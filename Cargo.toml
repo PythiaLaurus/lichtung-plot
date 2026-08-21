@@ -4,28 +4,26 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.96"
 license = "MIT OR Apache-2.0"
-description = "Strongly typed scientific plotting with deterministic SVG and optional PNG output"
+description = "Strongly typed scientific plotting with deterministic SVG and PNG output"
 documentation = "https://docs.rs/lichtung-plot"
 readme = "README.md"
 publish = false
 autotests = false
 
 [features]
-default = []
+default = ["png"]
 text-as-path = ["dep:resvg"]
-png = ["text-as-path", "dep:png", "dep:zune-jpeg"]
+png = ["text-as-path", "dep:png"]
 
 [dependencies]
 polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
 statrs = "0.18"
 thiserror = "2"
 unicode-segmentation = "1.13"
-# `resvg` outlines SVG text and, with the `png` feature, rasterizes the native
-# SVG output. Pure Rust, with no external renderer process.
+# Lichtung SVGs contain no raster images, so resvg's JPEG, GIF, and WebP
+# decoders are deliberately disabled.
 png = { version = "0.18", optional = true }
-resvg = { version = "0.47.0", features = ["text"], optional = true }
-# zune-jpeg 0.5.15's no-log warning macro does not compile on the supported toolchain.
-zune-jpeg = { version = "=0.5.15", features = ["log"], optional = true }
+resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"], optional = true }
 
 [dev-dependencies]
 insta = "1.48"

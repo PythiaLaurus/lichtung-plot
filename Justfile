@@ -8,29 +8,29 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
-# Check the default SVG-only build.
+# Check the minimal SVG-only build.
 check:
+    cargo check --locked --offline --all-targets --no-default-features
+
+# Check the default SVG and PNG build.
+check-png:
     cargo check --locked --offline --all-targets
 
-# Check SVG and PNG support together.
-check-png:
-    cargo check --locked --offline --all-targets --features png
-
-# Lint the default SVG-only build.
+# Lint the minimal SVG-only build.
 lint:
+    cargo clippy --locked --offline --all-targets --no-default-features -- -D warnings
+
+# Lint the default SVG and PNG build.
+lint-png:
     cargo clippy --locked --offline --all-targets -- -D warnings
 
-# Lint SVG and PNG support together.
-lint-png:
-    cargo clippy --locked --offline --all-targets --features png -- -D warnings
-
-# Run the default SVG-only test suite.
+# Run the minimal SVG-only test suite.
 test:
-    cargo test --locked --offline --all-targets
+    cargo test --locked --offline --all-targets --no-default-features
 
-# Run the SVG and PNG test suite.
+# Run the default SVG and PNG test suite.
 test-png:
-    cargo test --locked --offline --all-targets --features png
+    cargo test --locked --offline --all-targets
 
 # Build API documentation with warnings denied.
 docs:

@@ -33,6 +33,11 @@ capability and enables rasterization of the canonical SVG through `resvg` and
 `tiny-skia`. PNG sizing validates positive, finite DPI or scale, positive
 dimensions, and bounded pixel work before allocation.
 
+`png` is enabled by default; callers may disable default features for an
+SVG-only build. Lichtung's canonical SVG backend emits no raster image elements,
+so the `resvg` JPEG, GIF, and WebP decoders are excluded. The dedicated PNG
+encoder remains responsible for compression and physical-resolution metadata.
+
 There is no plot-level PDF output. Applications that need PDF must own that
 conversion or report workflow outside this crate.
 
