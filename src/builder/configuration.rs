@@ -1,0 +1,636 @@
+use super::Chart;
+use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
+use crate::layout::AxisTick;
+use crate::spec::{
+    AxisScale, BarAggregation, BarSpacing, CategoricalColors, DumbbellEndpoints,
+    EffectBandSemantics, EstimateSource, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
+    HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite, HistogramStat,
+    IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
+    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, ValueSort, ViolinLayout,
+    WaterfallLabels,
+};
+use crate::theme::Theme;
+use crate::Labels;
+use crate::{ComparisonAnnotation, HistogramCompositeGeometryInput, RaincloudGeometryInput};
+
+impl<'a> Chart<'a> {
+    /// Set original source-row identities aligned one-to-one with the chart data.
+    ///
+    /// An explicitly configured raw-overlay source-row column takes precedence
+    /// for charts that configure both forms of identity.
+    #[must_use]
+    pub const fn source_rows(mut self, source_rows: &'a [usize]) -> Self {
+        self.source_rows = Some(source_rows);
+        self
+    }
+
+    /// Set the x-axis column name.
+    #[must_use]
+    pub fn x(&mut self, col: &'a str) -> &mut Self {
+        self.x_col = Some(col);
+        self
+    }
+
+    /// Set the y-axis column name.
+    #[must_use]
+    pub fn y(&mut self, col: &'a str) -> &mut Self {
+        self.y_col = Some(col);
+        self
+    }
+
+    /// Set the hue column name.
+    #[must_use]
+    pub fn hue(mut self, col: &'a str) -> Self {
+        self.hue_col = Some(col);
+        self
+    }
+
+    /// Set the graphical-group column used to partition collective marks.
+    /// Group never assigns color or creates legend entries.
+    #[must_use]
+    pub fn group(mut self, col: &'a str) -> Self {
+        self.group_col = Some(col);
+        self
+    }
+
+    /// Set a continuous color-value column for plot kinds that support it.
+    #[must_use]
+    pub fn color(mut self, col: &'a str) -> Self {
+        self.color_col = Some(col);
+        self
+    }
+
+    /// Set the title shown beside a heatmap color scale.
+    #[must_use]
+    pub fn color_label(mut self, label: impl Into<String>) -> Self {
+        self.color_label = Some(label.into());
+        self
+    }
+
+    /// Set the heatmap color-scale policy.
+    #[must_use]
+    pub fn heatmap_scale(mut self, scale: HeatmapScale) -> Self {
+        self.heatmap_scale = scale;
+        self
+    }
+
+    /// Select Cartesian or structural triangular heatmap cells.
+    #[must_use]
+    pub fn heatmap_layout(mut self, layout: HeatmapLayout) -> Self {
+        self.heatmap_layout = layout;
+        self
+    }
+
+    /// Configure whether crowded heatmap category labels are elided or wrapped.
+    #[must_use]
+    pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self {
+        self.heatmap_label_fit = fit;
+        self
+    }
+
+    /// Set exact heatmap color-domain limits. Values outside them saturate.
+    #[must_use]
+    pub fn heatmap_color_limits(mut self, min: f64, max: f64) -> Self {
+        self.heatmap_color_limits = Some((min, max));
+        self
+    }
+
+    /// Set exact beeswarm continuous-color limits. Values outside them saturate.
+    #[must_use]
+    pub fn beeswarm_color_limits(mut self, min: f64, max: f64) -> Self {
+        self.beeswarm_color_limits = Some((min, max));
+        self
+    }
+
+    /// Configure optional heatmap cell-value annotations.
+    #[must_use]
+    pub fn heatmap_annotations(mut self, annotations: HeatmapAnnotations) -> Self {
+        self.heatmap_annotations = annotations;
+        self
+    }
+
+    /// Add caller-owned wrapped text for one fully-null Cartesian heatmap row.
+    #[must_use]
+    pub fn heatmap_null_row_annotation(mut self, annotation: HeatmapNullRowAnnotation) -> Self {
+        self.heatmap_null_row_annotations.push(annotation);
+        self
+    }
+
+    /// Set a strict Boolean column whose true heatmap cells receive a prominent border.
+    #[must_use]
+    pub const fn heatmap_highlight(mut self, column: &'a str) -> Self {
+        self.heatmap_highlight_col = Some(column);
+        self
+    }
+
+    /// Draw fixed-format numeric labels beside point-only coefficient estimates.
+    #[must_use]
+    pub fn estimate_labels(mut self, format: NumericLabelFormat) -> Self {
+        self.estimate_labels = Some(format);
+        self
+    }
+
+    /// Draw exact caller-supplied significance marks beside coefficient estimates.
+    ///
+    /// The column must contain only [`crate::CoefficientSignificanceMark::as_str`]
+    /// values and is accepted only for coefficient plots with confidence intervals.
+    #[must_use]
+    pub const fn coefficient_significance(mut self, column: &'a str) -> Self {
+        self.coefficient_significance_col = Some(column);
+        self
+    }
+
+    /// Draw exact caller-supplied significance marks beside identity bars.
+    #[must_use]
+    pub const fn bar_significance(mut self, column: &'a str) -> Self {
+        self.bar_significance_col = Some(column);
+        self
+    }
+
+    /// Configure significance typography independently of axis text.
+    #[must_use]
+    pub const fn significance_mark_style(mut self, style: crate::SignificanceMarkStyle) -> Self {
+        self.significance_mark_style = style;
+        self
+    }
+
+    /// Add one exact caller-owned factor-level annotation over grouped bars.
+    #[must_use]
+    pub fn grouped_factor_annotation(mut self, annotation: crate::GroupedFactorAnnotation) -> Self {
+        self.grouped_factor_annotations.push(annotation);
+        self
+    }
+
+    /// Set the chart title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Set the chart subtitle.
+    #[must_use]
+    pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
+    }
+
+    /// Set the chart caption.
+    #[must_use]
+    pub fn caption(mut self, caption: impl Into<String>) -> Self {
+        self.caption = Some(caption.into());
+        self
+    }
+
+    /// Set the x-axis label.
+    #[must_use]
+    pub fn x_label(mut self, label: impl Into<String>) -> Self {
+        self.x_label = Some(label.into());
+        self
+    }
+
+    /// Set the y-axis label.
+    #[must_use]
+    pub fn y_label(mut self, label: impl Into<String>) -> Self {
+        self.y_label = Some(label.into());
+        self
+    }
+
+    /// Set presentation rules for every label inferred from data identities.
+    #[must_use]
+    pub fn labels(mut self, labels: Labels) -> Self {
+        self.labels = labels;
+        self
+    }
+
+    /// Set explicit x-axis limits.
+    #[must_use]
+    pub fn x_limits(mut self, min: f64, max: f64) -> Self {
+        self.x_axis_spec = self.x_axis_spec.limits(min, max);
+        self.x_limits_user_explicit = true;
+        self
+    }
+
+    /// Set explicit y-axis limits.
+    #[must_use]
+    pub fn y_limits(mut self, min: f64, max: f64) -> Self {
+        self.y_axis_spec = self.y_axis_spec.limits(min, max);
+        self.y_limits_user_explicit = true;
+        self
+    }
+
+    /// Set target x-axis tick count.
+    #[must_use]
+    pub fn x_tick_count(mut self, count: usize) -> Self {
+        self.x_axis_spec = self.x_axis_spec.tick_count(count);
+        self.x_tick_count_overridden = true;
+        self
+    }
+
+    /// Replace automatic x-axis ticks with caller-labeled numeric positions.
+    #[must_use]
+    pub fn x_ticks(mut self, ticks: Vec<AxisTick>) -> Self {
+        self.x_ticks = Some(ticks);
+        self
+    }
+
+    /// Set target y-axis tick count.
+    #[must_use]
+    pub fn y_tick_count(mut self, count: usize) -> Self {
+        self.y_axis_spec = self.y_axis_spec.tick_count(count);
+        self.y_tick_count_overridden = true;
+        self
+    }
+
+    /// Replace automatic y-axis ticks with caller-labeled numeric positions.
+    #[must_use]
+    pub fn y_ticks(mut self, ticks: Vec<AxisTick>) -> Self {
+        self.y_ticks = Some(ticks);
+        self
+    }
+
+    /// Append a numeric guide rendered in data space.
+    #[must_use]
+    pub fn guide(mut self, guide: GuideSpec) -> Self {
+        self.guides.push(guide);
+        self
+    }
+
+    /// Append a separately borrowed strict point layer to a numeric line chart.
+    #[must_use]
+    pub fn point_layer(mut self, layer: PointLayer<'a>) -> Self {
+        self.point_layers.push(layer);
+        self
+    }
+
+    /// Append a separately borrowed strict point layer to an ordinary bar chart.
+    #[must_use]
+    pub fn bar_point_layer(mut self, layer: BarPointLayer<'a>) -> Self {
+        self.bar_point_layers.push(layer);
+        self
+    }
+
+    /// Set grouped-bar spacing.
+    #[must_use]
+    pub fn bar_spacing(mut self, spacing: BarSpacing) -> Self {
+        self.bar_spacing = spacing;
+        self
+    }
+
+    /// Select sample-mean inference or one-row identity values for ordinary bars.
+    #[must_use]
+    pub const fn bar_aggregation(mut self, aggregation: BarAggregation) -> Self {
+        self.bar_aggregation = aggregation;
+        self
+    }
+
+    /// Set the histogram bin-selection strategy.
+    #[must_use]
+    pub fn histogram_bins(&mut self, bins: HistogramBins) -> &mut Self {
+        self.histogram_bins = bins;
+        self
+    }
+
+    /// Set the histogram vertical-axis normalization.
+    #[must_use]
+    pub fn histogram_stat(&mut self, stat: HistogramStat) -> &mut Self {
+        self.histogram_stat = stat;
+        self
+    }
+
+    /// Add a KDE density curve and complete source-observation rug to a histogram.
+    #[must_use]
+    pub fn histogram_composite(mut self, composite: HistogramComposite) -> Self {
+        self.histogram_composite = composite;
+        self
+    }
+
+    /// Use complete caller-computed density-axis histogram composite geometry.
+    ///
+    /// This selects [`HistogramStat::Density`]. Rendering maps the supplied bins,
+    /// KDE points, and rug segments to the panel without deriving sample statistics.
+    #[must_use]
+    pub fn histogram_composite_geometry(mut self, input: HistogramCompositeGeometryInput) -> Self {
+        self.histogram_stat = HistogramStat::Density;
+        self.histogram_composite_geometry = Some(input);
+        self
+    }
+
+    /// Set the normal Q-Q reference-line policy.
+    #[must_use]
+    pub fn qq_line(&mut self, line: QqLine) -> &mut Self {
+        self.qq_line = line;
+        self
+    }
+
+    /// Sort categorical values before rendering.
+    #[must_use]
+    pub fn value_sort(mut self, sort: ValueSort) -> Self {
+        self.value_sort = sort;
+        self
+    }
+
+    /// Color positive and negative bars with distinct theme colors.
+    #[must_use]
+    pub fn color_by_sign(mut self) -> Self {
+        self.color_by_sign = true;
+        self
+    }
+
+    /// Draw a reference line at zero on the continuous axis.
+    #[must_use]
+    pub fn zero_line(mut self) -> Self {
+        self.zero_line = true;
+        self
+    }
+
+    /// Set columns containing lower and upper bounds for a bounds-consuming plot.
+    /// Ordinary identity bars consume these columns with matching semantics;
+    /// generated mean and stacked bars reject them.
+    #[must_use]
+    pub fn interval_bounds(mut self, lower_col: &'a str, upper_col: &'a str) -> Self {
+        self.interval_lower_col = Some(lower_col);
+        self.interval_upper_col = Some(upper_col);
+        self
+    }
+
+    /// Attach the statistical interpretation and provenance of rendered intervals.
+    #[must_use]
+    pub fn interval_semantics(mut self, semantics: IntervalSemantics) -> Self {
+        self.interval_semantics = Some(semantics);
+        self
+    }
+
+    /// Set an exact `estimated`/`not_estimable` availability column for estimate rows.
+    #[must_use]
+    pub const fn estimate_status(mut self, column: &'a str) -> Self {
+        self.estimate_status_col = Some(column);
+        self
+    }
+
+    /// Attach model-adjusted pointwise or simultaneous semantics to a Line ribbon.
+    #[must_use]
+    pub fn effect_band_semantics(mut self, semantics: EffectBandSemantics) -> Self {
+        self.interval_semantics = Some(semantics.interval().clone());
+        self.effect_band_semantics = Some(semantics);
+        self
+    }
+
+    /// Set whether line-like plot families draw markers at estimates.
+    #[must_use]
+    pub fn markers(mut self, visible: bool) -> Self {
+        self.markers_visible = visible;
+        self
+    }
+
+    /// Select the generated regression confidence-band policy.
+    #[must_use]
+    pub const fn regression_band(mut self, band: RegressionBand) -> Self {
+        self.regression_band = band;
+        self
+    }
+
+    /// Select ordinary series, repeated trajectory, or source-ordered path semantics.
+    #[must_use]
+    pub const fn line_mode(mut self, mode: LineMode) -> Self {
+        self.line_mode = mode;
+        self
+    }
+
+    /// Select the complete-path color and legend policy for `LineMode::Path`.
+    #[must_use]
+    pub const fn line_path_style(mut self, style: LinePathStyle) -> Self {
+        self.line_path_style = style;
+        self
+    }
+
+    /// Set the scientific reference/null line for an estimate plot.
+    #[must_use]
+    pub fn reference_line(mut self, value: f64) -> Self {
+        self.reference_line = Some(value);
+        self
+    }
+
+    /// Set the numeric axis scale used by a forest plot.
+    #[must_use]
+    pub fn axis_scale(mut self, scale: AxisScale) -> Self {
+        self.axis_scale = scale;
+        self
+    }
+
+    /// Identify interaction estimates as raw summaries or model-adjusted means.
+    #[must_use]
+    pub fn interaction_source(mut self, source: EstimateSource) -> Self {
+        self.interaction_source = Some(source);
+        self
+    }
+
+    /// Set whether an interaction plot draws connectors between category estimates.
+    #[must_use]
+    pub const fn interaction_connectors(mut self, visible: bool) -> Self {
+        self.interaction_connectors = Some(visible);
+        self
+    }
+
+    /// Set exact categorical point-shape and line-pattern columns for interaction traces.
+    ///
+    /// Point-shape values must be [`crate::PointShape::as_str`] values and line-pattern
+    /// values must be [`crate::LinePattern::as_str`] values. Each graphical trace must
+    /// resolve to one constant value from each column.
+    #[must_use]
+    pub const fn interaction_styles(
+        mut self,
+        point_shape_col: &'a str,
+        line_pattern_col: &'a str,
+    ) -> Self {
+        self.interaction_style_cols = Some((point_shape_col, line_pattern_col));
+        self
+    }
+
+    /// Sets exact caller-owned colors for every categorical level used by the plot.
+    #[must_use]
+    pub fn categorical_colors(mut self, colors: CategoricalColors) -> Self {
+        self.categorical_colors = Some(colors);
+        self
+    }
+
+    /// Add caller-owned single-line text at one corner inside the chart panel.
+    #[must_use]
+    pub fn panel_text_annotation(mut self, annotation: PanelTextAnnotation) -> Self {
+        self.panel_text_annotations.push(annotation);
+        self
+    }
+
+    /// Base and terminal metadata columns for a waterfall.
+    #[must_use]
+    pub fn waterfall_totals(mut self, base_col: &'a str, terminal_col: &'a str) -> Self {
+        self.waterfall_base_col = Some(base_col);
+        self.waterfall_terminal_col = Some(terminal_col);
+        self
+    }
+
+    /// Set caller-owned labels for waterfall base and terminal annotations.
+    #[must_use]
+    pub fn waterfall_labels(mut self, labels: WaterfallLabels) -> Self {
+        self.waterfall_labels = Some(labels);
+        self
+    }
+
+    /// Set the second finite numeric endpoint column for a dumbbell plot.
+    #[must_use]
+    pub const fn dumbbell_right(mut self, column: &'a str) -> Self {
+        self.dumbbell_right_col = Some(column);
+        self
+    }
+
+    /// Set required caller-owned labels and colors for both dumbbell endpoints.
+    #[must_use]
+    pub fn dumbbell_endpoints(mut self, endpoints: DumbbellEndpoints) -> Self {
+        self.dumbbell_endpoints = Some(endpoints);
+        self
+    }
+
+    /// Render scatter-like point marks without the default white outline.
+    #[must_use]
+    pub fn hide_point_outline(mut self) -> Self {
+        self.point_outline = None;
+        self
+    }
+
+    /// Set the visual theme.
+    #[must_use]
+    pub fn theme(&mut self, theme: Theme) -> &mut Self {
+        self.theme = theme;
+        self
+    }
+
+    /// Append owned explicit pairwise comparisons for bracket rendering.
+    #[must_use]
+    pub fn add_comparisons(
+        &mut self,
+        comparisons: impl IntoIterator<Item = ComparisonAnnotation>,
+    ) -> &mut Self {
+        self.comparisons.extend(comparisons);
+        self
+    }
+
+    /// Include non-significant comparisons as `ns` brackets.
+    #[must_use]
+    pub fn show_non_significant(&mut self) -> &mut Self {
+        self.show_non_significant = true;
+        self
+    }
+
+    /// Cap rendered pairwise significance stars while preserving typed results.
+    #[must_use]
+    pub const fn significance_star_limit(mut self, limit: crate::SignificanceStarLimit) -> Self {
+        self.significance_star_limit = limit;
+        self
+    }
+
+    /// Set the output pixel size. Default 640x480.
+    #[must_use]
+    pub fn size(&mut self, width: u32, height: u32) -> &mut Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    /// Inject `(m/z, intensity)` peak markers for the
+    /// `PlotKind::MassSpectrum` kind. Each pair becomes a
+    /// filled-circle marker on the spectrum line plus an
+    /// m/z text label. The data is owned (not borrowed)
+    /// because callers commonly extract peaks from a temporary
+    /// analysis result; no borrowed reference would survive the
+    /// builder chain.
+    ///
+    /// Calling this replaces any previously-set peaks; pass
+    /// the full list on each call.
+    #[must_use]
+    pub fn add_peaks(&mut self, peaks: Vec<(f64, f64)>) -> &mut Self {
+        self.peaks = peaks;
+        self
+    }
+
+    /// Inject pre-computed `(x, y)` scatter points for the
+    /// `PlotKind::Marginal` kind. When non-empty, the
+    /// marginal plot uses these points (and the marginal
+    /// histograms are computed over them) instead of
+    /// extracting from `x_col` / `y_col` in the `DataFrame`.
+    /// One use case is passing precomputed UMAP coordinates
+    /// as a `Vec<(f64, f64)>` without materializing columns.
+    ///
+    /// Calling this replaces any previously-set coords;
+    /// pass the full list on each call. Pass an empty
+    /// `Vec` to fall back to the data-column path.
+    #[must_use]
+    pub fn add_marginal_coords(&mut self, coords: Vec<(f64, f64)>) -> &mut Self {
+        self.marginal_coords = coords;
+        self
+    }
+
+    /// Set the ordered variable names for the matrix (pairplot) grid.
+    /// Each variable becomes one axis in the N×N grid.
+    #[must_use]
+    pub fn matrix_variables(&mut self, variables: Vec<impl Into<String>>) -> &mut Self {
+        self.matrix_variables = variables.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Request a specific legend placement.
+    #[must_use]
+    pub fn legend_position(&mut self, position: LegendPosition) -> &mut Self {
+        self.legend_position = position;
+        self.legend_visible = Some(position != LegendPosition::Hidden);
+        self
+    }
+
+    /// Force the legend to be rendered when the selected plot can produce one.
+    #[must_use]
+    pub fn show_legend(&mut self) -> &mut Self {
+        self.legend_visible = Some(true);
+        self
+    }
+
+    /// Suppress the legend even when the selected plot can produce one.
+    #[must_use]
+    pub fn hide_legend(&mut self) -> &mut Self {
+        self.legend_visible = Some(false);
+        self
+    }
+
+    /// Select a centered or deterministic source-row-displaced raw-observation
+    /// overlay for a boxplot or violin plot.
+    #[must_use]
+    pub const fn raw_overlay(mut self, overlay: RawOverlay) -> Self {
+        self.raw_overlay = overlay;
+        self
+    }
+
+    /// Set the integer column carrying original row identities for a visible
+    /// raw-observation overlay after the caller has filtered or compacted data.
+    #[must_use]
+    pub const fn raw_overlay_source_row(mut self, column: &'a str) -> Self {
+        self.raw_overlay_source_row_col = Some(column);
+        self
+    }
+
+    /// Select the mirrored or raincloud violin geometry.
+    #[must_use]
+    pub const fn violin_layout(mut self, layout: ViolinLayout) -> Self {
+        self.violin_layout = layout;
+        self
+    }
+
+    /// Use complete caller-computed raincloud geometry.
+    ///
+    /// This selects [`ViolinLayout::Raincloud`]. Rendering maps the supplied
+    /// density boundaries, summaries, and strip points without KDE, quantile,
+    /// or jitter calculation.
+    #[must_use]
+    pub fn raincloud_geometry(mut self, input: RaincloudGeometryInput) -> Self {
+        self.violin_layout = ViolinLayout::Raincloud;
+        self.raincloud_geometry = Some(input);
+        self
+    }
+}

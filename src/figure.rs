@@ -1,0 +1,1420 @@
+//! Heterogeneous one-canvas figure composition.
+
+use std::path::Path;
+
+use crate::Error;
+
+use crate::decorations::legend::{Legend, LegendEntry};
+use crate::decorations::title_block::TitleBlock;
+use crate::layout::figure::{
+    allocate_composed_grid, try_wrap_text, PanelRequirements, PANEL_HEADER_GAP,
+};
+use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox};
+use crate::render::backend::{with_layer, Backend};
+use crate::render::svg_backend::SvgBackend;
+use crate::scene::RenderedSvgScene;
+use crate::spec::DecorationMode;
+#[cfg(feature = "png")]
+use crate::PngOptions;
+use crate::{Chart, FigureLegendPolicy, Labels, PlotKind, Theme};
+
+type LegendEntrySignature = (
+    String,
+    String,
+    (u8, u8, u8),
+    u32,
+    crate::PointShape,
+    Option<((u8, u8, u8), u64)>,
+    u64,
+    Option<((u8, u8, u8), u32, String)>,
+);
+
+struct FigurePanelPreflight {
+    index: usize,
+    kind: PlotKind,
+    cell: PanelBox,
+    plan: crate::decorations::plan::PanelPlan,
+}
+
+struct FigurePreflight<'a> {
+    charts: Vec<Option<Chart<'a>>>,
+    figure_layout: FigureLayout,
+    full_outer: PanelBox,
+    outer: PanelBox,
+    shared_legend: Option<(String, Vec<LegendEntry>)>,
+    panels: Vec<FigurePanelPreflight>,
+    text_panels: Vec<TextPanelPlan>,
+    headers: Vec<FigureHeaderPlan>,
+    row_titles: Vec<FigureHeaderPlan>,
+}
+
+struct FigureHeaderPlan {
+    text: String,
+    x: f64,
+    y: f64,
+}
+
+/// Categorical tick-label policy for composed figure grids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FigureCategoryLabels {
+    /// Render categorical tick labels in every panel.
+    #[default]
+    EveryPanel,
+    /// Render categorical tick labels only in the first column of each row.
+    FirstColumnPerRow,
+}
+
+#[derive(Debug, Clone)]
+struct FigureHeader {
+    start: usize,
+    span: usize,
+    text: String,
+}
+
+struct TextPanelPlan {
+    index: usize,
+    cell: PanelBox,
+    title: crate::layout::TextBlock,
+    body: crate::layout::TextBlock,
+}
+
+/// Validated prose content for one composed-figure grid cell.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextPanel {
+    title: String,
+    body: String,
+}
+
+impl TextPanel {
+    /// Construct a text panel with nonempty title and body.
+    pub fn new(title: impl Into<String>, body: impl Into<String>) -> Result<Self, Error> {
+        let title = title.into();
+        let body = body.into();
+        validate_text_panel_value(&title, "title")?;
+        validate_text_panel_value(&body, "body")?;
+        Ok(Self { title, body })
+    }
+
+    /// Panel title rendered above the body.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Panel body rendered with deterministic wrapping.
+    #[must_use]
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+}
+
+fn validate_text_panel_value(value: &str, role: &str) -> Result<(), Error> {
+    if value.trim().is_empty() || value.trim() != value {
+        return Err(Error::Data(format!(
+            "text panel {role} must be nonempty and have no surrounding whitespace"
+        )));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(Error::Data(format!(
+            "text panel {role} must not contain control characters"
+        )));
+    }
+    Ok(())
+}
+
+fn figure_header(
+    start: usize,
+    span: usize,
+    text: String,
+    limit: usize,
+    role: &str,
+) -> Result<FigureHeader, Error> {
+    if span == 0 || start.checked_add(span).is_none_or(|end| end > limit) {
+        return Err(Error::Data(format!(
+            "figure {role} header range {start}..{} is outside 0..{limit}",
+            start.saturating_add(span)
+        )));
+    }
+    if text.trim().is_empty() || text.trim() != text || text.chars().any(char::is_control) {
+        return Err(Error::Data(format!(
+            "figure {role} header must be nonempty, trimmed, and free of control characters"
+        )));
+    }
+    Ok(FigureHeader { start, span, text })
+}
+
+fn validate_header_overlap(
+    headers: &[FigureHeader],
+    candidate: &FigureHeader,
+    role: &str,
+) -> Result<(), Error> {
+    let end = candidate.start + candidate.span;
+    if headers.iter().any(|header| {
+        let other_end = header.start + header.span;
+        candidate.start < other_end && header.start < end
+    }) {
+        return Err(Error::Data(format!(
+            "figure {role} headers must not overlap"
+        )));
+    }
+    Ok(())
+}
+
+/// A typed grid of independently configured charts rendered on one canvas.
+pub struct Figure<'a> {
+    rows: usize,
+    columns: usize,
+    panels: Vec<Option<Chart<'a>>>,
+    text_panels: Vec<Option<TextPanel>>,
+    legend_policy: FigureLegendPolicy,
+    shared_legend_gap: Option<f64>,
+    width: u32,
+    height: u32,
+    title: Option<String>,
+    subtitle: Option<String>,
+    caption: Option<String>,
+    labels: Option<Labels>,
+    category_labels: FigureCategoryLabels,
+    column_headers: Vec<FigureHeader>,
+    row_headers: Vec<FigureHeader>,
+    row_titles: Vec<FigureHeader>,
+    x_range_groups: Vec<Vec<usize>>,
+}
+
+impl<'a> Figure<'a> {
+    /// Construct a non-empty panel grid.
+    pub fn grid(rows: usize, columns: usize) -> Result<Self, Error> {
+        if rows == 0 || columns == 0 {
+            return Err(Error::Data(
+                "figure grid rows and columns must both be greater than zero".into(),
+            ));
+        }
+        let panel_count = rows
+            .checked_mul(columns)
+            .ok_or_else(|| Error::Data("figure grid dimensions exceed allocation limits".into()))?;
+        Ok(Self {
+            rows,
+            columns,
+            panels: (0..panel_count).map(|_| None).collect(),
+            text_panels: (0..panel_count).map(|_| None).collect(),
+            legend_policy: FigureLegendPolicy::PerPanel,
+            shared_legend_gap: None,
+            width: 960,
+            height: 640,
+            title: None,
+            subtitle: None,
+            caption: None,
+            labels: None,
+            category_labels: FigureCategoryLabels::EveryPanel,
+            column_headers: Vec::new(),
+            row_headers: Vec::new(),
+            row_titles: Vec::new(),
+            x_range_groups: Vec::new(),
+        })
+    }
+
+    /// Place one chart in an unoccupied zero-based grid cell.
+    pub fn panel(mut self, row: usize, column: usize, chart: Chart<'a>) -> Result<Self, Error> {
+        if row >= self.rows || column >= self.columns {
+            return Err(Error::Data(format!(
+                "figure panel ({row}, {column}) is outside {}x{} grid",
+                self.rows, self.columns
+            )));
+        }
+        let index = row * self.columns + column;
+        if self.panels[index].is_some() || self.text_panels[index].is_some() {
+            return Err(Error::Data(format!(
+                "figure panel ({row}, {column}) is already occupied"
+            )));
+        }
+        self.panels[index] = Some(chart);
+        Ok(self)
+    }
+
+    /// Place one validated text panel in an unoccupied zero-based grid cell.
+    pub fn text_panel(
+        mut self,
+        row: usize,
+        column: usize,
+        panel: TextPanel,
+    ) -> Result<Self, Error> {
+        if row >= self.rows || column >= self.columns {
+            return Err(Error::Data(format!(
+                "figure panel ({row}, {column}) is outside {}x{} grid",
+                self.rows, self.columns
+            )));
+        }
+        let index = row * self.columns + column;
+        if self.panels[index].is_some() || self.text_panels[index].is_some() {
+            return Err(Error::Data(format!(
+                "figure panel ({row}, {column}) is already occupied"
+            )));
+        }
+        self.text_panels[index] = Some(panel);
+        Ok(self)
+    }
+
+    /// Set per-panel, shared, or hidden legend behavior.
+    #[must_use]
+    pub fn legend_policy(mut self, policy: FigureLegendPolicy) -> Self {
+        self.legend_policy = policy;
+        self
+    }
+
+    /// Set the exact CSS-pixel gap between the panel grid and a shared legend.
+    pub fn shared_legend_gap(mut self, gap: f64) -> Result<Self, Error> {
+        if !gap.is_finite() || gap < 0.0 {
+            return Err(Error::Data(
+                "figure shared legend gap must be finite and nonnegative".into(),
+            ));
+        }
+        self.shared_legend_gap = Some(gap);
+        Ok(self)
+    }
+
+    /// Add one measured header spanning contiguous figure columns.
+    pub fn column_header(
+        mut self,
+        start_column: usize,
+        span: usize,
+        text: impl Into<String>,
+    ) -> Result<Self, Error> {
+        let header = figure_header(start_column, span, text.into(), self.columns, "column")?;
+        validate_header_overlap(&self.column_headers, &header, "column")?;
+        self.column_headers.push(header);
+        Ok(self)
+    }
+
+    /// Add one measured header spanning contiguous figure rows.
+    pub fn row_header(
+        mut self,
+        start_row: usize,
+        span: usize,
+        text: impl Into<String>,
+    ) -> Result<Self, Error> {
+        let header = figure_header(start_row, span, text.into(), self.rows, "row")?;
+        validate_header_overlap(&self.row_headers, &header, "row")?;
+        self.row_headers.push(header);
+        Ok(self)
+    }
+
+    /// Add one measured title centered above every panel in one figure row.
+    pub fn row_title(mut self, row: usize, text: impl Into<String>) -> Result<Self, Error> {
+        let title = figure_header(row, 1, text.into(), self.rows, "row title")?;
+        validate_header_overlap(&self.row_titles, &title, "row title")?;
+        self.row_titles.push(title);
+        Ok(self)
+    }
+
+    /// Configure duplicate categorical-label handling across the grid.
+    #[must_use]
+    pub const fn category_labels(mut self, policy: FigureCategoryLabels) -> Self {
+        self.category_labels = policy;
+        self
+    }
+
+    /// Couple the automatic horizontal range of explicit panel cells.
+    pub fn x_range_group(
+        mut self,
+        cells: impl IntoIterator<Item = (usize, usize)>,
+    ) -> Result<Self, Error> {
+        let mut indices = Vec::new();
+        for (row, column) in cells {
+            if row >= self.rows || column >= self.columns {
+                return Err(Error::Data(format!(
+                    "figure x-range group cell ({row}, {column}) is outside {}x{} grid",
+                    self.rows, self.columns
+                )));
+            }
+            let index = row * self.columns + column;
+            if indices.contains(&index)
+                || self
+                    .x_range_groups
+                    .iter()
+                    .any(|group| group.contains(&index))
+            {
+                return Err(Error::Data(format!(
+                    "figure x-range group repeats panel ({row}, {column})"
+                )));
+            }
+            indices.push(index);
+        }
+        if indices.is_empty() {
+            return Err(Error::Data(
+                "figure x-range group must contain at least one panel".into(),
+            ));
+        }
+        self.x_range_groups.push(indices);
+        Ok(self)
+    }
+
+    /// Set the composed canvas dimensions.
+    #[must_use]
+    pub fn size(mut self, width: u32, height: u32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    /// Set one figure-level title.
+    #[must_use]
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Set one figure-level subtitle.
+    #[must_use]
+    pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
+    }
+
+    /// Set one figure-level caption.
+    #[must_use]
+    pub fn caption(mut self, caption: impl Into<String>) -> Self {
+        self.caption = Some(caption.into());
+        self
+    }
+
+    /// Apply one reusable automatic-label policy to every configured panel.
+    #[must_use]
+    pub fn labels(mut self, labels: Labels) -> Self {
+        self.labels = Some(labels);
+        self
+    }
+
+    /// Render through a caller-owned backend with exactly one canvas lifecycle.
+    pub fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        let preflight = self.preflight_plan()?;
+        self.render_preflighted(preflight, backend)
+    }
+
+    fn render_preflighted(
+        &self,
+        preflight: FigurePreflight<'a>,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        let mut backend =
+            crate::orchestrator::DeferredBackend::new(backend, self.width, self.height);
+        let rendered = self.render_open_canvas(preflight, &mut backend);
+        backend.finish(rendered, "composed figure canvas")
+    }
+
+    /// Validate the complete composed figure without opening a backend or creating files.
+    ///
+    /// This checks canvas and grid layout, every chart's plot-specific data and
+    /// representability preflight, channel and interval contracts, shared legend
+    /// compatibility, and nested self-managed plot restrictions.
+    pub fn preflight(&self) -> Result<(), Error> {
+        self.preflight_plan().map(drop)
+    }
+
+    /// Render one immutable canonical composed SVG scene without creating a file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when figure preflight or SVG rendering fails.
+    pub fn render_scene(&self) -> Result<RenderedSvgScene, Error> {
+        let preflight = self.preflight_plan()?;
+        let mut backend = SvgBackend::in_memory(self.width, self.height);
+        self.render_preflighted(preflight, &mut backend)?;
+        Ok(RenderedSvgScene::new(
+            self.width,
+            self.height,
+            backend.into_bytes()?,
+        ))
+    }
+
+    /// Render the canonical composed SVG scene to owned bytes without creating a file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when figure preflight or SVG rendering fails.
+    pub fn render_to_svg_bytes(&self) -> Result<Vec<u8>, Error> {
+        self.render_scene().map(RenderedSvgScene::into_svg_bytes)
+    }
+
+    /// Render deterministic SVG output.
+    pub fn render_to_svg(&self, path: &Path) -> Result<(), Error> {
+        let scene = self.render_scene()?;
+        let staged = crate::orchestrator::reserve_unique_sibling_temp_path(path, "svg")?;
+        crate::orchestrator::with_temporary_artifacts(vec![staged.clone()], || {
+            std::fs::write(&staged, scene.svg_bytes()).map_err(Error::Io)?;
+            crate::orchestrator::publish_staged(&staged, path)
+        })
+    }
+
+    /// Render the canonical composed scene to default-sized PNG bytes.
+    #[cfg(feature = "png")]
+    pub fn render_to_png_bytes(&self) -> Result<Vec<u8>, Error> {
+        self.render_to_png_bytes_with_options(&PngOptions::default())
+    }
+
+    /// Render the canonical composed scene to PNG bytes with explicit options.
+    #[cfg(feature = "png")]
+    pub fn render_to_png_bytes_with_options(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
+        self.render_scene()?.png_bytes(options)
+    }
+
+    /// Render PNG by rasterizing the canonical SVG scene.
+    #[cfg(feature = "png")]
+    pub fn render_to_png(&self, path: &Path) -> Result<(), Error> {
+        self.render_to_png_with_options(path, &PngOptions::default())
+    }
+
+    /// Render PNG with explicit rasterization options.
+    #[cfg(feature = "png")]
+    pub fn render_to_png_with_options(
+        &self,
+        path: &Path,
+        options: &PngOptions,
+    ) -> Result<(), Error> {
+        let png = self.render_to_png_bytes_with_options(options)?;
+        let staged = crate::orchestrator::reserve_unique_sibling_temp_path(path, "png")?;
+        crate::orchestrator::with_temporary_artifacts(vec![staged.clone()], || {
+            std::fs::write(&staged, &png).map_err(Error::Io)?;
+            crate::orchestrator::publish_staged(&staged, path)
+        })
+    }
+
+    /// Render one SVG scene and publish both SVG and PNG artifacts.
+    #[cfg(feature = "png")]
+    pub fn render_to_svg_and_png(&self, svg_path: &Path, png_path: &Path) -> Result<(), Error> {
+        self.render_to_svg_and_png_with_options(svg_path, png_path, &PngOptions::default())
+    }
+
+    /// Render one SVG scene and publish SVG and PNG with explicit PNG options.
+    #[cfg(feature = "png")]
+    pub fn render_to_svg_and_png_with_options(
+        &self,
+        svg_path: &Path,
+        png_path: &Path,
+        options: &PngOptions,
+    ) -> Result<(), Error> {
+        if crate::orchestrator::paths_resolve_to_same_destination(svg_path, png_path)? {
+            return Err(Error::Data(
+                "SVG and PNG output paths must be distinct".into(),
+            ));
+        }
+        let scene = self.render_scene()?;
+        let png = scene.png_bytes(options)?;
+        let (staged_svg, staged_png) =
+            crate::orchestrator::reserve_staging_pair(svg_path, "svg", png_path, "png")?;
+        crate::orchestrator::with_temporary_artifacts(
+            vec![staged_svg.clone(), staged_png.clone()],
+            || {
+                std::fs::write(&staged_svg, scene.svg_bytes()).map_err(Error::Io)?;
+                std::fs::write(&staged_png, &png).map_err(Error::Io)?;
+                crate::orchestrator::publish_staged_pair([
+                    (staged_svg.as_path(), svg_path),
+                    (staged_png.as_path(), png_path),
+                ])
+            },
+        )
+    }
+
+    fn validate_structure(&self) -> Result<(), Error> {
+        if self.width < 160 || self.height < 120 {
+            return Err(Error::Data(
+                "figure canvas must be at least 160x120 pixels".into(),
+            ));
+        }
+        if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
+            return Err(Error::Data(
+                "figure requires at least one configured panel".into(),
+            ));
+        }
+        if self.shared_legend_gap.is_some() && self.legend_policy != FigureLegendPolicy::Shared {
+            return Err(Error::Data(
+                "figure shared legend gap requires FigureLegendPolicy::Shared".into(),
+            ));
+        }
+        for chart in self.panels.iter().flatten() {
+            chart.x_axis_spec().validate("x-axis")?;
+            chart.y_axis_spec().validate("y-axis")?;
+            let kind = chart
+                .plot_kind()
+                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            chart.validate_facet_configuration(kind)?;
+            chart.validate_interval_configuration(kind)?;
+            chart.validate_channel_configuration(kind)?;
+            if chart.has_facets() {
+                return Err(Error::Render(
+                    "a faceted chart cannot be nested inside a composed figure".into(),
+                ));
+            }
+        }
+        for title in &self.row_titles {
+            let start = title.start * self.columns;
+            let end = start + self.columns;
+            if self.panels[start..end].iter().flatten().any(|chart| {
+                chart.title_text().is_some_and(|text| !text.is_empty())
+                    || chart.subtitle_text().is_some_and(|text| !text.is_empty())
+            }) {
+                return Err(Error::Data(format!(
+                    "figure row title cannot coexist with a panel title or subtitle in row {}",
+                    title.start
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn row_title_lines(
+        &self,
+        title: &FigureHeader,
+        cells: &[PanelBox],
+        palette: &crate::theme::ThemePalette,
+    ) -> Result<Vec<String>, Error> {
+        let first = title.start * self.columns;
+        let last = first + self.columns - 1;
+        let maximum_width = (cells[last].x1 - cells[first].x0 - 16.0).max(1.0);
+        try_wrap_text(
+            &title.text,
+            palette.title_font_size,
+            maximum_width,
+            "figure row title",
+        )
+    }
+
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "wrapped row-title line counts are bounded by the finite figure canvas"
+    )]
+    fn add_row_title_requirements(
+        &self,
+        requirements: &mut Vec<(usize, usize, PanelRequirements)>,
+        cells: &[PanelBox],
+        palette: &crate::theme::ThemePalette,
+    ) -> Result<(), Error> {
+        for title in &self.row_titles {
+            let lines = self.row_title_lines(title, cells, palette)?;
+            let top = lines.len() as f64 * (f64::from(palette.title_font_size) + 6.0) + 8.0;
+            requirements.push((
+                title.start,
+                0,
+                PanelRequirements {
+                    top,
+                    ..PanelRequirements::default()
+                },
+            ));
+        }
+        Ok(())
+    }
+
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "wrapped row-title line indices are bounded by the finite figure canvas"
+    )]
+    fn plan_row_titles(
+        &self,
+        cells: &[PanelBox],
+        palette: &crate::theme::ThemePalette,
+    ) -> Result<Vec<FigureHeaderPlan>, Error> {
+        let mut plans = Vec::new();
+        let line_height = f64::from(palette.title_font_size) + 6.0;
+        for title in &self.row_titles {
+            let first = title.start * self.columns;
+            let last = first + self.columns - 1;
+            let x = f64::midpoint(cells[first].x0, cells[last].x1);
+            for (index, line) in self
+                .row_title_lines(title, cells, palette)?
+                .into_iter()
+                .rev()
+                .enumerate()
+            {
+                plans.push(FigureHeaderPlan {
+                    text: line,
+                    x,
+                    y: cells[first].y1 + 14.0 + index as f64 * line_height,
+                });
+            }
+        }
+        Ok(plans)
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
+    )]
+    fn preflight_plan(&self) -> Result<FigurePreflight<'a>, Error> {
+        self.validate_structure()?;
+        let palette = Theme::Publication.palette();
+        let figure_layout = FigureLayout::measured_composed_canvas(
+            self.width,
+            self.height,
+            &palette,
+            FigureLayoutSpec {
+                has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
+                has_subtitle: self
+                    .subtitle
+                    .as_ref()
+                    .is_some_and(|value| !value.is_empty()),
+                has_caption: self.caption.as_ref().is_some_and(|value| !value.is_empty()),
+                has_x_label: false,
+                has_y_label: false,
+            },
+            (
+                self.title.as_deref(),
+                self.subtitle.as_deref(),
+                self.caption.as_deref(),
+            ),
+        )?;
+        let full_outer = figure_layout.panel_box;
+        let hue_groups = if self.legend_policy == FigureLegendPolicy::Shared {
+            self.figure_hue_groups(full_outer)?
+        } else {
+            Vec::new()
+        };
+        let mut charts = self
+            .panels
+            .iter()
+            .enumerate()
+            .map(|(index, chart)| {
+                chart.as_ref().map(|chart| {
+                    let chart = self.labels.as_ref().map_or_else(
+                        || chart.clone(),
+                        |labels| chart.clone().labels(labels.clone()),
+                    );
+                    let chart = hue_groups
+                        .iter()
+                        .find(|(dimension, _)| {
+                            Some(dimension.as_str()) == chart.hue_dimension_key()
+                        })
+                        .map_or_else(
+                            || chart.clone(),
+                            |(_, levels)| chart.clone().with_global_hue_levels(levels.clone()),
+                        );
+                    chart
+                        .with_canvas_size(self.width, self.height)
+                        .with_render_scope(format!("panel-{index}"))
+                })
+            })
+            .collect::<Vec<_>>();
+        if self.category_labels == FigureCategoryLabels::FirstColumnPerRow {
+            for row in 0..self.rows {
+                let first_index = row * self.columns;
+                let first = charts[first_index].as_ref().ok_or_else(|| {
+                    Error::Data(format!(
+                        "figure row {row} requires a configured first-column panel for shared category labels"
+                    ))
+                })?;
+                let expected = chart_category_domain(first)?;
+                for column in 1..self.columns {
+                    let index = first_index + column;
+                    let chart = charts[index].as_ref().ok_or_else(|| {
+                        Error::Data(format!(
+                            "figure row {row} requires panel ({row}, {column}) for shared category labels"
+                        ))
+                    })?;
+                    if chart_category_domain(chart)? != expected {
+                        return Err(Error::Data(format!(
+                            "figure row {row} category domains differ across panels"
+                        )));
+                    }
+                    charts[index] = Some(chart.clone().with_y_tick_labels_visible(false));
+                }
+            }
+        }
+        let shared_legend = if self.legend_policy == FigureLegendPolicy::Shared {
+            Self::preflight_shared_legend(&charts, full_outer)?
+        } else {
+            None
+        };
+        let mut outer = full_outer;
+        if let Some((title, entries)) = &shared_legend {
+            let legend = Legend::new(
+                title.clone(),
+                entries.clone(),
+                f64::from(self.width),
+                f64::from(self.height),
+            );
+            if legend.compute_box_height() > full_outer.height() {
+                return Err(Error::Render(
+                    "measured shared figure legend is taller than the available figure band".into(),
+                ));
+            }
+            let gap = self.resolved_shared_legend_gap(&legend);
+            outer.x1 -= legend.compute_box_width() + gap + legend.metrics.pad;
+        }
+        let header_palette = charts
+            .iter()
+            .flatten()
+            .next()
+            .map_or_else(|| palette.clone(), Chart::palette);
+        let header_outer = outer;
+        let column_header_height = if self.column_headers.is_empty() {
+            0.0
+        } else {
+            f64::from(header_palette.title_font_size) + 18.0
+        };
+        let row_header_width = self
+            .row_headers
+            .iter()
+            .map(|header| {
+                crate::layout::estimated_text_width(&header.text, header_palette.title_font_size)
+            })
+            .fold(0.0_f64, f64::max)
+            + if self.row_headers.is_empty() {
+                0.0
+            } else {
+                20.0
+            };
+        outer.y1 -= column_header_height;
+        outer.x0 += row_header_width;
+        if outer.width() < 80.0 || outer.height() < 60.0 {
+            return Err(Error::Render(
+                "figure shared headers leave insufficient panel space; enlarge the canvas".into(),
+            ));
+        }
+        let provisional =
+            allocate_composed_grid(outer, self.rows, self.columns, &[], "figure layout")?;
+        if !self.x_range_groups.is_empty() {
+            let mut ranges = vec![None; charts.len()];
+            for (index, chart) in charts.iter().enumerate() {
+                let Some(chart) = chart else { continue };
+                let kind = chart.plot_kind().ok_or_else(|| {
+                    Error::Data("every figure panel must select a plot kind".into())
+                })?;
+                let result = chart.preflight_panel(kind, provisional[index])?;
+                ranges[index] = Some(result.layout.projection.x_range());
+            }
+            for group in &self.x_range_groups {
+                let mut shared: Option<(f64, f64)> = None;
+                for &index in group {
+                    let range = ranges[index].ok_or_else(|| {
+                        Error::Data(format!(
+                            "figure x-range group references unconfigured panel {index}"
+                        ))
+                    })?;
+                    shared = Some(shared.map_or(range, |current| {
+                        (current.0.min(range.0), current.1.max(range.1))
+                    }));
+                }
+                let shared = shared.expect("validated nonempty x-range group");
+                for &index in group {
+                    let chart = charts[index].as_ref().expect("validated grouped panel");
+                    charts[index] = Some(chart.clone().with_planned_x_limits(shared));
+                }
+            }
+        }
+        let mut measured = Vec::new();
+        for (index, chart) in charts.iter().enumerate() {
+            let Some(chart) = chart else { continue };
+            let row = index / self.columns;
+            let column = index % self.columns;
+            let kind = chart
+                .plot_kind()
+                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let result = chart.preflight_panel(kind, provisional[index])?;
+            if result.decoration_mode == DecorationMode::SelfManaged {
+                return Err(Error::Render(format!(
+                    "{kind:?} manages its own canvas and cannot be nested in a composed figure"
+                )));
+            }
+            let palette = chart.palette();
+            let title = palette
+                .show_title
+                .then(|| chart.title_text())
+                .flatten()
+                .filter(|title| !title.is_empty());
+            let subtitle = palette
+                .show_subtitle
+                .then(|| chart.subtitle_text())
+                .flatten()
+                .filter(|subtitle| !subtitle.is_empty());
+            let requirement = PanelRequirements::measure_header(
+                &result.layout,
+                &palette,
+                title,
+                subtitle,
+                provisional[index],
+            )?;
+            measured.push((index, row, column, kind, result, requirement));
+        }
+        let mut requirements = measured
+            .iter()
+            .map(|(_, row, column, _, _, requirement)| (*row, *column, *requirement))
+            .collect::<Vec<_>>();
+        self.add_row_title_requirements(&mut requirements, &provisional, &header_palette)?;
+        let first_cells = allocate_composed_grid(
+            outer,
+            self.rows,
+            self.columns,
+            &requirements,
+            "figure layout",
+        )?;
+        let mut requirements = measured
+            .iter()
+            .map(|(index, row, column, _, result, _)| {
+                let chart = charts[*index]
+                    .as_ref()
+                    .expect("measured figure panel remains configured");
+                let palette = chart.palette();
+                let title = palette
+                    .show_title
+                    .then(|| chart.title_text())
+                    .flatten()
+                    .filter(|title| !title.is_empty());
+                let subtitle = palette
+                    .show_subtitle
+                    .then(|| chart.subtitle_text())
+                    .flatten()
+                    .filter(|subtitle| !subtitle.is_empty());
+                Ok::<_, Error>((
+                    *row,
+                    *column,
+                    PanelRequirements::measure_header(
+                        &result.layout,
+                        &palette,
+                        title,
+                        subtitle,
+                        first_cells[*index],
+                    )?,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.add_row_title_requirements(&mut requirements, &first_cells, &header_palette)?;
+        let cells = allocate_composed_grid(
+            outer,
+            self.rows,
+            self.columns,
+            &requirements,
+            "figure layout",
+        )?;
+        let mut headers = Vec::new();
+        for header in &self.column_headers {
+            let left = cells[header.start].x0;
+            let right = cells[header.start + header.span - 1].x1;
+            headers.push(FigureHeaderPlan {
+                text: header.text.clone(),
+                x: f64::midpoint(left, right),
+                y: header_outer.y1 - column_header_height / 2.0,
+            });
+        }
+        for header in &self.row_headers {
+            let indices = (header.start..header.start + header.span)
+                .map(|row| row * self.columns)
+                .collect::<Vec<_>>();
+            let bottom = indices
+                .iter()
+                .map(|index| cells[*index].y0)
+                .fold(f64::INFINITY, f64::min);
+            let top = indices
+                .iter()
+                .map(|index| cells[*index].y1)
+                .fold(f64::NEG_INFINITY, f64::max);
+            headers.push(FigureHeaderPlan {
+                text: header.text.clone(),
+                x: header_outer.x0 + row_header_width / 2.0,
+                y: f64::midpoint(bottom, top),
+            });
+        }
+        let row_titles = self.plan_row_titles(&cells, &header_palette)?;
+
+        let mut text_panels = Vec::new();
+        for (index, text_panel) in self.text_panels.iter().enumerate() {
+            let Some(text_panel) = text_panel else {
+                continue;
+            };
+            let cell = cells[index];
+            let maximum_width = (cell.width() - 32.0).max(1.0);
+            let title = crate::layout::TextBlock::layout(
+                text_panel.title(),
+                palette.title_font_size,
+                maximum_width,
+                "text panel title",
+            )?;
+            let body = crate::layout::TextBlock::layout(
+                text_panel.body(),
+                palette.label_font_size,
+                maximum_width,
+                "text panel body",
+            )?;
+            let required_height = title.height() + 12.0 + body.height();
+            if required_height > cell.height() - 32.0 {
+                return Err(Error::Render(format!(
+                    "text panel at ({}, {}) requires {required_height:.1}px but only {:.1}px is available; increase figure size or shorten text",
+                    index / self.columns,
+                    index % self.columns,
+                    (cell.height() - 32.0).max(0.0)
+                )));
+            }
+            text_panels.push(TextPanelPlan {
+                index,
+                cell,
+                title,
+                body,
+            });
+        }
+
+        for chart in charts.iter_mut().flatten() {
+            *chart = chart.clone().with_measured_composed_axis_text();
+        }
+
+        let mut panels = Vec::with_capacity(measured.len());
+        for (index, _, _, kind, _, _) in measured {
+            let chart = charts[index]
+                .as_ref()
+                .expect("measured figure panel remains configured");
+            let cell = cells[index];
+            let role = if self.legend_policy == FigureLegendPolicy::PerPanel {
+                crate::decorations::plan::LegendRole::Panel
+            } else {
+                crate::decorations::plan::LegendRole::Suppressed
+            };
+            let plan = crate::decorations::plan::plan_panel(chart, kind, cell, role)?;
+            if plan.result.decoration_mode == DecorationMode::SelfManaged {
+                return Err(Error::Render(format!(
+                    "{kind:?} manages its own canvas and cannot be nested in a composed figure"
+                )));
+            }
+            panels.push(FigurePanelPreflight {
+                index,
+                kind,
+                cell,
+                plan,
+            });
+        }
+        Ok(FigurePreflight {
+            charts,
+            figure_layout,
+            full_outer,
+            outer,
+            shared_legend,
+            panels,
+            text_panels,
+            headers,
+            row_titles,
+        })
+    }
+
+    fn render_open_canvas(
+        &self,
+        preflight: FigurePreflight<'a>,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        let palette = Theme::Publication.palette();
+        let row_title_palette = preflight
+            .charts
+            .iter()
+            .flatten()
+            .next()
+            .map_or_else(|| palette.clone(), Chart::palette);
+        for panel in &preflight.panels {
+            let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
+                Error::Render("composed figure panel disappeared during preflight".into())
+            })?;
+            crate::decorations::apply::apply_grid(
+                chart,
+                &panel.plan.result,
+                &chart.palette(),
+                backend,
+            )?;
+        }
+        for panel in preflight.panels {
+            let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
+                Error::Render("composed figure panel disappeared during render".into())
+            })?;
+            let source_rows = chart.configured_source_rows()?;
+            let render_chart = panel.plan.chart_for_render(chart);
+            let context = source_rows.as_deref().map_or_else(
+                || crate::spec::PlotRenderContext::new(render_chart.data(), panel.plan.panel),
+                |rows| {
+                    crate::spec::PlotRenderContext::with_source_rows(
+                        render_chart.data(),
+                        rows,
+                        panel.plan.panel,
+                    )
+                },
+            );
+            render_chart.render_panel(panel.kind, context, backend)?;
+            if !panel.plan.result.significance_brackets.is_empty() {
+                crate::significance::render(
+                    chart,
+                    &panel.plan.result.significance_brackets,
+                    backend,
+                )?;
+            }
+            crate::decorations::apply::apply_axes(
+                chart,
+                &panel.plan.result,
+                &chart.palette(),
+                backend,
+            )?;
+            crate::decorations::apply::apply_planned_legend(
+                chart,
+                panel.plan.legend.as_ref(),
+                backend,
+            )?;
+            draw_panel_header(chart, panel.cell, backend)?;
+        }
+        for panel in &preflight.text_panels {
+            draw_text_panel(panel, &palette, backend)?;
+        }
+        draw_figure_row_titles(&preflight.row_titles, &row_title_palette, backend)?;
+        draw_figure_headers(&preflight.headers, &palette, backend)?;
+        if let Some((title, entries)) = preflight.shared_legend {
+            let legend = Legend::new(
+                title,
+                entries,
+                f64::from(self.width),
+                f64::from(self.height),
+            );
+            let left = preflight.outer.x1 + self.resolved_shared_legend_gap(&legend);
+            let bottom = (preflight.full_outer.y1 - legend.compute_box_height())
+                .max(preflight.full_outer.y0);
+            let (x, y) = legend.box_at(left, bottom).anchor();
+            with_layer(backend, "figure-shared-legend", |backend| {
+                legend.draw(backend, x, y)
+            })?;
+        }
+        let mut titles = TitleBlock::new().font_family(palette.font_family.clone());
+        if let Some(title) = &self.title {
+            titles = titles.title(title.clone());
+        }
+        if let Some(subtitle) = &self.subtitle {
+            titles = titles.subtitle(subtitle.clone());
+        }
+        if let Some(caption) = &self.caption {
+            titles = titles.caption(caption.clone());
+        }
+        titles.draw(backend, self.width, &preflight.figure_layout, &palette)
+    }
+
+    fn figure_hue_groups(&self, panel: PanelBox) -> Result<Vec<(String, Vec<String>)>, Error> {
+        let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+        for chart in self.panels.iter().flatten() {
+            let chart = self.labels.as_ref().map_or_else(
+                || chart.clone(),
+                |labels| chart.clone().labels(labels.clone()),
+            );
+            let Some(dimension) = chart.hue_dimension_key() else {
+                continue;
+            };
+            let kind = chart
+                .plot_kind()
+                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let observed = chart.preflight_hue_levels(kind, panel)?;
+            let levels =
+                if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
+                    levels
+                } else {
+                    let index = groups.len();
+                    groups.push((dimension.to_owned(), Vec::new()));
+                    &mut groups[index].1
+                };
+            for level in observed {
+                if !levels.contains(&level) {
+                    levels.push(level);
+                }
+            }
+        }
+        Ok(groups)
+    }
+
+    fn resolved_shared_legend_gap(&self, legend: &Legend) -> f64 {
+        self.shared_legend_gap.unwrap_or(legend.metrics.pad * 2.0)
+    }
+
+    fn preflight_shared_legend(
+        charts: &[Option<Chart<'a>>],
+        panel: PanelBox,
+    ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
+        let mut expected_title: Option<(String, String)> = None;
+        let mut entries: Vec<(LegendEntrySignature, LegendEntry)> = Vec::new();
+        for chart in charts.iter().flatten() {
+            let kind = chart
+                .plot_kind()
+                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let result = chart.preflight_panel(kind, panel)?;
+            if result.legend_entries.is_empty() {
+                continue;
+            }
+            let raw_title = chart.legend_title_key().to_owned();
+            let title = chart.resolved_legend_title();
+            let title_signature = (raw_title, title.clone());
+            if expected_title
+                .as_ref()
+                .is_some_and(|expected| expected != &title_signature)
+            {
+                return Err(Error::Render(
+                    "shared figure legend requires compatible semantic titles, labels, and styles in every legend-bearing panel"
+                        .into(),
+                ));
+            }
+            expected_title = Some(title_signature);
+            for (index, entry) in result.legend_entries.into_iter().enumerate() {
+                let signature = (
+                    result
+                        .legend_keys
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_else(|| entry.label.clone()),
+                    entry.label.clone(),
+                    entry.style.color,
+                    entry.style.radius,
+                    entry.style.shape,
+                    entry
+                        .style
+                        .outline
+                        .map(|outline| (outline.color, outline.width_ratio.to_bits())),
+                    entry.style.opacity.to_bits(),
+                    entry
+                        .line_style
+                        .as_ref()
+                        .map(|style| (style.color, style.width.to_bits(), style.dash.clone())),
+                );
+                if entries
+                    .iter()
+                    .any(|(existing, _)| existing.0 != signature.0 && existing.1 == signature.1)
+                {
+                    return Err(Error::Render(format!(
+                        "shared figure legend has distinct raw identities resolving to display label {:?}",
+                        signature.1
+                    )));
+                }
+                if let Some((existing, _)) = entries
+                    .iter()
+                    .find(|(existing, _)| existing.0 == signature.0)
+                {
+                    if existing != &signature {
+                        return Err(Error::Render(
+                            "shared figure legend requires compatible semantic titles, labels, and styles in every legend-bearing panel"
+                                .into(),
+                        ));
+                    }
+                } else {
+                    entries.push((signature, entry));
+                }
+            }
+        }
+        Ok(expected_title
+            .map(|(_, title)| (title, entries.into_iter().map(|(_, entry)| entry).collect())))
+    }
+}
+
+fn chart_category_domain(chart: &Chart<'_>) -> Result<Vec<String>, Error> {
+    let column = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("shared category labels require an x category".into()))?;
+    let values = crate::data::strict_strings(chart.data(), column, "figure category labels")?;
+    let mut domain = Vec::new();
+    for value in values {
+        if !domain.contains(&value) {
+            domain.push(value);
+        }
+    }
+    Ok(domain)
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "validated shared-header positions are bounded by the figure canvas"
+)]
+fn draw_figure_headers(
+    headers: &[FigureHeaderPlan],
+    palette: &crate::theme::ThemePalette,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    if headers.is_empty() {
+        return Ok(());
+    }
+    let style = crate::render::backend::TextStyle {
+        color: palette.foreground,
+        font_family: palette.font_family.clone(),
+        font_size: palette.title_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Middle,
+        rotation: 0.0,
+    };
+    with_layer(backend, "figure-shared-headers", |backend| {
+        for header in headers {
+            backend.draw_text(
+                header.x.round() as u32,
+                header.y.round() as u32,
+                &header.text,
+                &style,
+            )?;
+        }
+        Ok(())
+    })
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "validated row-title positions are bounded by the figure canvas"
+)]
+fn draw_figure_row_titles(
+    titles: &[FigureHeaderPlan],
+    palette: &crate::theme::ThemePalette,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    if titles.is_empty() {
+        return Ok(());
+    }
+    let style = crate::render::backend::TextStyle {
+        color: palette.foreground,
+        font_family: palette.font_family.clone(),
+        font_size: palette.title_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Middle,
+        rotation: 0.0,
+    };
+    with_layer(backend, "figure-row-titles", |backend| {
+        for title in titles {
+            backend.draw_text(
+                title.x.round() as u32,
+                title.y.round() as u32,
+                &title.text,
+                &style,
+            )?;
+        }
+        Ok(())
+    })
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "validated text-panel positions are bounded by the figure canvas"
+)]
+fn draw_text_panel(
+    panel: &TextPanelPlan,
+    palette: &crate::theme::ThemePalette,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    let gap = 12.0;
+    let total_height = panel.title.height() + gap + panel.body.height();
+    let center_x = panel.cell.x0.midpoint(panel.cell.x1);
+    let mut y = panel.cell.y0.midpoint(panel.cell.y1) + total_height / 2.0
+        - panel.title.line_height() / 2.0;
+    let title_style = crate::render::backend::TextStyle {
+        color: palette.foreground,
+        font_family: palette.font_family.clone(),
+        font_size: palette.title_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Middle,
+        rotation: 0.0,
+    };
+    let body_style = crate::render::backend::TextStyle {
+        color: palette.foreground,
+        font_family: palette.font_family.clone(),
+        font_size: palette.label_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Middle,
+        rotation: 0.0,
+    };
+    with_layer(
+        backend,
+        &format!("figure-text-panel-{}", panel.index),
+        |backend| {
+            for line in panel.title.lines() {
+                backend.draw_text(
+                    center_x.round() as u32,
+                    y.round() as u32,
+                    line,
+                    &title_style,
+                )?;
+                y -= panel.title.line_height();
+            }
+            y -= gap;
+            for line in panel.body.lines() {
+                backend.draw_text(center_x.round() as u32, y.round() as u32, line, &body_style)?;
+                y -= panel.body.line_height();
+            }
+            Ok(())
+        },
+    )
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "validated panel title positions are projected into backend pixel coordinates"
+)]
+fn draw_panel_header(
+    chart: &Chart<'_>,
+    cell: PanelBox,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    let palette = chart.palette();
+    let title = palette
+        .show_title
+        .then(|| chart.title_text())
+        .flatten()
+        .filter(|title| !title.is_empty());
+    let subtitle = palette
+        .show_subtitle
+        .then(|| chart.subtitle_text())
+        .flatten()
+        .filter(|subtitle| !subtitle.is_empty());
+    if title.is_none() && subtitle.is_none() {
+        return Ok(());
+    }
+    let maximum_width = (cell.width() - 16.0).max(1.0);
+    let title_lines = title
+        .map(|text| try_wrap_text(text, palette.title_font_size, maximum_width, "panel title"))
+        .transpose()?
+        .unwrap_or_default();
+    let subtitle_lines = subtitle
+        .map(|text| {
+            try_wrap_text(
+                text,
+                palette.subtitle_font_size,
+                maximum_width,
+                "panel subtitle",
+            )
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let subtitle_line_height = f64::from(palette.subtitle_font_size) + 6.0;
+    let title_line_height = f64::from(palette.title_font_size) + 6.0;
+    let subtitle_style = crate::render::backend::TextStyle {
+        color: (80, 80, 80),
+        font_family: palette.font_family.clone(),
+        font_size: palette.subtitle_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Start,
+        rotation: 0.0,
+    };
+    let title_style = crate::render::backend::TextStyle {
+        color: palette.foreground,
+        font_family: palette.font_family,
+        font_size: palette.title_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: crate::render::backend::TextAnchor::Start,
+        rotation: 0.0,
+    };
+    with_layer(backend, &chart.layer_name("title"), |backend| {
+        for (index, line) in subtitle_lines.iter().rev().enumerate() {
+            backend.draw_text(
+                (cell.x0 + 8.0).round() as u32,
+                (cell.y1 + 14.0 + index as f64 * subtitle_line_height).round() as u32,
+                line,
+                &subtitle_style,
+            )?;
+        }
+        let title_base = cell.y1
+            + 14.0
+            + subtitle_lines.len() as f64 * subtitle_line_height
+            + if title_lines.is_empty() || subtitle_lines.is_empty() {
+                0.0
+            } else {
+                PANEL_HEADER_GAP
+            };
+        for (index, line) in title_lines.iter().rev().enumerate() {
+            backend.draw_text(
+                (cell.x0 + 8.0).round() as u32,
+                (title_base + index as f64 * title_line_height).round() as u32,
+                line,
+                &title_style,
+            )?;
+        }
+        Ok(())
+    })
+}

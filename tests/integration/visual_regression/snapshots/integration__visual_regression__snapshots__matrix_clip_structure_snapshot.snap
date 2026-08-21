@@ -1,0 +1,24 @@
+---
+source: tests/integration/visual_regression/snapshots.rs
+assertion_line: 37
+expression: "specialized_svg_structure(&svg, &[\"Matrix structural title\", \"Group\"])"
+---
+<clipPath id="clip-0"><rect x="72.800" y="50.000" width="96.800" height="79.000"/></clipPath>
+<clipPath id="clip-1"><rect x="177.600" y="50.000" width="96.800" height="79.000"/></clipPath>
+<clipPath id="clip-2"><rect x="72.800" y="137.000" width="96.800" height="79.000"/></clipPath>
+<clipPath id="clip-3"><rect x="177.600" y="137.000" width="96.800" height="79.000"/></clipPath>
+<text x="180" y="20" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" fill="#000000" text-anchor="middle" dominant-baseline="middle">Matrix structural title</text>
+<g clip-path="url(#clip-0)">
+MARKS circle=0 line=0 polygon=2 polyline=0 text=0
+END MARKS
+<g clip-path="url(#clip-1)">
+MARKS circle=4 line=0 polygon=0 polyline=0 text=0
+END MARKS
+<g clip-path="url(#clip-2)">
+MARKS circle=4 line=0 polygon=0 polyline=0 text=0
+END MARKS
+<g clip-path="url(#clip-3)">
+MARKS circle=0 line=0 polygon=2 polyline=0 text=0
+END MARKS
+<g id="legend">
+<text x="299" y="72" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" dominant-baseline="middle">Group</text>

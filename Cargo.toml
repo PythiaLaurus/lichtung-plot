@@ -1,0 +1,40 @@
+[package]
+name = "lichtung-plot"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "MIT OR Apache-2.0"
+description = "Strongly typed scientific plotting with deterministic SVG and optional PNG output"
+documentation = "https://docs.rs/lichtung-plot"
+readme = "README.md"
+publish = false
+
+[features]
+default = []
+png = ["dep:png", "dep:resvg", "dep:zune-jpeg"]
+
+[dependencies]
+polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
+statrs = "0.18"
+thiserror = "2"
+unicode-segmentation = "1.13"
+# `resvg` + `tiny-skia` rasterize the native SVG output to PNG when the
+# `png` feature is enabled. Pure Rust, with no external renderer process.
+png = { version = "0.18", optional = true }
+resvg = { version = "0.47.0", features = ["text"], optional = true }
+# zune-jpeg 0.5.15's no-log warning macro does not compile on the supported toolchain.
+zune-jpeg = { version = "=0.5.15", features = ["log"], optional = true }
+
+[dev-dependencies]
+insta = "1.48"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
