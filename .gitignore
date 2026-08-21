@@ -1,9 +1,6 @@
 /target/
 *.png
 *.svg
-__pycache__/
-*.py[cod]
-.pytest_cache/
 .cache/
 *.swp
 *.swo

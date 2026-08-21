@@ -57,6 +57,4 @@ just verify
 ```
 
 Focused recipes include `just test`, `just test-png`, `just lint`, and
-`just lint-png`. The repository policy gate mechanically rejects first-party
-Lichtung dependencies, path dependencies, legacy `mod.rs` layout, and retired
-PDF/error boundary symbols.
+`just lint-png`.

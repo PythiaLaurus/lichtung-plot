@@ -8,6 +8,7 @@ description = "Strongly typed scientific plotting with deterministic SVG and opt
 documentation = "https://docs.rs/lichtung-plot"
 readme = "README.md"
 publish = false
+autotests = false
 
 [features]
 default = []
@@ -27,6 +28,62 @@ zune-jpeg = { version = "=0.5.15", features = ["log"], optional = true }
 
 [dev-dependencies]
 insta = "1.48"
+
+[[test]]
+name = "annotations"
+path = "tests/annotations/suite.rs"
+
+[[test]]
+name = "categorical"
+path = "tests/categorical/suite.rs"
+
+[[test]]
+name = "composition"
+path = "tests/composition/suite.rs"
+
+[[test]]
+name = "distributions"
+path = "tests/distributions/suite.rs"
+
+[[test]]
+name = "estimates"
+path = "tests/estimates/suite.rs"
+
+[[test]]
+name = "heatmap"
+path = "tests/heatmap/suite.rs"
+
+[[test]]
+name = "interactions"
+path = "tests/interactions/suite.rs"
+
+[[test]]
+name = "layout"
+path = "tests/layout/suite.rs"
+
+[[test]]
+name = "lines"
+path = "tests/lines/suite.rs"
+
+[[test]]
+name = "marginal-matrix"
+path = "tests/marginal_matrix/suite.rs"
+
+[[test]]
+name = "output"
+path = "tests/output/suite.rs"
+
+[[test]]
+name = "rendering"
+path = "tests/rendering/suite.rs"
+
+[[test]]
+name = "statistics"
+path = "tests/statistics/suite.rs"
+
+[[test]]
+name = "visual-regression"
+path = "tests/visual_regression/suite.rs"
 
 [lints.rust]
 unsafe_code = "deny"

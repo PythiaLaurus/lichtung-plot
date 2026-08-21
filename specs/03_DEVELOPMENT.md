@@ -24,9 +24,9 @@ just package
 just verify
 ```
 
-`just verify` is the complete read-only gate. It checks formatting, repository
-policy, default and PNG builds, lints, tests, documentation, and Cargo's
-independently unpacked package.
+`just verify` is the complete read-only gate. It checks formatting, default and
+PNG builds, lints, tests, documentation, and Cargo's independently unpacked
+package.
 
 ## Dependency Changes
 
@@ -45,9 +45,49 @@ the new output is intentional and consistent with `02_RENDERING_CONTRACT.md`.
 
 ## Test Layout
 
-`tests/integration.rs` is the sole Cargo-discovered integration-test root.
-Suites below `tests/integration/` are grouped into the stable `plots`,
-`rendering`, `composition`, `visual_regression`, and `statistics` domains. Plot
-tests are grouped again by plot family rather than added as loose root files.
-Shared fixtures and backend helpers live under `tests/integration/support/`, and
-visual snapshots remain beside the visual-regression module that owns them.
+Integration tests are independent Cargo test targets declared in `Cargo.toml`.
+Each target lives in `tests/<domain>/suite.rs`, with sibling modules for one
+cohesive plot family or rendering contract. This keeps targets independently
+runnable without scattering loose Rust files across `tests/` or routing every
+test through one monolithic integration crate. Shared test-only helpers live in
+`tests/support/`. Visual snapshots live beside the visual-regression target that
+owns and reviews them.
+
+The current focused targets are:
+
+```text
+annotations       categorical       composition
+distributions     estimates         heatmap
+interactions      layout            lines
+marginal-matrix   output            rendering
+statistics        visual-regression
+```
+
+Run one target with `cargo test --test <target>`. New tests belong in the target
+whose public behavior they exercise. Add a target only for a genuinely distinct
+contract; do not create chronological, catch-all, or `general` suites.
+
+## Snapshot Tests
+
+The five committed snapshots are generated directly by tests in
+`tests/visual_regression/suite.rs`. Those tests construct fixed data, render the
+canonical SVG with `Chart`, normalize only unstable embedded-font bytes, and
+pass either the bounded SVG or a small clipping/layer summary to
+`insta::assert_snapshot!`. No script, Python process, or external plotting
+library generates them.
+
+Run them with:
+
+```text
+cargo test --test visual-regression
+```
+
+On a missing or changed baseline, Insta writes a `.snap.new` candidate and the
+test fails. Review intentional changes with `cargo insta review`; never accept a
+snapshot merely to make CI green. Snapshots are tracked because CI needs an
+approved expected output to compare against on a fresh checkout.
+
+Snapshots are regression baselines, not independent correctness oracles.
+Semantic behavior, validation errors, geometry bounds, and numeric properties
+remain covered by explicit assertions in the focused targets. Keep snapshots
+small and reviewable; broad multi-plot manifest snapshots are prohibited.

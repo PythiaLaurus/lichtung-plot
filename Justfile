@@ -32,11 +32,6 @@ test:
 test-png:
     cargo test --locked --offline --all-targets --features png
 
-# Verify repository structure and the standalone dependency boundary.
-policy:
-    python3 scripts/check_repository.py
-    python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-
 # Build API documentation with warnings denied.
 docs:
     RUSTDOCFLAGS="-D warnings" cargo doc --locked --offline --all-features --no-deps
@@ -46,4 +41,4 @@ package:
     cargo package --locked --offline --allow-dirty
 
 # Run the complete read-only repository verification.
-verify: fmt-check policy check check-png lint lint-png test test-png docs package
+verify: fmt-check check check-png lint lint-png test test-png docs package

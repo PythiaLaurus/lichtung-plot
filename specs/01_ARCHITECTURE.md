@@ -19,8 +19,7 @@ lichtung-plot/
 ├── tests/
 ├── examples/
 ├── specs/
-├── docs/
-└── scripts/
+└── docs/
 ```
 
 The package is the repository root. `src/lib.rs` defines the public surface.
