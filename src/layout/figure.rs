@@ -13,6 +13,9 @@ const MIN_PANEL_WIDTH: f64 = 80.0;
 const MIN_PANEL_HEIGHT: f64 = 60.0;
 const COMPOSED_PANEL_GAP: f64 = 12.0;
 pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
+pub(crate) const X_AXIS_TICK_LABEL_GAP: f64 = 8.0;
+pub(crate) const X_AXIS_TITLE_GAP: f64 = 8.0;
+pub(crate) const X_AXIS_TITLE_WITHOUT_TICKS_GAP: f64 = 16.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -198,31 +201,32 @@ impl PanelRequirements {
         }
         left = left.max(x_tick_half_width).max(x_label_overhang) + 4.0;
 
-        let mut bottom = if palette.show_tick_labels {
-            tick_length
-                + 8.0
-                + x_tick_blocks
-                    .iter()
-                    .map(crate::layout::TextBlock::height)
-                    .fold(f64::from(palette.tick_font_size), f64::max)
+        let x_tick_height = if palette.show_tick_labels {
+            x_tick_blocks
+                .iter()
+                .map(crate::layout::TextBlock::height)
+                .fold(0.0_f64, f64::max)
+        } else {
+            0.0
+        };
+        let mut bottom = if x_tick_height > 0.0 {
+            tick_length + X_AXIS_TICK_LABEL_GAP + x_tick_height
         } else {
             tick_length + 4.0
         };
         if palette.show_x_label && !layout.x_axis.label.is_empty() {
-            let extra_tick_height = (x_tick_blocks
-                .iter()
-                .map(crate::layout::TextBlock::height)
-                .fold(0.0_f64, f64::max)
-                - f64::from(palette.tick_font_size) * 1.2)
-                .max(0.0);
+            let title_gap = if x_tick_height > 0.0 {
+                X_AXIS_TICK_LABEL_GAP + x_tick_height + X_AXIS_TITLE_GAP
+            } else {
+                X_AXIS_TITLE_WITHOUT_TICKS_GAP
+            };
             bottom = bottom.max(
                 tick_length
-                    + 30.0
+                    + title_gap
                     + x_label_block.as_ref().map_or(
-                        f64::from(palette.label_font_size),
+                        f64::from(palette.label_font_size) * 1.2,
                         crate::layout::TextBlock::height,
-                    )
-                    + extra_tick_height,
+                    ),
             );
         }
         bottom = bottom.max(y_label_overhang).max(y_tick_vertical_overhang) + 4.0;
@@ -503,14 +507,21 @@ impl FigureLayout {
         };
 
         let tick_h = if reserve_axes && palette.show_tick_labels {
-            f64::from(palette.tick_font_size) + f64::from(palette.tick_length) + 8.0
+            f64::from(palette.tick_length)
+                + X_AXIS_TICK_LABEL_GAP
+                + f64::from(palette.tick_font_size) * 1.2
         } else if reserve_axes {
             f64::from(palette.tick_length) + 4.0
         } else {
             0.0
         };
         let x_label_h = if spec.has_x_label && palette.show_x_label {
-            f64::from(palette.label_font_size) + 14.0
+            let gap = if reserve_axes && palette.show_tick_labels {
+                X_AXIS_TITLE_GAP
+            } else {
+                X_AXIS_TITLE_WITHOUT_TICKS_GAP
+            };
+            gap + f64::from(palette.label_font_size) * 1.2
         } else {
             0.0
         };

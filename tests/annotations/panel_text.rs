@@ -212,7 +212,7 @@ fn automatic_legend_falls_back_around_panel_text() {
 #[test]
 fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
     let data = scatter_data();
-    let chart = scatter(&data)
+    let mut chart = scatter(&data)
         .panel_text_annotation(
             PanelTextAnnotation::new(
                 PanelCorner::TopLeft,
@@ -227,6 +227,7 @@ fn separately_valid_panel_annotations_reject_pairwise_overlap_before_begin() {
             )
             .unwrap(),
         );
+    let _ = chart.size(460, 300);
 
     let error = chart.preflight().unwrap_err().to_string();
     assert!(

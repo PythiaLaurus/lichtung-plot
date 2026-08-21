@@ -7,9 +7,17 @@ system-font fallback declaration, vector geometry, deterministic clip and
 gradient identifiers, and no embedded font data. In-memory and file rendering
 preserve the same scene bytes.
 
+## Outlined SVG
+
+The `text-as-path` feature adds
+`RenderedSvgScene::svg_with_text_as_paths`. It converts the canonical scene's
+text to vector glyph paths using installed system fonts, verifies that no
+`<text>` elements remain, and returns a self-contained derived SVG. This output
+is not selectable or searchable and can differ across font environments.
+
 ## PNG
 
-PNG requires the `png` feature:
+PNG requires the `png` feature, which includes text outlining:
 
 ```toml
 lichtung-plot = { path = "../lichtung-plot", features = ["png"] }

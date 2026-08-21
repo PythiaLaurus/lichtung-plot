@@ -42,7 +42,7 @@ caller-owned analysis result
 lichtung_plot::ComparisonAnnotation
         |
         v
-Chart -> preflight -> canonical SVG scene -> SVG and optional PNG
+Chart -> preflight -> canonical SVG scene -> SVG, outlined SVG, and optional PNG
 ```
 
 The renderer never calls back into an application and never computes a
@@ -54,9 +54,11 @@ display values.
 - `Chart` and `Figure` own plotting configuration while borrowing dataframes.
 - `ComparisonAnnotation` owns visual endpoint and p-value metadata.
 - `Error` owns the renderer's I/O, data, and rendering failure domains.
-- `RenderedSvgScene` owns exact SVG bytes and canonical CSS dimensions.
+- `RenderedSvgScene` owns exact SVG bytes and canonical CSS dimensions and can
+  derive a text-as-path SVG without rerunning chart layout.
 - `Backend` is the public custom-renderer extension point.
-- Built-in SVG and optional PNG output remain first-party implementations.
+- Built-in SVG, optional text outlining, and optional PNG output remain
+  first-party implementations.
 
 ## Excluded Responsibilities
 

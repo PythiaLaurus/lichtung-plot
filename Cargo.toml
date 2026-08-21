@@ -12,15 +12,16 @@ autotests = false
 
 [features]
 default = []
-png = ["dep:png", "dep:resvg", "dep:zune-jpeg"]
+text-as-path = ["dep:resvg"]
+png = ["text-as-path", "dep:png", "dep:zune-jpeg"]
 
 [dependencies]
 polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
 statrs = "0.18"
 thiserror = "2"
 unicode-segmentation = "1.13"
-# `resvg` + `tiny-skia` rasterize the native SVG output to PNG when the
-# `png` feature is enabled. Pure Rust, with no external renderer process.
+# `resvg` outlines SVG text and, with the `png` feature, rasterizes the native
+# SVG output. Pure Rust, with no external renderer process.
 png = { version = "0.18", optional = true }
 resvg = { version = "0.47.0", features = ["text"], optional = true }
 # zune-jpeg 0.5.15's no-log warning macro does not compile on the supported toolchain.

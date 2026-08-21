@@ -111,17 +111,17 @@ pub struct ThemePalette {
     pub show_caption: bool,
     /// Length of the axis tick marks in pixels. Default `4`.
     pub tick_length: u32,
-    /// Font size in points for axis tick labels. Default `14`.
+    /// Font size in points for axis tick labels. Default `16`.
     pub tick_font_size: u32,
-    /// Font size in points for annotations, status text, and color scales. Default `12`.
+    /// Font size in points for annotations, status text, and color scales. Default `14`.
     pub detail_font_size: u32,
-    /// Font size in points for axis labels. Default `15`.
+    /// Font size in points for axis labels. Default `17`.
     pub label_font_size: u32,
-    /// Font size in points for the figure title. Default `18`.
+    /// Font size in points for the figure title. Default `20`.
     pub title_font_size: u32,
-    /// Font size in points for the figure subtitle. Default `12`.
+    /// Font size in points for the figure subtitle. Default `14`.
     pub subtitle_font_size: u32,
-    /// Font size in points for the figure caption. Default `12`.
+    /// Font size in points for the figure caption. Default `14`.
     pub caption_font_size: u32,
     /// Color of the grid lines (RGB). Default light gray.
     pub grid_color: (u8, u8, u8),
@@ -167,12 +167,12 @@ fn publication_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 14,
-        detail_font_size: 12,
-        label_font_size: 15,
-        title_font_size: 18,
-        subtitle_font_size: 13,
-        caption_font_size: 13,
+        tick_font_size: 16,
+        detail_font_size: 14,
+        label_font_size: 17,
+        title_font_size: 20,
+        subtitle_font_size: 15,
+        caption_font_size: 15,
         grid_color: (220, 220, 220),
         grid_width: 0.5,
     }
@@ -206,12 +206,12 @@ fn nature_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 14,
-        detail_font_size: 12,
-        label_font_size: 14,
-        title_font_size: 17,
-        subtitle_font_size: 12,
-        caption_font_size: 12,
+        tick_font_size: 16,
+        detail_font_size: 14,
+        label_font_size: 16,
+        title_font_size: 19,
+        subtitle_font_size: 14,
+        caption_font_size: 14,
         grid_color: (230, 230, 230),
         grid_width: 0.5,
     }
@@ -245,12 +245,12 @@ fn science_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 14,
-        detail_font_size: 12,
-        label_font_size: 15,
-        title_font_size: 19,
-        subtitle_font_size: 14,
-        caption_font_size: 13,
+        tick_font_size: 16,
+        detail_font_size: 14,
+        label_font_size: 17,
+        title_font_size: 21,
+        subtitle_font_size: 16,
+        caption_font_size: 15,
         grid_color: (200, 200, 200),
         grid_width: 0.5,
     }
@@ -284,12 +284,12 @@ fn chi_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 14,
-        detail_font_size: 12,
-        label_font_size: 15,
-        title_font_size: 17,
-        subtitle_font_size: 13,
-        caption_font_size: 13,
+        tick_font_size: 16,
+        detail_font_size: 14,
+        label_font_size: 17,
+        title_font_size: 19,
+        subtitle_font_size: 15,
+        caption_font_size: 15,
         grid_color: (220, 220, 220),
         grid_width: 0.5,
     }
@@ -353,7 +353,7 @@ mod tests {
         assert!(Theme::ALL
             .iter()
             .copied()
-            .all(|theme| theme.palette().tick_font_size == 14));
+            .all(|theme| theme.palette().tick_font_size == 16));
     }
 
     #[test]
@@ -361,6 +361,6 @@ mod tests {
         assert!(Theme::ALL
             .iter()
             .copied()
-            .all(|theme| theme.palette().detail_font_size == 12));
+            .all(|theme| theme.palette().detail_font_size == 14));
     }
 }

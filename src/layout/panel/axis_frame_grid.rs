@@ -2,6 +2,9 @@ use crate::Error;
 
 use super::geometry::y_axis_label_half_width;
 use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection, Scale};
+use crate::layout::figure::{
+    X_AXIS_TICK_LABEL_GAP, X_AXIS_TITLE_GAP, X_AXIS_TITLE_WITHOUT_TICKS_GAP,
+};
 use crate::layout::TextBlock;
 use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
 use crate::theme::ThemePalette;
@@ -135,7 +138,10 @@ impl Axis {
                             tick_width,
                             "x-axis tick label",
                         )?;
-                        let first_y = y0 - f64::from(palette.tick_length) - 8.0;
+                        let first_y = y0
+                            - f64::from(palette.tick_length)
+                            - X_AXIS_TICK_LABEL_GAP
+                            - block.line_height() / 2.0;
                         for (index, line) in block.lines().iter().enumerate() {
                             backend.draw_text(
                                 x_px.round() as u32,
@@ -215,11 +221,14 @@ impl Axis {
                         "x-axis title",
                     )?;
                     let tick_offset = if tick_label_height > 0.0 {
-                        8.0 + tick_label_height + 8.0
+                        X_AXIS_TICK_LABEL_GAP + tick_label_height + X_AXIS_TITLE_GAP
                     } else {
-                        16.0
+                        X_AXIS_TITLE_WITHOUT_TICKS_GAP
                     };
-                    let first_y = y0 - f64::from(palette.tick_length) - tick_offset;
+                    let first_y = y0
+                        - f64::from(palette.tick_length)
+                        - tick_offset
+                        - block.line_height() / 2.0;
                     for (index, line) in block.lines().iter().enumerate() {
                         backend.draw_text(
                             cx.round() as u32,

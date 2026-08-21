@@ -479,13 +479,13 @@ fn unavailable_text_without_a_fitting_guide_side_fails_before_backend_begin() {
     )
     .unwrap();
     let mut chart = point_interval(&data, true).zero_line().x_limits(-1.0, 1.0);
-    let _ = chart.size(220, 240);
+    let _ = chart.size(224, 240);
 
-    assert!(chart
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("does not fit on either side"));
+    let error = chart.preflight().unwrap_err().to_string();
+    assert!(
+        error.contains("does not fit on either side"),
+        "unexpected preflight error: {error}"
+    );
     let mut backend = BeginCountingBackend::default();
     assert!(chart.render_with_backend(&mut backend).is_err());
     assert_eq!(backend.begins, 0);

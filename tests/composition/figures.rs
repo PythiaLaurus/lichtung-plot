@@ -462,10 +462,10 @@ fn composed_panel_subtitle_is_distinct_and_clear_of_title_and_panel() {
     let subtitle_y = attribute(subtitle, "y").parse::<f64>().unwrap();
     let panel_y = attribute(clip, "y").parse::<f64>().unwrap();
 
-    assert_eq!(attribute(title, "font-size"), "18");
-    assert_eq!(attribute(subtitle, "font-size"), "13");
+    assert_eq!(attribute(title, "font-size"), "20");
+    assert_eq!(attribute(subtitle, "font-size"), "15");
     assert!(subtitle_y - title_y > 15.5);
-    assert!(subtitle_y + 6.5 < panel_y);
+    assert!(subtitle_y + 7.5 < panel_y);
 }
 
 #[test]

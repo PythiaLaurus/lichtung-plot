@@ -1,15 +1,14 @@
 ---
 source: tests/visual_regression/suite.rs
-assertion_line: 67
 expression: "specialized_svg_structure(&svg,\n&[\"Beeswarm structural title\", \"Color\", \"0.100\", \"1.000\"])"
 ---
-<clipPath id="clip-0"><rect x="104.400" y="50.000" width="150.600" height="166.000"/></clipPath>
+<clipPath id="clip-0"><rect x="113.600" y="52.000" width="139.900" height="159.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
-<text x="289" y="62" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start" dominant-baseline="middle">1.000</text>
-<text x="289" y="221" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start" dominant-baseline="middle">0.100</text>
-<text x="320" y="133" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90.0,320,133)">Color</text>
+<text x="287" y="61" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" dominant-baseline="middle">1.000</text>
+<text x="287" y="220" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" dominant-baseline="middle">0.100</text>
+<text x="318" y="132" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90.0,318,132)">Color</text>
 <g id="axes">
-<text x="180" y="20" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" fill="#000000" text-anchor="middle" dominant-baseline="middle">Beeswarm structural title</text>
+<text x="180" y="20" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#000000" text-anchor="middle" dominant-baseline="middle">Beeswarm structural title</text>

@@ -128,6 +128,33 @@ enum GroupState {
     Clip,
 }
 
+/// Convert canonical SVG scene text to vector paths using installed fonts.
+#[cfg(feature = "text-as-path")]
+pub(crate) fn convert_svg_text_to_paths(
+    svg_data: &[u8],
+    width_css_px: u32,
+    height_css_px: u32,
+) -> Result<Vec<u8>, Error> {
+    let mut options = resvg::usvg::Options::default();
+    crate::font::configure_system_fonts(options.fontdb_mut())?;
+
+    let tree = resvg::usvg::Tree::from_data(svg_data, &options)
+        .map_err(|error| Error::Render(format!("parse svg for text outlining: {error}")))?;
+    let source_size = tree.size().to_int_size();
+    if source_size.width() != width_css_px || source_size.height() != height_css_px {
+        return Err(Error::Render(
+            "rendered SVG scene dimensions do not match its canonical CSS dimensions".into(),
+        ));
+    }
+    let outlined = tree.to_string(&resvg::usvg::WriteOptions::default());
+    if outlined.contains("<text") {
+        return Err(Error::Render(
+            "SVG text outlining left text elements in the converted scene".into(),
+        ));
+    }
+    Ok(outlined.into_bytes())
+}
+
 /// Rasterize canonical SVG scene bytes to PNG bytes with explicit export options.
 #[cfg(feature = "png")]
 pub(crate) fn rasterize_svg_bytes_to_png(

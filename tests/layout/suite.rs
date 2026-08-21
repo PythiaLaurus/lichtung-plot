@@ -1,4 +1,4 @@
-use lichtung_plot::layout::{deterministic_text_width, AxisSpec, Layout};
+use lichtung_plot::layout::{deterministic_text_width, AxisSpec, AxisTick, Layout};
 use lichtung_plot::{BarAggregation, Chart, Labels, LegendPosition, Theme};
 use polars::prelude::*;
 

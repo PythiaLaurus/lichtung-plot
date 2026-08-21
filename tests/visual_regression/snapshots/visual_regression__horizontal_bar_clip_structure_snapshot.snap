@@ -1,12 +1,11 @@
 ---
 source: tests/visual_regression/suite.rs
-assertion_line: 94
 expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A deliberately long category\"])"
 ---
-<clipPath id="clip-0"><rect x="250.000" y="50.000" width="80.000" height="166.000"/></clipPath>
+<clipPath id="clip-0"><rect x="219.040" y="52.000" width="110.960" height="159.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
 <g id="axes">
-<text x="180" y="20" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" fill="#000000" text-anchor="middle" dominant-baseline="middle">Horizontal structural title</text>
+<text x="180" y="20" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#000000" text-anchor="middle" dominant-baseline="middle">Horizontal structural title</text>

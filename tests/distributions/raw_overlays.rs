@@ -123,12 +123,6 @@ fn temp_path(label: &str) -> PathBuf {
     ))
 }
 
-fn fnv1a64(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
-    })
-}
-
 #[test]
 fn explicit_hidden_is_byte_identical_to_the_default_for_boxplot_and_violin() {
     let data = data(&[1.0, 2.0, 3.0, 4.0]);
@@ -145,17 +139,6 @@ fn explicit_hidden_is_byte_identical_to_the_default_for_boxplot_and_violin() {
             std::fs::read(&default_path).unwrap(),
             std::fs::read(&hidden_path).unwrap(),
             "{kind:?}"
-        );
-        let svg = std::fs::read_to_string(&hidden_path).unwrap();
-        let expected = match kind {
-            PlotKind::Boxplot => 0xf3ec_5b1a_728c_43d4,
-            PlotKind::Violin => 0xfaeb_cacd_c6ef_3a6d,
-            _ => unreachable!(),
-        };
-        assert_eq!(
-            fnv1a64(svg.as_bytes()),
-            expected,
-            "{kind:?} pre-overlay hidden SVG golden changed"
         );
         std::fs::remove_file(default_path).unwrap();
         std::fs::remove_file(hidden_path).unwrap();

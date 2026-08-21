@@ -16,7 +16,7 @@ pub const SYSTEM_FONT_FAMILIES: &[&str] = &[
     "Arial",
 ];
 
-#[cfg(feature = "png")]
+#[cfg(feature = "text-as-path")]
 pub(crate) fn configure_system_fonts(
     database: &mut resvg::usvg::fontdb::Database,
 ) -> crate::Result<()> {

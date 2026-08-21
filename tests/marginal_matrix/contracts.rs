@@ -123,6 +123,7 @@ fn marginal_kde_range_does_not_create_excessive_blank_space() {
     let dir = unique_dir("marginal-kde-range-not-excessive");
     let out = dir.join("marginal.svg");
     let mut chart = Chart::new(&df).group("region").hue("region");
+    let _ = chart.legend_position(LegendPosition::Hidden);
     let _ = chart.x("mz").y("intensity").size(420, 300).marginal();
     chart
         .render_to_svg(&out)

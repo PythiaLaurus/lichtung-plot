@@ -25,10 +25,13 @@ remain outside mark clipping where required.
 
 ## Output Formats
 
-SVG is always compiled. The `png` Cargo feature enables rasterization of the
-canonical SVG through `resvg` and `tiny-skia`. PNG sizing validates positive,
-finite DPI or scale, positive dimensions, and bounded pixel work before
-allocation.
+SVG is always compiled. The `text-as-path` feature enables conversion of every
+text element in the canonical scene to vector glyph paths through `resvg`. The
+derived SVG is self-contained but its text is no longer selectable, searchable,
+or available to assistive text extraction. The `png` feature includes this
+capability and enables rasterization of the canonical SVG through `resvg` and
+`tiny-skia`. PNG sizing validates positive, finite DPI or scale, positive
+dimensions, and bounded pixel work before allocation.
 
 There is no plot-level PDF output. Applications that need PDF must own that
 conversion or report workflow outside this crate.
@@ -42,9 +45,11 @@ Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
 
 PNG scans platform font directories and selects the first installed preferred
-family. Rendering performs no download, provisioning, or cache lookup. SVG
-structure and geometry remain deterministic for identical inputs and options;
-exact glyph appearance and PNG bytes require the same installed-font
+family. Rendering performs no download, provisioning, or cache lookup. The
+optional text-as-path conversion resolves this same stack from installed fonts
+and fails if no font is available or any text remains. SVG structure and
+geometry remain deterministic for identical inputs and options; exact glyph
+paths, glyph appearance, and PNG bytes require the same installed-font
 environment.
 
 ## Comparison Annotations

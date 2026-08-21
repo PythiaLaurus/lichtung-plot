@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-#[cfg(feature = "png")]
+#[cfg(feature = "text-as-path")]
 use crate::Error;
 
 #[cfg(feature = "png")]
@@ -70,6 +70,26 @@ impl RenderedSvgScene {
     #[must_use]
     pub fn into_svg_bytes(self) -> Vec<u8> {
         self.svg.into_vec()
+    }
+
+    /// Return SVG bytes with every text element converted to vector paths.
+    ///
+    /// The conversion uses the first available family from the renderer's
+    /// system-font policy. The returned SVG is self-contained but no longer
+    /// contains selectable or searchable text.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no system font is available, the canonical SVG
+    /// cannot be parsed, its dimensions change, or any text remains after
+    /// conversion.
+    #[cfg(feature = "text-as-path")]
+    pub fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
+        crate::render::svg_backend::convert_svg_text_to_paths(
+            &self.svg,
+            self.width_css_px,
+            self.height_css_px,
+        )
     }
 
     /// Rasterize the scene to deterministic PNG bytes with explicit options.

@@ -70,6 +70,33 @@ fn figure_layout_reserves_caption_space() {
 }
 
 #[test]
+fn x_tick_labels_clear_tick_marks_by_their_measured_edge_gap() {
+    let df = df!(
+        "x" => [0.0_f64, 1.0],
+        "y" => [0.0_f64, 1.0]
+    )
+    .unwrap();
+    let mut chart = Chart::new(&df)
+        .x_label("Horizontal axis")
+        .x_limits(0.0, 1.0)
+        .x_ticks(vec![AxisTick::new(0.0, "zero"), AxisTick::new(1.0, "one")]);
+    let _ = chart.x("x").y("y").size(360, 260).scatter();
+    let svg = String::from_utf8(chart.render_to_svg_bytes().unwrap()).unwrap();
+    let text = parse_text_elements(&svg);
+    let tick = text_element(&text, "zero");
+    let clip = parse_first_clip_rect(&svg);
+    let palette = Theme::Publication.palette();
+    let tick_endpoint = clip.y + clip.height + f64::from(palette.tick_length);
+    let tick_top = tick.y - tick.font_size * 0.6;
+    let gap = tick_top - tick_endpoint;
+
+    assert!(
+        (7.0..=9.0).contains(&gap),
+        "x tick label should clear the tick mark by the measured 8px gap: gap={gap}"
+    );
+}
+
+#[test]
 fn default_single_panel_left_inset_is_compact() {
     let df = fixture_df();
     let mut chart = Chart::new(&df).y_label("response");
@@ -95,7 +122,7 @@ fn caption_uses_theme_font_size() {
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
     assert!(
-        svg.contains("font-size=\"13\"") && svg.contains(">Caption text</text>"),
+        svg.contains("font-size=\"15\"") && svg.contains(">Caption text</text>"),
         "publication captions should render at the theme caption font size"
     );
 }
@@ -574,9 +601,9 @@ fn publication_theme_uses_larger_default_text() {
     let palette = Theme::Publication.palette();
 
     assert!(
-        palette.tick_font_size >= 14
-            && palette.label_font_size >= 15
-            && palette.title_font_size >= 18,
+        palette.tick_font_size >= 16
+            && palette.label_font_size >= 17
+            && palette.title_font_size >= 20,
         "publication typography should be readable by default: {palette:?}"
     );
 }

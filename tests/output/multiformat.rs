@@ -17,7 +17,7 @@ fn figure(data: &DataFrame) -> Figure<'_> {
         .unwrap()
         .panel(0, 0, chart(data))
         .unwrap()
-        .size(320, 240)
+        .size(320, 260)
         .title("Selectable figure text")
 }
 
@@ -57,7 +57,7 @@ fn figure_scene_reuses_one_render_for_exact_svg_bytes() {
     let scene = figure(&data).render_scene().unwrap();
 
     assert_eq!(scene.svg_bytes(), scene.svg_bytes());
-    assert_eq!((scene.width_css_px(), scene.height_css_px()), (320, 240));
+    assert_eq!((scene.width_css_px(), scene.height_css_px()), (320, 260));
 }
 
 #[test]
@@ -86,6 +86,23 @@ fn figure_legacy_svg_methods_preserve_scene_bytes() {
     assert_eq!(std::fs::read(&path).unwrap(), expected);
 }
 
+#[cfg(feature = "text-as-path")]
+#[test]
+fn scene_can_convert_every_text_element_to_vector_paths() {
+    let data = fixture();
+    let scene = chart(&data).render_scene().unwrap();
+    let outlined = String::from_utf8(scene.svg_with_text_as_paths().unwrap()).unwrap();
+
+    assert!(
+        scene
+            .svg_bytes()
+            .windows(5)
+            .any(|window| window == b"<text")
+            && !outlined.contains("<text")
+            && outlined.contains("<path")
+    );
+}
+
 #[cfg(feature = "png")]
 #[test]
 fn chart_scene_produces_deterministic_300_dpi_png_with_density() {
@@ -112,7 +129,7 @@ fn figure_supports_option_aware_in_memory_300_dpi_png() {
     let actual = figure.render_to_png_bytes_with_options(&dpi_300()).unwrap();
 
     assert_eq!(actual, expected);
-    assert_eq!(png_dimensions(&actual), (1000, 750));
+    assert_eq!(png_dimensions(&actual), (1000, 813));
     assert_eq!(png_density(&actual), Some((11_811, 11_811, 1)));
 }
 

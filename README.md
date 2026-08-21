@@ -1,8 +1,8 @@
 # lichtung-plot
 
 `lichtung-plot` is a strongly typed scientific plotting library for Polars
-dataframes. It produces one canonical SVG scene and can optionally rasterize
-that scene to PNG with the `png` feature.
+dataframes. It produces one canonical SVG scene, can convert its text to vector
+paths, and can optionally rasterize that scene to PNG.
 
 This first standalone-boundary release intentionally has no dependency on the
 Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
@@ -39,11 +39,16 @@ family from that order. Exact text appearance therefore depends on the host's
 installed fonts, while chart data, geometry, layout, and SVG structure remain
 deterministic for the same inputs and environment.
 
+Enable `text-as-path` and call `RenderedSvgScene::svg_with_text_as_paths` when
+the SVG must carry glyph outlines instead of selectable `<text>` elements. This
+uses the same local font policy and embeds no font files.
+
 ## Features
 
 | Feature | Default | Capability |
 | --- | --- | --- |
-| `png` | No | Rasterize the canonical SVG scene to PNG |
+| `text-as-path` | No | Convert canonical SVG text to self-contained vector paths |
+| `png` | No | Enable text outlining and rasterize the canonical SVG scene to PNG |
 
 SVG output is always available. PDF output is deliberately outside this crate.
 

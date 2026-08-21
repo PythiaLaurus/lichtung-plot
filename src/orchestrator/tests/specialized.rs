@@ -29,6 +29,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     assert!(horizontal_backend.clips[0].x0 > outer_panel.x0);
 
     let mut beeswarm = Chart::new(&data).color("color");
+    let _ = beeswarm.size(800, 600);
     let _ = beeswarm.x("x");
     let _ = beeswarm.y("group");
     let _ = beeswarm.select(PlotKind::Beeswarm);
