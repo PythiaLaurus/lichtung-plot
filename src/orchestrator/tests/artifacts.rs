@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use super::{
     assert_no_staging_files, configured_chart, fixture, publish_staged,
-    reserve_unique_sibling_temp_path, test_directory, with_temporary_artifacts,
-    ComparisonAnnotation, Error, PlotKind,
+    reserve_unique_sibling_temp_path, test_directory, with_temporary_artifacts, Error, PlotKind,
+    Significance, SignificanceMark,
 };
 
 #[test]
@@ -13,8 +13,11 @@ fn render_failure_preserves_existing_svg_and_removes_staging_files() {
     let output = dir.join("figure.svg");
     std::fs::write(&output, "existing artifact").unwrap();
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Scatter)
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+    let chart = configured_chart(&data, PlotKind::Scatter).significance([Significance::between(
+        "a",
+        "b",
+        SignificanceMark::PValue(0.01),
+    )]);
 
     assert!(chart.svg(&output).is_err());
     assert_eq!(

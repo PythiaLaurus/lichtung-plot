@@ -17,9 +17,9 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
     )
     .unwrap();
     let comparisons = vec![
-        ComparisonAnnotation::new("a", "b", 0.04),
-        ComparisonAnnotation::new("b", "c", 0.005),
-        ComparisonAnnotation::new("a", "c", 0.0005),
+        Significance::between("a", "b", SignificanceMark::PValue(0.04)),
+        Significance::between("b", "c", SignificanceMark::PValue(0.005)),
+        Significance::between("a", "c", SignificanceMark::PValue(0.0005)),
     ];
 
     for kind in ["bar", "boxplot", "violin"] {
@@ -28,7 +28,7 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
             "boxplot" => Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value")),
             _ => Plot::violin(data::category(&df, "group"), data::numeric(&df, "value")),
         }
-        .add_comparisons(comparisons.clone())
+        .significance(comparisons.clone())
         .size(360, 280);
         let svg = render(plot, &format!("significance-{kind}"));
 

@@ -167,7 +167,7 @@ pub(super) fn layout_panels(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_comparison_subset(&facet.cell)?;
+            .with_significance_subset(facet.significance_selectors())?;
         let result = panel_chart.render_panel(
             kind,
             PlotRenderContext::new(
@@ -225,7 +225,7 @@ pub(super) fn plan_panels(
             let panel_chart = chart
                 .clone()
                 .with_render_scope(facet.render_scope())
-                .with_comparison_subset(&facet.cell)?;
+                .with_significance_subset(facet.significance_selectors())?;
             let role = if legend_owner {
                 LegendRole::Panel
             } else {

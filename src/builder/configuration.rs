@@ -11,8 +11,8 @@ use crate::spec::{
 use crate::theme::Theme;
 use crate::Labels;
 use crate::{
-    BooleanValues, CategoryValues, ComparisonAnnotation, HistogramCompositeGeometryInput,
-    NumericValues, RaincloudGeometryInput, SourceRows,
+    BooleanValues, CategoryValues, HistogramCompositeGeometryInput, NumericValues,
+    RaincloudGeometryInput, Significance, SourceRows,
 };
 
 impl Plot {
@@ -40,18 +40,31 @@ impl Plot {
         self
     }
 
-    /// Set the hue column name.
+    /// Set categorical color identity.
+    ///
+    /// For bars, boxplots, and sample-derived violins, this configures the same
+    /// positioned, colored series as [`Self::group`]; the last call wins.
     #[must_use]
     pub fn hue(mut self, values: CategoryValues) -> Self {
-        self.hue = Some(values);
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series = Some(values);
+        } else {
+            self.hue = Some(values);
+        }
         self
     }
 
     /// Set the graphical-group column used to partition collective marks.
-    /// Group never assigns color or creates legend entries.
+    ///
+    /// For bars, boxplots, and sample-derived violins, this configures the same
+    /// positioned, colored series as [`Self::hue`]; the last call wins.
     #[must_use]
     pub fn group(mut self, values: CategoryValues) -> Self {
-        self.group = Some(values);
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series = Some(values);
+        } else {
+            self.group = Some(values);
+        }
         self
     }
 
@@ -132,34 +145,10 @@ impl Plot {
         self
     }
 
-    /// Draw exact caller-supplied significance marks beside coefficient estimates.
-    ///
-    /// The column must contain only [`crate::CoefficientSignificanceMark::as_str`]
-    /// values and is accepted only for coefficient plots with confidence intervals.
-    #[must_use]
-    pub fn coefficient_significance(mut self, values: CategoryValues) -> Self {
-        self.coefficient_significance = Some(values);
-        self
-    }
-
-    /// Draw exact caller-supplied significance marks beside identity bars.
-    #[must_use]
-    pub fn bar_significance(mut self, values: CategoryValues) -> Self {
-        self.bar_significance = Some(values);
-        self
-    }
-
     /// Configure significance typography independently of axis text.
     #[must_use]
     pub const fn significance_mark_style(mut self, style: crate::SignificanceMarkStyle) -> Self {
         self.significance_mark_style = style;
-        self
-    }
-
-    /// Add one exact caller-owned factor-level annotation over grouped bars.
-    #[must_use]
-    pub fn grouped_factor_annotation(mut self, annotation: crate::GroupedFactorAnnotation) -> Self {
-        self.grouped_factor_annotations.push(annotation);
         self
     }
 
@@ -516,27 +505,10 @@ impl Plot {
         self
     }
 
-    /// Append owned explicit pairwise comparisons for bracket rendering.
+    /// Append caller-owned significance marks and pairwise brackets.
     #[must_use]
-    pub fn add_comparisons(
-        mut self,
-        comparisons: impl IntoIterator<Item = ComparisonAnnotation>,
-    ) -> Self {
-        self.comparisons.extend(comparisons);
-        self
-    }
-
-    /// Include non-significant comparisons as `ns` brackets.
-    #[must_use]
-    pub fn show_non_significant(mut self) -> Self {
-        self.show_non_significant = true;
-        self
-    }
-
-    /// Cap rendered pairwise significance stars while preserving typed results.
-    #[must_use]
-    pub const fn significance_star_limit(mut self, limit: crate::SignificanceStarLimit) -> Self {
-        self.significance_star_limit = limit;
+    pub fn significance(mut self, annotations: impl IntoIterator<Item = Significance>) -> Self {
+        self.significance.extend(annotations);
         self
     }
 

@@ -4,7 +4,6 @@
 
 mod builder;
 mod canvas;
-mod comparison;
 mod data;
 /// Non-data chart decorations: legends, titles, and captions.
 pub mod decorations;
@@ -35,7 +34,6 @@ mod values;
 
 pub use builder::Plot;
 pub use canvas::{Canvas, CanvasCategoryLabels, TextPanel};
-pub use comparison::{ComparisonAnnotation, ComparisonEndpoint, ComparisonFacet, SignificanceMark};
 pub use error::{Error, Result};
 pub use font::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_FAMILY_STACK, SYSTEM_FONT_FAMILIES};
 pub use geometry::{
@@ -48,15 +46,15 @@ pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
 pub use output::{Output, SvgText};
+pub use significance::{Significance, SignificanceMark, SignificanceTarget};
 pub use spec::{
     AxisScale, BarAggregation, BarSpacing, CanvasLegendPolicy, CategoricalColors, CategoryOrder,
-    CoefficientSignificanceMark, DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics,
-    EstimateSource, EstimateStatus, FacetScales, GroupedFactorAnnotation, GroupedFactorEndpoint,
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,
-    HistogramBins, HistogramComposite, HistogramKde, HistogramStat, InferentialScale, IntervalKind,
-    IntervalSemantics, LegendPosition, LineMode, LinePathStyle, LinePattern, NumericLabelFormat,
-    PanelCorner, PanelTextAnnotation, PlotKind, PngCompression, PngOptions, PngSizing, PointShape,
-    QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, SignificanceStarLimit, TextWeight,
+    DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics, EstimateSource, EstimateStatus,
+    FacetScales, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
+    HeatmapScale, HistogramBins, HistogramComposite, HistogramKde, HistogramStat, InferentialScale,
+    IntervalKind, IntervalSemantics, LegendPosition, LineMode, LinePathStyle, LinePattern,
+    NumericLabelFormat, PanelCorner, PanelTextAnnotation, PlotKind, PngCompression, PngOptions,
+    PngSizing, PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, TextWeight,
     ValueSort, ViolinLayout, WaterfallLabels,
 };
 pub use theme::Theme;

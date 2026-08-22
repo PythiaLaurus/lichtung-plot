@@ -2,9 +2,9 @@ use crate::Error;
 
 use super::Plot;
 use crate::data::{
-    DataColumn, BAR_SIGNIFICANCE, COEFFICIENT_SIGNIFICANCE, COLOR, DUMBBELL_RIGHT, FACET_COLUMN,
-    FACET_ROW, FACET_WRAP, GROUP, HEATMAP_HIGHLIGHT, HUE, INTERACTION_LINE_PATTERN,
-    INTERACTION_POINT_SHAPE, INTERVAL_LOWER, INTERVAL_UPPER, STATUS, X, Y,
+    DataColumn, COLOR, DUMBBELL_RIGHT, FACET_COLUMN, FACET_ROW, FACET_WRAP, GROUP,
+    HEATMAP_HIGHLIGHT, HUE, INTERACTION_LINE_PATTERN, INTERACTION_POINT_SHAPE, INTERVAL_LOWER,
+    INTERVAL_UPPER, SERIES, STATUS, X, Y,
 };
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
@@ -20,7 +20,7 @@ use crate::spec::{
     WaterfallLabels,
 };
 use crate::Labels;
-use crate::{ComparisonAnnotation, HistogramCompositeGeometryInput, RaincloudGeometryInput};
+use crate::{HistogramCompositeGeometryInput, RaincloudGeometryInput, Significance};
 
 impl Plot {
     pub(crate) const fn data(&self) -> crate::data::PlotData<'_> {
@@ -44,19 +44,35 @@ impl Plot {
     }
 
     pub(crate) fn hue_col(&self) -> Option<&'static str> {
-        self.hue.as_ref().map(|_| HUE)
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series.as_ref().map(|_| SERIES)
+        } else {
+            self.hue.as_ref().map(|_| HUE)
+        }
     }
 
     pub(crate) fn hue_name(&self) -> Option<&str> {
-        self.hue.as_ref().map(crate::CategoryValues::name)
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series.as_ref().map(crate::CategoryValues::name)
+        } else {
+            self.hue.as_ref().map(crate::CategoryValues::name)
+        }
     }
 
     pub(crate) fn group_col(&self) -> Option<&'static str> {
-        self.group.as_ref().map(|_| GROUP)
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series.as_ref().map(|_| SERIES)
+        } else {
+            self.group.as_ref().map(|_| GROUP)
+        }
     }
 
     pub(crate) fn group_name(&self) -> Option<&str> {
-        self.group.as_ref().map(crate::CategoryValues::name)
+        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+            self.series.as_ref().map(crate::CategoryValues::name)
+        } else {
+            self.group.as_ref().map(crate::CategoryValues::name)
+        }
     }
 
     pub(crate) fn color_col(&self) -> Option<&'static str> {
@@ -73,13 +89,9 @@ impl Plot {
         match key {
             HUE => self.hue.as_ref().map(DataColumn::Category),
             GROUP => self.group.as_ref().map(DataColumn::Category),
+            SERIES => self.series.as_ref().map(DataColumn::Category),
             COLOR => self.color.as_ref().map(DataColumn::Numeric),
             HEATMAP_HIGHLIGHT => self.heatmap_highlight.as_ref().map(DataColumn::Boolean),
-            COEFFICIENT_SIGNIFICANCE => self
-                .coefficient_significance
-                .as_ref()
-                .map(DataColumn::Category),
-            BAR_SIGNIFICANCE => self.bar_significance.as_ref().map(DataColumn::Category),
             INTERVAL_LOWER => self.interval_lower.as_ref().map(DataColumn::Numeric),
             INTERVAL_UPPER => self.interval_upper.as_ref().map(DataColumn::Numeric),
             STATUS => self.estimate_status.as_ref().map(DataColumn::Category),
@@ -277,18 +289,13 @@ impl Plot {
             }
             PlotInput::HistogramGeometry | PlotInput::RaincloudGeometry => Vec::new(),
         };
+        columns.extend(self.series.iter().map(DataColumn::Category));
         columns.extend(self.hue.iter().map(DataColumn::Category));
         columns.extend(self.group.iter().map(DataColumn::Category));
         columns.extend(self.color.iter().map(DataColumn::Numeric));
         columns.extend(self.interval_lower.iter().map(DataColumn::Numeric));
         columns.extend(self.interval_upper.iter().map(DataColumn::Numeric));
         columns.extend(self.estimate_status.iter().map(DataColumn::Category));
-        columns.extend(
-            self.coefficient_significance
-                .iter()
-                .map(DataColumn::Category),
-        );
-        columns.extend(self.bar_significance.iter().map(DataColumn::Category));
         columns.extend(self.heatmap_highlight.iter().map(DataColumn::Boolean));
         columns.extend(self.facet_row.iter().map(DataColumn::Category));
         columns.extend(self.facet_col.iter().map(DataColumn::Category));
@@ -359,22 +366,8 @@ impl Plot {
         self.estimate_labels.as_ref()
     }
 
-    pub(crate) fn coefficient_significance_col(&self) -> Option<&'static str> {
-        self.coefficient_significance
-            .as_ref()
-            .map(|_| COEFFICIENT_SIGNIFICANCE)
-    }
-
-    pub(crate) fn bar_significance_col(&self) -> Option<&'static str> {
-        self.bar_significance.as_ref().map(|_| BAR_SIGNIFICANCE)
-    }
-
     pub(crate) const fn significance_mark_style_spec(&self) -> crate::SignificanceMarkStyle {
         self.significance_mark_style
-    }
-
-    pub(crate) fn grouped_factor_annotations(&self) -> &[crate::GroupedFactorAnnotation] {
-        &self.grouped_factor_annotations
     }
 
     pub(crate) const fn category_order_spec(&self) -> &CategoryOrder {
@@ -698,14 +691,11 @@ impl Plot {
     }
 
     pub(crate) fn hue_dimension_key(&self) -> Option<&str> {
-        self.hue
-            .as_ref()
-            .map(crate::CategoryValues::name)
-            .or_else(|| {
-                self.raincloud_geometry
-                    .as_ref()
-                    .and_then(|input| input.dimensions.hue.as_deref())
-            })
+        self.hue_name().or_else(|| {
+            self.raincloud_geometry
+                .as_ref()
+                .and_then(|input| input.dimensions.hue.as_deref())
+        })
     }
 
     /// Borrow x-axis scale configuration.
@@ -748,20 +738,10 @@ impl Plot {
         &self.bar_point_layers
     }
 
-    /// Borrow the registered explicit pairwise comparisons.
+    /// Borrow the registered significance annotations.
     #[must_use]
-    pub fn comparisons(&self) -> &[ComparisonAnnotation] {
-        &self.comparisons
-    }
-
-    pub(crate) fn shows_non_significant(&self) -> bool {
-        self.show_non_significant
-    }
-
-    /// Configured maximum significance-star count.
-    #[must_use]
-    pub const fn significance_star_limit_spec(&self) -> crate::SignificanceStarLimit {
-        self.significance_star_limit
+    pub fn significance_annotations(&self) -> &[Significance] {
+        &self.significance
     }
 
     /// Output width in pixels.

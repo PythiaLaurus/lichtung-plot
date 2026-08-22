@@ -3,7 +3,7 @@
 //! Semantic constructors accept immutable Rust-native values. Configuration is
 //! chained before `.svg(path)` or `.png(path)` consumes the plot.
 //!
-//! Pairwise annotations are caller-owned display inputs. The renderer never
+//! Significance annotations are caller-owned display inputs. The renderer never
 //! performs hypothesis tests or adjusts p-values.
 
 mod accessors;
@@ -27,8 +27,8 @@ use crate::spec::{
 use crate::theme::Theme;
 use crate::Labels;
 use crate::{
-    BooleanValues, CategoryValues, ComparisonAnnotation, HistogramCompositeGeometryInput,
-    NumericValues, RaincloudGeometryInput, SourceRows,
+    BooleanValues, CategoryValues, HistogramCompositeGeometryInput, NumericValues,
+    RaincloudGeometryInput, Significance, SourceRows,
 };
 
 /// One configured semantic plot backed by immutable Rust-native values.
@@ -40,6 +40,7 @@ use crate::{
 pub struct Plot {
     input: PlotInput,
     source_rows: Option<SourceRows>,
+    series: Option<CategoryValues>,
     hue: Option<CategoryValues>,
     group: Option<CategoryValues>,
     title: Option<String>,
@@ -57,10 +58,7 @@ pub struct Plot {
     y_tick_count_overridden: bool,
     y_ticks: Option<Vec<AxisTick>>,
     theme: Theme,
-    comparisons: Vec<ComparisonAnnotation>,
-    grouped_factor_annotations: Vec<crate::GroupedFactorAnnotation>,
-    show_non_significant: bool,
-    significance_star_limit: crate::SignificanceStarLimit,
+    significance: Vec<Significance>,
     width: u32,
     height: u32,
     /// Ordered variable names for `PlotKind::Matrix` (pairplot).
@@ -86,8 +84,6 @@ pub struct Plot {
     heatmap_null_row_annotations: Vec<HeatmapNullRowAnnotation>,
     heatmap_highlight: Option<BooleanValues>,
     estimate_labels: Option<NumericLabelFormat>,
-    coefficient_significance: Option<CategoryValues>,
-    bar_significance: Option<CategoryValues>,
     significance_mark_style: crate::SignificanceMarkStyle,
     category_orders: CategoryOrders,
     color_by_sign: bool,
@@ -152,6 +148,7 @@ impl Plot {
         Self {
             input,
             source_rows: None,
+            series: None,
             hue: None,
             group: None,
             title: None,
@@ -169,10 +166,7 @@ impl Plot {
             y_tick_count_overridden: false,
             y_ticks: None,
             theme: Theme::Publication,
-            comparisons: Vec::new(),
-            grouped_factor_annotations: Vec::new(),
-            show_non_significant: false,
-            significance_star_limit: crate::SignificanceStarLimit::default(),
+            significance: Vec::new(),
             width: 640,
             height: 480,
             matrix_variables: Vec::new(),
@@ -197,8 +191,6 @@ impl Plot {
             heatmap_null_row_annotations: Vec::new(),
             heatmap_highlight: None,
             estimate_labels: None,
-            coefficient_significance: None,
-            bar_significance: None,
             significance_mark_style: crate::SignificanceMarkStyle::default(),
             category_orders: CategoryOrders::default(),
             color_by_sign: false,
@@ -393,7 +385,7 @@ impl Plot {
             PlotInput::StackedBar { category, value },
             PlotKind::StackedBar,
         );
-        plot.group = Some(group);
+        plot.series = Some(group);
         plot
     }
 
@@ -408,7 +400,7 @@ impl Plot {
             PlotInput::StackedHorizontalBar { category, value },
             PlotKind::StackedHorizontalBar,
         );
-        plot.group = Some(group);
+        plot.series = Some(group);
         plot
     }
 

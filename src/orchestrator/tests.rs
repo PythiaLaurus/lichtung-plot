@@ -12,8 +12,7 @@ use crate::render::backend::{
     TextStyle,
 };
 use crate::test_support::{DataFrame, Fixture, Series};
-use crate::ComparisonAnnotation;
-use crate::{HeatmapLayout, LegendPosition, ValueSort};
+use crate::{HeatmapLayout, LegendPosition, Significance, SignificanceMark, ValueSort};
 
 #[path = "tests/artifacts.rs"]
 mod artifacts;

@@ -35,8 +35,16 @@ pub(crate) struct PreparedBar {
     pub(crate) end: f64,
     /// Optional explicit lower and upper interval endpoints around `end`.
     pub(crate) interval: Option<(f64, f64)>,
-    /// Exact caller-supplied significance mark.
-    pub(crate) significance: String,
+}
+
+/// One attached significance label resolved to a rendered bar or category cluster.
+#[derive(Debug, Clone)]
+pub(crate) struct PreparedBarSignificance {
+    pub(crate) category_index: usize,
+    pub(crate) series_index: Option<usize>,
+    pub(crate) edge: f64,
+    pub(crate) positive: bool,
+    pub(crate) label: String,
 }
 
 /// One strict supplemental point resolved to an ordinary bar anchor.
@@ -63,6 +71,8 @@ pub(crate) struct PreparedBars {
     pub(crate) value_range: (f64, f64),
     /// Supplemental points at resolved category/group centers.
     pub(crate) points: Vec<PreparedBarPoint>,
+    /// Significance labels attached to exact bar/category anchors.
+    pub(crate) significance: Vec<PreparedBarSignificance>,
 }
 
 /// Build prepared bar data from x/y and optional graphical group and hue channels.
@@ -140,10 +150,8 @@ pub(crate) fn prepare<'a>(
         if let Some(bounds) = chart.interval_bound_cols() {
             apply_identity_bounds(chart, data, &mut prepared, bounds)?;
         }
-        if let Some(column) = chart.bar_significance_col() {
-            apply_identity_significance(chart, data, &mut prepared, column)?;
-        }
     }
+    apply_attached_significance(chart, &mut prepared, mode)?;
     prepared.points = prepare_point_layers(chart, &prepared, mode)?;
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
@@ -152,50 +160,86 @@ pub(crate) fn prepare<'a>(
     Ok(prepared)
 }
 
-fn apply_identity_significance(
+fn apply_attached_significance(
     chart: &Plot,
-    data: crate::data::PlotData<'_>,
     prepared: &mut PreparedBars,
-    column: &str,
+    mode: BarMode,
 ) -> Result<(), Error> {
-    let category_column = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
-    let categories = crate::data::strict_strings(data, category_column, "bar significance")?;
-    let groups = chart
-        .group_col()
-        .map(|name| crate::data::strict_strings(data, name, "bar significance"))
-        .transpose()?;
-    let marks = crate::data::strict_strings(data, column, "bar significance")?;
-    for row in 0..categories.len() {
-        if crate::CoefficientSignificanceMark::parse_exact(&marks[row]).is_none() {
-            return Err(Error::Data(format!(
-                "bar significance column {column:?} has invalid value {:?} at source row {}; expected exactly \"\", \"*\", \"**\", or \"***\"",
-                marks[row],
-                data.source_row(row)
-            )));
-        }
+    for annotation in chart.significance_annotations() {
+        let Some(target) = annotation.at_target() else {
+            continue;
+        };
         let category_index = prepared
             .categories
             .iter()
-            .position(|category| category == &categories[row])
-            .ok_or_else(|| Error::Data("bar significance category disappeared".into()))?;
-        let series_index = groups
-            .as_ref()
-            .map(|values| {
+            .position(|category| category == target.category_name())
+            .ok_or_else(|| {
+                Error::Data(format!(
+                    "bar significance references unknown category {:?}; available categories: {}",
+                    target.category_name(),
+                    prepared.categories.join(", ")
+                ))
+            })?;
+        let series_index = target
+            .series_name()
+            .map(|series| {
                 prepared
                     .series
                     .iter()
-                    .position(|group| group == &values[row])
-                    .ok_or_else(|| Error::Data("bar significance group disappeared".into()))
+                    .position(|candidate| candidate == series)
+                    .ok_or_else(|| {
+                        Error::Data(format!(
+                            "bar significance references unknown series {series:?}; available series: {}",
+                            prepared.series.join(", ")
+                        ))
+                    })
             })
             .transpose()?;
-        let bar = prepared
-            .bars
-            .iter_mut()
-            .find(|bar| bar.category_index == category_index && bar.series_index == series_index)
-            .ok_or_else(|| Error::Data("bar significance cell disappeared".into()))?;
-        bar.significance.clone_from(&marks[row]);
+        if target.series_name().is_some() && mode == BarMode::Single {
+            return Err(Error::Data(
+                "series-qualified significance target requires a configured bar series".into(),
+            ));
+        }
+        if prepared
+            .significance
+            .iter()
+            .any(|mark| mark.category_index == category_index && mark.series_index == series_index)
+        {
+            return Err(Error::Data(format!(
+                "bar significance target {:?} is annotated more than once",
+                target.category_name()
+            )));
+        }
+        let bars = prepared.bars.iter().filter(|bar| {
+            bar.category_index == category_index
+                && series_index.is_none_or(|index| bar.series_index == Some(index))
+        });
+        let mut positive_edge = None::<f64>;
+        let mut negative_edge = None::<f64>;
+        for bar in bars {
+            if bar.end >= 0.0 {
+                let edge = bar
+                    .interval
+                    .map_or(bar.end, |(_, upper)| upper.max(bar.end));
+                positive_edge = Some(positive_edge.map_or(edge, |current| current.max(edge)));
+            } else {
+                let edge = bar
+                    .interval
+                    .map_or(bar.end, |(lower, _)| lower.min(bar.end));
+                negative_edge = Some(negative_edge.map_or(edge, |current| current.min(edge)));
+            }
+        }
+        let (edge, positive) = positive_edge
+            .map(|edge| (edge, true))
+            .or_else(|| negative_edge.map(|edge| (edge, false)))
+            .ok_or_else(|| Error::Data("bar significance target has no rendered bar".into()))?;
+        prepared.significance.push(PreparedBarSignificance {
+            category_index,
+            series_index,
+            edge,
+            positive,
+            label: annotation.mark().glyph()?.to_owned(),
+        });
     }
     Ok(())
 }
@@ -586,7 +630,6 @@ fn prepare_single(
             start: 0.0,
             end: value,
             interval,
-            significance: String::new(),
         });
     }
     let value_range = value_range(&bars)?;
@@ -597,6 +640,7 @@ fn prepare_single(
         value_range,
         bars,
         points: Vec::new(),
+        significance: Vec::new(),
     })
 }
 
@@ -652,7 +696,6 @@ fn prepare_grouped(
             start: 0.0,
             end: value,
             interval,
-            significance: String::new(),
         });
     }
     let value_range = value_range(&bars)?;
@@ -664,6 +707,7 @@ fn prepare_grouped(
         value_range,
         bars,
         points: Vec::new(),
+        significance: Vec::new(),
     })
 }
 
@@ -756,7 +800,6 @@ fn prepare_stacked(
                 start,
                 end,
                 interval: None,
-                significance: String::new(),
             });
         }
     }
@@ -769,6 +812,7 @@ fn prepare_stacked(
         value_range,
         bars,
         points: Vec::new(),
+        significance: Vec::new(),
     })
 }
 

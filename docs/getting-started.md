@@ -34,21 +34,27 @@ parent must already exist.
 To attach caller-computed pairwise results, construct plot-owned display data:
 
 ```rust
-use lichtung_plot::{CategoryValues, ComparisonAnnotation, NumericValues, Plot};
+use lichtung_plot::{
+    CategoryValues, NumericValues, Plot, Significance, SignificanceMark,
+};
 
-let comparisons = [
-    ComparisonAnnotation::new("control", "treatment", 0.01)
-        .adjusted(0.02, "Holm"),
+let significance = [
+    Significance::between(
+        "control",
+        "treatment",
+        SignificanceMark::PValue(0.02),
+    ),
 ];
 
 let plot = Plot::boxplot(
     CategoryValues::new("group", ["control", "control", "treatment", "treatment"] )?,
     NumericValues::new("response", [1.0, 1.5, 2.0, 2.5]),
 )
-.add_comparisons(comparisons);
+.significance(significance);
 # let _ = plot;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-The renderer validates and displays these values but does not perform or choose
-a statistical test.
+The caller supplies the exact display p-value after any desired adjustment. The
+renderer validates and displays it but does not perform or choose a statistical
+test.

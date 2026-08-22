@@ -234,16 +234,10 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
 #[test]
 fn coefficient_confidence_intervals_render_exact_caller_significance_marks() {
     let frame = df!(
-        "term" => ["none", "one", "two", "three"],
-        "estimate" => [1.0_f64, 2.0, 3.0, 4.0],
-        "lower" => [0.5_f64, 1.5, 2.5, 3.5],
-        "upper" => [1.5_f64, 2.5, 3.5, 4.5],
-        "mark" => [
-            CoefficientSignificanceMark::None.as_str(),
-            CoefficientSignificanceMark::OneStar.as_str(),
-            CoefficientSignificanceMark::TwoStars.as_str(),
-            CoefficientSignificanceMark::ThreeStars.as_str(),
-        ]
+        "term" => ["none", "one", "two", "three", "four", "p-value"],
+        "estimate" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
+        "lower" => [0.5_f64, 1.5, 2.5, 3.5, 4.5, 5.5],
+        "upper" => [1.5_f64, 2.5, 3.5, 4.5, 5.5, 6.5]
     )
     .unwrap();
     let svg = render_svg(
@@ -256,46 +250,31 @@ fn coefficient_confidence_intervals_render_exact_caller_significance_marks() {
             data::numeric(&frame, "upper"),
         )
         .interval_semantics(confidence(InferentialScale::Coefficient))
-        .coefficient_significance(data::category(&frame, "mark")),
+        .significance([
+            Significance::at("none", SignificanceMark::NotSignificant),
+            Significance::at("one", SignificanceMark::OneStar),
+            Significance::at("two", SignificanceMark::TwoStars),
+            Significance::at("three", SignificanceMark::ThreeStars),
+            Significance::at("four", SignificanceMark::FourStars),
+            Significance::at("p-value", SignificanceMark::PValue(0.008)),
+        ]),
         "coefficient-significance",
     )
     .unwrap();
     assert_eq!(svg.matches(">*</text>").count(), 1);
-    assert_eq!(svg.matches(">**</text>").count(), 1);
+    assert_eq!(svg.matches(">**</text>").count(), 2);
     assert_eq!(svg.matches(">***</text>").count(), 1);
+    assert_eq!(svg.matches(">****</text>").count(), 1);
+    assert_eq!(svg.matches(">ns</text>").count(), 1);
 }
 
 #[test]
-fn coefficient_significance_marks_fail_closed_during_preflight() {
-    let make = |mark: Option<&str>| {
-        let marks = lichtung_plot::CategoryValues::nullable("mark", [mark]).unwrap();
-        Plot::coefficient(
-            lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
-            lichtung_plot::NumericValues::new("estimate", [1.0]),
-        )
-        .interval_bounds(
-            lichtung_plot::NumericValues::new("lower", [0.5]),
-            lichtung_plot::NumericValues::new("upper", [1.5]),
-        )
-        .interval_semantics(confidence(InferentialScale::Coefficient))
-        .coefficient_significance(marks)
-    };
-    assert!(make(Some("****"))
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("expected exactly"));
-    assert!(make(None)
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("null"));
-
+fn coefficient_significance_requires_confidence_intervals() {
     let missing = Plot::coefficient(
         lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
         lichtung_plot::NumericValues::new("estimate", [1.0]),
     )
-    .coefficient_significance(lichtung_plot::CategoryValues::new("mark", ["*"]).unwrap());
+    .significance([Significance::at("term", SignificanceMark::OneStar)]);
     assert!(missing
         .preflight()
         .unwrap_err()
@@ -319,7 +298,7 @@ fn coefficient_significance_marks_fail_closed_during_preflight() {
         )
         .unwrap(),
     )
-    .coefficient_significance(lichtung_plot::CategoryValues::new("mark", ["*"]).unwrap());
+    .significance([Significance::at("term", SignificanceMark::OneStar)]);
     assert!(credible
         .preflight()
         .unwrap_err()
@@ -336,12 +315,12 @@ fn coefficient_significance_is_rejected_by_other_plot_kinds() {
         data::numeric(&frame, "lower"),
         data::numeric(&frame, "upper"),
     )
-    .coefficient_significance(
-        lichtung_plot::CategoryValues::new("mark", ["", "*", "**", "***"]).unwrap(),
-    )
+    .significance([Significance::at("intercept", SignificanceMark::OneStar)])
     .preflight()
     .unwrap_err();
-    assert!(error.to_string().contains("supported only by Coefficient"));
+    assert!(error
+        .to_string()
+        .contains("attached significance marks are supported only"));
 }
 
 #[test]

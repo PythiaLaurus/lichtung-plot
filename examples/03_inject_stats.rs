@@ -1,16 +1,15 @@
 //! Example 03: injecting owned pairwise comparisons into a plot.
 //!
 //! The standalone plot crate performs no hypothesis test. It consumes its own
-//! `ComparisonAnnotation` display values supplied by the caller.
+//! [`Significance`] display values supplied by the caller.
 //!
-//! This example supplies raw and adjusted p-values for multiple named pairs;
-//! the adjusted values determine the stars shown on the boxplot.
+//! This example supplies the adjusted display p-value for each named pair.
 //!
 //! Run with:  cargo run --example 03_inject_stats -p lichtung-plot
 //!
 //! Writes a boxplot SVG to the system temporary directory.
 
-use lichtung_plot::{CategoryValues, ComparisonAnnotation, NumericValues, Plot, Theme};
+use lichtung_plot::{CategoryValues, NumericValues, Plot, Significance, SignificanceMark, Theme};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Three groups with clearly different means.
@@ -34,8 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         value_col.push(*v);
     }
     let comparisons = vec![
-        ComparisonAnnotation::new("A", "B", 0.002).adjusted(0.006, "Holm"),
-        ComparisonAnnotation::new("A", "C", 0.000_01).adjusted(0.000_03, "Holm"),
+        Significance::between("A", "B", SignificanceMark::PValue(0.006)),
+        Significance::between("A", "C", SignificanceMark::PValue(0.000_03)),
     ];
 
     let path = std::env::temp_dir().join("inject_stats.svg");
@@ -45,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .theme(Theme::Nature)
     .size(640, 480)
-    .add_comparisons(comparisons)
+    .significance(comparisons)
     .svg(&path)?;
 
     println!("wrote {}", path.display());

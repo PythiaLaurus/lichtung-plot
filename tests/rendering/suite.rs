@@ -1,4 +1,4 @@
-use lichtung_plot::{BarAggregation, ComparisonAnnotation, Plot, ValueSort};
+use lichtung_plot::{BarAggregation, Plot, Significance, SignificanceMark, ValueSort};
 
 #[path = "../support/data.rs"]
 mod data;

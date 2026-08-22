@@ -609,7 +609,10 @@ fn invalid_panel_semantics_and_facet_ownership_fail_canvas_preflight() {
         data::category(&frame, "factor"),
         data::numeric(&frame, "estimate"),
     )
-    .add_comparisons([ComparisonAnnotation::new("before", "after", 0.01).in_facet("facet", "one")]);
+    .significance([
+        Significance::between("before", "after", SignificanceMark::PValue(0.01))
+            .facet("facet", "one"),
+    ]);
     let error = Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, bar)
@@ -618,5 +621,5 @@ fn invalid_panel_semantics_and_facet_ownership_fail_canvas_preflight() {
         .unwrap_err();
     assert!(error
         .to_string()
-        .contains("facet-owned significance comparisons require"));
+        .contains("facet-owned significance annotations require"));
 }

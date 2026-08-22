@@ -132,17 +132,13 @@ pub(crate) fn render(
         crate::significance::plan(chart, x_levels, &rendered_maxima, base_display_range, panel)?
     } else {
         let mut grouped_maxima = vec![vec![f64::NEG_INFINITY; group_levels.len()]; x_levels.len()];
-        let mut mark_hues = vec![vec![None; group_levels.len()]; x_levels.len()];
         for group in &sample.groups {
             grouped_maxima[group.x_index][group.group_index] = support_range.1;
-            mark_hues[group.x_index][group.group_index] =
-                group.hue_index.map(|index| hue_levels[index].clone());
         }
         crate::significance::plan_grouped(
             chart,
             x_levels,
             group_levels,
-            &mark_hues,
             &grouped_maxima,
             0.72,
             base_display_range,

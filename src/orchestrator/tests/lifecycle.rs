@@ -1,8 +1,9 @@
 use std::sync::atomic::Ordering;
 
 use super::{
-    configured_chart, fixture, test_directory, BackendFailure, ComparisonAnnotation, DataFrame,
-    Plot, PlotKind, RecordingBackend, Series, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
+    configured_chart, fixture, test_directory, BackendFailure, DataFrame, Plot, PlotKind,
+    RecordingBackend, Series, Significance, SignificanceMark, ValueSort, RENDER_PANEL_CALLS,
+    TEMP_FILE_COUNTER,
 };
 
 #[test]
@@ -159,8 +160,11 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
 #[test]
 fn unsupported_significance_fails_before_canvas_begin() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Scatter)
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+    let chart = configured_chart(&data, PlotKind::Scatter).significance([Significance::between(
+        "a",
+        "b",
+        SignificanceMark::PValue(0.01),
+    )]);
     let mut backend = RecordingBackend::default();
 
     assert!(chart.render_kind(PlotKind::Scatter, &mut backend).is_err());
@@ -235,8 +239,11 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Boxplot)
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+    let chart = configured_chart(&data, PlotKind::Boxplot).significance([Significance::between(
+        "a",
+        "b",
+        SignificanceMark::PValue(0.01),
+    )]);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Boxplot, &mut backend).unwrap();

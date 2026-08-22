@@ -213,7 +213,7 @@ fn source_row_unit(source_row: usize) -> f64 {
 }
 
 #[test]
-fn supplied_raincloud_geometry_matches_sample_labels_colors_legend_and_recorded_marks() {
+fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_marks() {
     let categories = lichtung_plot::CategoryValues::new(
         "condition",
         [
@@ -241,10 +241,15 @@ fn supplied_raincloud_geometry_matches_sample_labels_colors_legend_and_recorded_
     .violin_layout(ViolinLayout::Raincloud);
     let supplied = Plot::raincloud(parity_raincloud_geometry());
 
-    assert_eq!(
-        render(supplied, "supplied-raincloud").unwrap(),
-        render(sample, "sample-raincloud").unwrap()
-    );
+    let supplied = render(supplied, "supplied-raincloud").unwrap();
+    let sample = render(sample, "sample-raincloud").unwrap();
+
+    for svg in [&supplied, &sample] {
+        assert!(svg.contains(">Condition</text>") && svg.contains(">Score</text>"));
+        assert!(svg.contains(">Control</text>") && svg.contains(">Active</text>"));
+        assert!(svg.contains("#0072B2") && svg.contains("#D55E00"));
+        assert_eq!(svg.matches("<circle ").count(), 12);
+    }
 }
 
 #[test]

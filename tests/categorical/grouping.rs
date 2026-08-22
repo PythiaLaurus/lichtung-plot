@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    BarAggregation, ComparisonAnnotation, ComparisonEndpoint, DumbbellEndpoints, EstimateSource,
-    InferentialScale, IntervalKind, IntervalSemantics, Plot, PlotKind,
+    BarAggregation, DumbbellEndpoints, EstimateSource, InferentialScale, IntervalKind,
+    IntervalSemantics, Plot, PlotKind, Significance, SignificanceMark, SignificanceTarget,
 };
 
 use super::{data, df, parse_polygon_bounds, unique_dir, DataFrame};
@@ -134,7 +134,7 @@ fn rgb(color: (u8, u8, u8)) -> String {
 }
 
 #[test]
-fn exact_supported_families_render_group_only_without_group_legends() {
+fn separate_group_hue_families_render_group_only_without_group_legends() {
     let data = collective_data();
     let interaction = interaction_data();
     let dumbbell = df!(
@@ -150,12 +150,6 @@ fn exact_supported_families_render_group_only_without_group_legends() {
         PlotKind::Density,
         PlotKind::Marginal,
         PlotKind::Matrix,
-        PlotKind::Bar,
-        PlotKind::HorizontalBar,
-        PlotKind::StackedBar,
-        PlotKind::StackedHorizontalBar,
-        PlotKind::Boxplot,
-        PlotKind::Violin,
         PlotKind::Dumbbell,
     ] {
         let source = if kind == PlotKind::Interaction {
@@ -168,6 +162,23 @@ fn exact_supported_families_render_group_only_without_group_legends() {
         let svg = render(configured_group_plot(source, kind), "group-only-family")
             .unwrap_or_else(|error| panic!("{kind:?} should support group: {error}"));
         assert!(!svg.contains(">G 1</text>") && !svg.contains(">G 2</text>"));
+    }
+}
+
+#[test]
+fn unified_categorical_families_treat_group_as_colored_series() {
+    let data = collective_data();
+    for kind in [
+        PlotKind::Bar,
+        PlotKind::HorizontalBar,
+        PlotKind::StackedBar,
+        PlotKind::StackedHorizontalBar,
+        PlotKind::Boxplot,
+        PlotKind::Violin,
+    ] {
+        let svg = render(configured_group_plot(&data, kind), "unified-group-family")
+            .unwrap_or_else(|error| panic!("{kind:?} should support group as its series: {error}"));
+        assert!(svg.contains(">G 1</text>") && svg.contains(">G 2</text>"));
     }
 }
 
@@ -227,34 +238,18 @@ fn explicit_group_rejects_multiple_hues_per_collective_mark() {
 }
 
 #[test]
-fn categorical_marks_allow_one_group_to_change_hue_between_x_cells() {
-    let data = df!(
-        "category" => ["a", "a", "a", "a", "b", "b", "b", "b"],
-        "group" => ["g1", "g1", "g2", "g2", "g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2", "h1", "h1"],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0],
-    )
-    .unwrap();
-    Plot::bar(data::category(&data, "category"), data::numeric(&data, "y"))
-        .group(data::category(&data, "group"))
-        .hue(data::category(&data, "hue"))
-        .preflight()
-        .unwrap();
-}
-
-#[test]
-fn significance_endpoints_select_explicit_group_and_validate_hue() {
+fn significance_endpoints_select_group_when_group_is_last_series_alias() {
     let data = collective_data();
-    let comparison = ComparisonAnnotation {
-        endpoint_a: ComparisonEndpoint::new("a").with_group("g1").with_hue("h1"),
-        endpoint_b: ComparisonEndpoint::new("a").with_group("g2").with_hue("h2"),
-        ..ComparisonAnnotation::new("a", "a", 0.01)
-    };
+    let comparison = Significance::between(
+        SignificanceTarget::category_series("a", "g1"),
+        SignificanceTarget::category_series("a", "g2"),
+        SignificanceMark::PValue(0.01),
+    );
     let svg = render(
         Plot::boxplot(data::category(&data, "category"), data::numeric(&data, "y"))
-            .group(data::category(&data, "group"))
             .hue(data::category(&data, "hue"))
-            .add_comparisons([comparison]),
+            .group(data::category(&data, "group"))
+            .significance([comparison]),
         "group-significance",
     )
     .unwrap();
@@ -285,7 +280,7 @@ fn shared_hue_uses_one_chart_wide_color_across_collective_families() {
     let data = shared_hue_data();
     let interaction = shared_hue_interaction_data();
     let expected = lichtung_plot::Theme::Publication.palette().colors;
-    let plots = [
+    let plots = vec![
         configured_group_plot(&data, PlotKind::Line).hue(data::category(&data, "hue")),
         configured_group_plot(&data, PlotKind::Density).hue(data::category(&data, "hue")),
         configured_group_plot(&data, PlotKind::Marginal).hue(data::category(&data, "hue")),
@@ -336,20 +331,41 @@ fn faceted_explicit_groups_keep_global_dodge_slots_when_a_panel_omits_a_group() 
     bars.sort_by(|left, right| left.x.total_cmp(&right.x));
     assert_eq!(bars.len(), 3);
     assert!(bars[1].x - bars[0].x < bars[2].x - bars[1].x);
+    let expected = lichtung_plot::Theme::Publication.palette().colors;
+    let polygons = svg
+        .lines()
+        .filter(|line| line.starts_with("<polygon points="))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        polygons
+            .iter()
+            .filter(|line| line.contains(&rgb(expected[0])))
+            .count(),
+        1
+    );
+    assert_eq!(
+        polygons
+            .iter()
+            .filter(|line| line.contains(&rgb(expected[1])))
+            .count(),
+        2
+    );
+    assert_eq!(svg.matches(">G 1</text>").count(), 1);
+    assert_eq!(svg.matches(">G 2</text>").count(), 1);
 }
 
 #[test]
-fn every_categorical_group_family_rejects_conflicting_hue_within_one_cell() {
+fn hue_last_replaces_group_for_every_unified_categorical_family() {
     let data = df!(
-        "category" => ["a", "a"],
-        "group" => ["g1", "g1"],
-        "hue" => ["h1", "h2"],
-        "value" => [1.0_f64, 2.0],
+        "category" => ["a", "a", "a", "a", "a", "a"],
+        "group" => ["replaced", "replaced", "replaced", "replaced", "replaced", "replaced"],
+        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2"],
+        "value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
     )
     .unwrap();
     let group = || data::category(&data, "group");
     let hue = || data::category(&data, "hue");
-    let plots = [
+    let plots = vec![
         Plot::bar(
             data::category(&data, "category"),
             data::numeric(&data, "value"),
@@ -361,6 +377,18 @@ fn every_categorical_group_family_rejects_conflicting_hue_within_one_cell() {
             data::numeric(&data, "value"),
         )
         .group(group())
+        .hue(hue()),
+        Plot::stacked_bar(
+            data::category(&data, "category"),
+            data::numeric(&data, "value"),
+            group(),
+        )
+        .hue(hue()),
+        Plot::stacked_horizontal_bar(
+            data::category(&data, "category"),
+            data::numeric(&data, "value"),
+            group(),
+        )
         .hue(hue()),
         Plot::boxplot(
             data::category(&data, "category"),
@@ -376,11 +404,7 @@ fn every_categorical_group_family_rejects_conflicting_hue_within_one_cell() {
         .hue(hue()),
     ];
     for plot in plots {
-        assert!(plot
-            .preflight()
-            .unwrap_err()
-            .to_string()
-            .contains("each collective mark must have exactly one hue"));
+        plot.preflight().unwrap();
     }
 }
 
@@ -407,30 +431,30 @@ fn faceted_collectives_keep_global_first_observed_hue_color_order() {
 }
 
 #[test]
-fn horizontal_significance_uses_group_anchor_and_mismatched_hue_rejects_before_begin() {
+fn horizontal_significance_uses_hue_when_hue_is_last_series_alias() {
     let data = collective_data();
-    let valid = ComparisonAnnotation {
-        endpoint_a: ComparisonEndpoint::new("a").with_group("g1").with_hue("h1"),
-        endpoint_b: ComparisonEndpoint::new("a").with_group("g2").with_hue("h2"),
-        ..ComparisonAnnotation::new("a", "a", 0.01)
-    };
+    let valid = Significance::between(
+        SignificanceTarget::category_series("a", "h1"),
+        SignificanceTarget::category_series("a", "h2"),
+        SignificanceMark::PValue(0.01),
+    );
     let base = || {
         Plot::horizontal_bar(data::category(&data, "category"), data::numeric(&data, "y"))
             .group(data::category(&data, "group"))
             .hue(data::category(&data, "hue"))
     };
     let svg = render(
-        base().add_comparisons([valid]),
+        base().significance([valid]),
         "horizontal-group-significance",
     )
     .unwrap();
     assert!(svg.contains("class=\"significance-bracket horizontal\""));
 
-    let invalid = ComparisonAnnotation {
-        endpoint_a: ComparisonEndpoint::new("a").with_group("g1").with_hue("h2"),
-        endpoint_b: ComparisonEndpoint::new("a").with_group("g2").with_hue("h2"),
-        ..ComparisonAnnotation::new("a", "a", 0.01)
-    };
-    let error = base().add_comparisons([invalid]).preflight().unwrap_err();
-    assert!(error.to_string().contains("does not have hue \"h2\""));
+    let invalid = Significance::between(
+        SignificanceTarget::category_series("a", "g1"),
+        SignificanceTarget::category_series("a", "h2"),
+        SignificanceMark::PValue(0.01),
+    );
+    let error = base().significance([invalid]).preflight().unwrap_err();
+    assert!(error.to_string().contains("unknown series \"g1\""));
 }

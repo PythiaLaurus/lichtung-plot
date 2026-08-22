@@ -1,12 +1,17 @@
 //! Significance bracket planning and rendering for categorical plots.
 
+mod spec;
+
+pub use spec::{Significance, SignificanceMark, SignificanceTarget};
+
 use crate::Error;
 
 use crate::layout::{deterministic_text_width, PanelBox};
 use crate::render::backend::{
-    Backend, BracketOrientation, BracketStyle, SignificanceBracket, SIGNIFICANCE_BRACKET_METRICS,
+    Backend, BracketMetrics, BracketOrientation, BracketStyle, SignificanceBracket,
+    SIGNIFICANCE_BRACKET_METRICS,
 };
-use crate::{ComparisonAnnotation, ComparisonEndpoint, Plot};
+use crate::{Plot, SignificanceMarkStyle};
 
 #[derive(Debug)]
 pub(crate) struct SignificancePlan {
@@ -34,13 +39,6 @@ struct ResolvedComparison {
     right: usize,
     level: usize,
     label: String,
-    display_p_value: f64,
-}
-
-#[derive(Debug)]
-struct ExactBracketSpan {
-    endpoints: Vec<String>,
-    label: String,
 }
 
 pub(crate) fn plan(
@@ -50,9 +48,8 @@ pub(crate) fn plan(
     y_range: (f64, f64),
     panel: PanelBox,
 ) -> Result<SignificancePlan, Error> {
-    plan_comparisons_limited(
-        chart.comparisons(),
-        chart.shows_non_significant(),
+    plan_comparisons(
+        chart.significance_annotations(),
         categories,
         rendered_maxima,
         y_range,
@@ -60,7 +57,7 @@ pub(crate) fn plan(
         chart.user_y_limits(),
         panel,
         LegendAnnotationConstraint::NoObstacle,
-        chart.significance_star_limit_spec(),
+        chart.significance_mark_style_spec(),
     )
 }
 
@@ -68,16 +65,8 @@ pub(crate) fn plan(
     clippy::too_many_arguments,
     reason = "the wrapper preserves the existing validated significance planner inputs"
 )]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the default wrapper supports direct planner tests"
-    )
-)]
 fn plan_comparisons(
-    comparisons: &[ComparisonAnnotation],
-    show_non_significant: bool,
+    annotations: &[Significance],
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
@@ -85,41 +74,10 @@ fn plan_comparisons(
     y_limits: Option<(f64, f64)>,
     panel: PanelBox,
     legend_constraint: LegendAnnotationConstraint,
-) -> Result<SignificancePlan, Error> {
-    plan_comparisons_limited(
-        comparisons,
-        show_non_significant,
-        categories,
-        rendered_maxima,
-        y_range,
-        categorical_x_override,
-        y_limits,
-        panel,
-        legend_constraint,
-        crate::SignificanceStarLimit::Four,
-    )
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the chart wrapper adds one closed significance-label policy"
-)]
-fn plan_comparisons_limited(
-    comparisons: &[ComparisonAnnotation],
-    show_non_significant: bool,
-    categories: &[String],
-    rendered_maxima: &[f64],
-    y_range: (f64, f64),
-    categorical_x_override: Option<(f64, f64)>,
-    y_limits: Option<(f64, f64)>,
-    panel: PanelBox,
-    legend_constraint: LegendAnnotationConstraint,
-    star_limit: crate::SignificanceStarLimit,
+    mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
     plan_comparisons_at(
-        comparisons,
-        &[],
-        show_non_significant,
+        annotations,
         categories,
         rendered_maxima,
         None,
@@ -129,7 +87,7 @@ fn plan_comparisons_limited(
         panel,
         legend_constraint,
         false,
-        star_limit,
+        mark_style,
     )
 }
 
@@ -140,9 +98,7 @@ fn plan_comparisons_limited(
     reason = "the private planner keeps validated anchors, ranges, and panel geometry together"
 )]
 fn plan_comparisons_at(
-    comparisons: &[ComparisonAnnotation],
-    exact_spans: &[ExactBracketSpan],
-    show_non_significant: bool,
+    annotations: &[Significance],
     categories: &[String],
     rendered_maxima: &[f64],
     anchor_positions: Option<&[f64]>,
@@ -152,8 +108,9 @@ fn plan_comparisons_at(
     panel: PanelBox,
     legend_constraint: LegendAnnotationConstraint,
     horizontal: bool,
-    star_limit: crate::SignificanceStarLimit,
+    mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
+    let metrics = bracket_metrics(mark_style);
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
@@ -200,77 +157,50 @@ fn plan_comparisons_at(
 
     let mut resolved = Vec::new();
     let mut comparison_pairs = Vec::new();
-    for comparison in comparisons {
-        validate_comparison(comparison, categories)?;
+    for annotation in annotations {
+        let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
+            continue;
+        };
+        validate_bracket(annotation, categories)?;
         let a = categories
             .iter()
-            .position(|category| category == &comparison.endpoint_a.category)
+            .position(|category| category == endpoint_a.category_name())
             .ok_or_else(|| {
                 render_error("validated significance category unexpectedly disappeared")
             })?;
         let b = categories
             .iter()
-            .position(|category| category == &comparison.endpoint_b.category)
+            .position(|category| category == endpoint_b.category_name())
             .ok_or_else(|| {
                 render_error("validated significance category unexpectedly disappeared")
             })?;
+        if anchor_positions
+            .is_some_and(|positions| positions[a].to_bits() == positions[b].to_bits())
+        {
+            return Err(Error::Data(format!(
+                "significance comparison targets {endpoint_a:?} and {endpoint_b:?} resolve to the same rendered anchor"
+            )));
+        }
         let pair = (a.min(b), a.max(b));
         if comparison_pairs.contains(&pair) {
-            return Err(render_error(format!(
+            return Err(Error::Data(format!(
                 "duplicate significance comparison for {:?} and {:?}; each unordered category pair may appear only once",
                 categories[pair.0], categories[pair.1]
             )));
         }
         comparison_pairs.push(pair);
-        if !show_non_significant && !comparison.is_significant() {
-            continue;
-        }
         resolved.push(ResolvedComparison {
             left: pair.0,
             right: pair.1,
             level: 0,
-            label: star_limit.cap(comparison.render_mark().glyph()).to_owned(),
-            display_p_value: comparison.display_p_value(),
-        });
-    }
-    for span in exact_spans {
-        if span.endpoints.len() < 2 {
-            return Err(render_error(
-                "exact significance bracket requires at least two endpoints",
-            ));
-        }
-        let mut indices = Vec::with_capacity(span.endpoints.len());
-        for endpoint in &span.endpoints {
-            let index = categories
-                .iter()
-                .position(|category| category == endpoint)
-                .ok_or_else(|| {
-                    render_error(format!(
-                        "exact significance bracket references unknown endpoint {endpoint:?}"
-                    ))
-                })?;
-            if indices.contains(&index) {
-                return Err(render_error(format!(
-                    "exact significance bracket repeats endpoint {endpoint:?}"
-                )));
-            }
-            indices.push(index);
-        }
-        let left = *indices.iter().min().expect("validated exact endpoints");
-        let right = *indices.iter().max().expect("validated exact endpoints");
-        resolved.push(ResolvedComparison {
-            left,
-            right,
-            level: 0,
-            label: span.label.clone(),
-            display_p_value: 0.0,
+            label: annotation.mark().glyph()?.to_owned(),
         });
     }
 
     if resolved.is_empty() {
         let planned_range = match (legend_constraint, y_limits) {
             (LegendAnnotationConstraint::TopCeiling(ceiling), None) => {
-                fit_data_below_ceiling(y_range, panel, rendered_maxima, ceiling)?
+                fit_data_below_ceiling(y_range, panel, rendered_maxima, ceiling, metrics)?
             }
             _ => y_range,
         };
@@ -304,7 +234,6 @@ fn plan_comparisons_at(
             .cmp(&right.left)
             .then_with(|| left.right.cmp(&right.right))
             .then_with(|| left.label.cmp(&right.label))
-            .then_with(|| left.display_p_value.total_cmp(&right.display_p_value))
     });
     let mut level_ends = Vec::<usize>::new();
     for comparison in &mut resolved {
@@ -330,31 +259,27 @@ fn plan_comparisons_at(
             .fold(f64::NEG_INFINITY, f64::max);
         level_maxima[comparison.level] = level_maxima[comparison.level].max(span_maximum);
         let label_extent = if horizontal {
-            deterministic_text_width(
-                &comparison.label,
-                f64::from(SIGNIFICANCE_BRACKET_METRICS.label_font_size),
-            )
+            deterministic_text_width(&comparison.label, f64::from(metrics.label_font_size))
         } else {
-            f64::from(SIGNIFICANCE_BRACKET_METRICS.label_font_size)
+            f64::from(metrics.label_font_size)
         };
         level_label_extents[comparison.level] =
             level_label_extents[comparison.level].max(label_extent);
     }
 
-    let annotation_top =
-        annotation_ceiling.unwrap_or(panel.y1) - SIGNIFICANCE_BRACKET_METRICS.panel_padding;
-    let annotation_top = annotation_top.min(panel.y1 - SIGNIFICANCE_BRACKET_METRICS.panel_padding);
+    let annotation_top = annotation_ceiling.unwrap_or(panel.y1) - metrics.panel_padding;
+    let annotation_top = annotation_top.min(panel.y1 - metrics.panel_padding);
     let available_height = annotation_top - panel.y0;
-    let minimum_height = SIGNIFICANCE_BRACKET_METRICS.data_gap
-        + SIGNIFICANCE_BRACKET_METRICS.tick_height
+    let minimum_height = metrics.data_gap
+        + metrics.tick_height
         + level_label_extents
             .iter()
             .take(level_label_extents.len().saturating_sub(1))
-            .map(|extent| significance_level_spacing(*extent))
+            .map(|extent| significance_level_spacing(*extent, metrics))
             .sum::<f64>()
         + level_label_extents.last().copied().unwrap_or_default()
-        + SIGNIFICANCE_BRACKET_METRICS.label_gap
-        + 2.0 * SIGNIFICANCE_BRACKET_METRICS.panel_padding;
+        + metrics.label_gap
+        + 2.0 * metrics.panel_padding;
     if available_height <= minimum_height {
         return Err(render_error(format!(
             "plot panel space below the inside legend is too short for {} significance level(s): {:.1}px available, more than {:.1}px required; increase chart height, move/hide the legend, or reduce comparisons",
@@ -372,6 +297,7 @@ fn plan_comparisons_at(
             &level_label_extents,
             annotation_ceiling,
             global_maximum,
+            metrics,
         ) else {
             let suggested = expand_upper_limit(
                 limits,
@@ -380,6 +306,7 @@ fn plan_comparisons_at(
                 &level_label_extents,
                 annotation_ceiling,
                 global_maximum,
+                metrics,
             )?
             .0;
             let remedy = if annotation_ceiling.is_some() {
@@ -400,6 +327,7 @@ fn plan_comparisons_at(
         &level_label_extents,
         annotation_ceiling,
         global_maximum,
+        metrics,
     ) {
         (y_range, lines)
     } else {
@@ -410,6 +338,7 @@ fn plan_comparisons_at(
             &level_label_extents,
             annotation_ceiling,
             global_maximum,
+            metrics,
         )?
     };
 
@@ -419,7 +348,6 @@ fn plan_comparisons_at(
             .then_with(|| left.left.cmp(&right.left))
             .then_with(|| left.right.cmp(&right.right))
             .then_with(|| left.label.cmp(&right.label))
-            .then_with(|| left.display_p_value.total_cmp(&right.display_p_value))
     });
     let category_width = panel.width() / categories.len() as f64;
     let brackets = resolved
@@ -431,15 +359,33 @@ fn plan_comparisons_at(
                     |positions| panel.x0 + positions[index] * panel.width(),
                 )
             };
-            SignificanceBracket {
-                x_left: anchor(comparison.left),
-                x_right: anchor(comparison.right),
+            let x_left = anchor(comparison.left);
+            let x_right = anchor(comparison.right);
+            let label_center = f64::midpoint(x_left, x_right);
+            let label_half_extent = if horizontal {
+                f64::from(metrics.label_font_size) / 2.0
+            } else {
+                deterministic_text_width(
+                    &comparison.label,
+                    f64::from(metrics.label_font_size),
+                ) / 2.0
+            };
+            if label_center - label_half_extent < panel.x0
+                || label_center + label_half_extent > panel.x1
+            {
+                return Err(render_error(
+                    "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
+                ));
+            }
+            Ok(SignificanceBracket {
+                x_left,
+                x_right,
                 y: line_positions[comparison.level],
                 label: comparison.label,
                 orientation: BracketOrientation::Vertical,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
 
     Ok(SignificancePlan {
         y_range: planned_range,
@@ -456,7 +402,6 @@ pub(crate) fn plan_grouped(
     chart: &Plot,
     categories: &[String],
     groups: &[String],
-    mark_hues: &[Vec<Option<String>>],
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     y_range: (f64, f64),
@@ -467,7 +412,6 @@ pub(crate) fn plan_grouped(
         chart,
         categories,
         groups,
-        mark_hues,
         rendered_maxima,
         group_width,
         y_range,
@@ -487,7 +431,6 @@ pub(crate) fn plan_horizontal(
     chart: &Plot,
     categories: &[String],
     groups: &[String],
-    mark_hues: &[Vec<Option<String>>],
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     x_range: (f64, f64),
@@ -498,7 +441,6 @@ pub(crate) fn plan_horizontal(
         chart,
         categories,
         groups,
-        mark_hues,
         rendered_maxima,
         group_width,
         x_range,
@@ -523,7 +465,6 @@ pub(crate) fn plan_horizontal(
 
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     clippy::cast_precision_loss,
     reason = "grouped vertical and horizontal planners share one exact-anchor implementation"
 )]
@@ -531,7 +472,6 @@ fn plan_grouped_oriented(
     chart: &Plot,
     categories: &[String],
     groups: &[String],
-    mark_hues: &[Vec<Option<String>>],
     rendered_maxima: &[Vec<f64>],
     group_width: f64,
     numeric_range: (f64, f64),
@@ -545,13 +485,9 @@ fn plan_grouped_oriented(
         || rendered_maxima
             .iter()
             .any(|maxima| maxima.len() != groups.len().max(1))
-        || mark_hues.len() != categories.len()
-        || mark_hues
-            .iter()
-            .any(|hues| hues.len() != groups.len().max(1))
     {
         return Err(render_error(
-            "grouped significance placement requires one maximum and hue identity per category and graphical-group anchor",
+            "grouped significance placement requires one maximum per category and series anchor",
         ));
     }
     let group_count = groups.len().max(1);
@@ -591,62 +527,33 @@ fn plan_grouped_oriented(
         .map(|index| positions[*index])
         .collect::<Vec<_>>();
     let transformed = chart
-        .comparisons()
+        .significance_annotations()
         .iter()
-        .map(|comparison| {
-            if stacked
-                && (comparison.endpoint_a.group.is_some()
-                    || comparison.endpoint_b.group.is_some()
-                    || comparison.endpoint_a.hue.is_some()
-                    || comparison.endpoint_b.hue.is_some())
+        .filter_map(|annotation| {
+            annotation
+                .endpoints()
+                .map(|endpoints| (annotation, endpoints))
+        })
+        .map(|(annotation, (endpoint_a, endpoint_b))| {
+            if stacked && (endpoint_a.series_name().is_some() || endpoint_b.series_name().is_some())
             {
-                return Err(render_error(
-                    "group- or hue-qualified significance endpoints are ambiguous for stacked bars",
+                return Err(Error::Data(
+                    "series-qualified significance targets are ambiguous for stacked bars".into(),
                 ));
             }
-            let mut comparison = comparison.clone();
-            comparison.endpoint_a.category = resolve_grouped_endpoint(
-                &comparison.endpoint_a,
-                categories,
-                groups,
-                rendered_maxima,
-                mark_hues,
-            )?;
-            comparison.endpoint_b.category = resolve_grouped_endpoint(
-                &comparison.endpoint_b,
-                categories,
-                groups,
-                rendered_maxima,
-                mark_hues,
-            )?;
-            comparison.endpoint_a.group = None;
-            comparison.endpoint_b.group = None;
-            comparison.endpoint_a.hue = None;
-            comparison.endpoint_b.hue = None;
-            Ok(comparison)
+            let endpoint_a =
+                resolve_grouped_endpoint(endpoint_a, categories, groups, rendered_maxima)?;
+            let endpoint_b =
+                resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
+            Ok(Significance::between(
+                endpoint_a,
+                endpoint_b,
+                annotation.mark(),
+            ))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let exact_spans = chart
-        .grouped_factor_annotations()
-        .iter()
-        .map(|annotation| {
-            let endpoints = annotation
-                .endpoints()
-                .iter()
-                .map(|endpoint| {
-                    resolve_factor_endpoint(endpoint, categories, groups, rendered_maxima)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(ExactBracketSpan {
-                endpoints,
-                label: annotation.mark().to_owned(),
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
     let mut result = plan_comparisons_at(
         &transformed,
-        &exact_spans,
-        chart.shows_non_significant(),
         &labels,
         &maxima,
         Some(&positions),
@@ -664,7 +571,7 @@ fn plan_grouped_oriented(
         panel,
         legend_constraint,
         horizontal,
-        chart.significance_star_limit_spec(),
+        chart.significance_mark_style_spec(),
     )?;
     if horizontal {
         for bracket in &mut result.brackets {
@@ -674,93 +581,51 @@ fn plan_grouped_oriented(
     Ok(result)
 }
 
-fn resolve_factor_endpoint(
-    endpoint: &crate::GroupedFactorEndpoint,
-    categories: &[String],
-    groups: &[String],
-    rendered_maxima: &[Vec<f64>],
-) -> Result<String, Error> {
-    let category_index = categories
-        .iter()
-        .position(|category| category == endpoint.category())
-        .ok_or_else(|| {
-            render_error(format!(
-                "grouped-factor annotation references unknown category {:?}; available categories: {}",
-                endpoint.category(),
-                categories.join(", ")
-            ))
-        })?;
-    let group_index = groups
-        .iter()
-        .position(|group| group == endpoint.group())
-        .ok_or_else(|| {
-            render_error(format!(
-                "grouped-factor annotation references unknown graphical group {:?}; available groups: {}",
-                endpoint.group(),
-                groups.join(", ")
-            ))
-        })?;
-    if !rendered_maxima[category_index][group_index].is_finite() {
-        return Err(render_error(format!(
-            "grouped-factor annotation endpoint category {:?}, graphical group {:?} has no rendered bar",
-            endpoint.category(),
-            endpoint.group()
-        )));
-    }
-    Ok(format!("{}\u{1f}{}", endpoint.category(), endpoint.group()))
-}
-
 fn resolve_grouped_endpoint(
-    endpoint: &ComparisonEndpoint,
+    endpoint: &SignificanceTarget,
     categories: &[String],
     groups: &[String],
     rendered_maxima: &[Vec<f64>],
-    mark_hues: &[Vec<Option<String>>],
 ) -> Result<String, Error> {
     let category_index = categories
         .iter()
-        .position(|category| category == &endpoint.category)
+        .position(|category| category == endpoint.category_name())
         .ok_or_else(|| {
-            render_error(format!(
+            Error::Data(format!(
                 "significance comparison references unknown category {:?}; available categories: {}",
-                endpoint.category,
+                endpoint.category_name(),
                 categories.join(", ")
             ))
         })?;
-    let group_index = if let Some(group) = &endpoint.group {
-        let index = groups.iter().position(|candidate| candidate == group).ok_or_else(|| {
-            render_error(format!(
-                "significance comparison references unknown graphical group {group:?}; available groups: {}",
+    let group_index = if let Some(group) = endpoint.series_name() {
+        let index = groups
+            .iter()
+            .position(|candidate| candidate == group)
+            .ok_or_else(|| {
+                Error::Data(format!(
+                "significance comparison references unknown series {group:?}; available series: {}",
                 groups.join(", ")
             ))
-        })?;
-        if let Some(hue) = &endpoint.hue {
-            if mark_hues[category_index][index].as_ref() != Some(hue) {
-                return Err(render_error(format!(
-                    "significance endpoint category {:?}, graphical group {group:?} does not have hue {hue:?}",
-                    endpoint.category
-                )));
-            }
-        }
+            })?;
         Some(index)
-    } else if let Some(hue) = &endpoint.hue {
-        return Err(render_error(format!(
-            "significance endpoint category {:?} qualifies hue {hue:?} without a graphical group; hue may only validate a group-qualified endpoint",
-            endpoint.category
-        )));
     } else {
         None
     };
     if let Some(index) = group_index {
         if !rendered_maxima[category_index][index].is_finite() {
-            return Err(render_error(format!(
-                "significance endpoint category {:?}, graphical group {:?} has no rendered mark",
-                endpoint.category, groups[index]
+            return Err(Error::Data(format!(
+                "significance target category {:?}, series {:?} has no rendered mark",
+                endpoint.category_name(),
+                groups[index]
             )));
         }
-        Ok(format!("{}\u{1f}{}", endpoint.category, groups[index]))
+        Ok(format!(
+            "{}\u{1f}{}",
+            endpoint.category_name(),
+            groups[index]
+        ))
     } else {
-        Ok(format!("{}\u{1f}", endpoint.category))
+        Ok(format!("{}\u{1f}", endpoint.category_name()))
     }
 }
 
@@ -779,55 +644,35 @@ fn validate_range(range: (f64, f64), explicit: bool) -> Result<(), Error> {
     )))
 }
 
-fn validate_comparison(
-    comparison: &ComparisonAnnotation,
-    categories: &[String],
-) -> Result<(), Error> {
-    if comparison.endpoint_a == comparison.endpoint_b {
-        return Err(render_error(format!(
+fn validate_bracket(annotation: &Significance, categories: &[String]) -> Result<(), Error> {
+    let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
+        return Ok(());
+    };
+    if endpoint_a == endpoint_b {
+        return Err(Error::Data(format!(
             "significance comparison endpoints must be different; both were {:?}",
-            comparison.endpoint_a.category
+            endpoint_a.category_name()
         )));
     }
-    if comparison.endpoint_a.group.is_some()
-        || comparison.endpoint_b.group.is_some()
-        || comparison.endpoint_a.hue.is_some()
-        || comparison.endpoint_b.hue.is_some()
-    {
-        return Err(render_error(
-            "group- or hue-qualified significance endpoints require graphical-group plot anchors",
+    if endpoint_a.series_name().is_some() || endpoint_b.series_name().is_some() {
+        return Err(Error::Data(
+            "series-qualified significance targets require rendered series anchors".into(),
         ));
     }
-    for group in [
-        &comparison.endpoint_a.category,
-        &comparison.endpoint_b.category,
-    ] {
-        if !categories.iter().any(|category| category == group) {
-            return Err(render_error(format!(
-                "significance comparison references unknown category {group:?}; available categories: {}",
+    for target in [endpoint_a, endpoint_b] {
+        if !categories
+            .iter()
+            .any(|category| category == target.category_name())
+        {
+            return Err(Error::Data(format!(
+                "significance comparison references unknown category {:?}; available categories: {}",
+                target.category_name(),
                 categories.join(", ")
             )));
         }
     }
-    validate_p_value(comparison.raw_p_value, "raw", comparison)?;
-    if let Some(adjusted) = comparison.adjusted_p_value {
-        validate_p_value(adjusted, "adjusted", comparison)?;
-    }
+    annotation.mark().glyph()?;
     Ok(())
-}
-
-fn validate_p_value(
-    value: f64,
-    kind: &str,
-    comparison: &ComparisonAnnotation,
-) -> Result<(), Error> {
-    if value.is_finite() && (0.0..=1.0).contains(&value) {
-        return Ok(());
-    }
-    Err(render_error(format!(
-        "significance comparison {:?} vs {:?} has invalid {kind} p-value {value}; expected a finite value in [0, 1]",
-        comparison.endpoint_a.category, comparison.endpoint_b.category
-    )))
 }
 
 fn place_lines(
@@ -837,28 +682,28 @@ fn place_lines(
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
     global_maximum: f64,
+    metrics: BracketMetrics,
 ) -> Option<Vec<f64>> {
-    if annotation_ceiling
-        .is_some_and(|ceiling| !data_fits_below_ceiling(range, panel, global_maximum, ceiling))
-    {
+    if annotation_ceiling.is_some_and(|ceiling| {
+        !data_fits_below_ceiling(range, panel, global_maximum, ceiling, metrics)
+    }) {
         return None;
     }
     if level_maxima.len() != level_label_extents.len() {
         return None;
     }
-    let annotation_edge = annotation_ceiling.unwrap_or(panel.y1).min(panel.y1)
-        - SIGNIFICANCE_BRACKET_METRICS.panel_padding;
+    let annotation_edge =
+        annotation_ceiling.unwrap_or(panel.y1).min(panel.y1) - metrics.panel_padding;
     let mut lines = Vec::with_capacity(level_maxima.len());
     for (level, maximum) in level_maxima.iter().enumerate() {
         let fraction = ((*maximum - range.0) / (range.1 - range.0)).clamp(0.0, 1.0);
         let data_y = panel.y0 + fraction * panel.height();
-        let clearance_y = data_y
-            + SIGNIFICANCE_BRACKET_METRICS.tick_height
-            + SIGNIFICANCE_BRACKET_METRICS.data_gap;
+        let clearance_y = data_y + metrics.tick_height + metrics.data_gap;
         let line = lines.last().map_or(clearance_y, |previous| {
-            clearance_y.max(previous + significance_level_spacing(level_label_extents[level - 1]))
+            clearance_y
+                .max(previous + significance_level_spacing(level_label_extents[level - 1], metrics))
         });
-        let label_edge = line + SIGNIFICANCE_BRACKET_METRICS.label_gap + level_label_extents[level];
+        let label_edge = line + metrics.label_gap + level_label_extents[level];
         if !line.is_finite() || !label_edge.is_finite() || label_edge > annotation_edge {
             return None;
         }
@@ -867,12 +712,10 @@ fn place_lines(
     Some(lines)
 }
 
-fn significance_level_spacing(label_extent: f64) -> f64 {
-    SIGNIFICANCE_BRACKET_METRICS.level_step.max(
-        SIGNIFICANCE_BRACKET_METRICS.label_gap
-            + label_extent
-            + SIGNIFICANCE_BRACKET_METRICS.panel_padding,
-    )
+fn significance_level_spacing(label_extent: f64, metrics: BracketMetrics) -> f64 {
+    metrics
+        .level_step
+        .max(metrics.label_gap + label_extent + metrics.panel_padding)
 }
 
 fn expand_upper_limit(
@@ -882,6 +725,7 @@ fn expand_upper_limit(
     level_label_extents: &[f64],
     annotation_ceiling: Option<f64>,
     global_maximum: f64,
+    metrics: BracketMetrics,
 ) -> Result<((f64, f64), Vec<f64>), Error> {
     let lower = range.0;
     let mut failing_upper = range.1;
@@ -909,6 +753,7 @@ fn expand_upper_limit(
             level_label_extents,
             annotation_ceiling,
             global_maximum,
+            metrics,
         ) {
             break lines;
         }
@@ -926,6 +771,7 @@ fn expand_upper_limit(
             level_label_extents,
             annotation_ceiling,
             global_maximum,
+            metrics,
         ) {
             passing_upper = midpoint;
             lines = candidate;
@@ -941,18 +787,18 @@ fn fit_data_below_ceiling(
     panel: PanelBox,
     rendered_maxima: &[f64],
     ceiling: f64,
+    metrics: BracketMetrics,
 ) -> Result<(f64, f64), Error> {
     let maximum = rendered_maxima
         .iter()
         .copied()
         .fold(f64::NEG_INFINITY, f64::max);
-    let fits = |upper: f64| data_fits_below_ceiling((range.0, upper), panel, maximum, ceiling);
+    let fits =
+        |upper: f64| data_fits_below_ceiling((range.0, upper), panel, maximum, ceiling, metrics);
     if fits(range.1) {
         return Ok(range);
     }
-    if ceiling - panel.y0
-        <= SIGNIFICANCE_BRACKET_METRICS.data_gap + SIGNIFICANCE_BRACKET_METRICS.panel_padding
-    {
+    if ceiling - panel.y0 <= metrics.data_gap + metrics.panel_padding {
         return Err(render_error(
             "inside legend leaves no vertical room for categorical data; increase chart height or move/hide the legend",
         ));
@@ -985,11 +831,24 @@ fn fit_data_below_ceiling(
     Ok((range.0, passing_upper))
 }
 
-fn data_fits_below_ceiling(range: (f64, f64), panel: PanelBox, maximum: f64, ceiling: f64) -> bool {
+fn data_fits_below_ceiling(
+    range: (f64, f64),
+    panel: PanelBox,
+    maximum: f64,
+    ceiling: f64,
+    metrics: BracketMetrics,
+) -> bool {
     let fraction = ((maximum - range.0) / (range.1 - range.0)).clamp(0.0, 1.0);
     let data_top = panel.y0 + fraction * panel.height();
-    data_top + SIGNIFICANCE_BRACKET_METRICS.data_gap
-        <= ceiling - SIGNIFICANCE_BRACKET_METRICS.panel_padding
+    data_top + metrics.data_gap <= ceiling - metrics.panel_padding
+}
+
+fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
+    BracketMetrics {
+        label_gap: style.gap(),
+        label_font_size: style.font_size(),
+        ..SIGNIFICANCE_BRACKET_METRICS
+    }
 }
 
 pub(crate) fn render(
@@ -997,9 +856,15 @@ pub(crate) fn render(
     brackets: &[SignificanceBracket],
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
+    let palette = chart.palette();
+    let mark_style = chart.significance_mark_style_spec();
     let style = BracketStyle {
-        color: chart.palette().foreground,
-        width: chart.palette().bracket_width,
+        color: palette.foreground,
+        width: palette.bracket_width,
+        font_family: palette.font_family,
+        font_size: mark_style.font_size(),
+        weight: mark_style.weight(),
+        label_gap: mark_style.gap(),
     };
     for bracket in brackets {
         backend.draw_bracket(bracket, &style)?;

@@ -219,22 +219,41 @@ impl Backend for GeometryBackend {
     ) -> Result<(), Error> {
         backend::validate_bracket(bracket, style)?;
         let metrics = SIGNIFICANCE_BRACKET_METRICS;
-        let label_width = estimated_text_width(&bracket.label, metrics.label_font_size);
+        let label_width = estimated_text_width(&bracket.label, style.font_size);
         let bounds = match bracket.orientation {
-            BracketOrientation::Vertical => GeometryBox {
-                left: bracket.x_left.min(bracket.x_right),
-                right: bracket.x_left.max(bracket.x_right),
-                bottom: bracket.y - metrics.tick_height,
-                top: bracket.y + metrics.label_gap + f64::from(metrics.label_font_size),
-                weight: ANNOTATION_COLLISION_WEIGHT,
-            },
-            BracketOrientation::Horizontal => GeometryBox {
-                left: bracket.y - metrics.tick_height,
-                right: bracket.y + metrics.label_gap + label_width,
-                bottom: bracket.x_left.min(bracket.x_right),
-                top: bracket.x_left.max(bracket.x_right),
-                weight: ANNOTATION_COLLISION_WEIGHT,
-            },
+            BracketOrientation::Vertical => {
+                let label_center = f64::midpoint(bracket.x_left, bracket.x_right);
+                GeometryBox {
+                    left: bracket
+                        .x_left
+                        .min(bracket.x_right)
+                        .min(label_center - label_width / 2.0),
+                    right: bracket
+                        .x_left
+                        .max(bracket.x_right)
+                        .max(label_center + label_width / 2.0),
+                    bottom: bracket.y - metrics.tick_height,
+                    top: bracket.y + style.label_gap + f64::from(style.font_size),
+                    weight: ANNOTATION_COLLISION_WEIGHT,
+                }
+            }
+            BracketOrientation::Horizontal => {
+                let label_center = f64::midpoint(bracket.x_left, bracket.x_right);
+                let label_half_height = f64::from(style.font_size) / 2.0;
+                GeometryBox {
+                    left: bracket.y - metrics.tick_height,
+                    right: bracket.y + style.label_gap + label_width,
+                    bottom: bracket
+                        .x_left
+                        .min(bracket.x_right)
+                        .min(label_center - label_half_height),
+                    top: bracket
+                        .x_left
+                        .max(bracket.x_right)
+                        .max(label_center + label_half_height),
+                    weight: ANNOTATION_COLLISION_WEIGHT,
+                }
+            }
         };
         self.record(Some(bounds));
         Ok(())
@@ -298,5 +317,45 @@ mod tests {
                 weight: 1.0,
             }]
         );
+    }
+
+    #[test]
+    fn brackets_record_label_overhang_in_both_orientations() {
+        let style = BracketStyle {
+            color: (0, 0, 0),
+            width: 1.0,
+            font_family: "sans-serif".into(),
+            font_size: 20,
+            weight: crate::TextWeight::Normal,
+            label_gap: 5.0,
+        };
+        let mut backend = GeometryBackend::default();
+        backend
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 49.0,
+                    x_right: 51.0,
+                    y: 80.0,
+                    label: "****".into(),
+                    orientation: BracketOrientation::Vertical,
+                },
+                &style,
+            )
+            .unwrap();
+        backend
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 49.0,
+                    x_right: 51.0,
+                    y: 120.0,
+                    label: "****".into(),
+                    orientation: BracketOrientation::Horizontal,
+                },
+                &style,
+            )
+            .unwrap();
+
+        assert!(backend.bounds[0].left < 49.0 && backend.bounds[0].right > 51.0);
+        assert!(backend.bounds[1].bottom < 49.0 && backend.bounds[1].top > 51.0);
     }
 }

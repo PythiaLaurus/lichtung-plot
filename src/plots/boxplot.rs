@@ -107,13 +107,10 @@ pub(crate) fn render(
     let mut rendered_maxima = vec![f64::NEG_INFINITY; x_levels.len()];
     let mut grouped_maxima =
         vec![vec![f64::NEG_INFINITY; group_levels.len().max(1)]; x_levels.len()];
-    let mut mark_hues = vec![vec![None; group_levels.len().max(1)]; x_levels.len()];
     for stat in &stats {
         let maximum = stat.fliers.iter().copied().fold(stat.hi_whisker, f64::max);
         rendered_maxima[stat.x_index] = rendered_maxima[stat.x_index].max(maximum);
         grouped_maxima[stat.x_index][stat.group_index] = maximum;
-        mark_hues[stat.x_index][stat.group_index] =
-            stat.hue_index.map(|index| hue_levels[index].clone());
     }
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
@@ -135,7 +132,6 @@ pub(crate) fn render(
             chart,
             x_levels,
             group_levels,
-            &mark_hues,
             &grouped_maxima,
             0.72,
             base_y_range,

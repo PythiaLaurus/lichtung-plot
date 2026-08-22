@@ -18,7 +18,8 @@ fn identity_bar(data_frame: &DataFrame) -> Plot {
 #[test]
 fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     let frame = estimate_data();
-    let comparison = ComparisonAnnotation::new("before", "after", 0.01).in_facet("facet", "one");
+    let comparison = Significance::between("before", "after", SignificanceMark::PValue(0.01))
+        .facet("facet", "one");
     let interaction = Plot::interaction(
         data::category(&frame, "factor"),
         data::numeric(&frame, "estimate"),
@@ -30,7 +31,7 @@ fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     .interaction_source(EstimateSource::ObservedCellSummary)
     .hue(data::category(&frame, "trace"))
     .facet_col(data::category(&frame, "facet"))
-    .add_comparisons([comparison]);
+    .significance([comparison]);
     assert!(interaction
         .preflight()
         .unwrap_err()
@@ -48,9 +49,11 @@ fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     let bar = identity_bar(&frame)
         .facet_col(data::category(&frame, "facet"))
         .facet_scales(FacetScales::Free)
-        .add_comparisons([ComparisonAnnotation::new("before", "after", 0.01)
-            .in_facet("facet", "one")
-            .in_facet("facet", "one")]);
+        .significance([
+            Significance::between("before", "after", SignificanceMark::PValue(0.01))
+                .facet("facet", "one")
+                .facet("facet", "one"),
+        ]);
     let svg = render_svg(bar, "faceted-annotation").unwrap();
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
 }
@@ -58,17 +61,15 @@ fn faceting_uses_unique_clips_and_panel_owned_annotations() {
 #[test]
 fn contradictory_duplicate_facet_ownership_fails_preflight() {
     let frame = estimate_data();
-    let comparison = ComparisonAnnotation::new("before", "after", 0.01)
-        .in_facet("facet", "one")
-        .in_facet("facet", "two");
+    let comparison = Significance::between("before", "after", SignificanceMark::PValue(0.01))
+        .facet("facet", "one")
+        .facet("facet", "two");
     let error = identity_bar(&frame)
         .facet_col(data::category(&frame, "facet"))
-        .add_comparisons([comparison])
+        .significance([comparison])
         .preflight()
         .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("contradictory duplicate ownership"));
+    assert!(error.to_string().contains("names facet variable"));
 }
 
 #[test]
@@ -81,16 +82,12 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
     )
     .unwrap();
     let comparisons = ["one", "two"].map(|facet| {
-        ComparisonAnnotation {
-            endpoint_a: ComparisonEndpoint::new("before")
-                .with_group("control")
-                .with_hue("control"),
-            endpoint_b: ComparisonEndpoint::new("before")
-                .with_group("active")
-                .with_hue("active"),
-            ..ComparisonAnnotation::new("before", "before", 0.01)
-        }
-        .in_facet("facet", facet)
+        Significance::between(
+            SignificanceTarget::category_series("before", "control"),
+            SignificanceTarget::category_series("before", "active"),
+            SignificanceMark::PValue(0.01),
+        )
+        .facet("facet", facet)
     });
     let svg = render_svg(
         Plot::bar(
@@ -101,7 +98,7 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
         .group(data::category(&frame, "hue"))
         .hue(data::category(&frame, "hue"))
         .facet_col(data::category(&frame, "facet"))
-        .add_comparisons(comparisons),
+        .significance(comparisons),
         "facet-hue-panel-comparisons",
     )
     .unwrap();
@@ -117,12 +114,15 @@ fn facet_owned_comparison_on_unfaceted_plot_fails_preflight() {
         lichtung_plot::NumericValues::new("estimate", [1.0, 2.0]),
     )
     .bar_aggregation(BarAggregation::Identity)
-    .add_comparisons([ComparisonAnnotation::new("before", "after", 0.01).in_facet("facet", "one")])
+    .significance([
+        Significance::between("before", "after", SignificanceMark::PValue(0.01))
+            .facet("facet", "one"),
+    ])
     .preflight()
     .unwrap_err();
     assert!(error
         .to_string()
-        .contains("facet-owned significance comparisons require"));
+        .contains("facet-owned significance annotations require"));
 }
 
 #[test]
@@ -361,6 +361,39 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
     .size(760, 360);
     let svg = render_svg(categorical, "reserved-categorical").unwrap();
     assert!(svg.contains(">Alpha</text>") && svg.contains(">Beta</text>"));
+
+    let current_internal_name = Plot::bar(
+        lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
+        lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+    )
+    .group(lichtung_plot::CategoryValues::new("__series", ["g1", "g2", "g1", "g2"]).unwrap())
+    .facet_col(
+        lichtung_plot::CategoryValues::new("__series", ["left", "left", "right", "right"]).unwrap(),
+    )
+    .bar_aggregation(BarAggregation::Identity)
+    .size(760, 360);
+    let svg = render_svg(current_internal_name, "current-internal-facet-name").unwrap();
+    assert_eq!(svg.matches("<clipPath id=").count(), 2);
+    assert_eq!(svg.matches("<polygon points=").count(), 4);
+    assert!(svg.contains(">Series = Left</text>") && svg.contains(">Series = Right</text>"));
+}
+
+#[test]
+fn row_and_column_facets_require_distinct_variable_names() {
+    let plot = Plot::bar(
+        lichtung_plot::CategoryValues::new("category", ["a", "b"]).unwrap(),
+        lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+    )
+    .facet_row(lichtung_plot::CategoryValues::new("facet", ["r1", "r2"]).unwrap())
+    .facet_col(lichtung_plot::CategoryValues::new("facet", ["c1", "c2"]).unwrap())
+    .bar_aggregation(BarAggregation::Identity);
+
+    let error = plot.preflight().unwrap_err();
+    assert!(matches!(error, lichtung_plot::Error::Data(_)));
+    assert!(
+        error.to_string().contains("must use different columns"),
+        "{error}"
+    );
 }
 
 #[test]

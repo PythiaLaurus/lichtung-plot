@@ -43,7 +43,6 @@ fn bar_with_hue_renders_grouped_bars_and_hue_legend() {
     let dir = unique_dir("bar-hue-grouped");
     let out = dir.join("bar.svg");
     let chart = Plot::bar(data::category(&df, "group"), data::numeric(&df, "value"))
-        .group(data::category(&df, "series"))
         .hue(data::category(&df, "series"))
         .bar_aggregation(BarAggregation::Identity);
     chart
@@ -94,7 +93,6 @@ fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
     let dir = unique_dir("horizontal-bar-hue-grouped");
     let out = dir.join("horizontal_bar.svg");
     let chart = Plot::horizontal_bar(data::category(&df, "group"), data::numeric(&df, "value"))
-        .group(data::category(&df, "series"))
         .hue(data::category(&df, "series"))
         .bar_aggregation(BarAggregation::Identity);
     chart
@@ -112,7 +110,7 @@ fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
 }
 
 #[test]
-fn stacked_bar_sums_duplicate_category_hue_rows() {
+fn stacked_bar_sums_duplicate_category_series_rows() {
     let df = df!(
         "group" => ["A", "A", "A"],
         "series" => ["first", "first", "second"],
@@ -127,7 +125,6 @@ fn stacked_bar_sums_duplicate_category_hue_rows() {
         data::numeric(&df, "value"),
         data::category(&df, "series"),
     )
-    .hue(data::category(&df, "series"))
     .size(360, 260);
     chart.svg(&out).expect("stacked bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
@@ -136,7 +133,7 @@ fn stacked_bar_sums_duplicate_category_hue_rows() {
     assert_eq!(
         bars.len(),
         2,
-        "duplicates should aggregate to one segment per hue"
+        "duplicates should aggregate to one segment per series"
     );
     assert!(
         bars.iter().any(|a| bars

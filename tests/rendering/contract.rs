@@ -1,9 +1,9 @@
 use lichtung_plot::{
     BarAggregation, BarPointLayer, Canvas, InferentialScale, IntervalKind, IntervalSemantics, Plot,
-    SignificanceStarLimit, TextPanel,
+    TextPanel,
 };
 
-use super::{data, df, unique_dir, ComparisonAnnotation, DataFrame};
+use super::{data, df, unique_dir, DataFrame, Significance, SignificanceMark};
 
 fn interval_semantics() -> IntervalSemantics {
     IntervalSemantics::new(
@@ -284,30 +284,26 @@ fn bar_point_layers_reject_nonfinite_mismatch_stacking_other_kinds_and_facets() 
 }
 
 #[test]
-fn three_star_limit_caps_planning_and_rendering_while_four_is_byte_inert() {
+fn explicit_and_p_value_marks_render_the_same_four_stars() {
     let data = df!("category" => ["a", "b"], "value" => [2.0_f64, 4.0]).unwrap();
-    let make = |limit: Option<SignificanceStarLimit>, name: &str| {
-        let plot = Plot::bar(
-            data::category(&data, "category"),
-            data::numeric(&data, "value"),
-        )
-        .bar_aggregation(BarAggregation::Identity);
-        let plot = limit.map_or(plot.clone(), |limit| plot.significance_star_limit(limit));
+    let plot = Plot::bar(
+        data::category(&data, "category"),
+        data::numeric(&data, "value"),
+    )
+    .bar_aggregation(BarAggregation::Identity);
+    let render = |mark, name| {
         svg(
-            plot.add_comparisons([ComparisonAnnotation::new("a", "b", 0.00001)]),
+            plot.clone()
+                .significance([Significance::between("a", "b", mark)]),
             name,
         )
     };
 
-    let default = make(None, "default-four-star-limit");
-    let explicit_four = make(
-        Some(SignificanceStarLimit::Four),
-        "explicit-four-star-limit",
-    );
-    let capped = make(Some(SignificanceStarLimit::Three), "three-star-limit");
+    let explicit = render(SignificanceMark::FourStars, "explicit-four-stars");
+    let derived = render(SignificanceMark::PValue(0.00001), "p-value-four-stars");
 
-    assert_eq!(default, explicit_four);
-    assert!(capped.contains(">***</text>") && !capped.contains(">****</text>"));
+    assert_eq!(explicit, derived);
+    assert!(explicit.contains(">****</text>"));
 }
 
 #[test]

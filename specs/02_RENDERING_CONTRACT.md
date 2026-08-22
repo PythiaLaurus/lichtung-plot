@@ -15,6 +15,15 @@ must name every rendered category exactly once. Value-derived ordering is
 applied only after a supported family prepares one scalar rendered value per
 category; ambiguous multi-value categorical dimensions reject it.
 
+For bars, horizontal bars, stacked bars, stacked horizontal bars, boxplots,
+and sample-derived violins, `Plot::group` and `Plot::hue` are last-write-wins
+aliases for one positioned, colored categorical series. That series owns
+geometry, partitioning, color, legend identity, and significance targeting
+where the plot family admits the requested placement.
+The two channels remain independent for plot families whose geometry requires
+separate grouping and color dimensions. Precomputed raincloud geometry is
+self-contained and accepts neither setter.
+
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
 requested descriptive summaries, and ordinary least-squares display fits. It
@@ -66,15 +75,30 @@ geometry remain deterministic for identical inputs and options; exact glyph
 paths, glyph appearance, and PNG bytes require the same installed-font
 environment.
 
-## Comparison Annotations
+## Significance Annotations
 
-`ComparisonAnnotation` is plot-owned display data. It carries two explicit
-category endpoints, optional group and hue qualifiers, optional facet identity,
-a raw p-value, and an optional adjusted or intrinsically familywise p-value.
-The displayed p-value determines the conventional significance mark.
+`Significance` is plot-owned display data with exactly one of two placements:
+`Significance::at` attaches a label to one category or positioned series, while
+`Significance::between` draws one bracket between exactly two such targets.
+Raw strings identify complete categories; `SignificanceTarget::category_series`
+identifies one exact positioned series.
 
-The renderer validates annotations against rendered categories and graphical
-anchors. It never computes, adjusts, or substitutes p-values.
+Attached marks are supported by ordinary bars, ordinary horizontal bars, and
+coefficient plots. Pairwise brackets are supported by bar variants, boxplots,
+and sample-derived violins. Stacked bars accept category-level bracket targets;
+their partitioned series do not provide distinct bracket anchors. Coefficients
+accept attached term targets only and require complete confidence intervals.
+
+`SignificanceMark` accepts an explicit `ns` or one-through-four-star mark, or
+one caller-selected display p-value. A p-value at or above `0.05` renders `ns`;
+smaller values map through the conventional one-, two-, three-, and four-star
+thresholds. Every supplied annotation renders. Statistical adjustment and
+familywise provenance remain caller responsibilities.
+
+Facet-owned annotations name every configured facet dimension exactly once
+through `Significance::facet`; annotations are never silently replicated across
+panels. The renderer validates all annotations against rendered categories,
+series, and facet panels. It never computes, adjusts, or substitutes p-values.
 
 ## Errors
 

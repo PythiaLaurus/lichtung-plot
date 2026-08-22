@@ -58,7 +58,7 @@ display values.
   immutable semantic input values.
 - `Plot` owns one selected plot family and all its rendering configuration.
 - `Canvas` owns a typed grid of `Plot` and `TextPanel` values.
-- `ComparisonAnnotation` owns visual endpoint and p-value metadata.
+- `Significance` owns one explicit attached or pairwise display annotation.
 - `Error` owns the renderer's I/O, data, and rendering failure domains.
 - `Output` privately owns one rendered scene and can publish additional formats
   without rerunning layout.

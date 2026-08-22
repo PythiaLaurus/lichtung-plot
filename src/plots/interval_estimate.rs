@@ -7,8 +7,7 @@ use crate::Error;
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor, TextStyle};
 use crate::spec::{
-    AxisScale, CoefficientSignificanceMark, EstimateStatus, FacetScales, IntervalKind,
-    PlotRenderContext, PlotRenderResult,
+    AxisScale, EstimateStatus, FacetScales, IntervalKind, PlotRenderContext, PlotRenderResult,
 };
 use crate::Plot;
 
@@ -308,7 +307,37 @@ pub(crate) fn render(
     } else {
         None
     };
-    let coefficient_significance = if let Some(column) = chart.coefficient_significance_col() {
+    let mut coefficient_significance = vec![None; labels.len()];
+    for annotation in chart.significance_annotations() {
+        let Some(target) = annotation.at_target() else {
+            return Err(Error::Data(
+                "coefficient: only attached significance annotations are supported".into(),
+            ));
+        };
+        if target.series_name().is_some() {
+            return Err(Error::Data(
+                "coefficient: series-qualified significance targets are not supported".into(),
+            ));
+        }
+        let index = labels
+            .iter()
+            .position(|label| label == target.category_name())
+            .ok_or_else(|| {
+                Error::Data(format!(
+                    "coefficient significance references unknown term {:?}; available terms: {}",
+                    target.category_name(),
+                    labels.join(", ")
+                ))
+            })?;
+        if coefficient_significance[index].is_some() {
+            return Err(Error::Data(format!(
+                "coefficient significance target {:?} is annotated more than once",
+                target.category_name()
+            )));
+        }
+        coefficient_significance[index] = Some(annotation.mark().glyph()?.to_owned());
+    }
+    if coefficient_significance.iter().any(Option::is_some) {
         if !has_intervals {
             return Err(Error::Data(
                 "coefficient: significance marks require complete confidence interval columns"
@@ -322,23 +351,7 @@ pub(crate) fn render(
                     .into(),
             ));
         }
-        Some(
-            crate::data::strict_strings(context.data, column, "coefficient significance")?
-                .into_iter()
-                .enumerate()
-                .map(|(index, value)| {
-                    CoefficientSignificanceMark::parse_exact(&value).ok_or_else(|| {
-                        Error::Data(format!(
-                            "coefficient: significance column {column:?} has invalid value {value:?} at source row {}; expected exactly \"\", \"*\", \"**\", or \"***\"",
-                            context.data.source_row(index)
-                        ))
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-    } else {
-        None
-    };
+    }
     let reference = match chart.reference_line_value() {
         Some(value) if value.is_finite() => value,
         Some(value) => {
@@ -353,12 +366,7 @@ pub(crate) fn render(
         }
         None => 0.0,
     };
-    if labels.is_empty()
-        || labels.len() != estimates.len()
-        || coefficient_significance
-            .as_ref()
-            .is_some_and(|marks| marks.len() != labels.len())
-    {
+    if labels.is_empty() || labels.len() != estimates.len() {
         return Err(Error::Data(format!(
             "{family}: label, estimate, and interval columns must have equal non-zero lengths"
         )));
@@ -381,11 +389,7 @@ pub(crate) fn render(
                 "{family}: source row {source_row} must satisfy lower <= estimate <= upper"
             )));
         }
-        if estimate.is_none()
-            && coefficient_significance
-                .as_ref()
-                .is_some_and(|marks| !marks[index].as_str().is_empty())
-        {
+        if estimate.is_none() && coefficient_significance[index].is_some() {
             return Err(Error::Data(format!(
                 "coefficient: not_estimable source row {} cannot carry a significance mark",
                 context.data.source_row(index)
@@ -563,18 +567,33 @@ pub(crate) fn render(
                 .estimate_labels_spec()
                 .map(|format| (format.format(original_estimate), false))
                 .or_else(|| {
-                    coefficient_significance.as_ref().and_then(|marks| {
-                        let mark = marks[index].as_str();
-                        (!mark.is_empty()).then(|| (mark.to_owned(), true))
-                    })
+                    coefficient_significance[index]
+                        .clone()
+                        .map(|mark| (mark, true))
                 });
             if let Some((label, is_significance)) = adjacent_label {
-                let width = crate::layout::estimated_text_width(&label, palette.detail_font_size);
+                let significance_style = chart.significance_mark_style_spec();
+                let font_size = if is_significance {
+                    significance_style.font_size()
+                } else {
+                    palette.detail_font_size
+                };
+                let weight = if is_significance {
+                    significance_style.weight()
+                } else {
+                    crate::TextWeight::Normal
+                };
+                let gap = if is_significance {
+                    significance_style.gap()
+                } else {
+                    7.0
+                };
+                let width = crate::layout::estimated_text_width(&label, font_size);
                 let panel = layout.projection.panel_box();
-                let (label_x, anchor) = if x + 7.0 + width <= panel.x1 {
-                    (x + 7.0, TextAnchor::Start)
-                } else if x - 7.0 - width >= panel.x0 {
-                    (x - 7.0, TextAnchor::End)
+                let (label_x, anchor) = if x + gap + width <= panel.x1 {
+                    (x + gap, TextAnchor::Start)
+                } else if x - gap - width >= panel.x0 {
+                    (x - gap, TextAnchor::End)
                 } else {
                     let message = if is_significance {
                         format!(
@@ -594,8 +613,8 @@ pub(crate) fn render(
                     &TextStyle {
                         color: palette.foreground,
                         font_family: palette.font_family.clone(),
-                        font_size: palette.detail_font_size,
-                        weight: crate::TextWeight::Normal,
+                        font_size,
+                        weight,
                         anchor,
                         rotation: 0.0,
                     },

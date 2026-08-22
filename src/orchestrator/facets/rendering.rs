@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use super::data::FacetPanel;
+use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::figure::try_wrap_text;
@@ -32,7 +32,7 @@ pub(super) fn render_scene(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_comparison_subset(&facet.cell)?;
+            .with_significance_subset(facet.significance_selectors())?;
         crate::decorations::apply::apply_grid(
             &panel_chart,
             &plan.result,
@@ -45,7 +45,7 @@ pub(super) fn render_scene(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_comparison_subset(&facet.cell)?;
+            .with_significance_subset(facet.significance_selectors())?;
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
             plan.panel,
@@ -191,13 +191,13 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(chart: &Plot, cell: &[(String, String)]) -> String {
+pub(super) fn facet_label(chart: &Plot, cell: &FacetCell) -> String {
     cell.iter()
-        .map(|(variable, level)| {
+        .map(|selector| {
             format!(
                 "{} = {}",
-                chart.resolve_label(variable),
-                chart.resolve_label(level)
+                chart.resolve_label(&selector.variable),
+                chart.resolve_label(&selector.level)
             )
         })
         .collect::<Vec<_>>()

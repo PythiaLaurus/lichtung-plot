@@ -283,6 +283,14 @@ pub struct BracketStyle {
     pub color: (u8, u8, u8),
     /// Stroke width in pixels.
     pub width: f32,
+    /// Label font family.
+    pub font_family: String,
+    /// Label font size in pixels.
+    pub font_size: u32,
+    /// Label font weight.
+    pub weight: crate::TextWeight,
+    /// Gap between the bracket line and its label.
+    pub label_gap: f64,
 }
 
 /// The `Backend` trait. Every concrete renderer (Plotters,
@@ -587,11 +595,21 @@ pub(crate) fn validate_bracket(
             bracket.x_left, bracket.x_right, bracket.y
         )));
     }
+    if same_finite_coordinate(bracket.x_left, bracket.x_right) {
+        return Err(Error::Render(
+            "significance bracket must span two distinct rendered anchors".into(),
+        ));
+    }
     if !style.width.is_finite() || style.width < 0.0 {
         return Err(Error::Render(format!(
             "bracket width must be finite and non-negative; got {}",
             style.width
         )));
+    }
+    if style.font_size == 0 || !style.label_gap.is_finite() || style.label_gap < 0.0 {
+        return Err(Error::Render(
+            "bracket label style requires positive font size and finite nonnegative gap".into(),
+        ));
     }
     Ok(())
 }

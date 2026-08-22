@@ -14,7 +14,7 @@ use crate::layout::PanelBox;
 #[cfg(feature = "png")]
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use crate::theme::rgb_to_hex;
-use crate::{PointShape, DEFAULT_FONT_FAMILY_STACK};
+use crate::PointShape;
 
 impl SvgBackend {
     pub(crate) fn in_memory(width: u32, height: u32) -> Self {
@@ -684,6 +684,12 @@ impl Backend for SvgBackend {
         let color = rgb_to_hex(style.color);
         let h = f64::from(self.height);
         let label = Self::escape_text(&bracket.label);
+        let font_family = Self::escape_text(&style.font_family);
+        let weight = if style.weight == crate::TextWeight::Normal {
+            String::new()
+        } else {
+            format!(" font-weight=\"{}\"", style.weight.svg_value())
+        };
         let buf = self.buf();
         match bracket.orientation {
             super::backend::BracketOrientation::Vertical => {
@@ -697,9 +703,9 @@ impl Backend for SvgBackend {
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"middle\" font-family=\"{}\" font-size=\"{}\" fill=\"{color}\">{label}</text>",
-                    f64::midpoint(bracket.x_left, bracket.x_right), y - metrics.label_gap,
-                    DEFAULT_FONT_FAMILY_STACK, metrics.label_font_size,
+                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    f64::midpoint(bracket.x_left, bracket.x_right), y - style.label_gap,
+                    style.font_size,
                 );
             }
             super::backend::BracketOrientation::Horizontal => {
@@ -714,9 +720,8 @@ impl Backend for SvgBackend {
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{}\" font-size=\"{}\" fill=\"{color}\">{label}</text>",
-                    x + metrics.label_gap, f64::midpoint(bottom, top), DEFAULT_FONT_FAMILY_STACK,
-                    metrics.label_font_size,
+                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    x + style.label_gap, f64::midpoint(bottom, top), style.font_size,
                 );
             }
         }

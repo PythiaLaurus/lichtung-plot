@@ -1,8 +1,8 @@
 use lichtung_plot::{
     BarAggregation, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoryOrder,
-    EstimateSource, FacetScales, InferentialScale, LegendPosition, Plot,
+    EstimateSource, FacetScales, InferentialScale, LegendPosition, Plot, Significance,
+    SignificanceMark, SignificanceTarget,
 };
-use lichtung_plot::{ComparisonAnnotation, ComparisonEndpoint};
 
 #[path = "../support/data.rs"]
 mod data;

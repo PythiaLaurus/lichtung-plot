@@ -11,7 +11,7 @@
 use crate::Error;
 
 use crate::layout::{AxisTick, Layout, PanelBox, Projection};
-use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBars};
+use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
@@ -36,7 +36,6 @@ pub(crate) fn render(
         prepared.categories.iter().map(String::as_str),
     )?;
     let legend_entries = bar_data::legend_entries(&prepared, &palette);
-    let mark_hues = prepared_mark_hues(&prepared);
     let mut base_x_range =
         crate::layout::anchored_auto_range(prepared.value_range, chart.x_axis_spec(), 0.0);
     let y_count = prepared.categories.len() as f64;
@@ -84,18 +83,19 @@ pub(crate) fn render(
             rendered_maxima[point.category_index][point.series_index.unwrap_or(0)].max(clearance);
     }
     let mark_style = chart.significance_mark_style_spec();
-    for bar in prepared
-        .bars
-        .iter()
-        .filter(|bar| !bar.significance.is_empty() && bar.end >= 0.0)
-    {
-        let edge = bar
-            .interval
-            .map_or(bar.end, |(_, upper)| upper.max(bar.end));
-        let width = crate::layout::estimated_text_width(&bar.significance, mark_style.font_size());
-        let clearance = edge + (mark_style.gap() + width + 2.0) * value_per_pixel;
-        rendered_maxima[bar.category_index][bar.series_index.unwrap_or(0)] =
-            rendered_maxima[bar.category_index][bar.series_index.unwrap_or(0)].max(clearance);
+    for mark in prepared.significance.iter().filter(|mark| mark.positive) {
+        let width = crate::layout::estimated_text_width(&mark.label, mark_style.font_size());
+        let clearance = mark.edge + (mark_style.gap() + width + 2.0) * value_per_pixel;
+        if let Some(series_index) = mark.series_index {
+            rendered_maxima[mark.category_index][series_index] =
+                rendered_maxima[mark.category_index][series_index].max(clearance);
+        } else {
+            for maximum in &mut rendered_maxima[mark.category_index] {
+                if maximum.is_finite() {
+                    *maximum = maximum.max(clearance);
+                }
+            }
+        }
     }
     if mode == BarMode::Stacked {
         for maxima in &mut rendered_maxima {
@@ -107,7 +107,6 @@ pub(crate) fn render(
         chart,
         &prepared.categories,
         &prepared.series,
-        &mark_hues,
         &rendered_maxima,
         0.74,
         base_x_range,
@@ -186,7 +185,9 @@ pub(crate) fn render(
                     &style,
                 )?;
             }
-            draw_bar_significance(chart, bar, &prepared, mode, &layout, backend)?;
+        }
+        for mark in &prepared.significance {
+            draw_bar_significance(chart, mark, &prepared, mode, &layout, backend)?;
         }
         for point in &prepared.points {
             let y_center = point_center(point.category_index, point.series_index, &prepared, mode);
@@ -210,29 +211,19 @@ fn range_for_bar_marks(
     panel: PanelBox,
     range: (f64, f64),
 ) -> (f64, f64) {
-    if chart.bar_significance_col().is_none() || chart.user_x_limits().is_some() {
+    if prepared.significance.is_empty() || chart.user_x_limits().is_some() {
         return range;
     }
     let style = chart.significance_mark_style_spec();
     let units_per_pixel = (range.1 - range.0) / panel.width();
     let mut extent = prepared.value_range;
-    for bar in prepared
-        .bars
-        .iter()
-        .filter(|bar| !bar.significance.is_empty())
-    {
-        let width = crate::layout::estimated_text_width(&bar.significance, style.font_size());
+    for mark in &prepared.significance {
+        let width = crate::layout::estimated_text_width(&mark.label, style.font_size());
         let clearance = (style.gap() + width + 2.0) * units_per_pixel;
-        if bar.end >= 0.0 {
-            let edge = bar
-                .interval
-                .map_or(bar.end, |(_, upper)| upper.max(bar.end));
-            extent.1 = extent.1.max(edge + clearance);
+        if mark.positive {
+            extent.1 = extent.1.max(mark.edge + clearance);
         } else {
-            let edge = bar
-                .interval
-                .map_or(bar.end, |(lower, _)| lower.min(bar.end));
-            extent.0 = extent.0.min(edge - clearance);
+            extent.0 = extent.0.min(mark.edge - clearance);
         }
     }
     crate::layout::anchored_auto_range(extent, chart.x_axis_spec(), 0.0)
@@ -240,28 +231,18 @@ fn range_for_bar_marks(
 
 fn draw_bar_significance(
     chart: &Plot,
-    bar: &PreparedBar,
+    mark: &PreparedBarSignificance,
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    if bar.significance.is_empty() {
-        return Ok(());
-    }
     let style = chart.significance_mark_style_spec();
-    let y = point_center(bar.category_index, bar.series_index, prepared, mode);
-    let edge = if bar.end >= 0.0 {
-        bar.interval
-            .map_or(bar.end, |(_, upper)| upper.max(bar.end))
-    } else {
-        bar.interval
-            .map_or(bar.end, |(lower, _)| lower.min(bar.end))
-    };
-    let (edge_x, y) = layout.projection.project(edge, y);
-    let width = crate::layout::estimated_text_width(&bar.significance, style.font_size());
+    let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
+    let (edge_x, y) = layout.projection.project(mark.edge, y);
+    let width = crate::layout::estimated_text_width(&mark.label, style.font_size());
     let panel = layout.projection.panel_box();
-    let (x, anchor, fits) = if bar.end >= 0.0 {
+    let (x, anchor, fits) = if mark.positive {
         let x = edge_x + style.gap();
         (x, TextAnchor::Start, x + width <= panel.x1)
     } else {
@@ -271,13 +252,13 @@ fn draw_bar_significance(
     if !fits {
         return Err(Error::Render(format!(
             "horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range",
-            bar.significance
+            mark.label
         )));
     }
     backend.draw_text(
         x.round() as u32,
         y.round() as u32,
-        &bar.significance,
+        &mark.label,
         &TextStyle {
             color: chart.palette().foreground,
             font_family: chart.palette().font_family,
@@ -297,23 +278,12 @@ fn validate_bar_significance_collisions(
 ) -> Result<(), Error> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
-    for bar in prepared
-        .bars
-        .iter()
-        .filter(|bar| !bar.significance.is_empty())
-    {
-        let y = point_center(bar.category_index, bar.series_index, prepared, mode);
-        let edge = if bar.end >= 0.0 {
-            bar.interval
-                .map_or(bar.end, |(_, upper)| upper.max(bar.end))
-        } else {
-            bar.interval
-                .map_or(bar.end, |(lower, _)| lower.min(bar.end))
-        };
-        let (edge_x, y) = layout.projection.project(edge, y);
-        let width = crate::layout::estimated_text_width(&bar.significance, style.font_size());
+    for mark in &prepared.significance {
+        let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
+        let (edge_x, y) = layout.projection.project(mark.edge, y);
+        let width = crate::layout::estimated_text_width(&mark.label, style.font_size());
         let height = f64::from(style.font_size()) * 1.2;
-        let (x0, x1) = if bar.end >= 0.0 {
+        let (x0, x1) = if mark.positive {
             (edge_x + style.gap(), edge_x + style.gap() + width)
         } else {
             (edge_x - style.gap() - width, edge_x - style.gap())
@@ -332,6 +302,17 @@ fn validate_bar_significance_collisions(
     Ok(())
 }
 
+fn significance_center(
+    category_index: usize,
+    series_index: Option<usize>,
+    prepared: &PreparedBars,
+    mode: BarMode,
+) -> f64 {
+    series_index.map_or(category_index as f64 + 0.5, |series_index| {
+        point_center(category_index, Some(series_index), prepared, mode)
+    })
+}
+
 fn point_center(
     category_index: usize,
     series_index: Option<usize>,
@@ -345,15 +326,6 @@ fn point_center(
     let series_count = prepared.series.len().max(1) as f64;
     let slot = 0.74 / series_count;
     category_center - 0.74 / 2.0 + slot * (series_index.unwrap_or(0) as f64 + 0.5)
-}
-
-fn prepared_mark_hues(prepared: &PreparedBars) -> Vec<Vec<Option<String>>> {
-    let mut hues = vec![vec![None; prepared.series.len().max(1)]; prepared.categories.len()];
-    for bar in &prepared.bars {
-        hues[bar.category_index][bar.series_index.unwrap_or(0)] =
-            bar.hue_index.map(|index| prepared.hues[index].clone());
-    }
-    hues
 }
 
 fn bar_geometry(

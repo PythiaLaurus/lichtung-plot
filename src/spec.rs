@@ -11,9 +11,8 @@ mod output;
 
 pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
 pub use estimate::{
-    AxisScale, CoefficientSignificanceMark, EstimateSource, EstimateStatus,
-    GroupedFactorAnnotation, GroupedFactorEndpoint, LineMode, LinePathStyle, LinePattern,
-    PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
+    AxisScale, EstimateSource, EstimateStatus, LineMode, LinePathStyle, LinePattern, PointShape,
+    QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
 pub use inference::{
     EffectBandCoverage, EffectBandSemantics, InferentialScale, IntervalKind, IntervalSemantics,
@@ -40,25 +39,6 @@ pub enum BarAggregation {
     Mean,
     /// Render one already-computed finite value per cell without an interval.
     Identity,
-}
-
-/// Maximum star count used to display pairwise significance marks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SignificanceStarLimit {
-    /// Display at most three stars, including for p-values below 0.0001.
-    Three,
-    /// Display the existing four-star scale.
-    #[default]
-    Four,
-}
-
-impl SignificanceStarLimit {
-    pub(crate) fn cap(self, glyph: &str) -> &str {
-        match (self, glyph) {
-            (Self::Three, "****") => "***",
-            _ => glyph,
-        }
-    }
 }
 
 impl BarAggregation {
@@ -635,8 +615,8 @@ define_plot_kinds! {
     Heatmap => ("Categorical grid with a continuous numeric fill.", "heatmap", "heatmap"),
     Bar => ("Bar plot with CI error bars.", "bar plot", "bar-plot"),
     HorizontalBar => ("Horizontal bar plot.", "horizontal bar plot", "horizontal-bar-plot"),
-    StackedBar => ("Stacked vertical bar plot using graphical group as the stack series.", "stacked bar plot", "stacked-bar-plot"),
-    StackedHorizontalBar => ("Stacked horizontal bar plot using graphical group as the stack series.", "stacked horizontal bar plot", "stacked-horizontal-bar-plot"),
+    StackedBar => ("Stacked vertical bar plot using one categorical series.", "stacked bar plot", "stacked-bar-plot"),
+    StackedHorizontalBar => ("Stacked horizontal bar plot using one categorical series.", "stacked horizontal bar plot", "stacked-horizontal-bar-plot"),
     Boxplot => ("Box-and-whisker plot.", "boxplot", "boxplot"),
     Violin => ("Violin plot with mirrored or raincloud KDE, summary, and observation geometry.", "violin plot", "violin-plot"),
     Regression => ("Regression plot (scatter + fit line).", "regression plot", "regression-plot"),
@@ -647,6 +627,18 @@ define_plot_kinds! {
 }
 
 impl PlotKind {
+    pub(crate) const fn uses_unified_series(self) -> bool {
+        matches!(
+            self,
+            Self::Bar
+                | Self::HorizontalBar
+                | Self::StackedBar
+                | Self::StackedHorizontalBar
+                | Self::Boxplot
+                | Self::Violin
+        )
+    }
+
     pub(crate) const fn supports_significance(self) -> bool {
         matches!(
             self,
@@ -656,6 +648,7 @@ impl PlotKind {
                 | Self::StackedHorizontalBar
                 | Self::Boxplot
                 | Self::Violin
+                | Self::Coefficient
         )
     }
 

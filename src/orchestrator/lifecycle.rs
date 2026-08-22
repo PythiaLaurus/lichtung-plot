@@ -48,9 +48,9 @@ impl Plot {
     }
 
     fn render_open_canvas(&self, kind: PlotKind, backend: &mut dyn Backend) -> Result<(), Error> {
-        if !self.comparisons().is_empty() && !kind.supports_significance() {
-            return Err(Error::Render(format!(
-                "significance comparisons are not supported for {kind:?}; use a supported categorical family or remove the comparisons"
+        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+            return Err(Error::Data(format!(
+                "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
         }
         let palette = self.palette();
@@ -101,9 +101,9 @@ impl Plot {
         panel: crate::layout::PanelBox,
     ) -> Result<PlotRenderResult, Error> {
         self.validate_category_order_configuration(kind)?;
-        if !self.comparisons().is_empty() && !kind.supports_significance() {
-            return Err(Error::Render(format!(
-                "significance comparisons are not supported for {kind:?}; use a supported categorical family or remove the comparisons"
+        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+            return Err(Error::Data(format!(
+                "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
         }
         let source_rows = self.configured_source_rows()?;

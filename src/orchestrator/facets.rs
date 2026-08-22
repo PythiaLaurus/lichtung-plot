@@ -20,9 +20,9 @@ impl Plot {
         kind: PlotKind,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        if !self.comparisons().is_empty() && !kind.supports_significance() {
-            return Err(Error::Render(format!(
-                "significance comparisons are not supported for {kind:?}"
+        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+            return Err(Error::Data(format!(
+                "significance annotations are not supported for {kind:?}"
             )));
         }
 
@@ -54,7 +54,7 @@ impl Plot {
             vertical_axis_label.is_some(),
         )?;
         let mut panels = data::extract_panels(self, &selectors, &provisional)?;
-        data::validate_comparison_facet_anchors(self, &panels)?;
+        data::validate_significance_facet_anchors(self, &panels)?;
 
         let mut null_backend = NullBackend;
         let preflight = legend::preflight_panels(&base, kind, &panels, &mut null_backend)?;

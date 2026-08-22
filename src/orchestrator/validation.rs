@@ -190,12 +190,16 @@ impl Plot {
 
     pub(crate) fn validate_facet_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         let (row, column, wrap, wrap_columns) = self.facet_columns();
+        let (row_name, column_name, _) = self.facet_names();
         if wrap.is_some() && (row.is_some() || column.is_some()) {
             return Err(Error::Data(
                 "facet_wrap cannot be combined with facet_row or facet_col".into(),
             ));
         }
-        if row.is_some() && row == column {
+        if row_name
+            .zip(column_name)
+            .is_some_and(|(row_name, column_name)| row_name == column_name)
+        {
             return Err(Error::Data(
                 "facet_row and facet_col must use different columns".into(),
             ));
@@ -216,28 +220,18 @@ impl Plot {
                     .into(),
             ));
         }
+        for annotation in self.significance_annotations() {
+            annotation.validate()?;
+        }
         if !self.has_facets()
             && self
-                .comparisons()
+                .significance_annotations()
                 .iter()
-                .any(|comparison| !comparison.facet.is_empty())
+                .any(|annotation| annotation.facet_ownership().next().is_some())
         {
             return Err(Error::Render(
-                "facet-owned significance comparisons require facet_row, facet_col, or facet_wrap; ownership is never ignored on an unfaceted chart".into(),
+                "facet-owned significance annotations require facet_row, facet_col, or facet_wrap; ownership is never ignored on an unfaceted chart".into(),
             ));
-        }
-        for comparison in self.comparisons() {
-            for (index, facet) in comparison.facet.iter().enumerate() {
-                if let Some(previous) = comparison.facet[..index]
-                    .iter()
-                    .find(|previous| previous.variable == facet.variable)
-                {
-                    return Err(Error::Render(format!(
-                        "significance comparison has contradictory duplicate ownership for facet variable {:?}: {:?} and {:?}; name each facet variable exactly once",
-                        facet.variable, previous.level, facet.level
-                    )));
-                }
-            }
         }
         Ok(())
     }
@@ -448,7 +442,7 @@ impl Plot {
                         .into(),
                 ));
             }
-            if !self.comparisons().is_empty() {
+            if !self.significance_annotations().is_empty() {
                 return Err(Error::Data(
                     "violin: precomputed raincloud geometry does not support significance annotations"
                         .into(),
@@ -672,55 +666,28 @@ impl Plot {
                 "{family}: numeric estimate labels are supported only by Coefficient"
             )));
         }
-        if self.coefficient_significance_col().is_some() && kind != PlotKind::Coefficient {
-            return Err(Error::Data(format!(
-                "{family}: coefficient significance marks are supported only by Coefficient"
-            )));
-        }
-        if self.bar_significance_col().is_some()
-            && !matches!(kind, PlotKind::Bar | PlotKind::HorizontalBar)
+        let has_attached_significance = self
+            .significance_annotations()
+            .iter()
+            .any(|annotation| annotation.at_target().is_some());
+        let has_bracket_significance = self
+            .significance_annotations()
+            .iter()
+            .any(|annotation| annotation.endpoints().is_some());
+        if has_attached_significance
+            && !matches!(
+                kind,
+                PlotKind::Bar | PlotKind::HorizontalBar | PlotKind::Coefficient
+            )
         {
             return Err(Error::Data(format!(
-                "{family}: per-bar significance marks are supported only by ordinary Bar and HorizontalBar"
+                "{family}: attached significance marks are supported only by ordinary Bar, HorizontalBar, and Coefficient"
             )));
         }
-        if self.bar_significance_col().is_some()
-            && self.bar_aggregation_spec() != crate::BarAggregation::Identity
-        {
-            return Err(Error::Data(format!(
-                "{family}: per-bar significance marks require identity aggregation"
-            )));
-        }
-        if !self.grouped_factor_annotations().is_empty() {
-            if !matches!(kind, PlotKind::Bar | PlotKind::HorizontalBar) {
-                return Err(Error::Data(format!(
-                    "{family}: grouped-factor annotations are supported only by ordinary Bar and HorizontalBar"
-                )));
-            }
-            if self.bar_aggregation_spec() != BarAggregation::Identity {
-                return Err(Error::Data(format!(
-                    "{family}: grouped-factor annotations require identity aggregation"
-                )));
-            }
-            if self.group_col().is_none() {
-                return Err(Error::Data(format!(
-                    "{family}: grouped-factor annotations require a graphical group column"
-                )));
-            }
-            if self.has_facets() {
-                return Err(Error::Data(format!(
-                    "{family}: grouped-factor annotations are not supported with faceting"
-                )));
-            }
-            let mut factors = HashSet::new();
-            for annotation in self.grouped_factor_annotations() {
-                if !factors.insert(annotation.factor()) {
-                    return Err(Error::Data(format!(
-                        "{family}: grouped-factor annotation repeats factor identity {:?}",
-                        annotation.factor()
-                    )));
-                }
-            }
+        if has_bracket_significance && kind == PlotKind::Coefficient {
+            return Err(Error::Data(
+                "coefficient: bracket significance annotations are not supported".into(),
+            ));
         }
         if self.estimate_status_col().is_some()
             && !matches!(

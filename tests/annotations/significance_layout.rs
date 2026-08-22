@@ -1,8 +1,7 @@
-use lichtung_plot::ComparisonAnnotation;
 use lichtung_plot::Error;
 use lichtung_plot::{
-    BarAggregation, GroupedFactorAnnotation, GroupedFactorEndpoint, LegendPosition, Plot,
-    SignificanceMarkStyle, TextWeight,
+    BarAggregation, LegendPosition, Plot, Significance, SignificanceMark, SignificanceMarkStyle,
+    SignificanceTarget, TextWeight,
 };
 
 use super::{data, df, render_svg, DataFrame};
@@ -15,9 +14,9 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
     )
     .unwrap();
     let comparisons = vec![
-        ComparisonAnnotation::new("c", "d", 0.01),
-        ComparisonAnnotation::new("a", "c", 0.01),
-        ComparisonAnnotation::new("a", "b", 0.01),
+        comparison("c", "d", 0.01),
+        comparison("a", "c", 0.01),
+        comparison("a", "b", 0.01),
     ];
     let dir = tempdir("inside-and-levels");
     let annotated_path = dir.join("annotated.svg");
@@ -25,7 +24,7 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
 
     let annotated = identity_bar_chart(&df)
         .size(500, 360)
-        .add_comparisons(comparisons);
+        .significance(comparisons);
     let annotated_panel = annotated.figure_layout().panel_box;
     annotated.svg(&annotated_path).unwrap();
 
@@ -61,7 +60,7 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
 }
 
 #[test]
-fn stacked_bar_renders_result_owned_significance_bracket() {
+fn stacked_bar_renders_non_significant_pairwise_bracket() {
     let df = df!(
         "group" => ["a", "a", "b", "b"],
         "series" => ["positive", "negative", "positive", "negative"],
@@ -75,15 +74,14 @@ fn stacked_bar_renders_result_owned_significance_bracket() {
         data::numeric(&df, "value"),
         data::category(&df, "series"),
     )
-    .group(data::category(&df, "series"))
-    .hue(data::category(&df, "series"))
-    .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)])
+    .significance([comparison("a", "b", 0.05)])
     .size(420, 300);
 
     chart.svg(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
 
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+    assert!(svg.contains(">ns</text>"));
 }
 
 #[test]
@@ -96,7 +94,7 @@ fn boxplot_bracket_clears_high_outlier_geometry() {
     let dir = tempdir("boxplot-outlier");
     let path = dir.join("boxplot.svg");
     let chart = Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value"))
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)])
+        .significance([comparison("a", "b", 0.01)])
         .size(420, 300);
 
     chart.svg(&path).unwrap();
@@ -120,7 +118,7 @@ fn violin_bracket_clears_rendered_kde_support() {
     let dir = tempdir("violin-support");
     let path = dir.join("violin.svg");
     let chart = Plot::violin(data::category(&df, "group"), data::numeric(&df, "value"))
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)])
+        .significance([comparison("a", "b", 0.01)])
         .size(420, 300);
 
     chart.svg(&path).unwrap();
@@ -178,8 +176,7 @@ fn auto_bar_legend_keeps_top_right_beside_tall_uncompared_category() {
     let path = dir.join("bar.svg");
     let chart = identity_bar_chart(&df)
         .group(data::category(&df, "series"))
-        .hue(data::category(&df, "series"))
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)])
+        .significance([comparison("a", "b", 0.01)])
         .size(460, 320);
 
     chart.svg(&path).unwrap();
@@ -216,11 +213,10 @@ fn bottom_inside_legend_never_moves_positive_bar_zero_minimum() {
         let dir = tempdir("bottom-inside-zero-anchor");
         let path = dir.join("bar.svg");
         let mut chart = identity_bar_chart(&df)
-            .group(data::category(&df, "series"))
             .hue(data::category(&df, "series"))
             .legend_position(LegendPosition::InsideBottomRight);
         if with_comparison {
-            chart = chart.add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+            chart = chart.significance([comparison("a", "b", 0.01)]);
         }
 
         let error = chart.svg(&path).err().unwrap();
@@ -239,7 +235,7 @@ fn categorical_x_limits_reject_visible_comparisons() {
     let path = dir.join("bar.svg");
     let chart = identity_bar_chart(&df)
         .x_limits(0.0, 2.0)
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+        .significance([comparison("a", "b", 0.01)]);
 
     let error = chart.svg(&path).err().unwrap();
     assert!(matches!(error, Error::Render(_)));
@@ -275,7 +271,7 @@ fn categorical_y_limits_reject_horizontal_visible_comparisons() {
     let path = dir.join("horizontal.svg");
     let chart = identity_horizontal_bar_chart(&df)
         .y_limits(0.0, 2.0)
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+        .significance([comparison("a", "b", 0.01)]);
 
     let error = chart.svg(&path).err().unwrap();
 
@@ -283,39 +279,37 @@ fn categorical_y_limits_reject_horizontal_visible_comparisons() {
 }
 
 #[test]
-fn grouped_factor_annotations_render_exact_spans_in_both_orientations() {
+fn category_series_comparisons_render_exact_spans_in_both_orientations() {
     let df = df!(
         "outcome" => ["d-prime", "d-prime", "criterion", "criterion"],
         "condition" => ["baseline", "intervention", "baseline", "intervention"],
         "value" => [1.2_f64, 1.8, 0.4, 0.7]
     )
     .unwrap();
-    let annotation = |category: &str, mark: &str| {
-        GroupedFactorAnnotation::new(
-            category,
-            [
-                GroupedFactorEndpoint::new(category, "baseline").unwrap(),
-                GroupedFactorEndpoint::new(category, "intervention").unwrap(),
-            ],
+    let annotation = |category: &str, mark| {
+        Significance::between(
+            SignificanceTarget::category_series(category, "baseline"),
+            SignificanceTarget::category_series(category, "intervention"),
             mark,
         )
-        .unwrap()
     };
 
     let vertical = identity_bar_chart(&df)
         .group(data::category(&df, "condition"))
-        .hue(data::category(&df, "condition"))
         .bar_aggregation(BarAggregation::Identity)
-        .grouped_factor_annotation(annotation("d-prime", "**"))
-        .grouped_factor_annotation(annotation("criterion", "*"));
+        .significance([
+            annotation("d-prime", SignificanceMark::TwoStars),
+            annotation("criterion", SignificanceMark::OneStar),
+        ]);
     let vertical = render_svg(vertical, "grouped-factor-vertical").unwrap();
 
     let horizontal = identity_horizontal_bar_chart(&df)
-        .group(data::category(&df, "condition"))
         .hue(data::category(&df, "condition"))
         .bar_aggregation(BarAggregation::Identity)
-        .grouped_factor_annotation(annotation("d-prime", "**"))
-        .grouped_factor_annotation(annotation("criterion", "*"));
+        .significance([
+            annotation("d-prime", SignificanceMark::TwoStars),
+            annotation("criterion", SignificanceMark::OneStar),
+        ]);
     let horizontal = render_svg(horizontal, "grouped-factor-horizontal").unwrap();
 
     assert_eq!(
@@ -333,52 +327,80 @@ fn grouped_factor_annotations_render_exact_spans_in_both_orientations() {
 }
 
 #[test]
-fn grouped_factor_annotations_reject_missing_rendered_endpoints() {
+fn attached_category_marks_do_not_create_missing_series_targets() {
     let df = df!(
-        "outcome" => ["d-prime", "d-prime"],
-        "condition" => ["baseline", "intervention"],
-        "value" => [1.2_f64, 1.8]
+        "outcome" => ["d-prime", "d-prime", "criterion"],
+        "condition" => ["baseline", "intervention", "intervention"],
+        "value" => [1.2_f64, 1.8, 0.7]
     )
     .unwrap();
-    let annotation = GroupedFactorAnnotation::new(
-        "agent_support",
-        [
-            GroupedFactorEndpoint::new("d-prime", "baseline").unwrap(),
-            GroupedFactorEndpoint::new("d-prime", "missing").unwrap(),
-        ],
-        "*",
-    )
-    .unwrap();
+    let annotation = Significance::between(
+        SignificanceTarget::category_series("criterion", "baseline"),
+        SignificanceTarget::category_series("criterion", "intervention"),
+        SignificanceMark::OneStar,
+    );
     let chart = identity_bar_chart(&df)
         .group(data::category(&df, "condition"))
         .bar_aggregation(BarAggregation::Identity)
-        .grouped_factor_annotation(annotation);
+        .significance([
+            Significance::at("criterion", SignificanceMark::TwoStars),
+            annotation,
+        ]);
 
     let error = render_svg(chart, "missing-grouped-factor")
         .unwrap_err()
         .to_string();
-    assert!(error.contains("unknown graphical group"), "{error}");
+    assert!(error.contains("has no rendered mark"), "{error}");
+}
+
+#[test]
+fn category_and_center_series_cannot_form_a_zero_width_bracket() {
+    let df = df!(
+        "outcome" => ["d-prime", "d-prime", "d-prime"],
+        "condition" => ["left", "center", "right"],
+        "value" => [1.2_f64, 1.8, 1.4]
+    )
+    .unwrap();
+    let annotation = Significance::between(
+        "d-prime",
+        SignificanceTarget::category_series("d-prime", "center"),
+        SignificanceMark::OneStar,
+    );
+    let chart = identity_bar_chart(&df)
+        .group(data::category(&df, "condition"))
+        .bar_aggregation(BarAggregation::Identity)
+        .significance([annotation]);
+
+    let error = render_svg(chart, "same-grouped-anchor")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("same rendered anchor"), "{error}");
 }
 
 #[test]
 fn exact_per_bar_marks_render_with_independent_weight_in_both_orientations() {
     let df = df!(
         "outcome" => ["positive", "negative"],
-        "value" => [1.0_f64, -0.8],
-        "mark" => ["**", "*"]
+        "value" => [1.0_f64, -0.8]
     )
     .unwrap();
     let style = SignificanceMarkStyle::new(18, TextWeight::Semibold, 9.0).unwrap();
+    let marks = || {
+        [
+            Significance::at("positive", SignificanceMark::TwoStars),
+            Significance::at("negative", SignificanceMark::OneStar),
+        ]
+    };
 
     let vertical = identity_bar_chart(&df)
         .bar_aggregation(BarAggregation::Identity)
-        .bar_significance(data::category(&df, "mark"))
+        .significance(marks())
         .significance_mark_style(style);
     let vertical = render_svg(vertical, "bar-marks-vertical").unwrap();
 
     let horizontal = identity_horizontal_bar_chart(&df)
         .bar_aggregation(BarAggregation::Identity)
-        .bar_significance(data::category(&df, "mark"))
+        .significance(marks())
         .significance_mark_style(style);
     let horizontal = render_svg(horizontal, "bar-marks-horizontal").unwrap();
 
@@ -397,7 +419,7 @@ fn default_per_bar_mark_weight_is_normal() {
 }
 
 #[test]
-fn unsupported_plot_kind_rejects_attached_comparisons() {
+fn unsupported_plot_kind_rejects_significance() {
     let df = df!(
         "x" => [1.0_f64, 2.0],
         "y" => [2.0_f64, 3.0]
@@ -406,10 +428,10 @@ fn unsupported_plot_kind_rejects_attached_comparisons() {
     let dir = tempdir("unsupported-comparison-kind");
     let path = dir.join("scatter.svg");
     let chart = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+        .significance([comparison("a", "b", 0.01)]);
 
     let error = chart.svg(&path).err().unwrap();
-    assert!(matches!(error, Error::Render(_)));
+    assert!(matches!(error, Error::Data(_)));
     assert!(error.to_string().contains("not supported for Scatter"));
 }
 
@@ -420,13 +442,13 @@ fn explicit_y_limits_succeed_when_sufficient_and_error_when_insufficient() {
         "value" => [2.0_f64, 4.0]
     )
     .unwrap();
-    let comparison = ComparisonAnnotation::new("a", "b", 0.01);
+    let comparison = comparison("a", "b", 0.01);
     let dir = tempdir("explicit-limits");
 
     let sufficient_path = dir.join("sufficient.svg");
     let sufficient = identity_bar_chart(&df)
         .y_limits(0.0, 10.0)
-        .add_comparisons([comparison.clone()])
+        .significance([comparison.clone()])
         .size(420, 300);
     sufficient.svg(&sufficient_path).unwrap();
     let sufficient_svg = std::fs::read_to_string(sufficient_path).unwrap();
@@ -436,7 +458,7 @@ fn explicit_y_limits_succeed_when_sufficient_and_error_when_insufficient() {
     let insufficient_path = dir.join("insufficient.svg");
     let insufficient = identity_bar_chart(&df)
         .y_limits(0.0, 4.0)
-        .add_comparisons([comparison])
+        .significance([comparison])
         .size(420, 300);
     let error = insufficient.svg(&insufficient_path).err().unwrap();
 
@@ -530,15 +552,13 @@ fn render_grouped_bar_with_legend(
     .unwrap();
     let dir = tempdir(name);
     let path = dir.join("bar.svg");
-    let mut chart = identity_bar_chart(&df)
-        .group(data::category(&df, "series"))
-        .hue(data::category(&df, "series"));
+    let mut chart = identity_bar_chart(&df).group(data::category(&df, "series"));
     if let Some(position) = position {
         chart = chart.legend_position(position);
     }
     chart = chart.size(460, 320);
     if with_comparison {
-        chart = chart.add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+        chart = chart.significance([comparison("a", "b", 0.01)]);
     }
     chart.svg(&path).unwrap();
     std::fs::read_to_string(path).unwrap()
@@ -556,14 +576,12 @@ fn render_grouped_horizontal_bar_with_legend(
     .unwrap();
     let dir = tempdir(name);
     let path = dir.join("horizontal.svg");
-    let mut chart = identity_horizontal_bar_chart(&df)
-        .group(data::category(&df, "series"))
-        .hue(data::category(&df, "series"));
+    let mut chart = identity_horizontal_bar_chart(&df).hue(data::category(&df, "series"));
     if let Some(position) = position {
         chart = chart.legend_position(position);
     }
     chart
-        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)])
+        .significance([comparison("a", "b", 0.01)])
         .size(460, 320)
         .svg(&path)
         .unwrap();
@@ -575,6 +593,10 @@ fn attribute<'a>(line: &'a str, name: &str) -> &'a str {
     let start = line.find(&start_marker).unwrap() + start_marker.len();
     let end = line[start..].find('"').unwrap() + start;
     &line[start..end]
+}
+
+fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> Significance {
+    Significance::between(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
 }
 
 fn identity_bar_chart(data: &DataFrame) -> Plot {

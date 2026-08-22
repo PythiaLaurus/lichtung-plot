@@ -55,6 +55,14 @@ impl Plot {
         )
     }
 
+    pub(crate) fn facet_names(&self) -> (Option<&str>, Option<&str>, Option<&str>) {
+        (
+            self.facet_row.as_ref().map(crate::CategoryValues::name),
+            self.facet_col.as_ref().map(crate::CategoryValues::name),
+            self.facet_wrap.as_ref().map(crate::CategoryValues::name),
+        )
+    }
+
     pub(crate) fn without_facets(mut self) -> Self {
         self.facet_row = None;
         self.facet_col = None;
@@ -63,39 +71,40 @@ impl Plot {
         self
     }
 
-    pub(crate) fn with_comparison_subset(
+    pub(crate) fn with_significance_subset<'a>(
         mut self,
-        selectors: &[(String, String)],
+        selectors: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> Result<Self, Error> {
-        for comparison in &self.comparisons {
-            for (variable, _) in selectors {
-                if !comparison
-                    .facet
-                    .iter()
-                    .any(|facet| &facet.variable == variable)
+        let selectors = selectors.into_iter().collect::<Vec<_>>();
+        for annotation in &self.significance {
+            for (variable, _) in &selectors {
+                if !annotation
+                    .facet_ownership()
+                    .any(|(owned_variable, _)| owned_variable == *variable)
                 {
                     return Err(Error::Render(format!(
-                        "faceted significance comparison must name facet variable {variable:?}; annotations are never replicated across facets"
+                        "faceted significance annotation must name facet variable {variable:?}; annotations are never replicated across facets"
                     )));
                 }
             }
-            if comparison.facet.iter().any(|facet| {
+            if annotation.facet_ownership().any(|(owned_variable, _)| {
                 !selectors
                     .iter()
-                    .any(|(variable, _)| variable == &facet.variable)
+                    .any(|(variable, _)| *variable == owned_variable)
             }) {
                 return Err(Error::Render(
-                    "significance comparison references a facet variable not configured on this chart"
+                    "significance annotation references a facet variable not configured on this chart"
                         .into(),
                 ));
             }
         }
-        self.comparisons.retain(|comparison| {
+        self.significance.retain(|annotation| {
             selectors.iter().all(|(variable, level)| {
-                comparison
-                    .facet
-                    .iter()
-                    .any(|facet| facet.variable == *variable && facet.level == *level)
+                annotation
+                    .facet_ownership()
+                    .any(|(owned_variable, owned_level)| {
+                        owned_variable == *variable && owned_level == *level
+                    })
             })
         });
         Ok(self)

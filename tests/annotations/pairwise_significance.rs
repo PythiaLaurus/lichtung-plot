@@ -1,22 +1,18 @@
 use super::*;
 
 #[test]
-fn grouped_and_horizontal_significance_use_typed_pairwise_endpoints_only() {
+fn grouped_and_horizontal_significance_use_category_series_targets() {
     let data = df!(
         "category" => ["a", "a", "b", "b"],
         "hue" => ["left", "right", "left", "right"],
         "value" => [2.0_f64, 3.0, 4.0, 5.0]
     )
     .unwrap();
-    let comparison = ComparisonAnnotation {
-        endpoint_a: ComparisonEndpoint::new("a")
-            .with_group("left")
-            .with_hue("left"),
-        endpoint_b: ComparisonEndpoint::new("a")
-            .with_group("right")
-            .with_hue("right"),
-        ..ComparisonAnnotation::new("a", "a", 0.01)
-    };
+    let comparison = Significance::between(
+        SignificanceTarget::category_series("a", "left"),
+        SignificanceTarget::category_series("a", "right"),
+        SignificanceMark::TwoStars,
+    );
     let dir = tempdir("grouped-horizontal-significance");
     let vertical_path = dir.join("vertical.svg");
     let horizontal_path = dir.join("horizontal.svg");
@@ -26,9 +22,8 @@ fn grouped_and_horizontal_significance_use_typed_pairwise_endpoints_only() {
         data::numeric(&data, "value"),
     )
     .group(data::category(&data, "hue"))
-    .hue(data::category(&data, "hue"))
     .bar_aggregation(BarAggregation::Identity)
-    .add_comparisons([comparison.clone()])
+    .significance([comparison.clone()])
     .svg(&vertical_path)
     .unwrap();
 
@@ -36,10 +31,9 @@ fn grouped_and_horizontal_significance_use_typed_pairwise_endpoints_only() {
         data::category(&data, "category"),
         data::numeric(&data, "value"),
     )
-    .group(data::category(&data, "hue"))
     .hue(data::category(&data, "hue"))
     .bar_aggregation(BarAggregation::Identity)
-    .add_comparisons([comparison])
+    .significance([comparison])
     .svg(&horizontal_path)
     .unwrap();
 

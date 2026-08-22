@@ -6,7 +6,14 @@ use crate::builder::Plot;
 use crate::layout::PanelBox;
 use crate::spec::{LineMode, PlotKind};
 
-type FacetCell = Vec<(String, String)>;
+#[derive(Clone)]
+pub(super) struct FacetSelector {
+    pub(super) column: &'static str,
+    pub(super) variable: String,
+    pub(super) level: String,
+}
+
+pub(super) type FacetCell = Vec<FacetSelector>;
 type PositionedFacetCell = (usize, usize, FacetCell);
 
 pub(super) struct FacetSelectors {
@@ -30,7 +37,7 @@ impl FacetPanel {
         let selectors = self
             .cell
             .iter()
-            .map(|(variable, level)| format!("{variable}={level}"))
+            .map(|selector| format!("{}={}", selector.variable, selector.level))
             .collect::<Vec<_>>()
             .join(", ");
         if selectors.is_empty() {
@@ -38,6 +45,12 @@ impl FacetPanel {
         } else {
             format!("facet {selectors}")
         }
+    }
+
+    pub(super) fn significance_selectors(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.cell
+            .iter()
+            .map(|selector| (selector.variable.as_str(), selector.level.as_str()))
     }
 }
 
@@ -68,7 +81,11 @@ pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
                 (
                     index / columns,
                     index % columns,
-                    vec![(variable.clone(), level)],
+                    vec![FacetSelector {
+                        column: wrap,
+                        variable: variable.clone(),
+                        level,
+                    }],
                 )
             })
             .collect::<Vec<_>>()
@@ -98,10 +115,18 @@ pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
             for (column_index, column_level) in column_levels.iter().enumerate() {
                 let mut cell = Vec::new();
                 if let Some(column) = row_column {
-                    cell.push((data.column(column)?.name().to_owned(), row_level.clone()));
+                    cell.push(FacetSelector {
+                        column,
+                        variable: data.column(column)?.name().to_owned(),
+                        level: row_level.clone(),
+                    });
                 }
                 if let Some(column) = column_column {
-                    cell.push((data.column(column)?.name().to_owned(), column_level.clone()));
+                    cell.push(FacetSelector {
+                        column,
+                        variable: data.column(column)?.name().to_owned(),
+                        level: column_level.clone(),
+                    });
                 }
                 cells.push((row_index, column_index, cell));
             }
@@ -184,12 +209,12 @@ pub(super) fn extract_panels(
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
         let columns_data = cell
             .iter()
-            .map(|(name, _)| crate::data::strict_strings(mapped_data, name, "facet"))
+            .map(|selector| crate::data::strict_strings(mapped_data, selector.column, "facet"))
             .collect::<Result<Vec<_>, _>>()?;
         let source_indices = (0..chart.row_count())
             .filter(|index| {
-                cell.iter().enumerate().all(|(selector_index, (_, level))| {
-                    columns_data[selector_index][*index] == *level
+                cell.iter().enumerate().all(|(selector_index, selector)| {
+                    columns_data[selector_index][*index] == selector.level
                 })
             })
             .collect::<Vec<_>>();
@@ -218,24 +243,24 @@ pub(super) fn extract_panels(
     Ok(panels)
 }
 
-pub(super) fn validate_comparison_facet_anchors(
+pub(super) fn validate_significance_facet_anchors(
     chart: &Plot,
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
-    for comparison in chart.comparisons() {
+    for annotation in chart.significance_annotations() {
         let anchored = panels.iter().any(|panel| {
-            panel.cell.iter().all(|(variable, level)| {
-                comparison
-                    .facet
-                    .iter()
-                    .any(|facet| facet.variable == *variable && facet.level == *level)
+            panel.cell.iter().all(|selector| {
+                annotation
+                    .facet_ownership()
+                    .any(|(owned_variable, owned_level)| {
+                        owned_variable == selector.variable && owned_level == selector.level
+                    })
             })
         });
         if !anchored {
-            return Err(Error::Render(format!(
-                "faceted significance comparison {:?} versus {:?} does not identify an observed facet panel",
-                comparison.endpoint_a.category, comparison.endpoint_b.category
-            )));
+            return Err(Error::Render(
+                "faceted significance annotation does not identify an observed facet panel".into(),
+            ));
         }
     }
     Ok(())
