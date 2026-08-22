@@ -4,10 +4,10 @@ use crate::Error;
 
 use crate::render::backend::Backend;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::Chart;
+use crate::Plot;
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {

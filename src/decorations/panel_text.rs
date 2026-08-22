@@ -4,7 +4,7 @@ use crate::Error;
 
 use crate::layout::{Layout, PanelBox};
 use crate::render::backend::{with_clip, with_layer, Backend, TextAnchor, TextStyle};
-use crate::{Chart, PanelCorner};
+use crate::{PanelCorner, Plot};
 
 const PANEL_TEXT_PADDING: f64 = 8.0;
 
@@ -17,11 +17,7 @@ struct PanelTextPlan<'a> {
     corner: PanelCorner,
 }
 
-pub(crate) fn draw(
-    chart: &Chart<'_>,
-    layout: &Layout,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
+pub(crate) fn draw(chart: &Plot, layout: &Layout, backend: &mut dyn Backend) -> Result<(), Error> {
     if chart.panel_text_annotations().is_empty() {
         return Ok(());
     }
@@ -50,7 +46,7 @@ pub(crate) fn draw(
 }
 
 pub(crate) fn conflicting_legend_corner(
-    chart: &Chart<'_>,
+    chart: &Plot,
     layout: &Layout,
     legend: crate::decorations::legend::LegendBox,
 ) -> Result<Option<PanelCorner>, Error> {
@@ -68,7 +64,7 @@ pub(crate) fn conflicting_legend_corner(
     clippy::cast_sign_loss,
     reason = "validated panel coordinates are finite and bounded by the canvas"
 )]
-fn plans<'a>(chart: &'a Chart<'_>, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>, Error> {
+fn plans<'a>(chart: &'a Plot, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>, Error> {
     let palette = chart.palette();
     let panel = layout.projection.panel_box();
     let available_width = panel.width() - PANEL_TEXT_PADDING * 2.0;

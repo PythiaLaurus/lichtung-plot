@@ -10,13 +10,19 @@ readme = "README.md"
 publish = false
 autotests = false
 
+[workspace]
+members = [
+    "adapters/lichtung-plot-ndarray",
+    "adapters/lichtung-plot-polars",
+]
+resolver = "2"
+
 [features]
 default = ["png"]
 text-as-path = ["dep:resvg"]
 png = ["text-as-path", "dep:png"]
 
 [dependencies]
-polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
 statrs = "0.18"
 thiserror = "2"
 unicode-segmentation = "1.13"
@@ -27,6 +33,7 @@ resvg = { version = "0.47.0", default-features = false, features = ["text", "sys
 
 [dev-dependencies]
 insta = "1.48"
+polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
 
 [[test]]
 name = "annotations"

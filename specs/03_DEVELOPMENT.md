@@ -71,7 +71,7 @@ contract; do not create chronological, catch-all, or `general` suites.
 
 The five committed snapshots are generated directly by tests in
 `tests/visual_regression/suite.rs`. Those tests construct fixed data, render the
-canonical SVG with `Chart`, normalize only unstable embedded-font bytes, and
+canonical SVG with `Plot`, normalize only unstable embedded-font bytes, and
 pass either the bounded SVG or a small clipping/layer summary to
 `insta::assert_snapshot!`. No script, Python process, or external plotting
 library generates them.

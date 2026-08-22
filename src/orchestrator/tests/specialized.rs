@@ -1,7 +1,7 @@
 use polars::prelude::NamedFrom;
 
 use super::{
-    configured_chart, fixture, test_directory, Chart, DataFrame, PlotKind, RecordingBackend, Series,
+    configured_chart, fixture, test_directory, DataFrame, Plot, PlotKind, RecordingBackend, Series,
 };
 
 #[test]
@@ -17,10 +17,10 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     )
     .unwrap();
 
-    let mut horizontal = Chart::new(&data);
-    let _ = horizontal.x("group");
-    let _ = horizontal.y("y");
-    let _ = horizontal.select(PlotKind::HorizontalBar);
+    let horizontal = Plot::horizontal_bar(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "y"),
+    );
     let outer_panel = horizontal.figure_layout().panel_box;
     let mut horizontal_backend = RecordingBackend::default();
     horizontal
@@ -28,11 +28,12 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .unwrap();
     assert!(horizontal_backend.clips[0].x0 > outer_panel.x0);
 
-    let mut beeswarm = Chart::new(&data).color("color");
-    let _ = beeswarm.size(800, 600);
-    let _ = beeswarm.x("x");
-    let _ = beeswarm.y("group");
-    let _ = beeswarm.select(PlotKind::Beeswarm);
+    let beeswarm = Plot::beeswarm(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "color"),
+    )
+    .size(800, 600);
     let mut beeswarm_backend = RecordingBackend::default();
     beeswarm
         .render_kind(PlotKind::Beeswarm, &mut beeswarm_backend)
@@ -56,19 +57,21 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     assert!((f64::from(low_label.0) - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
     assert!((f64::from(low_label.1) - (bottom - 13.0).max(0.0).trunc()).abs() < f64::EPSILON);
 
-    let mut marginal = Chart::new(&data);
-    let _ = marginal.x("x");
-    let _ = marginal.y("y");
-    let _ = marginal.select(PlotKind::Marginal);
+    let marginal = Plot::marginal(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    );
     let mut marginal_backend = RecordingBackend::default();
     marginal
         .render_kind(PlotKind::Marginal, &mut marginal_backend)
         .unwrap();
     assert_eq!(marginal_backend.clips.len(), 3);
 
-    let mut matrix = Chart::new(&data).title("Matrix title");
-    let _ = matrix.matrix_variables(vec!["x", "y"]);
-    let _ = matrix.select(PlotKind::Matrix);
+    let matrix = Plot::matrix(vec![
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    ])
+    .title("Matrix title");
     let mut matrix_backend = RecordingBackend::default();
     matrix
         .render_kind(PlotKind::Matrix, &mut matrix_backend)
@@ -85,13 +88,10 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
         (PlotKind::Matrix, "matrix", 4),
     ];
     for (kind, name, expected_clips) in cases {
-        let mut chart = configured_chart(&data, kind).title(format!("{name} title"));
-        if kind == PlotKind::Beeswarm {
-            chart = chart.color("color");
-        }
+        let chart = configured_chart(&data, kind).title(format!("{name} title"));
         let dir = test_directory(name);
         let output = dir.join("figure.svg");
-        chart.render_to_svg(&output).unwrap();
+        chart.svg(&output).unwrap();
         let svg = std::fs::read_to_string(&output).unwrap();
         assert_eq!(
             svg.matches("<clipPath id=").count(),
@@ -111,37 +111,52 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
 }
 
 #[test]
-fn mass_spectrum_peak_label_uses_math_space_y() {
+fn point_layer_label_uses_math_space_y() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::MassSpectrum);
+    let layer = crate::PointLayer::new(
+        crate::NumericValues::new("peak x", [2.0]),
+        crate::NumericValues::new("peak y", [3.0]),
+        (180, 45, 40),
+        4,
+        0.9,
+    )
+    .unwrap()
+    .labels(crate::CategoryValues::new("peak label", ["2.0"]).unwrap());
+    let chart = configured_chart(&data, PlotKind::Line).point_layer(layer);
     let mut backend = RecordingBackend::default();
 
-    chart
-        .render_kind(PlotKind::MassSpectrum, &mut backend)
-        .unwrap();
+    chart.render_kind(PlotKind::Line, &mut backend).unwrap();
 
-    let peak = backend.scatter_points[0];
+    let peak = *backend.scatter_points.last().unwrap();
     let label = backend
         .texts
         .iter()
         .find(|(_, _, text)| text == "2.0")
         .unwrap();
-    assert!((f64::from(label.0) - (peak.x + 6.0).trunc()).abs() < f64::EPSILON);
-    assert!((f64::from(label.1) - (peak.y + 6.0).trunc()).abs() < f64::EPSILON);
+    assert!((f64::from(label.0) - (peak.x + 6.0).round()).abs() < f64::EPSILON);
+    assert!((f64::from(label.1) - (peak.y + 6.0).round()).abs() < f64::EPSILON);
 }
 
 #[test]
-fn explicit_limits_omit_out_of_range_mass_spectrum_labels_from_svg() {
+fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     let data = fixture();
-    let mut chart = Chart::new(&data).x_limits(0.0, 3.0).y_limits(0.0, 6.0);
-    let _ = chart.x("x");
-    let _ = chart.y("y");
-    let _ = chart.add_peaks(vec![(-0.1, 2.0), (2.0, 3.0), (3.5, 4.0)]);
-    let _ = chart.select(PlotKind::MassSpectrum);
+    let layer = crate::PointLayer::new(
+        crate::NumericValues::new("peak x", [-0.1, 2.0, 3.5]),
+        crate::NumericValues::new("peak y", [2.0, 3.0, 4.0]),
+        (180, 45, 40),
+        4,
+        0.9,
+    )
+    .unwrap()
+    .labels(crate::CategoryValues::new("peak label", ["-0.1", "2.0", "3.5"]).unwrap());
+    let chart = configured_chart(&data, PlotKind::Line)
+        .point_layer(layer)
+        .x_limits(0.0, 3.0)
+        .y_limits(0.0, 6.0);
     let dir = test_directory("mass-label-explicit-limits");
     let output = dir.join("figure.svg");
 
-    chart.render_to_svg(&output).unwrap();
+    chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
 
     assert!(!svg.contains(">-0.1</text>"));
@@ -161,16 +176,17 @@ fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
         vec![category.into(), delta.into(), base.into(), terminal.into()],
     )
     .unwrap();
-    let mut chart = Chart::new(&data)
-        .x_limits(10.5, 11.5)
-        .waterfall_totals("base", "terminal");
-    let _ = chart.x("category");
-    let _ = chart.y("delta");
-    let _ = chart.select(PlotKind::Waterfall);
+    let chart = Plot::waterfall(
+        crate::test_support::category(&data, "category"),
+        crate::test_support::numeric(&data, "delta"),
+        10.0,
+        11.0,
+    )
+    .x_limits(10.5, 11.5);
     let dir = test_directory("waterfall-label-explicit-limits");
     let output = dir.join("figure.svg");
 
-    chart.render_to_svg(&output).unwrap();
+    chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
 
     assert!(!svg.contains(">base 10.000</text>"));
@@ -189,16 +205,17 @@ fn waterfall_annotation_requires_visible_source_category() {
         vec![category.into(), delta.into(), base.into(), terminal.into()],
     )
     .unwrap();
-    let mut chart = Chart::new(&data)
-        .y_limits(0.0, 1.5)
-        .waterfall_totals("base", "terminal");
-    let _ = chart.x("category");
-    let _ = chart.y("delta");
-    let _ = chart.select(PlotKind::Waterfall);
+    let chart = Plot::waterfall(
+        crate::test_support::category(&data, "category"),
+        crate::test_support::numeric(&data, "delta"),
+        10.0,
+        11.0,
+    )
+    .y_limits(0.0, 1.5);
     let dir = test_directory("waterfall-label-category-limits");
     let output = dir.join("figure.svg");
 
-    chart.render_to_svg(&output).unwrap();
+    chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
 
     assert!(!svg.contains(">base 10.000</text>"));

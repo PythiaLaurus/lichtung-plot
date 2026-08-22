@@ -16,11 +16,11 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
-use crate::Chart;
+use crate::Plot;
 
 /// Render a vertical bar plot.
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -191,7 +191,7 @@ pub(crate) fn render(
 }
 
 fn range_for_bar_marks(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &PreparedBars,
     panel: crate::layout::PanelBox,
     range: (f64, f64),
@@ -224,7 +224,7 @@ fn range_for_bar_marks(
 }
 
 fn draw_bar_significance(
-    chart: &Chart<'_>,
+    chart: &Plot,
     bar: &PreparedBar,
     prepared: &PreparedBars,
     mode: BarMode,
@@ -272,7 +272,7 @@ fn draw_bar_significance(
 }
 
 fn validate_bar_significance_collisions(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,

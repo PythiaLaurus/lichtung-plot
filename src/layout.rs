@@ -1,6 +1,6 @@
 //! Shared plot and figure layout modules.
 
-/// Figure-level layout reservations and panel placement.
+/// Canvas-level layout reservations and panel placement.
 pub mod figure;
 /// Single-panel layout primitives: projection, axes, frame, grid, and ticks.
 mod panel;

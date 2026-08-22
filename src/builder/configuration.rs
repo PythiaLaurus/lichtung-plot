@@ -1,4 +1,4 @@
-use super::Chart;
+use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
@@ -11,52 +11,55 @@ use crate::spec::{
 };
 use crate::theme::Theme;
 use crate::Labels;
-use crate::{ComparisonAnnotation, HistogramCompositeGeometryInput, RaincloudGeometryInput};
+use crate::{
+    BooleanValues, CategoryValues, ComparisonAnnotation, HistogramCompositeGeometryInput,
+    NumericValues, RaincloudGeometryInput, SourceRows,
+};
 
-impl<'a> Chart<'a> {
+impl Plot {
+    /// Configure PNG sizing and compression before the first terminal output.
+    #[must_use]
+    pub const fn png_options(mut self, options: crate::PngOptions) -> Self {
+        self.png_options = options;
+        self
+    }
+
+    /// Configure selectable text or outlined text for SVG output.
+    #[must_use]
+    pub const fn svg_text(mut self, text: crate::SvgText) -> Self {
+        self.svg_text = text;
+        self
+    }
+
     /// Set original source-row identities aligned one-to-one with the chart data.
     ///
     /// An explicitly configured raw-overlay source-row column takes precedence
     /// for charts that configure both forms of identity.
     #[must_use]
-    pub const fn source_rows(mut self, source_rows: &'a [usize]) -> Self {
+    pub fn source_rows(mut self, source_rows: SourceRows) -> Self {
         self.source_rows = Some(source_rows);
-        self
-    }
-
-    /// Set the x-axis column name.
-    #[must_use]
-    pub fn x(&mut self, col: &'a str) -> &mut Self {
-        self.x_col = Some(col);
-        self
-    }
-
-    /// Set the y-axis column name.
-    #[must_use]
-    pub fn y(&mut self, col: &'a str) -> &mut Self {
-        self.y_col = Some(col);
         self
     }
 
     /// Set the hue column name.
     #[must_use]
-    pub fn hue(mut self, col: &'a str) -> Self {
-        self.hue_col = Some(col);
+    pub fn hue(mut self, values: CategoryValues) -> Self {
+        self.hue = Some(values);
         self
     }
 
     /// Set the graphical-group column used to partition collective marks.
     /// Group never assigns color or creates legend entries.
     #[must_use]
-    pub fn group(mut self, col: &'a str) -> Self {
-        self.group_col = Some(col);
+    pub fn group(mut self, values: CategoryValues) -> Self {
+        self.group = Some(values);
         self
     }
 
     /// Set a continuous color-value column for plot kinds that support it.
     #[must_use]
-    pub fn color(mut self, col: &'a str) -> Self {
-        self.color_col = Some(col);
+    pub fn color(mut self, values: NumericValues) -> Self {
+        self.color = Some(values);
         self
     }
 
@@ -118,8 +121,8 @@ impl<'a> Chart<'a> {
 
     /// Set a strict Boolean column whose true heatmap cells receive a prominent border.
     #[must_use]
-    pub const fn heatmap_highlight(mut self, column: &'a str) -> Self {
-        self.heatmap_highlight_col = Some(column);
+    pub fn heatmap_highlight(mut self, values: BooleanValues) -> Self {
+        self.heatmap_highlight = Some(values);
         self
     }
 
@@ -135,15 +138,15 @@ impl<'a> Chart<'a> {
     /// The column must contain only [`crate::CoefficientSignificanceMark::as_str`]
     /// values and is accepted only for coefficient plots with confidence intervals.
     #[must_use]
-    pub const fn coefficient_significance(mut self, column: &'a str) -> Self {
-        self.coefficient_significance_col = Some(column);
+    pub fn coefficient_significance(mut self, values: CategoryValues) -> Self {
+        self.coefficient_significance = Some(values);
         self
     }
 
     /// Draw exact caller-supplied significance marks beside identity bars.
     #[must_use]
-    pub const fn bar_significance(mut self, column: &'a str) -> Self {
-        self.bar_significance_col = Some(column);
+    pub fn bar_significance(mut self, values: CategoryValues) -> Self {
+        self.bar_significance = Some(values);
         self
     }
 
@@ -258,14 +261,14 @@ impl<'a> Chart<'a> {
 
     /// Append a separately borrowed strict point layer to a numeric line chart.
     #[must_use]
-    pub fn point_layer(mut self, layer: PointLayer<'a>) -> Self {
+    pub fn point_layer(mut self, layer: PointLayer) -> Self {
         self.point_layers.push(layer);
         self
     }
 
     /// Append a separately borrowed strict point layer to an ordinary bar chart.
     #[must_use]
-    pub fn bar_point_layer(mut self, layer: BarPointLayer<'a>) -> Self {
+    pub fn bar_point_layer(mut self, layer: BarPointLayer) -> Self {
         self.bar_point_layers.push(layer);
         self
     }
@@ -348,9 +351,9 @@ impl<'a> Chart<'a> {
     /// Ordinary identity bars consume these columns with matching semantics;
     /// generated mean and stacked bars reject them.
     #[must_use]
-    pub fn interval_bounds(mut self, lower_col: &'a str, upper_col: &'a str) -> Self {
-        self.interval_lower_col = Some(lower_col);
-        self.interval_upper_col = Some(upper_col);
+    pub fn interval_bounds(mut self, lower: NumericValues, upper: NumericValues) -> Self {
+        self.interval_lower = Some(lower);
+        self.interval_upper = Some(upper);
         self
     }
 
@@ -363,8 +366,8 @@ impl<'a> Chart<'a> {
 
     /// Set an exact `estimated`/`not_estimable` availability column for estimate rows.
     #[must_use]
-    pub const fn estimate_status(mut self, column: &'a str) -> Self {
-        self.estimate_status_col = Some(column);
+    pub fn estimate_status(mut self, values: CategoryValues) -> Self {
+        self.estimate_status = Some(values);
         self
     }
 
@@ -438,12 +441,12 @@ impl<'a> Chart<'a> {
     /// values must be [`crate::LinePattern::as_str`] values. Each graphical trace must
     /// resolve to one constant value from each column.
     #[must_use]
-    pub const fn interaction_styles(
+    pub fn interaction_styles(
         mut self,
-        point_shape_col: &'a str,
-        line_pattern_col: &'a str,
+        point_shapes: CategoryValues,
+        line_patterns: CategoryValues,
     ) -> Self {
-        self.interaction_style_cols = Some((point_shape_col, line_pattern_col));
+        self.interaction_styles = Some((point_shapes, line_patterns));
         self
     }
 
@@ -461,25 +464,10 @@ impl<'a> Chart<'a> {
         self
     }
 
-    /// Base and terminal metadata columns for a waterfall.
-    #[must_use]
-    pub fn waterfall_totals(mut self, base_col: &'a str, terminal_col: &'a str) -> Self {
-        self.waterfall_base_col = Some(base_col);
-        self.waterfall_terminal_col = Some(terminal_col);
-        self
-    }
-
     /// Set caller-owned labels for waterfall base and terminal annotations.
     #[must_use]
     pub fn waterfall_labels(mut self, labels: WaterfallLabels) -> Self {
         self.waterfall_labels = Some(labels);
-        self
-    }
-
-    /// Set the second finite numeric endpoint column for a dumbbell plot.
-    #[must_use]
-    pub const fn dumbbell_right(mut self, column: &'a str) -> Self {
-        self.dumbbell_right_col = Some(column);
         self
     }
 
@@ -499,7 +487,7 @@ impl<'a> Chart<'a> {
 
     /// Set the visual theme.
     #[must_use]
-    pub fn theme(&mut self, theme: Theme) -> &mut Self {
+    pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = theme;
         self
     }
@@ -507,16 +495,16 @@ impl<'a> Chart<'a> {
     /// Append owned explicit pairwise comparisons for bracket rendering.
     #[must_use]
     pub fn add_comparisons(
-        &mut self,
+        mut self,
         comparisons: impl IntoIterator<Item = ComparisonAnnotation>,
-    ) -> &mut Self {
+    ) -> Self {
         self.comparisons.extend(comparisons);
         self
     }
 
     /// Include non-significant comparisons as `ns` brackets.
     #[must_use]
-    pub fn show_non_significant(&mut self) -> &mut Self {
+    pub fn show_non_significant(mut self) -> Self {
         self.show_non_significant = true;
         self
     }
@@ -530,56 +518,15 @@ impl<'a> Chart<'a> {
 
     /// Set the output pixel size. Default 640x480.
     #[must_use]
-    pub fn size(&mut self, width: u32, height: u32) -> &mut Self {
+    pub fn size(mut self, width: u32, height: u32) -> Self {
         self.width = width;
         self.height = height;
         self
     }
 
-    /// Inject `(m/z, intensity)` peak markers for the
-    /// `PlotKind::MassSpectrum` kind. Each pair becomes a
-    /// filled-circle marker on the spectrum line plus an
-    /// m/z text label. The data is owned (not borrowed)
-    /// because callers commonly extract peaks from a temporary
-    /// analysis result; no borrowed reference would survive the
-    /// builder chain.
-    ///
-    /// Calling this replaces any previously-set peaks; pass
-    /// the full list on each call.
-    #[must_use]
-    pub fn add_peaks(&mut self, peaks: Vec<(f64, f64)>) -> &mut Self {
-        self.peaks = peaks;
-        self
-    }
-
-    /// Inject pre-computed `(x, y)` scatter points for the
-    /// `PlotKind::Marginal` kind. When non-empty, the
-    /// marginal plot uses these points (and the marginal
-    /// histograms are computed over them) instead of
-    /// extracting from `x_col` / `y_col` in the `DataFrame`.
-    /// One use case is passing precomputed UMAP coordinates
-    /// as a `Vec<(f64, f64)>` without materializing columns.
-    ///
-    /// Calling this replaces any previously-set coords;
-    /// pass the full list on each call. Pass an empty
-    /// `Vec` to fall back to the data-column path.
-    #[must_use]
-    pub fn add_marginal_coords(&mut self, coords: Vec<(f64, f64)>) -> &mut Self {
-        self.marginal_coords = coords;
-        self
-    }
-
-    /// Set the ordered variable names for the matrix (pairplot) grid.
-    /// Each variable becomes one axis in the N×N grid.
-    #[must_use]
-    pub fn matrix_variables(&mut self, variables: Vec<impl Into<String>>) -> &mut Self {
-        self.matrix_variables = variables.into_iter().map(Into::into).collect();
-        self
-    }
-
     /// Request a specific legend placement.
     #[must_use]
-    pub fn legend_position(&mut self, position: LegendPosition) -> &mut Self {
+    pub fn legend_position(mut self, position: LegendPosition) -> Self {
         self.legend_position = position;
         self.legend_visible = Some(position != LegendPosition::Hidden);
         self
@@ -587,14 +534,14 @@ impl<'a> Chart<'a> {
 
     /// Force the legend to be rendered when the selected plot can produce one.
     #[must_use]
-    pub fn show_legend(&mut self) -> &mut Self {
+    pub fn show_legend(mut self) -> Self {
         self.legend_visible = Some(true);
         self
     }
 
     /// Suppress the legend even when the selected plot can produce one.
     #[must_use]
-    pub fn hide_legend(&mut self) -> &mut Self {
+    pub fn hide_legend(mut self) -> Self {
         self.legend_visible = Some(false);
         self
     }
@@ -610,8 +557,8 @@ impl<'a> Chart<'a> {
     /// Set the integer column carrying original row identities for a visible
     /// raw-observation overlay after the caller has filtered or compacted data.
     #[must_use]
-    pub const fn raw_overlay_source_row(mut self, column: &'a str) -> Self {
-        self.raw_overlay_source_row_col = Some(column);
+    pub fn raw_overlay_source_rows(mut self, source_rows: SourceRows) -> Self {
+        self.raw_overlay_source_rows = Some(source_rows);
         self
     }
 

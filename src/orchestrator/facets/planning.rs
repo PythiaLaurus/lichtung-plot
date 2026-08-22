@@ -1,10 +1,10 @@
-//! Figure measurement, panel placement, and final panel planning.
+//! Canvas measurement, panel placement, and final panel planning.
 
 use crate::Error;
 
 use super::data::FacetPanel;
 use super::rendering::facet_label;
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::decorations::plan::{LegendRole, PanelPlan, ResolvedLegend};
 use crate::layout::figure::{allocate_composed_grid, PanelRequirements};
 use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox, TextBlock};
@@ -13,7 +13,7 @@ use crate::spec::{DecorationMode, PlotKind, PlotRenderContext};
 use crate::theme::ThemePalette;
 
 pub(super) fn figure_layout(
-    chart: &Chart<'_>,
+    chart: &Plot,
     palette: &ThemePalette,
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
@@ -153,7 +153,7 @@ fn adjusted_shared_axis_panel(
 }
 
 pub(super) fn layout_panels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     kind: PlotKind,
     panels: &mut [FacetPanel],
     outer: PanelBox,
@@ -166,13 +166,12 @@ pub(super) fn layout_panels(
     for facet in panels.iter() {
         let panel_chart = chart
             .clone()
-            .with_render_scope(format!("facet-{}", facet.panel_index))
+            .with_render_scope(facet.render_scope())
             .with_comparison_subset(&facet.cell)?;
         let result = panel_chart.render_panel(
             kind,
-            PlotRenderContext::with_source_rows(
-                &facet.data,
-                &facet.source_rows,
+            PlotRenderContext::new(
+                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                 provisional[facet.row * columns + facet.column],
             ),
             backend,
@@ -210,14 +209,14 @@ pub(super) fn layout_panels(
     Ok(())
 }
 
-pub(super) fn plan_panels<'a>(
-    mut chart: Chart<'a>,
+pub(super) fn plan_panels(
+    mut chart: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
     outside_legend: Option<ResolvedLegend>,
     fix_x: bool,
     fix_y: bool,
-) -> Result<(Chart<'a>, Vec<PanelPlan>), Error> {
+) -> Result<(Plot, Vec<PanelPlan>), Error> {
     let mut final_plans = Vec::new();
     for _ in 0..2 {
         final_plans = Vec::with_capacity(panels.len());
@@ -225,7 +224,7 @@ pub(super) fn plan_panels<'a>(
         for facet in panels {
             let panel_chart = chart
                 .clone()
-                .with_render_scope(format!("facet-{}", facet.panel_index))
+                .with_render_scope(facet.render_scope())
                 .with_comparison_subset(&facet.cell)?;
             let role = if legend_owner {
                 LegendRole::Panel
@@ -237,8 +236,8 @@ pub(super) fn plan_panels<'a>(
                 kind,
                 facet.panel,
                 role,
-                &facet.data,
-                Some(&facet.source_rows),
+                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                None,
             )?;
             if plan.result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(

@@ -3,14 +3,14 @@
 use crate::Error;
 
 use super::data::{stable_levels, FacetPanel};
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::PanelBox;
 use crate::render::backend::Backend;
 use crate::spec::{AxisDomain, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult};
 
 pub(super) fn preflight_panels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
     backend: &mut dyn Backend,
@@ -19,22 +19,25 @@ pub(super) fn preflight_panels(
     for facet in panels {
         let panel_chart = chart
             .clone()
-            .with_render_scope(format!("facet-{}", facet.panel_index))
+            .with_render_scope(facet.render_scope())
             .with_comparison_subset(&facet.cell)?;
         preflight.push(panel_chart.render_panel(
             kind,
-            PlotRenderContext::with_source_rows(&facet.data, &facet.source_rows, facet.panel),
+            PlotRenderContext::new(
+                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                facet.panel,
+            ),
             backend,
         )?);
     }
     Ok(preflight)
 }
 
-pub(super) fn coordinate_hue_levels<'a>(
-    source: &Chart<'a>,
-    mut chart: Chart<'a>,
+pub(super) fn coordinate_hue_levels(
+    source: &Plot,
+    mut chart: Plot,
     preflight: &[PlotRenderResult],
-) -> Result<Chart<'a>, Error> {
+) -> Result<Plot, Error> {
     if let Some(hue_column) = source.hue_col() {
         let rendered_levels = stable_levels(
             preflight
@@ -59,8 +62,8 @@ pub(super) fn coordinate_hue_levels<'a>(
 }
 
 pub(super) fn reserve_shared_legend(
-    source: &Chart<'_>,
-    shared: &Chart<'_>,
+    source: &Plot,
+    shared: &Plot,
     preflight: &[PlotRenderResult],
     mut outer: PanelBox,
 ) -> Result<(PanelBox, Option<ResolvedLegend>), Error> {
@@ -108,8 +111,7 @@ pub(super) fn reserve_shared_legend(
                     .map(|result| result.legend_entries.as_slice())
             });
             if let Some(entries) = entries {
-                let mut legend_chart = shared.clone();
-                let _ = legend_chart.legend_position(facet_legend_position);
+                let legend_chart = shared.clone().legend_position(facet_legend_position);
                 let (reserved, legend) =
                     crate::decorations::plan::plan_outside_legend(&legend_chart, entries, outer)?;
                 outer = reserved;

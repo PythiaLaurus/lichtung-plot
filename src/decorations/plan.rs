@@ -8,7 +8,7 @@ use crate::render::geometry::GeometryBackend;
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
 };
-use crate::Chart;
+use crate::Plot;
 
 // Data-space expansion normally clears a legend in one pass. The larger bound
 // permits coupled axis/decorations to settle while making non-convergence fatal.
@@ -34,7 +34,7 @@ pub(crate) struct PanelPlan {
 }
 
 pub(crate) fn plan_outside_legend(
-    chart: &Chart<'_>,
+    chart: &Plot,
     entries: &[crate::decorations::legend::LegendEntry],
     cell: PanelBox,
 ) -> Result<(PanelBox, ResolvedLegend), Error> {
@@ -80,7 +80,7 @@ const fn is_inside(position: LegendPosition) -> bool {
 }
 
 impl PanelPlan {
-    pub(crate) fn chart_for_render<'a>(&self, chart: &Chart<'a>) -> Chart<'a> {
+    pub(crate) fn chart_for_render(&self, chart: &Plot) -> Plot {
         let chart = self.planned_x_limits.map_or_else(
             || chart.clone(),
             |limits| chart.clone().with_planned_x_limits(limits),
@@ -99,7 +99,7 @@ impl PanelPlan {
 }
 
 pub(crate) fn plan_panel(
-    chart: &Chart<'_>,
+    chart: &Plot,
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
@@ -121,11 +121,11 @@ pub(crate) fn plan_panel(
     reason = "the two-pass panel lifecycle keeps discovery, reservation, collision resolution, and frozen output together"
 )]
 pub(crate) fn plan_panel_with_data(
-    chart: &Chart<'_>,
+    chart: &Plot,
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
-    data: &polars::prelude::DataFrame,
+    data: crate::data::PlotData<'_>,
     source_rows: Option<&[usize]>,
 ) -> Result<PanelPlan, Error> {
     let legend_default = kind.legend_default(chart.user_y_limits().is_some());
@@ -348,7 +348,7 @@ pub(crate) fn plan_panel_with_data(
 }
 
 fn record_brackets(
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     geometry: &mut GeometryBackend,
 ) -> Result<(), Error> {
@@ -410,7 +410,7 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) 
 
 fn automatic_clearance(
     kind: PlotKind,
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -435,7 +435,7 @@ fn automatic_clearance(
 
 fn top_right_clearance(
     kind: PlotKind,
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -500,7 +500,7 @@ fn candidate_edges(index: usize, clearance: LegendClearance) -> [ClearanceEdge; 
 
 fn lowest_overlap_clearance(
     kind: PlotKind,
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -575,7 +575,7 @@ fn lowest_overlap_clearance(
 
 fn explicit_clearance(
     kind: PlotKind,
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -646,7 +646,7 @@ fn overlap_score_within_panel(
 
 fn expanded_axis_limits(
     kind: PlotKind,
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -721,10 +721,10 @@ fn bar_expansion_moves_zero_anchor(
 }
 
 fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     kind: PlotKind,
     panel: PanelBox,
-    data: &polars::prelude::DataFrame,
+    data: crate::data::PlotData<'_>,
     source_rows: Option<&[usize]>,
     backend: &mut GeometryBackend,
 ) -> Result<PlotRenderResult, Error> {
@@ -736,7 +736,7 @@ fn render(
 }
 
 fn auto_candidate_avoiding_panel_text(
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     preferred: usize,

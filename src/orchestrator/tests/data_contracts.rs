@@ -1,29 +1,26 @@
 use polars::prelude::NamedFrom;
 
 use super::{
-    configured_bar_chart, configured_chart, fixture, Backend, Chart, DataFrame, Error, FillStyle,
-    LegendPosition, LineStyle, NullBackend, PanelBox, PlotKind, Point2D, RecordingBackend, Series,
+    configured_bar_chart, Backend, DataFrame, Error, FillStyle, LegendPosition, LineStyle,
+    NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend, Series,
 };
 
 #[test]
-fn mass_spectrum_rejects_null_mz_exactly() {
+fn line_rejects_null_x_before_begin() {
     let mz = Series::new("mz".into(), [Some(1.0_f64), None, Some(3.0)]);
     let intensity = Series::new("intensity".into(), [2.0_f64, 4.0, 6.0]);
     let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("mz");
-    let _ = chart.y("intensity");
-    let _ = chart.select(PlotKind::MassSpectrum);
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "mz"),
+        crate::test_support::numeric(&data, "intensity"),
+    );
 
     let mut backend = RecordingBackend::default();
-    let error = chart
-        .render_kind(PlotKind::MassSpectrum, &mut backend)
-        .unwrap_err();
+    let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
 
-    assert_eq!(
-        error.to_string(),
-        "data error: mass_spectrum: column \"mz\" contains null at source row 1"
-    );
+    assert!(error
+        .to_string()
+        .contains("value \"mz\" contains null at source row 1"));
     assert_eq!(backend.begins, 0);
 }
 
@@ -38,16 +35,15 @@ fn explicit_inside_legend_with_fixed_limits_rejects_overlap_before_begin() {
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data)
-        .group("hue")
-        .hue("hue")
-        .x_limits(0.0, 10.0)
-        .y_limits(0.0, 10.0);
-    chart
-        .legend_position(LegendPosition::InsideRight)
-        .x("x")
-        .y("y")
-        .line();
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .group(crate::test_support::category(&data, "hue"))
+    .hue(crate::test_support::category(&data, "hue"))
+    .x_limits(0.0, 10.0)
+    .y_limits(0.0, 10.0)
+    .legend_position(LegendPosition::InsideRight);
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
@@ -77,13 +73,15 @@ fn oversized_explicit_inside_legend_rejects_before_begin() {
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data).hue("hue").x_label("").y_label("");
-    chart
-        .legend_position(LegendPosition::InsideTopLeft)
-        .x("x")
-        .y("y")
-        .size(180, 140)
-        .scatter();
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .hue(crate::test_support::category(&data, "hue"))
+    .x_label("")
+    .y_label("")
+    .legend_position(LegendPosition::InsideTopLeft)
+    .size(180, 140);
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
@@ -96,27 +94,26 @@ fn oversized_explicit_inside_legend_rejects_before_begin() {
 }
 
 #[test]
-fn mass_spectrum_rejects_null_intensity_exactly() {
+fn line_rejects_null_y_before_begin() {
     let mz = Series::new("mz".into(), [1.0_f64, 2.0, 3.0]);
     let intensity = Series::new("intensity".into(), [Some(2.0_f64), None, Some(6.0)]);
     let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("mz");
-    let _ = chart.y("intensity");
-    let _ = chart.select(PlotKind::MassSpectrum);
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "mz"),
+        crate::test_support::numeric(&data, "intensity"),
+    );
 
     let error = chart
-        .render_kind(PlotKind::MassSpectrum, &mut RecordingBackend::default())
+        .render_kind(PlotKind::Line, &mut RecordingBackend::default())
         .unwrap_err();
 
-    assert_eq!(
-        error.to_string(),
-        "data error: mass_spectrum: column \"intensity\" contains null at source row 1"
-    );
+    assert!(error
+        .to_string()
+        .contains("value \"intensity\" contains null at source row 1"));
 }
 
 #[test]
-fn mass_spectrum_rejects_non_finite_scientific_values_exactly() {
+fn line_rejects_non_finite_scientific_values_before_begin() {
     for (column, value) in [("mz", f64::NAN), ("intensity", f64::INFINITY)] {
         let mz = Series::new(
             "mz".into(),
@@ -135,21 +132,18 @@ fn mass_spectrum_rejects_non_finite_scientific_values_exactly() {
             },
         );
         let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
-        let mut chart = Chart::new(&data);
-        let _ = chart.x("mz");
-        let _ = chart.y("intensity");
-        let _ = chart.select(PlotKind::MassSpectrum);
+        let chart = Plot::line(
+            crate::test_support::numeric(&data, "mz"),
+            crate::test_support::numeric(&data, "intensity"),
+        );
 
         let error = chart
-            .render_kind(PlotKind::MassSpectrum, &mut RecordingBackend::default())
+            .render_kind(PlotKind::Line, &mut RecordingBackend::default())
             .unwrap_err();
 
-        assert_eq!(
-            error.to_string(),
-            format!(
-                "data error: mass_spectrum: column \"{column}\" contains non-finite value {value} at source row 1"
-            )
-        );
+        assert!(error.to_string().contains(&format!(
+            "value \"{column}\" contains non-finite value {value} at source row 1"
+        )));
     }
 }
 
@@ -158,10 +152,10 @@ fn violin_rejects_null_x_exactly() {
     let group = Series::new("group".into(), [Some("a"), None, Some("a")]);
     let value = Series::new("value".into(), [1.0_f64, 2.0, 3.0]);
     let data = DataFrame::new(group.len(), vec![group.into(), value.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(PlotKind::Violin);
+    let chart = Plot::violin(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "value"),
+    );
 
     let mut backend = RecordingBackend::default();
     let error = chart
@@ -170,7 +164,7 @@ fn violin_rejects_null_x_exactly() {
 
     assert_eq!(
         error.to_string(),
-        "data error: violin: column \"group\" contains null at source row 1"
+        "data error: violin: value \"group\" contains null at source row 1"
     );
     assert_eq!(backend.begins, 0);
 }
@@ -180,10 +174,10 @@ fn violin_rejects_null_y_exactly() {
     let group = Series::new("group".into(), ["a", "a", "a"]);
     let value = Series::new("value".into(), [Some(1.0_f64), None, Some(3.0)]);
     let data = DataFrame::new(group.len(), vec![group.into(), value.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(PlotKind::Violin);
+    let chart = Plot::violin(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "value"),
+    );
 
     let error = chart
         .render_kind(PlotKind::Violin, &mut RecordingBackend::default())
@@ -191,7 +185,7 @@ fn violin_rejects_null_y_exactly() {
 
     assert_eq!(
         error.to_string(),
-        "data error: violin: column \"value\" contains null at source row 1"
+        "data error: violin: value \"value\" contains null at source row 1"
     );
 }
 
@@ -201,10 +195,11 @@ fn violin_rejects_null_hue_exactly() {
     let hue = Series::new("hue".into(), [Some("x"), None, Some("y")]);
     let value = Series::new("value".into(), [1.0_f64, 2.0, 3.0]);
     let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
-    let mut chart = Chart::new(&data).hue("hue");
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(PlotKind::Violin);
+    let chart = Plot::violin(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "value"),
+    )
+    .hue(crate::test_support::category(&data, "hue"));
 
     let error = chart
         .render_kind(PlotKind::Violin, &mut RecordingBackend::default())
@@ -212,7 +207,7 @@ fn violin_rejects_null_hue_exactly() {
 
     assert_eq!(
         error.to_string(),
-        "data error: violin: column \"hue\" contains null at source row 1"
+        "data error: violin: value \"hue\" contains null at source row 1"
     );
 }
 
@@ -222,10 +217,10 @@ fn violin_rejects_non_finite_y_exactly() {
         let group = Series::new("group".into(), ["a", "a", "a"]);
         let measurement = Series::new("value".into(), [1.0_f64, value, 3.0]);
         let data = DataFrame::new(group.len(), vec![group.into(), measurement.into()]).unwrap();
-        let mut chart = Chart::new(&data);
-        let _ = chart.x("group");
-        let _ = chart.y("value");
-        let _ = chart.select(PlotKind::Violin);
+        let chart = Plot::violin(
+            crate::test_support::category(&data, "group"),
+            crate::test_support::numeric(&data, "value"),
+        );
 
         let error = chart
             .render_kind(PlotKind::Violin, &mut RecordingBackend::default())
@@ -234,54 +229,35 @@ fn violin_rejects_non_finite_y_exactly() {
         assert_eq!(
             error.to_string(),
             format!(
-                "data error: violin: column \"value\" contains non-finite value {value} at source row 1"
+                "data error: violin: value \"value\" contains non-finite value {value} at source row 1"
             )
         );
     }
 }
 
 #[test]
-fn mass_spectrum_rejects_non_finite_supplemental_peak_before_begin() {
+fn line_rejects_non_finite_supplemental_point_before_begin() {
     let mz = Series::new("mz".into(), [1.0_f64, 2.0, 3.0]);
     let intensity = Series::new("intensity".into(), [2.0_f64, 4.0, 6.0]);
     let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.add_peaks(vec![(2.0, f64::INFINITY)]);
-    let _ = chart.x("mz");
-    let _ = chart.y("intensity");
-    let _ = chart.select(PlotKind::MassSpectrum);
+    let layer = crate::PointLayer::new(
+        crate::NumericValues::new("peak m/z", [2.0]),
+        crate::NumericValues::new("peak intensity", [f64::INFINITY]),
+        (180, 45, 40),
+        4,
+        0.9,
+    )
+    .unwrap();
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "mz"),
+        crate::test_support::numeric(&data, "intensity"),
+    )
+    .point_layer(layer);
     let mut backend = RecordingBackend::default();
 
-    let error = chart
-        .render_kind(PlotKind::MassSpectrum, &mut backend)
-        .unwrap_err();
+    let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
 
-    assert_eq!(
-        error.to_string(),
-        "data error: mass_spectrum: supplemental peak 0 must contain finite m/z and intensity values, got (2, inf)"
-    );
-    assert_eq!(backend.begins, 0);
-}
-
-#[test]
-fn boxplot_rejects_numeric_string_y_before_begin() {
-    let group = Series::new("group".into(), ["a", "a"]);
-    let value = Series::new("value".into(), ["1.0", "2.0"]);
-    let data = DataFrame::new(group.len(), vec![group.into(), value.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(PlotKind::Boxplot);
-    let mut backend = RecordingBackend::default();
-
-    let error = chart
-        .render_kind(PlotKind::Boxplot, &mut backend)
-        .unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        "data error: boxplot: column \"value\" must have a numeric dtype, got String"
-    );
+    assert!(error.to_string().contains("non-finite value inf"));
     assert_eq!(backend.begins, 0);
 }
 
@@ -292,11 +268,13 @@ fn boxplot_rejects_null_category_and_hue_with_source_rows() {
     let value = Series::new("value".into(), [1.0_f64, 2.0]);
     let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
     for (hue_column, expected_column) in [(None, "group"), (Some("hue"), "group")] {
-        let mut chart =
-            hue_column.map_or_else(|| Chart::new(&data), |hue| Chart::new(&data).hue(hue));
-        let _ = chart.x("group");
-        let _ = chart.y("value");
-        let _ = chart.select(PlotKind::Boxplot);
+        let mut chart = Plot::boxplot(
+            crate::test_support::category(&data, "group"),
+            crate::test_support::numeric(&data, "value"),
+        );
+        if hue_column.is_some() {
+            chart = chart.hue(crate::test_support::category(&data, "hue"));
+        }
         let mut backend = RecordingBackend::default();
 
         let error = chart
@@ -306,7 +284,7 @@ fn boxplot_rejects_null_category_and_hue_with_source_rows() {
         assert_eq!(
             error.to_string(),
             format!(
-                "data error: boxplot: column \"{expected_column}\" contains null at source row 1"
+                "data error: boxplot: value \"{expected_column}\" contains null at source row 1"
             )
         );
         assert_eq!(backend.begins, 0);
@@ -319,10 +297,11 @@ fn boxplot_rejects_null_hue_after_valid_categories() {
     let hue = Series::new("hue".into(), [Some("x"), None]);
     let value = Series::new("value".into(), [1.0_f64, 2.0]);
     let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
-    let mut chart = Chart::new(&data).hue("hue");
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(PlotKind::Boxplot);
+    let chart = Plot::boxplot(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "value"),
+    )
+    .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -331,7 +310,7 @@ fn boxplot_rejects_null_hue_after_valid_categories() {
 
     assert_eq!(
         error.to_string(),
-        "data error: boxplot: column \"hue\" contains null at source row 1"
+        "data error: boxplot: value \"hue\" contains null at source row 1"
     );
     assert_eq!(backend.begins, 0);
 }
@@ -342,10 +321,10 @@ fn boxplot_rejects_nan_and_infinity_with_source_rows_before_begin() {
         let group = Series::new("group".into(), ["a", "a"]);
         let measurement = Series::new("value".into(), [1.0_f64, value]);
         let data = DataFrame::new(group.len(), vec![group.into(), measurement.into()]).unwrap();
-        let mut chart = Chart::new(&data);
-        let _ = chart.x("group");
-        let _ = chart.y("value");
-        let _ = chart.select(PlotKind::Boxplot);
+        let chart = Plot::boxplot(
+            crate::test_support::category(&data, "group"),
+            crate::test_support::numeric(&data, "value"),
+        );
         let mut backend = RecordingBackend::default();
 
         let error = chart
@@ -355,7 +334,7 @@ fn boxplot_rejects_nan_and_infinity_with_source_rows_before_begin() {
         assert_eq!(
             error.to_string(),
             format!(
-                "data error: boxplot: column \"value\" contains non-finite value {value} at source row 1"
+                "data error: boxplot: value \"value\" contains non-finite value {value} at source row 1"
             )
         );
         assert_eq!(backend.begins, 0);
@@ -368,10 +347,11 @@ fn scatter_rejects_null_hue_even_when_numeric_row_would_be_dropped() {
     let y = Series::new("y".into(), [Some(2.0_f64), None]);
     let hue = Series::new("hue".into(), [Some("a"), None]);
     let data = DataFrame::new(x.len(), vec![x.into(), y.into(), hue.into()]).unwrap();
-    let mut chart = Chart::new(&data).hue("hue");
-    let _ = chart.x("x");
-    let _ = chart.y("y");
-    let _ = chart.select(PlotKind::Scatter);
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -380,28 +360,7 @@ fn scatter_rejects_null_hue_even_when_numeric_row_would_be_dropped() {
 
     assert_eq!(
         error.to_string(),
-        "data error: scatter: required categorical column \"hue\" contains null at source row 1"
-    );
-    assert_eq!(backend.begins, 0);
-}
-
-#[test]
-fn matrix_rejects_numeric_strings_before_backend_begin() {
-    let numeric_string = Series::new("numeric_string".into(), ["1.0", "2.0"]);
-    let numeric = Series::new("numeric".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(2, vec![numeric_string.into(), numeric.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.matrix_variables(vec!["numeric_string", "numeric"]);
-    let _ = chart.select(PlotKind::Matrix);
-    let mut backend = RecordingBackend::default();
-
-    let error = chart
-        .render_kind(PlotKind::Matrix, &mut backend)
-        .unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        "data error: matrix: column \"numeric_string\" must have a numeric dtype, got String"
+        "data error: scatter: value \"hue\" contains null at source row 1"
     );
     assert_eq!(backend.begins, 0);
 }
@@ -417,9 +376,10 @@ fn matrix_rejects_every_missing_or_non_finite_numeric_value_before_begin() {
         let x = Series::new("x".into(), [Some(1.0_f64), value]);
         let y = Series::new("y".into(), [2.0_f64, 3.0]);
         let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
-        let mut chart = Chart::new(&data);
-        let _ = chart.matrix_variables(vec!["x", "y"]);
-        let _ = chart.select(PlotKind::Matrix);
+        let chart = Plot::matrix(vec![
+            crate::test_support::numeric(&data, "x"),
+            crate::test_support::numeric(&data, "y"),
+        ]);
         let mut backend = RecordingBackend::default();
 
         let error = chart
@@ -436,9 +396,10 @@ fn matrix_rejects_constant_ungrouped_column_before_backend_begin() {
     let x = Series::new("constant".into(), [2.0_f64, 2.0, 2.0]);
     let y = Series::new("varying".into(), [1.0_f64, 2.0, 3.0]);
     let data = DataFrame::new(3, vec![x.into(), y.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.matrix_variables(vec!["constant", "varying"]);
-    let _ = chart.select(PlotKind::Matrix);
+    let chart = Plot::matrix(vec![
+        crate::test_support::numeric(&data, "constant"),
+        crate::test_support::numeric(&data, "varying"),
+    ]);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -458,9 +419,12 @@ fn matrix_rejects_degenerate_hue_group_with_column_and_group_context_before_begi
     let y = Series::new("y".into(), [2.0_f64, 3.0, 4.0]);
     let hue = Series::new("cohort".into(), ["singleton", "valid", "valid"]);
     let data = DataFrame::new(3, vec![x.into(), y.into(), hue.into()]).unwrap();
-    let mut chart = Chart::new(&data).group("cohort").hue("cohort");
-    let _ = chart.matrix_variables(vec!["x", "y"]);
-    let _ = chart.select(PlotKind::Matrix);
+    let chart = Plot::matrix(vec![
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    ])
+    .group(crate::test_support::category(&data, "cohort"))
+    .hue(crate::test_support::category(&data, "cohort"));
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -480,9 +444,10 @@ fn matrix_rejects_unrepresentable_extreme_kde_support_before_begin() {
     let x = Series::new("extreme".into(), [lower, f64::MAX]);
     let y = Series::new("ordinary".into(), [1.0_f64, 2.0]);
     let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.matrix_variables(vec!["extreme", "ordinary"]);
-    let _ = chart.select(PlotKind::Matrix);
+    let chart = Plot::matrix(vec![
+        crate::test_support::numeric(&data, "extreme"),
+        crate::test_support::numeric(&data, "ordinary"),
+    ]);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -585,32 +550,6 @@ fn null_backend_rejects_non_finite_geometry_and_styles() {
 }
 
 #[test]
-fn every_bar_family_rejects_numeric_strings_before_backend_begin() {
-    let group = Series::new("group".into(), ["a", "b"]);
-    let hue = Series::new("hue".into(), ["h1", "h2"]);
-    let value = Series::new("value".into(), ["1.0", "2.0"]);
-    let data = DataFrame::new(2, vec![group.into(), hue.into(), value.into()]).unwrap();
-
-    for kind in [
-        PlotKind::Bar,
-        PlotKind::HorizontalBar,
-        PlotKind::StackedBar,
-        PlotKind::StackedHorizontalBar,
-    ] {
-        let chart = configured_bar_chart(&data, kind);
-        let mut backend = RecordingBackend::default();
-
-        let error = chart.render_kind(kind, &mut backend).unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "data error: bar: column \"value\" must have a numeric dtype, got String"
-        );
-        assert_eq!(backend.begins, 0, "{kind:?}");
-    }
-}
-
-#[test]
 fn every_bar_family_rejects_missing_and_non_finite_values_before_begin() {
     for value in [
         None,
@@ -640,57 +579,6 @@ fn every_bar_family_rejects_missing_and_non_finite_values_before_begin() {
 }
 
 #[test]
-fn injected_marginal_coordinates_jointly_drop_nan_pairs() {
-    let data = fixture();
-    let mut chart = configured_chart(&data, PlotKind::Marginal);
-    let _ = chart.add_marginal_coords(vec![(f64::NAN, 1.0), (2.0, f64::NAN), (3.0, 4.0)]);
-    let mut backend = RecordingBackend::default();
-
-    chart.render_kind(PlotKind::Marginal, &mut backend).unwrap();
-
-    assert_eq!((backend.begins, backend.scatter_points.len()), (1, 1));
-}
-
-#[test]
-fn injected_marginal_coordinates_reject_either_infinity_before_begin() {
-    for coords in [
-        vec![(1.0, 2.0), (f64::INFINITY, 3.0)],
-        vec![(1.0, 2.0), (3.0, f64::NEG_INFINITY)],
-        vec![(f64::NAN, f64::INFINITY)],
-    ] {
-        let data = fixture();
-        let mut chart = configured_chart(&data, PlotKind::Marginal);
-        let _ = chart.add_marginal_coords(coords);
-        let mut backend = RecordingBackend::default();
-
-        let error = chart
-            .render_kind(PlotKind::Marginal, &mut backend)
-            .unwrap_err();
-
-        assert!(error.to_string().contains("contains infinity"));
-        assert_eq!(backend.begins, 0);
-    }
-}
-
-#[test]
-fn injected_marginal_coordinates_error_when_joint_drop_removes_every_point() {
-    let data = fixture();
-    let mut chart = configured_chart(&data, PlotKind::Marginal);
-    let _ = chart.add_marginal_coords(vec![(f64::NAN, 1.0), (2.0, f64::NAN)]);
-    let mut backend = RecordingBackend::default();
-
-    let error = chart
-        .render_kind(PlotKind::Marginal, &mut backend)
-        .unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        "data error: marginal: no injected points remain after jointly dropping NaN pairs"
-    );
-    assert_eq!(backend.begins, 0);
-}
-
-#[test]
 fn ungrouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
     let lower = f64::MAX.next_down();
     let data = DataFrame::new(
@@ -701,8 +589,10 @@ fn ungrouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() 
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data);
-    let _ = chart.x("x").y("y").marginal();
+    let chart = Plot::marginal(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    );
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -730,8 +620,12 @@ fn grouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data).group("hue").hue("hue");
-    let _ = chart.x("x").y("y").marginal();
+    let chart = Plot::marginal(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .group(crate::test_support::category(&data, "hue"))
+    .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -768,18 +662,21 @@ fn numeric_categories_remain_supported_by_beeswarm_and_waterfall() {
     )
     .unwrap();
 
-    let mut beeswarm = Chart::new(&data).color("color");
-    let _ = beeswarm.x("x");
-    let _ = beeswarm.y("category");
-    let _ = beeswarm.select(PlotKind::Beeswarm);
+    let beeswarm = Plot::beeswarm(
+        crate::test_support::category(&data, "category"),
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "color"),
+    );
     beeswarm
         .render_kind(PlotKind::Beeswarm, &mut RecordingBackend::default())
         .unwrap();
 
-    let mut waterfall = Chart::new(&data).waterfall_totals("base", "terminal");
-    let _ = waterfall.x("category");
-    let _ = waterfall.y("delta");
-    let _ = waterfall.select(PlotKind::Waterfall);
+    let waterfall = Plot::waterfall(
+        crate::test_support::category(&data, "category"),
+        crate::test_support::numeric(&data, "delta"),
+        crate::test_support::constant_numeric(&data, "base"),
+        crate::test_support::constant_numeric(&data, "terminal"),
+    );
     waterfall
         .render_kind(PlotKind::Waterfall, &mut RecordingBackend::default())
         .unwrap();

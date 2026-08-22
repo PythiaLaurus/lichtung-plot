@@ -15,17 +15,23 @@ fn valid_data() -> DataFrame {
     )
 }
 
-fn chart(data: &DataFrame) -> Chart<'_> {
-    let mut chart = Chart::new(data).color("fill");
-    let _ = chart.x("x").y("y");
-    chart
+fn chart(data: &DataFrame) -> Plot {
+    Plot::heatmap(
+        crate::test_support::category(data, "x"),
+        crate::test_support::category(data, "y"),
+        crate::test_support::numeric(data, "fill"),
+    )
+}
+
+fn prepare_chart(chart: &Plot) -> Result<HeatmapData, Error> {
+    prepare(chart, chart)
 }
 
 #[test]
 fn prepare_normalizes_categories_and_preserves_first_observed_axes() {
     let data = valid_data();
 
-    let prepared = prepare(&chart(&data), &data).unwrap();
+    let prepared = prepare_chart(&chart(&data)).unwrap();
 
     assert_eq!(
         (prepared.x_levels, prepared.y_levels),
@@ -44,7 +50,7 @@ fn prepare_builds_cartesian_grid_with_absent_and_null_cells() {
         Series::new("fill".into(), [Some(1.0_f64), None, Some(3.0)]),
     );
 
-    let prepared = prepare(&chart(&data), &data).unwrap();
+    let prepared = prepare_chart(&chart(&data)).unwrap();
 
     assert_eq!(prepared.cells, [Some(1.0), None, Some(3.0), None]);
     assert!(prepared.has_missing);
@@ -58,7 +64,7 @@ fn prepare_rejects_duplicate_normalized_pairs() {
         Series::new("fill".into(), [1.0_f64, 2.0]),
     );
 
-    let error = prepare(&chart(&data), &data).unwrap_err().to_string();
+    let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
 
     assert!(error.contains("duplicate normalized"));
 }
@@ -74,12 +80,12 @@ fn prepare_rejects_null_and_empty_category_labels() {
             Series::new("y".into(), ["one", "two"]),
             Series::new("fill".into(), [1.0_f64, 2.0]),
         );
-        assert!(prepare(&chart(&data), &data).is_err());
+        assert!(prepare_chart(&chart(&data)).is_err());
     }
 }
 
 #[test]
-fn prepare_rejects_non_numeric_non_finite_and_all_null_fill() {
+fn prepare_rejects_non_finite_and_all_null_fill() {
     for fill in [
         Series::new("fill".into(), [Some(1.0_f64), Some(f64::NAN)]),
         Series::new("fill".into(), [Some(1.0_f64), Some(f64::INFINITY)]),
@@ -90,14 +96,8 @@ fn prepare_rejects_non_numeric_non_finite_and_all_null_fill() {
             Series::new("y".into(), ["one", "one"]),
             fill,
         );
-        assert!(prepare(&chart(&data), &data).is_err());
+        assert!(prepare_chart(&chart(&data)).is_err());
     }
-    let strings = data(
-        Series::new("x".into(), ["a", "b"]),
-        Series::new("y".into(), ["one", "one"]),
-        Series::new("fill".into(), ["1", "2"]),
-    );
-    assert!(prepare(&chart(&strings), &strings).is_err());
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn prepare_rejects_cartesian_grid_above_safety_limit() {
         Series::new("fill".into(), vec![1.0_f64; 1_001]),
     );
 
-    let error = prepare(&chart(&data), &data).unwrap_err().to_string();
+    let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
 
     assert!(error.contains("safety limit"));
 }
@@ -251,7 +251,7 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
         chart(&data).x_limits(0.0, 1.0),
         chart(&data).y_tick_count(2),
         chart(&data).value_sort(ValueSort::Ascending),
-        chart(&data).hue("x"),
+        chart(&data).hue(crate::test_support::category(&data, "x")),
         chart(&data).heatmap_scale(HeatmapScale::Diverging { center: f64::NAN }),
     ];
 

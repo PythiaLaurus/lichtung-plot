@@ -14,11 +14,11 @@ use crate::render::backend::{
     with_clip, Backend, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::Chart;
 use crate::Error;
+use crate::Plot;
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -174,7 +174,7 @@ pub(crate) fn render(
 }
 
 fn draw_colorbar(
-    chart: &Chart<'_>,
+    chart: &Plot,
     backend: &mut dyn Backend,
     layout: &Layout,
     label: &crate::layout::TextBlock,

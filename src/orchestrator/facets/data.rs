@@ -1,9 +1,8 @@
 //! Facet selector construction, row extraction, and anchor validation.
 
 use crate::Error;
-use polars::prelude::{DataFrame, IdxCa, IdxSize};
 
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::layout::PanelBox;
 use crate::spec::{LineMode, PlotKind};
 
@@ -21,27 +20,47 @@ pub(super) struct FacetPanel {
     pub(super) row: usize,
     pub(super) column: usize,
     pub(super) cell: FacetCell,
-    pub(super) data: DataFrame,
+    pub(super) rows: Vec<usize>,
     pub(super) source_rows: Vec<usize>,
     pub(super) panel: PanelBox,
 }
 
-pub(super) fn facet_selectors(chart: &Chart<'_>) -> Result<FacetSelectors, Error> {
+impl FacetPanel {
+    pub(super) fn render_scope(&self) -> String {
+        let selectors = self
+            .cell
+            .iter()
+            .map(|(variable, level)| format!("{variable}={level}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if selectors.is_empty() {
+            format!("facet-{}", self.panel_index)
+        } else {
+            format!("facet {selectors}")
+        }
+    }
+}
+
+pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.as_deref().map_or_else(
-        || crate::data::PlotData::new(chart.data()),
-        |rows| crate::data::PlotData::with_source_rows(chart.data(), rows),
-    );
+    let data = source_rows
+        .as_deref()
+        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let (row_column, column_column, wrap_column, wrap_columns) = chart.facet_columns();
     let variables = [row_column, column_column, wrap_column]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-    chart.resolve_label_domain("facet variables", variables.iter().copied())?;
+    let variable_names = variables
+        .iter()
+        .map(|column| data.column(column).map(crate::data::DataColumn::name))
+        .collect::<Result<Vec<_>, _>>()?;
+    chart.resolve_label_domain("facet variables", variable_names.iter().copied())?;
     let cells = if let Some(wrap) = wrap_column {
         let levels = stable_levels(crate::data::strict_strings(data, wrap, "facet")?);
         chart.resolve_label_domain("facet levels", levels.iter().map(String::as_str))?;
         let columns = wrap_columns.unwrap_or(1);
+        let variable = data.column(wrap)?.name().to_owned();
         levels
             .into_iter()
             .enumerate()
@@ -49,7 +68,7 @@ pub(super) fn facet_selectors(chart: &Chart<'_>) -> Result<FacetSelectors, Error
                 (
                     index / columns,
                     index % columns,
-                    vec![(wrap.to_owned(), level)],
+                    vec![(variable.clone(), level)],
                 )
             })
             .collect::<Vec<_>>()
@@ -79,10 +98,10 @@ pub(super) fn facet_selectors(chart: &Chart<'_>) -> Result<FacetSelectors, Error
             for (column_index, column_level) in column_levels.iter().enumerate() {
                 let mut cell = Vec::new();
                 if let Some(column) = row_column {
-                    cell.push((column.to_owned(), row_level.clone()));
+                    cell.push((data.column(column)?.name().to_owned(), row_level.clone()));
                 }
                 if let Some(column) = column_column {
-                    cell.push((column.to_owned(), column_level.clone()));
+                    cell.push((data.column(column)?.name().to_owned(), column_level.clone()));
                 }
                 cells.push((row_index, column_index, cell));
             }
@@ -108,17 +127,16 @@ pub(super) fn facet_selectors(chart: &Chart<'_>) -> Result<FacetSelectors, Error
     })
 }
 
-pub(super) fn base_chart<'a>(
-    chart: &Chart<'a>,
+pub(super) fn base_chart(
+    chart: &Plot,
     kind: PlotKind,
     has_horizontal_axis_label: bool,
     has_vertical_axis_label: bool,
-) -> Result<Chart<'a>, Error> {
+) -> Result<Plot, Error> {
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.as_deref().map_or_else(
-        || crate::data::PlotData::new(chart.data()),
-        |rows| crate::data::PlotData::with_source_rows(chart.data(), rows),
-    );
+    let data = source_rows
+        .as_deref()
+        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let mut base = chart.clone().without_facets();
     if has_horizontal_axis_label {
         base = base.x_label("");
@@ -139,7 +157,7 @@ pub(super) fn base_chart<'a>(
             let source = chart.data().column(x_column).map_err(|error| {
                 Error::Data(format!("line trajectory: column {x_column:?}: {error}"))
             })?;
-            if !source.dtype().is_numeric() {
+            if !source.is_numeric() {
                 let levels = stable_levels(crate::data::strict_normalized_strings(
                     data,
                     x_column,
@@ -154,35 +172,28 @@ pub(super) fn base_chart<'a>(
 }
 
 pub(super) fn extract_panels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     selectors: &FacetSelectors,
     provisional: &[PanelBox],
 ) -> Result<Vec<FacetPanel>, Error> {
     let configured_source_rows = chart.configured_source_rows()?;
-    let mapped_data = configured_source_rows.as_deref().map_or_else(
-        || crate::data::PlotData::new(chart.data()),
-        |rows| crate::data::PlotData::with_source_rows(chart.data(), rows),
-    );
+    let mapped_data = configured_source_rows
+        .as_deref()
+        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let mut panels = Vec::new();
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
         let columns_data = cell
             .iter()
             .map(|(name, _)| crate::data::strict_strings(mapped_data, name, "facet"))
             .collect::<Result<Vec<_>, _>>()?;
-        let source_indices = (0..chart.data().height())
+        let source_indices = (0..chart.row_count())
             .filter(|index| {
                 cell.iter().enumerate().all(|(selector_index, (_, level))| {
                     columns_data[selector_index][*index] == *level
                 })
             })
             .collect::<Vec<_>>();
-        let indices = source_indices
-            .iter()
-            .copied()
-            .map(IdxSize::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| Error::Data("facet row index exceeds backend limits".into()))?;
-        if indices.is_empty() {
+        if source_indices.is_empty() {
             continue;
         }
         let source_rows = source_indices
@@ -193,16 +204,13 @@ pub(super) fn extract_panels(
                     .map_or(*index, |rows| rows[*index])
             })
             .collect();
-        let data = chart
-            .data()
-            .take(&IdxCa::from_vec("facet".into(), indices))?;
         let panel = provisional[*row * selectors.columns + *column];
         panels.push(FacetPanel {
             panel_index,
             row: *row,
             column: *column,
             cell: cell.clone(),
-            data,
+            rows: source_indices,
             source_rows,
             panel,
         });
@@ -211,7 +219,7 @@ pub(super) fn extract_panels(
 }
 
 pub(super) fn validate_comparison_facet_anchors(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
     for comparison in chart.comparisons() {

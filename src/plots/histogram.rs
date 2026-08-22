@@ -14,7 +14,7 @@ use crate::spec::{
     HistogramBins, HistogramComposite, HistogramKde, HistogramStat, PlotRenderContext,
     PlotRenderResult,
 };
-use crate::Chart;
+use crate::Plot;
 
 const MAX_AUTO_BINS: usize = 512;
 const MAX_EXPLICIT_BINS: usize = 1_000_000;
@@ -27,7 +27,7 @@ struct PreparedHistogram {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -121,7 +121,7 @@ pub(crate) fn render(
 }
 
 fn render_precomputed_composite(
-    chart: &Chart<'_>,
+    chart: &Plot,
     input: &crate::HistogramCompositeGeometryInput,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,

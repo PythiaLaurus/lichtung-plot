@@ -16,10 +16,10 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
-use crate::Chart;
+use crate::Plot;
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -205,7 +205,7 @@ pub(crate) fn render(
 }
 
 fn range_for_bar_marks(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &PreparedBars,
     panel: PanelBox,
     range: (f64, f64),
@@ -239,7 +239,7 @@ fn range_for_bar_marks(
 }
 
 fn draw_bar_significance(
-    chart: &Chart<'_>,
+    chart: &Plot,
     bar: &PreparedBar,
     prepared: &PreparedBars,
     mode: BarMode,
@@ -290,7 +290,7 @@ fn draw_bar_significance(
 }
 
 fn validate_bar_significance_collisions(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
@@ -435,7 +435,7 @@ fn draw_error_bar(
 }
 
 pub(crate) fn panel_box_for_y_tick_labels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
 ) -> Result<PanelBox, Error> {
@@ -443,7 +443,7 @@ pub(crate) fn panel_box_for_y_tick_labels(
 }
 
 pub(crate) fn panel_box_for_elided_y_tick_labels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
 ) -> Result<PanelBox, Error> {
@@ -451,7 +451,7 @@ pub(crate) fn panel_box_for_elided_y_tick_labels(
 }
 
 fn panel_box_for_y_tick_labels_impl(
-    chart: &Chart<'_>,
+    chart: &Plot,
     mut panel: PanelBox,
     labels: &[String],
     validate_row_height: bool,
@@ -487,7 +487,7 @@ fn panel_box_for_y_tick_labels_impl(
 }
 
 pub(crate) fn validate_y_tick_label_rows(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
 ) -> Result<(), Error> {
@@ -499,7 +499,7 @@ pub(crate) fn validate_y_tick_label_rows(
 }
 
 fn y_tick_label_blocks(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
 ) -> Result<Vec<crate::layout::TextBlock>, Error> {
@@ -539,7 +539,7 @@ fn validate_y_tick_label_row_height(
 }
 
 pub(crate) fn panel_box_for_x_tick_labels(
-    chart: &Chart<'_>,
+    chart: &Plot,
     mut panel: PanelBox,
     labels: &[String],
 ) -> Result<PanelBox, Error> {

@@ -1,12 +1,12 @@
 # Getting Started
 
-`lichtung-plot` renders Polars dataframes directly. SVG support is always
-available; enable `png` only when raster output is needed.
+`lichtung-plot` renders owned immutable display values. SVG support is always
+available; enable `png` only when raster output is needed. Separate adapter
+crates convert dataframe and ndarray columns at application boundaries.
 
 ```toml
 [dependencies]
 lichtung-plot = { git = "<repository-url>", rev = "<commit>" }
-polars = "0.54"
 ```
 
 For a neighboring local checkout:
@@ -14,26 +14,17 @@ For a neighboring local checkout:
 ```toml
 [dependencies]
 lichtung-plot = { path = "../lichtung-plot" }
-polars = "0.54"
 ```
 
 ```rust
-use lichtung_plot::{Chart, Theme};
-use polars::df;
+use lichtung_plot::{NumericValues, Plot, Theme};
 
-let frame = df!(
-    "dose" => [1.0, 2.0, 3.0],
-    "response" => [1.5, 2.5, 2.0],
-)?;
-
-let mut chart = Chart::new(&frame);
-chart
-    .x("dose")
-    .y("response")
+Plot::scatter(
+    NumericValues::new("dose", [1.0, 2.0, 3.0]),
+    NumericValues::new("response", [1.5, 2.5, 2.0]),
+)
     .theme(Theme::Publication)
-    .scatter();
-
-chart.render_to_svg(std::path::Path::new("response.svg"))?;
+    .svg("response.svg")?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -43,14 +34,20 @@ parent must already exist.
 To attach caller-computed pairwise results, construct plot-owned display data:
 
 ```rust
-use lichtung_plot::ComparisonAnnotation;
+use lichtung_plot::{CategoryValues, ComparisonAnnotation, NumericValues, Plot};
 
 let comparisons = [
     ComparisonAnnotation::new("control", "treatment", 0.01)
         .adjusted(0.02, "Holm"),
 ];
 
-chart.add_comparisons(comparisons);
+let plot = Plot::boxplot(
+    CategoryValues::new("group", ["control", "control", "treatment", "treatment"] )?,
+    NumericValues::new("response", [1.0, 1.5, 2.0, 2.5]),
+)
+.add_comparisons(comparisons);
+# let _ = plot;
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 The renderer validates and displays these values but does not perform or choose

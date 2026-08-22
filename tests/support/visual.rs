@@ -3,8 +3,11 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{BarAggregation, BarSpacing, Chart};
+use lichtung_plot::{BarAggregation, BarSpacing, Plot};
 use polars::prelude::*;
+
+#[path = "native.rs"]
+mod native;
 
 pub(super) fn fixture_df() -> DataFrame {
     let xs: Vec<f64> = (0..30).map(|i| f64::from(i) * 0.5).collect();
@@ -270,13 +273,16 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
     .unwrap();
     let dir = unique_dir("grouped-bar-spacing");
     let out = dir.join("bar.svg");
-    let mut chart = Chart::new(&df)
-        .group("series")
-        .hue("series")
-        .bar_aggregation(BarAggregation::Identity)
-        .bar_spacing(spacing);
-    let _ = chart.x("group").y("value").size(360, 260).bar();
-    chart.render_to_svg(&out).expect("bar render must succeed");
+    let chart = Plot::bar(
+        native::category(&df, "group"),
+        native::numeric(&df, "value"),
+    )
+    .group(native::category(&df, "series"))
+    .hue(native::category(&df, "series"))
+    .bar_aggregation(BarAggregation::Identity)
+    .bar_spacing(spacing)
+    .size(360, 260);
+    chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let mut bars = parse_polygon_bounds(&svg);
     bars.sort_by(|a, b| a.x.total_cmp(&b.x));
@@ -448,7 +454,7 @@ pub(super) fn circle_bounds(circles: &[(f64, f64)]) -> (f64, f64, f64, f64) {
 }
 
 pub(super) fn marginal_central_panel(
-    chart: &Chart<'_>,
+    chart: &Plot,
     right_w: f64,
     top_h: f64,
     gap: f64,

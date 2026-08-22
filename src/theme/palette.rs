@@ -49,7 +49,7 @@ define_themes! {
 /// layout grammar (whether to draw the frame, grid, ticks, etc.).
 ///
 /// Defaults are tuned so that
-/// `Chart::new(df).x("a").y("b").scatter()` (or any other plot
+/// `Plot::new(df).x("a").y("b").scatter()` (or any other plot
 /// kind) produces a publication-quality figure without the caller
 /// having to manually request decorations.
 ///

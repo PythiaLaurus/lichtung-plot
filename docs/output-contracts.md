@@ -2,18 +2,17 @@
 
 ## SVG
 
-SVG is the canonical scene and is always available. Output contains a stable
+SVG is always available and is rendered from one private canonical scene. Output contains a stable
 system-font fallback declaration, vector geometry, deterministic clip and
-gradient identifiers, and no embedded font data. In-memory and file rendering
-preserve the same scene bytes.
+gradient identifiers, and no embedded font data. A consuming `Output::svg` call
+can publish the same scene again without rerunning layout.
 
 ## Outlined SVG
 
-The `text-as-path` feature adds
-`RenderedSvgScene::svg_with_text_as_paths`. It converts the canonical scene's
-text to vector glyph paths using installed system fonts, verifies that no
-`<text>` elements remain, and returns a self-contained derived SVG. This output
-is not selectable or searchable and can differ across font environments.
+The `text-as-path` feature enables `.svg_text(SvgText::Paths)` before terminal
+output. It converts the canonical scene's text to vector glyph paths using
+installed system fonts and verifies that no `<text>` elements remain. This
+output is not selectable or searchable and can differ across font environments.
 
 ## PNG
 
@@ -42,9 +41,9 @@ rendering-engine changes.
 ## Atomicity
 
 SVG and PNG files are completed at sibling staging paths before publication.
-Combined output is not a portable multi-file transaction, but preflight and
-conversion failures occur before destination replacement and staging residue is
-removed.
+Each consuming `Plot`, `Canvas`, or `Output` call publishes one file
+independently. Preflight and conversion failures occur before destination
+replacement and staging residue is removed.
 
 ## Unsupported Output
 

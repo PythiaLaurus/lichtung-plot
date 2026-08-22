@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::render::backend::Backend;
 use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
 
@@ -14,12 +14,6 @@ mod lifecycle;
 mod output;
 mod validation;
 
-#[cfg(any(feature = "png", test))]
-pub(crate) use artifacts::paths_resolve_to_same_destination;
-#[cfg(any(feature = "png", windows))]
-pub(crate) use artifacts::publish_staged_pair;
-#[cfg(feature = "png")]
-pub(crate) use artifacts::reserve_staging_pair;
 pub(crate) use artifacts::{
     publish_staged, reserve_unique_sibling_temp_path, with_temporary_artifacts,
 };
@@ -30,7 +24,7 @@ thread_local! {
     static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-impl Chart<'_> {
+impl Plot {
     /// Render the selected plot through a caller-owned backend.
     ///
     /// This performs the canonical one-canvas lifecycle but does not create or
@@ -42,7 +36,7 @@ impl Chart<'_> {
     ///
     /// Returns an error when no plot kind has been selected, backend startup or
     /// finalization fails, or the selected renderer rejects its data or options.
-    pub fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+    pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         let kind = self
             .plot_kind()
             .ok_or_else(|| Error::Data("render called before selecting a plot kind".into()))?;
@@ -92,7 +86,6 @@ impl Chart<'_> {
             PlotKind::Regression => crate::plots::regression::render(self, context, backend),
             PlotKind::Marginal => crate::plots::marginal::render(self, context, backend),
             PlotKind::Matrix => crate::plots::matrix::render(self, context, backend),
-            PlotKind::MassSpectrum => crate::plots::mass_spectrum::render(self, context, backend),
             PlotKind::Beeswarm => crate::plots::beeswarm::render(self, context, backend),
             PlotKind::Waterfall => crate::plots::waterfall::render(self, context, backend),
         }?;
@@ -162,7 +155,7 @@ impl Chart<'_> {
     }
 }
 
-fn resolve_rendered_labels(chart: &Chart<'_>, result: &mut PlotRenderResult) -> Result<(), Error> {
+fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Result<(), Error> {
     if result.x_domain == AxisDomain::Categorical && result.x_tick_keys.is_none() {
         let raw = result
             .layout
@@ -224,7 +217,7 @@ fn resolve_rendered_labels(chart: &Chart<'_>, result: &mut PlotRenderResult) -> 
     clippy::cast_precision_loss,
     reason = "tick counts are bounded by the finite panel width and allocated tick vector"
 )]
-fn validate_axis_text(chart: &Chart<'_>, layout: &crate::layout::Layout) -> Result<(), Error> {
+fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<(), Error> {
     let palette = chart.palette();
     let panel = layout.projection.panel_box();
     let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;

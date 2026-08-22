@@ -3,13 +3,12 @@
 #![allow(clippy::cast_precision_loss)]
 
 use crate::Error;
-use polars::prelude::*;
 
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::PointStyle;
 use crate::theme::ThemePalette;
 use crate::ValueSort;
-use crate::{BarAggregation, Chart};
+use crate::{BarAggregation, Plot};
 
 /// Bar arrangement mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +68,7 @@ pub(crate) struct PreparedBars {
 
 /// Build prepared bar data from x/y and optional graphical group and hue channels.
 pub(crate) fn prepare<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
     mode: BarMode,
 ) -> Result<PreparedBars, Error> {
@@ -152,7 +151,7 @@ pub(crate) fn prepare<'a>(
 }
 
 fn apply_identity_significance(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: crate::data::PlotData<'_>,
     prepared: &mut PreparedBars,
     column: &str,
@@ -200,7 +199,7 @@ fn apply_identity_significance(
 }
 
 fn apply_identity_bounds(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: crate::data::PlotData<'_>,
     prepared: &mut PreparedBars,
     (lower_column, upper_column): (&str, &str),
@@ -263,7 +262,7 @@ fn apply_identity_bounds(
 }
 
 fn prepare_point_layers(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &PreparedBars,
     mode: BarMode,
 ) -> Result<Vec<PreparedBarPoint>, Error> {
@@ -279,18 +278,17 @@ fn prepare_point_layers(
     let mut points = Vec::new();
     for (layer_index, layer) in chart.bar_point_layers().iter().enumerate() {
         let context = format!("bar point layer {layer_index}");
-        if layer.group_column().is_some() != grouped {
+        if layer.group_values().is_some() != grouped {
             return Err(Error::Data(format!(
                 "{context}: layer graphical-group configuration must match the bar chart"
             )));
         }
-        let categories =
-            crate::data::strict_strings(layer.data(), layer.category_column(), &context)?;
+        let categories = crate::data::strict_category_values(layer.category_values(), &context)?;
         let groups = layer
-            .group_column()
-            .map(|column| crate::data::strict_strings(layer.data(), column, &context))
+            .group_values()
+            .map(|values| crate::data::strict_category_values(values, &context))
             .transpose()?;
-        let values = crate::data::strict_finite_f64(layer.data(), layer.value_column(), &context)?;
+        let values = crate::data::strict_numeric_values(layer.values(), &context)?;
         if categories.is_empty() || categories.len() != values.len() {
             return Err(Error::Data(format!(
                 "{context}: category and value columns must have equal non-zero lengths"
@@ -348,8 +346,8 @@ fn prepare_point_layers(
     reason = "one pass preserves source-row, facet, category, and graphical-group validation context"
 )]
 pub(crate) fn validate_aggregation_cells(
-    chart: &Chart<'_>,
-    data: &DataFrame,
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
     aggregation: BarAggregation,
 ) -> Result<(), Error> {
     let x_col = chart
@@ -360,6 +358,7 @@ pub(crate) fn validate_aggregation_cells(
         .ok_or_else(|| Error::Data("bar: y column not set".into()))?;
     let categories = crate::data::strict_strings(data, x_col, "bar")?;
     let values = crate::data::strict_finite_f64(data, y_col, "bar")?;
+    let category_name = data.column(x_col)?.name();
     let facet_columns = {
         let (row, column, wrap, _) = chart.facet_columns();
         [row, column, wrap]
@@ -370,6 +369,10 @@ pub(crate) fn validate_aggregation_cells(
     let facet_values = facet_columns
         .iter()
         .map(|column| crate::data::strict_strings(data, column, "bar"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let facet_names = facet_columns
+        .iter()
+        .map(|column| data.column(column).map(crate::data::DataColumn::name))
         .collect::<Result<Vec<_>, _>>()?;
     let mark_cells = (0..values.len())
         .map(|index| {
@@ -424,16 +427,16 @@ pub(crate) fn validate_aggregation_cells(
         )));
     }
     for (key, rows, finite) in cells {
-        let mut labels = facet_columns
+        let mut labels = facet_names
             .iter()
             .zip(&key)
             .map(|(column, level)| format!("facet {column}={level}"))
             .collect::<Vec<_>>();
         let category_index = facet_columns.len();
-        labels.push(format!("category {x_col}={}", key[category_index]));
-        if let Some(group_col) = chart.group_col() {
+        labels.push(format!("category {category_name}={}", key[category_index]));
+        if let Some(group_name) = chart.group_name() {
             labels.push(format!(
-                "graphical group {group_col}={}",
+                "graphical group {group_name}={}",
                 key[category_index + 1]
             ));
         }

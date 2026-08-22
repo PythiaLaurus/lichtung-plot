@@ -1,8 +1,8 @@
 # lichtung-plot
 
-`lichtung-plot` is a strongly typed scientific plotting library for Polars
-dataframes. It produces one canonical SVG scene, can convert its text to vector
-paths, and can rasterize that scene to PNG.
+`lichtung-plot` is a strongly typed scientific renderer for owned immutable
+display values. It publishes SVG directly and can reuse the same opaque rendered
+output for outlined SVG or PNG publication.
 
 This first standalone-boundary release intentionally has no dependency on the
 Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
@@ -11,17 +11,14 @@ precomputed inferential annotations as ordinary plotting data.
 The renderer is maintained in its own repository. Its architecture and output
 contracts live in [`specs/`](specs/); user guides live in [`docs/`](docs/).
 
-```rust
-use lichtung_plot::Chart;
-use polars::df;
+```rust,no_run
+use lichtung_plot::{NumericValues, Plot};
 
-let data = df!(
-    "x" => [1.0, 2.0, 3.0],
-    "y" => [1.5, 2.5, 2.0],
-)?;
-let mut chart = Chart::new(&data);
-chart.x("x").y("y").scatter();
-let svg = chart.render_to_svg_bytes()?;
+Plot::scatter(
+    NumericValues::new("x", [1.0, 2.0, 3.0]),
+    NumericValues::new("y", [1.5, 2.5, 2.0]),
+)
+.svg("scatter.svg")?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -39,9 +36,9 @@ family from that order. Exact text appearance therefore depends on the host's
 installed fonts, while chart data, geometry, layout, and SVG structure remain
 deterministic for the same inputs and environment.
 
-Call `RenderedSvgScene::svg_with_text_as_paths` when the SVG must carry glyph
-outlines instead of selectable `<text>` elements. This uses the same local font
-policy and embeds no font files.
+Configure `.svg_text(SvgText::Paths)` before `.svg(path)` when the SVG must carry
+glyph outlines instead of selectable `<text>` elements. This uses the same local
+font policy and embeds no font files.
 
 ## Features
 

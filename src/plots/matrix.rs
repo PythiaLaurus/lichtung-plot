@@ -30,7 +30,7 @@ use crate::render::backend::{
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
 use crate::Error;
-use crate::{Chart, LegendPosition};
+use crate::{LegendPosition, Plot};
 
 /// One graphical group for the matrix plot.
 struct HueGroup {
@@ -48,7 +48,7 @@ struct HueGroup {
 /// Returns a dummy `Layout` (the matrix is self-decorated) and
 /// legend entries (empty — legend is drawn internally).
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -163,8 +163,8 @@ pub(crate) fn render(
                 &groups,
                 column_index,
                 cols[column_index],
-                chart.group_col(),
-                chart.hue_col(),
+                chart.group_name(),
+                chart.hue_name(),
             )
         })
         .collect::<Result<_, _>>()?;
@@ -378,11 +378,11 @@ pub(crate) fn render(
     Ok(PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations())
 }
 
-pub(crate) fn panel_box(chart: &Chart<'_>) -> Result<crate::layout::PanelBox, Error> {
+pub(crate) fn panel_box(chart: &Plot) -> Result<crate::layout::PanelBox, Error> {
     Ok(matrix_figure_layout(chart)?.panel_box)
 }
 
-fn matrix_legend(chart: &Chart<'_>, hue_levels: &[String]) -> Result<Option<Legend>, Error> {
+fn matrix_legend(chart: &Plot, hue_levels: &[String]) -> Result<Option<Legend>, Error> {
     if hue_levels.len() <= 1 {
         return Ok(None);
     }
@@ -418,7 +418,7 @@ fn legend_total_width(legend: &Legend) -> f64 {
     legend.compute_box_width()
 }
 
-fn draw_title_block(chart: &Chart<'_>, backend: &mut dyn Backend) -> Result<(), Error> {
+fn draw_title_block(chart: &Plot, backend: &mut dyn Backend) -> Result<(), Error> {
     let palette = chart.palette();
     let mut title_block = TitleBlock::new().font_family(palette.font_family.clone());
     if palette.show_title {
@@ -443,7 +443,7 @@ fn draw_title_block(chart: &Chart<'_>, backend: &mut dyn Backend) -> Result<(), 
     Ok(())
 }
 
-fn matrix_figure_layout(chart: &Chart<'_>) -> Result<FigureLayout, Error> {
+fn matrix_figure_layout(chart: &Plot) -> Result<FigureLayout, Error> {
     let palette = chart.palette();
     FigureLayout::measured_single_panel(
         chart.width(),
@@ -552,7 +552,7 @@ fn draw_diagonal_kde(
 
 /// Build graphical groups while preserving hue as color-only metadata.
 fn build_groups(
-    chart: &Chart<'_>,
+    chart: &Plot,
     cols: &[&str],
     data: crate::data::PlotData<'_>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
@@ -598,7 +598,7 @@ fn build_groups(
     if groups.is_empty() {
         return Err(Error::Data("matrix: no valid finite rows".into()));
     }
-    validate_group_kdes(&mut groups, cols, chart.group_col(), chart.hue_col())?;
+    validate_group_kdes(&mut groups, cols, chart.group_name(), chart.hue_name())?;
     Ok((groups, hue_levels))
 }
 

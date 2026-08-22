@@ -3,7 +3,7 @@
 use crate::Error;
 
 use super::backend::NullBackend;
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::figure::allocate_composed_grid;
 use crate::render::backend::Backend;
@@ -14,7 +14,7 @@ mod legend;
 mod planning;
 mod rendering;
 
-impl Chart<'_> {
+impl Plot {
     pub(super) fn render_facets(
         &self,
         kind: PlotKind,

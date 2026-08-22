@@ -14,11 +14,5 @@ pub enum Error {
     Render(String),
 }
 
-impl From<polars::error::PolarsError> for Error {
-    fn from(error: polars::error::PolarsError) -> Self {
-        Self::Data(error.to_string())
-    }
-}
-
 /// Result returned by plotting operations.
 pub type Result<T> = std::result::Result<T, Error>;

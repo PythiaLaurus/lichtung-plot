@@ -22,7 +22,7 @@ use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::quantile;
-use crate::{Chart, RawOverlay};
+use crate::{Plot, RawOverlay};
 
 #[derive(Debug, PartialEq)]
 struct BoxSummary {
@@ -51,7 +51,7 @@ struct BoxStats {
 /// so the orchestrator can apply decorations (frame / grid /
 /// axes / legend). Categorical x-ticks carry the group labels.
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {

@@ -4,13 +4,43 @@ use std::collections::HashSet;
 
 use crate::Error;
 
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::spec::{
     BarAggregation, HistogramBins, HistogramComposite, HistogramStat, LineMode, LinePathStyle,
     PlotKind, RegressionBand, ViolinLayout,
 };
 
-impl Chart<'_> {
+impl Plot {
+    pub(crate) fn validate_value_alignment(&self) -> Result<(), Error> {
+        let expected = self.row_count();
+        for values in self.aligned_columns() {
+            if values.len() != expected {
+                return Err(Error::Data(format!(
+                    "plot value {:?} has length {}, expected {expected}",
+                    values.name(),
+                    values.len()
+                )));
+            }
+        }
+        if let Some(rows) = self.source_row_map() {
+            if rows.len() != expected {
+                return Err(Error::Data(format!(
+                    "plot source-row map has length {}, expected {expected}",
+                    rows.len()
+                )));
+            }
+        }
+        if let Some(rows) = self.raw_overlay_source_row_map() {
+            if rows.len() != expected {
+                return Err(Error::Data(format!(
+                    "raw-overlay source-row map has length {}, expected {expected}",
+                    rows.len()
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn validate_facet_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         let (row, column, wrap, wrap_columns) = self.facet_columns();
         if wrap.is_some() && (row.is_some() || column.is_some()) {
@@ -231,7 +261,7 @@ impl Chart<'_> {
                         .into(),
                 ));
             }
-            if self.source_row_map().is_some() || self.raw_overlay_source_row_col().is_some() {
+            if self.source_row_map().is_some() || self.raw_overlay_source_row_map().is_some() {
                 return Err(Error::Data(
                     "histogram: precomputed composite geometry does not accept source-row inputs"
                         .into(),
@@ -265,7 +295,7 @@ impl Chart<'_> {
                         .into(),
                 ));
             }
-            if self.source_row_map().is_some() || self.raw_overlay_source_row_col().is_some() {
+            if self.source_row_map().is_some() || self.raw_overlay_source_row_map().is_some() {
                 return Err(Error::Data(
                     "violin: precomputed raincloud geometry does not accept source-row inputs"
                         .into(),
@@ -314,7 +344,7 @@ impl Chart<'_> {
         let raincloud_uses_source_rows = kind == PlotKind::Violin
             && self.violin_layout_spec() == ViolinLayout::Raincloud
             && self.raincloud_geometry_input().is_none();
-        if self.raw_overlay_source_row_col().is_some()
+        if self.raw_overlay_source_row_map().is_some()
             && !self.raw_overlay_spec().is_visible()
             && !raincloud_uses_source_rows
         {
@@ -456,15 +486,6 @@ impl Chart<'_> {
                 "interaction: markers and connectors cannot both be hidden".into(),
             ));
         }
-        if kind == PlotKind::Marginal
-            && !self.marginal_coords().is_empty()
-            && (self.hue_col().is_some() || self.group_col().is_some())
-        {
-            return Err(Error::Data(
-                "marginal: group and hue are not supported with injected marginal coordinates because the coordinates have no aligned categorical source rows"
-                    .into(),
-            ));
-        }
         if matches!(kind, PlotKind::Boxplot | PlotKind::Violin)
             && self
                 .hue_col()
@@ -592,7 +613,7 @@ impl Chart<'_> {
                 "{family}: interval bound columns are not supported"
             )));
         }
-        if self.waterfall_total_cols().is_some() && kind != PlotKind::Waterfall {
+        if self.waterfall_totals().is_some() && kind != PlotKind::Waterfall {
             return Err(Error::Data(format!(
                 "{family}: waterfall base and terminal channels are not supported"
             )));
@@ -600,16 +621,6 @@ impl Chart<'_> {
         if self.waterfall_labels_spec().is_some() && kind != PlotKind::Waterfall {
             return Err(Error::Data(format!(
                 "{family}: waterfall annotation labels are supported only by Waterfall"
-            )));
-        }
-        if !self.peaks().is_empty() && kind != PlotKind::MassSpectrum {
-            return Err(Error::Data(format!(
-                "{family}: supplemental mass-spectrum peaks are not supported"
-            )));
-        }
-        if !self.marginal_coords().is_empty() && kind != PlotKind::Marginal {
-            return Err(Error::Data(format!(
-                "{family}: injected marginal coordinates are not supported"
             )));
         }
         if kind == PlotKind::Matrix {
@@ -658,7 +669,7 @@ impl Chart<'_> {
         let source = self.data().column(x_column).map_err(|error| {
             Error::Data(format!("line trajectory: column {x_column:?}: {error}"))
         })?;
-        if source.dtype().is_numeric() {
+        if source.is_numeric() {
             return Ok(());
         }
         if self.x_axis_spec().limits.is_some() {
@@ -683,7 +694,7 @@ impl Chart<'_> {
             .data()
             .column(x_column)
             .map_err(|error| Error::Data(format!("line path: column {x_column:?}: {error}")))?;
-        if source.dtype().is_numeric() {
+        if source.is_numeric() {
             Ok(())
         } else {
             Err(Error::Data(

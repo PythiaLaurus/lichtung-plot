@@ -1,11 +1,11 @@
 use crate::Error;
 
-use super::Chart;
+use super::Plot;
 use crate::layout::{FigureLayout, FigureLayoutSpec, Layout, PanelBox, TextBlock};
 use crate::spec::PlotKind;
 use crate::theme::ThemePalette;
 
-impl Chart<'_> {
+impl Plot {
     /// Borrow the active theme palette.
     #[must_use]
     pub fn palette(&self) -> ThemePalette {
@@ -18,7 +18,7 @@ impl Chart<'_> {
         let mut figure = self
             .measured_figure_layout()
             .unwrap_or_else(|_| self.resolve_figure_layout());
-        let Some(kind) = self.plot_kind.filter(|_| !self.has_facets()) else {
+        let Some(kind) = self.kind.filter(|_| !self.has_facets()) else {
             return figure;
         };
         if kind == PlotKind::Matrix {
@@ -71,7 +71,7 @@ impl Chart<'_> {
     }
 
     fn axis_label_presence(&self) -> (bool, bool) {
-        self.plot_kind.map_or((false, false), |kind| {
+        self.kind.map_or((false, false), |kind| {
             let (x, y) = self.resolved_axis_labels(kind);
             (!x.is_empty(), !y.is_empty())
         })
@@ -103,7 +103,7 @@ impl Chart<'_> {
         figure: &mut FigureLayout,
         checked: bool,
     ) -> Result<(), Error> {
-        let Some(kind) = self.plot_kind else {
+        let Some(kind) = self.kind else {
             return Ok(());
         };
         let baseline = self.axis_title_line_counts(kind, figure.panel_box)?;

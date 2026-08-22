@@ -8,7 +8,7 @@ use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, QqLine};
 use crate::stats::distribution::{quantile, standard_normal_quantile};
-use crate::Chart;
+use crate::Plot;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LineGeometry {
@@ -24,7 +24,7 @@ struct PreparedQq {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {

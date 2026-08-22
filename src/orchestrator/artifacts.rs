@@ -5,18 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::Error;
 
-#[cfg(any(feature = "png", test))]
-use crate::output_path::destination_identity;
-
 pub(super) static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-#[cfg(any(feature = "png", test))]
-pub(crate) fn paths_resolve_to_same_destination(
-    first: &Path,
-    second: &Path,
-) -> Result<bool, Error> {
-    Ok(destination_identity(first)? == destination_identity(second)?)
-}
 
 pub(crate) fn reserve_unique_sibling_temp_path(
     path: &Path,
@@ -33,24 +22,6 @@ pub(crate) fn reserve_unique_sibling_temp_path(
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),
         }
-    }
-}
-
-#[cfg(feature = "png")]
-pub(crate) fn reserve_staging_pair(
-    first_target: &Path,
-    first_extension: &str,
-    second_target: &Path,
-    second_extension: &str,
-) -> Result<(PathBuf, PathBuf), Error> {
-    let first = reserve_unique_sibling_temp_path(first_target, first_extension)?;
-    match reserve_unique_sibling_temp_path(second_target, second_extension) {
-        Ok(second) => Ok((first, second)),
-        Err(error) => crate::render::backend::finish_scope(
-            Err(error),
-            remove_if_present(&first).map_err(Error::Io),
-            "partial staging reservation",
-        ),
     }
 }
 
@@ -82,7 +53,7 @@ pub(crate) fn publish_staged(staged: &Path, final_path: &Path) -> Result<(), Err
     }
 }
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 pub(crate) fn publish_staged_pair<const N: usize>(paths: [(&Path, &Path); N]) -> Result<(), Error> {
     for (_, final_path) in paths {
         if final_path.exists() && !std::fs::metadata(final_path)?.is_file() {
@@ -126,7 +97,7 @@ pub(crate) fn publish_staged_pair<const N: usize>(paths: [(&Path, &Path); N]) ->
     Ok(())
 }
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 pub(super) fn finish_committed_publication(
     backups: &[(PathBuf, PathBuf)],
     mut remove: impl FnMut(&Path) -> std::io::Result<()>,
@@ -136,7 +107,7 @@ pub(super) fn finish_committed_publication(
     }
 }
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 fn rollback_publication(
     published: &[PathBuf],
     backups: &[(PathBuf, PathBuf)],
@@ -146,7 +117,7 @@ fn rollback_publication(
     })
 }
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 fn rollback_publication_with(
     published: &[PathBuf],
     backups: &[(PathBuf, PathBuf)],
@@ -171,7 +142,7 @@ fn rollback_publication_with(
     cleanup_result(&failures, "artifact publication rollback")
 }
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
     let mut failures = Vec::new();
     for (backup, final_path) in backups.iter().rev() {
@@ -237,7 +208,7 @@ fn cleanup_result(failures: &[String], action: &str) -> Result<(), Error> {
     }
 }
 
-#[cfg(all(test, feature = "png"))]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 

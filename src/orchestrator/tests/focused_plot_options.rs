@@ -1,6 +1,6 @@
 use polars::prelude::{DataFrame, NamedFrom, Series};
 
-use super::{Chart, PanelBox, PlotKind, RecordingBackend};
+use super::{svg_bytes, PanelBox, Plot, PlotKind, RecordingBackend};
 use crate::render::backend::{TextAnchor, TextStyle};
 use crate::{CategoricalColors, LineMode, LinePathStyle, NumericLabelFormat, WaterfallLabels};
 
@@ -21,14 +21,15 @@ fn path_data() -> DataFrame {
     .unwrap()
 }
 
-fn path_chart(data: &DataFrame, style: LinePathStyle) -> Chart<'_> {
-    let mut chart = Chart::new(data)
-        .group("path")
-        .hue("hue")
-        .line_mode(LineMode::Path)
-        .line_path_style(style);
-    let _ = chart.x("x").y("y").line();
-    chart
+fn path_chart(data: &DataFrame, style: LinePathStyle) -> Plot {
+    Plot::line(
+        crate::test_support::numeric(data, "x"),
+        crate::test_support::numeric(data, "y"),
+    )
+    .group(crate::test_support::category(data, "path"))
+    .hue(crate::test_support::category(data, "hue"))
+    .line_mode(LineMode::Path)
+    .line_path_style(style)
 }
 
 #[test]
@@ -172,12 +173,14 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
 #[test]
 fn trajectory_still_rejects_hidden_markers_before_backend_begin() {
     let data = path_data();
-    let mut chart = Chart::new(&data)
-        .group("path")
-        .hue("hue")
-        .line_mode(LineMode::Trajectory)
-        .markers(false);
-    let _ = chart.x("x").y("y").line();
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .group(crate::test_support::category(&data, "path"))
+    .hue(crate::test_support::category(&data, "hue"))
+    .line_mode(LineMode::Trajectory)
+    .markers(false);
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
@@ -205,18 +208,10 @@ fn hue_path_rejects_constant_hue_absent_from_resolved_order() {
 #[test]
 fn neutral_path_default_is_byte_inert_and_hue_path_bytes_are_deterministic() {
     let data = path_data();
-    let default = path_chart(&data, LinePathStyle::default())
-        .render_to_svg_bytes()
-        .unwrap();
-    let explicit_neutral = path_chart(&data, LinePathStyle::Neutral)
-        .render_to_svg_bytes()
-        .unwrap();
-    let first_hue = path_chart(&data, LinePathStyle::Hue)
-        .render_to_svg_bytes()
-        .unwrap();
-    let second_hue = path_chart(&data, LinePathStyle::Hue)
-        .render_to_svg_bytes()
-        .unwrap();
+    let default = svg_bytes(path_chart(&data, LinePathStyle::default()));
+    let explicit_neutral = svg_bytes(path_chart(&data, LinePathStyle::Neutral));
+    let first_hue = svg_bytes(path_chart(&data, LinePathStyle::Hue));
+    let second_hue = svg_bytes(path_chart(&data, LinePathStyle::Hue));
 
     assert_eq!(default, explicit_neutral);
     assert_eq!(first_hue, second_hue);
@@ -245,12 +240,15 @@ fn beeswarm_data(colors: &[f64]) -> DataFrame {
     .unwrap()
 }
 
-fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Chart<'_> {
-    let mut chart = Chart::new(data).color("color");
+fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Plot {
+    let mut chart = Plot::beeswarm(
+        crate::test_support::category(data, "category"),
+        crate::test_support::numeric(data, "x"),
+        crate::test_support::numeric(data, "color"),
+    );
     if let Some((minimum, maximum)) = limits {
         chart = chart.beeswarm_color_limits(minimum, maximum);
     }
-    let _ = chart.x("x").y("category").beeswarm();
     chart
 }
 
@@ -330,10 +328,8 @@ fn beeswarm_accepts_adjacent_and_opposite_extreme_finite_color_limits() {
 #[test]
 fn beeswarm_auto_domain_matches_the_same_explicit_domain_byte_for_byte() {
     let data = beeswarm_data(&[0.1, 1.0]);
-    let automatic = beeswarm_chart(&data, None).render_to_svg_bytes().unwrap();
-    let explicit = beeswarm_chart(&data, Some((0.1, 1.0)))
-        .render_to_svg_bytes()
-        .unwrap();
+    let automatic = svg_bytes(beeswarm_chart(&data, None));
+    let explicit = svg_bytes(beeswarm_chart(&data, Some((0.1, 1.0))));
 
     assert_eq!(automatic, explicit);
 }
@@ -351,12 +347,16 @@ fn waterfall_data() -> DataFrame {
     .unwrap()
 }
 
-fn waterfall_chart(data: &DataFrame, labels: Option<WaterfallLabels>) -> Chart<'_> {
-    let mut chart = Chart::new(data).waterfall_totals("base", "terminal");
+fn waterfall_chart(data: &DataFrame, labels: Option<WaterfallLabels>) -> Plot {
+    let mut chart = Plot::waterfall(
+        crate::test_support::category(data, "step"),
+        crate::test_support::numeric(data, "delta"),
+        crate::test_support::constant_numeric(data, "base"),
+        crate::test_support::constant_numeric(data, "terminal"),
+    );
     if let Some(labels) = labels {
         chart = chart.waterfall_labels(labels);
     }
-    let _ = chart.x("step").y("delta").waterfall();
     chart
 }
 
@@ -373,14 +373,13 @@ fn waterfall_labels_are_nonempty_verbatim_and_replace_only_configured_text() {
         assert!(WaterfallLabels::new(base, terminal).is_err());
     }
     let data = waterfall_data();
-    let defaults =
-        String::from_utf8(waterfall_chart(&data, None).render_to_svg_bytes().unwrap()).unwrap();
+    let defaults = String::from_utf8(svg_bytes(waterfall_chart(&data, None))).unwrap();
     let labels = WaterfallLabels::new("Expected output", "Final prediction").unwrap();
     assert_eq!(labels.base(), "Expected output");
     assert_eq!(labels.terminal(), "Final prediction");
     let custom_chart = waterfall_chart(&data, Some(labels));
-    let first = custom_chart.render_to_svg_bytes().unwrap();
-    let second = custom_chart.render_to_svg_bytes().unwrap();
+    let first = svg_bytes(custom_chart.clone());
+    let second = svg_bytes(custom_chart);
     let custom = String::from_utf8(first.clone()).unwrap();
 
     assert!(defaults.contains(">base 10.000</text>"));
@@ -405,8 +404,7 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
     )
     .unwrap();
     let labels = WaterfallLabels::new("Expected model output", "Final model prediction").unwrap();
-    let mut chart = waterfall_chart(&data, Some(labels));
-    let _ = chart.size(520, 280);
+    let chart = waterfall_chart(&data, Some(labels)).size(520, 280);
     let outer_panel = chart.figure_layout().panel_box;
     let mut backend = RecordingBackend::default();
 
@@ -451,10 +449,12 @@ fn affected_detail_text_uses_publication_detail_typography() {
         ],
     )
     .unwrap();
-    let mut heatmap = Chart::new(&heatmap_data)
-        .color("value")
-        .color_label("Heatmap detail");
-    let _ = heatmap.x("column").y("row").heatmap();
+    let heatmap = Plot::heatmap(
+        crate::test_support::category(&heatmap_data, "column"),
+        crate::test_support::category(&heatmap_data, "row"),
+        crate::test_support::numeric(&heatmap_data, "value"),
+    )
+    .color_label("Heatmap detail");
     let mut heatmap_backend = RecordingBackend::default();
     heatmap
         .render_kind(PlotKind::Heatmap, &mut heatmap_backend)
@@ -468,9 +468,11 @@ fn affected_detail_text_uses_publication_detail_typography() {
         ],
     )
     .unwrap();
-    let mut coefficient = Chart::new(&estimate_data)
-        .estimate_labels(NumericLabelFormat::with_suffix(2, " detail").unwrap());
-    let _ = coefficient.x("estimate").y("term").coefficient();
+    let coefficient = Plot::coefficient(
+        crate::test_support::category(&estimate_data, "term"),
+        crate::test_support::numeric(&estimate_data, "estimate"),
+    )
+    .estimate_labels(NumericLabelFormat::with_suffix(2, " detail").unwrap());
     let mut coefficient_backend = RecordingBackend::default();
     coefficient
         .render_kind(PlotKind::Coefficient, &mut coefficient_backend)
@@ -521,14 +523,20 @@ fn rectangles_intersect(left: PanelBox, right: PanelBox) -> bool {
 fn line_path_style_requires_path_mode_and_hue_before_backend_begin() {
     let data = path_data();
     let cases = [
-        Chart::new(&data).line_path_style(LinePathStyle::Hue),
-        Chart::new(&data)
-            .group("path")
-            .line_mode(LineMode::Path)
-            .line_path_style(LinePathStyle::Hue),
+        Plot::line(
+            crate::test_support::numeric(&data, "x"),
+            crate::test_support::numeric(&data, "y"),
+        )
+        .line_path_style(LinePathStyle::Hue),
+        Plot::line(
+            crate::test_support::numeric(&data, "x"),
+            crate::test_support::numeric(&data, "y"),
+        )
+        .group(crate::test_support::category(&data, "path"))
+        .line_mode(LineMode::Path)
+        .line_path_style(LinePathStyle::Hue),
     ];
-    for mut chart in cases {
-        let _ = chart.x("x").y("y").line();
+    for chart in cases {
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
 
@@ -542,11 +550,18 @@ fn focused_options_are_rejected_by_unrelated_plot_kinds() {
     let data = waterfall_data();
     let labels = WaterfallLabels::new("Expected output", "Final prediction").unwrap();
     let cases = [
-        Chart::new(&data).beeswarm_color_limits(0.0, 1.0),
-        Chart::new(&data).waterfall_labels(labels),
+        Plot::scatter(
+            crate::test_support::numeric(&data, "base"),
+            crate::test_support::numeric(&data, "terminal"),
+        )
+        .beeswarm_color_limits(0.0, 1.0),
+        Plot::scatter(
+            crate::test_support::numeric(&data, "base"),
+            crate::test_support::numeric(&data, "terminal"),
+        )
+        .waterfall_labels(labels),
     ];
-    for mut chart in cases {
-        let _ = chart.x("base").y("terminal").scatter();
+    for chart in cases {
         let mut backend = RecordingBackend::default();
         let error = chart
             .render_kind(PlotKind::Scatter, &mut backend)

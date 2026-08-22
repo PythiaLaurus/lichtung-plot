@@ -11,13 +11,12 @@
 )]
 
 use crate::Error;
-use polars::prelude::{ChunkCompareEq, PlSmallStr, Scalar};
 
 use crate::decorations::legend::LegendEntry;
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::Chart;
+use crate::Plot;
 
 /// Render a scatter plot of the chart's `x_col` vs `y_col`.
 ///
@@ -30,7 +29,7 @@ use crate::Chart;
 /// `Error::Data` if either column is missing or
 /// non-castable to f64.
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -56,10 +55,7 @@ pub(crate) fn render(
     } else {
         Vec::new()
     };
-    hue_keys.sort_by_key(|key| {
-        let label = crate::data::categorical_value_text(key);
-        chart.hue_color_index(&label, usize::MAX)
-    });
+    hue_keys.sort_by_key(|key| chart.hue_color_index(key, usize::MAX));
     let x_range = crate::layout::continuous_auto_range((xmin, xmax), chart.x_axis_spec());
     let y_range = crate::layout::continuous_auto_range((ymin, ymax), chart.y_axis_spec());
     let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
@@ -80,25 +76,15 @@ pub(crate) fn render(
     let mut legend_entries = Vec::new();
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if let Some(hue_col) = chart.hue_col() {
-            let hue_series = df.column(hue_col)?;
-            let hue_series = hue_series.as_series().ok_or_else(|| {
-                Error::Data(format!("scatter: hue column {hue_col} is not a Series"))
-            })?;
-            for (i, key_static) in hue_keys.into_iter().enumerate() {
-                let label = crate::data::categorical_value_text(&key_static);
+            let hues = crate::data::strict_strings(df, hue_col, "scatter")?;
+            let aligned = crate::data::aligned_finite_rows(df, x_col, y_col, "scatter")?;
+            for (i, label) in hue_keys.into_iter().enumerate() {
                 let color = palette.colors[chart.hue_color_index(&label, i) % palette.colors.len()];
                 let style = chart.point_style(color, 3);
-                let dtype = key_static.dtype();
-                let scalar = Scalar::new(dtype, key_static);
-                let key_series = scalar.into_series(PlSmallStr::EMPTY);
-                let mask = hue_series.equal(&key_series)?;
-                let group = df.filter(&mask)?;
-
-                let group_points =
-                    crate::data::aligned_finite_f64(&group, x_col, y_col, "scatter")?;
-                let pts: Vec<Point2D> = group_points
+                let pts: Vec<Point2D> = aligned
                     .iter()
-                    .map(|(x, y)| {
+                    .filter(|(row, _, _)| hues[*row] == label)
+                    .map(|(_, x, y)| {
                         let (px, py) = proj.project(*x, *y);
                         Point2D::new(px, py)
                     })

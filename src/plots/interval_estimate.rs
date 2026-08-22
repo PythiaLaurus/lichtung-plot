@@ -10,7 +10,7 @@ use crate::spec::{
     AxisScale, CoefficientSignificanceMark, EstimateStatus, FacetScales, IntervalKind,
     PlotRenderContext, PlotRenderResult,
 };
-use crate::Chart;
+use crate::Plot;
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
 
@@ -26,7 +26,7 @@ pub(crate) struct EstimateTuple {
     reason = "one preparation boundary keeps exact status parsing and complete/null tuple validation together"
 )]
 pub(crate) fn prepare_estimate_tuples(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: crate::data::PlotData<'_>,
     family: &str,
     require_intervals: bool,
@@ -177,12 +177,12 @@ pub(crate) fn estimate_data_range(estimates: &[Option<EstimateTuple>]) -> Option
 }
 
 pub(crate) fn fixed_facet_estimate_tuples(
-    chart: &Chart<'_>,
+    chart: &Plot,
     panel_data: crate::data::PlotData<'_>,
     family: &str,
     require_intervals: bool,
 ) -> Result<Option<Vec<Option<EstimateTuple>>>, Error> {
-    if panel_data.is_frame(chart.data())
+    if panel_data.is_full_plot()
         || !matches!(
             chart.facet_scales_spec(),
             FacetScales::Fixed | FacetScales::FreeY
@@ -191,15 +191,14 @@ pub(crate) fn fixed_facet_estimate_tuples(
         return Ok(None);
     }
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.as_deref().map_or_else(
-        || crate::data::PlotData::new(chart.data()),
-        |rows| crate::data::PlotData::with_source_rows(chart.data(), rows),
-    );
+    let data = source_rows
+        .as_deref()
+        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     prepare_estimate_tuples(chart, data, family, require_intervals).map(Some)
 }
 
 pub(crate) fn draw_not_estimable(
-    chart: &Chart<'_>,
+    chart: &Plot,
     layout: &Layout,
     y: f64,
     vertical_guide_x: Option<f64>,
@@ -274,7 +273,7 @@ fn not_estimable_text_x(
     reason = "validated row counts and bounded non-negative panel coordinates are converted to plot coordinates"
 )]
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
     family: &'static str,

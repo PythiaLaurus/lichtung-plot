@@ -9,7 +9,7 @@ use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
-use crate::Chart;
+use crate::Plot;
 
 const MIN_GRID_POINTS: usize = 128;
 const MAX_GRID_POINTS: usize = 2_048;
@@ -31,7 +31,7 @@ struct PreparedDensity {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -125,7 +125,7 @@ fn prepare_density<'a>(
 }
 
 fn prepare_density_for_chart<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
     value_col: &str,
 ) -> Result<PreparedDensity, Error> {
@@ -425,6 +425,26 @@ mod tests {
         DataFrame::new(row_count, columns).unwrap()
     }
 
+    fn prepare_frame(
+        data: &DataFrame,
+        grouped: bool,
+        hued: bool,
+    ) -> Result<PreparedDensity, Error> {
+        let mut plot = Plot::density(crate::test_support::numeric(data, "value"));
+        if grouped {
+            plot = plot.group(crate::test_support::category(data, "group"));
+        }
+        if hued {
+            plot = plot.hue(crate::test_support::category(data, "group"));
+        }
+        prepare_density(
+            &plot,
+            crate::data::X,
+            grouped.then_some(crate::data::GROUP),
+            hued.then_some(crate::data::HUE),
+        )
+    }
+
     #[test]
     fn grouped_density_preserves_hue_order_and_shared_axis() {
         let data = frame(
@@ -432,7 +452,7 @@ mod tests {
             Some(&["b", "a", "b", "a", "b", "a"]),
         );
 
-        let prepared = prepare_density(&data, "value", Some("group"), Some("group")).unwrap();
+        let prepared = prepare_frame(&data, true, true).unwrap();
 
         assert_eq!(prepared.curves[0].hue.as_deref(), Some("b"));
         assert_eq!(prepared.curves[1].hue.as_deref(), Some("a"));
@@ -454,7 +474,7 @@ mod tests {
             &[0.0, 1.0, 2.0, 10.0, 11.0, 12.0],
             Some(&["a", "a", "a", "b", "b", "b"]),
         );
-        let prepared = prepare_density(&data, "value", Some("group"), Some("group")).unwrap();
+        let prepared = prepare_frame(&data, true, true).unwrap();
         let integrals = prepared
             .curves
             .iter()
@@ -471,7 +491,7 @@ mod tests {
         let data = frame(&samples, None);
         let bandwidth = strict_scott_bandwidth(&samples).unwrap();
 
-        let prepared = prepare_density(&data, "value", None, None).unwrap();
+        let prepared = prepare_frame(&data, false, false).unwrap();
 
         assert!((prepared.curves[0].grid[0] - (samples[0] - 3.0 * bandwidth)).abs() < 1e-12);
         assert!(
@@ -489,7 +509,7 @@ mod tests {
             Some(&["sharp", "sharp", "sharp", "broad", "broad", "broad"]),
         );
 
-        let prepared = prepare_density(&data, "value", Some("group"), Some("group")).unwrap();
+        let prepared = prepare_frame(&data, true, true).unwrap();
         let sharp = &prepared.curves[0];
         let broad = &prepared.curves[1];
 
@@ -505,7 +525,7 @@ mod tests {
     fn density_rejects_small_group_with_label() {
         let data = frame(&[0.0, 1.0, 2.0], Some(&["small", "ok", "ok"]));
 
-        let error = prepare_density(&data, "value", Some("group"), Some("group")).unwrap_err();
+        let error = prepare_frame(&data, true, true).unwrap_err();
 
         assert!(error
             .to_string()
@@ -516,7 +536,7 @@ mod tests {
     fn density_rejects_constant_group_with_label() {
         let data = frame(&[1.0, 1.0, 2.0, 3.0], Some(&["flat", "flat", "ok", "ok"]));
 
-        let error = prepare_density(&data, "value", Some("group"), Some("group")).unwrap_err();
+        let error = prepare_frame(&data, true, true).unwrap_err();
 
         assert!(error
             .to_string()
@@ -528,7 +548,7 @@ mod tests {
         let base = 1e300_f64;
         let data = frame(&[base, base.next_up(), base.next_up().next_up()], None);
 
-        let error = prepare_density(&data, "value", None, None).unwrap_err();
+        let error = prepare_frame(&data, false, false).unwrap_err();
 
         assert!(error
             .to_string()
@@ -540,7 +560,7 @@ mod tests {
         let base = 1e300_f64;
         let data = frame(&[base, base + 1e287, base + 2e287], None);
 
-        let prepared = prepare_density(&data, "value", None, None).unwrap();
+        let prepared = prepare_frame(&data, false, false).unwrap();
 
         assert!(prepared.curves[0]
             .grid
@@ -557,7 +577,7 @@ mod tests {
         let extreme = f64::MAX * 0.2;
         let data = frame(&[-extreme, extreme], None);
 
-        let prepared = prepare_density(&data, "value", None, None).unwrap();
+        let prepared = prepare_frame(&data, false, false).unwrap();
         let curve = &prepared.curves[0];
 
         assert!((prepared.x_range.1 - prepared.x_range.0).is_infinite());

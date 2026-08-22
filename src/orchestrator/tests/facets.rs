@@ -1,28 +1,46 @@
 use polars::prelude::NamedFrom;
 
 use super::{
-    configured_chart, fixture, valid_grouped_bar_fixture, Chart, DataFrame, PlotKind,
+    configured_chart, fixture, valid_grouped_bar_fixture, DataFrame, Plot, PlotKind,
     RecordingBackend, Series,
 };
+
+fn bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+    let category = crate::test_support::category(data, "group");
+    let value = crate::test_support::numeric(data, "y");
+    match kind {
+        PlotKind::Bar => Plot::bar(category, value),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value),
+        _ => panic!("unsupported bar kind {kind:?}"),
+    }
+}
+
+fn grouped_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+    bar_chart(data, kind)
+        .group(crate::test_support::category(data, "hue"))
+        .hue(crate::test_support::category(data, "hue"))
+}
 
 #[test]
 fn composed_per_panel_outside_legends_remain_in_their_cells() {
     let data = fixture();
-    let mut left = Chart::new(&data).group("hue").hue("hue");
-    let _ = left
-        .x("x")
-        .y("y")
-        .legend_position(crate::LegendPosition::OutsideRight)
-        .size(900, 360)
-        .line();
-    let mut right = Chart::new(&data).group("hue").hue("hue");
-    let _ = right
-        .x("x")
-        .y("y")
-        .legend_position(crate::LegendPosition::OutsideRight)
-        .size(900, 360)
-        .line();
-    let figure = crate::Figure::grid(1, 2)
+    let left = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .group(crate::test_support::category(&data, "hue"))
+    .hue(crate::test_support::category(&data, "hue"))
+    .legend_position(crate::LegendPosition::OutsideRight)
+    .size(900, 360);
+    let right = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .group(crate::test_support::category(&data, "hue"))
+    .hue(crate::test_support::category(&data, "hue"))
+    .legend_position(crate::LegendPosition::OutsideRight)
+    .size(900, 360);
+    let figure = crate::Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, left)
         .unwrap()
@@ -50,13 +68,14 @@ fn facets_reserve_one_complete_outside_legend_band() {
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data).hue("hue").facet_col("facet");
-    let _ = chart
-        .x("x")
-        .y("y")
-        .legend_position(crate::LegendPosition::OutsideRight)
-        .size(760, 420)
-        .scatter();
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .hue(crate::test_support::category(&data, "hue"))
+    .facet_col(crate::test_support::category(&data, "facet"))
+    .legend_position(crate::LegendPosition::OutsideRight)
+    .size(760, 420);
     let mut backend = RecordingBackend::default();
 
     chart.render_with_backend(&mut backend).unwrap();
@@ -118,8 +137,13 @@ fn dense_fixed_facets_share_planner_headroom() {
         ],
     )
     .unwrap();
-    let mut chart = Chart::new(&data).hue("hue").facet_col("facet");
-    let _ = chart.x("x").y("y").size(760, 420).scatter();
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .hue(crate::test_support::category(&data, "hue"))
+    .facet_col(crate::test_support::category(&data, "facet"))
+    .size(760, 420);
     let mut backend = RecordingBackend::default();
 
     chart.render_with_backend(&mut backend).unwrap();
@@ -173,7 +197,10 @@ fn every_bar_family_rejects_ignored_bounds_before_backend_begin() {
         PlotKind::StackedBar,
         PlotKind::StackedHorizontalBar,
     ] {
-        let chart = configured_chart(&data, kind).interval_bounds("lower", "upper");
+        let chart = configured_chart(&data, kind).interval_bounds(
+            crate::test_support::numeric(&data, "lower"),
+            crate::test_support::numeric(&data, "upper"),
+        );
         let mut backend = RecordingBackend::default();
         assert!(chart.render_kind(kind, &mut backend).is_err(), "{kind:?}");
         assert_eq!(backend.begins, 0, "{kind:?}");
@@ -195,10 +222,7 @@ fn unsupported_bar_subfamilies_reject_semantics_before_backend_begin() {
 fn singleton_grouped_generated_bar_cells_fail_before_backend_begin() {
     let data = fixture();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let mut chart = Chart::new(&data).group("hue").hue("hue");
-        let _ = chart.x("group");
-        let _ = chart.y("y");
-        let _ = chart.select(kind);
+        let chart = grouped_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
         assert!(error.to_string().contains("at least two are required"));
@@ -236,10 +260,7 @@ fn empty_singleton_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
     ];
     for data in &fixtures {
         for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-            let mut chart = Chart::new(data);
-            let _ = chart.x("group");
-            let _ = chart.y("y");
-            let _ = chart.select(kind);
+            let chart = bar_chart(data, kind);
             let mut backend = RecordingBackend::default();
             assert!(chart.render_kind(kind, &mut backend).is_err());
             assert_eq!(backend.begins, 0, "{kind:?}");
@@ -251,10 +272,7 @@ fn empty_singleton_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
 fn valid_grouped_vertical_and_horizontal_bars_keep_provenance_off_canvas() {
     let data = valid_grouped_bar_fixture();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let mut chart = Chart::new(&data).group("hue").hue("hue");
-        let _ = chart.x("group");
-        let _ = chart.y("y");
-        let _ = chart.select(kind);
+        let chart = grouped_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         let rendered_text = backend
@@ -279,13 +297,10 @@ fn generated_bar_sample_sizes_are_not_pooled_across_facets() {
     )
     .unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let mut chart = Chart::new(&data).facet_col("facet");
-        let _ = chart.x("group");
-        let _ = chart.y("y");
-        let _ = chart.select(kind);
+        let chart = bar_chart(&data, kind).facet_col(crate::test_support::category(&data, "facet"));
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
-        assert!(error.to_string().contains("facet facet=left"));
+        assert!(error.to_string().contains("facet facet=left"), "{error}");
         assert_eq!(backend.begins, 0, "{kind:?}");
     }
 }
@@ -309,8 +324,7 @@ fn identity_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
     )
     .unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let mut chart = Chart::new(&valid).bar_aggregation(crate::BarAggregation::Identity);
-        let _ = chart.x("group").y("y").select(kind);
+        let chart = bar_chart(&valid, kind).bar_aggregation(crate::BarAggregation::Identity);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert!(backend
@@ -318,8 +332,7 @@ fn identity_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
             .iter()
             .all(|(_, _, text)| !text.contains(crate::BarAggregation::Identity.provenance())));
 
-        let mut chart = Chart::new(&duplicate).bar_aggregation(crate::BarAggregation::Identity);
-        let _ = chart.x("group").y("y").select(kind);
+        let chart = bar_chart(&duplicate, kind).bar_aggregation(crate::BarAggregation::Identity);
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
         assert!(error.to_string().contains("exactly one is required"));

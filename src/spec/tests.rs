@@ -14,7 +14,6 @@ fn plot_kinds_expose_their_semantic_legend_defaults() {
         PlotKind::Interaction,
         PlotKind::Boxplot,
         PlotKind::Violin,
-        PlotKind::MassSpectrum,
         PlotKind::Regression,
     ] {
         assert_eq!(
@@ -202,7 +201,6 @@ fn plot_kind_metadata_is_pinned_in_stable_order() {
         (PlotKind::Regression, "regression plot", "regression-plot"),
         (PlotKind::Marginal, "marginal plot", "marginal-plot"),
         (PlotKind::Matrix, "scatter matrix", "scatter-matrix"),
-        (PlotKind::MassSpectrum, "mass spectrum", "mass-spectrum"),
         (PlotKind::Beeswarm, "beeswarm plot", "beeswarm-plot"),
         (PlotKind::Waterfall, "waterfall plot", "waterfall-plot"),
     ];

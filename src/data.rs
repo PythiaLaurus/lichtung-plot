@@ -1,107 +1,132 @@
-//! Shared DataFrame extraction for plot renderers.
+//! Private semantic value access shared by plot renderers.
 
-use std::collections::BTreeSet;
+use crate::{BooleanValues, CategoryValues, Error, NumericValues};
 
-use crate::Error;
-#[cfg(test)]
-use polars::prelude::Series;
-use polars::prelude::{AnyValue, DataFrame, DataType};
+pub(crate) const X: &str = "__x";
+pub(crate) const Y: &str = "__y";
+pub(crate) const HUE: &str = "__hue";
+pub(crate) const GROUP: &str = "__group";
+pub(crate) const COLOR: &str = "__color";
+pub(crate) const INTERVAL_LOWER: &str = "__interval_lower";
+pub(crate) const INTERVAL_UPPER: &str = "__interval_upper";
+pub(crate) const STATUS: &str = "__status";
+pub(crate) const HEATMAP_HIGHLIGHT: &str = "__heatmap_highlight";
+pub(crate) const COEFFICIENT_SIGNIFICANCE: &str = "__coefficient_significance";
+pub(crate) const BAR_SIGNIFICANCE: &str = "__bar_significance";
+pub(crate) const INTERACTION_POINT_SHAPE: &str = "__interaction_point_shape";
+pub(crate) const INTERACTION_LINE_PATTERN: &str = "__interaction_line_pattern";
+pub(crate) const DUMBBELL_RIGHT: &str = "__dumbbell_right";
+pub(crate) const FACET_ROW: &str = "__facet_row";
+pub(crate) const FACET_COLUMN: &str = "__facet_column";
+pub(crate) const FACET_WRAP: &str = "__facet_wrap";
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) enum DataColumn<'a> {
+    Numeric(&'a NumericValues),
+    Category(&'a CategoryValues),
+    Boolean(&'a BooleanValues),
+}
+
+impl<'a> DataColumn<'a> {
+    pub(crate) const fn is_numeric(self) -> bool {
+        matches!(self, Self::Numeric(_))
+    }
+
+    pub(crate) fn name(self) -> &'a str {
+        match self {
+            Self::Numeric(values) => values.name(),
+            Self::Category(values) => values.name(),
+            Self::Boolean(values) => values.name(),
+        }
+    }
+
+    pub(crate) fn len(self) -> usize {
+        match self {
+            Self::Numeric(values) => values.len(),
+            Self::Category(values) => values.len(),
+            Self::Boolean(values) => values.len(),
+        }
+    }
+}
+
+/// A borrowed semantic plot view, optionally restricted to selected source rows.
+#[derive(Clone, Copy)]
 pub(crate) struct PlotData<'a> {
-    frame: &'a DataFrame,
+    plot: &'a crate::builder::Plot,
+    rows: Option<&'a [usize]>,
     source_rows: Option<&'a [usize]>,
 }
 
+impl std::fmt::Debug for PlotData<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PlotData")
+            .field("height", &self.height())
+            .field("is_full_plot", &self.is_full_plot())
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> PlotData<'a> {
-    pub(crate) const fn new(frame: &'a DataFrame) -> Self {
+    pub(crate) const fn new(plot: &'a crate::builder::Plot) -> Self {
         Self {
-            frame,
+            plot,
+            rows: None,
             source_rows: None,
         }
     }
 
-    pub(crate) const fn with_source_rows(frame: &'a DataFrame, source_rows: &'a [usize]) -> Self {
+    pub(crate) fn map_source_rows(mut self, source_rows: &'a [usize]) -> Self {
+        self.source_rows = Some(source_rows);
+        self
+    }
+
+    pub(crate) const fn with_rows(
+        plot: &'a crate::builder::Plot,
+        rows: &'a [usize],
+        source_rows: &'a [usize],
+    ) -> Self {
         Self {
-            frame,
+            plot,
+            rows: Some(rows),
             source_rows: Some(source_rows),
         }
+    }
+
+    pub(crate) fn column(self, key: &str) -> Result<DataColumn<'a>, Error> {
+        self.plot
+            .data_column(key)
+            .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
+    }
+
+    pub(crate) fn height(self) -> usize {
+        self.rows
+            .map_or_else(|| self.plot.row_count(), <[usize]>::len)
+    }
+
+    pub(crate) const fn is_full_plot(self) -> bool {
+        self.rows.is_none()
     }
 
     pub(crate) fn source_row(self, local_row: usize) -> usize {
         self.source_rows
             .and_then(|rows| rows.get(local_row))
             .copied()
+            .unwrap_or_else(|| self.row_index(local_row))
+    }
+
+    fn row_index(self, local_row: usize) -> usize {
+        self.rows
+            .and_then(|rows| rows.get(local_row))
+            .copied()
             .unwrap_or(local_row)
     }
-
-    pub(crate) fn is_frame(self, frame: &DataFrame) -> bool {
-        std::ptr::eq(self.frame, frame)
-    }
 }
 
-impl std::ops::Deref for PlotData<'_> {
-    type Target = DataFrame;
-
-    fn deref(&self) -> &Self::Target {
-        self.frame
+impl<'a> From<&'a crate::builder::Plot> for PlotData<'a> {
+    fn from(plot: &'a crate::builder::Plot) -> Self {
+        Self::new(plot)
     }
-}
-
-impl<'a> From<&'a DataFrame> for PlotData<'a> {
-    fn from(frame: &'a DataFrame) -> Self {
-        Self::new(frame)
-    }
-}
-
-pub(crate) fn strict_source_rows(
-    data: &DataFrame,
-    column: &str,
-    plot: &str,
-) -> Result<Vec<usize>, Error> {
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: source-row column {column:?}: {error}")))?;
-    if !source.dtype().is_integer() {
-        return Err(Error::Data(format!(
-            "{plot}: source-row column {column:?} must have an integer dtype, got {:?}",
-            source.dtype()
-        )));
-    }
-    let values = source.cast(&DataType::UInt64).map_err(|error| {
-        Error::Data(format!(
-            "{plot}: source-row column {column:?} must contain non-negative integers: {error}"
-        ))
-    })?;
-    let mut seen = BTreeSet::new();
-    values
-        .u64()
-        .map_err(|error| {
-            Error::Data(format!(
-                "{plot}: source-row column {column:?} cannot be read as unsigned integers: {error}"
-            ))
-        })?
-        .iter()
-        .enumerate()
-        .map(|(row, value)| {
-            let value = value.ok_or_else(|| {
-                Error::Data(format!(
-                    "{plot}: source-row column {column:?} contains null at local row {row}"
-                ))
-            })?;
-            let value = usize::try_from(value).map_err(|_| {
-                Error::Data(format!(
-                    "{plot}: source-row identity {value} at local row {row} exceeds platform limits"
-                ))
-            })?;
-            if !seen.insert(value) {
-                return Err(Error::Data(format!(
-                    "{plot}: source-row column {column:?} contains duplicate identity {value}"
-                )));
-            }
-            Ok(value)
-        })
-        .collect()
 }
 
 pub(crate) fn strict_finite_f64<'a>(
@@ -110,33 +135,62 @@ pub(crate) fn strict_finite_f64<'a>(
     plot: &str,
 ) -> Result<Vec<f64>, Error> {
     let data = data.into();
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: column {column:?}: {error}")))?;
-    if !source.dtype().is_numeric() {
+    let DataColumn::Numeric(values) = data.column(column)? else {
         return Err(Error::Data(format!(
-            "{plot}: column {column:?} must have a numeric dtype, got {:?}",
-            source.dtype()
+            "{plot}: value {:?} must be numeric",
+            data.column(column)?.name()
         )));
-    }
-    let values = source
-        .cast(&DataType::Float64)
-        .map_err(|error| Error::Data(format!("{plot}: cast {column:?}: {error}")))?;
-    values
-        .f64()
-        .map_err(|error| Error::Data(format!("{plot}: as f64 {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(index, value)| match value {
-            Some(value) if value.is_finite() => Ok(value),
-            Some(value) => Err(Error::Data(format!(
-                "{plot}: column {column:?} contains non-finite value {value} at source row {}",
-                data.source_row(index)
+    };
+    (0..data.height())
+        .map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) if value.is_finite() => Ok(value),
+            Some(Some(value)) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains non-finite value {value} at source row {}",
+                values.name(),
+                data.source_row(row)
             ))),
-            None => Err(Error::Data(format!(
-                "{plot}: column {column:?} contains null at source row {}",
-                data.source_row(index)
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
+                data.source_row(row)
             ))),
+            None => Err(length_error(plot, values.name(), row)),
+        })
+        .collect()
+}
+
+pub(crate) fn strict_numeric_values(values: &NumericValues, plot: &str) -> Result<Vec<f64>, Error> {
+    (0..values.len())
+        .map(|row| match values.get(row) {
+            Some(Some(value)) if value.is_finite() => Ok(value),
+            Some(Some(value)) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains non-finite value {value} at source row {}",
+                values.name(),
+                values.source_row(row)
+            ))),
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
+                values.source_row(row)
+            ))),
+            None => unreachable!("row is bounded by NumericValues::len"),
+        })
+        .collect()
+}
+
+pub(crate) fn strict_category_values(
+    values: &CategoryValues,
+    plot: &str,
+) -> Result<Vec<String>, Error> {
+    (0..values.len())
+        .map(|row| match values.get(row) {
+            Some(Some(value)) => Ok(value.to_owned()),
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
+                values.source_row(row)
+            ))),
+            None => unreachable!("row is bounded by CategoryValues::len"),
         })
         .collect()
 }
@@ -147,30 +201,22 @@ pub(crate) fn nullable_finite_f64<'a>(
     plot: &str,
 ) -> Result<Vec<Option<f64>>, Error> {
     let data = data.into();
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: column {column:?}: {error}")))?;
-    if !source.dtype().is_numeric() {
+    let DataColumn::Numeric(values) = data.column(column)? else {
         return Err(Error::Data(format!(
-            "{plot}: column {column:?} must have a numeric dtype, got {:?}",
-            source.dtype()
+            "{plot}: value {:?} must be numeric",
+            data.column(column)?.name()
         )));
-    }
-    let values = source
-        .cast(&DataType::Float64)
-        .map_err(|error| Error::Data(format!("{plot}: cast {column:?}: {error}")))?;
-    values
-        .f64()
-        .map_err(|error| Error::Data(format!("{plot}: as f64 {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(index, value)| match value {
-            Some(value) if value.is_finite() => Ok(Some(value)),
-            Some(value) => Err(Error::Data(format!(
-                "{plot}: column {column:?} contains non-finite value {value} at source row {}",
-                data.source_row(index)
+    };
+    (0..data.height())
+        .map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) if value.is_finite() => Ok(Some(value)),
+            Some(Some(value)) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains non-finite value {value} at source row {}",
+                values.name(),
+                data.source_row(row)
             ))),
-            None => Ok(None),
+            Some(None) => Ok(None),
+            None => Err(length_error(plot, values.name(), row)),
         })
         .collect()
 }
@@ -181,27 +227,21 @@ pub(crate) fn strict_bool<'a>(
     plot: &str,
 ) -> Result<Vec<bool>, Error> {
     let data = data.into();
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: column {column:?}: {error}")))?;
-    if source.dtype() != &DataType::Boolean {
+    let DataColumn::Boolean(values) = data.column(column)? else {
         return Err(Error::Data(format!(
-            "{plot}: column {column:?} must have Boolean dtype, got {:?}",
-            source.dtype()
+            "{plot}: value {:?} must be Boolean",
+            data.column(column)?.name()
         )));
-    }
-    source
-        .bool()
-        .map_err(|error| Error::Data(format!("{plot}: as bool {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(row, value)| {
-            value.ok_or_else(|| {
-                Error::Data(format!(
-                    "{plot}: column {column:?} contains null at source row {}",
-                    data.source_row(row)
-                ))
-            })
+    };
+    (0..data.height())
+        .map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) => Ok(value),
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
+                data.source_row(row)
+            ))),
+            None => Err(length_error(plot, values.name(), row)),
         })
         .collect()
 }
@@ -217,46 +257,12 @@ pub(crate) fn aligned_finite_f64<'a>(
     let y = optional_finite_f64(data, y_column, plot)?;
     if x.len() != y.len() {
         return Err(Error::Data(format!(
-            "{plot}: aligned column length mismatch {} vs {}",
+            "{plot}: aligned value length mismatch {} vs {}",
             x.len(),
             y.len()
         )));
     }
     Ok(x.into_iter().zip(y).filter_map(|(x, y)| x.zip(y)).collect())
-}
-
-fn optional_finite_f64(
-    data: PlotData<'_>,
-    column: &str,
-    plot: &str,
-) -> Result<Vec<Option<f64>>, Error> {
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: column {column:?}: {error}")))?;
-    if !source.dtype().is_numeric() {
-        return Err(Error::Data(format!(
-            "{plot}: column {column:?} must have a numeric dtype, got {:?}",
-            source.dtype()
-        )));
-    }
-    let values = source
-        .cast(&DataType::Float64)
-        .map_err(|error| Error::Data(format!("{plot}: cast {column:?}: {error}")))?;
-    values
-        .f64()
-        .map_err(|error| Error::Data(format!("{plot}: as f64 {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(row, value)| match value {
-            Some(value) if value.is_infinite() => Err(Error::Data(format!(
-                "{plot}: column {column:?} contains infinite value {value} at source row {}",
-                data.source_row(row)
-            ))),
-            Some(value) if value.is_nan() => Ok(None),
-            Some(value) => Ok(Some(value)),
-            None => Ok(None),
-        })
-        .collect()
 }
 
 pub(crate) fn aligned_finite_rows<'a>(
@@ -270,7 +276,7 @@ pub(crate) fn aligned_finite_rows<'a>(
     let y = optional_finite_f64(data, y_column, plot)?;
     if x.len() != y.len() {
         return Err(Error::Data(format!(
-            "{plot}: aligned column length mismatch {} vs {}",
+            "{plot}: aligned value length mismatch {} vs {}",
             x.len(),
             y.len()
         )));
@@ -280,6 +286,31 @@ pub(crate) fn aligned_finite_rows<'a>(
         .enumerate()
         .filter_map(|(row, (x, y))| Some((row, x?, y?)))
         .collect())
+}
+
+fn optional_finite_f64(
+    data: PlotData<'_>,
+    column: &str,
+    plot: &str,
+) -> Result<Vec<Option<f64>>, Error> {
+    let DataColumn::Numeric(values) = data.column(column)? else {
+        return Err(Error::Data(format!(
+            "{plot}: value {:?} must be numeric",
+            data.column(column)?.name()
+        )));
+    };
+    (0..data.height())
+        .map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) if value.is_infinite() => Err(Error::Data(format!(
+                "{plot}: value {:?} contains infinite value {value} at source row {}",
+                values.name(),
+                data.source_row(row)
+            ))),
+            Some(Some(value)) if value.is_nan() => Ok(None),
+            Some(value) => Ok(value),
+            None => Err(length_error(plot, values.name(), row)),
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -314,7 +345,7 @@ pub(crate) fn collective_channels<'a>(
         || cells.is_some_and(|values| values.len() != row_count)
     {
         return Err(Error::Data(format!(
-            "{plot}: graphical group, hue, and mark-cell columns must align with the data"
+            "{plot}: graphical group, hue, and mark-cell values must align with the plot input"
         )));
     }
 
@@ -329,12 +360,8 @@ pub(crate) fn collective_channels<'a>(
                 .find(|(seen_cell, seen_group, _)| *seen_cell == cell && *seen_group == group)
             {
                 if *seen_hue != hue {
-                    let cell_context =
-                        cell.map_or_else(String::new, |cell| format!(" in cell {cell:?}"));
-                    let group_context = group
-                        .map_or_else(String::new, |group| format!(" graphical group {group:?}"));
                     return Err(Error::Data(format!(
-                        "{plot}:{group_context} collective mark{cell_context} contains multiple hue values {seen_hue:?} and {hue:?}; each collective mark must have exactly one hue (source row {})",
+                        "{plot}: each collective mark must have exactly one hue; found {seen_hue:?} and {hue:?} at source row {}",
                         data.source_row(row)
                     )));
                 }
@@ -366,55 +393,27 @@ pub(crate) fn stable_levels(values: &[String]) -> Vec<String> {
     levels
 }
 
-pub(crate) fn categorical_value_text(value: &AnyValue<'_>) -> String {
-    match value {
-        AnyValue::String(value) => (*value).to_owned(),
-        AnyValue::StringOwned(value) => value.as_str().to_owned(),
-        _ => value.to_string(),
-    }
-}
-
 pub(crate) fn strict_strings<'a>(
     data: impl Into<PlotData<'a>>,
     column: &str,
     plot: &str,
 ) -> Result<Vec<String>, Error> {
     let data = data.into();
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("{plot}: column {column:?}: {error}")))?;
-    for (row, value) in source.as_materialized_series().iter().enumerate() {
-        let reason = match value {
-            AnyValue::Null => Some("null"),
-            AnyValue::Float16(value) if value.is_nan() => Some("NaN"),
-            AnyValue::Float32(value) if value.is_nan() => Some("NaN"),
-            AnyValue::Float64(value) if value.is_nan() => Some("NaN"),
-            AnyValue::Float16(value) if value.0.is_infinite() => Some("infinite value"),
-            AnyValue::Float32(value) if value.is_infinite() => Some("infinite value"),
-            AnyValue::Float64(value) if value.is_infinite() => Some("infinite value"),
-            _ => None,
-        };
-        if let Some(reason) = reason {
-            return Err(Error::Data(format!(
-                "{plot}: column {column:?} contains {reason} at source row {}",
+    let DataColumn::Category(values) = data.column(column)? else {
+        return Err(Error::Data(format!(
+            "{plot}: value {:?} must be categorical",
+            data.column(column)?.name()
+        )));
+    };
+    (0..data.height())
+        .map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) => Ok(value.to_owned()),
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
                 data.source_row(row)
-            )));
-        }
-    }
-    source
-        .cast(&DataType::String)
-        .map_err(|error| Error::Data(format!("{plot}: cast {column:?}: {error}")))?
-        .str()
-        .map_err(|error| Error::Data(format!("{plot}: as string {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(index, value)| {
-            value.map(str::to_owned).ok_or_else(|| {
-                Error::Data(format!(
-                    "{plot}: column {column:?} contains null at source row {}",
-                    data.source_row(index)
-                ))
-            })
+            ))),
+            None => Err(length_error(plot, values.name(), row)),
         })
         .collect()
 }
@@ -447,67 +446,24 @@ pub(crate) fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-#[cfg(test)]
-pub(crate) fn observed_levels(series: &Series) -> Vec<AnyValue<'static>> {
-    let mut levels = Vec::new();
-    for value in series.iter().map(AnyValue::into_static) {
-        if !matches!(value, AnyValue::Null) && !levels.iter().any(|seen| seen == &value) {
-            levels.push(value);
-        }
-    }
-    levels
-}
-
 pub(crate) fn observed_levels_for_finite_pairs<'a>(
     data: impl Into<PlotData<'a>>,
     x_column: &str,
     y_column: &str,
     hue_column: &str,
     plot: &str,
-) -> Result<Vec<AnyValue<'static>>, Error> {
+) -> Result<Vec<String>, Error> {
     let data = data.into();
     let x = optional_finite_f64(data, x_column, plot)?;
     let y = optional_finite_f64(data, y_column, plot)?;
-    let hue = data
-        .column(hue_column)
-        .map_err(|error| Error::Data(format!("{plot}: column {hue_column:?}: {error}")))?
-        .as_materialized_series();
+    let hue = strict_strings(data, hue_column, plot)?;
     let mut levels = Vec::new();
-    for (row, ((x, y), value)) in x.into_iter().zip(y).zip(hue.iter()).enumerate() {
-        validate_required_category_value(&value, hue_column, plot, data.source_row(row))?;
-        if x.is_none() || y.is_none() {
-            continue;
-        }
-        let value = value.into_static();
-        if !levels.iter().any(|seen| seen == &value) {
+    for ((x, y), value) in x.into_iter().zip(y).zip(hue) {
+        if x.is_some() && y.is_some() && !levels.contains(&value) {
             levels.push(value);
         }
     }
     Ok(levels)
-}
-
-fn validate_required_category_value(
-    value: &AnyValue<'_>,
-    column: &str,
-    plot: &str,
-    row: usize,
-) -> Result<(), Error> {
-    let invalid = match value {
-        AnyValue::Null => Some("null"),
-        AnyValue::Float16(value) if value.is_nan() => Some("NaN"),
-        AnyValue::Float32(value) if value.is_nan() => Some("NaN"),
-        AnyValue::Float64(value) if value.is_nan() => Some("NaN"),
-        AnyValue::Float16(value) if value.0.is_infinite() => Some("infinite"),
-        AnyValue::Float32(value) if value.is_infinite() => Some("infinite"),
-        AnyValue::Float64(value) if value.is_infinite() => Some("infinite"),
-        _ => None,
-    };
-    if let Some(reason) = invalid {
-        return Err(Error::Data(format!(
-            "{plot}: required categorical column {column:?} contains {reason} at source row {row}"
-        )));
-    }
-    Ok(())
 }
 
 pub(crate) fn min_max(
@@ -526,150 +482,8 @@ pub(crate) fn min_max(
     range.ok_or_else(|| Error::Data(format!("{plot}: cannot compute range from no values")))
 }
 
-#[cfg(test)]
-mod tests {
-    use polars::prelude::{DataFrame, NamedFrom, Series};
-
-    use super::*;
-
-    #[test]
-    fn aligned_finite_f64_preserves_row_alignment_when_filtering() {
-        let x = Series::new("x".into(), [Some(1.0_f64), None, Some(3.0)]);
-        let y = Series::new("y".into(), [Some(10.0_f64), Some(20.0), Some(f64::NAN)]);
-        let data = DataFrame::new(x.len(), vec![x.into(), y.into()]).unwrap();
-
-        assert_eq!(
-            aligned_finite_f64(&data, "x", "y", "test").unwrap(),
-            [(1.0, 10.0)]
-        );
-    }
-
-    #[test]
-    fn aligned_finite_f64_rejects_x_infinity_with_source_row() {
-        let x = Series::new("x".into(), [1.0_f64, f64::INFINITY]);
-        let y = Series::new("y".into(), [10.0_f64, 20.0]);
-        let data = DataFrame::new(x.len(), vec![x.into(), y.into()]).unwrap();
-
-        let error = aligned_finite_f64(&data, "x", "y", "scatter").unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "data error: scatter: column \"x\" contains infinite value inf at source row 1"
-        );
-    }
-
-    #[test]
-    fn aligned_finite_f64_rejects_y_infinity_with_source_row() {
-        let x = Series::new("x".into(), [1.0_f64, 2.0]);
-        let y = Series::new("y".into(), [10.0_f64, f64::NEG_INFINITY]);
-        let data = DataFrame::new(x.len(), vec![x.into(), y.into()]).unwrap();
-
-        let error = aligned_finite_f64(&data, "x", "y", "scatter").unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "data error: scatter: column \"y\" contains infinite value -inf at source row 1"
-        );
-    }
-
-    #[test]
-    fn strict_finite_f64_rejects_non_finite_values() {
-        let values = Series::new("x".into(), [1.0_f64, f64::INFINITY]);
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
-
-        assert!(strict_finite_f64(&data, "x", "test").is_err());
-    }
-
-    #[test]
-    fn strict_finite_f64_rejects_numeric_looking_strings() {
-        let values = Series::new("x".into(), ["1.0", "2.0"]);
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
-
-        let error = strict_finite_f64(&data, "x", "test").unwrap_err();
-
-        assert!(error.to_string().contains("must have a numeric dtype"));
-    }
-
-    #[test]
-    fn strict_finite_f64_rejects_booleans() {
-        let values = Series::new("x".into(), [true, false]);
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
-
-        let error = strict_finite_f64(&data, "x", "test").unwrap_err();
-
-        assert!(error.to_string().contains("must have a numeric dtype"));
-    }
-
-    #[test]
-    fn strict_strings_casts_numeric_categories_and_rejects_nulls() {
-        let numeric = Series::new("group".into(), [1_i64, 2, 1]);
-        let numeric_data = DataFrame::new(numeric.len(), vec![numeric.into()]).unwrap();
-        assert_eq!(
-            strict_strings(&numeric_data, "group", "test").unwrap(),
-            ["1", "2", "1"]
-        );
-
-        let nullable = Series::new("group".into(), [Some(1_i64), None]);
-        let nullable_data = DataFrame::new(nullable.len(), vec![nullable.into()]).unwrap();
-        assert!(strict_strings(&nullable_data, "group", "test").is_err());
-    }
-
-    #[test]
-    fn strict_finite_f64_rejects_null_exactly() {
-        let values = Series::new("intensity".into(), [Some(2.0_f64), None, Some(4.0)]);
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
-
-        assert_eq!(
-            strict_finite_f64(&data, "intensity", "mass_spectrum")
-                .unwrap_err()
-                .to_string(),
-            "data error: mass_spectrum: column \"intensity\" contains null at source row 1"
-        );
-    }
-
-    #[test]
-    fn collective_channels_require_one_hue_per_ungrouped_mark() {
-        let hues = Series::new("hue".into(), ["first", "second"]);
-        let data = DataFrame::new(hues.len(), vec![hues.into()]).unwrap();
-
-        let error = collective_channels(&data, None, Some("hue"), None, "line").unwrap_err();
-
-        assert!(error
-            .to_string()
-            .contains("each collective mark must have exactly one hue"));
-    }
-
-    #[test]
-    fn collective_channels_scope_ungrouped_hue_consistency_by_cell() {
-        let hues = Series::new("hue".into(), ["first", "second"]);
-        let data = DataFrame::new(hues.len(), vec![hues.into()]).unwrap();
-        let cells = ["left".to_owned(), "right".to_owned()];
-
-        let channels = collective_channels(&data, None, Some("hue"), Some(&cells), "bar").unwrap();
-
-        assert!(channels.groups.is_none());
-        assert_eq!(channels.hue_levels, ["first", "second"]);
-    }
-
-    #[test]
-    fn observed_levels_preserves_first_seen_order() {
-        let values = Series::new("group".into(), ["b", "a", "b", "c"]);
-
-        let labels = observed_levels(&values)
-            .into_iter()
-            .map(|value| categorical_value_text(&value))
-            .collect::<Vec<_>>();
-        assert_eq!(labels, ["b", "a", "c"]);
-    }
-
-    #[test]
-    fn categorical_value_text_preserves_literal_quotes() {
-        let values = Series::new("group".into(), ["\"control\"", "'active'"]);
-        let labels = observed_levels(&values)
-            .into_iter()
-            .map(|value| categorical_value_text(&value))
-            .collect::<Vec<_>>();
-
-        assert_eq!(labels, ["\"control\"", "'active'"]);
-    }
+fn length_error(plot: &str, name: &str, row: usize) -> Error {
+    Error::Data(format!(
+        "{plot}: value {name:?} is shorter than the aligned plot input at row {row}"
+    ))
 }

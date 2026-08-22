@@ -1,7 +1,6 @@
 //! Native SVG backend for deterministic publication-oriented output.
 
 use std::fmt::Write as _;
-use std::path::PathBuf;
 
 use crate::Error;
 
@@ -18,27 +17,9 @@ use crate::theme::rgb_to_hex;
 use crate::{PointShape, DEFAULT_FONT_FAMILY_STACK};
 
 impl SvgBackend {
-    /// Create an SVG backend that writes to `path`.
-    #[must_use]
-    pub fn new(path: PathBuf, width: u32, height: u32) -> Self {
-        Self {
-            destination: SvgDestination::File(path),
-            width,
-            height,
-            body: String::new(),
-            grid_buf: String::new(),
-            clip_defs: String::new(),
-            gradient_defs: String::new(),
-            group_stack: Vec::new(),
-            next_clip_id: 0,
-            next_gradient_id: 0,
-            begun: false,
-        }
-    }
-
     pub(crate) fn in_memory(width: u32, height: u32) -> Self {
         Self {
-            destination: SvgDestination::Memory(None),
+            output: None,
             width,
             height,
             body: String::new(),
@@ -53,15 +34,8 @@ impl SvgBackend {
     }
 
     pub(crate) fn into_bytes(self) -> Result<Vec<u8>, Error> {
-        match self.destination {
-            SvgDestination::Memory(Some(bytes)) => Ok(bytes),
-            SvgDestination::Memory(None) => Err(Error::Render(
-                "in-memory SVG backend did not finish rendering".into(),
-            )),
-            SvgDestination::File(_) => Err(Error::Render(
-                "file SVG backend cannot return in-memory bytes".into(),
-            )),
-        }
+        self.output
+            .ok_or_else(|| Error::Render("in-memory SVG backend did not finish rendering".into()))
     }
 
     fn y_mark(&self, y: f64) -> f64 {
@@ -114,11 +88,6 @@ impl SvgBackend {
             )))
         }
     }
-}
-
-enum SvgDestination {
-    File(PathBuf),
-    Memory(Option<Vec<u8>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -354,7 +323,7 @@ fn dpi_to_pixels_per_meter(dpi: f32) -> Result<u32, Error> {
 /// emitted before all other content at `end()` time, ensuring grid lines
 /// always appear behind data marks without constraining their unique IDs.
 pub struct SvgBackend {
-    destination: SvgDestination,
+    output: Option<Vec<u8>>,
     width: u32,
     height: u32,
     body: String,
@@ -788,12 +757,7 @@ impl Backend for SvgBackend {
         }
         svg.push_str(&content);
         svg.push_str("</svg>\n");
-        match &mut self.destination {
-            SvgDestination::File(path) => {
-                std::fs::write(path, svg).map_err(Error::Io)?;
-            }
-            SvgDestination::Memory(bytes) => *bytes = Some(svg.into_bytes()),
-        }
+        self.output = Some(svg.into_bytes());
         self.begun = false;
         Ok(())
     }
@@ -803,17 +767,9 @@ impl Backend for SvgBackend {
 mod tests {
     use super::*;
 
-    fn output_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "lichtung-svg-backend-{name}-{}.svg",
-            std::process::id()
-        ))
-    }
-
     #[test]
     fn clip_scopes_emit_deterministic_ids_and_balanced_groups() {
-        let path = output_path("clips");
-        let mut backend = SvgBackend::new(path.clone(), 200, 100);
+        let mut backend = SvgBackend::in_memory(200, 100);
         backend.begin(200, 100).unwrap();
         backend.begin_layer("marks").unwrap();
         backend
@@ -833,15 +789,14 @@ mod tests {
         backend.end_clip().unwrap();
         backend.end().unwrap();
 
-        let svg = std::fs::read_to_string(&path).unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert!(svg.contains("<clipPath id=\"clip-0\"") && svg.contains("clip-1"));
         assert!(svg.contains("<g id=\"marks\">\n<g clip-path=\"url(#clip-0)\">"));
-        let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn begin_clip_rejects_non_finite_or_non_positive_rectangles() {
-        let mut backend = SvgBackend::new(output_path("invalid-clip"), 200, 100);
+        let mut backend = SvgBackend::in_memory(200, 100);
         backend.begin(200, 100).unwrap();
 
         assert!(backend
@@ -854,7 +809,7 @@ mod tests {
 
     #[test]
     fn end_rejects_unclosed_group_state() {
-        let mut backend = SvgBackend::new(output_path("unclosed"), 200, 100);
+        let mut backend = SvgBackend::in_memory(200, 100);
         backend.begin(200, 100).unwrap();
         backend.begin_layer("marks").unwrap();
 
@@ -863,8 +818,7 @@ mod tests {
 
     #[test]
     fn nested_layer_and_clip_scopes_require_lifo_order() {
-        let path = output_path("nested-order");
-        let mut backend = SvgBackend::new(path.clone(), 200, 100);
+        let mut backend = SvgBackend::in_memory(200, 100);
         backend.begin(200, 100).unwrap();
         backend.begin_layer("marks").unwrap();
         backend
@@ -875,20 +829,17 @@ mod tests {
         backend.end_clip().unwrap();
         backend.end_layer().unwrap();
         backend.end().unwrap();
-        let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn linear_gradients_emit_native_deterministic_defs_and_math_space_geometry() {
-        let first_path = output_path("gradient-first");
-        let second_path = output_path("gradient-second");
         let stops = [
             GradientStop::new(0.0, (49, 130, 189)),
             GradientStop::new(0.25, (247, 247, 247)),
             GradientStop::new(1.0, (222, 45, 38)),
         ];
-        for path in [&first_path, &second_path] {
-            let mut backend = SvgBackend::new(path.clone(), 200, 100);
+        let render = || {
+            let mut backend = SvgBackend::in_memory(200, 100);
             backend.begin(200, 100).unwrap();
             backend
                 .draw_linear_gradient(
@@ -899,10 +850,11 @@ mod tests {
                 )
                 .unwrap();
             backend.end().unwrap();
-        }
+            String::from_utf8(backend.into_bytes().unwrap()).unwrap()
+        };
 
-        let first = std::fs::read_to_string(&first_path).unwrap();
-        let second = std::fs::read_to_string(&second_path).unwrap();
+        let first = render();
+        let second = render();
         assert_eq!(first, second);
         assert!(first.contains(
             "<linearGradient id=\"linear-gradient-0\" gradientUnits=\"userSpaceOnUse\" x1=\"16.000\" y1=\"80.000\" x2=\"16.000\" y2=\"20.000\">"
@@ -911,7 +863,5 @@ mod tests {
         assert!(first.contains(
             "<rect x=\"10.000\" y=\"20.000\" width=\"12.000\" height=\"60.000\" fill=\"url(#linear-gradient-0)\"/>"
         ));
-        let _ = std::fs::remove_file(first_path);
-        let _ = std::fs::remove_file(second_path);
     }
 }

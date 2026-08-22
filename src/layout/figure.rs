@@ -1,4 +1,4 @@
-//! Figure-level layout: canvas reservations and panel placement.
+//! Canvas-level layout: canvas reservations and panel placement.
 //!
 //! `Layout` owns a plot panel's data range and projection. This module
 //! owns the figure geometry around that panel: title, subtitle, caption,

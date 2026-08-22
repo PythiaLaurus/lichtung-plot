@@ -514,10 +514,10 @@ pub enum FacetScales {
 
 /// Legend policy for a heterogeneous composed figure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FigureLegendPolicy {
+pub enum CanvasLegendPolicy {
     /// Render each panel's own legend.
     #[default]
-    PerPanel,
+    PerPlot,
     /// Render one legend after validating that panel legends are compatible.
     Shared,
     /// Suppress all panel legends.
@@ -587,7 +587,7 @@ pub enum LegendPosition {
 
 macro_rules! define_plot_kinds {
     ($($variant:ident => ($documentation:literal, $label:literal, $key:literal)),+ $(,)?) => {
-        /// Which plot type a [`crate::Chart`] will produce.
+        /// Which plot type a [`crate::Plot`] will produce.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum PlotKind {
             $(
@@ -642,7 +642,6 @@ define_plot_kinds! {
     Regression => ("Regression plot (scatter + fit line).", "regression plot", "regression-plot"),
     Marginal => ("Marginal plot (marginal histograms + central scatter).", "marginal plot", "marginal-plot"),
     Matrix => ("Scatter matrix (small multiples).", "scatter matrix", "scatter-matrix"),
-    MassSpectrum => ("Mass-spec spectrum plot (line + peak markers + m/z labels).", "mass spectrum", "mass-spectrum"),
     Beeswarm => ("Categorical rows of collision-separated points with continuous x and color values.", "beeswarm plot", "beeswarm-plot"),
     Waterfall => ("Cumulative signed deltas between a base and terminal value.", "waterfall plot", "waterfall-plot"),
 }
@@ -671,7 +670,6 @@ impl PlotKind {
             | Self::Interaction
             | Self::Boxplot
             | Self::Violin
-            | Self::MassSpectrum
             | Self::Regression => LegendDefault::TopRight(LegendClearance::VerticalMaximum),
             Self::Scatter | Self::Marginal if !explicit_y_limits => {
                 LegendDefault::TopRight(LegendClearance::VerticalMaximum)
@@ -703,20 +701,17 @@ pub(crate) struct PlotRenderContext<'a> {
 }
 
 impl<'a> PlotRenderContext<'a> {
-    pub(crate) const fn new(data: &'a polars::prelude::DataFrame, panel: PanelBox) -> Self {
-        Self {
-            data: crate::data::PlotData::new(data),
-            panel,
-        }
+    pub(crate) const fn new(data: crate::data::PlotData<'a>, panel: PanelBox) -> Self {
+        Self { data, panel }
     }
 
-    pub(crate) const fn with_source_rows(
-        data: &'a polars::prelude::DataFrame,
+    pub(crate) fn with_source_rows(
+        data: crate::data::PlotData<'a>,
         source_rows: &'a [usize],
         panel: PanelBox,
     ) -> Self {
         Self {
-            data: crate::data::PlotData::with_source_rows(data, source_rows),
+            data: data.map_source_rows(source_rows),
             panel,
         }
     }

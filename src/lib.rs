@@ -3,50 +3,53 @@
 #![deny(missing_docs)]
 
 mod builder;
+mod canvas;
 mod comparison;
 mod data;
 /// Non-data chart decorations: legends, titles, and captions.
 pub mod decorations;
 mod error;
-mod figure;
 mod font;
 mod geometry;
+mod input;
 mod labels;
 mod layers;
 /// Shared plot layout core: scales, projection, axes, frames.
 pub mod layout;
 mod orchestrator;
-#[cfg(any(feature = "png", test))]
-mod output_path;
+mod output;
 mod plots;
-/// `Backend` trait and the native SVG backend impl.
-pub mod render;
+mod render;
 mod scene;
 mod significance;
 mod spec;
 /// Display-only statistics (KDE, CI, OLS for fit lines).
 pub mod stats;
+#[cfg(test)]
+mod test_support;
 /// Publication themes (`Theme::Nature`, `Theme::Science`, ...).
 pub mod theme;
+mod values;
 
-pub use builder::Chart;
+pub use builder::Plot;
+pub use canvas::{Canvas, CanvasCategoryLabels, TextPanel};
 pub use comparison::{ComparisonAnnotation, ComparisonEndpoint, ComparisonFacet, SignificanceMark};
 pub use error::{Error, Result};
-pub use figure::{Figure, FigureCategoryLabels, TextPanel};
 pub use font::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_FAMILY_STACK, SYSTEM_FONT_FAMILIES};
 pub use geometry::{
     HistogramBinInput, HistogramCompositeGeometryInput, HistogramDimensionsInput,
     HistogramKdePoint, HistogramRugInput, RaincloudDensityPoint, RaincloudDimensionsInput,
     RaincloudGeometryInput, RaincloudGroupInput, RaincloudPoint,
 };
+pub use input::AxisValues;
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
-pub use scene::RenderedSvgScene;
+pub use output::{Output, SvgText};
 pub use spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CoefficientSignificanceMark,
-    DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics, EstimateSource, EstimateStatus,
-    FacetScales, FigureLegendPolicy, GroupedFactorAnnotation, GroupedFactorEndpoint,
+    AxisScale, BarAggregation, BarSpacing, CanvasLegendPolicy, CategoricalColors,
+    CoefficientSignificanceMark, DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics,
+    EstimateSource, EstimateStatus, FacetScales, GroupedFactorAnnotation, GroupedFactorEndpoint,
     HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,
     HistogramBins, HistogramComposite, HistogramKde, HistogramStat, InferentialScale, IntervalKind,
     IntervalSemantics, LegendPosition, LineMode, LinePathStyle, LinePattern, NumericLabelFormat,
@@ -55,3 +58,4 @@ pub use spec::{
     ValueSort, ViolinLayout, WaterfallLabels,
 };
 pub use theme::Theme;
+pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

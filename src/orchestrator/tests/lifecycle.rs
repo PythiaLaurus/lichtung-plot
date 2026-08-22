@@ -3,17 +3,16 @@ use std::sync::atomic::Ordering;
 use polars::prelude::NamedFrom;
 
 use super::{
-    configured_chart, fixture, test_directory, BackendFailure, Chart, ComparisonAnnotation,
-    DataFrame, PlotKind, RecordingBackend, Series, ValueSort, RENDER_PANEL_CALLS,
-    TEMP_FILE_COUNTER,
+    configured_chart, fixture, test_directory, BackendFailure, ComparisonAnnotation, DataFrame,
+    Plot, PlotKind, RecordingBackend, Series, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
 };
 
 #[test]
 fn impossible_wrapped_caption_fails_before_backend_begin() {
     let data = fixture();
-    let mut chart = configured_chart(&data, PlotKind::Scatter)
-        .caption("diagnostic provenance and model adjustment details ".repeat(20));
-    let _ = chart.size(160, 120);
+    let chart = configured_chart(&data, PlotKind::Scatter)
+        .caption("diagnostic provenance and model adjustment details ".repeat(20))
+        .size(160, 120);
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
@@ -24,9 +23,10 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 
 #[test]
 fn invalid_chart_preflights_before_output_path_access() {
-    let data = fixture();
-    let mut chart = Chart::new(&data);
-    let _ = chart.scatter();
+    let chart = Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0]),
+        crate::NumericValues::new("y", [1.0]),
+    );
     let parent = std::env::temp_dir().join(format!(
         "lichtung-invalid-preflight-{}-{}",
         std::process::id(),
@@ -34,9 +34,11 @@ fn invalid_chart_preflights_before_output_path_access() {
     ));
     let output = parent.join("missing").join("chart.svg");
 
-    let error = chart.render_to_svg(&output).unwrap_err();
+    let error = chart.svg(&output).err().unwrap();
 
-    assert!(error.to_string().contains("x column not set"));
+    assert!(error
+        .to_string()
+        .contains("plot value \"y\" has length 1, expected 2"));
     assert!(!parent.exists());
 }
 
@@ -75,10 +77,8 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let facet = Series::new("facet".into(), ["left", "left", "right", "right"]);
     let mut faceted_data = data.clone();
     faceted_data.with_column(facet.into()).unwrap();
-    let mut faceted = Chart::new(&faceted_data).facet_col("facet");
-    let _ = faceted.x("x");
-    let _ = faceted.y("y");
-    let _ = faceted.select(PlotKind::Scatter);
+    let faceted = configured_chart(&faceted_data, PlotKind::Scatter)
+        .facet_col(crate::test_support::category(&faceted_data, "facet"));
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
     faceted
         .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
@@ -86,7 +86,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
     let panel = configured_chart(&data, PlotKind::Scatter);
-    let figure = crate::Figure::grid(1, 1)
+    let figure = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, panel)
         .unwrap();
@@ -97,7 +97,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let figure_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
     let preflight_panel = configured_chart(&data, PlotKind::Scatter);
-    let preflight_figure = crate::Figure::grid(1, 1)
+    let preflight_figure = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, preflight_panel)
         .unwrap();
@@ -108,12 +108,12 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let directory = test_directory("figure-single-preflight");
     let output = directory.join("figure.svg");
     let rendered_panel = configured_chart(&data, PlotKind::Scatter);
-    let rendered_figure = crate::Figure::grid(1, 1)
+    let rendered_figure = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, rendered_panel)
         .unwrap();
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    rendered_figure.render_to_svg(&output).unwrap();
+    rendered_figure.svg(&output).unwrap();
     let rendered_figure_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
     std::fs::remove_dir_all(directory).unwrap();
 
@@ -161,8 +161,8 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
 #[test]
 fn unsupported_significance_fails_before_canvas_begin() {
     let data = fixture();
-    let mut chart = configured_chart(&data, PlotKind::Scatter);
-    let _ = chart.add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+    let chart = configured_chart(&data, PlotKind::Scatter)
+        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
     let mut backend = RecordingBackend::default();
 
     assert!(chart.render_kind(PlotKind::Scatter, &mut backend).is_err());
@@ -217,8 +217,12 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
     let x = Series::new("x".into(), [0.0, upper]);
     let y = Series::new("y".into(), [0.0, upper]);
     let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
-    let mut chart = Chart::new(&data).x_limits(0.0, upper).y_limits(0.0, upper);
-    chart.x("x").y("y").scatter();
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .x_limits(0.0, upper)
+    .y_limits(0.0, upper);
     let mut backend = RecordingBackend::default();
 
     chart.render_with_backend(&mut backend).unwrap();
@@ -233,8 +237,8 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
     let data = fixture();
-    let mut chart = configured_chart(&data, PlotKind::Boxplot);
-    let _ = chart.add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
+    let chart = configured_chart(&data, PlotKind::Boxplot)
+        .add_comparisons([ComparisonAnnotation::new("a", "b", 0.01)]);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
@@ -247,10 +251,12 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
     let x = Series::new("x".into(), [-1.0_f64, 0.5, 2.0]);
     let y = Series::new("y".into(), [0.5_f64, 0.5, 0.5]);
     let data = DataFrame::new(x.len(), vec![x.into(), y.into()]).unwrap();
-    let mut chart = Chart::new(&data).x_limits(0.0, 1.0).y_limits(0.0, 1.0);
-    let _ = chart.x("x");
-    let _ = chart.y("y");
-    let _ = chart.select(PlotKind::Scatter);
+    let chart = Plot::scatter(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .x_limits(0.0, 1.0)
+    .y_limits(0.0, 1.0);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Scatter, &mut backend).unwrap();
@@ -262,7 +268,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
     let dir = test_directory("out-of-range-svg");
     let output = dir.join("figure.svg");
-    chart.render_to_svg(&output).unwrap();
+    chart.clone().svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[0].x)));
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[2].x)));
@@ -317,9 +323,9 @@ fn decoration_layer_closes_after_inner_draw_error() {
 #[test]
 fn matrix_legend_layer_closes_after_inner_draw_error() {
     let data = fixture();
-    let mut chart = Chart::new(&data).group("hue").hue("hue");
-    let _ = chart.matrix_variables(vec!["x", "y"]);
-    let _ = chart.select(PlotKind::Matrix);
+    let chart = configured_chart(&data, PlotKind::Matrix)
+        .group(crate::test_support::category(&data, "hue"))
+        .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::PolygonInLayer, BackendFailure::LayerEnd],
         ..RecordingBackend::default()

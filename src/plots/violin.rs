@@ -34,7 +34,7 @@ use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, ViolinLayout};
 use crate::stats::distribution::{kde, kde_support_range, quantile};
-use crate::Chart;
+use crate::Plot;
 
 #[derive(Debug, PartialEq)]
 struct ViolinSummary {
@@ -50,7 +50,7 @@ struct ViolinSummary {
 /// / grid / axes / legend). Categorical x-ticks carry the
 /// group labels.
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -420,7 +420,7 @@ pub(crate) fn render(
 }
 
 fn group_color(
-    chart: &Chart<'_>,
+    chart: &Plot,
     group: &crate::plots::distribution_sample::DistributionGroup,
     default_index: usize,
     group_active: bool,

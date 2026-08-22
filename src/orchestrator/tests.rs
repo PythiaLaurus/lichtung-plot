@@ -3,10 +3,8 @@ use std::sync::atomic::Ordering;
 
 use polars::prelude::{DataFrame, NamedFrom, Series};
 
-#[cfg(any(feature = "png", windows))]
+#[cfg(windows)]
 use super::artifacts::finish_committed_publication;
-#[cfg(feature = "png")]
-use super::artifacts::reserve_staging_pair;
 use super::artifacts::TEMP_FILE_COUNTER;
 use super::backend::NullBackend;
 use super::*;
@@ -252,116 +250,143 @@ fn valid_grouped_bar_fixture() -> DataFrame {
     .unwrap()
 }
 
-fn configured_chart(data: &DataFrame, kind: PlotKind) -> Chart<'_> {
-    let mut chart = match kind {
-        PlotKind::StackedBar | PlotKind::StackedHorizontalBar => {
-            Chart::new(data).group("hue").hue("hue")
-        }
-        PlotKind::Interaction => Chart::new(data)
-            .group("hue")
-            .hue("hue")
-            .interval_bounds("lower", "upper")
-            .interval_semantics(
-                crate::IntervalSemantics::new(
-                    crate::IntervalKind::Confidence,
-                    0.95,
-                    crate::InferentialScale::Response,
-                    "orchestrator fixture",
-                )
-                .unwrap(),
-            )
-            .interaction_source(crate::EstimateSource::EstimatedMarginalMean),
-        PlotKind::Coefficient => Chart::new(data)
-            .interval_bounds("lower", "upper")
-            .interval_semantics(
-                crate::IntervalSemantics::new(
-                    crate::IntervalKind::Confidence,
-                    0.95,
-                    crate::InferentialScale::Coefficient,
-                    "orchestrator fixture",
-                )
-                .unwrap(),
-            ),
-        PlotKind::PointInterval => Chart::new(data).interval_bounds("lower", "upper"),
-        PlotKind::Forest => Chart::new(data)
-            .interval_bounds("lower", "upper")
-            .interval_semantics(
-                crate::IntervalSemantics::new(
-                    crate::IntervalKind::Confidence,
-                    0.95,
-                    crate::InferentialScale::Coefficient,
-                    "orchestrator fixture",
-                )
-                .unwrap(),
-            )
-            .reference_line(0.0),
-        PlotKind::Dumbbell => Chart::new(data)
-            .group("interval_group")
-            .dumbbell_right("y")
-            .dumbbell_endpoints(
-                crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40))
-                    .unwrap(),
-            ),
-        PlotKind::Beeswarm | PlotKind::Heatmap => Chart::new(data).color("color"),
-        PlotKind::Waterfall => Chart::new(data).waterfall_totals("base", "terminal"),
-        _ => Chart::new(data),
-    };
+#[expect(
+    clippy::too_many_lines,
+    reason = "the exhaustive fixture keeps every plot kind's canonical construction in one place"
+)]
+fn configured_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+    use crate::test_support::{axis, category, constant_numeric, numeric};
+
     match kind {
-        PlotKind::Bar
-        | PlotKind::HorizontalBar
-        | PlotKind::StackedBar
-        | PlotKind::StackedHorizontalBar
-        | PlotKind::Boxplot
-        | PlotKind::Violin
-        | PlotKind::Interaction => {
-            let _ = chart.x("group");
-            let _ = chart.y("y");
+        PlotKind::Scatter => Plot::scatter(numeric(data, "x"), numeric(data, "y")),
+        PlotKind::Histogram => Plot::histogram(numeric(data, "x")),
+        PlotKind::Density => Plot::density(numeric(data, "x")),
+        PlotKind::Qq => Plot::qq(numeric(data, "x")),
+        PlotKind::PointInterval => Plot::point_interval(
+            category(data, "interval_group"),
+            numeric(data, "x"),
+            numeric(data, "lower"),
+            numeric(data, "upper"),
+        ),
+        PlotKind::Line => Plot::line(axis(data, "x"), numeric(data, "y")),
+        PlotKind::Interaction => Plot::interaction(
+            category(data, "group"),
+            numeric(data, "y"),
+            category(data, "hue"),
+            numeric(data, "lower"),
+            numeric(data, "upper"),
+        )
+        .hue(category(data, "hue"))
+        .interval_semantics(
+            crate::IntervalSemantics::new(
+                crate::IntervalKind::Confidence,
+                0.95,
+                crate::InferentialScale::Response,
+                "orchestrator fixture",
+            )
+            .unwrap(),
+        )
+        .interaction_source(crate::EstimateSource::EstimatedMarginalMean),
+        PlotKind::Coefficient => {
+            Plot::coefficient(category(data, "interval_group"), numeric(data, "x"))
+                .interval_bounds(numeric(data, "lower"), numeric(data, "upper"))
+                .interval_semantics(
+                    crate::IntervalSemantics::new(
+                        crate::IntervalKind::Confidence,
+                        0.95,
+                        crate::InferentialScale::Coefficient,
+                        "orchestrator fixture",
+                    )
+                    .unwrap(),
+                )
         }
-        PlotKind::Beeswarm => {
-            let _ = chart.x("x");
-            let _ = chart.y("group");
+        PlotKind::Forest => Plot::forest(
+            category(data, "interval_group"),
+            numeric(data, "x"),
+            numeric(data, "lower"),
+            numeric(data, "upper"),
+        )
+        .interval_semantics(
+            crate::IntervalSemantics::new(
+                crate::IntervalKind::Confidence,
+                0.95,
+                crate::InferentialScale::Coefficient,
+                "orchestrator fixture",
+            )
+            .unwrap(),
+        )
+        .reference_line(0.0),
+        PlotKind::Dumbbell => Plot::dumbbell(
+            category(data, "group"),
+            numeric(data, "x"),
+            numeric(data, "y"),
+        )
+        .group(category(data, "interval_group"))
+        .dumbbell_endpoints(
+            crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+        ),
+        PlotKind::Heatmap => Plot::heatmap(
+            category(data, "interval_group"),
+            category(data, "group"),
+            numeric(data, "color"),
+        ),
+        PlotKind::Bar => Plot::bar(category(data, "group"), numeric(data, "y")),
+        PlotKind::HorizontalBar => {
+            Plot::horizontal_bar(category(data, "group"), numeric(data, "y"))
         }
-        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
-            let _ = chart.x("x");
-            let _ = chart.y("interval_group");
-        }
-        PlotKind::Dumbbell => {
-            let _ = chart.x("group");
-            let _ = chart.y("x");
-        }
-        PlotKind::Heatmap => {
-            let _ = chart.x("interval_group");
-            let _ = chart.y("group");
-        }
-        PlotKind::Waterfall => {
-            let _ = chart.x("group");
-            let _ = chart.y("delta");
-        }
-        PlotKind::Matrix => {
-            let _ = chart.matrix_variables(vec!["x", "y"]);
-        }
-        _ => {
-            let _ = chart.x("x");
-            let _ = chart.y("y");
-        }
+        PlotKind::StackedBar => Plot::stacked_bar(
+            category(data, "group"),
+            numeric(data, "y"),
+            category(data, "hue"),
+        )
+        .hue(category(data, "hue")),
+        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
+            category(data, "group"),
+            numeric(data, "y"),
+            category(data, "hue"),
+        )
+        .hue(category(data, "hue")),
+        PlotKind::Boxplot => Plot::boxplot(category(data, "group"), numeric(data, "y")),
+        PlotKind::Violin => Plot::violin(category(data, "group"), numeric(data, "y")),
+        PlotKind::Regression => Plot::regression(numeric(data, "x"), numeric(data, "y")),
+        PlotKind::Marginal => Plot::marginal(numeric(data, "x"), numeric(data, "y")),
+        PlotKind::Matrix => Plot::matrix(vec![numeric(data, "x"), numeric(data, "y")]),
+        PlotKind::Beeswarm => Plot::beeswarm(
+            category(data, "group"),
+            numeric(data, "x"),
+            numeric(data, "color"),
+        ),
+        PlotKind::Waterfall => Plot::waterfall(
+            category(data, "group"),
+            numeric(data, "delta"),
+            constant_numeric(data, "base"),
+            constant_numeric(data, "terminal"),
+        ),
     }
-    if kind == PlotKind::MassSpectrum {
-        let _ = chart.add_peaks(vec![(2.0, 3.0)]);
-    }
-    let _ = chart.select(kind);
-    chart
 }
 
-fn configured_bar_chart(data: &DataFrame, kind: PlotKind) -> Chart<'_> {
-    let mut chart = if matches!(kind, PlotKind::StackedBar | PlotKind::StackedHorizontalBar) {
-        Chart::new(data).group("hue").hue("hue")
-    } else {
-        Chart::new(data)
-    };
-    let _ = chart.x("group");
-    let _ = chart.y("value");
-    let _ = chart.select(kind);
-    chart
+fn configured_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+    use crate::test_support::{category, numeric};
+
+    match kind {
+        PlotKind::Bar => Plot::bar(category(data, "group"), numeric(data, "value")),
+        PlotKind::HorizontalBar => {
+            Plot::horizontal_bar(category(data, "group"), numeric(data, "value"))
+        }
+        PlotKind::StackedBar => Plot::stacked_bar(
+            category(data, "group"),
+            numeric(data, "value"),
+            category(data, "hue"),
+        )
+        .hue(category(data, "hue")),
+        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
+            category(data, "group"),
+            numeric(data, "value"),
+            category(data, "hue"),
+        )
+        .hue(category(data, "hue")),
+        _ => panic!("unsupported bar fixture kind {kind:?}"),
+    }
 }
 
 fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> DataFrame {
@@ -403,7 +428,7 @@ fn categorical_fault_fixture(column: &str) -> DataFrame {
     data
 }
 
-fn assert_rejected_before_begin(chart: &Chart<'_>, kind: PlotKind) -> String {
+fn assert_rejected_before_begin(chart: &Plot, kind: PlotKind) -> String {
     let mut backend = RecordingBackend::default();
     let error = chart.render_kind(kind, &mut backend).unwrap_err();
     assert_eq!((backend.begins, backend.ends), (0, 0), "{kind:?}");
@@ -418,6 +443,15 @@ fn test_directory(name: &str) -> PathBuf {
     ));
     std::fs::create_dir(&path).unwrap();
     path
+}
+
+fn svg_bytes(plot: Plot) -> Vec<u8> {
+    let directory = test_directory("svg-bytes");
+    let output = directory.join("figure.svg");
+    plot.svg(&output).unwrap();
+    let bytes = std::fs::read(&output).unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    bytes
 }
 
 fn assert_no_staging_files(directory: &Path) {

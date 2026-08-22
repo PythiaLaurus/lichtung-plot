@@ -10,7 +10,6 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::Error;
-use polars::prelude::DataType;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::layout::{AxisSpec, AxisTick, Layout, PanelBox};
@@ -21,7 +20,7 @@ use crate::spec::{
     HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPosition,
     PlotRenderContext, PlotRenderResult, ValueSort,
 };
-use crate::Chart;
+use crate::Plot;
 
 const MAX_CELLS: usize = 1_000_000;
 const ANNOTATION_FONT_SIZE: u32 = 11;
@@ -47,7 +46,7 @@ struct ColorDomain {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -176,7 +175,7 @@ pub(crate) fn render(
 }
 
 fn prepare<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<HeatmapData, Error> {
     let data = data.into();
@@ -193,7 +192,7 @@ fn prepare<'a>(
 
     let x_values = normalized_categories(data, x_col, "x")?;
     let y_values = normalized_categories(data, y_col, "y")?;
-    let fills = nullable_finite_f64(data, color_col)?;
+    let fills = crate::data::nullable_finite_f64(data, color_col, "heatmap")?;
     let highlights = chart
         .heatmap_highlight_col()
         .map(|column| crate::data::strict_bool(data, column, "heatmap"))
@@ -300,7 +299,7 @@ fn prepare<'a>(
     })
 }
 
-fn validate_options(chart: &Chart<'_>) -> Result<(), Error> {
+fn validate_options(chart: &Plot) -> Result<(), Error> {
     if chart.x_axis_spec() != &AxisSpec::default() || chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "heatmap: categorical axis limits and tick-count overrides are not supported".into(),
@@ -333,7 +332,7 @@ fn validate_options(chart: &Chart<'_>) -> Result<(), Error> {
 }
 
 fn resolve_null_row_annotations(
-    chart: &Chart<'_>,
+    chart: &Plot,
     layout: HeatmapLayout,
     y_levels: &[String],
     cells: &[Option<f64>],
@@ -406,130 +405,6 @@ fn normalized_categories(
             }
         })
         .collect()
-}
-
-fn nullable_finite_f64(
-    data: crate::data::PlotData<'_>,
-    column: &str,
-) -> Result<Vec<Option<f64>>, Error> {
-    let source = data
-        .column(column)
-        .map_err(|error| Error::Data(format!("heatmap: column {column:?}: {error}")))?;
-    if !source.dtype().is_numeric() {
-        return Err(Error::Data(format!(
-            "heatmap: color column {column:?} must have a numeric dtype, got {:?}",
-            source.dtype()
-        )));
-    }
-    validate_exact_integer_fill(data, source, column)?;
-    let values = source
-        .cast(&DataType::Float64)
-        .map_err(|error| Error::Data(format!("heatmap: cast {column:?}: {error}")))?;
-    values
-        .f64()
-        .map_err(|error| Error::Data(format!("heatmap: as f64 {column:?}: {error}")))?
-        .iter()
-        .enumerate()
-        .map(|(row, value)| match value {
-            Some(value) if value.is_finite() => Ok(Some(value)),
-            Some(value) => Err(Error::Data(format!(
-                "heatmap: color column {column:?} contains non-finite value {value} at source row {}",
-                data.source_row(row)
-            ))),
-            None => Ok(None),
-        })
-        .collect()
-}
-
-fn validate_exact_integer_fill(
-    data: crate::data::PlotData<'_>,
-    source: &polars::prelude::Column,
-    column: &str,
-) -> Result<(), Error> {
-    match source.dtype() {
-        DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-            let values = source
-                .cast(&DataType::Int64)
-                .map_err(|error| Error::Data(format!("heatmap: cast {column:?}: {error}")))?;
-            for (row, value) in values
-                .i64()
-                .map_err(|error| Error::Data(format!("heatmap: as i64 {column:?}: {error}")))?
-                .iter()
-                .enumerate()
-            {
-                if value.is_some_and(|value| !integer_is_exact_f64(value.unsigned_abs().into())) {
-                    let source_row = data.source_row(row);
-                    return Err(Error::Data(format!(
-                        "heatmap: integer color value in column {column:?} at source row {source_row} cannot be represented exactly as f64"
-                    )));
-                }
-            }
-        }
-        DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-            let values = source
-                .cast(&DataType::UInt64)
-                .map_err(|error| Error::Data(format!("heatmap: cast {column:?}: {error}")))?;
-            for (row, value) in values
-                .u64()
-                .map_err(|error| Error::Data(format!("heatmap: as u64 {column:?}: {error}")))?
-                .iter()
-                .enumerate()
-            {
-                if value.is_some_and(|value| !integer_is_exact_f64(value.into())) {
-                    let source_row = data.source_row(row);
-                    return Err(Error::Data(format!(
-                        "heatmap: integer color value in column {column:?} at source row {source_row} cannot be represented exactly as f64"
-                    )));
-                }
-            }
-        }
-        DataType::Int128 => {
-            for (row, value) in source
-                .i128()
-                .map_err(|error| Error::Data(format!("heatmap: as i128 {column:?}: {error}")))?
-                .iter()
-                .enumerate()
-            {
-                if value.is_some_and(|value| !integer_is_exact_f64(value.unsigned_abs())) {
-                    let source_row = data.source_row(row);
-                    return Err(Error::Data(format!(
-                        "heatmap: integer color value in column {column:?} at source row {source_row} cannot be represented exactly as f64"
-                    )));
-                }
-            }
-        }
-        DataType::UInt128 => {
-            for (row, value) in source
-                .u128()
-                .map_err(|error| Error::Data(format!("heatmap: as u128 {column:?}: {error}")))?
-                .iter()
-                .enumerate()
-            {
-                if value.is_some_and(|value| !integer_is_exact_f64(value)) {
-                    let source_row = data.source_row(row);
-                    return Err(Error::Data(format!(
-                        "heatmap: integer color value in column {column:?} at source row {source_row} cannot be represented exactly as f64"
-                    )));
-                }
-            }
-        }
-        dtype if dtype.is_integer() => {
-            return Err(Error::Data(format!(
-                "heatmap: integer color column {column:?} with dtype {dtype:?} cannot be checked for exact f64 representation"
-            )));
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn integer_is_exact_f64(magnitude: u128) -> bool {
-    if magnitude == 0 {
-        return true;
-    }
-    let significant_bits = u128::BITS - magnitude.leading_zeros();
-    significant_bits <= f64::MANTISSA_DIGITS
-        || magnitude.trailing_zeros() >= significant_bits - f64::MANTISSA_DIGITS
 }
 
 fn observed_order(values: &[String]) -> Vec<String> {
@@ -645,7 +520,7 @@ fn color_domain(
 }
 
 fn draw_cells(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
     backend: &mut dyn Backend,
@@ -749,7 +624,7 @@ fn draw_cells(
 }
 
 fn draw_null_row_annotation(
-    chart: &Chart<'_>,
+    chart: &Plot,
     annotation: &str,
     left: f64,
     right: f64,
@@ -785,7 +660,7 @@ fn draw_null_row_annotation(
 }
 
 fn validate_annotation_fit(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
 ) -> Result<(), Error> {
@@ -834,7 +709,7 @@ fn validate_annotation_fit(
 }
 
 fn draw_colorbar(
-    chart: &Chart<'_>,
+    chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
     color_label: &crate::layout::TextBlock,

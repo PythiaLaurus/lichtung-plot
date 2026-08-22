@@ -24,8 +24,8 @@ use crate::layout::{self, AxisSpec, Layout, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range};
-use crate::Chart;
 use crate::Error;
+use crate::Plot;
 
 const MARGINAL_KDE_CUT: f64 = 3.0;
 const MARGINAL_KDE_GRID_POINTS: usize = 256;
@@ -52,7 +52,7 @@ struct HueGroup {
 /// and legend entries.
 #[allow(clippy::if_not_else)]
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -339,45 +339,11 @@ fn validate_marginal_range<'a>(
 
 /// Build graphical groups while keeping hue as color-only metadata.
 fn build_groups<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let data = data.into();
     let palette = chart.palette();
-
-    // If pre-computed coords exist, use them (single group, no hue).
-    if !chart.marginal_coords().is_empty() {
-        let mut xs = Vec::with_capacity(chart.marginal_coords().len());
-        let mut ys = Vec::with_capacity(chart.marginal_coords().len());
-        for (index, (x, y)) in chart.marginal_coords().iter().copied().enumerate() {
-            if x.is_infinite() || y.is_infinite() {
-                return Err(Error::Data(format!(
-                    "marginal: injected x/y channels at supplemental row {index} contains infinity ({x}, {y})"
-                )));
-            }
-            if x.is_nan() || y.is_nan() {
-                continue;
-            }
-            xs.push(x);
-            ys.push(y);
-        }
-        if xs.is_empty() {
-            return Err(Error::Data(
-                "marginal: no injected points remain after jointly dropping NaN pairs".into(),
-            ));
-        }
-        let color = palette.colors[0];
-        return Ok((
-            vec![HueGroup {
-                label: String::new(),
-                hue: None,
-                x: xs,
-                y: ys,
-                color,
-            }],
-            Vec::new(),
-        ));
-    }
 
     let x_col = chart
         .x_col()

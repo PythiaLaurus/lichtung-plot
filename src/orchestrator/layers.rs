@@ -5,11 +5,11 @@ use crate::Error;
 use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{LineMode, PlotKind, PlotRenderResult};
-use crate::{Chart, GuideSpec};
+use crate::{GuideSpec, Plot};
 
 const MAX_EXPLICIT_TICKS: usize = 10_000;
 
-impl Chart<'_> {
+impl Plot {
     pub(crate) fn validate_supplemental_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         let configured = self.explicit_x_ticks().is_some()
             || self.explicit_y_ticks().is_some()
@@ -85,7 +85,7 @@ impl Chart<'_> {
 }
 
 pub(crate) fn apply(
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &mut PlotRenderResult,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -205,15 +205,14 @@ fn same_coordinate(left: f64, right: f64) -> bool {
     left.to_bits() == right.to_bits() || (left == 0.0 && right == 0.0)
 }
 
-fn numeric_axes(chart: &Chart<'_>, kind: PlotKind) -> (bool, bool) {
+fn numeric_axes(chart: &Plot, kind: PlotKind) -> (bool, bool) {
     match kind {
         PlotKind::Scatter
         | PlotKind::Histogram
         | PlotKind::Density
         | PlotKind::Qq
         | PlotKind::Regression
-        | PlotKind::Marginal
-        | PlotKind::MassSpectrum => (true, true),
+        | PlotKind::Marginal => (true, true),
         PlotKind::Line if chart.line_mode_spec() != LineMode::Trajectory => (true, true),
         PlotKind::PointInterval
         | PlotKind::Coefficient

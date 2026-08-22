@@ -4,7 +4,7 @@ use crate::Error;
 
 use crate::data::PlotData;
 use crate::render::backend::PointStyle;
-use crate::{Chart, RawOverlay};
+use crate::{Plot, RawOverlay};
 
 pub(crate) struct DistributionObservation {
     pub(crate) source_row: usize,
@@ -29,7 +29,7 @@ pub(crate) struct DistributionSample {
 }
 
 pub(crate) fn prepare(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: PlotData<'_>,
     family: &str,
 ) -> Result<DistributionSample, Error> {

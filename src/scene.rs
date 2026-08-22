@@ -17,21 +17,17 @@ const MAX_EXPORT_PIXELS_F64: f64 = 100_000_000.0;
 #[cfg(feature = "png")]
 const MAX_CONVERSION_SCENE_BYTES: usize = 64 * 1024 * 1024;
 
-/// One immutable, fully rendered SVG scene shared by SVG and PNG output.
-///
-/// [`crate::Chart::render_scene`] and [`crate::Figure::render_scene`] perform
-/// layout and rendering once. SVG access is exact and allocation-free; optional
-/// PNG conversion consumes these same bytes without laying out the plot again.
-pub struct RenderedSvgScene {
+/// One internal fully rendered SVG scene shared by terminal outputs.
+pub(crate) struct RenderedScene {
     width_css_px: u32,
     height_css_px: u32,
     svg: Box<[u8]>,
 }
 
-impl fmt::Debug for RenderedSvgScene {
+impl fmt::Debug for RenderedScene {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("RenderedSvgScene")
+            .debug_struct("RenderedScene")
             .field("width_css_px", &self.width_css_px)
             .field("height_css_px", &self.height_css_px)
             .field("svg_bytes", &self.svg.len())
@@ -39,7 +35,7 @@ impl fmt::Debug for RenderedSvgScene {
     }
 }
 
-impl RenderedSvgScene {
+impl RenderedScene {
     pub(crate) fn new(width_css_px: u32, height_css_px: u32, svg: Vec<u8>) -> Self {
         Self {
             width_css_px,
@@ -48,28 +44,10 @@ impl RenderedSvgScene {
         }
     }
 
-    /// Return the scene width in CSS pixels.
-    #[must_use]
-    pub const fn width_css_px(&self) -> u32 {
-        self.width_css_px
-    }
-
-    /// Return the scene height in CSS pixels.
-    #[must_use]
-    pub const fn height_css_px(&self) -> u32 {
-        self.height_css_px
-    }
-
     /// Borrow the exact canonical SVG bytes.
     #[must_use]
-    pub fn svg_bytes(&self) -> &[u8] {
+    pub(crate) fn svg_bytes(&self) -> &[u8] {
         &self.svg
-    }
-
-    /// Consume the scene and return the exact canonical SVG bytes.
-    #[must_use]
-    pub fn into_svg_bytes(self) -> Vec<u8> {
-        self.svg.into_vec()
     }
 
     /// Return SVG bytes with every text element converted to vector paths.
@@ -84,7 +62,7 @@ impl RenderedSvgScene {
     /// cannot be parsed, its dimensions change, or any text remains after
     /// conversion.
     #[cfg(feature = "text-as-path")]
-    pub fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
         crate::render::svg_backend::convert_svg_text_to_paths(
             &self.svg,
             self.width_css_px,
@@ -99,7 +77,7 @@ impl RenderedSvgScene {
     /// Returns an error for invalid or excessive sizing, unavailable rendering
     /// fonts, SVG parsing failures, allocation failure, or PNG encoding failure.
     #[cfg(feature = "png")]
-    pub fn png_bytes(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
+    pub(crate) fn png_bytes(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
         self.validate_conversion_input("PNG")?;
         crate::render::svg_backend::rasterize_svg_bytes_to_png(
             &self.svg,

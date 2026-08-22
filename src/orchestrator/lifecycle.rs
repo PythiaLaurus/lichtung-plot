@@ -3,13 +3,13 @@
 use crate::Error;
 
 use super::backend::{DeferredBackend, NullBackend};
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::render::backend::Backend;
 use crate::spec::{
     DecorationMode, HeatmapLabelFit, HeatmapLayout, PlotKind, PlotRenderContext, PlotRenderResult,
 };
 
-impl Chart<'_> {
+impl Plot {
     pub(super) fn render_kind(
         &self,
         kind: PlotKind,
@@ -32,6 +32,7 @@ impl Chart<'_> {
                 "{kind:?}: fully-null heatmap row annotations are supported only by PlotKind::Heatmap"
             )));
         }
+        self.validate_value_alignment()?;
         self.validate_channel_configuration(kind)?;
         self.validate_interval_configuration(kind)?;
         self.validate_facet_configuration(kind)?;
@@ -140,10 +141,15 @@ impl Chart<'_> {
                 )));
             }
         }
-        if let Some(column) = self.raw_overlay_source_row_col() {
-            return crate::data::strict_source_rows(self.data(), column, "raw overlay")
-                .map(std::borrow::Cow::Owned)
-                .map(Some);
+        if let Some(rows) = self.raw_overlay_source_row_map() {
+            if rows.len() != self.row_count() {
+                return Err(Error::Data(format!(
+                    "raw-overlay source-row map has length {}, but plot input has {} rows",
+                    rows.len(),
+                    self.row_count()
+                )));
+            }
+            return Ok(Some(std::borrow::Cow::Borrowed(rows)));
         }
         Ok(self.source_row_map().map(std::borrow::Cow::Borrowed))
     }

@@ -6,7 +6,7 @@ use crate::layout::{deterministic_text_width, PanelBox};
 use crate::render::backend::{
     Backend, BracketOrientation, BracketStyle, SignificanceBracket, SIGNIFICANCE_BRACKET_METRICS,
 };
-use crate::{Chart, ComparisonAnnotation, ComparisonEndpoint};
+use crate::{ComparisonAnnotation, ComparisonEndpoint, Plot};
 
 #[derive(Debug)]
 pub(crate) struct SignificancePlan {
@@ -44,7 +44,7 @@ struct ExactBracketSpan {
 }
 
 pub(crate) fn plan(
-    chart: &Chart<'_>,
+    chart: &Plot,
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
@@ -453,7 +453,7 @@ fn plan_comparisons_at(
     reason = "grouped anchors require explicit data, geometry, and legend constraints"
 )]
 pub(crate) fn plan_grouped(
-    chart: &Chart<'_>,
+    chart: &Plot,
     categories: &[String],
     groups: &[String],
     mark_hues: &[Vec<Option<String>>],
@@ -484,7 +484,7 @@ pub(crate) fn plan_grouped(
     reason = "horizontal anchors require explicit data, geometry, and stacking policy"
 )]
 pub(crate) fn plan_horizontal(
-    chart: &Chart<'_>,
+    chart: &Plot,
     categories: &[String],
     groups: &[String],
     mark_hues: &[Vec<Option<String>>],
@@ -528,7 +528,7 @@ pub(crate) fn plan_horizontal(
     reason = "grouped vertical and horizontal planners share one exact-anchor implementation"
 )]
 fn plan_grouped_oriented(
-    chart: &Chart<'_>,
+    chart: &Plot,
     categories: &[String],
     groups: &[String],
     mark_hues: &[Vec<Option<String>>],
@@ -993,7 +993,7 @@ fn data_fits_below_ceiling(range: (f64, f64), panel: PanelBox, maximum: f64, cei
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     brackets: &[SignificanceBracket],
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {

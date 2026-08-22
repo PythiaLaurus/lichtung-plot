@@ -1,4 +1,4 @@
-//! Heterogeneous one-canvas figure composition.
+//! Heterogeneous plot composition on one canvas.
 
 use std::path::Path;
 
@@ -12,11 +12,9 @@ use crate::layout::figure::{
 use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox};
 use crate::render::backend::{with_layer, Backend};
 use crate::render::svg_backend::SvgBackend;
-use crate::scene::RenderedSvgScene;
+use crate::scene::RenderedScene;
 use crate::spec::DecorationMode;
-#[cfg(feature = "png")]
-use crate::PngOptions;
-use crate::{Chart, FigureLegendPolicy, Labels, PlotKind, Theme};
+use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, PngOptions, SvgText, Theme};
 
 type LegendEntrySignature = (
     String,
@@ -36,8 +34,8 @@ struct FigurePanelPreflight {
     plan: crate::decorations::plan::PanelPlan,
 }
 
-struct FigurePreflight<'a> {
-    charts: Vec<Option<Chart<'a>>>,
+struct FigurePreflight {
+    charts: Vec<Option<Plot>>,
     figure_layout: FigureLayout,
     full_outer: PanelBox,
     outer: PanelBox,
@@ -56,10 +54,10 @@ struct FigureHeaderPlan {
 
 /// Categorical tick-label policy for composed figure grids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FigureCategoryLabels {
+pub enum CanvasCategoryLabels {
     /// Render categorical tick labels in every panel.
     #[default]
-    EveryPanel,
+    EveryPlot,
     /// Render categorical tick labels only in the first column of each row.
     FirstColumnPerRow,
 }
@@ -161,12 +159,12 @@ fn validate_header_overlap(
 }
 
 /// A typed grid of independently configured charts rendered on one canvas.
-pub struct Figure<'a> {
+pub struct Canvas {
     rows: usize,
     columns: usize,
-    panels: Vec<Option<Chart<'a>>>,
+    panels: Vec<Option<Plot>>,
     text_panels: Vec<Option<TextPanel>>,
-    legend_policy: FigureLegendPolicy,
+    legend_policy: CanvasLegendPolicy,
     shared_legend_gap: Option<f64>,
     width: u32,
     height: u32,
@@ -174,14 +172,16 @@ pub struct Figure<'a> {
     subtitle: Option<String>,
     caption: Option<String>,
     labels: Option<Labels>,
-    category_labels: FigureCategoryLabels,
+    category_labels: CanvasCategoryLabels,
     column_headers: Vec<FigureHeader>,
     row_headers: Vec<FigureHeader>,
     row_titles: Vec<FigureHeader>,
     x_range_groups: Vec<Vec<usize>>,
+    png_options: PngOptions,
+    svg_text: SvgText,
 }
 
-impl<'a> Figure<'a> {
+impl Canvas {
     /// Construct a non-empty panel grid.
     pub fn grid(rows: usize, columns: usize) -> Result<Self, Error> {
         if rows == 0 || columns == 0 {
@@ -197,7 +197,7 @@ impl<'a> Figure<'a> {
             columns,
             panels: (0..panel_count).map(|_| None).collect(),
             text_panels: (0..panel_count).map(|_| None).collect(),
-            legend_policy: FigureLegendPolicy::PerPanel,
+            legend_policy: CanvasLegendPolicy::PerPlot,
             shared_legend_gap: None,
             width: 960,
             height: 640,
@@ -205,16 +205,18 @@ impl<'a> Figure<'a> {
             subtitle: None,
             caption: None,
             labels: None,
-            category_labels: FigureCategoryLabels::EveryPanel,
+            category_labels: CanvasCategoryLabels::EveryPlot,
             column_headers: Vec::new(),
             row_headers: Vec::new(),
             row_titles: Vec::new(),
             x_range_groups: Vec::new(),
+            png_options: PngOptions::default(),
+            svg_text: SvgText::default(),
         })
     }
 
     /// Place one chart in an unoccupied zero-based grid cell.
-    pub fn panel(mut self, row: usize, column: usize, chart: Chart<'a>) -> Result<Self, Error> {
+    pub fn panel(mut self, row: usize, column: usize, chart: Plot) -> Result<Self, Error> {
         if row >= self.rows || column >= self.columns {
             return Err(Error::Data(format!(
                 "figure panel ({row}, {column}) is outside {}x{} grid",
@@ -256,7 +258,7 @@ impl<'a> Figure<'a> {
 
     /// Set per-panel, shared, or hidden legend behavior.
     #[must_use]
-    pub fn legend_policy(mut self, policy: FigureLegendPolicy) -> Self {
+    pub fn legend_policy(mut self, policy: CanvasLegendPolicy) -> Self {
         self.legend_policy = policy;
         self
     }
@@ -308,7 +310,7 @@ impl<'a> Figure<'a> {
 
     /// Configure duplicate categorical-label handling across the grid.
     #[must_use]
-    pub const fn category_labels(mut self, policy: FigureCategoryLabels) -> Self {
+    pub const fn category_labels(mut self, policy: CanvasCategoryLabels) -> Self {
         self.category_labels = policy;
         self
     }
@@ -384,15 +386,23 @@ impl<'a> Figure<'a> {
         self
     }
 
-    /// Render through a caller-owned backend with exactly one canvas lifecycle.
-    pub fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        let preflight = self.preflight_plan()?;
-        self.render_preflighted(preflight, backend)
+    /// Configure PNG sizing and compression before the first terminal output.
+    #[must_use]
+    pub const fn png_options(mut self, options: PngOptions) -> Self {
+        self.png_options = options;
+        self
+    }
+
+    /// Configure selectable text or outlined text for SVG output.
+    #[must_use]
+    pub const fn svg_text(mut self, text: SvgText) -> Self {
+        self.svg_text = text;
+        self
     }
 
     fn render_preflighted(
         &self,
-        preflight: FigurePreflight<'a>,
+        preflight: FigurePreflight,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let mut backend =
@@ -410,108 +420,39 @@ impl<'a> Figure<'a> {
         self.preflight_plan().map(drop)
     }
 
+    #[cfg(test)]
+    pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        let preflight = self.preflight_plan()?;
+        self.render_preflighted(preflight, backend)
+    }
+
     /// Render one immutable canonical composed SVG scene without creating a file.
     ///
     /// # Errors
     ///
     /// Returns an error when figure preflight or SVG rendering fails.
-    pub fn render_scene(&self) -> Result<RenderedSvgScene, Error> {
+    fn render_scene(&self) -> Result<RenderedScene, Error> {
         let preflight = self.preflight_plan()?;
         let mut backend = SvgBackend::in_memory(self.width, self.height);
         self.render_preflighted(preflight, &mut backend)?;
-        Ok(RenderedSvgScene::new(
+        Ok(RenderedScene::new(
             self.width,
             self.height,
             backend.into_bytes()?,
         ))
     }
 
-    /// Render the canonical composed SVG scene to owned bytes without creating a file.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when figure preflight or SVG rendering fails.
-    pub fn render_to_svg_bytes(&self) -> Result<Vec<u8>, Error> {
-        self.render_scene().map(RenderedSvgScene::into_svg_bytes)
+    /// Render once, publish SVG immediately, and return an opaque reusable output.
+    pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+        let output = Output::new(self.render_scene()?, self.png_options, self.svg_text);
+        output.svg(path)
     }
 
-    /// Render deterministic SVG output.
-    pub fn render_to_svg(&self, path: &Path) -> Result<(), Error> {
-        let scene = self.render_scene()?;
-        let staged = crate::orchestrator::reserve_unique_sibling_temp_path(path, "svg")?;
-        crate::orchestrator::with_temporary_artifacts(vec![staged.clone()], || {
-            std::fs::write(&staged, scene.svg_bytes()).map_err(Error::Io)?;
-            crate::orchestrator::publish_staged(&staged, path)
-        })
-    }
-
-    /// Render the canonical composed scene to default-sized PNG bytes.
+    /// Render once, publish PNG immediately, and return an opaque reusable output.
     #[cfg(feature = "png")]
-    pub fn render_to_png_bytes(&self) -> Result<Vec<u8>, Error> {
-        self.render_to_png_bytes_with_options(&PngOptions::default())
-    }
-
-    /// Render the canonical composed scene to PNG bytes with explicit options.
-    #[cfg(feature = "png")]
-    pub fn render_to_png_bytes_with_options(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
-        self.render_scene()?.png_bytes(options)
-    }
-
-    /// Render PNG by rasterizing the canonical SVG scene.
-    #[cfg(feature = "png")]
-    pub fn render_to_png(&self, path: &Path) -> Result<(), Error> {
-        self.render_to_png_with_options(path, &PngOptions::default())
-    }
-
-    /// Render PNG with explicit rasterization options.
-    #[cfg(feature = "png")]
-    pub fn render_to_png_with_options(
-        &self,
-        path: &Path,
-        options: &PngOptions,
-    ) -> Result<(), Error> {
-        let png = self.render_to_png_bytes_with_options(options)?;
-        let staged = crate::orchestrator::reserve_unique_sibling_temp_path(path, "png")?;
-        crate::orchestrator::with_temporary_artifacts(vec![staged.clone()], || {
-            std::fs::write(&staged, &png).map_err(Error::Io)?;
-            crate::orchestrator::publish_staged(&staged, path)
-        })
-    }
-
-    /// Render one SVG scene and publish both SVG and PNG artifacts.
-    #[cfg(feature = "png")]
-    pub fn render_to_svg_and_png(&self, svg_path: &Path, png_path: &Path) -> Result<(), Error> {
-        self.render_to_svg_and_png_with_options(svg_path, png_path, &PngOptions::default())
-    }
-
-    /// Render one SVG scene and publish SVG and PNG with explicit PNG options.
-    #[cfg(feature = "png")]
-    pub fn render_to_svg_and_png_with_options(
-        &self,
-        svg_path: &Path,
-        png_path: &Path,
-        options: &PngOptions,
-    ) -> Result<(), Error> {
-        if crate::orchestrator::paths_resolve_to_same_destination(svg_path, png_path)? {
-            return Err(Error::Data(
-                "SVG and PNG output paths must be distinct".into(),
-            ));
-        }
-        let scene = self.render_scene()?;
-        let png = scene.png_bytes(options)?;
-        let (staged_svg, staged_png) =
-            crate::orchestrator::reserve_staging_pair(svg_path, "svg", png_path, "png")?;
-        crate::orchestrator::with_temporary_artifacts(
-            vec![staged_svg.clone(), staged_png.clone()],
-            || {
-                std::fs::write(&staged_svg, scene.svg_bytes()).map_err(Error::Io)?;
-                std::fs::write(&staged_png, &png).map_err(Error::Io)?;
-                crate::orchestrator::publish_staged_pair([
-                    (staged_svg.as_path(), svg_path),
-                    (staged_png.as_path(), png_path),
-                ])
-            },
-        )
+    pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+        let output = Output::new(self.render_scene()?, self.png_options, self.svg_text);
+        output.png(path)
     }
 
     fn validate_structure(&self) -> Result<(), Error> {
@@ -525,9 +466,9 @@ impl<'a> Figure<'a> {
                 "figure requires at least one configured panel".into(),
             ));
         }
-        if self.shared_legend_gap.is_some() && self.legend_policy != FigureLegendPolicy::Shared {
+        if self.shared_legend_gap.is_some() && self.legend_policy != CanvasLegendPolicy::Shared {
             return Err(Error::Data(
-                "figure shared legend gap requires FigureLegendPolicy::Shared".into(),
+                "figure shared legend gap requires CanvasLegendPolicy::Shared".into(),
             ));
         }
         for chart in self.panels.iter().flatten() {
@@ -638,7 +579,7 @@ impl<'a> Figure<'a> {
         clippy::too_many_lines,
         reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
     )]
-    fn preflight_plan(&self) -> Result<FigurePreflight<'a>, Error> {
+    fn preflight_plan(&self) -> Result<FigurePreflight, Error> {
         self.validate_structure()?;
         let palette = Theme::Publication.palette();
         let figure_layout = FigureLayout::measured_composed_canvas(
@@ -662,7 +603,7 @@ impl<'a> Figure<'a> {
             ),
         )?;
         let full_outer = figure_layout.panel_box;
-        let hue_groups = if self.legend_policy == FigureLegendPolicy::Shared {
+        let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
             self.figure_hue_groups(full_outer)?
         } else {
             Vec::new()
@@ -692,7 +633,7 @@ impl<'a> Figure<'a> {
                 })
             })
             .collect::<Vec<_>>();
-        if self.category_labels == FigureCategoryLabels::FirstColumnPerRow {
+        if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
             for row in 0..self.rows {
                 let first_index = row * self.columns;
                 let first = charts[first_index].as_ref().ok_or_else(|| {
@@ -717,7 +658,7 @@ impl<'a> Figure<'a> {
                 }
             }
         }
-        let shared_legend = if self.legend_policy == FigureLegendPolicy::Shared {
+        let shared_legend = if self.legend_policy == CanvasLegendPolicy::Shared {
             Self::preflight_shared_legend(&charts, full_outer)?
         } else {
             None
@@ -742,7 +683,7 @@ impl<'a> Figure<'a> {
             .iter()
             .flatten()
             .next()
-            .map_or_else(|| palette.clone(), Chart::palette);
+            .map_or_else(|| palette.clone(), Plot::palette);
         let header_outer = outer;
         let column_header_height = if self.column_headers.is_empty() {
             0.0
@@ -959,7 +900,7 @@ impl<'a> Figure<'a> {
                 .as_ref()
                 .expect("measured figure panel remains configured");
             let cell = cells[index];
-            let role = if self.legend_policy == FigureLegendPolicy::PerPanel {
+            let role = if self.legend_policy == CanvasLegendPolicy::PerPlot {
                 crate::decorations::plan::LegendRole::Panel
             } else {
                 crate::decorations::plan::LegendRole::Suppressed
@@ -992,7 +933,7 @@ impl<'a> Figure<'a> {
 
     fn render_open_canvas(
         &self,
-        preflight: FigurePreflight<'a>,
+        preflight: FigurePreflight,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let palette = Theme::Publication.palette();
@@ -1001,7 +942,7 @@ impl<'a> Figure<'a> {
             .iter()
             .flatten()
             .next()
-            .map_or_else(|| palette.clone(), Chart::palette);
+            .map_or_else(|| palette.clone(), Plot::palette);
         for panel in &preflight.panels {
             let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed figure panel disappeared during preflight".into())
@@ -1119,7 +1060,7 @@ impl<'a> Figure<'a> {
     }
 
     fn preflight_shared_legend(
-        charts: &[Option<Chart<'a>>],
+        charts: &[Option<Plot>],
         panel: PanelBox,
     ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
         let mut expected_title: Option<(String, String)> = None;
@@ -1195,7 +1136,7 @@ impl<'a> Figure<'a> {
     }
 }
 
-fn chart_category_domain(chart: &Chart<'_>) -> Result<Vec<String>, Error> {
+fn chart_category_domain(chart: &Plot) -> Result<Vec<String>, Error> {
     let column = chart
         .x_col()
         .ok_or_else(|| Error::Data("shared category labels require an x category".into()))?;
@@ -1337,11 +1278,7 @@ fn draw_text_panel(
     clippy::cast_precision_loss,
     reason = "validated panel title positions are projected into backend pixel coordinates"
 )]
-fn draw_panel_header(
-    chart: &Chart<'_>,
-    cell: PanelBox,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
+fn draw_panel_header(chart: &Plot, cell: PanelBox, backend: &mut dyn Backend) -> Result<(), Error> {
     let palette = chart.palette();
     let title = palette
         .show_title

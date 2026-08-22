@@ -9,7 +9,7 @@ use crate::Error;
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, ValueSort};
-use crate::Chart;
+use crate::Plot;
 
 const CAP_HALF_HEIGHT_PX: f64 = 4.0;
 
@@ -24,7 +24,7 @@ struct PointIntervalRow {
     reason = "point-interval range, layout, and estimated/unavailable row geometry share one renderer boundary"
 )]
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -158,7 +158,7 @@ pub(crate) fn render(
 }
 
 fn prepare<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
     let data = data.into();
@@ -326,17 +326,24 @@ mod tests {
         )
     }
 
-    fn chart(data: &DataFrame) -> Chart<'_> {
-        let mut chart = Chart::new(data).interval_bounds("lower", "upper");
-        let _ = chart.x("estimate").y("category");
-        chart
+    fn chart(data: &DataFrame) -> Plot {
+        Plot::point_interval(
+            crate::test_support::category(data, "category"),
+            crate::test_support::numeric(data, "estimate"),
+            crate::test_support::numeric(data, "lower"),
+            crate::test_support::numeric(data, "upper"),
+        )
+    }
+
+    fn prepare_chart(chart: &Plot) -> Result<Vec<PointIntervalRow>, Error> {
+        prepare(chart, chart)
     }
 
     #[test]
     fn prepare_preserves_rows_by_default() {
         let data = valid_data();
 
-        let rows = prepare(&chart(&data), &data).unwrap();
+        let rows = prepare_chart(&chart(&data)).unwrap();
 
         assert_eq!(
             rows.iter()
@@ -350,7 +357,7 @@ mod tests {
     fn prepare_sorts_rows_by_estimate() {
         let data = valid_data();
 
-        let rows = prepare(&chart(&data).value_sort(ValueSort::Ascending), &data).unwrap();
+        let rows = prepare_chart(&chart(&data).value_sort(ValueSort::Ascending)).unwrap();
 
         assert_eq!(
             rows.iter()
@@ -369,7 +376,7 @@ mod tests {
             Series::new("upper".into(), Vec::<f64>::new()),
         );
 
-        assert!(prepare(&chart(&data), &data).is_err());
+        assert!(prepare_chart(&chart(&data)).is_err());
     }
 
     #[test]
@@ -381,7 +388,7 @@ mod tests {
             Series::new("upper".into(), [2.0_f64, 3.0]),
         );
 
-        assert!(prepare(&chart(&data), &data)
+        assert!(prepare_chart(&chart(&data))
             .unwrap_err()
             .to_string()
             .contains("label is empty"));
@@ -396,7 +403,7 @@ mod tests {
             Series::new("upper".into(), [2.0_f64, 3.0]),
         );
 
-        assert!(prepare(&chart(&data), &data)
+        assert!(prepare_chart(&chart(&data))
             .unwrap_err()
             .to_string()
             .contains("duplicate rendered"));
@@ -411,7 +418,7 @@ mod tests {
             Series::new("upper".into(), [2.0_f64, 3.0]),
         );
 
-        assert!(prepare(&chart(&data), &data).is_err());
+        assert!(prepare_chart(&chart(&data)).is_err());
     }
 
     #[test]
@@ -426,7 +433,7 @@ mod tests {
                 Series::new("lower".into(), [0.0_f64, 1.0]),
                 Series::new("upper".into(), [2.0_f64, 3.0]),
             );
-            assert!(prepare(&chart(&data), &data).is_err());
+            assert!(prepare_chart(&chart(&data)).is_err());
         }
     }
 
@@ -439,7 +446,7 @@ mod tests {
             Series::new("upper".into(), [1.0_f64]),
         );
 
-        assert!(prepare(&chart(&data), &data)
+        assert!(prepare_chart(&chart(&data))
             .unwrap_err()
             .to_string()
             .contains("lower <= estimate <= upper"));
@@ -448,8 +455,12 @@ mod tests {
     #[test]
     fn prepare_rejects_hue_and_color() {
         let data = valid_data();
-        let hue_error = prepare(&chart(&data).hue("category"), &data).unwrap_err();
-        let color_error = prepare(&chart(&data).color("estimate"), &data).unwrap_err();
+        let hue_error =
+            prepare_chart(&chart(&data).hue(crate::test_support::category(&data, "category")))
+                .unwrap_err();
+        let color_error =
+            prepare_chart(&chart(&data).color(crate::test_support::numeric(&data, "estimate")))
+                .unwrap_err();
 
         assert!(
             hue_error.to_string().contains("hue column")
@@ -458,27 +469,10 @@ mod tests {
     }
 
     #[test]
-    fn prepare_requires_all_column_configuration() {
-        let data = valid_data();
-        let mut missing_x = Chart::new(&data).interval_bounds("lower", "upper");
-        let _ = missing_x.y("category");
-        let mut missing_y = Chart::new(&data).interval_bounds("lower", "upper");
-        let _ = missing_y.x("estimate");
-        let mut missing_bounds = Chart::new(&data);
-        let _ = missing_bounds.x("estimate").y("category");
-
-        assert!(
-            prepare(&missing_x, &data).is_err()
-                && prepare(&missing_y, &data).is_err()
-                && prepare(&missing_bounds, &data).is_err()
-        );
-    }
-
-    #[test]
     fn prepare_rejects_categorical_y_axis_overrides() {
         let data = valid_data();
 
-        let error = prepare(&chart(&data).y_limits(0.0, 1.0), &data)
+        let error = prepare_chart(&chart(&data).y_limits(0.0, 1.0))
             .unwrap_err()
             .to_string();
 

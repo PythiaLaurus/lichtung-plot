@@ -12,11 +12,11 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::Chart;
 use crate::Error;
+use crate::Plot;
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -26,26 +26,23 @@ pub(crate) fn render(
     let delta_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
-    let (base_col, terminal_col) = chart.waterfall_total_cols().ok_or_else(|| {
-        Error::Data("waterfall: base and terminal metadata columns not set".into())
-    })?;
+    let (base, terminal) = chart
+        .waterfall_totals()
+        .ok_or_else(|| Error::Data("waterfall: base and terminal values not set".into()))?;
     let labels = crate::data::strict_strings(context.data, label_col, "waterfall")?;
     let display_labels =
         chart.resolve_label_domain("y-axis categories", labels.iter().map(String::as_str))?;
     let deltas = crate::data::strict_finite_f64(context.data, delta_col, "waterfall")?;
-    let bases = crate::data::strict_finite_f64(context.data, base_col, "waterfall")?;
-    let terminals = crate::data::strict_finite_f64(context.data, terminal_col, "waterfall")?;
-    if labels.is_empty()
-        || labels.len() != deltas.len()
-        || labels.len() != bases.len()
-        || labels.len() != terminals.len()
-    {
+    if labels.is_empty() || labels.len() != deltas.len() {
         return Err(Error::Data(
-            "waterfall: columns must have equal non-zero lengths".into(),
+            "waterfall: labels and deltas must have equal non-zero lengths".into(),
         ));
     }
-    let base = constant_metadata(&bases, "base")?;
-    let terminal = constant_metadata(&terminals, "terminal")?;
+    if !base.is_finite() || !terminal.is_finite() {
+        return Err(Error::Data(
+            "waterfall: base and terminal values must be finite".into(),
+        ));
+    }
     let computed = base + deltas.iter().sum::<f64>();
     let tolerance = 1e-8_f64.max(terminal.abs() * 1e-8);
     if (computed - terminal).abs() > tolerance {
@@ -262,18 +259,4 @@ fn plan_annotations(
             + rows.len().saturating_sub(1) as f64 * ANNOTATION_ROW_GAP
     };
     Ok(AnnotationPlan { items, height })
-}
-
-fn constant_metadata(values: &[f64], label: &str) -> Result<f64, Error> {
-    let first = values[0];
-    if !first.is_finite()
-        || values
-            .iter()
-            .any(|value| !value.is_finite() || (*value - first).abs() > 1e-12)
-    {
-        return Err(Error::Data(format!(
-            "waterfall: {label} metadata must be finite and constant"
-        )));
-    }
-    Ok(first)
 }

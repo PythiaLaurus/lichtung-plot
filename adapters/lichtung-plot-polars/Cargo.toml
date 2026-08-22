@@ -1,0 +1,18 @@
+[package]
+name = "lichtung-plot-polars"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+lichtung-plot = { path = "../..", default-features = false }
+polars = { version = "0.54", features = ["dtype-i128", "dtype-u128"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"

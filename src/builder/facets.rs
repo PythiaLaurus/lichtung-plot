@@ -1,27 +1,29 @@
 use crate::Error;
 
-use super::Chart;
+use super::Plot;
+use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, PlotKind};
+use crate::CategoryValues;
 
-impl<'a> Chart<'a> {
-    /// Split the selected chart into rows by a categorical column.
+impl Plot {
+    /// Split the selected plot into rows by categorical values.
     #[must_use]
-    pub fn facet_row(mut self, column: &'a str) -> Self {
-        self.facet_row_col = Some(column);
+    pub fn facet_row(mut self, values: CategoryValues) -> Self {
+        self.facet_row = Some(values);
         self
     }
 
-    /// Split the selected chart into columns by a categorical column.
+    /// Split the selected plot into columns by categorical values.
     #[must_use]
-    pub fn facet_col(mut self, column: &'a str) -> Self {
-        self.facet_col_col = Some(column);
+    pub fn facet_col(mut self, values: CategoryValues) -> Self {
+        self.facet_col = Some(values);
         self
     }
 
-    /// Wrap one categorical facet variable into the requested number of columns.
+    /// Wrap categorical facet values into the requested number of columns.
     #[must_use]
-    pub fn facet_wrap(mut self, column: &'a str, columns: usize) -> Self {
-        self.facet_wrap_col = Some(column);
+    pub fn facet_wrap(mut self, values: CategoryValues, columns: usize) -> Self {
+        self.facet_wrap = Some(values);
         self.facet_wrap_columns = Some(columns);
         self
     }
@@ -37,26 +39,26 @@ impl<'a> Chart<'a> {
         self.facet_scales
     }
 
-    pub(crate) const fn facet_columns(
+    pub(crate) fn facet_columns(
         &self,
     ) -> (
-        Option<&'a str>,
-        Option<&'a str>,
-        Option<&'a str>,
+        Option<&'static str>,
+        Option<&'static str>,
+        Option<&'static str>,
         Option<usize>,
     ) {
         (
-            self.facet_row_col,
-            self.facet_col_col,
-            self.facet_wrap_col,
+            self.facet_row.as_ref().map(|_| FACET_ROW),
+            self.facet_col.as_ref().map(|_| FACET_COLUMN),
+            self.facet_wrap.as_ref().map(|_| FACET_WRAP),
             self.facet_wrap_columns,
         )
     }
 
     pub(crate) fn without_facets(mut self) -> Self {
-        self.facet_row_col = None;
-        self.facet_col_col = None;
-        self.facet_wrap_col = None;
+        self.facet_row = None;
+        self.facet_col = None;
+        self.facet_wrap = None;
         self.facet_wrap_columns = None;
         self
     }
@@ -100,9 +102,7 @@ impl<'a> Chart<'a> {
     }
 
     pub(crate) const fn has_facets(&self) -> bool {
-        self.facet_row_col.is_some()
-            || self.facet_col_col.is_some()
-            || self.facet_wrap_col.is_some()
+        self.facet_row.is_some() || self.facet_col.is_some() || self.facet_wrap.is_some()
     }
 
     pub(crate) fn with_resolved_facet_ranges(

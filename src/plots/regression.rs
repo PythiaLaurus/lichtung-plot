@@ -15,7 +15,7 @@ use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, RegressionBand};
 use crate::stats::regression::OlsFit;
-use crate::Chart;
+use crate::Plot;
 
 const BAND_POINTS: usize = 40;
 
@@ -24,7 +24,7 @@ const BAND_POINTS: usize = 40;
     reason = "the renderer keeps fit, band, projection, marks, and provenance in one ordered lifecycle"
 )]
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {

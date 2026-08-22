@@ -8,7 +8,7 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
-use crate::Chart;
+use crate::Plot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct TraceStyle {
@@ -22,7 +22,7 @@ struct TraceStyle {
     reason = "validated category indices and panel coordinates are bounded by the canvas"
 )]
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -201,7 +201,7 @@ pub(crate) fn render(
 }
 
 fn resolve_trace_styles(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     traces: &[String],
     trace_levels: &[String],

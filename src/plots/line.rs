@@ -6,10 +6,12 @@ use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle};
+use crate::render::backend::{
+    with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
+};
 use crate::spec::{AxisDomain, LineMode, LinePathStyle, PlotRenderContext, PlotRenderResult};
 use crate::theme::ThemePalette;
-use crate::Chart;
+use crate::Plot;
 
 #[derive(Debug)]
 struct SeriesData {
@@ -21,6 +23,8 @@ struct SeriesData {
 #[derive(Debug)]
 struct PreparedPointLayer {
     points: Vec<(f64, f64)>,
+    labels: Option<Vec<String>>,
+    legend_label: Option<String>,
     style: PointStyle,
 }
 
@@ -47,7 +51,7 @@ struct TrajectoryPoint {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -58,7 +62,7 @@ pub(crate) fn render(
 }
 
 fn render_series(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -118,7 +122,7 @@ fn render_series(
         .collect::<Vec<_>>();
     legend_hues.sort_by_key(|(index, _)| *index);
     legend_hues.dedup_by(|left, right| left.1 == right.1);
-    let legends = legend_hues
+    let mut legends = legend_hues
         .into_iter()
         .map(|(index, label)| {
             LegendEntry::point(
@@ -126,26 +130,46 @@ fn render_series(
                 PointStyle::new(palette.colors[index % palette.colors.len()], 3),
             )
         })
-        .collect();
+        .collect::<Vec<_>>();
+    legends.extend(point_layers.iter().filter_map(|layer| {
+        layer
+            .legend_label
+            .as_ref()
+            .map(|label| LegendEntry::point(label.clone(), layer.style.clone()))
+    }));
     Ok(PlotRenderResult::new(layout, legends))
 }
 
-fn prepare_point_layers(chart: &Chart<'_>) -> Result<Vec<PreparedPointLayer>, Error> {
+fn prepare_point_layers(chart: &Plot) -> Result<Vec<PreparedPointLayer>, Error> {
     chart
         .point_layers()
         .iter()
         .enumerate()
         .map(|(index, layer)| {
             let context = format!("line point layer {index}");
-            let x = crate::data::strict_finite_f64(layer.data(), layer.x_column(), &context)?;
-            let y = crate::data::strict_finite_f64(layer.data(), layer.y_column(), &context)?;
+            let x = crate::data::strict_numeric_values(layer.x_values(), &context)?;
+            let y = crate::data::strict_numeric_values(layer.y_values(), &context)?;
             if x.is_empty() || x.len() != y.len() {
                 return Err(Error::Data(format!(
                     "{context}: x and y columns must have equal non-zero lengths"
                 )));
             }
+            let labels = layer
+                .label_values()
+                .map(|values| crate::data::strict_category_values(values, &context))
+                .transpose()?;
+            if labels
+                .as_ref()
+                .is_some_and(|labels| labels.len() != x.len())
+            {
+                return Err(Error::Data(format!(
+                    "{context}: labels must align one-to-one with x and y"
+                )));
+            }
             Ok(PreparedPointLayer {
                 points: x.into_iter().zip(y).collect(),
+                labels,
+                legend_label: layer.legend_label_text().map(str::to_owned),
                 style: layer.point_style(),
             })
         })
@@ -171,13 +195,45 @@ fn draw_point_layers(
                 })
                 .collect::<Vec<_>>();
             backend.draw_scatter(&projected, &layer.style)?;
+            if let Some(labels) = &layer.labels {
+                let x_range = layout.projection.x_range();
+                let y_range = layout.projection.y_range();
+                let label_offset = f64::from(layer.style.radius) + 2.0;
+                for ((source, point), label) in layer.points.iter().zip(&projected).zip(labels) {
+                    if source.0 < x_range.0
+                        || source.0 > x_range.1
+                        || source.1 < y_range.0
+                        || source.1 > y_range.1
+                    {
+                        continue;
+                    }
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "projected point-layer coordinates are finite canvas positions"
+                    )]
+                    backend.draw_text(
+                        (point.x + label_offset).max(0.0).round() as u32,
+                        (point.y + label_offset).max(0.0).round() as u32,
+                        label,
+                        &TextStyle {
+                            color: layer.style.color,
+                            font_family: crate::DEFAULT_FONT_FAMILY.to_owned(),
+                            font_size: 10,
+                            weight: crate::TextWeight::Normal,
+                            anchor: TextAnchor::Start,
+                            rotation: 0.0,
+                        },
+                    )?;
+                }
+            }
         }
         Ok(())
     })
 }
 
 fn render_trajectory(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -281,7 +337,7 @@ fn render_trajectory(
 }
 
 fn trajectory_legends(
-    chart: &Chart<'_>,
+    chart: &Plot,
     hue_levels: &[String],
     palette: &ThemePalette,
     hue_paths: bool,
@@ -305,7 +361,7 @@ fn trajectory_legends(
 }
 
 fn hue_path_color(
-    chart: &Chart<'_>,
+    chart: &Plot,
     hue_levels: &[String],
     hue_index: Option<usize>,
 ) -> Result<(u8, u8, u8), Error> {
@@ -319,7 +375,7 @@ fn hue_path_color(
 }
 
 fn draw_series(
-    chart: &Chart<'_>,
+    chart: &Plot,
     layout: &Layout,
     series: &[SeriesData],
     palette: &ThemePalette,
@@ -370,7 +426,7 @@ fn draw_series(
 }
 
 fn prepare<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<Vec<SeriesData>, Error> {
     let data = data.into();
@@ -469,7 +525,7 @@ fn prepare<'a>(
     reason = "trajectory normalization, duplicate validation, and stable grouping form one ordered preflight"
 )]
 fn prepare_trajectory<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<TrajectoryData, Error> {
     let data = data.into();
@@ -499,7 +555,7 @@ fn prepare_trajectory<'a>(
     let x_source = data
         .column(x_col)
         .map_err(|error| Error::Data(format!("{context}: column {x_col:?}: {error}")))?;
-    let (x, condition_labels, condition_levels) = if x_source.dtype().is_numeric() {
+    let (x, condition_labels, condition_levels) = if x_source.is_numeric() {
         (
             crate::data::strict_finite_f64(data, x_col, context)?,
             None,

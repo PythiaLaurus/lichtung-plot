@@ -1,6 +1,12 @@
 use crate::Error;
 
-use super::Chart;
+use super::Plot;
+use crate::data::{
+    DataColumn, BAR_SIGNIFICANCE, COEFFICIENT_SIGNIFICANCE, COLOR, DUMBBELL_RIGHT, FACET_COLUMN,
+    FACET_ROW, FACET_WRAP, GROUP, HEATMAP_HIGHLIGHT, HUE, INTERACTION_LINE_PATTERN,
+    INTERACTION_POINT_SHAPE, INTERVAL_LOWER, INTERVAL_UPPER, STATUS, X, Y,
+};
+use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
@@ -16,45 +22,283 @@ use crate::spec::{
 use crate::Labels;
 use crate::{ComparisonAnnotation, HistogramCompositeGeometryInput, RaincloudGeometryInput};
 
-impl<'a> Chart<'a> {
-    /// Borrow the input DataFrame.
-    #[must_use]
-    pub fn data(&self) -> &'a polars::prelude::DataFrame {
-        self.data
+impl Plot {
+    pub(crate) const fn data(&self) -> crate::data::PlotData<'_> {
+        crate::data::PlotData::new(self)
     }
 
-    pub(crate) const fn source_row_map(&self) -> Option<&'a [usize]> {
-        self.source_rows
+    pub(crate) fn source_row_map(&self) -> Option<&[usize]> {
+        self.source_rows.as_ref().map(crate::SourceRows::as_slice)
     }
 
-    /// Currently-configured x column, if any.
-    #[must_use]
-    pub fn x_col(&self) -> Option<&'a str> {
-        self.x_col
+    pub(crate) fn row_count(&self) -> usize {
+        self.input.len()
     }
 
-    /// Currently-configured y column, if any.
-    #[must_use]
-    pub fn y_col(&self) -> Option<&'a str> {
-        self.y_col
+    pub(crate) fn x_col(&self) -> Option<&'static str> {
+        self.input.x_name().map(|_| X)
     }
 
-    /// Currently-configured hue column, if any.
-    #[must_use]
-    pub fn hue_col(&self) -> Option<&'a str> {
-        self.hue_col
+    pub(crate) fn y_col(&self) -> Option<&'static str> {
+        self.input.y_name().map(|_| Y)
     }
 
-    /// Currently-configured explicit graphical-group column, if any.
-    #[must_use]
-    pub fn group_col(&self) -> Option<&'a str> {
-        self.group_col
+    pub(crate) fn hue_col(&self) -> Option<&'static str> {
+        self.hue.as_ref().map(|_| HUE)
     }
 
-    /// Currently configured continuous color column.
-    #[must_use]
-    pub fn color_col(&self) -> Option<&'a str> {
-        self.color_col
+    pub(crate) fn hue_name(&self) -> Option<&str> {
+        self.hue.as_ref().map(crate::CategoryValues::name)
+    }
+
+    pub(crate) fn group_col(&self) -> Option<&'static str> {
+        self.group.as_ref().map(|_| GROUP)
+    }
+
+    pub(crate) fn group_name(&self) -> Option<&str> {
+        self.group.as_ref().map(crate::CategoryValues::name)
+    }
+
+    pub(crate) fn color_col(&self) -> Option<&'static str> {
+        self.color.as_ref().map(|_| COLOR)
+    }
+
+    pub(crate) fn data_column(&self, key: &str) -> Option<DataColumn<'_>> {
+        if key == X {
+            return self.x_data_column();
+        }
+        if key == Y {
+            return self.y_data_column();
+        }
+        match key {
+            HUE => self.hue.as_ref().map(DataColumn::Category),
+            GROUP => self.group.as_ref().map(DataColumn::Category),
+            COLOR => self.color.as_ref().map(DataColumn::Numeric),
+            HEATMAP_HIGHLIGHT => self.heatmap_highlight.as_ref().map(DataColumn::Boolean),
+            COEFFICIENT_SIGNIFICANCE => self
+                .coefficient_significance
+                .as_ref()
+                .map(DataColumn::Category),
+            BAR_SIGNIFICANCE => self.bar_significance.as_ref().map(DataColumn::Category),
+            INTERVAL_LOWER => self.interval_lower.as_ref().map(DataColumn::Numeric),
+            INTERVAL_UPPER => self.interval_upper.as_ref().map(DataColumn::Numeric),
+            STATUS => self.estimate_status.as_ref().map(DataColumn::Category),
+            INTERACTION_POINT_SHAPE => self
+                .interaction_styles
+                .as_ref()
+                .map(|(values, _)| DataColumn::Category(values)),
+            INTERACTION_LINE_PATTERN => self
+                .interaction_styles
+                .as_ref()
+                .map(|(_, values)| DataColumn::Category(values)),
+            DUMBBELL_RIGHT => self.dumbbell_right.as_ref().map(DataColumn::Numeric),
+            FACET_ROW => self.facet_row.as_ref().map(DataColumn::Category),
+            FACET_COLUMN => self.facet_col.as_ref().map(DataColumn::Category),
+            FACET_WRAP => self.facet_wrap.as_ref().map(DataColumn::Category),
+            _ => self
+                .facet_row
+                .as_ref()
+                .filter(|values| values.name() == key)
+                .or_else(|| {
+                    self.facet_col
+                        .as_ref()
+                        .filter(|values| values.name() == key)
+                })
+                .or_else(|| {
+                    self.facet_wrap
+                        .as_ref()
+                        .filter(|values| values.name() == key)
+                })
+                .map(DataColumn::Category)
+                .or_else(|| match &self.input {
+                    PlotInput::Matrix { variables } => self
+                        .matrix_variables
+                        .iter()
+                        .position(|name| name == key)
+                        .and_then(|index| variables.get(index))
+                        .map(DataColumn::Numeric),
+                    _ => None,
+                }),
+        }
+    }
+
+    fn x_data_column(&self) -> Option<DataColumn<'_>> {
+        match &self.input {
+            PlotInput::Scatter { x, .. }
+            | PlotInput::Regression { x, .. }
+            | PlotInput::Marginal { x, .. } => Some(DataColumn::Numeric(x)),
+            PlotInput::Histogram { values }
+            | PlotInput::Density { values }
+            | PlotInput::Qq { values } => Some(DataColumn::Numeric(values)),
+            PlotInput::PointInterval { estimate, .. }
+            | PlotInput::Coefficient { estimate, .. }
+            | PlotInput::Forest { estimate, .. } => Some(DataColumn::Numeric(estimate)),
+            PlotInput::Line { x, .. } => match x {
+                AxisValues::Numeric(values) => Some(DataColumn::Numeric(values)),
+                AxisValues::Category(values) => Some(DataColumn::Category(values)),
+            },
+            PlotInput::Interaction { condition, .. }
+            | PlotInput::Dumbbell {
+                category: condition,
+                ..
+            }
+            | PlotInput::Heatmap { x: condition, .. }
+            | PlotInput::Bar {
+                category: condition,
+                ..
+            }
+            | PlotInput::HorizontalBar {
+                category: condition,
+                ..
+            }
+            | PlotInput::StackedBar {
+                category: condition,
+                ..
+            }
+            | PlotInput::StackedHorizontalBar {
+                category: condition,
+                ..
+            }
+            | PlotInput::Boxplot {
+                category: condition,
+                ..
+            }
+            | PlotInput::Violin {
+                category: condition,
+                ..
+            }
+            | PlotInput::Waterfall {
+                labels: condition, ..
+            } => Some(DataColumn::Category(condition)),
+            PlotInput::Beeswarm { value, .. } => Some(DataColumn::Numeric(value)),
+            PlotInput::HistogramGeometry
+            | PlotInput::RaincloudGeometry
+            | PlotInput::Matrix { .. } => None,
+        }
+    }
+
+    fn y_data_column(&self) -> Option<DataColumn<'_>> {
+        match &self.input {
+            PlotInput::Scatter { y, .. }
+            | PlotInput::Line { y, .. }
+            | PlotInput::Regression { y, .. }
+            | PlotInput::Marginal { y, .. } => Some(DataColumn::Numeric(y)),
+            PlotInput::PointInterval { category, .. }
+            | PlotInput::Coefficient { term: category, .. }
+            | PlotInput::Forest { term: category, .. }
+            | PlotInput::Beeswarm { category, .. } => Some(DataColumn::Category(category)),
+            PlotInput::Interaction { estimate, .. }
+            | PlotInput::Dumbbell { left: estimate, .. }
+            | PlotInput::Bar {
+                value: estimate, ..
+            }
+            | PlotInput::HorizontalBar {
+                value: estimate, ..
+            }
+            | PlotInput::StackedBar {
+                value: estimate, ..
+            }
+            | PlotInput::StackedHorizontalBar {
+                value: estimate, ..
+            }
+            | PlotInput::Boxplot {
+                value: estimate, ..
+            }
+            | PlotInput::Violin {
+                value: estimate, ..
+            }
+            | PlotInput::Waterfall {
+                deltas: estimate, ..
+            } => Some(DataColumn::Numeric(estimate)),
+            PlotInput::Heatmap { y, .. } => Some(DataColumn::Category(y)),
+            PlotInput::Histogram { .. }
+            | PlotInput::HistogramGeometry
+            | PlotInput::Density { .. }
+            | PlotInput::Qq { .. }
+            | PlotInput::RaincloudGeometry
+            | PlotInput::Matrix { .. } => None,
+        }
+    }
+
+    pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
+        let mut columns = match &self.input {
+            PlotInput::Scatter { x, y }
+            | PlotInput::Regression { x, y }
+            | PlotInput::Marginal { x, y } => {
+                vec![DataColumn::Numeric(x), DataColumn::Numeric(y)]
+            }
+            PlotInput::Histogram { values }
+            | PlotInput::Density { values }
+            | PlotInput::Qq { values } => vec![DataColumn::Numeric(values)],
+            PlotInput::PointInterval { estimate, category }
+            | PlotInput::Coefficient {
+                estimate,
+                term: category,
+            }
+            | PlotInput::Forest {
+                estimate,
+                term: category,
+            } => vec![
+                DataColumn::Numeric(estimate),
+                DataColumn::Category(category),
+            ],
+            PlotInput::Line { x, y } => {
+                let x = match x {
+                    AxisValues::Numeric(values) => DataColumn::Numeric(values),
+                    AxisValues::Category(values) => DataColumn::Category(values),
+                };
+                vec![x, DataColumn::Numeric(y)]
+            }
+            PlotInput::Interaction {
+                condition,
+                estimate,
+            } => vec![
+                DataColumn::Category(condition),
+                DataColumn::Numeric(estimate),
+            ],
+            PlotInput::Dumbbell { category, left } => {
+                vec![DataColumn::Category(category), DataColumn::Numeric(left)]
+            }
+            PlotInput::Heatmap { x, y } => {
+                vec![DataColumn::Category(x), DataColumn::Category(y)]
+            }
+            PlotInput::Bar { category, value }
+            | PlotInput::HorizontalBar { category, value }
+            | PlotInput::StackedBar { category, value }
+            | PlotInput::StackedHorizontalBar { category, value }
+            | PlotInput::Boxplot { category, value }
+            | PlotInput::Violin { category, value }
+            | PlotInput::Beeswarm { category, value } => {
+                vec![DataColumn::Category(category), DataColumn::Numeric(value)]
+            }
+            PlotInput::Matrix { variables } => variables.iter().map(DataColumn::Numeric).collect(),
+            PlotInput::Waterfall { labels, deltas } => {
+                vec![DataColumn::Category(labels), DataColumn::Numeric(deltas)]
+            }
+            PlotInput::HistogramGeometry | PlotInput::RaincloudGeometry => Vec::new(),
+        };
+        columns.extend(self.hue.iter().map(DataColumn::Category));
+        columns.extend(self.group.iter().map(DataColumn::Category));
+        columns.extend(self.color.iter().map(DataColumn::Numeric));
+        columns.extend(self.interval_lower.iter().map(DataColumn::Numeric));
+        columns.extend(self.interval_upper.iter().map(DataColumn::Numeric));
+        columns.extend(self.estimate_status.iter().map(DataColumn::Category));
+        columns.extend(
+            self.coefficient_significance
+                .iter()
+                .map(DataColumn::Category),
+        );
+        columns.extend(self.bar_significance.iter().map(DataColumn::Category));
+        columns.extend(self.heatmap_highlight.iter().map(DataColumn::Boolean));
+        columns.extend(self.facet_row.iter().map(DataColumn::Category));
+        columns.extend(self.facet_col.iter().map(DataColumn::Category));
+        columns.extend(self.facet_wrap.iter().map(DataColumn::Category));
+        columns.extend(self.dumbbell_right.iter().map(DataColumn::Numeric));
+        if let Some((point_shapes, line_patterns)) = &self.interaction_styles {
+            columns.push(DataColumn::Category(point_shapes));
+            columns.push(DataColumn::Category(line_patterns));
+        }
+        columns
     }
 
     /// Heatmap colorbar title, if explicitly configured.
@@ -105,8 +349,8 @@ impl<'a> Chart<'a> {
         &self.heatmap_null_row_annotations
     }
 
-    pub(crate) const fn heatmap_highlight_col(&self) -> Option<&'a str> {
-        self.heatmap_highlight_col
+    pub(crate) fn heatmap_highlight_col(&self) -> Option<&'static str> {
+        self.heatmap_highlight.as_ref().map(|_| HEATMAP_HIGHLIGHT)
     }
 
     /// Fixed numeric labels configured for point-only coefficient estimates.
@@ -115,12 +359,14 @@ impl<'a> Chart<'a> {
         self.estimate_labels.as_ref()
     }
 
-    pub(crate) const fn coefficient_significance_col(&self) -> Option<&'a str> {
-        self.coefficient_significance_col
+    pub(crate) fn coefficient_significance_col(&self) -> Option<&'static str> {
+        self.coefficient_significance
+            .as_ref()
+            .map(|_| COEFFICIENT_SIGNIFICANCE)
     }
 
-    pub(crate) const fn bar_significance_col(&self) -> Option<&'a str> {
-        self.bar_significance_col
+    pub(crate) fn bar_significance_col(&self) -> Option<&'static str> {
+        self.bar_significance.as_ref().map(|_| BAR_SIGNIFICANCE)
     }
 
     pub(crate) const fn significance_mark_style_spec(&self) -> crate::SignificanceMarkStyle {
@@ -179,10 +425,11 @@ impl<'a> Chart<'a> {
         self.zero_line
     }
 
-    /// Lower and upper bound columns for a point-interval plot.
-    #[must_use]
-    pub fn interval_bound_cols(&self) -> Option<(&'a str, &'a str)> {
-        self.interval_lower_col.zip(self.interval_upper_col)
+    pub(crate) fn interval_bound_cols(&self) -> Option<(&'static str, &'static str)> {
+        self.interval_lower
+            .as_ref()
+            .zip(self.interval_upper.as_ref())
+            .map(|_| (INTERVAL_LOWER, INTERVAL_UPPER))
     }
 
     /// Typed interpretation of configured interval bounds.
@@ -191,10 +438,8 @@ impl<'a> Chart<'a> {
         self.interval_semantics.as_ref()
     }
 
-    /// Configured estimate-status column, if any.
-    #[must_use]
-    pub const fn estimate_status_col(&self) -> Option<&'a str> {
-        self.estimate_status_col
+    pub(crate) fn estimate_status_col(&self) -> Option<&'static str> {
+        self.estimate_status.as_ref().map(|_| STATUS)
     }
 
     /// Typed model-adjusted effect-band semantics, when configured.
@@ -231,8 +476,10 @@ impl<'a> Chart<'a> {
         self.raw_overlay
     }
 
-    pub(crate) const fn raw_overlay_source_row_col(&self) -> Option<&'a str> {
-        self.raw_overlay_source_row_col
+    pub(crate) fn raw_overlay_source_row_map(&self) -> Option<&[usize]> {
+        self.raw_overlay_source_rows
+            .as_ref()
+            .map(crate::SourceRows::as_slice)
     }
 
     /// Requested violin-family geometry.
@@ -270,8 +517,10 @@ impl<'a> Chart<'a> {
         }
     }
 
-    pub(crate) const fn interaction_style_cols(&self) -> Option<(&'a str, &'a str)> {
-        self.interaction_style_cols
+    pub(crate) fn interaction_style_cols(&self) -> Option<(&'static str, &'static str)> {
+        self.interaction_styles
+            .as_ref()
+            .map(|_| (INTERACTION_POINT_SHAPE, INTERACTION_LINE_PATTERN))
     }
 
     pub(crate) const fn categorical_colors_spec(&self) -> Option<&CategoricalColors> {
@@ -302,10 +551,8 @@ impl<'a> Chart<'a> {
         }
     }
 
-    /// Base and terminal metadata columns for a waterfall.
-    #[must_use]
-    pub fn waterfall_total_cols(&self) -> Option<(&'a str, &'a str)> {
-        self.waterfall_base_col.zip(self.waterfall_terminal_col)
+    pub(crate) fn waterfall_totals(&self) -> Option<(f64, f64)> {
+        self.waterfall_base.zip(self.waterfall_terminal)
     }
 
     /// Caller-owned waterfall annotation labels, if configured.
@@ -314,10 +561,8 @@ impl<'a> Chart<'a> {
         self.waterfall_labels.as_ref()
     }
 
-    /// Second endpoint value column for a dumbbell plot.
-    #[must_use]
-    pub const fn dumbbell_right_col(&self) -> Option<&'a str> {
-        self.dumbbell_right_col
+    pub(crate) fn dumbbell_right_col(&self) -> Option<&'static str> {
+        self.dumbbell_right.as_ref().map(|_| DUMBBELL_RIGHT)
     }
 
     /// Required endpoint labels and colors for a dumbbell plot.
@@ -377,29 +622,31 @@ impl<'a> Chart<'a> {
     pub(crate) fn resolved_axis_labels(&self, kind: PlotKind) -> (String, String) {
         let inferred =
             |raw: Option<&str>| raw.map_or_else(String::new, |raw| self.resolve_label(raw));
+        let x_name = self.input.x_name();
+        let y_name = self.input.y_name();
         let x = self.x_label.clone().unwrap_or_else(|| match kind {
             PlotKind::HorizontalBar
             | PlotKind::StackedHorizontalBar
             | PlotKind::Waterfall
-            | PlotKind::Dumbbell => inferred(self.y_col),
+            | PlotKind::Dumbbell => inferred(y_name),
             PlotKind::Qq => "Theoretical normal quantiles".to_owned(),
             PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
-                || inferred(self.x_col),
+                || inferred(x_name),
                 |input| self.resolve_label(&input.dimensions.value),
             ),
             PlotKind::Violin => self.raincloud_geometry_input().map_or_else(
-                || inferred(self.x_col),
+                || inferred(x_name),
                 |input| self.resolve_label(&input.dimensions.category),
             ),
             PlotKind::Matrix => String::new(),
-            _ => inferred(self.x_col),
+            _ => inferred(x_name),
         });
         let y = self.y_label.clone().unwrap_or_else(|| match kind {
             PlotKind::HorizontalBar
             | PlotKind::StackedHorizontalBar
             | PlotKind::Waterfall
             | PlotKind::Dumbbell
-            | PlotKind::Qq => inferred(self.x_col),
+            | PlotKind::Qq => inferred(x_name),
             PlotKind::Histogram => self.histogram_composite_geometry_input().map_or_else(
                 || match self.histogram_stat {
                     HistogramStat::Count => "Count".to_owned(),
@@ -409,25 +656,26 @@ impl<'a> Chart<'a> {
                 |input| self.resolve_label(&input.dimensions.density),
             ),
             PlotKind::Violin => self.raincloud_geometry_input().map_or_else(
-                || inferred(self.y_col),
+                || inferred(y_name),
                 |input| self.resolve_label(&input.dimensions.value),
             ),
             PlotKind::Density => "Density".to_owned(),
             PlotKind::Matrix => String::new(),
-            _ => inferred(self.y_col),
+            _ => inferred(y_name),
         });
         (x, y)
     }
 
     pub(crate) fn resolved_color_label(&self) -> String {
         self.color_label.clone().unwrap_or_else(|| {
-            self.color_col
-                .map_or_else(String::new, |raw| self.resolve_label(raw))
+            self.color
+                .as_ref()
+                .map_or_else(String::new, |values| self.resolve_label(values.name()))
         })
     }
 
     pub(crate) fn resolved_legend_title(&self) -> String {
-        if self.interaction_style_cols.is_some() || self.hue_dimension_key().is_some() {
+        if self.interaction_styles.is_some() || self.hue_dimension_key().is_some() {
             self.resolve_label(self.legend_title_key())
         } else {
             "series".to_owned()
@@ -435,18 +683,23 @@ impl<'a> Chart<'a> {
     }
 
     pub(crate) fn legend_title_key(&self) -> &str {
-        self.interaction_style_cols
-            .and(self.group_col)
+        self.interaction_styles
+            .as_ref()
+            .and(self.group.as_ref())
+            .map(crate::CategoryValues::name)
             .or_else(|| self.hue_dimension_key())
             .unwrap_or("series")
     }
 
     pub(crate) fn hue_dimension_key(&self) -> Option<&str> {
-        self.hue_col.or_else(|| {
-            self.raincloud_geometry
-                .as_ref()
-                .and_then(|input| input.dimensions.hue.as_deref())
-        })
+        self.hue
+            .as_ref()
+            .map(crate::CategoryValues::name)
+            .or_else(|| {
+                self.raincloud_geometry
+                    .as_ref()
+                    .and_then(|input| input.dimensions.hue.as_deref())
+            })
     }
 
     /// Borrow x-axis scale configuration.
@@ -481,11 +734,11 @@ impl<'a> Chart<'a> {
         &self.guides
     }
 
-    pub(crate) fn point_layers(&self) -> &[PointLayer<'a>] {
+    pub(crate) fn point_layers(&self) -> &[PointLayer] {
         &self.point_layers
     }
 
-    pub(crate) fn bar_point_layers(&self) -> &[BarPointLayer<'a>] {
+    pub(crate) fn bar_point_layers(&self) -> &[BarPointLayer] {
         &self.bar_point_layers
     }
 
@@ -517,21 +770,6 @@ impl<'a> Chart<'a> {
         self.height
     }
 
-    /// Borrow the peak markers for `PlotKind::MassSpectrum`.
-    /// Returns an empty slice for all other kinds.
-    #[must_use]
-    pub fn peaks(&self) -> &[(f64, f64)] {
-        &self.peaks
-    }
-
-    /// Borrow the pre-computed scatter points for
-    /// `PlotKind::Marginal`. Returns an empty slice if
-    /// the data-column path should be used.
-    #[must_use]
-    pub fn marginal_coords(&self) -> &[(f64, f64)] {
-        &self.marginal_coords
-    }
-
     /// Borrow the ordered variable names for `PlotKind::Matrix`.
     #[must_use]
     pub(crate) fn matrix_variable_names(&self) -> &[String] {
@@ -560,7 +798,7 @@ impl<'a> Chart<'a> {
     /// `.bar()` / `.boxplot()`) has been called.
     #[must_use]
     pub fn plot_kind(&self) -> Option<PlotKind> {
-        self.plot_kind
+        self.kind
     }
 
     /// Currently requested legend placement.
@@ -619,5 +857,9 @@ impl<'a> Chart<'a> {
         } else {
             None
         }
+    }
+
+    pub(crate) const fn output_options(&self) -> (crate::PngOptions, crate::SvgText) {
+        (self.png_options, self.svg_text)
     }
 }

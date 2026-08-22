@@ -3,7 +3,7 @@
 use crate::Error;
 
 use super::data::FacetPanel;
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::figure::try_wrap_text;
 use crate::layout::{PanelBox, TextBlock};
@@ -16,8 +16,8 @@ use crate::theme::ThemePalette;
     reason = "the immutable scene inputs preserve facet rendering order and geometry"
 )]
 pub(super) fn render_scene(
-    source: &Chart<'_>,
-    chart: &Chart<'_>,
+    source: &Plot,
+    chart: &Plot,
     kind: PlotKind,
     panels: Vec<FacetPanel>,
     plans: Vec<PanelPlan>,
@@ -31,7 +31,7 @@ pub(super) fn render_scene(
     for (facet, plan) in panels.iter().zip(&plans) {
         let panel_chart = chart
             .clone()
-            .with_render_scope(format!("facet-{}", facet.panel_index))
+            .with_render_scope(facet.render_scope())
             .with_comparison_subset(&facet.cell)?;
         crate::decorations::apply::apply_grid(
             &panel_chart,
@@ -44,10 +44,12 @@ pub(super) fn render_scene(
     for (facet, plan) in panels.into_iter().zip(plans) {
         let panel_chart = chart
             .clone()
-            .with_render_scope(format!("facet-{}", facet.panel_index))
+            .with_render_scope(facet.render_scope())
             .with_comparison_subset(&facet.cell)?;
-        let context =
-            PlotRenderContext::with_source_rows(&facet.data, &facet.source_rows, plan.panel);
+        let context = PlotRenderContext::new(
+            crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+            plan.panel,
+        );
         plan.chart_for_render(&panel_chart)
             .render_panel(kind, context, backend)?;
         if !plan.result.significance_brackets.is_empty() {
@@ -84,7 +86,7 @@ pub(super) fn render_scene(
     reason = "validated finite facet coordinates are rounded for the integer text backend"
 )]
 fn draw_facet_strip(
-    chart: &Chart<'_>,
+    chart: &Plot,
     facet: &FacetPanel,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -189,7 +191,7 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(chart: &Chart<'_>, cell: &[(String, String)]) -> String {
+pub(super) fn facet_label(chart: &Plot, cell: &[(String, String)]) -> String {
     cell.iter()
         .map(|(variable, level)| {
             format!(

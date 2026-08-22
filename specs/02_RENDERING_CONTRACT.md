@@ -4,9 +4,11 @@
 
 ## Inputs
 
-`Chart` consumes a borrowed Polars `DataFrame`. Plot families validate required
-columns, finite numeric values, categorical identities, bounds, channel
-compatibility, and representable geometry before opening a backend canvas.
+`Plot` consumes owned immutable semantic values. Plot families validate aligned
+lengths, finite numeric values, categorical identities, source-row provenance,
+bounds, channel compatibility, and representable geometry before opening a
+backend canvas. Dataframe and ndarray extraction belongs to separate adapter
+crates.
 
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
@@ -15,18 +17,20 @@ does not select scientific tests or infer caller intent.
 
 ## Scene Lifecycle
 
-`Chart::render_scene` and `Figure::render_scene` perform one complete preflight
-and render one immutable `RenderedSvgScene`. SVG bytes are the canonical scene.
-File methods and in-memory methods must preserve those bytes exactly.
+`Plot::svg`, `Plot::png`, `Canvas::svg`, and `Canvas::png` perform one complete
+preflight and render one private immutable scene. The terminal call consumes the
+plot or canvas, publishes its requested file immediately, and returns an opaque
+`Output`. Consuming `Output::svg` and `Output::png` calls reuse that exact scene.
 
-`Figure` renders all panels through one backend begin/end lifecycle. Marks are
+`Canvas` renders all panels through one backend begin/end lifecycle. Marks are
 clipped to their panel; titles, axes, legends, captions, and other decorations
 remain outside mark clipping where required.
 
 ## Output Formats
 
-SVG is always compiled. The `text-as-path` feature enables conversion of every
-text element in the canonical scene to vector glyph paths through `resvg`. The
+SVG is always compiled. Callers select searchable text or `SvgText::Paths`
+before the first terminal output. The `text-as-path` feature enables conversion
+of every text element in the canonical scene to vector glyph paths through `resvg`. The
 derived SVG is self-contained but its text is no longer selectable, searchable,
 or available to assistive text extraction. The `png` feature includes this
 capability and enables rasterization of the canonical SVG through `resvg` and
@@ -80,10 +84,10 @@ No fallback renderer or alternate output path is attempted after an error.
 
 ## Artifact Publication
 
-File output is staged at unique sibling paths and renamed only after rendering
-or conversion succeeds. Combined SVG/PNG output validates distinct destination
-identity before touching either destination. Failures preserve existing output
-where the underlying filesystem supports ordinary same-directory rename
+Each file output is staged at a unique sibling path and renamed only after
+rendering or conversion succeeds. Every consuming output call publishes
+independently; there is no multi-file transaction. Failures preserve existing
+output where the underlying filesystem supports ordinary same-directory rename
 semantics.
 
 ## Regression Evidence

@@ -13,7 +13,7 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, ValueSort};
-use crate::Chart;
+use crate::Plot;
 
 struct DumbbellRow {
     category_index: usize,
@@ -30,7 +30,7 @@ struct DumbbellData {
 }
 
 pub(crate) fn render(
-    chart: &Chart<'_>,
+    chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -109,7 +109,7 @@ pub(crate) fn render(
 }
 
 fn prepare<'a>(
-    chart: &Chart<'_>,
+    chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<DumbbellData, Error> {
     let data = data.into();

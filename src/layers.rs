@@ -1,9 +1,9 @@
 //! Typed supplemental geometry for numeric charts.
 
 use crate::Error;
-use polars::prelude::DataFrame;
 
 use crate::LinePattern;
+use crate::{CategoryValues, NumericValues};
 
 /// Closed visual style for a numeric guide line.
 ///
@@ -104,15 +104,16 @@ impl GuideSpec {
     }
 }
 
-/// A complete strict point layer borrowed independently from the chart data.
+/// A complete strict point layer owned independently from the plot input.
 ///
 /// Every source row contributes exactly one unconnected point. The layer has
 /// one fixed RGB color, radius, and transparent opacity and creates no legend.
 #[derive(Debug, Clone)]
-pub struct PointLayer<'a> {
-    data: &'a DataFrame,
-    x_column: &'a str,
-    y_column: &'a str,
+pub struct PointLayer {
+    x: NumericValues,
+    y: NumericValues,
+    labels: Option<CategoryValues>,
+    legend_label: Option<String>,
     color: (u8, u8, u8),
     radius: u32,
     opacity: f64,
@@ -124,64 +125,55 @@ pub struct PointLayer<'a> {
 /// hue is never used as dodge identity. Every row creates exactly one point and
 /// the layer creates no legend.
 #[derive(Debug, Clone)]
-pub struct BarPointLayer<'a> {
-    data: &'a DataFrame,
-    category_column: &'a str,
-    group_column: Option<&'a str>,
-    value_column: &'a str,
+pub struct BarPointLayer {
+    category: CategoryValues,
+    group: Option<CategoryValues>,
+    value: NumericValues,
     color: (u8, u8, u8),
     radius: u32,
     opacity: f64,
 }
 
-impl<'a> BarPointLayer<'a> {
-    /// Construct a borrowed grouped or ungrouped bar point layer.
+impl BarPointLayer {
+    /// Construct an owned grouped or ungrouped bar point layer.
     ///
     /// Pass `None` for an ungrouped bar and `Some(column)` for a chart whose
     /// ordinary bars use an explicit graphical group.
     pub fn new(
-        data: &'a DataFrame,
-        category_column: &'a str,
-        group_column: Option<&'a str>,
-        value_column: &'a str,
+        category: CategoryValues,
+        group: Option<CategoryValues>,
+        value: NumericValues,
         color: (u8, u8, u8),
         radius: u32,
         opacity: f64,
     ) -> Result<Self, Error> {
         validate_point_style("bar-point-layer", radius, opacity)?;
         Ok(Self {
-            data,
-            category_column,
-            group_column,
-            value_column,
+            category,
+            group,
+            value,
             color,
             radius,
             opacity,
         })
     }
 
-    /// Borrow the layer's source frame.
+    /// Categories resolved against prepared bar categories.
     #[must_use]
-    pub const fn data(&self) -> &'a DataFrame {
-        self.data
+    pub const fn category_values(&self) -> &CategoryValues {
+        &self.category
     }
 
-    /// Category column resolved against prepared bar categories.
+    /// Optional graphical-group values resolved against prepared bar groups.
     #[must_use]
-    pub const fn category_column(&self) -> &'a str {
-        self.category_column
+    pub const fn group_values(&self) -> Option<&CategoryValues> {
+        self.group.as_ref()
     }
 
-    /// Optional graphical-group column resolved against prepared bar groups.
+    /// Strict finite numeric point values.
     #[must_use]
-    pub const fn group_column(&self) -> Option<&'a str> {
-        self.group_column
-    }
-
-    /// Strict finite numeric point-value column.
-    #[must_use]
-    pub const fn value_column(&self) -> &'a str {
-        self.value_column
+    pub const fn values(&self) -> &NumericValues {
+        &self.value
     }
 
     /// Fixed RGB point color.
@@ -208,8 +200,8 @@ impl<'a> BarPointLayer<'a> {
     }
 }
 
-impl<'a> PointLayer<'a> {
-    /// Construct a borrowed point layer with fixed styling.
+impl PointLayer {
+    /// Construct an owned point layer with fixed styling.
     ///
     /// Column existence, numeric dtypes, and every strict finite row are
     /// validated during chart preflight before output publication.
@@ -219,34 +211,52 @@ impl<'a> PointLayer<'a> {
     /// Returns an error when `radius` is zero or `opacity` is not finite and
     /// strictly between zero and one.
     pub fn new(
-        data: &'a DataFrame,
-        x_column: &'a str,
-        y_column: &'a str,
+        x: NumericValues,
+        y: NumericValues,
         color: (u8, u8, u8),
         radius: u32,
         opacity: f64,
     ) -> Result<Self, Error> {
         validate_point_style("point-layer", radius, opacity)?;
         Ok(Self {
-            data,
-            x_column,
-            y_column,
+            x,
+            y,
+            labels: None,
+            legend_label: None,
             color,
             radius,
             opacity,
         })
     }
 
-    pub(crate) const fn data(&self) -> &'a DataFrame {
-        self.data
+    /// Attach one caller-owned label to every point.
+    #[must_use]
+    pub fn labels(mut self, labels: CategoryValues) -> Self {
+        self.labels = Some(labels);
+        self
     }
 
-    pub(crate) const fn x_column(&self) -> &'a str {
-        self.x_column
+    /// Give the layer one legend identity.
+    #[must_use]
+    pub fn legend_label(mut self, label: impl Into<String>) -> Self {
+        self.legend_label = Some(label.into());
+        self
     }
 
-    pub(crate) const fn y_column(&self) -> &'a str {
-        self.y_column
+    pub(crate) const fn x_values(&self) -> &NumericValues {
+        &self.x
+    }
+
+    pub(crate) const fn y_values(&self) -> &NumericValues {
+        &self.y
+    }
+
+    pub(crate) const fn label_values(&self) -> Option<&CategoryValues> {
+        self.labels.as_ref()
+    }
+
+    pub(crate) fn legend_label_text(&self) -> Option<&str> {
+        self.legend_label.as_deref()
     }
 
     pub(crate) fn point_style(&self) -> crate::render::backend::PointStyle {

@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use crate::builder::Chart;
+use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend as PlannedLegend;
 use crate::decorations::title_block::TitleBlock;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
@@ -11,7 +11,7 @@ use crate::theme::ThemePalette;
 
 /// Draw one panel's grid before its marks.
 pub(crate) fn apply_grid(
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     palette: &ThemePalette,
     backend: &mut dyn Backend,
@@ -26,7 +26,7 @@ pub(crate) fn apply_grid(
 
 /// Draw one panel's axes after its marks.
 pub(crate) fn apply_axes(
-    chart: &Chart<'_>,
+    chart: &Plot,
     result: &PlotRenderResult,
     palette: &ThemePalette,
     backend: &mut dyn Backend,
@@ -37,7 +37,7 @@ pub(crate) fn apply_axes(
 }
 
 pub(crate) fn apply_figure_text(
-    chart: &Chart<'_>,
+    chart: &Plot,
     palette: &ThemePalette,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -70,7 +70,7 @@ pub(crate) fn apply_figure_text(
 
 /// Draw a legend whose dimensions and position were frozen during preflight.
 pub(crate) fn apply_planned_legend(
-    chart: &Chart<'_>,
+    chart: &Plot,
     legend: Option<&PlannedLegend>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
