@@ -170,6 +170,58 @@ fn categorical_plots_preserve_observed_order() {
 }
 
 #[test]
+fn bar_order_is_plot_owned_and_value_sort_runs_after_mean_aggregation() {
+    let df = df!(
+        "species" => ["b", "b", "a", "a", "c", "c"],
+        "value" => [10.0_f64, 0.0, 1.0, 1.0, 8.0, 8.0]
+    )
+    .unwrap();
+    let categories = data::category(&df, "species");
+    let values = data::numeric(&df, "value");
+    let dir = unique_dir("bar-plot-owned-order");
+    let explicit_path = dir.join("explicit.svg");
+    let sorted_path = dir.join("sorted.svg");
+
+    Plot::bar(categories.clone(), values.clone())
+        .category_order(CategoryOrder::explicit(["c", "a", "b"]))
+        .size(320, 240)
+        .svg(&explicit_path)
+        .unwrap();
+    Plot::bar(categories, values)
+        .category_order(ValueSort::Descending)
+        .size(320, 240)
+        .svg(&sorted_path)
+        .unwrap();
+
+    let explicit = std::fs::read_to_string(explicit_path).unwrap();
+    let sorted = std::fs::read_to_string(sorted_path).unwrap();
+    assert!(explicit.find(">C</text>") < explicit.find(">A</text>"));
+    assert!(explicit.find(">A</text>") < explicit.find(">B</text>"));
+    assert!(sorted.find(">C</text>") < sorted.find(">B</text>"));
+    assert!(sorted.find(">B</text>") < sorted.find(">A</text>"));
+}
+
+#[test]
+fn grouped_bar_rejects_ambiguous_value_order() {
+    let df = df!(
+        "category" => ["a", "a", "b", "b"],
+        "group" => ["one", "two", "one", "two"],
+        "value" => [1.0_f64, 2.0, 3.0, 4.0]
+    )
+    .unwrap();
+
+    let error = Plot::bar(data::category(&df, "category"), data::numeric(&df, "value"))
+        .group(data::category(&df, "group"))
+        .bar_aggregation(BarAggregation::Identity)
+        .category_order(ValueSort::Descending)
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("requires one ungrouped bar per category"));
+}
+
+#[test]
 fn positive_bars_preserve_zero_baseline() {
     let df = df!(
         "group" => ["a", "b", "c"],

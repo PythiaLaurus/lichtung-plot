@@ -9,11 +9,11 @@ mod estimate;
 mod inference;
 mod output;
 
-pub use categorical::CategoricalColors;
+pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
 pub use estimate::{
     AxisScale, CoefficientSignificanceMark, EstimateSource, EstimateStatus,
     GroupedFactorAnnotation, GroupedFactorEndpoint, LineMode, LinePathStyle, LinePattern,
-    PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight, ValueSort,
+    PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
 pub use inference::{
     EffectBandCoverage, EffectBandSemantics, InferentialScale, IntervalKind, IntervalSemantics,

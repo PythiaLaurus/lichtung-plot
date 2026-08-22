@@ -88,7 +88,7 @@ fn point_interval_renders_asymmetric_intervals_with_fixed_pixel_caps() {
 fn point_interval_keeps_first_row_at_top_and_sorts_by_estimate() {
     let data = fixture();
     let observed = render(&data, |chart| chart);
-    let ascending = render(&data, |chart| chart.value_sort(ValueSort::Ascending));
+    let ascending = render(&data, |chart| chart.category_order(ValueSort::Ascending));
 
     assert!(text_y(&observed, "First") < text_y(&observed, "Second"));
     assert!(text_y(&ascending, "Second") < text_y(&ascending, "First"));

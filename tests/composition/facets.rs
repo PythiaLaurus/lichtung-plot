@@ -364,6 +364,54 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
 }
 
 #[test]
+fn faceted_explicit_category_order_validates_globally_and_filters_panel_subsets() {
+    let frame = df!(
+        "panel" => ["left", "right"],
+        "category" => ["a", "b"],
+        "value" => [1.0_f64, 2.0]
+    )
+    .unwrap();
+    let plot = |order| {
+        Plot::bar(
+            data::category(&frame, "category"),
+            data::numeric(&frame, "value"),
+        )
+        .bar_aggregation(BarAggregation::Identity)
+        .category_order(CategoryOrder::explicit(order))
+        .facet_col(data::category(&frame, "panel"))
+        .facet_scales(FacetScales::FreeX)
+    };
+
+    plot(["b", "a"]).preflight().unwrap();
+    let error = plot(["b", "unknown"]).preflight().unwrap_err();
+
+    assert!(error.to_string().contains("unknown level"));
+}
+
+#[test]
+fn faceted_bar_rejects_panel_local_value_order() {
+    let frame = df!(
+        "panel" => ["left", "left", "right", "right"],
+        "category" => ["a", "b", "a", "b"],
+        "value" => [1.0_f64, 2.0, 3.0, 1.0]
+    )
+    .unwrap();
+    let plot = Plot::bar(
+        data::category(&frame, "category"),
+        data::numeric(&frame, "value"),
+    )
+    .bar_aggregation(BarAggregation::Identity)
+    .category_order(lichtung_plot::ValueSort::Descending)
+    .facet_col(data::category(&frame, "panel"));
+
+    let error = plot.preflight().unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("value-derived category order is not supported with faceting"));
+}
+
+#[test]
 fn faceted_stacked_bar_preflights_extreme_finite_panels_without_pooling() {
     let value = f64::MAX * 0.26;
     let frame = df!(

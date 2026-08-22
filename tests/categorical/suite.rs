@@ -1,4 +1,4 @@
-use lichtung_plot::{BarAggregation, BarSpacing, Labels, Plot};
+use lichtung_plot::{BarAggregation, BarSpacing, CategoryOrder, Labels, Plot, ValueSort};
 
 #[path = "../support/data.rs"]
 mod data;

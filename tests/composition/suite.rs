@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    BarAggregation, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, EstimateSource, FacetScales,
-    InferentialScale, LegendPosition, Plot,
+    BarAggregation, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoryOrder,
+    EstimateSource, FacetScales, InferentialScale, LegendPosition, Plot,
 };
 use lichtung_plot::{ComparisonAnnotation, ComparisonEndpoint};
 

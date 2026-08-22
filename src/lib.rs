@@ -49,7 +49,7 @@ pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
 pub use output::{Output, SvgText};
 pub use spec::{
-    AxisScale, BarAggregation, BarSpacing, CanvasLegendPolicy, CategoricalColors,
+    AxisScale, BarAggregation, BarSpacing, CanvasLegendPolicy, CategoricalColors, CategoryOrder,
     CoefficientSignificanceMark, DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics,
     EstimateSource, EstimateStatus, FacetScales, GroupedFactorAnnotation, GroupedFactorEndpoint,
     HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,

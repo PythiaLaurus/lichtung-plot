@@ -8,7 +8,7 @@ use crate::Error;
 
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult, ValueSort};
+use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult, ValueSort};
 use crate::Plot;
 
 const CAP_HALF_HEIGHT_PX: f64 = 4.0;
@@ -228,28 +228,56 @@ fn prepare<'a>(
         rows.push(PointIntervalRow { label, estimate });
     }
 
-    if rows.iter().any(|row| row.estimate.is_none()) && chart.value_sort_spec() != ValueSort::None {
-        return Err(Error::Data(
-            "point_interval: estimate-status rows retain source order and do not support value sorting"
-                .into(),
-        ));
-    }
-    match chart.value_sort_spec() {
-        ValueSort::None => {}
-        ValueSort::Ascending => {
+    apply_category_order(&mut rows, chart.category_order_spec(), !data.is_full_plot())?;
+    Ok(rows)
+}
+
+fn apply_category_order(
+    rows: &mut [PointIntervalRow],
+    order: &CategoryOrder,
+    is_subset: bool,
+) -> Result<(), Error> {
+    match order {
+        CategoryOrder::Observed => {}
+        CategoryOrder::Explicit(requested) => {
+            let requested = requested
+                .iter()
+                .map(|label| crate::data::collapse_whitespace(label))
+                .collect::<Vec<_>>();
+            let observed = rows.iter().map(|row| row.label.clone()).collect::<Vec<_>>();
+            let ordered = crate::data::explicit_category_order(
+                &observed,
+                &requested,
+                "point_interval category order",
+                is_subset,
+            )?;
+            rows.sort_by_key(|row| {
+                ordered
+                    .iter()
+                    .position(|label| label == &row.label)
+                    .unwrap_or(usize::MAX)
+            });
+        }
+        CategoryOrder::Value(_) if rows.iter().any(|row| row.estimate.is_none()) => {
+            return Err(Error::Data(
+                "point_interval: estimate-status rows do not support value-derived category order"
+                    .into(),
+            ));
+        }
+        CategoryOrder::Value(ValueSort::Ascending) => {
             rows.sort_by(|left, right| match (left.estimate, right.estimate) {
                 (Some(left), Some(right)) => left.estimate.total_cmp(&right.estimate),
                 _ => std::cmp::Ordering::Equal,
             });
         }
-        ValueSort::Descending => {
+        CategoryOrder::Value(ValueSort::Descending) => {
             rows.sort_by(|left, right| match (left.estimate, right.estimate) {
                 (Some(left), Some(right)) => right.estimate.total_cmp(&left.estimate),
                 _ => std::cmp::Ordering::Equal,
             });
         }
     }
-    Ok(rows)
+    Ok(())
 }
 
 fn row_y(index: usize, row_count: usize) -> f64 {
@@ -358,7 +386,24 @@ mod tests {
     fn prepare_sorts_rows_by_estimate() {
         let data = valid_data();
 
-        let rows = prepare_chart(&chart(&data).value_sort(ValueSort::Ascending)).unwrap();
+        let rows = prepare_chart(&chart(&data).category_order(ValueSort::Ascending)).unwrap();
+
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.label.as_str())
+                .collect::<Vec<_>>(),
+            ["second", "first"]
+        );
+    }
+
+    #[test]
+    fn prepare_applies_explicit_category_order() {
+        let data = valid_data();
+
+        let rows = prepare_chart(
+            &chart(&data).category_order(crate::CategoryOrder::explicit(["second", "first"])),
+        )
+        .unwrap();
 
         assert_eq!(
             rows.iter()

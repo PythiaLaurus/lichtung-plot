@@ -383,18 +383,6 @@ impl EstimateStatus {
     }
 }
 
-/// Ordering applied to precomputed categorical values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ValueSort {
-    /// Preserve observed category order.
-    #[default]
-    None,
-    /// Sort from the smallest value to the largest.
-    Ascending,
-    /// Sort from the largest value to the smallest.
-    Descending,
-}
-
 /// Numeric scale used by interval-estimate plot families.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AxisScale {

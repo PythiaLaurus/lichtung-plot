@@ -393,6 +393,37 @@ pub(crate) fn stable_levels(values: &[String]) -> Vec<String> {
     levels
 }
 
+pub(crate) fn explicit_category_order(
+    observed: &[String],
+    requested: &[String],
+    context: &str,
+    allow_unobserved: bool,
+) -> Result<Vec<String>, Error> {
+    let mut seen = Vec::with_capacity(requested.len());
+    for level in requested {
+        if seen.contains(level) {
+            return Err(Error::Data(format!(
+                "{context}: explicit category order contains duplicate level {level:?}"
+            )));
+        }
+        if !allow_unobserved && !observed.contains(level) {
+            return Err(Error::Data(format!(
+                "{context}: explicit category order contains unknown level {level:?}"
+            )));
+        }
+        seen.push(level.clone());
+    }
+    if let Some(level) = observed.iter().find(|level| !seen.contains(level)) {
+        return Err(Error::Data(format!(
+            "{context}: explicit category order omits observed level {level:?}"
+        )));
+    }
+    if allow_unobserved {
+        seen.retain(|level| observed.contains(level));
+    }
+    Ok(seen)
+}
+
 pub(crate) fn strict_strings<'a>(
     data: impl Into<PlotData<'a>>,
     column: &str,

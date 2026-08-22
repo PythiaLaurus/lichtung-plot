@@ -12,7 +12,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult, ValueSort};
+use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
 struct DumbbellRow {
@@ -124,9 +124,9 @@ fn prepare<'a>(
                 .into(),
         ));
     }
-    if chart.value_sort_spec() != ValueSort::None {
+    if !matches!(chart.category_order_spec(), CategoryOrder::Observed) {
         return Err(Error::Data(
-            "dumbbell: ValueSort is not supported; category order is first-observed".into(),
+            "dumbbell: category ordering is not supported; category order is first-observed".into(),
         ));
     }
     let category_col = chart

@@ -140,7 +140,7 @@ fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
     let svg = render(
         Plot::horizontal_bar(data::category(&df, "label"), data::numeric(&df, "value"))
             .bar_aggregation(BarAggregation::Identity)
-            .value_sort(ValueSort::Descending)
+            .category_order(ValueSort::Descending)
             .color_by_sign()
             .zero_line(),
         "signed-horizontal-bar",

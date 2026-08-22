@@ -1,8 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use lichtung_plot::{
-    Canvas, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
-    HeatmapScale, LegendPosition, NumericLabelFormat, Plot, ValueSort,
+    Canvas, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
+    HeatmapNullRowAnnotation, HeatmapScale, LegendPosition, NumericLabelFormat, Plot, ValueSort,
 };
 
 #[path = "../support/data.rs"]
@@ -187,6 +187,25 @@ fn heatmap_places_first_observed_x_left_and_first_observed_y_top() {
 
     assert!(text_attr(&svg, "Second column", "x") < text_attr(&svg, "First column", "x"));
     assert!(text_attr(&svg, "Second row", "y") < text_attr(&svg, "First row", "y"));
+}
+
+#[test]
+fn heatmap_applies_explicit_axis_orders_independently_of_cell_row_order() {
+    let data = df!(
+        "column" => ["right", "left", "right", "left"],
+        "row" => ["bottom", "top", "top", "bottom"],
+        "value" => [0.75_f64, 0.0, 1.0, 0.5]
+    )
+    .unwrap();
+    let svg = render(&data, |chart| {
+        chart
+            .x_category_order(CategoryOrder::explicit(["left", "right"]))
+            .y_category_order(CategoryOrder::explicit(["top", "bottom"]))
+    })
+    .unwrap();
+
+    assert!(text_attr(&svg, "Left", "x") < text_attr(&svg, "Right", "x"));
+    assert!(text_attr(&svg, "Top", "y") < text_attr(&svg, "Bottom", "y"));
 }
 
 #[test]
@@ -638,7 +657,7 @@ fn heatmap_rejects_incompatible_public_options() {
     let errors = [
         render(&data, |chart| chart.x_limits(0.0, 1.0)).unwrap_err(),
         render(&data, |chart| chart.y_tick_count(2)).unwrap_err(),
-        render(&data, |chart| chart.value_sort(ValueSort::Descending)).unwrap_err(),
+        render(&data, |chart| chart.x_category_order(ValueSort::Descending)).unwrap_err(),
         render(&data, |chart| chart.hue(data::category(&data, "row"))).unwrap_err(),
         render(&data, |chart| {
             chart.legend_position(LegendPosition::OutsideRight)

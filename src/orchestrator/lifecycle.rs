@@ -33,6 +33,7 @@ impl Plot {
             )));
         }
         self.validate_value_alignment()?;
+        self.validate_category_order_configuration(kind)?;
         self.validate_channel_configuration(kind)?;
         self.validate_interval_configuration(kind)?;
         self.validate_facet_configuration(kind)?;
@@ -99,6 +100,7 @@ impl Plot {
         kind: PlotKind,
         panel: crate::layout::PanelBox,
     ) -> Result<PlotRenderResult, Error> {
+        self.validate_category_order_configuration(kind)?;
         if !self.comparisons().is_empty() && !kind.supports_significance() {
             return Err(Error::Render(format!(
                 "significance comparisons are not supported for {kind:?}; use a supported categorical family or remove the comparisons"

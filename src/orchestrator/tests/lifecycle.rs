@@ -144,7 +144,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
 #[test]
 fn heatmap_validation_failure_happens_before_canvas_begin() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Heatmap).value_sort(ValueSort::Ascending);
+    let chart = configured_chart(&data, PlotKind::Heatmap).x_category_order(ValueSort::Ascending);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -152,7 +152,7 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("ValueSort is not supported"));
+    assert!(error.contains("cannot use ValueSort::Ascending"));
     assert_eq!((backend.begins, backend.ends), (0, 0));
 }
 

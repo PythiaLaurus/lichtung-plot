@@ -6,11 +6,158 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::spec::{
-    BarAggregation, HistogramBins, HistogramComposite, HistogramStat, LineMode, LinePathStyle,
-    PlotKind, RegressionBand, ViolinLayout,
+    BarAggregation, CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat,
+    LineMode, LinePathStyle, PlotKind, RegressionBand, ViolinLayout,
 };
 
 impl Plot {
+    pub(crate) fn validate_category_order_configuration(
+        &self,
+        kind: PlotKind,
+    ) -> Result<(), Error> {
+        if !matches!(self.category_order_spec(), CategoryOrder::Observed)
+            && !matches!(
+                kind,
+                PlotKind::PointInterval
+                    | PlotKind::Heatmap
+                    | PlotKind::Bar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedBar
+                    | PlotKind::StackedHorizontalBar
+                    | PlotKind::Dumbbell
+            )
+        {
+            return Err(Error::Data(format!(
+                "{kind:?}: primary category ordering is not supported"
+            )));
+        }
+        if kind != PlotKind::Heatmap
+            && (!matches!(self.x_category_order_spec(), CategoryOrder::Observed)
+                || !matches!(self.y_category_order_spec(), CategoryOrder::Observed))
+        {
+            return Err(Error::Data(format!(
+                "{kind:?}: x_category_order and y_category_order are supported only by Heatmap"
+            )));
+        }
+        if self.has_facets() && matches!(self.category_order_spec(), CategoryOrder::Value(_)) {
+            return Err(Error::Data(
+                "value-derived category order is not supported with faceting; each panel can prepare a different value for the same category, so supply an explicit order"
+                    .into(),
+            ));
+        }
+        if self.has_facets() {
+            self.validate_faceted_explicit_category_orders(kind)?;
+        }
+        Ok(())
+    }
+
+    fn validate_faceted_explicit_category_orders(&self, kind: PlotKind) -> Result<(), Error> {
+        let configured_source_rows = self.configured_source_rows()?;
+        let data = configured_source_rows
+            .as_deref()
+            .map_or_else(|| self.data(), |rows| self.data().map_source_rows(rows));
+        match kind {
+            PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar => {
+                let column = self
+                    .x_col()
+                    .ok_or_else(|| Error::Data("bar: category column not set".into()))?;
+                let observed = crate::data::stable_levels(&crate::data::strict_strings(
+                    data,
+                    column,
+                    "faceted bar category order",
+                )?);
+                validate_full_explicit_order(
+                    self.category_order_spec(),
+                    &observed,
+                    "bar category order",
+                    false,
+                )?;
+            }
+            PlotKind::PointInterval => {
+                let column = self
+                    .y_col()
+                    .ok_or_else(|| Error::Data("point_interval: category column not set".into()))?;
+                let observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
+                    data,
+                    column,
+                    "faceted point_interval category order",
+                    "category",
+                )?);
+                validate_full_explicit_order(
+                    self.category_order_spec(),
+                    &observed,
+                    "point_interval category order",
+                    true,
+                )?;
+            }
+            PlotKind::Heatmap => self.validate_faceted_heatmap_category_orders(data)?,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn validate_faceted_heatmap_category_orders(
+        &self,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), Error> {
+        let x_column = self
+            .x_col()
+            .ok_or_else(|| Error::Data("heatmap: x category column not set".into()))?;
+        let y_column = self
+            .y_col()
+            .ok_or_else(|| Error::Data("heatmap: y category column not set".into()))?;
+        let x_observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
+            data,
+            x_column,
+            "faceted heatmap category order",
+            "x",
+        )?);
+        let y_observed = crate::data::stable_levels(&crate::data::strict_normalized_strings(
+            data,
+            y_column,
+            "faceted heatmap category order",
+            "y",
+        )?);
+        let family = (self.heatmap_layout_spec() != HeatmapLayout::Cartesian).then(|| {
+            let mut family = x_observed.clone();
+            for level in &y_observed {
+                if !family.contains(level) {
+                    family.push(level.clone());
+                }
+            }
+            family
+        });
+        for (axis, observed, order) in [
+            (
+                "x",
+                family.as_deref().unwrap_or(&x_observed),
+                self.x_category_order_spec(),
+            ),
+            (
+                "y",
+                family.as_deref().unwrap_or(&y_observed),
+                self.y_category_order_spec(),
+            ),
+        ] {
+            validate_full_explicit_order(
+                order,
+                observed,
+                &format!("heatmap {axis} category order"),
+                true,
+            )?;
+        }
+        if self.heatmap_layout_spec() != HeatmapLayout::Cartesian {
+            validate_matching_triangular_orders(
+                self.x_category_order_spec(),
+                self.y_category_order_spec(),
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn validate_value_alignment(&self) -> Result<(), Error> {
         let expected = self.row_count();
         for values in self.aligned_columns() {
@@ -703,6 +850,46 @@ impl Plot {
             ))
         }
     }
+}
+
+fn validate_full_explicit_order(
+    order: &CategoryOrder,
+    observed: &[String],
+    context: &str,
+    normalize: bool,
+) -> Result<(), Error> {
+    let CategoryOrder::Explicit(requested) = order else {
+        return Ok(());
+    };
+    let requested = if normalize {
+        requested
+            .iter()
+            .map(|level| crate::data::collapse_whitespace(level))
+            .collect::<Vec<_>>()
+    } else {
+        requested.clone()
+    };
+    crate::data::explicit_category_order(observed, &requested, context, false)?;
+    Ok(())
+}
+
+fn validate_matching_triangular_orders(x: &CategoryOrder, y: &CategoryOrder) -> Result<(), Error> {
+    let (CategoryOrder::Explicit(x), CategoryOrder::Explicit(y)) = (x, y) else {
+        return Ok(());
+    };
+    let normalized = |levels: &[String]| {
+        levels
+            .iter()
+            .map(|level| crate::data::collapse_whitespace(level))
+            .collect::<Vec<_>>()
+    };
+    if normalized(x) != normalized(y) {
+        return Err(Error::Data(
+            "heatmap: triangular x and y category orders must resolve to the same family order"
+                .into(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_beeswarm_color_limits(minimum: f64, maximum: f64) -> Result<(), Error> {

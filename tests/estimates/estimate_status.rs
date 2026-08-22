@@ -265,26 +265,43 @@ fn estimate_status_rejects_nonfinite_values_and_unsupported_kinds() {
 }
 
 #[test]
-fn estimate_status_value_sort_contract_preserves_source_order() {
+fn estimate_status_value_order_contract_preserves_source_order() {
     let mixed = mixed_data();
     assert!(point_interval(&mixed, true)
-        .value_sort(ValueSort::Ascending)
+        .category_order(ValueSort::Ascending)
         .preflight()
         .unwrap_err()
         .to_string()
-        .contains("retain source order"));
+        .contains("do not support value-derived category order"));
 
     let estimated = all_estimated_data();
     let strict = svg(
-        point_interval(&estimated, false).value_sort(ValueSort::Descending),
+        point_interval(&estimated, false).category_order(ValueSort::Descending),
         "strict-sorted-status",
     );
     let status = svg(
-        point_interval(&estimated, true).value_sort(ValueSort::Descending),
+        point_interval(&estimated, true).category_order(ValueSort::Descending),
         "sorted-status",
     );
     assert_eq!(strict, status);
     assert!(text_y(&status, "Second") < text_y(&status, "First"));
+}
+
+#[test]
+fn estimate_status_rows_accept_explicit_category_order() {
+    let mixed = mixed_data();
+
+    let rendered = svg(
+        point_interval(&mixed, true).category_order(CategoryOrder::explicit([
+            "third",
+            "unavailable",
+            "first",
+        ])),
+        "explicit-status-order",
+    );
+
+    assert!(text_y(&rendered, "Third") < text_y(&rendered, "Unavailable"));
+    assert!(text_y(&rendered, "Unavailable") < text_y(&rendered, "First"));
 }
 
 #[test]

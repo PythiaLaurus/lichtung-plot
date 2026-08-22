@@ -9,6 +9,12 @@ lengths, finite numeric values, categorical identities, source-row provenance,
 bounds, channel compatibility, and representable geometry before opening a
 backend canvas. Conversion from external data containers belongs to callers.
 
+Categorical ordering is plot-owned rather than encoded by physical input row
+order. First-observed order is the deterministic default. An explicit order
+must name every rendered category exactly once. Value-derived ordering is
+applied only after a supported family prepares one scalar rendered value per
+category; ambiguous multi-value categorical dimensions reject it.
+
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
 requested descriptive summaries, and ordinary least-squares display fits. It

@@ -13,7 +13,7 @@ use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox};
 use crate::render::backend::{with_layer, Backend};
 use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
-use crate::spec::DecorationMode;
+use crate::spec::{AxisDomain, DecorationMode};
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, PngOptions, SvgText, Theme};
 
 type LegendEntrySignature = (
@@ -488,6 +488,7 @@ impl Canvas {
             let kind = chart
                 .plot_kind()
                 .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            chart.validate_category_order_configuration(kind)?;
             chart.validate_facet_configuration(kind)?;
             chart.validate_interval_configuration(kind)?;
             chart.validate_channel_configuration(kind)?;
@@ -644,31 +645,6 @@ impl Canvas {
                 })
             })
             .collect::<Vec<_>>();
-        if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
-            for row in 0..self.rows {
-                let first_index = row * self.columns;
-                let first = charts[first_index].as_ref().ok_or_else(|| {
-                    Error::Data(format!(
-                        "figure row {row} requires a configured first-column panel for shared category labels"
-                    ))
-                })?;
-                let expected = chart_category_domain(first)?;
-                for column in 1..self.columns {
-                    let index = first_index + column;
-                    let chart = charts[index].as_ref().ok_or_else(|| {
-                        Error::Data(format!(
-                            "figure row {row} requires panel ({row}, {column}) for shared category labels"
-                        ))
-                    })?;
-                    if chart_category_domain(chart)? != expected {
-                        return Err(Error::Data(format!(
-                            "figure row {row} category domains differ across panels"
-                        )));
-                    }
-                    charts[index] = Some(chart.clone().with_y_tick_labels_visible(false));
-                }
-            }
-        }
         let shared_legend = if self.legend_policy == CanvasLegendPolicy::Shared {
             Self::preflight_shared_legend(&charts, full_outer)?
         } else {
@@ -722,6 +698,31 @@ impl Canvas {
         }
         let provisional =
             allocate_composed_grid(outer, self.rows, self.columns, &[], "figure layout")?;
+        if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
+            for row in 0..self.rows {
+                let first_index = row * self.columns;
+                let first = charts[first_index].as_ref().ok_or_else(|| {
+                    Error::Data(format!(
+                        "figure row {row} requires a configured first-column panel for shared category labels"
+                    ))
+                })?;
+                let expected = chart_category_domain(first, provisional[first_index])?;
+                for column in 1..self.columns {
+                    let index = first_index + column;
+                    let chart = charts[index].as_ref().ok_or_else(|| {
+                        Error::Data(format!(
+                            "figure row {row} requires panel ({row}, {column}) for shared category labels"
+                        ))
+                    })?;
+                    if chart_category_domain(chart, provisional[index])? != expected {
+                        return Err(Error::Data(format!(
+                            "figure row {row} category domains differ across panels"
+                        )));
+                    }
+                    charts[index] = Some(chart.clone().with_y_tick_labels_visible(false));
+                }
+            }
+        }
         if !self.x_range_groups.is_empty() {
             let mut ranges = vec![None; charts.len()];
             for (index, chart) in charts.iter().enumerate() {
@@ -1147,18 +1148,33 @@ impl Canvas {
     }
 }
 
-fn chart_category_domain(chart: &Plot) -> Result<Vec<String>, Error> {
-    let column = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("shared category labels require an x category".into()))?;
-    let values = crate::data::strict_strings(chart.data(), column, "figure category labels")?;
-    let mut domain = Vec::new();
-    for value in values {
-        if !domain.contains(&value) {
-            domain.push(value);
-        }
+fn chart_category_domain(chart: &Plot, panel: PanelBox) -> Result<Vec<String>, Error> {
+    let kind = chart
+        .plot_kind()
+        .ok_or_else(|| Error::Data("shared category labels require a selected plot kind".into()))?;
+    if !matches!(
+        kind,
+        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+    ) {
+        return Err(Error::Data(
+            "shared category labels are supported only by horizontal bar families".into(),
+        ));
     }
-    Ok(domain)
+    let result = chart.preflight_panel(kind, panel)?;
+    if result.y_domain != AxisDomain::Categorical {
+        return Err(Error::Data(
+            "shared category labels require a categorical y-axis".into(),
+        ));
+    }
+    Ok(result.y_tick_keys.unwrap_or_else(|| {
+        result
+            .layout
+            .y_axis
+            .ticks
+            .into_iter()
+            .map(|tick| tick.label)
+            .collect()
+    }))
 }
 
 #[expect(

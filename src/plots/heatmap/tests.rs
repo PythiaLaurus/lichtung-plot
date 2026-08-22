@@ -1,6 +1,7 @@
 use super::*;
 use crate::layout::deterministic_text_width;
 use crate::test_support::{into_column, Fixture, FixtureColumn};
+use crate::{CategoryOrder, ValueSort};
 
 fn data(x: FixtureColumn, y: FixtureColumn, fill: FixtureColumn) -> Fixture {
     Fixture::from_columns(vec![("x", x), ("y", y), ("fill", fill)]).unwrap()
@@ -39,6 +40,63 @@ fn prepare_normalizes_categories_and_preserves_first_observed_axes() {
             vec!["first".to_string(), "second row".to_string()]
         )
     );
+}
+
+#[test]
+fn prepare_applies_independent_explicit_orders_to_shuffled_cells() {
+    let data = data(
+        into_column(["b", "a", "b", "a"]),
+        into_column(["south", "north", "north", "south"]),
+        into_column([4.0_f64, 1.0, 2.0, 3.0]),
+    );
+    let chart = chart(&data)
+        .x_category_order(CategoryOrder::explicit([" a ", "b"]))
+        .y_category_order(CategoryOrder::explicit([" north ", "south"]));
+
+    let prepared = prepare_chart(&chart).unwrap();
+
+    assert_eq!(prepared.x_levels, ["a", "b"]);
+    assert_eq!(prepared.y_levels, ["north", "south"]);
+    assert_eq!(prepared.cells, [Some(1.0), Some(2.0), Some(3.0), Some(4.0)]);
+}
+
+#[test]
+fn prepare_rejects_inexact_explicit_axis_orders() {
+    let data = valid_data();
+    let orders = [vec!["b", "b"], vec!["b"], vec!["b", "a", "unknown"]];
+
+    let errors = orders
+        .into_iter()
+        .map(|order| {
+            prepare_chart(&chart(&data).x_category_order(CategoryOrder::explicit(order)))
+                .unwrap_err()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
+    assert!(errors[0].contains("duplicate level"));
+    assert!(errors[1].contains("omits observed level"));
+    assert!(errors[2].contains("unknown level"));
+}
+
+#[test]
+fn prepare_reorients_triangular_pairs_under_explicit_family_order() {
+    let data = data(
+        into_column(["a", "a", "b"]),
+        into_column(["b", "c", "c"]),
+        into_column([1.0_f64, 2.0, 3.0]),
+    );
+    let chart = chart(&data)
+        .heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: false })
+        .x_category_order(CategoryOrder::explicit(["c", "b", "a"]));
+
+    let prepared = prepare_chart(&chart).unwrap();
+
+    assert_eq!(prepared.x_levels, ["c", "b", "a"]);
+    assert_eq!(prepared.y_levels, ["c", "b", "a"]);
+    assert_eq!(prepared.cells[3], Some(3.0));
+    assert_eq!(prepared.cells[6], Some(2.0));
+    assert_eq!(prepared.cells[7], Some(1.0));
 }
 
 #[test]
@@ -241,7 +299,7 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
     let charts = [
         chart(&data).x_limits(0.0, 1.0),
         chart(&data).y_tick_count(2),
-        chart(&data).value_sort(ValueSort::Ascending),
+        chart(&data).x_category_order(ValueSort::Ascending),
         chart(&data).hue(crate::test_support::category(&data, "x")),
         chart(&data).heatmap_scale(HeatmapScale::Diverging { center: f64::NAN }),
     ];

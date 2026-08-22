@@ -7,8 +7,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::PointStyle;
 use crate::theme::ThemePalette;
-use crate::ValueSort;
-use crate::{BarAggregation, Plot};
+use crate::{BarAggregation, CategoryOrder, Plot, ValueSort};
 
 /// Bar arrangement mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,9 +130,12 @@ pub(crate) fn prepare<'a>(
             )
         }
     }?;
-    if mode == BarMode::Single {
-        sort_single_values(&mut prepared, chart.value_sort_spec());
-    }
+    apply_category_order(
+        &mut prepared,
+        chart.category_order_spec(),
+        mode,
+        !data.is_full_plot(),
+    )?;
     if chart.bar_aggregation_spec() == BarAggregation::Identity {
         if let Some(bounds) = chart.interval_bound_cols() {
             apply_identity_bounds(chart, data, &mut prepared, bounds)?;
@@ -464,10 +466,48 @@ pub(crate) fn validate_aggregation_cells(
     Ok(())
 }
 
-fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
-    if sort == ValueSort::None {
-        return;
+fn apply_category_order(
+    prepared: &mut PreparedBars,
+    order: &CategoryOrder,
+    mode: BarMode,
+    is_subset: bool,
+) -> Result<(), Error> {
+    match order {
+        CategoryOrder::Observed => Ok(()),
+        CategoryOrder::Explicit(requested) => {
+            let ordered = crate::data::explicit_category_order(
+                &prepared.categories,
+                requested,
+                "bar category order",
+                is_subset,
+            )?;
+            let old_categories = std::mem::replace(&mut prepared.categories, ordered);
+            for bar in &mut prepared.bars {
+                let label = &old_categories[bar.category_index];
+                bar.category_index = prepared
+                    .categories
+                    .iter()
+                    .position(|candidate| candidate == label)
+                    .ok_or_else(|| {
+                        Error::Render(format!(
+                            "bar category {label:?} was lost while applying explicit order"
+                        ))
+                    })?;
+            }
+            Ok(())
+        }
+        CategoryOrder::Value(sort) if mode == BarMode::Single => {
+            sort_single_values(prepared, *sort);
+            Ok(())
+        }
+        CategoryOrder::Value(_) => Err(Error::Data(
+            "bar: value-derived category order requires one ungrouped bar per category; use an explicit category order for grouped or stacked bars"
+                .into(),
+        )),
     }
+}
+
+fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
     let mut order: Vec<usize> = (0..prepared.categories.len()).collect();
     order.sort_by(|left, right| {
         let left_value = prepared.bars[*left].end;
@@ -475,7 +515,6 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
         match sort {
             ValueSort::Ascending => left_value.total_cmp(&right_value),
             ValueSort::Descending => right_value.total_cmp(&left_value),
-            ValueSort::None => std::cmp::Ordering::Equal,
         }
     });
     let categories = order

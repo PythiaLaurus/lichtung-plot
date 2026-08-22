@@ -358,6 +358,59 @@ fn shared_category_labels_reject_different_row_domains_preflight() {
 }
 
 #[test]
+fn shared_category_labels_compare_rendered_explicit_orders() {
+    let left = df!("outcome" => ["alpha", "beta"], "value" => [1.0_f64, 2.0]).unwrap();
+    let reversed = df!("outcome" => ["beta", "alpha"], "value" => [2.0_f64, 1.0]).unwrap();
+    let bar = |frame: &DataFrame, order| {
+        Plot::horizontal_bar(
+            data::category(frame, "outcome"),
+            data::numeric(frame, "value"),
+        )
+        .bar_aggregation(BarAggregation::Identity)
+        .category_order(CategoryOrder::explicit(order))
+    };
+
+    Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, bar(&left, ["alpha", "beta"]))
+        .unwrap()
+        .panel(0, 1, bar(&reversed, ["alpha", "beta"]))
+        .unwrap()
+        .category_labels(CanvasCategoryLabels::FirstColumnPerRow)
+        .preflight()
+        .unwrap();
+
+    let error = Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, bar(&left, ["alpha", "beta"]))
+        .unwrap()
+        .panel(0, 1, bar(&left, ["beta", "alpha"]))
+        .unwrap()
+        .category_labels(CanvasCategoryLabels::FirstColumnPerRow)
+        .preflight()
+        .unwrap_err();
+    assert!(error.to_string().contains("category domains differ"));
+}
+
+#[test]
+fn composed_panel_rejects_unsupported_category_order() {
+    let frame = df!("x" => [1.0_f64], "y" => [2.0_f64]).unwrap();
+    let plot = Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
+        .category_order(CategoryOrder::explicit(["unused"]));
+
+    let error = Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .preflight()
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("primary category ordering is not supported"));
+}
+
+#[test]
 fn composed_svg_is_byte_deterministic() {
     let build = || {
         let frame = estimate_data();

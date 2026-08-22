@@ -17,11 +17,11 @@ use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointOutline;
 use crate::spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, DumbbellEndpoints,
+    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints,
     EffectBandSemantics, EstimateSource, FacetScales, HeatmapAnnotations, HeatmapLabelFit,
     HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
     HistogramStat, IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, ValueSort, ViolinLayout,
+    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, ViolinLayout,
     WaterfallLabels,
 };
 use crate::theme::Theme;
@@ -89,7 +89,7 @@ pub struct Plot {
     coefficient_significance: Option<CategoryValues>,
     bar_significance: Option<CategoryValues>,
     significance_mark_style: crate::SignificanceMarkStyle,
-    value_sort: ValueSort,
+    category_orders: CategoryOrders,
     color_by_sign: bool,
     zero_line: bool,
     interval_lower: Option<NumericValues>,
@@ -138,6 +138,13 @@ pub struct Plot {
     /// Plot family selected by the semantic constructor and used for
     /// validation and rendering dispatch.
     kind: Option<PlotKind>,
+}
+
+#[derive(Clone, Default)]
+struct CategoryOrders {
+    primary: CategoryOrder,
+    x: CategoryOrder,
+    y: CategoryOrder,
 }
 
 impl Plot {
@@ -193,7 +200,7 @@ impl Plot {
             coefficient_significance: None,
             bar_significance: None,
             significance_mark_style: crate::SignificanceMarkStyle::default(),
-            value_sort: ValueSort::None,
+            category_orders: CategoryOrders::default(),
             color_by_sign: false,
             zero_line: false,
             interval_lower: None,

@@ -12,11 +12,11 @@ use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointStyle;
 use crate::spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, DumbbellEndpoints,
+    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints,
     EffectBandSemantics, EstimateSource, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
     HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite, HistogramStat,
     IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, ValueSort, ViolinLayout,
+    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, ViolinLayout,
     WaterfallLabels,
 };
 use crate::Labels;
@@ -377,10 +377,16 @@ impl Plot {
         &self.grouped_factor_annotations
     }
 
-    /// Requested categorical value ordering.
-    #[must_use]
-    pub fn value_sort_spec(&self) -> ValueSort {
-        self.value_sort
+    pub(crate) const fn category_order_spec(&self) -> &CategoryOrder {
+        &self.category_orders.primary
+    }
+
+    pub(crate) const fn x_category_order_spec(&self) -> &CategoryOrder {
+        &self.category_orders.x
+    }
+
+    pub(crate) const fn y_category_order_spec(&self) -> &CategoryOrder {
+        &self.category_orders.y
     }
 
     /// Requested histogram bin-selection strategy.

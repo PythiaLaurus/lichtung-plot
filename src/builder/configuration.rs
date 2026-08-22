@@ -2,12 +2,11 @@ use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, DumbbellEndpoints,
+    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints,
     EffectBandSemantics, EstimateSource, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
     HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite, HistogramStat,
     IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, ValueSort, ViolinLayout,
-    WaterfallLabels,
+    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, ViolinLayout, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
@@ -326,10 +325,35 @@ impl Plot {
         self
     }
 
-    /// Sort categorical values before rendering.
+    /// Set the primary categorical display order.
+    ///
+    /// Passing [`crate::ValueSort`] selects value-derived ordering after the
+    /// supported plot family has prepared one scalar value per category. This
+    /// option is supported by bar families and point-interval plots; heatmaps
+    /// use [`Self::x_category_order`] and [`Self::y_category_order`].
     #[must_use]
-    pub fn value_sort(mut self, sort: ValueSort) -> Self {
-        self.value_sort = sort;
+    pub fn category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+        self.category_orders.primary = order.into();
+        self
+    }
+
+    /// Set the horizontal categorical order for a heatmap.
+    ///
+    /// Heatmap axes accept observed or explicit ordering. Value-derived
+    /// ordering is ambiguous because one axis category owns multiple cells.
+    #[must_use]
+    pub fn x_category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+        self.category_orders.x = order.into();
+        self
+    }
+
+    /// Set the vertical categorical order for a heatmap.
+    ///
+    /// Heatmap axes accept observed or explicit ordering. Value-derived
+    /// ordering is ambiguous because one axis category owns multiple cells.
+    #[must_use]
+    pub fn y_category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+        self.category_orders.y = order.into();
         self
     }
 

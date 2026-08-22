@@ -17,8 +17,8 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{
-    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPosition,
-    PlotRenderContext, PlotRenderResult, ValueSort,
+    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale,
+    LegendPosition, PlotRenderContext, PlotRenderResult,
 };
 use crate::Plot;
 
@@ -213,9 +213,23 @@ fn prepare<'a>(
 
     let heatmap_layout = chart.heatmap_layout_spec();
     let (x_levels, y_levels) = match heatmap_layout {
-        HeatmapLayout::Cartesian => (observed_order(&x_values), observed_order(&y_values)),
+        HeatmapLayout::Cartesian => (
+            resolve_axis_order(
+                &crate::data::stable_levels(&x_values),
+                chart.x_category_order_spec(),
+                "x",
+                !data.is_full_plot(),
+            )?,
+            resolve_axis_order(
+                &crate::data::stable_levels(&y_values),
+                chart.y_category_order_spec(),
+                "y",
+                !data.is_full_plot(),
+            )?,
+        ),
         HeatmapLayout::LowerTriangle { .. } | HeatmapLayout::UpperTriangle { .. } => {
-            let family = triangular_family_order(&x_values, &y_values, heatmap_layout);
+            let observed = triangular_family_order(&x_values, &y_values, heatmap_layout);
+            let family = resolve_triangular_order(chart, &observed, !data.is_full_plot())?;
             (family.clone(), family)
         }
     };
@@ -239,18 +253,24 @@ fn prepare<'a>(
         .enumerate()
         .map(|(index, level)| (level.as_str(), index))
         .collect::<HashMap<_, _>>();
+    let explicit_triangular_order = heatmap_layout != HeatmapLayout::Cartesian
+        && (!matches!(chart.x_category_order_spec(), CategoryOrder::Observed)
+            || !matches!(chart.y_category_order_spec(), CategoryOrder::Observed));
     let mut seen = HashSet::with_capacity(x_values.len());
     let mut cells = vec![None; cell_count];
     let mut highlighted = vec![false; cell_count];
     for (row, ((x, y), fill)) in x_values.iter().zip(&y_values).zip(&fills).enumerate() {
-        if !seen.insert((x.as_str(), y.as_str())) {
+        let mut x_index = x_indices[x.as_str()];
+        let mut y_index = y_indices[y.as_str()];
+        if explicit_triangular_order && !active_cell(heatmap_layout, x_index, y_index) {
+            std::mem::swap(&mut x_index, &mut y_index);
+        }
+        if !seen.insert((x_index, y_index)) {
             let source_row = data.source_row(row);
             return Err(Error::Data(format!(
                 "heatmap: duplicate normalized (x, y) pair ({x:?}, {y:?}) at source row {source_row}"
             )));
         }
-        let x_index = x_indices[x.as_str()];
-        let y_index = y_indices[y.as_str()];
         if !active_cell(heatmap_layout, x_index, y_index) {
             let source_row = data.source_row(row);
             return Err(Error::Data(format!(
@@ -310,10 +330,21 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
             "heatmap: hue column {hue_col:?} is not supported; use color for numeric fill"
         )));
     }
-    if chart.value_sort_spec() != ValueSort::None {
+    if !matches!(chart.category_order_spec(), CategoryOrder::Observed) {
         return Err(Error::Data(
-            "heatmap: ValueSort is not supported; category order is first-observed".into(),
+            "heatmap: primary category order is ambiguous; use x_category_order(...) and y_category_order(...)"
+                .into(),
         ));
+    }
+    for (axis, order) in [
+        ("x", chart.x_category_order_spec()),
+        ("y", chart.y_category_order_spec()),
+    ] {
+        if let CategoryOrder::Value(sort) = order {
+            return Err(Error::Data(format!(
+                "heatmap: {axis} categories cannot use ValueSort::{sort:?}; each category maps to multiple cells, so supply an explicit order"
+            )));
+        }
     }
     if chart.legend_position_spec() != LegendPosition::Auto || chart.legend_visibility().is_some() {
         return Err(Error::Data(
@@ -407,14 +438,58 @@ fn normalized_categories(
         .collect()
 }
 
-fn observed_order(values: &[String]) -> Vec<String> {
-    let mut levels = Vec::new();
-    for value in values {
-        if !levels.contains(value) {
-            levels.push(value.clone());
+fn resolve_axis_order(
+    observed: &[String],
+    order: &CategoryOrder,
+    axis: &str,
+    is_subset: bool,
+) -> Result<Vec<String>, Error> {
+    match order {
+        CategoryOrder::Observed => Ok(observed.to_vec()),
+        CategoryOrder::Explicit(requested) => {
+            let requested = requested
+                .iter()
+                .map(|level| crate::data::collapse_whitespace(level))
+                .collect::<Vec<_>>();
+            if requested.iter().any(String::is_empty) {
+                return Err(Error::Data(format!(
+                    "heatmap: explicit {axis} category order contains an empty normalized level"
+                )));
+            }
+            crate::data::explicit_category_order(
+                observed,
+                &requested,
+                &format!("heatmap {axis} category order"),
+                is_subset,
+            )
+        }
+        CategoryOrder::Value(sort) => Err(Error::Data(format!(
+            "heatmap: {axis} categories cannot use ValueSort::{sort:?}; each category maps to multiple cells, so supply an explicit order"
+        ))),
+    }
+}
+
+fn resolve_triangular_order(
+    chart: &Plot,
+    observed: &[String],
+    is_subset: bool,
+) -> Result<Vec<String>, Error> {
+    match (chart.x_category_order_spec(), chart.y_category_order_spec()) {
+        (CategoryOrder::Observed, CategoryOrder::Observed) => Ok(observed.to_vec()),
+        (CategoryOrder::Observed, y) => resolve_axis_order(observed, y, "y", is_subset),
+        (x, CategoryOrder::Observed) => resolve_axis_order(observed, x, "x", is_subset),
+        (x, y) => {
+            let x = resolve_axis_order(observed, x, "x", is_subset)?;
+            let y = resolve_axis_order(observed, y, "y", is_subset)?;
+            if x != y {
+                return Err(Error::Data(
+                    "heatmap: triangular x and y category orders must resolve to the same family order"
+                        .into(),
+                ));
+            }
+            Ok(x)
         }
     }
-    levels
 }
 
 fn triangular_family_order(
