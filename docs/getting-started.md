@@ -1,8 +1,8 @@
 # Getting Started
 
 `lichtung-plot` renders owned immutable display values. SVG support is always
-available; enable `png` only when raster output is needed. Separate adapter
-crates convert dataframe and ndarray columns at application boundaries.
+available; enable `png` only when raster output is needed. Callers convert
+external data containers into the renderer's native values at their boundary.
 
 ```toml
 [dependencies]

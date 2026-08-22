@@ -411,25 +411,18 @@ fn scaled_difference_ratio(high: f64, low: f64, denominator: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use polars::prelude::{DataFrame, NamedFrom, Series};
-
     use super::*;
+    use crate::test_support::{into_column, Fixture};
 
-    fn frame(values: &[f64], labels: Option<&[&str]>) -> DataFrame {
-        let row_count = values.len();
-        let values = Series::new("value".into(), values);
-        let mut columns = vec![values.into()];
+    fn frame(values: &[f64], labels: Option<&[&str]>) -> Fixture {
+        let mut columns = vec![("value", into_column(values.to_vec()))];
         if let Some(labels) = labels {
-            columns.push(Series::new("group".into(), labels).into());
+            columns.push(("group", into_column(labels.to_vec())));
         }
-        DataFrame::new(row_count, columns).unwrap()
+        Fixture::from_columns(columns).unwrap()
     }
 
-    fn prepare_frame(
-        data: &DataFrame,
-        grouped: bool,
-        hued: bool,
-    ) -> Result<PreparedDensity, Error> {
+    fn prepare_frame(data: &Fixture, grouped: bool, hued: bool) -> Result<PreparedDensity, Error> {
         let mut plot = Plot::density(crate::test_support::numeric(data, "value"));
         if grouped {
             plot = plot.group(crate::test_support::category(data, "group"));

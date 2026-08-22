@@ -1,5 +1,3 @@
-use polars::prelude::NamedFrom;
-
 use super::{
     configured_chart, fixture, valid_grouped_bar_fixture, DataFrame, Plot, PlotKind,
     RecordingBackend, Series,

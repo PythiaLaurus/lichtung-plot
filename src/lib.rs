@@ -18,6 +18,8 @@ mod layers;
 pub mod layout;
 mod orchestrator;
 mod output;
+#[cfg(any(feature = "png", test))]
+mod output_path;
 mod plots;
 mod render;
 mod scene;

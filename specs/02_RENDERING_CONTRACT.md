@@ -7,8 +7,7 @@
 `Plot` consumes owned immutable semantic values. Plot families validate aligned
 lengths, finite numeric values, categorical identities, source-row provenance,
 bounds, channel compatibility, and representable geometry before opening a
-backend canvas. Dataframe and ndarray extraction belongs to separate adapter
-crates.
+backend canvas. Conversion from external data containers belongs to callers.
 
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
@@ -85,9 +84,10 @@ No fallback renderer or alternate output path is attempted after an error.
 ## Artifact Publication
 
 Each file output is staged at a unique sibling path and renamed only after
-rendering or conversion succeeds. Every consuming output call publishes
-independently; there is no multi-file transaction. Failures preserve existing
-output where the underlying filesystem supports ordinary same-directory rename
+rendering or conversion succeeds. Independent consuming output calls publish
+independently. Combined SVG/PNG output validates distinct destination identity
+and publishes both files transactionally. Failures preserve existing output
+where the underlying filesystem supports ordinary same-directory rename
 semantics.
 
 ## Regression Evidence

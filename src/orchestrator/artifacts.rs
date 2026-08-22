@@ -5,7 +5,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::Error;
 
+#[cfg(feature = "png")]
+use crate::output_path::destination_identity;
+
 pub(super) static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(feature = "png")]
+pub(crate) fn paths_resolve_to_same_destination(
+    first: &Path,
+    second: &Path,
+) -> Result<bool, Error> {
+    Ok(destination_identity(first)? == destination_identity(second)?)
+}
 
 pub(crate) fn reserve_unique_sibling_temp_path(
     path: &Path,
@@ -22,6 +33,24 @@ pub(crate) fn reserve_unique_sibling_temp_path(
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),
         }
+    }
+}
+
+#[cfg(feature = "png")]
+pub(crate) fn reserve_staging_pair(
+    first_target: &Path,
+    first_extension: &str,
+    second_target: &Path,
+    second_extension: &str,
+) -> Result<(PathBuf, PathBuf), Error> {
+    let first = reserve_unique_sibling_temp_path(first_target, first_extension)?;
+    match reserve_unique_sibling_temp_path(second_target, second_extension) {
+        Ok(second) => Ok((first, second)),
+        Err(error) => crate::render::backend::finish_scope(
+            Err(error),
+            remove_if_present(&first).map_err(Error::Io),
+            "partial staging reservation",
+        ),
     }
 }
 
@@ -53,7 +82,7 @@ pub(crate) fn publish_staged(staged: &Path, final_path: &Path) -> Result<(), Err
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(feature = "png", windows))]
 pub(crate) fn publish_staged_pair<const N: usize>(paths: [(&Path, &Path); N]) -> Result<(), Error> {
     for (_, final_path) in paths {
         if final_path.exists() && !std::fs::metadata(final_path)?.is_file() {
@@ -97,7 +126,7 @@ pub(crate) fn publish_staged_pair<const N: usize>(paths: [(&Path, &Path); N]) ->
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(feature = "png", windows))]
 pub(super) fn finish_committed_publication(
     backups: &[(PathBuf, PathBuf)],
     mut remove: impl FnMut(&Path) -> std::io::Result<()>,
@@ -107,7 +136,7 @@ pub(super) fn finish_committed_publication(
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(feature = "png", windows))]
 fn rollback_publication(
     published: &[PathBuf],
     backups: &[(PathBuf, PathBuf)],
@@ -117,7 +146,7 @@ fn rollback_publication(
     })
 }
 
-#[cfg(windows)]
+#[cfg(any(feature = "png", windows))]
 fn rollback_publication_with(
     published: &[PathBuf],
     backups: &[(PathBuf, PathBuf)],
@@ -142,7 +171,7 @@ fn rollback_publication_with(
     cleanup_result(&failures, "artifact publication rollback")
 }
 
-#[cfg(windows)]
+#[cfg(any(feature = "png", windows))]
 fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
     let mut failures = Vec::new();
     for (backup, final_path) in backups.iter().rev() {
@@ -208,9 +237,39 @@ fn cleanup_result(failures: &[String], action: &str) -> Result<(), Error> {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(all(test, feature = "png"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rollback_removes_partial_publication_and_restores_previous_artifacts() {
+        let directory = std::env::temp_dir().join(format!(
+            "lichtung-pair-rollback-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let svg = directory.join("plot.svg");
+        let png = directory.join("plot.png");
+        let svg_backup = directory.join("plot.svg.backup");
+        let png_backup = directory.join("plot.png.backup");
+        std::fs::write(&svg, b"new svg").unwrap();
+        std::fs::write(&svg_backup, b"old svg").unwrap();
+        std::fs::write(&png_backup, b"old png").unwrap();
+
+        rollback_publication(
+            std::slice::from_ref(&svg),
+            &[(svg_backup, svg.clone()), (png_backup, png.clone())],
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read(&svg).unwrap(), b"old svg");
+        assert_eq!(std::fs::read(&png).unwrap(), b"old png");
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn rollback_reports_both_published_cleanup_and_backup_restore_failures() {

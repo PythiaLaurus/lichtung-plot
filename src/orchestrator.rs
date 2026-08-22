@@ -14,6 +14,10 @@ mod lifecycle;
 mod output;
 mod validation;
 
+#[cfg(feature = "png")]
+pub(crate) use artifacts::{
+    paths_resolve_to_same_destination, publish_staged_pair, reserve_staging_pair,
+};
 pub(crate) use artifacts::{
     publish_staged, reserve_unique_sibling_temp_path, with_temporary_artifacts,
 };

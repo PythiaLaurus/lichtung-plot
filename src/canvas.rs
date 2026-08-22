@@ -455,6 +455,17 @@ impl Canvas {
         output.png(path)
     }
 
+    /// Render once and transactionally publish SVG and PNG outputs.
+    #[cfg(feature = "png")]
+    pub fn svg_and_png(
+        self,
+        svg_path: impl AsRef<Path>,
+        png_path: impl AsRef<Path>,
+    ) -> Result<Output, Error> {
+        let output = Output::new(self.render_scene()?, self.png_options, self.svg_text);
+        output.svg_and_png(svg_path, png_path)
+    }
+
     fn validate_structure(&self) -> Result<(), Error> {
         if self.width < 160 || self.height < 120 {
             return Err(Error::Data(

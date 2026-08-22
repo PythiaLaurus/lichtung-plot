@@ -408,7 +408,7 @@ impl Plot {
                 | PlotKind::Marginal
                 | PlotKind::Matrix
         );
-        if let Some(column) = self.hue_col().filter(|_| !supports_hue) {
+        if let Some(column) = self.hue_name().filter(|_| !supports_hue) {
             if kind == PlotKind::Histogram {
                 return Err(Error::Data(format!(
                     "histogram: hue column {column:?} is not supported yet; render separate single-series histograms"

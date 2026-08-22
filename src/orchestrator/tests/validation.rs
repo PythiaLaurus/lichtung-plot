@@ -1,5 +1,3 @@
-use polars::prelude::NamedFrom;
-
 use super::{
     assert_rejected_before_begin, categorical_fault_fixture, configured_chart, fixture,
     numeric_fault_fixture, DataFrame, HeatmapLayout, Plot, PlotKind, RecordingBackend, Series,

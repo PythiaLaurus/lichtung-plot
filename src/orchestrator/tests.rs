@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
-use polars::prelude::{DataFrame, NamedFrom, Series};
-
 #[cfg(windows)]
 use super::artifacts::finish_committed_publication;
 use super::artifacts::TEMP_FILE_COUNTER;
@@ -13,6 +11,7 @@ use crate::render::backend::{
     BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, SignificanceBracket,
     TextStyle,
 };
+use crate::test_support::{DataFrame, Fixture, Series};
 use crate::ComparisonAnnotation;
 use crate::{HeatmapLayout, LegendPosition, ValueSort};
 
@@ -203,49 +202,28 @@ impl Backend for RecordingBackend {
     }
 }
 
-fn fixture() -> DataFrame {
-    let group = Series::new("group".into(), ["a", "a", "b", "b"]);
-    let interval_group = Series::new("interval_group".into(), ["a", "b", "c", "d"]);
-    let hue = Series::new("hue".into(), ["h1", "h2", "h1", "h2"]);
-    let x = Series::new("x".into(), [1.0_f64, 2.0, 3.0, 4.0]);
-    let y = Series::new("y".into(), [1.0_f64, 3.0, 2.0, 5.0]);
-    let color = Series::new("color".into(), [0.1_f64, 0.3, 0.7, 1.0]);
-    let lower = Series::new("lower".into(), [0.5_f64, 1.0, 2.0, 3.0]);
-    let upper = Series::new("upper".into(), [1.5_f64, 3.0, 4.0, 5.0]);
-    let delta = Series::new("delta".into(), [1.0_f64, -1.0, 2.0, 0.0]);
-    let base = Series::new("base".into(), [10.0_f64; 4]);
-    let terminal = Series::new("terminal".into(), [12.0_f64; 4]);
-    DataFrame::new(
-        group.len(),
-        vec![
-            group.into(),
-            interval_group.into(),
-            hue.into(),
-            x.into(),
-            y.into(),
-            color.into(),
-            lower.into(),
-            upper.into(),
-            delta.into(),
-            base.into(),
-            terminal.into(),
-        ],
+fn fixture() -> Fixture {
+    crate::test_support::test_data!(
+        "group" => ["a", "a", "b", "b"],
+        "interval_group" => ["a", "b", "c", "d"],
+        "hue" => ["h1", "h2", "h1", "h2"],
+        "x" => [1.0_f64, 2.0, 3.0, 4.0],
+        "y" => [1.0_f64, 3.0, 2.0, 5.0],
+        "color" => [0.1_f64, 0.3, 0.7, 1.0],
+        "lower" => [0.5_f64, 1.0, 2.0, 3.0],
+        "upper" => [1.5_f64, 3.0, 4.0, 5.0],
+        "delta" => [1.0_f64, -1.0, 2.0, 0.0],
+        "base" => [10.0_f64; 4],
+        "terminal" => [12.0_f64; 4],
     )
     .unwrap()
 }
 
-fn valid_grouped_bar_fixture() -> DataFrame {
-    DataFrame::new(
-        8,
-        vec![
-            Series::new("group".into(), ["a", "a", "a", "a", "b", "b", "b", "b"]).into(),
-            Series::new(
-                "hue".into(),
-                ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"],
-            )
-            .into(),
-            Series::new("y".into(), [1.0_f64, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]).into(),
-        ],
+fn valid_grouped_bar_fixture() -> Fixture {
+    crate::test_support::test_data!(
+        "group" => ["a", "a", "a", "a", "b", "b", "b", "b"],
+        "hue" => ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"],
+        "y" => [1.0_f64, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0],
     )
     .unwrap()
 }
@@ -254,7 +232,7 @@ fn valid_grouped_bar_fixture() -> DataFrame {
     clippy::too_many_lines,
     reason = "the exhaustive fixture keeps every plot kind's canonical construction in one place"
 )]
-fn configured_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
     use crate::test_support::{axis, category, constant_numeric, numeric};
 
     match kind {
@@ -365,7 +343,7 @@ fn configured_chart(data: &DataFrame, kind: PlotKind) -> Plot {
     }
 }
 
-fn configured_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+fn configured_bar_chart(data: &Fixture, kind: PlotKind) -> Plot {
     use crate::test_support::{category, numeric};
 
     match kind {
@@ -389,7 +367,7 @@ fn configured_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
     }
 }
 
-fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> DataFrame {
+fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> Fixture {
     let mut data = fixture();
     let mut values = match column {
         "x" => vec![1.0_f64, 2.0, 3.0, 4.0],
@@ -411,7 +389,7 @@ fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> DataFrame {
     data
 }
 
-fn categorical_fault_fixture(column: &str) -> DataFrame {
+fn categorical_fault_fixture(column: &str) -> Fixture {
     let mut data = fixture();
     let mut values = match column {
         "group" => vec!["a", "a", "b", "b"],

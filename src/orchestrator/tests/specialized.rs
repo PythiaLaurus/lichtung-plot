@@ -1,5 +1,3 @@
-use polars::prelude::NamedFrom;
-
 use super::{
     configured_chart, fixture, test_directory, DataFrame, Plot, PlotKind, RecordingBackend, Series,
 };

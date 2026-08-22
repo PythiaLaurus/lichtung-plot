@@ -3,20 +3,25 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{BarAggregation, BarSpacing, Plot};
-use polars::prelude::*;
+use lichtung_plot::{BarAggregation, BarSpacing, NumericValues, Plot};
 
-#[path = "native.rs"]
-mod native;
-
-pub(super) fn fixture_df() -> DataFrame {
+pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
     let xs: Vec<f64> = (0..30).map(|i| f64::from(i) * 0.5).collect();
     let ys: Vec<f64> = (0..30)
         .map(|i| (f64::from(i) * 0.3).sin() * 5.0 + 10.0)
         .collect();
-    let sx = Series::new("x".into(), xs);
-    let sy = Series::new("y".into(), ys);
-    DataFrame::new(sx.len(), vec![sx.into(), sy.into()]).unwrap()
+    (NumericValues::new("x", xs), NumericValues::new("y", ys))
+}
+
+pub(super) fn fixture_df() -> crate::data::DataFrame {
+    let (x, y) = fixture_values();
+    let xs = (0..x.len())
+        .map(|index| f64::from(u32::try_from(index).unwrap()) * 0.5)
+        .collect::<Vec<_>>();
+    let ys = (0..y.len())
+        .map(|index| (f64::from(u32::try_from(index).unwrap()) * 0.3).sin() * 5.0 + 10.0)
+        .collect::<Vec<_>>();
+    crate::data::test_data!("x" => xs, "y" => ys).unwrap()
 }
 
 pub(super) fn normalize_embedded_font(svg: &str) -> String {
@@ -265,7 +270,7 @@ pub(super) fn text_y(text: &[SvgText], content: &str) -> f64 {
 }
 
 pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
-    let df = df!(
+    let data = crate::data::test_data!(
         "group" => ["A", "A"],
         "series" => ["control", "treatment"],
         "value" => [1.0_f64, 2.0]
@@ -274,11 +279,11 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
     let dir = unique_dir("grouped-bar-spacing");
     let out = dir.join("bar.svg");
     let chart = Plot::bar(
-        native::category(&df, "group"),
-        native::numeric(&df, "value"),
+        crate::data::category(&data, "group"),
+        crate::data::numeric(&data, "value"),
     )
-    .group(native::category(&df, "series"))
-    .hue(native::category(&df, "series"))
+    .group(crate::data::category(&data, "series"))
+    .hue(crate::data::category(&data, "series"))
     .bar_aggregation(BarAggregation::Identity)
     .bar_spacing(spacing)
     .size(360, 260);

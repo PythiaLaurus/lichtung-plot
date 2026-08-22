@@ -1,21 +1,20 @@
-use polars::prelude::{DataFrame, NamedFrom, Series};
-
 use super::*;
 use crate::layout::deterministic_text_width;
+use crate::test_support::{into_column, Fixture, FixtureColumn};
 
-fn data(x: Series, y: Series, fill: Series) -> DataFrame {
-    DataFrame::new(x.len(), vec![x.into(), y.into(), fill.into()]).unwrap()
+fn data(x: FixtureColumn, y: FixtureColumn, fill: FixtureColumn) -> Fixture {
+    Fixture::from_columns(vec![("x", x), ("y", y), ("fill", fill)]).unwrap()
 }
 
-fn valid_data() -> DataFrame {
+fn valid_data() -> Fixture {
     data(
-        Series::new("x".into(), [" b ", "a", "b"]),
-        Series::new("y".into(), ["first", "first", " second  row "]),
-        Series::new("fill".into(), [1.0_f64, 2.0, 3.0]),
+        into_column([" b ", "a", "b"]),
+        into_column(["first", "first", " second  row "]),
+        into_column([1.0_f64, 2.0, 3.0]),
     )
 }
 
-fn chart(data: &DataFrame) -> Plot {
+fn chart(data: &Fixture) -> Plot {
     Plot::heatmap(
         crate::test_support::category(data, "x"),
         crate::test_support::category(data, "y"),
@@ -45,9 +44,9 @@ fn prepare_normalizes_categories_and_preserves_first_observed_axes() {
 #[test]
 fn prepare_builds_cartesian_grid_with_absent_and_null_cells() {
     let data = data(
-        Series::new("x".into(), ["a", "b", "a"]),
-        Series::new("y".into(), ["one", "one", "two"]),
-        Series::new("fill".into(), [Some(1.0_f64), None, Some(3.0)]),
+        into_column(["a", "b", "a"]),
+        into_column(["one", "one", "two"]),
+        into_column([Some(1.0_f64), None, Some(3.0)]),
     );
 
     let prepared = prepare_chart(&chart(&data)).unwrap();
@@ -59,9 +58,9 @@ fn prepare_builds_cartesian_grid_with_absent_and_null_cells() {
 #[test]
 fn prepare_rejects_duplicate_normalized_pairs() {
     let data = data(
-        Series::new("x".into(), ["a b", " a  b "]),
-        Series::new("y".into(), ["one", "one"]),
-        Series::new("fill".into(), [1.0_f64, 2.0]),
+        into_column(["a b", " a  b "]),
+        into_column(["one", "one"]),
+        into_column([1.0_f64, 2.0]),
     );
 
     let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
@@ -72,14 +71,10 @@ fn prepare_rejects_duplicate_normalized_pairs() {
 #[test]
 fn prepare_rejects_null_and_empty_category_labels() {
     for x in [
-        Series::new("x".into(), [Some("a"), None]),
-        Series::new("x".into(), ["a", " \t "]),
+        into_column([Some("a"), None]),
+        into_column([Some("a"), Some(" \t ")]),
     ] {
-        let data = data(
-            x,
-            Series::new("y".into(), ["one", "two"]),
-            Series::new("fill".into(), [1.0_f64, 2.0]),
-        );
+        let data = data(x, into_column(["one", "two"]), into_column([1.0_f64, 2.0]));
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 }
@@ -87,15 +82,11 @@ fn prepare_rejects_null_and_empty_category_labels() {
 #[test]
 fn prepare_rejects_non_finite_and_all_null_fill() {
     for fill in [
-        Series::new("fill".into(), [Some(1.0_f64), Some(f64::NAN)]),
-        Series::new("fill".into(), [Some(1.0_f64), Some(f64::INFINITY)]),
-        Series::new("fill".into(), [None::<f64>, None]),
+        into_column([Some(1.0_f64), Some(f64::NAN)]),
+        into_column([Some(1.0_f64), Some(f64::INFINITY)]),
+        into_column([None::<f64>, None]),
     ] {
-        let data = data(
-            Series::new("x".into(), ["a", "b"]),
-            Series::new("y".into(), ["one", "one"]),
-            fill,
-        );
+        let data = data(into_column(["a", "b"]), into_column(["one", "one"]), fill);
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 }
@@ -106,9 +97,9 @@ fn prepare_rejects_cartesian_grid_above_safety_limit() {
         .map(|index| format!("v{index}"))
         .collect::<Vec<_>>();
     let data = data(
-        Series::new("x".into(), levels.clone()),
-        Series::new("y".into(), levels),
-        Series::new("fill".into(), vec![1.0_f64; 1_001]),
+        into_column(levels.clone()),
+        into_column(levels),
+        into_column(vec![1.0_f64; 1_001]),
     );
 
     let error = prepare_chart(&chart(&data)).unwrap_err().to_string();

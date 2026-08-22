@@ -1,7 +1,6 @@
-use polars::prelude::{DataFrame, NamedFrom, Series};
-
 use super::{svg_bytes, PanelBox, Plot, PlotKind, RecordingBackend};
 use crate::render::backend::{TextAnchor, TextStyle};
+use crate::test_support::{DataFrame, Series};
 use crate::{CategoricalColors, LineMode, LinePathStyle, NumericLabelFormat, WaterfallLabels};
 
 fn path_data() -> DataFrame {

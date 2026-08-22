@@ -39,7 +39,7 @@ boundary:
 caller-owned data or analysis result
         |
         v
-adapter or direct native value construction
+owned native value construction
         |
         v
 Plot / Canvas -> preflight -> private canonical scene -> SVG or optional PNG

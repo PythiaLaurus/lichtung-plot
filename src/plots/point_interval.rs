@@ -300,33 +300,34 @@ fn point_interval_display_range(
 
 #[cfg(test)]
 mod tests {
-    use polars::prelude::{DataFrame, NamedFrom, Series};
-
     use super::*;
+    use crate::test_support::{into_column, Fixture, FixtureColumn};
 
-    fn data(labels: Series, estimates: Series, lowers: Series, uppers: Series) -> DataFrame {
-        DataFrame::new(
-            labels.len(),
-            vec![
-                labels.into(),
-                estimates.into(),
-                lowers.into(),
-                uppers.into(),
-            ],
-        )
+    fn data(
+        labels: FixtureColumn,
+        estimates: FixtureColumn,
+        lowers: FixtureColumn,
+        uppers: FixtureColumn,
+    ) -> Fixture {
+        Fixture::from_columns(vec![
+            ("category", labels),
+            ("estimate", estimates),
+            ("lower", lowers),
+            ("upper", uppers),
+        ])
         .unwrap()
     }
 
-    fn valid_data() -> DataFrame {
+    fn valid_data() -> Fixture {
         data(
-            Series::new("category".into(), ["first", "second"]),
-            Series::new("estimate".into(), [2.0_f64, 1.0]),
-            Series::new("lower".into(), [1.5_f64, 0.0]),
-            Series::new("upper".into(), [4.0_f64, 1.5]),
+            into_column(["first", "second"]),
+            into_column([2.0_f64, 1.0]),
+            into_column([1.5_f64, 0.0]),
+            into_column([4.0_f64, 1.5]),
         )
     }
 
-    fn chart(data: &DataFrame) -> Plot {
+    fn chart(data: &Fixture) -> Plot {
         Plot::point_interval(
             crate::test_support::category(data, "category"),
             crate::test_support::numeric(data, "estimate"),
@@ -370,10 +371,10 @@ mod tests {
     #[test]
     fn prepare_rejects_empty_data() {
         let data = data(
-            Series::new("category".into(), Vec::<String>::new()),
-            Series::new("estimate".into(), Vec::<f64>::new()),
-            Series::new("lower".into(), Vec::<f64>::new()),
-            Series::new("upper".into(), Vec::<f64>::new()),
+            into_column(Vec::<String>::new()),
+            into_column(Vec::<f64>::new()),
+            into_column(Vec::<f64>::new()),
+            into_column(Vec::<f64>::new()),
         );
 
         assert!(prepare_chart(&chart(&data)).is_err());
@@ -382,10 +383,10 @@ mod tests {
     #[test]
     fn prepare_rejects_empty_category_labels() {
         let data = data(
-            Series::new("category".into(), ["first", " "]),
-            Series::new("estimate".into(), [1.0_f64, 2.0]),
-            Series::new("lower".into(), [0.0_f64, 1.0]),
-            Series::new("upper".into(), [2.0_f64, 3.0]),
+            into_column(["first", " "]),
+            into_column([1.0_f64, 2.0]),
+            into_column([0.0_f64, 1.0]),
+            into_column([2.0_f64, 3.0]),
         );
 
         assert!(prepare_chart(&chart(&data))
@@ -397,10 +398,10 @@ mod tests {
     #[test]
     fn prepare_rejects_duplicate_rendered_labels() {
         let data = data(
-            Series::new("category".into(), ["same label", " same  label "]),
-            Series::new("estimate".into(), [1.0_f64, 2.0]),
-            Series::new("lower".into(), [0.0_f64, 1.0]),
-            Series::new("upper".into(), [2.0_f64, 3.0]),
+            into_column(["same label", " same  label "]),
+            into_column([1.0_f64, 2.0]),
+            into_column([0.0_f64, 1.0]),
+            into_column([2.0_f64, 3.0]),
         );
 
         assert!(prepare_chart(&chart(&data))
@@ -412,10 +413,10 @@ mod tests {
     #[test]
     fn prepare_rejects_null_categories() {
         let data = data(
-            Series::new("category".into(), [Some("first"), None]),
-            Series::new("estimate".into(), [1.0_f64, 2.0]),
-            Series::new("lower".into(), [0.0_f64, 1.0]),
-            Series::new("upper".into(), [2.0_f64, 3.0]),
+            into_column([Some("first"), None]),
+            into_column([1.0_f64, 2.0]),
+            into_column([0.0_f64, 1.0]),
+            into_column([2.0_f64, 3.0]),
         );
 
         assert!(prepare_chart(&chart(&data)).is_err());
@@ -424,14 +425,14 @@ mod tests {
     #[test]
     fn prepare_rejects_null_and_non_finite_numbers() {
         for estimates in [
-            Series::new("estimate".into(), [Some(1.0_f64), None]),
-            Series::new("estimate".into(), [1.0_f64, f64::INFINITY]),
+            into_column([Some(1.0_f64), None]),
+            into_column([1.0_f64, f64::INFINITY]),
         ] {
             let data = data(
-                Series::new("category".into(), ["first", "second"]),
+                into_column(["first", "second"]),
                 estimates,
-                Series::new("lower".into(), [0.0_f64, 1.0]),
-                Series::new("upper".into(), [2.0_f64, 3.0]),
+                into_column([0.0_f64, 1.0]),
+                into_column([2.0_f64, 3.0]),
             );
             assert!(prepare_chart(&chart(&data)).is_err());
         }
@@ -440,10 +441,10 @@ mod tests {
     #[test]
     fn prepare_rejects_bounds_that_do_not_contain_estimate() {
         let data = data(
-            Series::new("category".into(), ["first"]),
-            Series::new("estimate".into(), [2.0_f64]),
-            Series::new("lower".into(), [0.0_f64]),
-            Series::new("upper".into(), [1.0_f64]),
+            into_column(["first"]),
+            into_column([2.0_f64]),
+            into_column([0.0_f64]),
+            into_column([1.0_f64]),
         );
 
         assert!(prepare_chart(&chart(&data))

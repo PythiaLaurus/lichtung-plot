@@ -1,5 +1,3 @@
-use polars::prelude::NamedFrom;
-
 use super::{
     configured_bar_chart, Backend, DataFrame, Error, FillStyle, LegendPosition, LineStyle,
     NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend, Series,

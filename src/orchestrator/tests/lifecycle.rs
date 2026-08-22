@@ -1,7 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use polars::prelude::NamedFrom;
-
 use super::{
     configured_chart, fixture, test_directory, BackendFailure, ComparisonAnnotation, DataFrame,
     Plot, PlotKind, RecordingBackend, Series, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,

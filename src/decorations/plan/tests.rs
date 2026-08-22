@@ -1,22 +1,18 @@
-use polars::prelude::{DataFrame, NamedFrom, Series};
-
 use super::*;
+use crate::test_support::Fixture;
 
-fn line_data(labels: [&str; 4]) -> DataFrame {
-    DataFrame::new(
-        4,
-        vec![
-            Series::new("x".into(), [0.0_f64, 1.0, 0.0, 1.0]).into(),
-            Series::new("y".into(), [8.0_f64, 10.0, 1.0, 2.0]).into(),
-            Series::new("low".into(), [7.0_f64, 9.0, 0.5, 1.5]).into(),
-            Series::new("high".into(), [9.0_f64, 11.0, 1.5, 2.5]).into(),
-            Series::new("hue".into(), labels).into(),
-        ],
+fn line_data(labels: [&str; 4]) -> Fixture {
+    crate::test_support::test_data!(
+        "x" => [0.0_f64, 1.0, 0.0, 1.0],
+        "y" => [8.0_f64, 10.0, 1.0, 2.0],
+        "low" => [7.0_f64, 9.0, 0.5, 1.5],
+        "high" => [9.0_f64, 11.0, 1.5, 2.5],
+        "hue" => labels,
     )
     .unwrap()
 }
 
-fn line_chart(data: &DataFrame) -> Plot {
+fn line_chart(data: &Fixture) -> Plot {
     Plot::line(
         crate::test_support::numeric(data, "x"),
         crate::test_support::numeric(data, "y"),
@@ -29,7 +25,7 @@ fn line_chart(data: &DataFrame) -> Plot {
     )
 }
 
-fn dense_bar_chart(data: &DataFrame, horizontal: bool) -> Plot {
+fn dense_bar_chart(data: &Fixture, horizontal: bool) -> Plot {
     let category = crate::test_support::category(data, "category");
     let value = crate::test_support::numeric(data, "value");
     let chart = if horizontal {
@@ -43,35 +39,18 @@ fn dense_bar_chart(data: &DataFrame, horizontal: bool) -> Plot {
         .bar_aggregation(crate::BarAggregation::Identity)
 }
 
-fn dense_horizontal_data() -> DataFrame {
+fn dense_horizontal_data() -> Fixture {
     signed_dense_bar_data(1.0)
 }
 
-fn signed_dense_bar_data(sign: f64) -> DataFrame {
-    DataFrame::new(
-        12,
-        vec![
-            Series::new(
-                "category".into(),
-                ["a", "a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f"],
-            )
-            .into(),
-            Series::new(
-                "value".into(),
-                [
-                    10.0_f64, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0,
-                ]
-                .map(|value| value * sign),
-            )
-            .into(),
-            Series::new(
-                "hue".into(),
-                [
-                    "one", "two", "one", "two", "one", "two", "one", "two", "one", "two", "one",
-                    "two",
-                ],
-            )
-            .into(),
+fn signed_dense_bar_data(sign: f64) -> Fixture {
+    crate::test_support::test_data!(
+        "category" => ["a", "a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f"],
+        "value" => [
+            10.0_f64, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0,
+        ].map(|value| value * sign),
+        "hue" => [
+            "one", "two", "one", "two", "one", "two", "one", "two", "one", "two", "one", "two",
         ],
     )
     .unwrap()
@@ -175,12 +154,9 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
 
 #[test]
 fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
-    let data = DataFrame::new(
-        3,
-        vec![
-            Series::new("x".into(), [0.0_f64, 1.0, 2.0]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0, 3.0]).into(),
-        ],
+    let data = crate::test_support::test_data!(
+        "x" => [0.0_f64, 1.0, 2.0],
+        "y" => [1.0_f64, 2.0, 3.0],
     )
     .unwrap();
     let chart = Plot::scatter(
@@ -240,13 +216,10 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
 
 #[test]
 fn scatter_with_automatic_y_limits_keeps_top_right_default() {
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("x".into(), [0.0_f64, 0.5, 9.5, 10.0]).into(),
-            Series::new("y".into(), [0.0_f64, 0.5, 9.5, 10.0]).into(),
-            Series::new("hue".into(), ["a", "a", "b", "b"]).into(),
-        ],
+    let data = crate::test_support::test_data!(
+        "x" => [0.0_f64, 0.5, 9.5, 10.0],
+        "y" => [0.0_f64, 0.5, 9.5, 10.0],
+        "hue" => ["a", "a", "b", "b"],
     )
     .unwrap();
     let visible = Plot::scatter(
@@ -275,13 +248,10 @@ fn scatter_with_automatic_y_limits_keeps_top_right_default() {
 
 #[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("x".into(), [8.0_f64, 10.0, 8.0, 10.0]).into(),
-            Series::new("y".into(), [5.0_f64; 4]).into(),
-            Series::new("hue".into(), ["a", "a", "b", "b"]).into(),
-        ],
+    let data = crate::test_support::test_data!(
+        "x" => [8.0_f64, 10.0, 8.0, 10.0],
+        "y" => [5.0_f64; 4],
+        "hue" => ["a", "a", "b", "b"],
     )
     .unwrap();
     let chart = Plot::line(
