@@ -2,10 +2,10 @@ use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
-    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, HeatmapAnnotations,
-    HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins,
-    HistogramComposite, HistogramStat, LegendPosition, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
+    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit,
+    HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
+    HistogramStat, LegendPosition, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine,
+    RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
@@ -567,16 +567,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::WaterfallOptions,
     {
         self.waterfall_labels = Some(labels);
-        self
-    }
-
-    /// Set required caller-owned labels and colors for both dumbbell endpoints.
-    #[must_use]
-    pub fn dumbbell_endpoints(mut self, endpoints: DumbbellEndpoints) -> Self
-    where
-        K: crate::kind::DumbbellOptions,
-    {
-        self.dumbbell_endpoints = Some(endpoints);
         self
     }
 

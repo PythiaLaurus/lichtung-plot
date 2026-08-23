@@ -26,9 +26,9 @@ pub(crate) fn render(
     let delta_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
-    let (base, terminal) = chart
-        .waterfall_totals()
-        .ok_or_else(|| Error::Data("waterfall: base and terminal values not set".into()))?;
+    let base = chart
+        .waterfall_base()
+        .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
     let labels = crate::data::strict_strings(context.data, label_col, "waterfall")?;
     let display_labels =
         chart.resolve_label_domain("y-axis categories", labels.iter().map(String::as_str))?;
@@ -38,17 +38,14 @@ pub(crate) fn render(
             "waterfall: labels and deltas must have equal non-zero lengths".into(),
         ));
     }
-    if !base.is_finite() || !terminal.is_finite() {
-        return Err(Error::Data(
-            "waterfall: base and terminal values must be finite".into(),
-        ));
+    if !base.is_finite() {
+        return Err(Error::Data("waterfall: base value must be finite".into()));
     }
-    let computed = base + deltas.iter().sum::<f64>();
-    let tolerance = 1e-8_f64.max(terminal.abs() * 1e-8);
-    if (computed - terminal).abs() > tolerance {
-        return Err(Error::Data(format!(
-            "waterfall: base plus deltas is {computed}, expected terminal {terminal}"
-        )));
+    let terminal = base + deltas.iter().sum::<f64>();
+    if !terminal.is_finite() {
+        return Err(Error::Data(
+            "waterfall: base plus deltas must be finite".into(),
+        ));
     }
     let mut running = base;
     let mut spans = Vec::with_capacity(deltas.len());

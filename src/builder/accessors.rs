@@ -135,7 +135,10 @@ impl<K: crate::kind::Marker> Plot<K> {
                 .interaction_styles
                 .as_ref()
                 .map(|(_, values)| DataColumn::Category(values)),
-            DUMBBELL_RIGHT => self.dumbbell_right.as_ref().map(DataColumn::Numeric),
+            DUMBBELL_RIGHT => match &self.input {
+                PlotInput::Dumbbell { right, .. } => Some(DataColumn::Numeric(right)),
+                _ => None,
+            },
             FACET_ROW => self
                 .facet
                 .as_ref()
@@ -267,6 +270,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "closed semantic input alignment remains exhaustive and centralized"
+    )]
     pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
         let mut columns = match &self.input {
             PlotInput::Scatter { x, y }
@@ -310,9 +317,16 @@ impl<K: crate::kind::Marker> Plot<K> {
                 DataColumn::Category(condition),
                 DataColumn::Numeric(estimate),
             ],
-            PlotInput::Dumbbell { category, left } => {
-                vec![DataColumn::Category(category), DataColumn::Numeric(left)]
-            }
+            PlotInput::Dumbbell {
+                category,
+                left,
+                right,
+                ..
+            } => vec![
+                DataColumn::Category(category),
+                DataColumn::Numeric(left),
+                DataColumn::Numeric(right),
+            ],
             PlotInput::Heatmap { x, y } => {
                 vec![DataColumn::Category(x), DataColumn::Category(y)]
             }
@@ -343,7 +357,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 })
             }
             PlotInput::Matrix { variables } => variables.iter().map(DataColumn::Numeric).collect(),
-            PlotInput::Waterfall { labels, deltas } => {
+            PlotInput::Waterfall { labels, deltas, .. } => {
                 vec![DataColumn::Category(labels), DataColumn::Numeric(deltas)]
             }
         };
@@ -360,7 +374,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         if let Some(facet) = &self.facet {
             columns.extend(facet.values().map(DataColumn::Category));
         }
-        columns.extend(self.dumbbell_right.iter().map(DataColumn::Numeric));
         if let Some((point_shapes, line_patterns)) = &self.interaction_styles {
             columns.push(DataColumn::Category(point_shapes));
             columns.push(DataColumn::Category(line_patterns));
@@ -619,8 +632,11 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    pub(crate) fn waterfall_totals(&self) -> Option<(f64, f64)> {
-        self.waterfall_base.zip(self.waterfall_terminal)
+    pub(crate) const fn waterfall_base(&self) -> Option<f64> {
+        match &self.input {
+            PlotInput::Waterfall { base, .. } => Some(*base),
+            _ => None,
+        }
     }
 
     /// Caller-owned waterfall annotation labels, if configured.
@@ -630,13 +646,16 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn dumbbell_right_col(&self) -> Option<&'static str> {
-        self.dumbbell_right.as_ref().map(|_| DUMBBELL_RIGHT)
+        matches!(&self.input, PlotInput::Dumbbell { .. }).then_some(DUMBBELL_RIGHT)
     }
 
     /// Required endpoint labels and colors for a dumbbell plot.
     #[must_use]
     pub const fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
-        self.dumbbell_endpoints.as_ref()
+        match &self.input {
+            PlotInput::Dumbbell { endpoints, .. } => Some(endpoints),
+            _ => None,
+        }
     }
 
     /// The chart title, if any.

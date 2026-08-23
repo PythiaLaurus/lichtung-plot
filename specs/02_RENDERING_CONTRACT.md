@@ -47,13 +47,17 @@ one `RaincloudInput`: aligned categorical samples or complete caller-computed
 geometry. Precomputed geometry is self-contained and rejects sample-only
 channels such as facets and source-row identities during preflight.
 
-`Plot::line` is an ordinary sorted line series and is the only line family that
-accepts bands or supplemental point layers. `Plot::trajectory` requires an
-explicit graphical group, sorts points within each group, and always draws an
-observation marker. `Plot::line_path` requires numeric x values and an explicit
-group, preserves source-row order and repeated x values, and alone accepts
-`LinePathStyle`. Marker visibility is configurable for ordinary lines and line
-paths, but not trajectories.
+`Plot::line` is an ordinary sorted numeric line series and is the only line
+family that accepts bands or supplemental point layers. `Plot::trajectory`
+requires an explicit graphical group, sorts points within each group, and always
+draws an observation marker. `Plot::line_path` requires numeric x values and an
+explicit group, preserves source-row order and repeated x values, and alone
+accepts `LinePathStyle`. Marker visibility is configurable for ordinary lines
+and line paths, but not trajectories.
+
+Dumbbell construction atomically consumes both numeric endpoints and their
+explicit labels and colors. Waterfall construction consumes a finite base;
+rendering derives its finite terminal as the base plus all supplied deltas.
 
 Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
 with a positive column count. A grid requires distinct row and column variable

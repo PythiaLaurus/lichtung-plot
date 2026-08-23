@@ -183,6 +183,33 @@ use crate::{
 /// ```
 ///
 /// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let _ = Plot::line(
+///     CategoryValues::new("x", ["before", "after"]).unwrap(),
+///     NumericValues::new("y", [1.0, 2.0]),
+/// );
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let _ = Plot::dumbbell(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("left", [1.0]),
+///     NumericValues::new("right", [2.0]),
+/// );
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{BarSpacing, CategoryValues, NumericValues, Plot};
+/// let plot = Plot::stacked_bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+///     CategoryValues::new("group", ["g"]).unwrap(),
+/// );
+/// let _ = plot.bar_spacing(BarSpacing::Compact);
+/// ```
+///
+/// ```compile_fail
 /// use lichtung_plot::{CategoryValues, FacetSpec, NumericValues, Plot};
 /// let plot = Plot::matrix(vec![
 ///     NumericValues::new("x", [1.0]),
@@ -280,11 +307,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     axis_text_measured: bool,
     composed_axis_text_measured: bool,
     y_tick_labels_visible: bool,
-    waterfall_base: Option<f64>,
-    waterfall_terminal: Option<f64>,
     waterfall_labels: Option<WaterfallLabels>,
-    dumbbell_right: Option<NumericValues>,
-    dumbbell_endpoints: Option<DumbbellEndpoints>,
     guides: Vec<GuideSpec>,
     point_layers: Vec<PointLayer>,
     bar_point_layers: Vec<BarPointLayer>,
@@ -377,11 +400,7 @@ impl Plot<crate::kind::Any> {
             axis_text_measured: false,
             composed_axis_text_measured: false,
             y_tick_labels_visible: true,
-            waterfall_base: None,
-            waterfall_terminal: None,
             waterfall_labels: None,
-            dumbbell_right: None,
-            dumbbell_endpoints: None,
             guides: Vec::new(),
             point_layers: Vec::new(),
             bar_point_layers: Vec::new(),
@@ -441,8 +460,14 @@ impl Plot<crate::kind::Any> {
 
     /// Construct an ordered line plot.
     #[must_use]
-    pub fn line(x: impl Into<AxisValues>, y: NumericValues) -> Plot<crate::kind::Line> {
-        Self::new(PlotInput::Line { x: x.into(), y }, PlotKind::Line)
+    pub fn line(x: NumericValues, y: NumericValues) -> Plot<crate::kind::Line> {
+        Self::new(
+            PlotInput::Line {
+                x: AxisValues::Numeric(x),
+                y,
+            },
+            PlotKind::Line,
+        )
     }
 
     /// Construct explicit-group repeated trajectories.
@@ -536,10 +561,17 @@ impl Plot<crate::kind::Any> {
         category: CategoryValues,
         left: NumericValues,
         right: NumericValues,
+        endpoints: DumbbellEndpoints,
     ) -> Plot<crate::kind::Dumbbell> {
-        let mut plot = Self::new(PlotInput::Dumbbell { category, left }, PlotKind::Dumbbell);
-        plot.dumbbell_right = Some(right);
-        plot
+        Self::new(
+            PlotInput::Dumbbell {
+                category,
+                left,
+                right,
+                endpoints,
+            },
+            PlotKind::Dumbbell,
+        )
     }
 
     /// Construct a categorical heatmap.
@@ -671,12 +703,15 @@ impl Plot<crate::kind::Any> {
         labels: CategoryValues,
         deltas: NumericValues,
         base: f64,
-        terminal: f64,
     ) -> Plot<crate::kind::Waterfall> {
-        let mut plot = Self::new(PlotInput::Waterfall { labels, deltas }, PlotKind::Waterfall);
-        plot.waterfall_base = Some(base);
-        plot.waterfall_terminal = Some(terminal);
-        plot
+        Self::new(
+            PlotInput::Waterfall {
+                labels,
+                deltas,
+                base,
+            },
+            PlotKind::Waterfall,
+        )
     }
 }
 
@@ -761,11 +796,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             axis_text_measured,
             composed_axis_text_measured,
             y_tick_labels_visible,
-            waterfall_base,
-            waterfall_terminal,
             waterfall_labels,
-            dumbbell_right,
-            dumbbell_endpoints,
             guides,
             point_layers,
             bar_point_layers,
@@ -846,11 +877,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             axis_text_measured,
             composed_axis_text_measured,
             y_tick_labels_visible,
-            waterfall_base,
-            waterfall_terminal,
             waterfall_labels,
-            dumbbell_right,
-            dumbbell_endpoints,
             guides,
             point_layers,
             bar_point_layers,
@@ -942,6 +969,7 @@ mod tests {
             category("category"),
             numeric("left"),
             numeric("right"),
+            DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
         ));
         assert_marker::<crate::kind::Heatmap>(Plot::heatmap(
             category("x"),
@@ -997,7 +1025,6 @@ mod tests {
             category("category"),
             numeric("delta"),
             0.0,
-            1.0,
         ));
     }
 

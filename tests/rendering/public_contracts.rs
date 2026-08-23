@@ -122,7 +122,7 @@ fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
 }
 
 #[test]
-fn waterfall_validates_terminal_total() {
+fn waterfall_derives_terminal_total() {
     let df = df!(
         "label" => ["a", "b"],
         "delta" => [2.0_f64, -1.0]
@@ -132,12 +132,30 @@ fn waterfall_validates_terminal_total() {
         data::category(&df, "label"),
         data::numeric(&df, "delta"),
         10.0,
-        12.0,
     );
 
-    let error = plot.preflight().unwrap_err();
+    plot.preflight().unwrap();
+    assert!(render(plot, "waterfall-derived-total").contains(">total 11.000</text>"));
+}
 
-    assert!(error.to_string().contains("base plus deltas"));
+#[test]
+fn waterfall_rejects_nonfinite_derived_terminal() {
+    let df = df!(
+        "label" => ["a", "b"],
+        "delta" => [f64::MAX, f64::MAX]
+    )
+    .unwrap();
+    let plot = Plot::waterfall(
+        data::category(&df, "label"),
+        data::numeric(&df, "delta"),
+        0.0,
+    );
+
+    assert!(plot
+        .preflight()
+        .unwrap_err()
+        .to_string()
+        .contains("base plus deltas must be finite"));
 }
 
 #[test]

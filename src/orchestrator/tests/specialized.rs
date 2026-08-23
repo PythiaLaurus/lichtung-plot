@@ -175,17 +175,15 @@ fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
     let category = Series::new("category".into(), ["a", "b"]);
     let delta = Series::new("delta".into(), [2.0_f64, -1.0]);
     let base = Series::new("base".into(), [10.0_f64, 10.0]);
-    let terminal = Series::new("terminal".into(), [11.0_f64, 11.0]);
     let data = DataFrame::new(
         category.len(),
-        vec![category.into(), delta.into(), base.into(), terminal.into()],
+        vec![category.into(), delta.into(), base.into()],
     )
     .unwrap();
     let chart = Plot::waterfall(
         crate::test_support::category(&data, "category"),
         crate::test_support::numeric(&data, "delta"),
         10.0,
-        11.0,
     )
     .x_limits(10.5, 11.5);
     let dir = test_directory("waterfall-label-explicit-limits");

@@ -148,11 +148,9 @@ fn configured_group_plot(data: &DataFrame, kind: PlotKind, with_hue: bool) -> Pl
             data::category(data, "category"),
             data::numeric(data, "left"),
             data::numeric(data, "right"),
-        )
-        .group(group())
-        .dumbbell_endpoints(
             DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
         )
+        .group(group())
         .erase(),
         _ => panic!("unsupported grouped fixture kind {kind:?}"),
     }

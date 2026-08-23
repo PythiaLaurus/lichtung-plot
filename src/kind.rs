@@ -97,7 +97,7 @@ capability!(QqOptions, "Q-Q-specific configuration." => [Qq]);
 capability!(HeatmapOptions, "Heatmap-specific configuration." => [Heatmap]);
 capability!(BeeswarmOptions, "Beeswarm-specific continuous-color configuration." => [Beeswarm]);
 capability!(BarSpacing, "Bar-family spacing configuration." => [
-    Bar, HorizontalBar, StackedBar, StackedHorizontalBar,
+    Bar, HorizontalBar,
 ]);
 capability!(BarPointLayers, "Ordinary bars that accept supplemental point layers." => [
     Bar, HorizontalBar,
@@ -133,7 +133,6 @@ capability!(PanelText, "Plots with one standard panel that accept corner text." 
     Raincloud, Regression, Marginal, Beeswarm, Waterfall,
 ]);
 capability!(WaterfallOptions, "Waterfall-specific annotation configuration." => [Waterfall]);
-capability!(DumbbellOptions, "Dumbbell-specific endpoint configuration." => [Dumbbell]);
 capability!(PointOutline, "Point-rendering families with a configurable outline." => [
     Scatter, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,
     Dumbbell, Boxplot, Violin, Raincloud, Regression, Marginal, Matrix, Beeswarm,

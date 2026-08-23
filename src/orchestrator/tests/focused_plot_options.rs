@@ -365,7 +365,6 @@ fn waterfall_data() -> DataFrame {
             Series::new("step".into(), ["first", "second"]).into(),
             Series::new("delta".into(), [2.0_f64, -1.0]).into(),
             Series::new("base".into(), [10.0_f64, 10.0]).into(),
-            Series::new("terminal".into(), [11.0_f64, 11.0]).into(),
         ],
     )
     .unwrap()
@@ -379,7 +378,6 @@ fn waterfall_chart(
         crate::test_support::category(data, "step"),
         crate::test_support::numeric(data, "delta"),
         crate::test_support::constant_numeric(data, "base"),
-        crate::test_support::constant_numeric(data, "terminal"),
     );
     if let Some(labels) = labels {
         chart = chart.waterfall_labels(labels);
@@ -426,7 +424,6 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
             Series::new("step".into(), ["first", "second"]).into(),
             Series::new("delta".into(), [0.01_f64, -0.009]).into(),
             Series::new("base".into(), [10.0_f64, 10.0]).into(),
-            Series::new("terminal".into(), [10.001_f64, 10.001]).into(),
         ],
     )
     .unwrap();

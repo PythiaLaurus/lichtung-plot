@@ -27,9 +27,9 @@ fn chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
         data::category(data, "category"),
         data::numeric(data, "left"),
         data::numeric(data, "right"),
+        endpoints(),
     )
     .group(data::category(data, "fold"))
-    .dumbbell_endpoints(endpoints())
 }
 
 fn svg(chart: &Plot<lichtung_plot::kind::Dumbbell>) -> String {
@@ -119,7 +119,7 @@ fn dumbbell_without_group_rejects_duplicate_categories() {
 }
 
 #[test]
-fn dumbbell_rejects_missing_nonfinite_and_incomplete_inputs() {
+fn dumbbell_rejects_null_and_nonfinite_inputs() {
     let null_data = df!(
         "category" => ["a", "b"],
         "left" => [Some(1.0_f64), None],
@@ -132,11 +132,6 @@ fn dumbbell_rejects_missing_nonfinite_and_incomplete_inputs() {
         "right" => [2.0_f64, f64::INFINITY]
     )
     .unwrap();
-    let missing_endpoints = Plot::dumbbell(
-        data::category(&infinite_data, "category"),
-        data::numeric(&infinite_data, "left"),
-        data::numeric(&infinite_data, "right"),
-    );
     let errors = [
         point_only_chart(&null_data)
             .preflight()
@@ -146,15 +141,11 @@ fn dumbbell_rejects_missing_nonfinite_and_incomplete_inputs() {
             .preflight()
             .unwrap_err()
             .to_string(),
-        missing_endpoints.preflight().unwrap_err().to_string(),
     ];
 
     assert!(errors.iter().all(|error| error.contains("dumbbell")));
     assert!(errors.iter().any(|error| error.contains("contains null")));
     assert!(errors.iter().any(|error| error.contains("non-finite")));
-    assert!(errors
-        .iter()
-        .any(|error| error.contains("configured together")));
 }
 
 #[test]
@@ -200,8 +191,8 @@ fn point_only_chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
         data::category(data, "category"),
         data::numeric(data, "left"),
         data::numeric(data, "right"),
+        endpoints(),
     )
-    .dumbbell_endpoints(endpoints())
 }
 
 fn text_y(svg: &str, text: &str) -> f64 {

@@ -37,7 +37,7 @@ pub(crate) fn render(
     let prepared = prepare(chart, context.data)?;
     let endpoints = chart
         .dumbbell_endpoints_spec()
-        .ok_or_else(missing_endpoints)?;
+        .expect("dumbbell input owns endpoint metadata");
     let display_categories = chart.resolve_label_domain(
         "y-axis categories",
         prepared.categories.iter().map(String::as_str),
@@ -138,9 +138,6 @@ fn prepare<'a>(
     let right_col = chart
         .dumbbell_right_col()
         .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?;
-    if chart.dumbbell_endpoints_spec().is_none() {
-        return Err(missing_endpoints());
-    }
     let categories =
         crate::data::strict_normalized_strings(data, category_col, "dumbbell", "category")?;
     let left = crate::data::strict_finite_f64(data, left_col, "dumbbell")?;
@@ -217,13 +214,6 @@ fn resolved_level_index(
                 "dumbbell: normalized {dimension} {value:?} at source row {source_row} is absent from the resolved {dimension} order"
             ))
         })
-}
-
-fn missing_endpoints() -> Error {
-    Error::Data(
-        "dumbbell: explicit endpoint labels and colors are required; call dumbbell_endpoints(...)"
-            .into(),
-    )
 }
 
 fn row_y(category_index: usize, category_count: usize) -> f64 {

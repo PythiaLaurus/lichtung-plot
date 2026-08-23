@@ -213,7 +213,6 @@ fn fixture() -> Fixture {
         "upper" => [1.5_f64, 3.0, 4.0, 5.0],
         "delta" => [1.0_f64, -1.0, 2.0, 0.0],
         "base" => [10.0_f64; 4],
-        "terminal" => [12.0_f64; 4],
     )
     .unwrap()
 }
@@ -247,7 +246,7 @@ fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
             crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
         )
         .erase(),
-        PlotKind::Line => Plot::line(axis(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Line => Plot::line(numeric(data, "x"), numeric(data, "y")).erase(),
         PlotKind::Trajectory => {
             Plot::trajectory(axis(data, "x"), numeric(data, "y"), category(data, "group")).erase()
         }
@@ -284,11 +283,9 @@ fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
             category(data, "group"),
             numeric(data, "x"),
             numeric(data, "y"),
-        )
-        .group(category(data, "interval_group"))
-        .dumbbell_endpoints(
             crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
         )
+        .group(category(data, "interval_group"))
         .erase(),
         PlotKind::Heatmap => Plot::heatmap(
             category(data, "interval_group"),
@@ -340,7 +337,6 @@ fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
             category(data, "group"),
             numeric(data, "delta"),
             constant_numeric(data, "base"),
-            constant_numeric(data, "terminal"),
         )
         .erase(),
     }
@@ -388,7 +384,6 @@ fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> Fixture {
         "upper" => vec![1.5_f64, 3.0, 4.0, 5.0],
         "delta" => vec![1.0_f64, -1.0, 2.0, 0.0],
         "base" => vec![10.0_f64; 4],
-        "terminal" => vec![12.0_f64; 4],
         _ => panic!("unsupported numeric fixture column {column}"),
     }
     .into_iter()

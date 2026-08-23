@@ -651,7 +651,6 @@ fn numeric_categories_remain_supported_by_beeswarm_and_waterfall() {
     let color = Series::new("color".into(), [0.2_f64, 0.8]);
     let delta = Series::new("delta".into(), [2.0_f64, -1.0]);
     let base = Series::new("base".into(), [10.0_f64, 10.0]);
-    let terminal = Series::new("terminal".into(), [11.0_f64, 11.0]);
     let data = DataFrame::new(
         category.len(),
         vec![
@@ -660,7 +659,6 @@ fn numeric_categories_remain_supported_by_beeswarm_and_waterfall() {
             color.into(),
             delta.into(),
             base.into(),
-            terminal.into(),
         ],
     )
     .unwrap();
@@ -678,7 +676,6 @@ fn numeric_categories_remain_supported_by_beeswarm_and_waterfall() {
         crate::test_support::category(&data, "category"),
         crate::test_support::numeric(&data, "delta"),
         crate::test_support::constant_numeric(&data, "base"),
-        crate::test_support::constant_numeric(&data, "terminal"),
     );
     waterfall
         .render_kind(PlotKind::Waterfall, &mut RecordingBackend::default())

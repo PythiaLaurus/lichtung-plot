@@ -1,8 +1,8 @@
 //! Closed semantic inputs for supported plot families.
 
 use crate::{
-    BarInput, Bounds, CategoryValues, CoefficientInput, HistogramCompositeGeometryInput,
-    NumericValues, RaincloudGeometryInput,
+    BarInput, Bounds, CategoryValues, CoefficientInput, DumbbellEndpoints,
+    HistogramCompositeGeometryInput, NumericValues, RaincloudGeometryInput,
 };
 
 /// Closed owned source for a histogram.
@@ -176,6 +176,8 @@ pub(crate) enum PlotInput {
     Dumbbell {
         category: CategoryValues,
         left: NumericValues,
+        right: NumericValues,
+        endpoints: DumbbellEndpoints,
     },
     Heatmap {
         x: CategoryValues,
@@ -226,6 +228,7 @@ pub(crate) enum PlotInput {
     Waterfall {
         labels: CategoryValues,
         deltas: NumericValues,
+        base: f64,
     },
 }
 

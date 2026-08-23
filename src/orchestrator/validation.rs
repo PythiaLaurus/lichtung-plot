@@ -565,19 +565,6 @@ impl Plot {
                 "{family}: estimate status is supported only by PointInterval, Coefficient, and Forest"
             )));
         }
-        if self.dumbbell_right_col().is_some() != self.dumbbell_endpoints_spec().is_some() {
-            return Err(Error::Data(format!(
-                "{family}: dumbbell right-value and endpoint options must be configured together"
-            )));
-        }
-        if kind != PlotKind::Dumbbell
-            && (self.dumbbell_right_col().is_some() || self.dumbbell_endpoints_spec().is_some())
-        {
-            return Err(Error::Data(format!(
-                "{family}: dumbbell endpoint options are not supported"
-            )));
-        }
-
         let supports_bounds = matches!(
             kind,
             PlotKind::PointInterval
@@ -589,11 +576,6 @@ impl Plot {
         if self.interval_bound_cols().is_some() && !supports_bounds {
             return Err(Error::Data(format!(
                 "{family}: interval bound columns are not supported"
-            )));
-        }
-        if self.waterfall_totals().is_some() && kind != PlotKind::Waterfall {
-            return Err(Error::Data(format!(
-                "{family}: waterfall base and terminal channels are not supported"
             )));
         }
         if self.waterfall_labels_spec().is_some() && kind != PlotKind::Waterfall {
