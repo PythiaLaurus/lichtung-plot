@@ -7,11 +7,6 @@ fn mixed_data() -> DataFrame {
         "estimate" => [Some(10.0_f64), None, Some(20.0)],
         "lower" => [Some(9.0_f64), None, Some(18.0)],
         "upper" => [Some(12.0_f64), None, Some(23.0)],
-        "status" => [
-            EstimateStatus::Estimated.as_str(),
-            EstimateStatus::NotEstimable.as_str(),
-            EstimateStatus::Estimated.as_str(),
-        ]
     )
     .unwrap()
 }
@@ -22,7 +17,6 @@ fn all_estimated_data() -> DataFrame {
         "estimate" => [1.0_f64, 2.0],
         "lower" => [0.5_f64, 1.5],
         "upper" => [1.5_f64, 2.5],
-        "status" => [EstimateStatus::Estimated.as_str(); 2]
     )
     .unwrap()
 }
@@ -34,7 +28,6 @@ fn all_unavailable_facet_data() -> DataFrame {
         "estimate" => [None::<f64>; 4],
         "lower" => [None::<f64>; 4],
         "upper" => [None::<f64>; 4],
-        "status" => [EstimateStatus::NotEstimable.as_str(); 4]
     )
     .unwrap()
 }
@@ -45,7 +38,15 @@ fn with_status<K: lichtung_plot::kind::Marker + lichtung_plot::kind::EstimateSta
     status: bool,
 ) -> Plot<K> {
     if status {
-        plot.estimate_status(data::category(frame, "status"))
+        plot.estimate_status(data::nullable_numeric(frame, "estimate").into_iter().map(
+            |estimate| {
+                if estimate.is_some() {
+                    EstimateStatus::Estimated
+                } else {
+                    EstimateStatus::NotEstimable
+                }
+            },
+        ))
     } else {
         plot
     }
@@ -143,20 +144,14 @@ fn all_estimated_status_is_byte_identical_to_strict_default() {
 }
 
 #[test]
-fn estimate_status_requires_exact_values() {
-    let frame = df!(
-        "term" => ["first", "unavailable", "third"],
-        "estimate" => [Some(10.0_f64), None, Some(20.0)],
-        "lower" => [Some(9.0_f64), None, Some(18.0)],
-        "upper" => [Some(12.0_f64), None, Some(23.0)],
-        "status" => ["estimated", "Not estimable", "estimated"]
-    )
-    .unwrap();
-    assert!(point_interval(&frame, true)
+fn estimate_status_values_must_align_with_estimate_rows() {
+    let frame = all_estimated_data();
+    assert!(point_interval(&frame, false)
+        .estimate_status([EstimateStatus::Estimated])
         .preflight()
         .unwrap_err()
         .to_string()
-        .contains("expected exactly \"estimated\" or \"not_estimable\""));
+        .contains("plot estimate status values have length 1, expected 2"));
 }
 
 #[test]
@@ -166,22 +161,23 @@ fn estimate_status_enforces_complete_null_tuples() {
             [Some(10.0), None],
             [Some(9.0), None],
             [Some(12.0), None],
-            ["not_estimable", "not_estimable"],
+            [EstimateStatus::NotEstimable, EstimateStatus::NotEstimable],
         ),
         (
             [Some(10.0), None],
             [Some(9.0), Some(8.0)],
             [Some(12.0), None],
-            ["estimated", "estimated"],
+            [EstimateStatus::Estimated, EstimateStatus::Estimated],
         ),
     ];
     for (estimate, lower, upper, status) in invalid {
         let frame = df!(
             "term" => ["first", "second"], "estimate" => estimate,
-            "lower" => lower, "upper" => upper, "status" => status
+            "lower" => lower, "upper" => upper,
         )
         .unwrap();
-        assert!(point_interval(&frame, true)
+        assert!(point_interval(&frame, false)
+            .estimate_status(status)
             .preflight()
             .unwrap_err()
             .to_string()
@@ -194,7 +190,6 @@ fn all_unavailable_rows_require_and_accept_explicit_ranges() {
     let frame = df!(
         "term" => ["first", "second"],
         "estimate" => [None::<f64>; 2], "lower" => [None::<f64>; 2], "upper" => [None::<f64>; 2],
-        "status" => [EstimateStatus::NotEstimable.as_str(); 2]
     )
     .unwrap();
     for plot in [
@@ -246,10 +241,10 @@ fn estimate_status_rejects_nonfinite_values() {
     let frame = df!(
         "term" => ["first"], "estimate" => [Some(f64::NAN)],
         "lower" => [Some(0.0_f64)], "upper" => [Some(1.0_f64)],
-        "status" => [EstimateStatus::NotEstimable.as_str()]
     )
     .unwrap();
-    assert!(point_interval(&frame, true)
+    assert!(point_interval(&frame, false)
+        .estimate_status([EstimateStatus::NotEstimable])
         .preflight()
         .unwrap_err()
         .to_string()
@@ -304,7 +299,6 @@ fn fixed_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
         "estimate" => [Some(10.0_f64), Some(20.0), None, None],
         "lower" => [Some(9.0_f64), Some(18.0), None, None],
         "upper" => [Some(12.0_f64), Some(23.0), None, None],
-        "status" => ["estimated", "estimated", "not_estimable", "not_estimable"]
     )
     .unwrap();
     for (plot, name) in [
@@ -367,7 +361,7 @@ fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
 fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values() {
     let frame = df!(
         "term" => ["first"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>], "status" => [EstimateStatus::NotEstimable.as_str()]
+        "upper" => [None::<f64>],
     )
     .unwrap();
     let output = svg(
@@ -384,7 +378,7 @@ fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values(
 fn unavailable_text_avoids_estimate_guides() {
     let frame = df!(
         "term" => ["unavailable"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>], "status" => [EstimateStatus::NotEstimable.as_str()]
+        "upper" => [None::<f64>],
     )
     .unwrap();
     let coefficient = svg(
@@ -419,7 +413,7 @@ fn unavailable_text_avoids_estimate_guides() {
 fn unavailable_text_without_a_fitting_guide_side_fails_preflight() {
     let frame = df!(
         "term" => ["x"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>], "status" => [EstimateStatus::NotEstimable.as_str()]
+        "upper" => [None::<f64>],
     )
     .unwrap();
     let error = point_interval(&frame, true)

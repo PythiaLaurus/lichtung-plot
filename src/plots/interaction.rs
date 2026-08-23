@@ -64,7 +64,7 @@ pub(crate) fn render(
     let mut x_levels = Vec::new();
     let trace_levels = chart.resolved_group_levels(channels.group_levels.clone());
     let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let trace_styles = resolve_trace_styles(chart, context, trace, &trace_levels)?;
+    let trace_styles = resolve_trace_styles(chart, &trace_levels)?;
     let mut cells = HashSet::new();
     for index in 0..x.len() {
         if lower[index] > estimate[index] || estimate[index] > upper[index] {
@@ -193,60 +193,31 @@ pub(crate) fn render(
 
 fn resolve_trace_styles(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
-    traces: &[String],
     trace_levels: &[String],
 ) -> Result<Option<Vec<TraceStyle>>, Error> {
-    let Some((point_shape_col, line_pattern_col)) = chart.interaction_style_cols() else {
+    let Some(configured) = chart.interaction_styles_spec() else {
         return Ok(None);
     };
-    let point_shapes = crate::data::strict_strings(context.data, point_shape_col, "interaction")?;
-    let line_patterns = crate::data::strict_strings(context.data, line_pattern_col, "interaction")?;
-    if point_shapes.len() != traces.len() || line_patterns.len() != traces.len() {
-        return Err(Error::Data(
-            "interaction: trace style columns must align one-to-one with trace rows".into(),
-        ));
-    }
 
     let mut styles = vec![None; trace_levels.len()];
-    for row in 0..traces.len() {
-        let point_shape = PointShape::parse_exact(&point_shapes[row]).ok_or_else(|| {
-            Error::Data(format!(
-                "interaction: point-shape column {point_shape_col:?} has invalid value {:?} at source row {}; expected exactly {:?} or {:?}",
-                point_shapes[row],
-                context.data.source_row(row),
-                PointShape::Circle.as_str(),
-                PointShape::TriangleUp.as_str()
-            ))
-        })?;
-        let line_pattern = LinePattern::parse_exact(&line_patterns[row]).ok_or_else(|| {
-            Error::Data(format!(
-                "interaction: line-pattern column {line_pattern_col:?} has invalid value {:?} at source row {}; expected exactly {:?} or {:?}",
-                line_patterns[row],
-                context.data.source_row(row),
-                LinePattern::Solid.as_str(),
-                LinePattern::Dashed.as_str()
-            ))
-        })?;
+    for configured_style in configured {
         let style = TraceStyle {
-            point_shape,
-            line_pattern,
+            point_shape: configured_style.point_shape(),
+            line_pattern: configured_style.line_pattern(),
         };
         let index = trace_levels
             .iter()
-            .position(|level| level == &traces[row])
+            .position(|level| level == configured_style.group())
             .ok_or_else(|| {
                 Error::Data(format!(
-                    "interaction: trace {:?} at source row {} is absent from the resolved trace order",
-                    traces[row],
-                    context.data.source_row(row)
+                    "interaction: style references unknown graphical group {:?}",
+                    configured_style.group()
                 ))
             })?;
-        if styles[index].is_some_and(|existing| existing != style) {
+        if styles[index].is_some() {
             return Err(Error::Data(format!(
-                "interaction: trace {:?} has inconsistent point-shape or line-pattern values at source row {}; each trace requires one exact style pair",
-                traces[row],
-                context.data.source_row(row)
+                "interaction: graphical group {:?} has more than one configured style",
+                configured_style.group()
             )));
         }
         styles[index] = Some(style);
@@ -258,7 +229,7 @@ fn resolve_trace_styles(
         .map(|(style, trace)| {
             style.ok_or_else(|| {
                 Error::Data(format!(
-                    "interaction: trace {trace:?} has no point-shape and line-pattern values"
+                    "interaction: graphical group {trace:?} has no configured style"
                 ))
             })
         })

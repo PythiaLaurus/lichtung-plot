@@ -168,6 +168,14 @@ impl Plot {
                 )));
             }
         }
+        if let Some(statuses) = self.estimate_status_values() {
+            if statuses.len() != expected {
+                return Err(Error::Data(format!(
+                    "plot estimate status values have length {}, expected {expected}",
+                    statuses.len()
+                )));
+            }
+        }
         if let Some(rows) = self.source_row_map() {
             if rows.len() != expected {
                 return Err(Error::Data(format!(
@@ -458,21 +466,15 @@ impl Plot {
                 "{family}: an explicit graphical group column is required"
             )));
         }
-        if self.interaction_style_cols().is_some() {
+        if self.interaction_styles_spec().is_some() {
             if kind != PlotKind::Interaction {
                 return Err(Error::Data(format!(
-                    "{family}: interaction style columns are supported only by Interaction"
+                    "{family}: interaction styles are supported only by Interaction"
                 )));
             }
             if !self.markers_visible() {
                 return Err(Error::Data(
-                    "interaction: style columns require visible markers".into(),
-                ));
-            }
-            if self.has_facets() {
-                return Err(Error::Data(
-                    "interaction: style columns are not supported with faceting in this focused style phase"
-                        .into(),
+                    "interaction: configured styles require visible markers".into(),
                 ));
             }
         }
@@ -482,9 +484,9 @@ impl Plot {
                     "{family}: interaction_connectors is supported only by Interaction"
                 )));
             }
-            if !connectors && self.interaction_style_cols().is_some() {
+            if !connectors && self.interaction_styles_spec().is_some() {
                 return Err(Error::Data(
-                    "interaction: interaction_connectors(false) is incompatible with line-pattern style columns"
+                    "interaction: interaction_connectors(false) is incompatible with configured styles"
                         .into(),
                 ));
             }
@@ -541,7 +543,7 @@ impl Plot {
                 "{family}: reference_line is supported only by Coefficient; Forest receives its reference in Plot::forest"
             )));
         }
-        if self.estimate_status_col().is_some()
+        if self.estimate_status_values().is_some()
             && !matches!(
                 kind,
                 PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest

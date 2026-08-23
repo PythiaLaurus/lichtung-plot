@@ -7,8 +7,6 @@ fn interaction_data() -> DataFrame {
         "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
         "lower" => [0.8_f64, 1.3, 1.0, 1.8],
         "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-        "shape" => [PointShape::Circle.as_str(); 4],
-        "pattern" => [LinePattern::Solid.as_str(); 4]
     )
     .unwrap()
 }
@@ -20,8 +18,6 @@ fn connector_collision_data() -> DataFrame {
         "estimate" => [0.0_f64, 0.0, 1.0, 0.6],
         "lower" => [-0.01_f64, -0.01, 0.99, 0.59],
         "upper" => [0.01_f64, 0.01, 1.01, 0.61],
-        "shape" => [PointShape::Circle.as_str(); 4],
-        "pattern" => [LinePattern::Solid.as_str(); 4]
     )
     .unwrap()
 }
@@ -74,19 +70,19 @@ fn hidden_interaction_connectors_omit_only_between_category_lines() {
 }
 
 #[test]
-fn hidden_interaction_connectors_reject_line_pattern_styles() {
+fn hidden_interaction_connectors_reject_configured_styles() {
     let frame = interaction_data();
     let invalid = chart(&frame)
-        .interaction_styles(
-            data::category(&frame, "shape"),
-            data::category(&frame, "pattern"),
-        )
+        .interaction_styles([
+            InteractionStyle::new("Control"),
+            InteractionStyle::new("Active"),
+        ])
         .interaction_connectors(false);
     assert!(invalid
         .preflight()
         .unwrap_err()
         .to_string()
-        .contains("incompatible with line-pattern style columns"));
+        .contains("incompatible with configured styles"));
 }
 
 #[test]

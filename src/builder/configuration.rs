@@ -4,12 +4,14 @@ use crate::layout::AxisTick;
 use crate::spec::{
     AxisScale, BarSpacing, CategoricalColors, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit,
     HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
-    HistogramStat, LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine,
-    RawOverlay, RegressionBand, WaterfallLabels,
+    HistogramStat, InteractionStyle, LegendPolicy, LinePathStyle, NumericLabelFormat,
+    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
-use crate::{BooleanValues, Bounds, CategoryValues, NumericValues, Significance, SourceRows};
+use crate::{
+    BooleanValues, Bounds, CategoryValues, EstimateStatus, NumericValues, Significance, SourceRows,
+};
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Configure PNG sizing and compression before the first terminal output.
@@ -449,13 +451,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set an exact `estimated`/`not_estimable` availability column for estimate rows.
+    /// Set one typed availability value per aligned estimate row.
     #[must_use]
-    pub fn estimate_status(mut self, values: CategoryValues) -> Self
+    pub fn estimate_status(mut self, statuses: impl IntoIterator<Item = EstimateStatus>) -> Self
     where
         K: crate::kind::EstimateStatus,
     {
-        self.estimate_status = Some(values);
+        self.estimate_status = Some(statuses.into_iter().collect::<Vec<_>>().into());
         self
     }
 
@@ -519,21 +521,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set exact categorical point-shape and line-pattern columns for interaction traces.
-    ///
-    /// Point-shape values must be [`crate::PointShape::as_str`] values and line-pattern
-    /// values must be [`crate::LinePattern::as_str`] values. Each graphical trace must
-    /// resolve to one constant value from each column.
+    /// Set exactly one typed point-and-connector style per interaction group.
     #[must_use]
-    pub fn interaction_styles(
-        mut self,
-        point_shapes: CategoryValues,
-        line_patterns: CategoryValues,
-    ) -> Self
+    pub fn interaction_styles(mut self, styles: impl IntoIterator<Item = InteractionStyle>) -> Self
     where
         K: crate::kind::InteractionOptions,
     {
-        self.interaction_styles = Some((point_shapes, line_patterns));
+        self.interaction_styles = Some(styles.into_iter().collect());
         self
     }
 

@@ -17,8 +17,8 @@ pub use bar::{
 pub(crate) use bar::{BarSource, ErrorBarKind};
 pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
 pub use estimate::{
-    AxisScale, Bounds, CoefficientInput, EstimateStatus, LinePathStyle, LinePattern, PointShape,
-    QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
+    AxisScale, Bounds, CoefficientInput, EstimateStatus, InteractionStyle, LinePathStyle,
+    LinePattern, PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
 pub use facet::{FacetScales, FacetSpec};
 #[cfg(feature = "png")]

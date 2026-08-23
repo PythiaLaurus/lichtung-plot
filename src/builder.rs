@@ -7,6 +7,7 @@
 //! performs hypothesis tests or adjusts p-values.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 mod accessors;
 mod configuration;
@@ -284,7 +285,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     color_by_sign: bool,
     zero_line: bool,
     line_band: Option<Bounds>,
-    estimate_status: Option<CategoryValues>,
+    estimate_status: Option<Arc<[crate::EstimateStatus]>>,
     markers_visible: bool,
     regression_band: RegressionBand,
     line_path_style: LinePathStyle,
@@ -298,7 +299,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     global_hue_levels: Option<Vec<String>>,
     global_group_levels: Option<Vec<String>>,
     global_line_condition_levels: Option<Vec<String>>,
-    interaction_styles: Option<(CategoryValues, CategoryValues)>,
+    interaction_styles: Option<Vec<crate::InteractionStyle>>,
     categorical_colors: Option<CategoricalColors>,
     render_scope: Option<String>,
     axis_text_measured: bool,

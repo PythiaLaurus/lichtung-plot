@@ -7,18 +7,6 @@ fn interaction_data() -> DataFrame {
         "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
         "lower" => [0.8_f64, 1.3, 1.0, 1.8],
         "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-        "point_shape" => [
-            PointShape::Circle.as_str(),
-            PointShape::Circle.as_str(),
-            PointShape::TriangleUp.as_str(),
-            PointShape::TriangleUp.as_str(),
-        ],
-        "line_pattern" => [
-            LinePattern::Dashed.as_str(),
-            LinePattern::Dashed.as_str(),
-            LinePattern::Solid.as_str(),
-            LinePattern::Solid.as_str(),
-        ],
     )
     .unwrap()
 }
@@ -33,10 +21,14 @@ fn chart(frame: &DataFrame, styled: bool) -> Plot<lichtung_plot::kind::Interacti
     .labels(Labels::raw())
     .hue(data::category(frame, "series"));
     if styled {
-        plot = plot.interaction_styles(
-            data::category(frame, "point_shape"),
-            data::category(frame, "line_pattern"),
-        );
+        let configurations = data::category_levels(frame, "series")
+            .into_iter()
+            .map(|group| match group.as_str() {
+                "Control" => InteractionStyle::new(group).pattern(LinePattern::Dashed),
+                "Semantic Agent" => InteractionStyle::new(group).shape(PointShape::TriangleUp),
+                _ => InteractionStyle::new(group),
+            });
+        plot = plot.interaction_styles(configurations);
     }
     plot
 }
@@ -111,57 +103,42 @@ fn interaction_style_legend_matches_each_trace_glyph() {
 }
 
 #[test]
-fn interaction_styles_reject_non_exact_values() {
-    let data = df!(
-        "condition" => ["Before", "After"],
-        "series" => ["Control", "Control"],
-        "estimate" => [1.0_f64, 1.5],
-        "lower" => [0.8_f64, 1.3],
-        "upper" => [1.2_f64, 1.7],
-        "point_shape" => ["Circle", "Circle"],
-        "line_pattern" => ["dashed", "dashed"],
-    )
-    .unwrap();
+fn interaction_styles_reject_unknown_groups() {
+    let data = interaction_data();
+    let error = chart(&data, false)
+        .interaction_styles([InteractionStyle::new("Unknown")])
+        .preflight()
+        .unwrap_err()
+        .to_string();
 
-    let error = chart(&data, true).preflight().unwrap_err().to_string();
-
-    assert!(error.contains("expected exactly \"circle\" or \"triangle-up\""));
+    assert!(error.contains("unknown graphical group \"Unknown\""));
 }
 
 #[test]
-fn interaction_styles_reject_non_exact_line_patterns() {
-    let data = df!(
-        "condition" => ["Before", "After"],
-        "series" => ["Control", "Control"],
-        "estimate" => [1.0_f64, 1.5],
-        "lower" => [0.8_f64, 1.3],
-        "upper" => [1.2_f64, 1.7],
-        "point_shape" => ["circle", "circle"],
-        "line_pattern" => ["Dashed", "Dashed"],
-    )
-    .unwrap();
+fn interaction_styles_require_one_style_per_group() {
+    let data = interaction_data();
+    let error = chart(&data, false)
+        .interaction_styles([InteractionStyle::new("Control")])
+        .preflight()
+        .unwrap_err()
+        .to_string();
 
-    let error = chart(&data, true).preflight().unwrap_err().to_string();
-
-    assert!(error.contains("expected exactly \"solid\" or \"dashed\""));
+    assert!(error.contains("graphical group \"Semantic Agent\" has no configured style"));
 }
 
 #[test]
-fn interaction_styles_reject_inconsistent_values_within_a_trace() {
-    let data = df!(
-        "condition" => ["Before", "After", "Before", "After"],
-        "series" => ["Control", "Control", "Semantic Agent", "Semantic Agent"],
-        "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
-        "lower" => [0.8_f64, 1.3, 1.0, 1.8],
-        "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-        "point_shape" => ["circle", "circle", "triangle-up", "triangle-up"],
-        "line_pattern" => ["dashed", "solid", "solid", "solid"]
-    )
-    .unwrap();
+fn interaction_styles_reject_duplicate_groups() {
+    let data = interaction_data();
+    let error = chart(&data, false)
+        .interaction_styles([
+            InteractionStyle::new("Control"),
+            InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+        ])
+        .preflight()
+        .unwrap_err()
+        .to_string();
 
-    let error = chart(&data, true).preflight().unwrap_err().to_string();
-
-    assert!(error.contains("each trace requires one exact style pair"));
+    assert!(error.contains("graphical group \"Control\" has more than one configured style"));
 }
 
 #[test]
@@ -172,7 +149,27 @@ fn styled_interaction_output_is_deterministic() {
 }
 
 #[test]
-fn unused_interaction_style_columns_preserve_circle_solid_defaults() {
+fn interaction_styles_apply_by_group_across_facets() {
+    let data = df!(
+        "panel" => ["Left", "Left", "Right", "Right"],
+        "condition" => ["Before", "After", "Before", "After"],
+        "series" => ["Control", "Control", "Semantic Agent", "Semantic Agent"],
+        "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
+        "lower" => [0.8_f64, 1.3, 1.0, 1.8],
+        "upper" => [1.2_f64, 1.7, 1.4, 2.2],
+    )
+    .unwrap();
+
+    let output = svg(chart(&data, true)
+        .facet(FacetSpec::column(data::category(&data, "panel")))
+        .size(960, 320));
+
+    assert!(output.contains(">panel = Left</text>") && output.contains(">panel = Right</text>"));
+    assert!(output.contains("stroke-dasharray=\"5 3\"") && output.contains("<polygon points="));
+}
+
+#[test]
+fn unconfigured_interaction_styles_preserve_circle_solid_defaults() {
     let data = interaction_data();
     let first = svg(chart(&data, false));
     let second = svg(chart(&data, false));
@@ -204,8 +201,6 @@ fn shared_figure_legend_preserves_caller_colors_and_composite_trace_glyphs() {
         "estimate" => [1.0_f64, 1.5],
         "lower" => [0.8_f64, 1.3],
         "upper" => [1.2_f64, 1.7],
-        "point_shape" => [PointShape::Circle.as_str(); 2],
-        "line_pattern" => [LinePattern::Dashed.as_str(); 2],
     )
     .unwrap();
     let semantic = df!(
@@ -214,8 +209,6 @@ fn shared_figure_legend_preserves_caller_colors_and_composite_trace_glyphs() {
         "estimate" => [1.2_f64, 2.0],
         "lower" => [1.0_f64, 1.8],
         "upper" => [1.4_f64, 2.2],
-        "point_shape" => [PointShape::TriangleUp.as_str(); 2],
-        "line_pattern" => [LinePattern::Solid.as_str(); 2],
     )
     .unwrap();
     let colors = CategoricalColors::new([
@@ -271,8 +264,6 @@ fn shared_figure_legend_rejects_conflicting_caller_color_mapping() {
         "estimate" => [1.0_f64, 1.5],
         "lower" => [0.8_f64, 1.3],
         "upper" => [1.2_f64, 1.7],
-        "point_shape" => [PointShape::Circle.as_str(); 2],
-        "line_pattern" => [LinePattern::Dashed.as_str(); 2],
     )
     .unwrap();
     let gray = CategoricalColors::new([("Control".to_owned(), (51, 51, 51))]).unwrap();

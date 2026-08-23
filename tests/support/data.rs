@@ -132,6 +132,15 @@ pub(crate) fn numeric(fixture: &Fixture, column: &str) -> NumericValues {
     }
 }
 
+pub(crate) fn nullable_numeric(fixture: &Fixture, column: &str) -> Vec<Option<f64>> {
+    match fixture.column(column) {
+        FixtureColumn::Numeric(values) => values.clone(),
+        FixtureColumn::Category(_) | FixtureColumn::Boolean(_) => {
+            panic!("fixture column {column:?} must be numeric")
+        }
+    }
+}
+
 pub(crate) fn category(fixture: &Fixture, column: &str) -> CategoryValues {
     let values = match fixture.column(column) {
         FixtureColumn::Category(values) => values.clone(),
@@ -145,6 +154,22 @@ pub(crate) fn category(fixture: &Fixture, column: &str) -> CategoryValues {
             .collect(),
     };
     CategoryValues::nullable(column, values).unwrap()
+}
+
+pub(crate) fn category_levels(fixture: &Fixture, column: &str) -> Vec<String> {
+    let FixtureColumn::Category(values) = fixture.column(column) else {
+        panic!("fixture column {column:?} must be categorical")
+    };
+    let mut levels = Vec::new();
+    for value in values {
+        let value = value
+            .as_ref()
+            .unwrap_or_else(|| panic!("fixture column {column:?} contains null"));
+        if !levels.contains(value) {
+            levels.push(value.clone());
+        }
+    }
+    levels
 }
 
 pub(crate) fn boolean(fixture: &Fixture, column: &str) -> BooleanValues {

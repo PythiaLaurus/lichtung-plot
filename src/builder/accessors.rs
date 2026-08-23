@@ -3,8 +3,8 @@ use crate::Error;
 use super::Plot;
 use crate::data::{
     DataColumn, BAR_INTERVAL_LOWER, BAR_INTERVAL_UPPER, BAR_UNITS, COLOR, DUMBBELL_RIGHT,
-    FACET_COLUMN, FACET_ROW, FACET_WRAP, GROUP, HEATMAP_HIGHLIGHT, HUE, INTERACTION_LINE_PATTERN,
-    INTERACTION_POINT_SHAPE, INTERVAL_LOWER, INTERVAL_UPPER, SERIES, STATUS, X, Y,
+    FACET_COLUMN, FACET_ROW, FACET_WRAP, GROUP, HEATMAP_HIGHLIGHT, HUE, INTERVAL_LOWER,
+    INTERVAL_UPPER, SERIES, X, Y,
 };
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
@@ -127,15 +127,6 @@ impl<K: crate::kind::Marker> Plot<K> {
                     | ErrorBarKind::PercentileInterval(_)
                     | ErrorBarKind::StandardError(_) => None,
                 }),
-            STATUS => self.estimate_status.as_ref().map(DataColumn::Category),
-            INTERACTION_POINT_SHAPE => self
-                .interaction_styles
-                .as_ref()
-                .map(|(values, _)| DataColumn::Category(values)),
-            INTERACTION_LINE_PATTERN => self
-                .interaction_styles
-                .as_ref()
-                .map(|(_, values)| DataColumn::Category(values)),
             DUMBBELL_RIGHT => match &self.input {
                 PlotInput::Dumbbell { right, .. } => Some(DataColumn::Numeric(right)),
                 _ => None,
@@ -271,10 +262,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "closed semantic input alignment remains exhaustive and centralized"
-    )]
     pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
         let mut columns = match &self.input {
             PlotInput::Scatter { x, y }
@@ -370,14 +357,9 @@ impl<K: crate::kind::Marker> Plot<K> {
             columns.push(DataColumn::Numeric(bounds.lower()));
             columns.push(DataColumn::Numeric(bounds.upper()));
         }
-        columns.extend(self.estimate_status.iter().map(DataColumn::Category));
         columns.extend(self.heatmap_highlight.iter().map(DataColumn::Boolean));
         if let Some(facet) = &self.facet {
             columns.extend(facet.values().map(DataColumn::Category));
-        }
-        if let Some((point_shapes, line_patterns)) = &self.interaction_styles {
-            columns.push(DataColumn::Category(point_shapes));
-            columns.push(DataColumn::Category(line_patterns));
         }
         columns
     }
@@ -537,8 +519,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.data_column(BAR_UNITS).map(|_| BAR_UNITS)
     }
 
-    pub(crate) fn estimate_status_col(&self) -> Option<&'static str> {
-        self.estimate_status.as_ref().map(|_| STATUS)
+    pub(crate) fn estimate_status_values(&self) -> Option<&[crate::EstimateStatus]> {
+        self.estimate_status.as_deref()
     }
 
     pub(crate) const fn markers_visible(&self) -> bool {
@@ -593,10 +575,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    pub(crate) fn interaction_style_cols(&self) -> Option<(&'static str, &'static str)> {
-        self.interaction_styles
-            .as_ref()
-            .map(|_| (INTERACTION_POINT_SHAPE, INTERACTION_LINE_PATTERN))
+    pub(crate) fn interaction_styles_spec(&self) -> Option<&[crate::InteractionStyle]> {
+        self.interaction_styles.as_deref()
     }
 
     pub(crate) const fn categorical_colors_spec(&self) -> Option<&CategoricalColors> {

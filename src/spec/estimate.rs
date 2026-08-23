@@ -193,7 +193,7 @@ pub enum LinePathStyle {
     Hue,
 }
 
-/// Closed point shapes accepted by interaction style columns.
+/// Closed point shapes accepted by interaction styles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PointShape {
     /// Filled circular marker.
@@ -203,26 +203,7 @@ pub enum PointShape {
     TriangleUp,
 }
 
-impl PointShape {
-    /// Exact categorical value accepted in an interaction point-shape column.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Circle => "circle",
-            Self::TriangleUp => "triangle-up",
-        }
-    }
-
-    pub(crate) fn parse_exact(value: &str) -> Option<Self> {
-        match value {
-            "circle" => Some(Self::Circle),
-            "triangle-up" => Some(Self::TriangleUp),
-            _ => None,
-        }
-    }
-}
-
-/// Closed connector patterns accepted by interaction style columns.
+/// Closed connector patterns accepted by interaction styles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LinePattern {
     /// Continuous connector.
@@ -233,23 +214,6 @@ pub enum LinePattern {
 }
 
 impl LinePattern {
-    /// Exact categorical value accepted in an interaction line-pattern column.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Solid => "solid",
-            Self::Dashed => "dashed",
-        }
-    }
-
-    pub(crate) fn parse_exact(value: &str) -> Option<Self> {
-        match value {
-            "solid" => Some(Self::Solid),
-            "dashed" => Some(Self::Dashed),
-            _ => None,
-        }
-    }
-
     pub(crate) fn line_style(
         self,
         color: (u8, u8, u8),
@@ -262,32 +226,65 @@ impl LinePattern {
     }
 }
 
-/// Exact availability values accepted by estimate-status columns.
+/// One exact point and connector style owned by an interaction group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InteractionStyle {
+    group: String,
+    shape: PointShape,
+    pattern: LinePattern,
+}
+
+impl InteractionStyle {
+    /// Construct a circle-and-solid style for one exact graphical group label.
+    #[must_use]
+    pub fn new(group: impl Into<String>) -> Self {
+        Self {
+            group: group.into(),
+            shape: PointShape::default(),
+            pattern: LinePattern::default(),
+        }
+    }
+
+    /// Select the point shape for this group.
+    #[must_use]
+    pub const fn shape(mut self, shape: PointShape) -> Self {
+        self.shape = shape;
+        self
+    }
+
+    /// Select the connector pattern for this group.
+    #[must_use]
+    pub const fn pattern(mut self, pattern: LinePattern) -> Self {
+        self.pattern = pattern;
+        self
+    }
+
+    /// Exact graphical group label that owns this style.
+    #[must_use]
+    pub fn group(&self) -> &str {
+        &self.group
+    }
+
+    /// Configured point shape.
+    #[must_use]
+    pub const fn point_shape(&self) -> PointShape {
+        self.shape
+    }
+
+    /// Configured connector pattern.
+    #[must_use]
+    pub const fn line_pattern(&self) -> LinePattern {
+        self.pattern
+    }
+}
+
+/// Typed availability of one aligned estimate row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EstimateStatus {
     /// The row owns a complete finite estimate tuple.
     Estimated,
     /// The row owns no numeric estimate tuple and is displayed explicitly.
     NotEstimable,
-}
-
-impl EstimateStatus {
-    /// Exact value accepted in an estimate-status column.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Estimated => "estimated",
-            Self::NotEstimable => "not_estimable",
-        }
-    }
-
-    pub(crate) fn parse_exact(value: &str) -> Option<Self> {
-        match value {
-            "estimated" => Some(Self::Estimated),
-            "not_estimable" => Some(Self::NotEstimable),
-            _ => None,
-        }
-    }
 }
 
 /// Numeric scale used by interval-estimate plot families.

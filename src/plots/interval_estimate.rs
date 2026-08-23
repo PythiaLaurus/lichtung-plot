@@ -20,7 +20,7 @@ pub(crate) struct EstimateTuple {
 
 #[expect(
     clippy::too_many_lines,
-    reason = "one preparation boundary keeps exact status parsing and complete/null tuple validation together"
+    reason = "one preparation boundary keeps typed status and complete/null tuple validation together"
 )]
 pub(crate) fn prepare_estimate_tuples(
     chart: &Plot,
@@ -40,7 +40,7 @@ pub(crate) fn prepare_estimate_tuples(
         }
         None => None,
     };
-    let Some(status_col) = chart.estimate_status_col() else {
+    let Some(statuses) = data.estimate_statuses()? else {
         let estimates = crate::data::strict_finite_f64(data, estimate_col, family)?;
         let intervals = interval_cols
             .map(|(lower_col, upper_col)| {
@@ -73,20 +73,6 @@ pub(crate) fn prepare_estimate_tuples(
             .collect();
     };
 
-    let statuses = crate::data::strict_strings(data, status_col, family)?
-        .into_iter()
-        .enumerate()
-        .map(|(index, value)| {
-            EstimateStatus::parse_exact(&value).ok_or_else(|| {
-                Error::Data(format!(
-                    "{family}: status column {status_col:?} has invalid value {value:?} at source row {}; expected exactly {:?} or {:?}",
-                    data.source_row(index),
-                    EstimateStatus::Estimated.as_str(),
-                    EstimateStatus::NotEstimable.as_str()
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     let estimates = crate::data::nullable_finite_f64(data, estimate_col, family)?;
     let intervals = interval_cols
         .map(|(lower_col, upper_col)| {
@@ -118,15 +104,13 @@ pub(crate) fn prepare_estimate_tuples(
                 EstimateStatus::Estimated => {
                     let Some(estimate) = estimate else {
                         return Err(Error::Data(format!(
-                            "{family}: status {:?} requires a complete non-null finite estimate tuple at source row {}",
-                            EstimateStatus::Estimated.as_str(),
+                            "{family}: EstimateStatus::Estimated requires a complete non-null finite estimate tuple at source row {}",
                             data.source_row(index)
                         )));
                     };
                     if interval_cols.is_some() && (lower.is_none() || upper.is_none()) {
                         return Err(Error::Data(format!(
-                            "{family}: status {:?} requires a complete non-null finite estimate tuple at source row {}",
-                            EstimateStatus::Estimated.as_str(),
+                            "{family}: EstimateStatus::Estimated requires a complete non-null finite estimate tuple at source row {}",
                             data.source_row(index)
                         )));
                     }
@@ -142,8 +126,7 @@ pub(crate) fn prepare_estimate_tuples(
                     Ok(None)
                 }
                 EstimateStatus::NotEstimable => Err(Error::Data(format!(
-                    "{family}: status {:?} requires the complete estimate tuple to be null at source row {}",
-                    EstimateStatus::NotEstimable.as_str(),
+                    "{family}: EstimateStatus::NotEstimable requires the complete estimate tuple to be null at source row {}",
                     data.source_row(index)
                 ))),
             }

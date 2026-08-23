@@ -119,7 +119,7 @@ impl Plot {
         }?;
         if let Some(levels) = self.global_hue_levels().filter(|_| {
             self.hue_dimension_key().is_some()
-                && self.interaction_style_cols().is_none()
+                && self.interaction_styles_spec().is_none()
                 && !result.legend_entries.is_empty()
         }) {
             let rendered = std::mem::take(&mut result.legend_entries);
@@ -217,7 +217,7 @@ fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Resul
         }
         result.y_tick_keys = Some(raw);
     }
-    if (chart.hue_dimension_key().is_some() || chart.interaction_style_cols().is_some())
+    if (chart.hue_dimension_key().is_some() || chart.interaction_styles_spec().is_some())
         && !result.legend_entries.is_empty()
     {
         let raw = if result.legend_keys.is_empty() {

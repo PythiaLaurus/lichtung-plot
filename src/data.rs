@@ -13,10 +13,7 @@ pub(crate) const INTERVAL_UPPER: &str = "__interval_upper";
 pub(crate) const BAR_INTERVAL_LOWER: &str = "__bar_interval_lower";
 pub(crate) const BAR_INTERVAL_UPPER: &str = "__bar_interval_upper";
 pub(crate) const BAR_UNITS: &str = "__bar_units";
-pub(crate) const STATUS: &str = "__status";
 pub(crate) const HEATMAP_HIGHLIGHT: &str = "__heatmap_highlight";
-pub(crate) const INTERACTION_POINT_SHAPE: &str = "__interaction_point_shape";
-pub(crate) const INTERACTION_LINE_PATTERN: &str = "__interaction_line_pattern";
 pub(crate) const DUMBBELL_RIGHT: &str = "__dumbbell_right";
 pub(crate) const FACET_ROW: &str = "__facet_row";
 pub(crate) const FACET_COLUMN: &str = "__facet_column";
@@ -115,6 +112,23 @@ impl<'a> PlotData<'a> {
             .and_then(|rows| rows.get(local_row))
             .copied()
             .unwrap_or_else(|| self.row_index(local_row))
+    }
+
+    pub(crate) fn estimate_statuses(self) -> Result<Option<Vec<crate::EstimateStatus>>, Error> {
+        let Some(statuses) = self.plot.estimate_status_values() else {
+            return Ok(None);
+        };
+        (0..self.height())
+            .map(|row| {
+                statuses.get(self.row_index(row)).copied().ok_or_else(|| {
+                    Error::Data(format!(
+                        "estimate status values are shorter than the aligned plot input at source row {}",
+                        self.source_row(row)
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some)
     }
 
     fn row_index(self, local_row: usize) -> usize {
