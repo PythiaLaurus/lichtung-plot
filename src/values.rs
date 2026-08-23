@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::Error;
 
-/// Original source-row identities shared by aligned plot values.
+/// Original source-row identities attached once to a plot's aligned values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceRows(Arc<[usize]>);
 
@@ -32,10 +32,6 @@ impl SourceRows {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-
-    pub(crate) fn get(&self, row: usize) -> Option<usize> {
-        self.0.get(row).copied()
     }
 
     pub(crate) fn as_slice(&self) -> &[usize] {
@@ -79,7 +75,6 @@ pub struct NumericValues {
     name: Arc<str>,
     values: Arc<[f64]>,
     validity: Validity,
-    source_rows: Option<SourceRows>,
 }
 
 impl NumericValues {
@@ -91,7 +86,6 @@ impl NumericValues {
             name: Arc::from(name.into()),
             values: values.into(),
             validity: Validity::All,
-            source_rows: None,
         }
     }
 
@@ -112,15 +106,7 @@ impl NumericValues {
             name: Arc::from(name.into()),
             values: values.into(),
             validity,
-            source_rows: None,
         }
-    }
-
-    /// Attach source-row identities aligned one-to-one with these values.
-    pub fn source_rows(mut self, rows: SourceRows) -> Result<Self, Error> {
-        validate_source_rows(self.values.len(), &rows, &self.name)?;
-        self.source_rows = Some(rows);
-        Ok(self)
     }
 
     /// Semantic value name used for inferred labels and diagnostics.
@@ -150,13 +136,6 @@ impl NumericValues {
             .get(row)
             .map(|value| self.validity.is_valid(row).then_some(*value))
     }
-
-    pub(crate) fn source_row(&self, row: usize) -> usize {
-        self.source_rows
-            .as_ref()
-            .and_then(|rows| rows.get(row))
-            .unwrap_or(row)
-    }
 }
 
 /// Named nullable categorical values stored with stable dictionary encoding.
@@ -166,7 +145,6 @@ pub struct CategoryValues {
     levels: Arc<[String]>,
     codes: Arc<[u32]>,
     validity: Validity,
-    source_rows: Option<SourceRows>,
 }
 
 impl CategoryValues {
@@ -233,15 +211,7 @@ impl CategoryValues {
             levels: levels.into(),
             codes: codes.into(),
             validity: Validity::from_flags(&valid),
-            source_rows: None,
         })
-    }
-
-    /// Attach source-row identities aligned one-to-one with these values.
-    pub fn source_rows(mut self, rows: SourceRows) -> Result<Self, Error> {
-        validate_source_rows(self.codes.len(), &rows, &self.name)?;
-        self.source_rows = Some(rows);
-        Ok(self)
     }
 
     /// Semantic value name used for inferred labels and diagnostics.
@@ -277,13 +247,6 @@ impl CategoryValues {
                 .map(String::as_str)
         })
     }
-
-    pub(crate) fn source_row(&self, row: usize) -> usize {
-        self.source_rows
-            .as_ref()
-            .and_then(|rows| rows.get(row))
-            .unwrap_or(row)
-    }
 }
 
 /// Named nullable Boolean values.
@@ -292,7 +255,6 @@ pub struct BooleanValues {
     name: Arc<str>,
     values: Arc<[bool]>,
     validity: Validity,
-    source_rows: Option<SourceRows>,
 }
 
 impl BooleanValues {
@@ -304,7 +266,6 @@ impl BooleanValues {
             name: Arc::from(name.into()),
             values: values.into(),
             validity: Validity::All,
-            source_rows: None,
         }
     }
 
@@ -325,15 +286,7 @@ impl BooleanValues {
             name: Arc::from(name.into()),
             values: values.into(),
             validity,
-            source_rows: None,
         }
-    }
-
-    /// Attach source-row identities aligned one-to-one with these values.
-    pub fn source_rows(mut self, rows: SourceRows) -> Result<Self, Error> {
-        validate_source_rows(self.values.len(), &rows, &self.name)?;
-        self.source_rows = Some(rows);
-        Ok(self)
     }
 
     /// Semantic value name used for diagnostics.
@@ -363,14 +316,4 @@ impl BooleanValues {
             .get(row)
             .map(|value| self.validity.is_valid(row).then_some(*value))
     }
-}
-
-fn validate_source_rows(length: usize, rows: &SourceRows, name: &str) -> Result<(), Error> {
-    if rows.len() != length {
-        return Err(Error::Data(format!(
-            "source-row identities for {name:?} have length {}, expected {length}",
-            rows.len()
-        )));
-    }
-    Ok(())
 }

@@ -63,6 +63,10 @@ Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
 hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
 are not independently configurable.
 
+`Plot::source_rows` is the sole source-row identity authority for all
+plot-aligned values, faceting, composition, and raw-observation overlays.
+Individual value objects and overlay options do not own provenance.
+
 Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
 with a positive column count, together with its numeric-axis sharing policy. A
 grid requires distinct row and column variable names. Marginal and matrix plots

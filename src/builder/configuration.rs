@@ -27,9 +27,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Set original source-row identities aligned one-to-one with the chart data.
-    ///
-    /// An explicitly configured raw-overlay source-row column takes precedence
-    /// for charts that configure both forms of identity.
     #[must_use]
     pub fn source_rows(mut self, source_rows: SourceRows) -> Self
     where
@@ -627,17 +624,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::RawOverlay,
     {
         self.raw_overlay = overlay;
-        self
-    }
-
-    /// Set the integer column carrying original row identities for a visible
-    /// raw-observation overlay after the caller has filtered or compacted data.
-    #[must_use]
-    pub fn raw_overlay_source_rows(mut self, source_rows: SourceRows) -> Self
-    where
-        K: crate::kind::RawOverlay,
-    {
-        self.raw_overlay_source_rows = Some(source_rows);
         self
     }
 }

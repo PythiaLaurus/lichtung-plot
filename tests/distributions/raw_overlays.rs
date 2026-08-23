@@ -161,7 +161,7 @@ fn jitter_bytes_are_deterministic_and_value_reordering_does_not_move_source_rows
 }
 
 #[test]
-fn explicit_source_row_column_preserves_jitter_after_compaction_and_reordering() {
+fn plot_source_rows_preserve_jitter_after_compaction_and_reordering() {
     let make = |values: [f64; 3], rows: [usize; 3]| {
         Plot::boxplot(
             lichtung_plot::CategoryValues::new("category", ["a"; 3]).unwrap(),
@@ -179,7 +179,7 @@ fn explicit_source_row_column_preserves_jitter_after_compaction_and_reordering()
 }
 
 #[test]
-fn explicit_source_row_column_rejects_duplicate_identities() {
+fn plot_source_rows_reject_duplicate_identities() {
     assert!(SourceRows::new([4, 4])
         .unwrap_err()
         .to_string()

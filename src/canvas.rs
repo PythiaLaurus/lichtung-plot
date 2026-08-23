@@ -977,7 +977,7 @@ impl Canvas {
             })?;
             let source_rows = chart.configured_source_rows()?;
             let render_chart = panel.plan.chart_for_render(chart);
-            let context = source_rows.as_deref().map_or_else(
+            let context = source_rows.map_or_else(
                 || crate::spec::PlotRenderContext::new(render_chart.data(), panel.plan.panel),
                 |rows| {
                     crate::spec::PlotRenderContext::with_source_rows(

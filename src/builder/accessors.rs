@@ -563,12 +563,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.raw_overlay
     }
 
-    pub(crate) fn raw_overlay_source_row_map(&self) -> Option<&[usize]> {
-        self.raw_overlay_source_rows
-            .as_ref()
-            .map(crate::SourceRows::as_slice)
-    }
-
     pub(crate) const fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometryInput> {
         match &self.input {
             PlotInput::Raincloud { input } => input.geometry_input(),

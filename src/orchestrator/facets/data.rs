@@ -56,9 +56,7 @@ impl FacetPanel {
 
 pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows
-        .as_deref()
-        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
+    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let (row_column, column_column, wrap_column, wrap_columns) = chart.facet_columns();
     let variables = [row_column, column_column, wrap_column]
         .into_iter()
@@ -159,9 +157,7 @@ pub(super) fn base_chart(
     has_vertical_axis_label: bool,
 ) -> Result<Plot, Error> {
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows
-        .as_deref()
-        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
+    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let mut base = chart.clone().without_facets();
     if has_horizontal_axis_label {
         base = base.x_label("");
@@ -203,7 +199,6 @@ pub(super) fn extract_panels(
 ) -> Result<Vec<FacetPanel>, Error> {
     let configured_source_rows = chart.configured_source_rows()?;
     let mapped_data = configured_source_rows
-        .as_deref()
         .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     let mut panels = Vec::new();
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {

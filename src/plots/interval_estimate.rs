@@ -188,9 +188,7 @@ pub(crate) fn fixed_facet_estimate_tuples(
         return Ok(None);
     }
     let source_rows = chart.configured_source_rows()?;
-    let data = source_rows
-        .as_deref()
-        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
+    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
     prepare_estimate_tuples(chart, data, family, require_intervals).map(Some)
 }
 

@@ -54,13 +54,14 @@ display values.
 
 ## Ownership
 
-- `NumericValues`, `CategoryValues`, `BooleanValues`, and `SourceRows` own
-  immutable semantic input values.
+- `NumericValues`, `CategoryValues`, and `BooleanValues` own immutable semantic
+  input values. `SourceRows` owns one plot-wide aligned provenance map attached
+  only through `Plot::source_rows`.
 - `HistogramInput` and `RaincloudInput` are closed source selections. Each owns
   either native samples or complete caller-computed geometry, so one constructor
   cannot be combined with a second source setter.
-- `FacetSpec` owns one complete generic-facet layout: row, column, grid, or wrap.
-  Mixed grid and wrap storage is not representable.
+- `FacetSpec` owns one complete generic-facet layout and axis-sharing policy:
+  row, column, grid, or wrap. Mixed grid and wrap storage is not representable.
 - `Plot<K = kind::Any>` owns one selected plot family and all its rendering
   configuration. Semantic constructors return an exact zero-sized family marker
   `K`; sealed capability traits expose only configuration supported by that

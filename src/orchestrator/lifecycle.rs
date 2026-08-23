@@ -70,7 +70,7 @@ impl Plot {
         }
         let source_rows = self.configured_source_rows()?;
         let render_chart = plan.chart_for_render(self);
-        let context = source_rows.as_deref().map_or_else(
+        let context = source_rows.map_or_else(
             || PlotRenderContext::new(render_chart.data(), plan.panel),
             |rows| PlotRenderContext::with_source_rows(render_chart.data(), rows, plan.panel),
         );
@@ -109,7 +109,7 @@ impl Plot {
             )));
         }
         let source_rows = self.configured_source_rows()?;
-        let context = source_rows.as_deref().map_or_else(
+        let context = source_rows.map_or_else(
             || PlotRenderContext::new(self.data(), panel),
             |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel),
         );
@@ -133,9 +133,7 @@ impl Plot {
         }
     }
 
-    pub(crate) fn configured_source_rows(
-        &self,
-    ) -> Result<Option<std::borrow::Cow<'_, [usize]>>, Error> {
+    pub(crate) fn configured_source_rows(&self) -> Result<Option<&[usize]>, Error> {
         if let Some(rows) = self.source_row_map() {
             if rows.len() != self.data().height() {
                 return Err(Error::Data(format!(
@@ -145,16 +143,6 @@ impl Plot {
                 )));
             }
         }
-        if let Some(rows) = self.raw_overlay_source_row_map() {
-            if rows.len() != self.row_count() {
-                return Err(Error::Data(format!(
-                    "raw-overlay source-row map has length {}, but plot input has {} rows",
-                    rows.len(),
-                    self.row_count()
-                )));
-            }
-            return Ok(Some(std::borrow::Cow::Borrowed(rows)));
-        }
-        Ok(self.source_row_map().map(std::borrow::Cow::Borrowed))
+        Ok(self.source_row_map())
     }
 }

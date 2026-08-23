@@ -168,12 +168,12 @@ pub(crate) fn strict_numeric_values(values: &NumericValues, plot: &str) -> Resul
             Some(Some(value)) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains non-finite value {value} at source row {}",
                 values.name(),
-                values.source_row(row)
+                row
             ))),
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
                 values.name(),
-                values.source_row(row)
+                row
             ))),
             None => unreachable!("row is bounded by NumericValues::len"),
         })
@@ -190,7 +190,7 @@ pub(crate) fn strict_category_values(
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
                 values.name(),
-                values.source_row(row)
+                row
             ))),
             None => unreachable!("row is bounded by CategoryValues::len"),
         })

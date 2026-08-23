@@ -187,7 +187,7 @@ fn source_rows_drive_standalone_facet_and_canvas_diagnostics() {
 }
 
 #[test]
-fn raw_overlay_source_rows_precede_structural_rows() {
+fn plot_source_rows_drive_raw_overlay_diagnostics() {
     let data = DataFrame::new(
         1,
         vec![
@@ -201,9 +201,8 @@ fn raw_overlay_source_rows_precede_structural_rows() {
         crate::test_support::category(&data, "category"),
         crate::test_support::numeric(&data, "value"),
     )
-    .source_rows(SourceRows::new([4]).unwrap())
-    .raw_overlay(RawOverlay::Points)
-    .raw_overlay_source_rows(crate::test_support::source_rows(&data, "overlay_row"));
+    .source_rows(crate::test_support::source_rows(&data, "overlay_row"))
+    .raw_overlay(RawOverlay::Points);
 
     let error = assert_rejected_before_begin(&chart, PlotKind::Boxplot);
     assert!(error.contains("source row 9"));

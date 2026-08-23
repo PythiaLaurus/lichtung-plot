@@ -153,7 +153,7 @@ pub enum RawOverlay {
     /// Draw every observation at its exact category or dodge center.
     Points,
     /// Deterministically displace every observation from its center using its
-    /// original zero-based source-row identity.
+    /// plot-level source-row identity.
     Jittered,
 }
 

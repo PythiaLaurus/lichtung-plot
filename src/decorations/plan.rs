@@ -108,14 +108,7 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
 ) -> Result<PanelPlan, Error> {
     let chart = chart.clone().erase();
     let source_rows = chart.configured_source_rows()?;
-    plan_panel_with_data(
-        &chart,
-        kind,
-        cell,
-        role,
-        chart.data(),
-        source_rows.as_deref(),
-    )
+    plan_panel_with_data(&chart, kind, cell, role, chart.data(), source_rows)
 }
 
 #[expect(

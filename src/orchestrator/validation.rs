@@ -54,7 +54,6 @@ impl Plot {
     fn validate_faceted_explicit_category_orders(&self, kind: PlotKind) -> Result<(), Error> {
         let configured_source_rows = self.configured_source_rows()?;
         let data = configured_source_rows
-            .as_deref()
             .map_or_else(|| self.data(), |rows| self.data().map_source_rows(rows));
         match kind {
             PlotKind::Bar
@@ -173,14 +172,6 @@ impl Plot {
             if rows.len() != expected {
                 return Err(Error::Data(format!(
                     "plot source-row map has length {}, expected {expected}",
-                    rows.len()
-                )));
-            }
-        }
-        if let Some(rows) = self.raw_overlay_source_row_map() {
-            if rows.len() != expected {
-                return Err(Error::Data(format!(
-                    "raw-overlay source-row map has length {}, expected {expected}",
                     rows.len()
                 )));
             }
@@ -314,7 +305,7 @@ impl Plot {
                         .into(),
                 ));
             }
-            if self.source_row_map().is_some() || self.raw_overlay_source_row_map().is_some() {
+            if self.source_row_map().is_some() {
                 return Err(Error::Data(
                     "histogram: precomputed composite geometry does not accept source-row inputs"
                         .into(),
@@ -342,7 +333,7 @@ impl Plot {
                         .into(),
                 ));
             }
-            if self.source_row_map().is_some() || self.raw_overlay_source_row_map().is_some() {
+            if self.source_row_map().is_some() {
                 return Err(Error::Data(
                     "raincloud: precomputed geometry does not accept source-row inputs".into(),
                 ));
@@ -372,11 +363,6 @@ impl Plot {
         {
             return Err(Error::Data(format!(
                 "{family}: visible RawOverlay is supported only by Boxplot and Violin"
-            )));
-        }
-        if self.raw_overlay_source_row_map().is_some() && !self.raw_overlay_spec().is_visible() {
-            return Err(Error::Data(format!(
-                "{family}: a raw-observation source-row column requires a visible RawOverlay"
             )));
         }
         if matches!(kind, PlotKind::Trajectory | PlotKind::LinePath) {
