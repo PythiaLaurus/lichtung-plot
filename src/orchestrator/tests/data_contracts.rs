@@ -1,6 +1,6 @@
 use super::{
-    configured_bar_chart, Backend, DataFrame, Error, FillStyle, LegendPosition, LineStyle,
-    NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend, Series,
+    configured_bar_chart, Backend, DataFrame, Error, FillStyle, LegendPolicy, LegendPosition,
+    LineStyle, NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend, Series,
 };
 
 #[test]
@@ -41,7 +41,7 @@ fn explicit_inside_legend_with_fixed_limits_rejects_overlap_before_begin() {
     .hue(crate::test_support::category(&data, "hue"))
     .x_limits(0.0, 10.0)
     .y_limits(0.0, 10.0)
-    .legend_position(LegendPosition::InsideRight);
+    .legend(LegendPolicy::Visible(LegendPosition::InsideRight));
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
@@ -78,7 +78,7 @@ fn oversized_explicit_inside_legend_rejects_before_begin() {
     .hue(crate::test_support::category(&data, "hue"))
     .x_label("")
     .y_label("")
-    .legend_position(LegendPosition::InsideTopLeft)
+    .legend(LegendPolicy::Visible(LegendPosition::InsideTopLeft))
     .size(180, 140);
     let mut backend = RecordingBackend::default();
 

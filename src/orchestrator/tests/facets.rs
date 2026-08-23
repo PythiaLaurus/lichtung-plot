@@ -51,7 +51,9 @@ fn composed_per_panel_outside_legends_remain_in_their_cells() {
     )
     .group(crate::test_support::category(&data, "hue"))
     .hue(crate::test_support::category(&data, "hue"))
-    .legend_position(crate::LegendPosition::OutsideRight)
+    .legend(crate::LegendPolicy::Visible(
+        crate::LegendPosition::OutsideRight,
+    ))
     .size(900, 360);
     let right = Plot::line(
         crate::test_support::numeric(&data, "x"),
@@ -59,7 +61,9 @@ fn composed_per_panel_outside_legends_remain_in_their_cells() {
     )
     .group(crate::test_support::category(&data, "hue"))
     .hue(crate::test_support::category(&data, "hue"))
-    .legend_position(crate::LegendPosition::OutsideRight)
+    .legend(crate::LegendPolicy::Visible(
+        crate::LegendPosition::OutsideRight,
+    ))
     .size(900, 360);
     let figure = crate::Canvas::grid(1, 2)
         .unwrap()
@@ -97,7 +101,9 @@ fn facets_reserve_one_complete_outside_legend_band() {
     .facet(crate::FacetSpec::column(crate::test_support::category(
         &data, "facet",
     )))
-    .legend_position(crate::LegendPosition::OutsideRight)
+    .legend(crate::LegendPolicy::Visible(
+        crate::LegendPosition::OutsideRight,
+    ))
     .size(760, 420);
     let mut backend = RecordingBackend::default();
 

@@ -481,8 +481,6 @@ pub enum LegendPosition {
     /// Use the plot-type default placement.
     #[default]
     Auto,
-    /// Do not draw a legend.
-    Hidden,
     /// Inside the axes at the top-left edge.
     InsideTopLeft,
     /// Inside the axes at the top edge.
@@ -531,6 +529,27 @@ pub enum LegendPosition {
     OutsideLeft,
     /// Outside the axes in left-side whitespace, aligned to panel bottom.
     OutsideLeftBottom,
+}
+
+/// Visibility and placement policy for a plot legend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LegendPolicy {
+    /// Use the plot-type default visibility and automatic placement.
+    #[default]
+    Automatic,
+    /// Do not draw a legend.
+    Hidden,
+    /// Draw the legend at the requested placement.
+    Visible(LegendPosition),
+}
+
+impl LegendPolicy {
+    pub(crate) const fn position(self) -> LegendPosition {
+        match self {
+            Self::Visible(position) => position,
+            Self::Automatic | Self::Hidden => LegendPosition::Auto,
+        }
+    }
 }
 
 macro_rules! define_plot_kinds {

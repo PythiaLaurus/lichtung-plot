@@ -1,5 +1,5 @@
 use lichtung_plot::layout::{deterministic_text_width, AxisSpec, AxisTick, Layout};
-use lichtung_plot::{BarInput, Labels, LegendPosition, Plot, PointLayer, Theme};
+use lichtung_plot::{BarInput, Labels, LegendPolicy, LegendPosition, Plot, PointLayer, Theme};
 
 #[path = "../support/data.rs"]
 mod data;

@@ -161,7 +161,10 @@ fn regression_inside_legend_is_clear_and_hidden_by_default() {
         || Plot::regression(data::numeric(&frame, "x"), data::numeric(&frame, "y")).size(360, 260);
     let default = render(regression(), "regression-no-legend");
     assert!(!has_legend(&default));
-    let visible = render(regression().show_legend(), "regression-visible-legend");
+    let visible = render(
+        regression().legend(LegendPolicy::Visible(LegendPosition::Auto)),
+        "regression-visible-legend",
+    );
     assert_inside_legend_clear(&visible, parse_first_clip_rect(&visible), "regression");
 }
 
@@ -334,7 +337,7 @@ fn explicit_inside_and_outside_legend_positions_are_honored() {
     let scatter = |position, width, height| {
         Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .hue(data::category(&frame, "group"))
-            .legend_position(position)
+            .legend(LegendPolicy::Visible(position))
             .size(width, height)
     };
     let inside = render(

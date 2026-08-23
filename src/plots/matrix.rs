@@ -383,7 +383,7 @@ pub(crate) fn panel_box(chart: &Plot) -> Result<crate::layout::PanelBox, Error> 
 }
 
 fn matrix_legend(chart: &Plot, hue_levels: &[String]) -> Result<Option<Legend>, Error> {
-    if hue_levels.len() <= 1 {
+    if hue_levels.len() <= 1 || chart.legend_policy_spec() == crate::LegendPolicy::Hidden {
         return Ok(None);
     }
     let hue_title = chart.resolved_legend_title();

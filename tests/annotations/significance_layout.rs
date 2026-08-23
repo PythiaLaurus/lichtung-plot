@@ -1,6 +1,6 @@
 use lichtung_plot::Error;
 use lichtung_plot::{
-    BarInput, LegendPosition, Pairwise, Plot, Significance, SignificanceMark,
+    BarInput, LegendPolicy, LegendPosition, Pairwise, Plot, Significance, SignificanceMark,
     SignificanceMarkStyle, SignificanceTarget, TextWeight,
 };
 
@@ -151,9 +151,12 @@ fn inside_legend_resolved_box_does_not_overlap_bracket_or_label() {
 
 #[test]
 fn outside_and_hidden_legends_do_not_add_annotation_headroom() {
-    let hidden = render_grouped_bar_with_legend(Some(LegendPosition::Hidden), "hidden", true);
-    let outside =
-        render_grouped_bar_with_legend(Some(LegendPosition::OutsideRight), "outside-right", true);
+    let hidden = render_grouped_bar_with_legend(Some(LegendPolicy::Hidden), "hidden", true);
+    let outside = render_grouped_bar_with_legend(
+        Some(LegendPolicy::Visible(LegendPosition::OutsideRight)),
+        "outside-right",
+        true,
+    );
     let inside = render_grouped_bar_with_legend(None, "inside-headroom", true);
     let hidden_y = bracket_line_y_values(&hidden)[0];
     let outside_y = bracket_line_y_values(&outside)[0];
@@ -192,7 +195,7 @@ fn auto_bar_legend_keeps_top_right_beside_tall_uncompared_category() {
 #[test]
 fn centered_inside_legend_uses_generic_geometry_with_comparisons() {
     let svg = render_grouped_bar_with_legend(
-        Some(LegendPosition::InsideRight),
+        Some(LegendPolicy::Visible(LegendPosition::InsideRight)),
         "centered-inside-legend",
         true,
     );
@@ -214,7 +217,7 @@ fn bottom_inside_legend_never_moves_positive_bar_zero_minimum() {
         let path = dir.join("bar.svg");
         let mut chart = identity_bar_chart(&df)
             .hue(data::category(&df, "series"))
-            .legend_position(LegendPosition::InsideBottomRight);
+            .legend(LegendPolicy::Visible(LegendPosition::InsideBottomRight));
         if with_comparison {
             chart = chart.significance([comparison("a", "b", 0.01)]);
         }
@@ -234,7 +237,7 @@ fn horizontal_inside_legend_is_a_transposed_annotation_obstacle() {
 #[test]
 fn horizontal_centered_inside_legend_uses_generic_geometry() {
     let svg = render_grouped_horizontal_bar_with_legend(
-        Some(LegendPosition::InsideTop),
+        Some(LegendPolicy::Visible(LegendPosition::InsideTop)),
         "horizontal-centered",
     );
 
@@ -497,7 +500,7 @@ fn legend_rect(svg: &str) -> (f64, f64, f64, f64) {
 }
 
 fn render_grouped_bar_with_legend(
-    position: Option<LegendPosition>,
+    policy: Option<LegendPolicy>,
     name: &str,
     with_comparison: bool,
 ) -> String {
@@ -510,8 +513,8 @@ fn render_grouped_bar_with_legend(
     let dir = tempdir(name);
     let path = dir.join("bar.svg");
     let mut chart = identity_bar_chart(&df).group(data::category(&df, "series"));
-    if let Some(position) = position {
-        chart = chart.legend_position(position);
+    if let Some(policy) = policy {
+        chart = chart.legend(policy);
     }
     chart = chart.size(460, 320);
     if with_comparison {
@@ -521,10 +524,7 @@ fn render_grouped_bar_with_legend(
     std::fs::read_to_string(path).unwrap()
 }
 
-fn render_grouped_horizontal_bar_with_legend(
-    position: Option<LegendPosition>,
-    name: &str,
-) -> String {
+fn render_grouped_horizontal_bar_with_legend(policy: Option<LegendPolicy>, name: &str) -> String {
     let df = df!(
         "group" => ["a", "a", "b", "b"],
         "series" => ["control", "treatment", "control", "treatment"],
@@ -534,8 +534,8 @@ fn render_grouped_horizontal_bar_with_legend(
     let dir = tempdir(name);
     let path = dir.join("horizontal.svg");
     let mut chart = identity_horizontal_bar_chart(&df).hue(data::category(&df, "series"));
-    if let Some(position) = position {
-        chart = chart.legend_position(position);
+    if let Some(policy) = policy {
+        chart = chart.legend(policy);
     }
     chart
         .significance([comparison("a", "b", 0.01)])

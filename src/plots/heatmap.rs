@@ -17,8 +17,8 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{
-    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale,
-    LegendPosition, PlotRenderContext, PlotRenderResult,
+    CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
+    PlotRenderContext, PlotRenderResult,
 };
 use crate::Plot;
 
@@ -346,9 +346,9 @@ fn validate_options(chart: &Plot) -> Result<(), Error> {
             )));
         }
     }
-    if chart.legend_position_spec() != LegendPosition::Auto || chart.legend_visibility().is_some() {
+    if chart.legend_policy_spec() != LegendPolicy::Automatic {
         return Err(Error::Data(
-            "heatmap: legend position and visibility overrides are not supported; the right-side colorbar is mandatory"
+            "heatmap: legend policy overrides are not supported; the right-side colorbar is mandatory"
                 .into(),
         ));
     }

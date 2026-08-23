@@ -6,7 +6,8 @@ use crate::decorations::legend::{Legend, LegendBox};
 use crate::layout::PanelBox;
 use crate::render::geometry::GeometryBackend;
 use crate::spec::{
-    LegendClearance, LegendDefault, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
+    LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
+    PlotRenderResult,
 };
 use crate::Plot;
 
@@ -76,7 +77,7 @@ pub(crate) const fn is_outside(position: LegendPosition) -> bool {
 }
 
 const fn is_inside(position: LegendPosition) -> bool {
-    !matches!(position, LegendPosition::Hidden) && !is_outside(position)
+    !is_outside(position)
 }
 
 impl PanelPlan {
@@ -145,8 +146,7 @@ pub(crate) fn plan_panel_with_data(
         &mut discovery,
     )?;
     let visible = role == LegendRole::Panel
-        && planning_chart.legend_visibility() != Some(false)
-        && planning_chart.legend_position_spec() != LegendPosition::Hidden
+        && planning_chart.legend_policy_spec() != LegendPolicy::Hidden
         && !discovered.legend_entries.is_empty();
     let legend = visible.then(|| {
         Legend::new(
@@ -855,7 +855,6 @@ fn resolve_box(
     match position {
         LegendPosition::Auto => legend.inside_candidates(pixel_box)
             [initial_auto_candidate(legend, axes, geometry, default)],
-        LegendPosition::Hidden => legend.top_right_box(pixel_box),
         LegendPosition::InsideTopLeft | LegendPosition::InsideLeftTop => {
             legend.aligned_inside_box(pixel_box, 0.0, 1.0)
         }

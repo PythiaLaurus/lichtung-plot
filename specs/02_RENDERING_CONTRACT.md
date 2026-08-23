@@ -59,6 +59,10 @@ Dumbbell construction atomically consumes both numeric endpoints and their
 explicit labels and colors. Waterfall construction consumes a finite base;
 rendering derives its finite terminal as the base plus all supplied deltas.
 
+Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
+hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
+are not independently configurable.
+
 Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
 with a positive column count. A grid requires distinct row and column variable
 names. Marginal and matrix plots do not implement the generic facet capability.

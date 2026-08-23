@@ -132,7 +132,7 @@ pub(crate) fn render(
         backend.draw_scatter(&scatter_points, &point_style)?;
         backend.draw_line(&fit_line, &line_style)
     })?;
-    let legend_entries = if chart.legend_visibility() == Some(true) {
+    let legend_entries = if matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
         vec![
             LegendEntry::point("Observations".to_string(), point_style),
             LegendEntry::point(

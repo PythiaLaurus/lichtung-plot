@@ -1,4 +1,6 @@
-use lichtung_plot::{FacetSpec, LegendPosition, PanelCorner, PanelTextAnnotation, Plot, Theme};
+use lichtung_plot::{
+    FacetSpec, LegendPolicy, LegendPosition, PanelCorner, PanelTextAnnotation, Plot, Theme,
+};
 
 use super::{data, df, render_svg, DataFrame};
 
@@ -105,7 +107,7 @@ fn panel_text_rejects_colliding_inside_legend() {
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::TopRight, "Caller note").unwrap(),
         )
-        .legend_position(LegendPosition::InsideTopRight);
+        .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight));
 
     assert!(chart
         .preflight()

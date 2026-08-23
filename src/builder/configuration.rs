@@ -4,7 +4,7 @@ use crate::layout::AxisTick;
 use crate::spec::{
     AxisScale, BarSpacing, CategoricalColors, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit,
     HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
-    HistogramStat, LegendPosition, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine,
+    HistogramStat, LegendPolicy, LinePathStyle, NumericLabelFormat, PanelTextAnnotation, QqLine,
     RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
@@ -609,34 +609,13 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Request a specific legend placement.
+    /// Set the legend visibility and placement policy.
     #[must_use]
-    pub fn legend_position(mut self, position: LegendPosition) -> Self
+    pub fn legend(mut self, policy: LegendPolicy) -> Self
     where
         K: crate::kind::Legend,
     {
-        self.legend_position = position;
-        self.legend_visible = Some(position != LegendPosition::Hidden);
-        self
-    }
-
-    /// Force the legend to be rendered when the selected plot can produce one.
-    #[must_use]
-    pub fn show_legend(mut self) -> Self
-    where
-        K: crate::kind::Legend,
-    {
-        self.legend_visible = Some(true);
-        self
-    }
-
-    /// Suppress the legend even when the selected plot can produce one.
-    #[must_use]
-    pub fn hide_legend(mut self) -> Self
-    where
-        K: crate::kind::Legend,
-    {
-        self.legend_visible = Some(false);
+        self.legend_policy = policy;
         self
     }
 

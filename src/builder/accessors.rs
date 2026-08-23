@@ -15,8 +15,9 @@ use crate::spec::{
     AxisScale, BarInput, BarSpacing, Bootstrap, CategoricalColors, CategoryOrder,
     ConfidenceIntervalAlgorithm, DumbbellEndpoints, ErrorBarKind, HeatmapAnnotations,
     HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins,
-    HistogramComposite, HistogramStat, LegendPosition, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
+    HistogramComposite, HistogramStat, LegendPolicy, LegendPosition, LinePathStyle,
+    NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
+    WaterfallLabels,
 };
 use crate::Labels;
 use crate::{HistogramCompositeGeometryInput, RaincloudGeometryInput};
@@ -868,24 +869,21 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.kind
     }
 
-    /// Currently requested legend placement.
-    #[must_use]
-    pub fn legend_position_spec(&self) -> LegendPosition {
-        self.legend_position
+    pub(crate) const fn legend_policy_spec(&self) -> LegendPolicy {
+        self.legend_policy
     }
 
-    pub(crate) fn legend_visibility(&self) -> Option<bool> {
-        self.legend_visible
+    pub(crate) const fn legend_position_spec(&self) -> LegendPosition {
+        self.legend_policy.position()
     }
 
     pub(crate) fn with_legend_position(mut self, position: LegendPosition) -> Self {
-        self.legend_position = position;
-        self.legend_visible = Some(position != LegendPosition::Hidden);
+        self.legend_policy = LegendPolicy::Visible(position);
         self
     }
 
     pub(crate) fn with_suppressed_legend(mut self) -> Self {
-        self.legend_visible = Some(false);
+        self.legend_policy = LegendPolicy::Hidden;
         self
     }
 

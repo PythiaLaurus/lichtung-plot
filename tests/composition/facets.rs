@@ -248,7 +248,7 @@ fn shared_facet_axis_titles_clear_outside_legends() {
                 .facet(FacetSpec::column(data::category(&frame, "facet")))
                 .x_label("Shared horizontal")
                 .y_label("Shared vertical")
-                .legend_position(position)
+                .legend(LegendPolicy::Visible(position))
                 .size(820, 520),
             "facet-outside-legend",
         )
@@ -444,7 +444,7 @@ fn faceted_stacked_bar_preflights_extreme_finite_panels_without_pooling() {
             data::category(&frame, "series"),
         )
         .hue(data::category(&frame, "series"))
-        .legend_position(LegendPosition::OutsideRight)
+        .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
     };
     assert!(base()
         .preflight()

@@ -7,7 +7,9 @@ use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::PanelBox;
 use crate::render::backend::Backend;
-use crate::spec::{AxisDomain, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::spec::{
+    AxisDomain, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
+};
 
 pub(super) fn preflight_panels(
     chart: &Plot,
@@ -76,7 +78,7 @@ pub(super) fn reserve_shared_legend(
     } else {
         None
     };
-    if source.legend_visibility() != Some(false) && legend_position != LegendPosition::Hidden {
+    if source.legend_policy_spec() != LegendPolicy::Hidden {
         if let Some(facet_legend_position) = facet_legend_position {
             let global_entries = shared
                 .global_hue_levels()

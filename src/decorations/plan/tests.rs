@@ -100,8 +100,8 @@ fn outside_legend_reservation_uses_measured_label_width_and_stays_in_cell() {
         "another long control label",
     ]);
     let cell = PanelBox::new(40.0, 620.0, 50.0, 390.0);
-    let short = line_chart(&short_data).legend_position(LegendPosition::OutsideRight);
-    let long = line_chart(&long_data).legend_position(LegendPosition::OutsideRight);
+    let short = line_chart(&short_data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
+    let long = line_chart(&long_data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
 
     let short = plan_panel(&short, PlotKind::Line, cell, LegendRole::Panel).unwrap();
     let long = plan_panel(&long, PlotKind::Line, cell, LegendRole::Panel).unwrap();
@@ -121,7 +121,7 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
         "second deliberately wide legend entry",
     ]);
     let cell = PanelBox::new(40.0, 700.0, 50.0, 390.0);
-    let initial = line_chart(&data).legend_position(LegendPosition::OutsideRight);
+    let initial = line_chart(&data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
     let initial = plan_panel(&initial, PlotKind::Line, cell, LegendRole::Panel).unwrap();
     let font_size = line_chart(&data).palette().label_font_size;
     let label = (1..=200)
@@ -146,7 +146,7 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
         .expect("legend reservation should expose an axis-title rewrap threshold");
     let chart = line_chart(&data)
         .x_label(label)
-        .legend_position(LegendPosition::OutsideRight);
+        .legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
 
     let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();
 
@@ -183,8 +183,8 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
     let auto = line_chart(&data);
-    let outside = line_chart(&data).legend_position(LegendPosition::OutsideRight);
-    let hidden = line_chart(&data).hide_legend();
+    let outside = line_chart(&data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
+    let hidden = line_chart(&data).legend(LegendPolicy::Hidden);
 
     let auto = plan_panel(&auto, PlotKind::Line, cell, LegendRole::Panel).unwrap();
     let outside = plan_panel(&outside, PlotKind::Line, cell, LegendRole::Panel).unwrap();
@@ -229,7 +229,7 @@ fn scatter_with_automatic_y_limits_keeps_top_right_default() {
         crate::test_support::numeric(&data, "y"),
     )
     .hue(crate::test_support::category(&data, "hue"));
-    let hidden = visible.clone().hide_legend();
+    let hidden = visible.clone().legend(LegendPolicy::Hidden);
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
     let visible = plan_panel(&visible, PlotKind::Scatter, cell, LegendRole::Panel).unwrap();
@@ -262,7 +262,7 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
     )
     .group(crate::test_support::category(&data, "hue"))
     .hue(crate::test_support::category(&data, "hue"))
-    .legend_position(LegendPosition::InsideRight);
+    .legend(LegendPolicy::Visible(LegendPosition::InsideRight));
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
     let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();

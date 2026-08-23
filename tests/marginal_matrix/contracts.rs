@@ -101,7 +101,7 @@ fn marginal_kde_range_does_not_create_excessive_blank_space() {
     )
     .group(lichtung_plot::CategoryValues::new("region", region.clone()).unwrap())
     .hue(lichtung_plot::CategoryValues::new("region", region).unwrap())
-    .hide_legend()
+    .legend(LegendPolicy::Hidden)
     .size(420, 300);
     let svg = render(plot, "marginal-bounded-kde-range");
     let text = parse_text_elements(&svg);
@@ -123,7 +123,7 @@ fn marginal_explicit_limits_override_kde_support_range() {
             .hue(data::category(&frame, "group"))
             .x_limits(0.0, 2.0)
             .y_limits(0.0, 100.0)
-            .hide_legend()
+            .legend(LegendPolicy::Hidden)
             .size(420, 300),
         "marginal-explicit-limits",
     );
@@ -249,6 +249,21 @@ fn matrix_legend_does_not_cover_points_and_stays_close_to_graphics() {
 }
 
 #[test]
+fn matrix_hidden_legend_policy_suppresses_self_managed_legend() {
+    let frame = matrix_frame(&["alpha", "alpha", "alpha", "beta", "beta", "beta"]);
+    let svg = render(
+        matrix(&frame)
+            .group(data::category(&frame, "group"))
+            .hue(data::category(&frame, "group"))
+            .legend(LegendPolicy::Hidden)
+            .size(420, 320),
+        "matrix-hidden-legend",
+    );
+
+    assert!(!has_legend(&svg));
+}
+
+#[test]
 fn matrix_title_and_caption_do_not_overlap_content() {
     let frame = df!(
         "a" => [1.0_f64, 2.0, 3.0, 4.0, 5.0],
@@ -287,7 +302,7 @@ fn matrix_outside_right_legend_can_be_center_aligned() {
         matrix(&frame)
             .group(data::category(&frame, "group"))
             .hue(data::category(&frame, "group"))
-            .legend_position(LegendPosition::OutsideRight)
+            .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
             .size(520, 420),
         "matrix-centered-legend",
     );

@@ -1,4 +1,4 @@
-use lichtung_plot::{LegendPosition, Plot};
+use lichtung_plot::{LegendPolicy, LegendPosition, Plot};
 
 #[path = "../support/data.rs"]
 mod data;
