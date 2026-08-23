@@ -23,26 +23,15 @@ fn interaction_data() -> DataFrame {
     .unwrap()
 }
 
-fn chart(frame: &DataFrame, styled: bool) -> Plot {
+fn chart(frame: &DataFrame, styled: bool) -> Plot<lichtung_plot::kind::Interaction> {
     let mut plot = Plot::interaction(
         data::category(frame, "condition"),
         data::numeric(frame, "estimate"),
         data::category(frame, "series"),
-        data::numeric(frame, "lower"),
-        data::numeric(frame, "upper"),
+        Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
     )
     .labels(Labels::raw())
-    .hue(data::category(frame, "series"))
-    .interval_semantics(
-        IntervalSemantics::new(
-            IntervalKind::Confidence,
-            0.95,
-            InferentialScale::Response,
-            "interaction style fixture",
-        )
-        .unwrap(),
-    )
-    .interaction_source(EstimateSource::EstimatedMarginalMean);
+    .hue(data::category(frame, "series"));
     if styled {
         plot = plot.interaction_styles(
             data::category(frame, "point_shape"),
@@ -52,7 +41,7 @@ fn chart(frame: &DataFrame, styled: bool) -> Plot {
     plot
 }
 
-fn svg(plot: Plot) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     render_svg(plot, "interaction-style").unwrap()
 }
 

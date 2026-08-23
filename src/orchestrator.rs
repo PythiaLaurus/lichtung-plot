@@ -28,6 +28,35 @@ thread_local! {
     static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+impl<K: crate::kind::Marker> Plot<K> {
+    /// Validate the complete selected chart without opening or publishing an output.
+    ///
+    /// This erases the compile-time marker and runs the same closed runtime
+    /// dispatch, data, geometry, facet, decoration, and representability path
+    /// used by rendering through a validating null backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns every error that would be detected before or during rendering.
+    pub fn preflight(&self) -> Result<(), Error> {
+        self.clone().erase().preflight_erased()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        self.clone().erase().render_with_backend_erased(backend)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn render_kind(
+        &self,
+        kind: PlotKind,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        self.clone().erase().render_kind_erased(kind, backend)
+    }
+}
+
 impl Plot {
     /// Render the selected plot through a caller-owned backend.
     ///
@@ -40,23 +69,15 @@ impl Plot {
     ///
     /// Returns an error when no plot kind has been selected, backend startup or
     /// finalization fails, or the selected renderer rejects its data or options.
-    pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+    fn render_with_backend_erased(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         let kind = self
             .plot_kind()
             .ok_or_else(|| Error::Data("render called before selecting a plot kind".into()))?;
-        self.render_kind(kind, backend)
+        self.render_kind_erased(kind, backend)
     }
 
-    /// Validate the complete selected chart without opening or publishing an output.
-    ///
-    /// This runs the same configuration, data, geometry, facet, decoration, and
-    /// representability path used by rendering through a validating null backend.
-    ///
-    /// # Errors
-    ///
-    /// Returns every error that would be detected before or during rendering.
-    pub fn preflight(&self) -> Result<(), Error> {
-        self.render_with_backend(&mut backend::NullBackend)
+    fn preflight_erased(&self) -> Result<(), Error> {
+        self.render_with_backend_erased(&mut backend::NullBackend)
     }
 
     pub(crate) fn render_panel(
@@ -74,6 +95,8 @@ impl Plot {
             PlotKind::Qq => crate::plots::qq::render(self, context, backend),
             PlotKind::PointInterval => crate::plots::point_interval::render(self, context, backend),
             PlotKind::Line => crate::plots::line::render(self, context, backend),
+            PlotKind::Trajectory => crate::plots::line::render_trajectory(self, context, backend),
+            PlotKind::LinePath => crate::plots::line::render_path(self, context, backend),
             PlotKind::Interaction => crate::plots::interaction::render(self, context, backend),
             PlotKind::Coefficient => crate::plots::coefficient::render(self, context, backend),
             PlotKind::Forest => crate::plots::forest::render(self, context, backend),
@@ -87,6 +110,7 @@ impl Plot {
             }
             PlotKind::Boxplot => crate::plots::boxplot::render(self, context, backend),
             PlotKind::Violin => crate::plots::violin::render(self, context, backend),
+            PlotKind::Raincloud => crate::plots::violin::render_raincloud(self, context, backend),
             PlotKind::Regression => crate::plots::regression::render(self, context, backend),
             PlotKind::Marginal => crate::plots::marginal::render(self, context, backend),
             PlotKind::Matrix => crate::plots::matrix::render(self, context, backend),
@@ -134,7 +158,8 @@ impl Plot {
             | PlotKind::Bar
             | PlotKind::StackedBar
             | PlotKind::Boxplot
-            | PlotKind::Violin => (AxisDomain::Categorical, AxisDomain::Continuous),
+            | PlotKind::Violin
+            | PlotKind::Raincloud => (AxisDomain::Categorical, AxisDomain::Continuous),
             PlotKind::PointInterval
             | PlotKind::Coefficient
             | PlotKind::Forest
@@ -144,7 +169,9 @@ impl Plot {
             | PlotKind::Beeswarm
             | PlotKind::Waterfall => (AxisDomain::Continuous, AxisDomain::Categorical),
             PlotKind::Heatmap => (AxisDomain::Categorical, AxisDomain::Categorical),
-            PlotKind::Line => (result.x_domain, result.y_domain),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                (result.x_domain, result.y_domain)
+            }
             _ => (AxisDomain::Continuous, AxisDomain::Continuous),
         };
         result.x_domain = domains.0;

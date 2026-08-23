@@ -474,19 +474,24 @@ fn bar_mean_of_repeated_maximum_values_remains_renderable() {
 }
 
 #[test]
-fn bars_reject_unrepresentable_extreme_confidence_geometry_before_begin() {
+fn student_t_bars_reject_unrepresentable_extreme_confidence_geometry_before_begin() {
     let group = Series::new("group".into(), ["a", "a"]);
     let value = Series::new("value".into(), [-f64::MAX, f64::MAX]);
     let data = DataFrame::new(2, vec![group.into(), value.into()]).unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = configured_bar_chart(&data, kind);
+        let category = crate::test_support::category(&data, "group");
+        let input = crate::BarInput::samples(crate::test_support::numeric(&data, "value"))
+            .error_bar(crate::ErrorBar::confidence_interval().student_t());
+        let chart = match kind {
+            PlotKind::Bar => Plot::bar(category, input).erase(),
+            PlotKind::HorizontalBar => Plot::horizontal_bar(category, input).erase(),
+            _ => unreachable!(),
+        };
         let mut backend = RecordingBackend::default();
 
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
 
-        assert!(error
-            .to_string()
-            .contains("confidence interval is not numerically representable"));
+        assert!(error.to_string().contains("not numerically representable"));
         assert_eq!(backend.begins, 0, "{kind:?}");
     }
 }

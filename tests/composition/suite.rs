@@ -1,7 +1,7 @@
 use lichtung_plot::{
-    BarAggregation, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoryOrder,
-    EstimateSource, FacetScales, InferentialScale, LegendPosition, Plot, Significance,
-    SignificanceMark, SignificanceTarget,
+    BarInput, Bounds, Canvas, CanvasCategoryLabels, CanvasLegendPolicy, CategoryOrder,
+    CoefficientInput, FacetScales, FacetSpec, LegendPosition, Plot, Significance, SignificanceMark,
+    SignificanceTarget,
 };
 
 #[path = "../support/data.rs"]

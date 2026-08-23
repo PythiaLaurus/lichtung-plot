@@ -1,4 +1,4 @@
-use lichtung_plot::{BarAggregation, Plot};
+use lichtung_plot::{BarInput, Plot};
 #[allow(
     clippy::duplicate_mod,
     reason = "each explicit integration target is an independent crate"
@@ -84,10 +84,9 @@ fn horizontal_bar_clip_structure_snapshot() {
     let out = dir.join("horizontal-structure.svg");
     let chart = Plot::horizontal_bar(
         data::category(&data, "category"),
-        data::numeric(&data, "value"),
+        BarInput::estimates(data::numeric(&data, "value")),
     )
     .title("Horizontal structural title")
-    .bar_aggregation(BarAggregation::Identity)
     .size(360, 280);
 
     chart.svg(&out).unwrap();

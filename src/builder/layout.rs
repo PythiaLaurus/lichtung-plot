@@ -5,7 +5,7 @@ use crate::layout::{FigureLayout, FigureLayoutSpec, Layout, PanelBox, TextBlock}
 use crate::spec::PlotKind;
 use crate::theme::ThemePalette;
 
-impl Plot {
+impl<K: crate::kind::Marker> Plot<K> {
     /// Borrow the active theme palette.
     #[must_use]
     pub fn palette(&self) -> ThemePalette {
@@ -15,6 +15,12 @@ impl Plot {
     /// Resolve the figure layout for this chart's canvas and configured text.
     #[must_use]
     pub fn figure_layout(&self) -> FigureLayout {
+        self.clone().erase().figure_layout_erased()
+    }
+}
+
+impl Plot {
+    fn figure_layout_erased(&self) -> FigureLayout {
         let mut figure = self
             .measured_figure_layout()
             .unwrap_or_else(|_| self.resolve_figure_layout());

@@ -1,6 +1,6 @@
 use super::*;
 
-fn render(plot: Plot, name: &str) -> String {
+fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     plot.svg(&output).unwrap();
@@ -9,11 +9,11 @@ fn render(plot: Plot, name: &str) -> String {
     svg
 }
 
-fn marginal(frame: &DataFrame) -> Plot {
+fn marginal(frame: &DataFrame) -> Plot<lichtung_plot::kind::Marginal> {
     Plot::marginal(data::numeric(frame, "x"), data::numeric(frame, "y"))
 }
 
-fn matrix(frame: &DataFrame) -> Plot {
+fn matrix(frame: &DataFrame) -> Plot<lichtung_plot::kind::Matrix> {
     Plot::matrix(vec![
         data::numeric(frame, "a"),
         data::numeric(frame, "b"),

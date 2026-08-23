@@ -1,6 +1,6 @@
 use super::*;
 
-fn estimate_line(frame: &DataFrame) -> Plot {
+fn estimate_line(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
     Plot::line(data::numeric(frame, "x"), data::numeric(frame, "estimate"))
         .group(data::category(frame, "trace"))
         .hue(data::category(frame, "trace"))
@@ -10,10 +10,10 @@ fn estimate_line(frame: &DataFrame) -> Plot {
 fn line_is_distinct_deterministic_clipped_and_draws_ribbon_before_markers() {
     let build = || {
         let frame = estimate_data();
-        estimate_line(&frame).interval_bounds(
+        estimate_line(&frame).band(Bounds::new(
             data::numeric(&frame, "lower"),
             data::numeric(&frame, "upper"),
-        )
+        ))
     };
     let first = render_svg(build(), "estimate-line-first").unwrap();
     let second = render_svg(build(), "estimate-line-second").unwrap();
@@ -48,153 +48,30 @@ fn line_rejects_duplicate_x_within_hue_series_including_signed_zero() {
 }
 
 #[test]
-fn interaction_retains_typed_source_without_canvas_provenance() {
+fn interaction_and_forest_constructors_accept_complete_atomic_bounds() {
     let frame = estimate_data();
-    let interaction = Plot::interaction(
-        data::category(&frame, "factor"),
-        data::numeric(&frame, "estimate"),
-        data::category(&frame, "trace"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .hue(data::category(&frame, "trace"))
-    .interval_semantics(confidence(InferentialScale::Response))
-    .interaction_source(EstimateSource::EstimatedMarginalMean);
-    let svg = render_svg(interaction, "interaction-source").unwrap();
-    assert!(!svg.contains("semantic-note"));
-    assert!(!svg.contains("estimated marginal mean"));
-    assert!(!svg.contains("model fit"));
-}
-
-#[test]
-fn typed_inferential_provenance_never_consumes_canvas_space() {
-    let frame = estimate_data();
-    let provenance = "restricted maximum likelihood covariance with small-sample correction";
-    let interval = || {
-        IntervalSemantics::new(
-            IntervalKind::Confidence,
-            0.95,
-            InferentialScale::Response,
-            provenance,
-        )
-        .unwrap()
-    };
-    let coefficient = Plot::coefficient(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
-    )
-    .interval_bounds(
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(interval())
-    .size(360, 240);
-    let interaction = Plot::interaction(
-        data::category(&frame, "factor"),
-        data::numeric(&frame, "estimate"),
-        data::category(&frame, "trace"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(interval())
-    .interaction_source(EstimateSource::EstimatedMarginalMean)
-    .size(300, 280);
-    let forest = Plot::forest(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(
-        IntervalSemantics::new(
-            IntervalKind::Credible,
-            0.9,
-            InferentialScale::Ratio,
-            provenance,
-        )
-        .unwrap(),
-    )
-    .reference_line(1.0)
-    .size(360, 240);
-    for (plot, name) in [
-        (coefficient, "coefficient-provenance"),
-        (interaction, "interaction-provenance"),
-        (forest, "forest-provenance"),
-    ] {
-        let svg = render_svg(plot, name).unwrap();
-        assert!(!svg.contains("semantic-note") && !svg.contains(provenance));
-    }
-}
-
-#[test]
-fn line_ribbons_and_point_intervals_require_and_retain_typed_semantics() {
-    let frame = estimate_data();
-    let provenance = "bootstrap percentile interval from 10000 deterministic resamples";
-    let semantics = || {
-        IntervalSemantics::new(
-            IntervalKind::Confidence,
-            0.95,
-            InferentialScale::Response,
-            provenance,
-        )
-        .unwrap()
-    };
-    let line = estimate_line(&frame)
-        .interval_bounds(
+    let bounds = || {
+        Bounds::new(
             data::numeric(&frame, "lower"),
             data::numeric(&frame, "upper"),
         )
-        .interval_semantics(semantics())
-        .size(240, 240);
-    let point = Plot::point_interval(
-        data::category(&frame, "term"),
+    };
+    Plot::interaction(
+        data::category(&frame, "factor"),
         data::numeric(&frame, "estimate"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(semantics())
-    .size(360, 240);
-    for (plot, name) in [(line, "line-semantics"), (point, "point-semantics")] {
-        let svg = render_svg(plot, name).unwrap();
-        assert!(!svg.contains("semantic-note") && !svg.contains(provenance));
-    }
-    assert!(estimate_line(&frame)
-        .interval_semantics(semantics())
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("require complete lower and upper bound columns"));
-}
-
-#[test]
-fn coefficient_allows_absent_intervals_while_forest_requires_reference() {
-    let frame = estimate_data();
-    Plot::coefficient(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
+        data::category(&frame, "trace"),
+        bounds(),
     )
     .preflight()
     .unwrap();
-    assert!(Plot::coefficient(
+    Plot::forest(
         data::category(&frame, "term"),
         data::numeric(&frame, "estimate"),
+        bounds(),
+        0.0,
     )
-    .interval_semantics(confidence(InferentialScale::Coefficient))
     .preflight()
-    .unwrap_err()
-    .to_string()
-    .contains("require complete lower and upper bound columns"));
-    assert!(Plot::forest(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(confidence(InferentialScale::Coefficient))
-    .preflight()
-    .unwrap_err()
-    .to_string()
-    .contains("explicit scientific reference"));
+    .unwrap();
 }
 
 #[test]
@@ -203,7 +80,7 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
     let base = || {
         Plot::coefficient(
             data::category(&frame, "term"),
-            data::numeric(&frame, "estimate"),
+            CoefficientInput::estimates(data::numeric(&frame, "estimate")),
         )
     };
     let default = render_svg(base(), "coefficient-default-labels").unwrap();
@@ -218,21 +95,25 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
         default.matches("<circle ").count(),
         labeled.matches("<circle ").count()
     );
-    assert!(base()
-        .interval_bounds(
-            data::numeric(&frame, "lower"),
-            data::numeric(&frame, "upper")
-        )
-        .interval_semantics(confidence(InferentialScale::Coefficient))
-        .estimate_labels(NumericLabelFormat::new(2).unwrap())
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("point-only displays without intervals"));
+    assert!(Plot::coefficient(
+        data::category(&frame, "term"),
+        CoefficientInput::estimates_with_intervals(
+            data::numeric(&frame, "estimate"),
+            Bounds::new(
+                data::numeric(&frame, "lower"),
+                data::numeric(&frame, "upper"),
+            ),
+        ),
+    )
+    .estimate_labels(NumericLabelFormat::new(2).unwrap())
+    .preflight()
+    .unwrap_err()
+    .to_string()
+    .contains("point-only displays without intervals"));
 }
 
 #[test]
-fn coefficient_confidence_intervals_render_exact_caller_significance_marks() {
+fn coefficient_bounds_render_exact_caller_significance_marks() {
     let frame = df!(
         "term" => ["none", "one", "two", "three", "four", "p-value"],
         "estimate" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
@@ -243,13 +124,14 @@ fn coefficient_confidence_intervals_render_exact_caller_significance_marks() {
     let svg = render_svg(
         Plot::coefficient(
             data::category(&frame, "term"),
-            data::numeric(&frame, "estimate"),
+            CoefficientInput::estimates_with_intervals(
+                data::numeric(&frame, "estimate"),
+                Bounds::new(
+                    data::numeric(&frame, "lower"),
+                    data::numeric(&frame, "upper"),
+                ),
+            ),
         )
-        .interval_bounds(
-            data::numeric(&frame, "lower"),
-            data::numeric(&frame, "upper"),
-        )
-        .interval_semantics(confidence(InferentialScale::Coefficient))
         .significance([
             Significance::at("none", SignificanceMark::NotSignificant),
             Significance::at("one", SignificanceMark::OneStar),
@@ -269,58 +151,32 @@ fn coefficient_confidence_intervals_render_exact_caller_significance_marks() {
 }
 
 #[test]
-fn coefficient_significance_requires_confidence_intervals() {
-    let missing = Plot::coefficient(
-        lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
-        lichtung_plot::NumericValues::new("estimate", [1.0]),
-    )
-    .significance([Significance::at("term", SignificanceMark::OneStar)]);
-    assert!(missing
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("require complete confidence interval columns"));
-
-    let credible = Plot::coefficient(
-        lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
-        lichtung_plot::NumericValues::new("estimate", [1.0]),
-    )
-    .interval_bounds(
-        lichtung_plot::NumericValues::new("lower", [0.5]),
-        lichtung_plot::NumericValues::new("upper", [1.5]),
-    )
-    .interval_semantics(
-        IntervalSemantics::new(
-            IntervalKind::Credible,
-            0.95,
-            InferentialScale::Coefficient,
-            "posterior",
+fn coefficient_significance_renders_without_bounds() {
+    let output = render_svg(
+        Plot::coefficient(
+            lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
+            CoefficientInput::estimates(lichtung_plot::NumericValues::new("estimate", [1.0])),
         )
-        .unwrap(),
+        .significance([Significance::at("term", SignificanceMark::OneStar)]),
+        "point-only-coefficient-significance",
     )
-    .significance([Significance::at("term", SignificanceMark::OneStar)]);
-    assert!(credible
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("require confidence intervals, not credible intervals"));
+    .unwrap();
+
+    assert!(output.contains(">*</text>"));
 }
 
 #[test]
-fn coefficient_significance_is_rejected_by_other_plot_kinds() {
-    let frame = estimate_data();
-    let error = Plot::point_interval(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
+fn coefficient_significance_rejects_unknown_terms() {
+    let unknown = Plot::coefficient(
+        lichtung_plot::CategoryValues::new("term", ["term"]).unwrap(),
+        CoefficientInput::estimates(lichtung_plot::NumericValues::new("estimate", [1.0])),
     )
-    .significance([Significance::at("intercept", SignificanceMark::OneStar)])
-    .preflight()
-    .unwrap_err();
-    assert!(error
+    .significance([Significance::at("missing", SignificanceMark::OneStar)]);
+    assert!(unknown
+        .preflight()
+        .unwrap_err()
         .to_string()
-        .contains("attached significance marks are supported only"));
+        .contains("unknown term"));
 }
 
 #[test]
@@ -329,11 +185,12 @@ fn forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values() {
         Plot::forest(
             lichtung_plot::CategoryValues::new("term", ["a", "b"]).unwrap(),
             lichtung_plot::NumericValues::new("estimate", estimate),
-            lichtung_plot::NumericValues::new("lower", lower),
-            lichtung_plot::NumericValues::new("upper", upper),
+            Bounds::new(
+                lichtung_plot::NumericValues::new("lower", lower),
+                lichtung_plot::NumericValues::new("upper", upper),
+            ),
+            1.0,
         )
-        .interval_semantics(confidence(InferentialScale::Ratio))
-        .reference_line(1.0)
         .axis_scale(AxisScale::Log10)
     };
     let svg = render_svg(forest([0.5, 2.0], [0.1, 1.0], [1.0, 10.0]), "forest-log").unwrap();
@@ -351,11 +208,12 @@ fn forest_narrow_log_range_keeps_raw_multiplicative_ticks() {
         Plot::forest(
             lichtung_plot::CategoryValues::new("term", ["a", "b"]).unwrap(),
             lichtung_plot::NumericValues::new("estimate", [1.1, 1.4]),
-            lichtung_plot::NumericValues::new("lower", [1.05, 1.3]),
-            lichtung_plot::NumericValues::new("upper", [1.2, 1.5]),
+            Bounds::new(
+                lichtung_plot::NumericValues::new("lower", [1.05, 1.3]),
+                lichtung_plot::NumericValues::new("upper", [1.2, 1.5]),
+            ),
+            1.0,
         )
-        .interval_semantics(confidence(InferentialScale::Ratio))
-        .reference_line(1.0)
         .axis_scale(AxisScale::Log10)
         .x_limits(1.0, 1.6),
         "forest-narrow-log",

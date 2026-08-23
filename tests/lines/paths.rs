@@ -19,20 +19,19 @@ fn categorical_trajectory_data() -> DataFrame {
     .unwrap()
 }
 
-fn trajectory(frame: &DataFrame) -> Plot {
-    Plot::line(
+fn trajectory(frame: &DataFrame) -> Plot<lichtung_plot::kind::Trajectory> {
+    Plot::trajectory(
         data::axis(frame, "condition"),
         data::numeric(frame, "value"),
+        data::category(frame, "subject"),
     )
-    .group(data::category(frame, "subject"))
-    .line_mode(LineMode::Trajectory)
 }
 
-fn trajectory_with_hue(frame: &DataFrame) -> Plot {
+fn trajectory_with_hue(frame: &DataFrame) -> Plot<lichtung_plot::kind::Trajectory> {
     trajectory(frame).hue(data::category(frame, "status"))
 }
 
-fn svg(plot: Plot, name: &str) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     render_svg(plot, name).unwrap()
 }
 
@@ -79,12 +78,11 @@ fn numeric_path_preserves_source_order_and_repeated_x_values() {
     )
     .unwrap();
     let output = svg(
-        Plot::line(
+        Plot::line_path(
             data::numeric(&frame, "rate"),
             data::numeric(&frame, "sensitivity"),
-        )
-        .group(data::category(&frame, "curve"))
-        .line_mode(LineMode::Path),
+            data::category(&frame, "curve"),
+        ),
         "numeric-path",
     );
     let connector = points(connector_tags(&output)[0]);
@@ -92,20 +90,6 @@ fn numeric_path_preserves_source_order_and_repeated_x_values() {
     assert_eq!(connector[0].0.to_bits(), connector[1].0.to_bits());
     assert!(connector[2].0 > connector[3].0);
     assert_eq!(output.matches("<circle ").count(), 4);
-}
-
-#[test]
-fn path_rejects_categorical_x_preflight() {
-    let frame = categorical_trajectory_data();
-    let error = Plot::line(
-        data::category(&frame, "condition"),
-        data::numeric(&frame, "value"),
-    )
-    .group(data::category(&frame, "subject"))
-    .line_mode(LineMode::Path)
-    .preflight()
-    .unwrap_err();
-    assert!(error.to_string().contains("line path: x must be numeric"));
 }
 
 #[test]
@@ -164,24 +148,22 @@ fn categorical_conditions_collapse_whitespace_before_ordering_and_ticks() {
 
 #[test]
 fn categorical_condition_duplicates_and_empty_values_fail_after_normalization() {
-    let duplicate = Plot::line(
+    let duplicate = Plot::trajectory(
         lichtung_plot::CategoryValues::new("condition", ["before visit", " before\tvisit "])
             .unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+        lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
     )
-    .group(lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap())
-    .line_mode(LineMode::Trajectory)
     .preflight()
     .unwrap_err()
     .to_string();
     assert!(duplicate.contains("duplicate normalized") && duplicate.contains("source row 1"));
 
-    let empty = Plot::line(
+    let empty = Plot::trajectory(
         lichtung_plot::CategoryValues::new("condition", ["before", " \t\n "]).unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+        lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
     )
-    .group(lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap())
-    .line_mode(LineMode::Trajectory)
     .preflight()
     .unwrap_err()
     .to_string();
@@ -211,7 +193,7 @@ fn faceted_categorical_trajectories_keep_global_order_and_source_rows() {
     )
     .unwrap();
     let output = svg(
-        trajectory(&frame).facet_col(data::category(&frame, "facet")),
+        trajectory(&frame).facet(FacetSpec::column(data::category(&frame, "facet"))),
         "faceted-categorical-trajectories",
     );
     assert_eq!(connector_tags(&output).len(), 4);
@@ -231,7 +213,7 @@ fn faceted_hues_use_global_first_observed_colors_and_one_complete_legend() {
     )
     .unwrap();
     let output = svg(
-        trajectory_with_hue(&frame).facet_col(data::category(&frame, "facet")),
+        trajectory_with_hue(&frame).facet(FacetSpec::column(data::category(&frame, "facet"))),
         "faceted-trajectory-hues",
     );
     assert_eq!(output.matches(">Late</text>").count(), 1);
@@ -251,7 +233,7 @@ fn facet_local_singletons_and_duplicates_report_before_render() {
     )
     .unwrap();
     let error = trajectory(&singleton)
-        .facet_col(data::category(&singleton, "facet"))
+        .facet(FacetSpec::column(data::category(&singleton, "facet")))
         .preflight()
         .unwrap_err();
     assert!(error
@@ -266,7 +248,7 @@ fn facet_local_singletons_and_duplicates_report_before_render() {
     )
     .unwrap();
     let error = trajectory(&duplicate)
-        .facet_col(data::category(&duplicate, "facet"))
+        .facet(FacetSpec::column(data::category(&duplicate, "facet")))
         .preflight()
         .unwrap_err();
     assert!(error.to_string().contains("source row 3"));
@@ -333,12 +315,11 @@ fn numeric_trajectory_preserves_x_limits_and_tick_count_behavior() {
 
 #[test]
 fn trajectory_rejects_signed_zero_duplicate() {
-    let error = Plot::line(
+    let error = Plot::trajectory(
         lichtung_plot::NumericValues::new("condition", [0.0, -0.0]),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+        lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
     )
-    .group(lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap())
-    .line_mode(LineMode::Trajectory)
     .preflight()
     .unwrap_err()
     .to_string();
@@ -347,24 +328,22 @@ fn trajectory_rejects_signed_zero_duplicate() {
 
 #[test]
 fn trajectory_rejects_null_group_and_nonfinite_conditions_with_source_rows() {
-    let null_group = Plot::line(
+    let null_group = Plot::trajectory(
         lichtung_plot::NumericValues::new("condition", [1.0, 2.0]),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+        lichtung_plot::CategoryValues::nullable("subject", [Some("s1"), None]).unwrap(),
     )
-    .group(lichtung_plot::CategoryValues::nullable("subject", [Some("s1"), None]).unwrap())
-    .line_mode(LineMode::Trajectory)
     .preflight()
     .unwrap_err()
     .to_string();
     assert!(null_group.contains("null at source row 1"));
 
     for value in [f64::NAN, f64::INFINITY] {
-        let error = Plot::line(
+        let error = Plot::trajectory(
             lichtung_plot::NumericValues::new("condition", [1.0, value]),
             lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+            lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
         )
-        .group(lichtung_plot::CategoryValues::new("subject", ["s1", "s1"]).unwrap())
-        .line_mode(LineMode::Trajectory)
         .preflight()
         .unwrap_err()
         .to_string();
@@ -384,69 +363,6 @@ fn trajectory_requires_two_conditions_per_group() {
         .unwrap_err()
         .to_string()
         .contains("group \"s2\" requires at least two retained conditions"));
-}
-
-#[test]
-fn trajectory_requires_group_visible_markers_and_no_ribbon() {
-    let frame = numeric_trajectory_data();
-    let cases = [
-        Plot::line(
-            data::numeric(&frame, "condition"),
-            data::numeric(&frame, "value"),
-        )
-        .hue(data::category(&frame, "status"))
-        .line_mode(LineMode::Trajectory),
-        trajectory(&frame).markers(false),
-        trajectory(&frame).interval_bounds(
-            data::numeric(&frame, "value"),
-            data::numeric(&frame, "value"),
-        ),
-    ];
-    assert!(cases.into_iter().all(|plot| plot.preflight().is_err()));
-}
-
-#[test]
-fn trajectory_option_is_rejected_by_non_line_kinds() {
-    let frame = numeric_trajectory_data();
-    let cases = [
-        Plot::scatter(
-            data::numeric(&frame, "condition"),
-            data::numeric(&frame, "value"),
-        ),
-        Plot::bar(
-            data::category(&frame, "subject"),
-            data::numeric(&frame, "value"),
-        ),
-        Plot::density(data::numeric(&frame, "value")),
-    ];
-    for plot in cases {
-        assert!(plot
-            .line_mode(LineMode::Trajectory)
-            .preflight()
-            .unwrap_err()
-            .to_string()
-            .contains("only supported by Line"));
-    }
-}
-
-#[test]
-fn series_is_the_default_and_remains_byte_identical_when_explicit() {
-    let frame = numeric_trajectory_data();
-    let default = Plot::line(
-        data::numeric(&frame, "condition"),
-        data::numeric(&frame, "value"),
-    )
-    .group(data::category(&frame, "subject"));
-    let explicit = Plot::line(
-        data::numeric(&frame, "condition"),
-        data::numeric(&frame, "value"),
-    )
-    .group(data::category(&frame, "subject"))
-    .line_mode(LineMode::Series);
-    assert_eq!(
-        svg(default, "series-default"),
-        svg(explicit, "series-explicit")
-    );
 }
 
 #[test]

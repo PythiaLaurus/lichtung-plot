@@ -12,31 +12,33 @@ fn line_data(labels: [&str; 4]) -> Fixture {
     .unwrap()
 }
 
-fn line_chart(data: &Fixture) -> Plot {
+fn line_chart(data: &Fixture) -> Plot<crate::kind::Line> {
     Plot::line(
         crate::test_support::numeric(data, "x"),
         crate::test_support::numeric(data, "y"),
     )
     .group(crate::test_support::category(data, "hue"))
     .hue(crate::test_support::category(data, "hue"))
-    .interval_bounds(
+    .band(crate::Bounds::new(
         crate::test_support::numeric(data, "low"),
         crate::test_support::numeric(data, "high"),
-    )
+    ))
 }
 
 fn dense_bar_chart(data: &Fixture, horizontal: bool) -> Plot {
     let category = crate::test_support::category(data, "category");
-    let value = crate::test_support::numeric(data, "value");
-    let chart = if horizontal {
-        Plot::horizontal_bar(category, value)
+    let input = crate::BarInput::estimates(crate::test_support::numeric(data, "value"));
+    if horizontal {
+        Plot::horizontal_bar(category, input)
+            .group(crate::test_support::category(data, "hue"))
+            .hue(crate::test_support::category(data, "hue"))
+            .erase()
     } else {
-        Plot::bar(category, value)
-    };
-    chart
-        .group(crate::test_support::category(data, "hue"))
-        .hue(crate::test_support::category(data, "hue"))
-        .bar_aggregation(crate::BarAggregation::Identity)
+        Plot::bar(category, input)
+            .group(crate::test_support::category(data, "hue"))
+            .hue(crate::test_support::category(data, "hue"))
+            .erase()
+    }
 }
 
 fn dense_horizontal_data() -> Fixture {

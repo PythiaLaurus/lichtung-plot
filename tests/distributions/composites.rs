@@ -1,9 +1,9 @@
 use lichtung_plot::{
     Canvas, CanvasLegendPolicy, CategoricalColors, HistogramBinInput, HistogramBins,
-    HistogramComposite, HistogramCompositeGeometryInput, HistogramDimensionsInput, HistogramKde,
-    HistogramKdePoint, HistogramRugInput, HistogramStat, Labels, Plot, RaincloudDensityPoint,
-    RaincloudDimensionsInput, RaincloudGeometryInput, RaincloudGroupInput, RaincloudPoint,
-    RawOverlay, SourceRows, ViolinLayout,
+    HistogramComposite, HistogramCompositeGeometryInput, HistogramDimensionsInput, HistogramInput,
+    HistogramKde, HistogramKdePoint, HistogramRugInput, HistogramStat, Labels, Plot,
+    RaincloudDensityPoint, RaincloudDimensionsInput, RaincloudGeometryInput, RaincloudGroupInput,
+    RaincloudInput, RaincloudPoint, Significance, SignificanceMark, SourceRows,
 };
 
 use super::{parse_circle_bounds, parse_polygon_bounds, unique_dir};
@@ -15,16 +15,16 @@ fn values(values: &[f64]) -> (lichtung_plot::CategoryValues, lichtung_plot::Nume
     )
 }
 
-fn raincloud_plot(samples: &[f64]) -> Plot {
+fn raincloud_plot(samples: &[f64]) -> Plot<lichtung_plot::kind::Raincloud> {
     let (category, values) = values(samples);
-    Plot::violin(category, values).violin_layout(ViolinLayout::Raincloud)
+    Plot::raincloud(RaincloudInput::samples(category, values))
 }
 
-fn histogram_plot(values: &[f64], kde: HistogramKde) -> Plot {
-    let mut plot = Plot::histogram(lichtung_plot::NumericValues::new(
+fn histogram_plot(values: &[f64], kde: HistogramKde) -> Plot<lichtung_plot::kind::Histogram> {
+    let mut plot = Plot::histogram(HistogramInput::samples(lichtung_plot::NumericValues::new(
         "value",
         values.iter().copied(),
-    ))
+    )))
     .histogram_composite(HistogramComposite::KdeAndRug(kde));
     let _ = plot
         .histogram_bins(HistogramBins::Count(2))
@@ -32,7 +32,10 @@ fn histogram_plot(values: &[f64], kde: HistogramKde) -> Plot {
     plot
 }
 
-fn render(plot: Plot, name: &str) -> Result<String, lichtung_plot::Error> {
+fn render<K: lichtung_plot::kind::Marker>(
+    plot: Plot<K>,
+    name: &str,
+) -> Result<String, lichtung_plot::Error> {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
@@ -230,16 +233,15 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
         ],
     )
     .unwrap();
-    let sample = Plot::violin(
+    let sample = Plot::raincloud(RaincloudInput::samples(
         categories,
         lichtung_plot::NumericValues::new(
             "score",
             [1.0, 2.0, 3.0, 4.0, 5.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         ),
-    )
-    .hue(hues)
-    .violin_layout(ViolinLayout::Raincloud);
-    let supplied = Plot::raincloud(parity_raincloud_geometry());
+    ))
+    .hue(hues);
+    let supplied = Plot::raincloud(RaincloudInput::geometry(parity_raincloud_geometry()));
 
     let supplied = render(supplied, "supplied-raincloud").unwrap();
     let sample = render(sample, "sample-raincloud").unwrap();
@@ -250,6 +252,37 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
         assert!(svg.contains("#0072B2") && svg.contains("#D55E00"));
         assert_eq!(svg.matches("<circle ").count(), 12);
     }
+}
+
+#[test]
+fn sample_raincloud_accepts_and_renders_pairwise_significance() {
+    let plot = Plot::raincloud(RaincloudInput::samples(
+        lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
+            .unwrap(),
+        lichtung_plot::NumericValues::new("value", [1.0, 1.5, 2.0, 2.5, 2.0, 2.5, 3.0, 3.5]),
+    ))
+    .significance([Significance::between("a", "b", SignificanceMark::TwoStars)]);
+
+    let svg = render(plot, "sample-raincloud-significance").unwrap();
+
+    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+    assert!(svg.contains(">**</text>"));
+}
+
+#[test]
+fn precomputed_raincloud_rejects_pairwise_significance_at_runtime() {
+    let error = Plot::raincloud(RaincloudInput::geometry(explicit_raincloud()))
+        .significance([Significance::between(
+            "Control",
+            "Other",
+            SignificanceMark::OneStar,
+        )])
+        .preflight()
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("precomputed geometry does not support significance annotations"));
 }
 
 #[test]
@@ -275,7 +308,11 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
         })
         .collect();
     assert_eq!(
-        render(Plot::histogram_geometry(supplied), "supplied-histogram").unwrap(),
+        render(
+            Plot::histogram(HistogramInput::geometry(supplied)),
+            "supplied-histogram",
+        )
+        .unwrap(),
         render(sample, "sample-histogram").unwrap()
     );
 }
@@ -287,16 +324,15 @@ fn embedded_raincloud_hues_coordinate_with_sample_hues_in_shared_figure_legend()
         ("active".to_owned(), (0, 114, 178)),
     ])
     .unwrap();
-    let sample = Plot::violin(
+    let sample = Plot::raincloud(RaincloudInput::samples(
         lichtung_plot::CategoryValues::new("condition", ["control"; 5]).unwrap(),
         lichtung_plot::NumericValues::new("score", [1.0, 2.0, 3.0, 4.0, 5.0]),
-    )
+    ))
     .hue(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
-    .categorical_colors(colors.clone())
-    .violin_layout(ViolinLayout::Raincloud);
+    .categorical_colors(colors.clone());
     let mut input = parity_raincloud_geometry();
     input.groups.remove(0);
-    let supplied = Plot::raincloud(input).categorical_colors(colors);
+    let supplied = Plot::raincloud(RaincloudInput::geometry(input)).categorical_colors(colors);
     let canvas = Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, sample)
@@ -319,7 +355,9 @@ fn embedded_raincloud_hues_coordinate_with_sample_hues_in_shared_figure_legend()
 fn precomputed_raincloud_accepts_repeated_categories_with_distinct_hues() {
     let mut input = parity_raincloud_geometry();
     input.groups[1].category = input.groups[0].category.clone();
-    Plot::raincloud(input).preflight().unwrap();
+    Plot::raincloud(RaincloudInput::geometry(input))
+        .preflight()
+        .unwrap();
 }
 
 #[test]
@@ -327,7 +365,7 @@ fn precomputed_raincloud_rejects_duplicate_category_hue_identities_before_backen
     let mut input = parity_raincloud_geometry();
     input.groups[1].category = input.groups[0].category.clone();
     input.groups[1].hue = input.groups[0].hue.clone();
-    assert!(Plot::raincloud(input)
+    assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -346,14 +384,16 @@ fn precomputed_histogram_accepts_signed_zero_contiguous_bin_edges() {
         HistogramKdePoint { x: 1.0, y: 0.1 },
     ];
     input.rugs[0].x = 0.0;
-    Plot::histogram_geometry(input).preflight().unwrap();
+    Plot::histogram(HistogramInput::geometry(input))
+        .preflight()
+        .unwrap();
 }
 
 #[test]
 fn precomputed_histogram_rejects_kde_over_safety_budget_before_backend_begin() {
     let mut input = explicit_histogram();
     input.kde = vec![HistogramKdePoint { x: 0.5, y: 0.1 }; 2_049];
-    assert!(Plot::histogram_geometry(input)
+    assert!(Plot::histogram(HistogramInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -362,7 +402,11 @@ fn precomputed_histogram_rejects_kde_over_safety_budget_before_backend_begin() {
 
 #[test]
 fn precomputed_raincloud_renders_without_sample_columns_and_maps_strip_coordinates() {
-    let svg = render(Plot::raincloud(explicit_raincloud()), "explicit-raincloud").unwrap();
+    let svg = render(
+        Plot::raincloud(RaincloudInput::geometry(explicit_raincloud())),
+        "explicit-raincloud",
+    )
+    .unwrap();
     let marks = svg
         .split_once("<g clip-path=")
         .unwrap()
@@ -378,7 +422,7 @@ fn precomputed_raincloud_renders_without_sample_columns_and_maps_strip_coordinat
 #[test]
 fn precomputed_histogram_renders_without_sample_columns_and_maps_explicit_rug_endpoints() {
     let svg = render(
-        Plot::histogram_geometry(explicit_histogram()),
+        Plot::histogram(HistogramInput::geometry(explicit_histogram())),
         "explicit-histogram",
     )
     .unwrap();
@@ -389,7 +433,7 @@ fn precomputed_histogram_renders_without_sample_columns_and_maps_explicit_rug_en
 fn precomputed_raincloud_rejects_out_of_range_strip_coordinate_before_backend_begin() {
     let mut input = explicit_raincloud();
     input.groups[0].points[0].normalized_strip = 1.1;
-    assert!(Plot::raincloud(input)
+    assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -400,7 +444,7 @@ fn precomputed_raincloud_rejects_out_of_range_strip_coordinate_before_backend_be
 fn precomputed_raincloud_rejects_nonincreasing_density_before_backend_begin() {
     let mut input = explicit_raincloud();
     input.groups[0].density[1].y = 0.0;
-    assert!(Plot::raincloud(input)
+    assert!(Plot::raincloud(RaincloudInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -411,7 +455,7 @@ fn precomputed_raincloud_rejects_nonincreasing_density_before_backend_begin() {
 fn precomputed_histogram_rejects_nonfinite_geometry_before_backend_begin() {
     let mut input = explicit_histogram();
     input.kde[0].y = f64::NAN;
-    assert!(Plot::histogram_geometry(input)
+    assert!(Plot::histogram(HistogramInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -422,7 +466,7 @@ fn precomputed_histogram_rejects_nonfinite_geometry_before_backend_begin() {
 fn precomputed_histogram_rejects_discontinuous_bins_before_backend_begin() {
     let mut input = explicit_histogram();
     input.bins[1].lower = 1.1;
-    assert!(Plot::histogram_geometry(input)
+    assert!(Plot::histogram(HistogramInput::geometry(input))
         .preflight()
         .unwrap_err()
         .to_string()
@@ -462,11 +506,11 @@ fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
         ("Semantic Agent".to_owned(), (0, 114, 178)),
     ])
     .unwrap();
-    let plot = Plot::violin(
+    let plot = Plot::raincloud(RaincloudInput::samples(
         lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
             .unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
-    )
+    ))
     .hue(
         lichtung_plot::CategoryValues::new(
             "condition",
@@ -483,26 +527,23 @@ fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
         )
         .unwrap(),
     )
-    .categorical_colors(colors)
-    .violin_layout(ViolinLayout::Raincloud);
+    .categorical_colors(colors);
     let svg = render(plot, "raincloud-colors").unwrap();
     assert!(svg.contains("#333333") && svg.contains("#0072B2"));
 }
 
 #[test]
 fn raincloud_strip_placement_follows_explicit_source_rows_after_reordering() {
-    let first = Plot::violin(
+    let first = Plot::raincloud(RaincloudInput::samples(
         lichtung_plot::CategoryValues::new("category", ["a"; 3]).unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0]),
-    )
-    .source_rows(SourceRows::new([10, 20, 30]).unwrap())
-    .violin_layout(ViolinLayout::Raincloud);
-    let reordered = Plot::violin(
+    ))
+    .source_rows(SourceRows::new([10, 20, 30]).unwrap());
+    let reordered = Plot::raincloud(RaincloudInput::samples(
         lichtung_plot::CategoryValues::new("category", ["a"; 3]).unwrap(),
         lichtung_plot::NumericValues::new("value", [3.0, 1.0, 2.0]),
-    )
-    .source_rows(SourceRows::new([30, 10, 20]).unwrap())
-    .violin_layout(ViolinLayout::Raincloud);
+    ))
+    .source_rows(SourceRows::new([30, 10, 20]).unwrap());
     let first = parse_circle_bounds(&render(first, "raincloud-source-first").unwrap());
     let reordered = parse_circle_bounds(&render(reordered, "raincloud-source-second").unwrap());
     assert_eq!(reordered[0].x.to_bits(), first[2].x.to_bits());
@@ -537,25 +578,16 @@ fn precomputed_kde_and_histogram_bars_share_density_projection() {
 
 #[test]
 fn histogram_composite_requires_density_before_backend_begin() {
-    let error = Plot::histogram(lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0]))
-        .histogram_composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
-        .preflight()
-        .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("requires HistogramStat::Density"));
-}
-
-#[test]
-fn histogram_composite_is_rejected_by_other_plot_kinds() {
-    let error = Plot::scatter(
-        lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0]),
-        lichtung_plot::NumericValues::new("other", [2.0, 1.0, 0.0]),
-    )
+    let error = Plot::histogram(HistogramInput::samples(lichtung_plot::NumericValues::new(
+        "value",
+        [0.0, 1.0, 2.0],
+    )))
     .histogram_composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
     .preflight()
     .unwrap_err();
-    assert!(error.to_string().contains("supported only by Histogram"));
+    assert!(error
+        .to_string()
+        .contains("requires HistogramStat::Density"));
 }
 
 #[test]
@@ -567,17 +599,6 @@ fn precomputed_kde_rejects_nonincreasing_points_before_backend_begin() {
     .preflight()
     .unwrap_err();
     assert!(error.to_string().contains("strictly increasing"));
-}
-
-#[test]
-fn raincloud_rejects_duplicate_raw_overlay_before_backend_begin() {
-    let error = raincloud_plot(&[1.0, 2.0, 3.0])
-        .raw_overlay(RawOverlay::Jittered)
-        .preflight()
-        .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("already includes every raw observation"));
 }
 
 #[test]
@@ -600,36 +621,15 @@ fn raincloud_accepts_source_row_column_without_duplicate_overlay() {
 
 #[test]
 fn explicit_inert_composite_options_match_default_svg_bytes() {
-    let histogram_default = Plot::histogram(lichtung_plot::NumericValues::new(
-        "value",
-        [0.0, 1.0, 2.0, 3.0],
+    let histogram_default = Plot::histogram(HistogramInput::samples(
+        lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]),
     ));
-    let histogram_explicit = Plot::histogram(lichtung_plot::NumericValues::new(
-        "value",
-        [0.0, 1.0, 2.0, 3.0],
+    let histogram_explicit = Plot::histogram(HistogramInput::samples(
+        lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]),
     ))
     .histogram_composite(HistogramComposite::HistogramOnly);
-    let (category, value) = values(&[1.0, 2.0, 3.0, 4.0]);
-    let violin_default = Plot::violin(category.clone(), value.clone());
-    let violin_explicit = Plot::violin(category, value).violin_layout(ViolinLayout::Mirrored);
     assert_eq!(
-        (
-            render(histogram_default, "histogram-default").unwrap(),
-            render(violin_default, "violin-default").unwrap(),
-        ),
-        (
-            render(histogram_explicit, "histogram-explicit").unwrap(),
-            render(violin_explicit, "violin-explicit").unwrap(),
-        )
+        render(histogram_default, "histogram-default").unwrap(),
+        render(histogram_explicit, "histogram-explicit").unwrap(),
     );
-}
-
-#[test]
-fn raincloud_layout_is_rejected_by_other_plot_kinds() {
-    let (category, value) = values(&[1.0, 2.0, 3.0]);
-    let error = Plot::boxplot(category, value)
-        .violin_layout(ViolinLayout::Raincloud)
-        .preflight()
-        .unwrap_err();
-    assert!(error.to_string().contains("supported only by Violin"));
 }

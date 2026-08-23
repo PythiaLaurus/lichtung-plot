@@ -1,5 +1,7 @@
 //! Public significance display values.
 
+use std::marker::PhantomData;
+
 use crate::Error;
 
 /// Exact significance text or the p-value used to derive it.
@@ -103,34 +105,52 @@ pub(crate) struct SignificanceFacet {
     level: String,
 }
 
+/// Marker for a significance mark attached to one rendered target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Attached;
+
+/// Marker for a pairwise significance bracket between two rendered targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Pairwise;
+
 #[derive(Debug, Clone, PartialEq)]
-enum SignificancePlacement {
-    At(SignificanceTarget),
-    Between {
+pub(crate) enum SignificanceAnnotation {
+    Attached {
+        target: SignificanceTarget,
+        mark: SignificanceMark,
+        facets: Vec<SignificanceFacet>,
+    },
+    Pairwise {
         endpoint_a: SignificanceTarget,
         endpoint_b: SignificanceTarget,
+        mark: SignificanceMark,
+        facets: Vec<SignificanceFacet>,
     },
 }
 
-/// One caller-owned significance mark attached to rendered categorical geometry.
+/// One caller-owned significance annotation with a compile-time placement.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Significance {
-    placement: SignificancePlacement,
-    mark: SignificanceMark,
-    facets: Vec<SignificanceFacet>,
+pub struct Significance<P> {
+    annotation: SignificanceAnnotation,
+    placement: PhantomData<P>,
 }
 
-impl Significance {
+impl Significance<Attached> {
     /// Place one significance mark at a categorical target.
     #[must_use]
     pub fn at(target: impl Into<SignificanceTarget>, mark: SignificanceMark) -> Self {
         Self {
-            placement: SignificancePlacement::At(target.into()),
-            mark,
-            facets: Vec::new(),
+            annotation: SignificanceAnnotation::Attached {
+                target: target.into(),
+                mark,
+                facets: Vec::new(),
+            },
+            placement: PhantomData,
         }
     }
+}
 
+impl Significance<Pairwise> {
     /// Draw one pairwise bracket between two categorical targets.
     #[must_use]
     pub fn between(
@@ -139,15 +159,18 @@ impl Significance {
         mark: SignificanceMark,
     ) -> Self {
         Self {
-            placement: SignificancePlacement::Between {
+            annotation: SignificanceAnnotation::Pairwise {
                 endpoint_a: endpoint_a.into(),
                 endpoint_b: endpoint_b.into(),
+                mark,
+                facets: Vec::new(),
             },
-            mark,
-            facets: Vec::new(),
+            placement: PhantomData,
         }
     }
+}
 
+impl<P> Significance<P> {
     /// Restrict this annotation to one level of a configured facet dimension.
     #[must_use]
     pub fn facet(mut self, variable: impl Into<String>, level: impl Into<String>) -> Self {
@@ -155,46 +178,70 @@ impl Significance {
             variable: variable.into(),
             level: level.into(),
         };
-        if !self.facets.contains(&facet) {
-            self.facets.push(facet);
+        let facets = self.annotation.facets_mut();
+        if !facets.contains(&facet) {
+            facets.push(facet);
         }
         self
     }
 
+    pub(crate) fn into_annotation(self) -> SignificanceAnnotation {
+        self.annotation
+    }
+}
+
+impl SignificanceAnnotation {
+    pub(crate) fn pairwise(
+        endpoint_a: impl Into<SignificanceTarget>,
+        endpoint_b: impl Into<SignificanceTarget>,
+        mark: SignificanceMark,
+    ) -> Self {
+        Self::Pairwise {
+            endpoint_a: endpoint_a.into(),
+            endpoint_b: endpoint_b.into(),
+            mark,
+            facets: Vec::new(),
+        }
+    }
+
     pub(crate) const fn mark(&self) -> SignificanceMark {
-        self.mark
+        match self {
+            Self::Attached { mark, .. } | Self::Pairwise { mark, .. } => *mark,
+        }
     }
 
     pub(crate) fn at_target(&self) -> Option<&SignificanceTarget> {
-        match &self.placement {
-            SignificancePlacement::At(target) => Some(target),
-            SignificancePlacement::Between { .. } => None,
+        match self {
+            Self::Attached { target, .. } => Some(target),
+            Self::Pairwise { .. } => None,
         }
     }
 
     pub(crate) fn endpoints(&self) -> Option<(&SignificanceTarget, &SignificanceTarget)> {
-        match &self.placement {
-            SignificancePlacement::At(_) => None,
-            SignificancePlacement::Between {
+        match self {
+            Self::Attached { .. } => None,
+            Self::Pairwise {
                 endpoint_a,
                 endpoint_b,
+                ..
             } => Some((endpoint_a, endpoint_b)),
         }
     }
 
     pub(crate) fn facet_ownership(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.facets
+        self.facets()
             .iter()
             .map(|facet| (facet.variable.as_str(), facet.level.as_str()))
     }
 
     pub(crate) fn validate(&self) -> Result<(), Error> {
-        self.mark.glyph()?;
-        match &self.placement {
-            SignificancePlacement::At(target) => validate_target(target)?,
-            SignificancePlacement::Between {
+        self.mark().glyph()?;
+        match self {
+            Self::Attached { target, .. } => validate_target(target)?,
+            Self::Pairwise {
                 endpoint_a,
                 endpoint_b,
+                ..
             } => {
                 validate_target(endpoint_a)?;
                 validate_target(endpoint_b)?;
@@ -205,10 +252,11 @@ impl Significance {
                 }
             }
         }
-        for (index, facet) in self.facets.iter().enumerate() {
+        let facets = self.facets();
+        for (index, facet) in facets.iter().enumerate() {
             validate_text("facet variable", &facet.variable)?;
             validate_text("facet level", &facet.level)?;
-            if self.facets[..index]
+            if facets[..index]
                 .iter()
                 .any(|previous| previous.variable == facet.variable)
             {
@@ -219,6 +267,18 @@ impl Significance {
             }
         }
         Ok(())
+    }
+
+    fn facets(&self) -> &[SignificanceFacet] {
+        match self {
+            Self::Attached { facets, .. } | Self::Pairwise { facets, .. } => facets,
+        }
+    }
+
+    fn facets_mut(&mut self) -> &mut Vec<SignificanceFacet> {
+        match self {
+            Self::Attached { facets, .. } | Self::Pairwise { facets, .. } => facets,
+        }
     }
 }
 
@@ -237,4 +297,26 @@ fn validate_text(role: &str, value: &str) -> Result<(), Error> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_attached(_: Significance<Attached>) {}
+    fn assert_pairwise(_: Significance<Pairwise>) {}
+
+    #[test]
+    fn constructors_return_exact_placement_types() {
+        assert_attached(Significance::at("a", SignificanceMark::OneStar));
+        assert_pairwise(Significance::between("a", "b", SignificanceMark::TwoStars));
+    }
+
+    #[test]
+    fn facet_preserves_each_placement_type() {
+        assert_attached(Significance::at("a", SignificanceMark::OneStar).facet("panel", "one"));
+        assert_pairwise(
+            Significance::between("a", "b", SignificanceMark::TwoStars).facet("panel", "one"),
+        );
+    }
 }

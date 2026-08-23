@@ -1,4 +1,6 @@
-use lichtung_plot::{HistogramBins, HistogramStat, Plot, PointLayer, QqLine, Theme};
+use lichtung_plot::{
+    HistogramBins, HistogramInput, HistogramStat, Plot, PointLayer, QqLine, Theme,
+};
 
 #[path = "../support/data.rs"]
 mod data;

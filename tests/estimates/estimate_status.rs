@@ -39,11 +39,11 @@ fn all_unavailable_facet_data() -> DataFrame {
     .unwrap()
 }
 
-fn semantics(scale: InferentialScale) -> IntervalSemantics {
-    IntervalSemantics::new(IntervalKind::Confidence, 0.95, scale, "status fixture").unwrap()
-}
-
-fn with_status(plot: Plot, frame: &DataFrame, status: bool) -> Plot {
+fn with_status<K: lichtung_plot::kind::Marker + lichtung_plot::kind::EstimateStatus>(
+    plot: Plot<K>,
+    frame: &DataFrame,
+    status: bool,
+) -> Plot<K> {
     if status {
         plot.estimate_status(data::category(frame, "status"))
     } else {
@@ -51,13 +51,12 @@ fn with_status(plot: Plot, frame: &DataFrame, status: bool) -> Plot {
     }
 }
 
-fn point_interval(frame: &DataFrame, status: bool) -> Plot {
+fn point_interval(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::PointInterval> {
     with_status(
         Plot::point_interval(
             data::category(frame, "term"),
             data::numeric(frame, "estimate"),
-            data::numeric(frame, "lower"),
-            data::numeric(frame, "upper"),
+            Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
         ),
         frame,
         status,
@@ -65,37 +64,36 @@ fn point_interval(frame: &DataFrame, status: bool) -> Plot {
     .size(480, 300)
 }
 
-fn coefficient(frame: &DataFrame, status: bool) -> Plot {
+fn coefficient(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::Coefficient> {
     with_status(
         Plot::coefficient(
             data::category(frame, "term"),
-            data::numeric(frame, "estimate"),
-        )
-        .interval_bounds(data::numeric(frame, "lower"), data::numeric(frame, "upper"))
-        .interval_semantics(semantics(InferentialScale::Coefficient)),
+            CoefficientInput::estimates_with_intervals(
+                data::numeric(frame, "estimate"),
+                Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+            ),
+        ),
         frame,
         status,
     )
     .size(480, 300)
 }
 
-fn forest(frame: &DataFrame, status: bool) -> Plot {
+fn forest(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::Forest> {
     with_status(
         Plot::forest(
             data::category(frame, "term"),
             data::numeric(frame, "estimate"),
-            data::numeric(frame, "lower"),
-            data::numeric(frame, "upper"),
-        )
-        .interval_semantics(semantics(InferentialScale::Ratio))
-        .reference_line(1.0),
+            Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+            1.0,
+        ),
         frame,
         status,
     )
     .size(480, 300)
 }
 
-fn svg(plot: Plot, name: &str) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     render_svg(plot, name).unwrap()
 }
 
@@ -103,9 +101,9 @@ fn svg(plot: Plot, name: &str) -> String {
 fn estimate_status_keeps_unavailable_rows_visible_without_numeric_marks() {
     let frame = mixed_data();
     for (plot, name) in [
-        (point_interval(&frame, true), "status-point"),
-        (coefficient(&frame, true), "status-coefficient"),
-        (forest(&frame, true), "status-forest"),
+        (point_interval(&frame, true).erase(), "status-point"),
+        (coefficient(&frame, true).erase(), "status-coefficient"),
+        (forest(&frame, true).erase(), "status-forest"),
     ] {
         let output = svg(plot, name);
         assert_eq!(output.matches(">Not estimable</text>").count(), 1);
@@ -120,16 +118,20 @@ fn all_estimated_status_is_byte_identical_to_strict_default() {
     let frame = all_estimated_data();
     for (without, with, name) in vec![
         (
-            point_interval(&frame, false),
-            point_interval(&frame, true),
+            point_interval(&frame, false).erase(),
+            point_interval(&frame, true).erase(),
             "point",
         ),
         (
-            coefficient(&frame, false),
-            coefficient(&frame, true),
+            coefficient(&frame, false).erase(),
+            coefficient(&frame, true).erase(),
             "coefficient",
         ),
-        (forest(&frame, false), forest(&frame, true), "forest"),
+        (
+            forest(&frame, false).erase(),
+            forest(&frame, true).erase(),
+            "forest",
+        ),
     ]
     .into_boxed_slice()
     {
@@ -196,9 +198,9 @@ fn all_unavailable_rows_require_and_accept_explicit_ranges() {
     )
     .unwrap();
     for plot in [
-        point_interval(&frame, true),
-        coefficient(&frame, true),
-        forest(&frame, true),
+        point_interval(&frame, true).erase(),
+        coefficient(&frame, true).erase(),
+        forest(&frame, true).erase(),
     ] {
         assert!(plot
             .preflight()
@@ -208,15 +210,15 @@ fn all_unavailable_rows_require_and_accept_explicit_ranges() {
     }
     for (plot, name) in [
         (
-            point_interval(&frame, true).x_limits(0.5, 2.5),
+            point_interval(&frame, true).x_limits(0.5, 2.5).erase(),
             "all-unavailable-point",
         ),
         (
-            coefficient(&frame, true).x_limits(-1.0, 1.0),
+            coefficient(&frame, true).x_limits(-1.0, 1.0).erase(),
             "all-unavailable-coefficient",
         ),
         (
-            forest(&frame, true).x_limits(0.5, 2.5),
+            forest(&frame, true).x_limits(0.5, 2.5).erase(),
             "all-unavailable-forest",
         ),
     ] {
@@ -240,7 +242,7 @@ fn estimate_status_auto_range_uses_only_estimated_rows() {
 }
 
 #[test]
-fn estimate_status_rejects_nonfinite_values_and_unsupported_kinds() {
+fn estimate_status_rejects_nonfinite_values() {
     let frame = df!(
         "term" => ["first"], "estimate" => [Some(f64::NAN)],
         "lower" => [Some(0.0_f64)], "upper" => [Some(1.0_f64)],
@@ -252,16 +254,6 @@ fn estimate_status_rejects_nonfinite_values_and_unsupported_kinds() {
         .unwrap_err()
         .to_string()
         .contains("non-finite"));
-    let scatter = Plot::scatter(
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .estimate_status(data::category(&frame, "status"));
-    assert!(scatter
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("supported only by PointInterval, Coefficient, and Forest"));
 }
 
 #[test]
@@ -316,15 +308,29 @@ fn fixed_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
     )
     .unwrap();
     for (plot, name) in [
-        (point_interval(&frame, true), "facet-point"),
-        (coefficient(&frame, true), "facet-coefficient"),
-        (forest(&frame, true), "facet-forest"),
+        (
+            point_interval(&frame, true)
+                .facet(FacetSpec::column(data::category(&frame, "panel")))
+                .size(960, 300)
+                .erase(),
+            "facet-point",
+        ),
+        (
+            coefficient(&frame, true)
+                .facet(FacetSpec::column(data::category(&frame, "panel")))
+                .size(960, 300)
+                .erase(),
+            "facet-coefficient",
+        ),
+        (
+            forest(&frame, true)
+                .facet(FacetSpec::column(data::category(&frame, "panel")))
+                .size(960, 300)
+                .erase(),
+            "facet-forest",
+        ),
     ] {
-        let output = svg(
-            plot.facet_col(data::category(&frame, "panel"))
-                .size(960, 300),
-            name,
-        );
+        let output = svg(plot, name);
         assert_eq!(output.matches(">Not estimable</text>").count(), 2);
         assert_eq!(output.matches("<circle ").count(), 2);
         let first = text_ys(&output, "First");
@@ -341,13 +347,13 @@ fn fixed_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
 fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
     let frame = all_unavailable_facet_data();
     assert!(point_interval(&frame, true)
-        .facet_col(data::category(&frame, "panel"))
+        .facet(FacetSpec::column(data::category(&frame, "panel")))
         .preflight()
         .unwrap_err()
         .to_string()
         .contains("set explicit x-axis limits"));
     let narrow = point_interval(&frame, true)
-        .facet_col(data::category(&frame, "panel"))
+        .facet(FacetSpec::column(data::category(&frame, "panel")))
         .x_limits(-2.0, 2.0);
     let error = narrow.preflight().unwrap_err().to_string();
     assert!(

@@ -1,19 +1,6 @@
-use lichtung_plot::{
-    BarAggregation, BarPointLayer, Canvas, InferentialScale, IntervalKind, IntervalSemantics, Plot,
-    TextPanel,
-};
+use lichtung_plot::{BarInput, BarPointLayer, Bounds, Canvas, FacetSpec, Plot, TextPanel};
 
 use super::{data, df, unique_dir, DataFrame, Significance, SignificanceMark};
-
-fn interval_semantics() -> IntervalSemantics {
-    IntervalSemantics::new(
-        IntervalKind::Confidence,
-        0.9,
-        InferentialScale::Response,
-        "caller bootstrap",
-    )
-    .unwrap()
-}
 
 fn identity_interval_data() -> DataFrame {
     df!(
@@ -26,23 +13,28 @@ fn identity_interval_data() -> DataFrame {
 }
 
 fn identity_interval_plot(data: &DataFrame, horizontal: bool) -> Plot {
-    let plot = if horizontal {
+    if horizontal {
         Plot::horizontal_bar(
             data::category(data, "category"),
-            data::numeric(data, "value"),
+            BarInput::estimates_with_error_bars(
+                data::numeric(data, "value"),
+                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
+            ),
         )
+        .erase()
     } else {
         Plot::bar(
             data::category(data, "category"),
-            data::numeric(data, "value"),
+            BarInput::estimates_with_error_bars(
+                data::numeric(data, "value"),
+                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
+            ),
         )
-    };
-    plot.bar_aggregation(BarAggregation::Identity)
-        .interval_bounds(data::numeric(data, "lower"), data::numeric(data, "upper"))
-        .interval_semantics(interval_semantics())
+        .erase()
+    }
 }
 
-fn svg(plot: Plot, name: &str) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     plot.svg(&output).unwrap();
@@ -52,7 +44,7 @@ fn svg(plot: Plot, name: &str) -> String {
 }
 
 #[test]
-fn identity_bar_intervals_render_asymmetric_endpoints_without_canvas_provenance() {
+fn precomputed_bar_bounds_render_asymmetric_endpoints() {
     let data = identity_interval_data();
     let vertical = svg(
         identity_interval_plot(&data, false),
@@ -63,33 +55,15 @@ fn identity_bar_intervals_render_asymmetric_endpoints_without_canvas_provenance(
         "horizontal-identity-interval",
     );
 
-    assert!(!vertical.contains("90% confidence interval · response scale · caller bootstrap"));
-    assert!(!horizontal.contains("90% confidence interval · response scale · caller bootstrap"));
     let plain = svg(
         Plot::bar(
             data::category(&data, "category"),
-            data::numeric(&data, "value"),
-        )
-        .bar_aggregation(BarAggregation::Identity),
+            BarInput::estimates(data::numeric(&data, "value")),
+        ),
         "plain-identity-bar",
     );
     assert!(vertical.matches("<polyline ").count() > plain.matches("<polyline ").count());
     assert!(horizontal.matches("<polyline ").count() > plain.matches("<polyline ").count());
-}
-
-#[test]
-fn generated_mean_bars_reject_explicit_identity_interval_contracts() {
-    let data = identity_interval_data();
-    let mean = Plot::bar(
-        data::category(&data, "category"),
-        data::numeric(&data, "value"),
-    )
-    .interval_bounds(data::numeric(&data, "lower"), data::numeric(&data, "upper"))
-    .interval_semantics(interval_semantics());
-
-    let error = mean.preflight().unwrap_err().to_string();
-
-    assert!(error.contains("generated mean intervals are owned by BarAggregation"));
 }
 
 #[test]
@@ -134,27 +108,27 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
         .unwrap()
     };
     let render = |horizontal| {
-        let plot = if horizontal {
-            Plot::horizontal_bar(
-                data::category(&bars, "category"),
-                data::numeric(&bars, "value"),
+        if horizontal {
+            svg(
+                Plot::horizontal_bar(
+                    data::category(&bars, "category"),
+                    BarInput::estimates(data::numeric(&bars, "value")),
+                )
+                .group(data::category(&bars, "group"))
+                .bar_point_layer(layer()),
+                "horizontal-bar-point-layer",
             )
         } else {
-            Plot::bar(
-                data::category(&bars, "category"),
-                data::numeric(&bars, "value"),
-            )
-        };
-        svg(
-            plot.group(data::category(&bars, "group"))
-                .bar_aggregation(BarAggregation::Identity)
+            svg(
+                Plot::bar(
+                    data::category(&bars, "category"),
+                    BarInput::estimates(data::numeric(&bars, "value")),
+                )
+                .group(data::category(&bars, "group"))
                 .bar_point_layer(layer()),
-            if horizontal {
-                "horizontal-bar-point-layer"
-            } else {
-                "vertical-bar-point-layer"
-            },
-        )
+                "vertical-bar-point-layer",
+            )
+        }
     };
 
     for output in [render(false), render(true)] {
@@ -186,9 +160,8 @@ fn unknown_bar_point_category_rejects_during_preflight() {
     .unwrap();
     let plot = Plot::bar(
         data::category(&bars, "category"),
-        data::numeric(&bars, "value"),
+        BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .bar_aggregation(BarAggregation::Identity)
     .bar_point_layer(layer);
 
     let error = plot.preflight().unwrap_err();
@@ -197,7 +170,7 @@ fn unknown_bar_point_category_rejects_during_preflight() {
 }
 
 #[test]
-fn bar_point_layers_reject_nonfinite_mismatch_stacking_other_kinds_and_facets() {
+fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
     let bars = df!(
         "category" => ["a", "b"],
         "group" => ["left", "left"],
@@ -232,16 +205,14 @@ fn bar_point_layers_reject_nonfinite_mismatch_stacking_other_kinds_and_facets() 
     .unwrap();
     let nonfinite_plot = Plot::bar(
         data::category(&bars, "category"),
-        data::numeric(&bars, "value"),
+        BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .bar_aggregation(BarAggregation::Identity)
     .bar_point_layer(nonfinite);
     let mismatch_plot = Plot::bar(
         data::category(&bars, "category"),
-        data::numeric(&bars, "value"),
+        BarInput::estimates(data::numeric(&bars, "value")),
     )
     .group(data::category(&bars, "group"))
-    .bar_aggregation(BarAggregation::Identity)
     .bar_point_layer(
         BarPointLayer::new(
             data::category(&grouped_points, "category"),
@@ -253,28 +224,17 @@ fn bar_point_layers_reject_nonfinite_mismatch_stacking_other_kinds_and_facets() 
         )
         .unwrap(),
     );
-    let stacked_plot = Plot::stacked_bar(
-        data::category(&bars, "category"),
-        data::numeric(&bars, "value"),
-        data::category(&bars, "group"),
-    )
-    .bar_point_layer(grouped.clone());
-    let scatter_plot = Plot::scatter(data::numeric(&bars, "value"), data::numeric(&bars, "value"))
-        .bar_point_layer(grouped.clone());
     let faceted_plot = Plot::bar(
         data::category(&bars, "category"),
-        data::numeric(&bars, "value"),
+        BarInput::estimates(data::numeric(&bars, "value")),
     )
     .group(data::category(&bars, "group"))
-    .bar_aggregation(BarAggregation::Identity)
     .bar_point_layer(grouped)
-    .facet_wrap(data::category(&bars, "facet"), 2);
+    .facet(FacetSpec::wrap(data::category(&bars, "facet"), 2).unwrap());
 
     let cases = [
         (nonfinite_plot, "finite"),
         (mismatch_plot, "must match"),
-        (stacked_plot, "ordinary Bar"),
-        (scatter_plot, "ordinary Bar"),
         (faceted_plot, "faceting"),
     ];
     for (plot, expected) in cases {
@@ -288,9 +248,8 @@ fn explicit_and_p_value_marks_render_the_same_four_stars() {
     let data = df!("category" => ["a", "b"], "value" => [2.0_f64, 4.0]).unwrap();
     let plot = Plot::bar(
         data::category(&data, "category"),
-        data::numeric(&data, "value"),
-    )
-    .bar_aggregation(BarAggregation::Identity);
+        BarInput::estimates(data::numeric(&data, "value")),
+    );
     let render = |mark, name| {
         svg(
             plot.clone()
@@ -328,9 +287,8 @@ fn canvas_supports_all_text_and_mixed_cells_without_text_legends() {
     let data = df!("category" => ["a"], "value" => [2.0_f64]).unwrap();
     let plot = Plot::bar(
         data::category(&data, "category"),
-        data::numeric(&data, "value"),
-    )
-    .bar_aggregation(BarAggregation::Identity);
+        BarInput::estimates(data::numeric(&data, "value")),
+    );
     let mixed = svg_canvas(
         Canvas::grid(1, 2)
             .unwrap()

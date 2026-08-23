@@ -22,7 +22,7 @@ fn replicated_data() -> DataFrame {
     .unwrap()
 }
 
-fn chart(data: &DataFrame) -> Plot {
+fn chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
     Plot::dumbbell(
         data::category(data, "category"),
         data::numeric(data, "left"),
@@ -32,7 +32,7 @@ fn chart(data: &DataFrame) -> Plot {
     .dumbbell_endpoints(endpoints())
 }
 
-fn svg(chart: &Plot) -> String {
+fn svg(chart: &Plot<lichtung_plot::kind::Dumbbell>) -> String {
     let directory = unique_dir("dumbbell-svg");
     let output = directory.join("plot.svg");
     chart.clone().svg(&output).unwrap();
@@ -195,7 +195,7 @@ fn dumbbell_endpoint_type_rejects_empty_or_duplicate_labels() {
         .all(|error| error.contains("dumbbell endpoint labels")));
 }
 
-fn point_only_chart(data: &DataFrame) -> Plot {
+fn point_only_chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
     Plot::dumbbell(
         data::category(data, "category"),
         data::numeric(data, "left"),

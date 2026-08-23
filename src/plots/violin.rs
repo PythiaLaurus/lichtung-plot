@@ -32,7 +32,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
-use crate::spec::{PlotRenderContext, PlotRenderResult, ViolinLayout};
+use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range, quantile};
 use crate::Plot;
 
@@ -45,6 +45,12 @@ struct ViolinSummary {
     hi_whisker: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DistributionLayout {
+    Mirrored,
+    Raincloud,
+}
+
 /// Render a violin plot. Returns the `Layout` used to project
 /// the violins so the orchestrator can apply decorations (frame
 /// / grid / axes / legend). Categorical x-ticks carry the
@@ -54,22 +60,41 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    render_samples(chart, context, backend, DistributionLayout::Mirrored)
+}
+
+pub(crate) fn render_raincloud(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+    backend: &mut dyn Backend,
+) -> Result<PlotRenderResult, Error> {
     if let Some(input) = chart.raincloud_geometry_input() {
         return precomputed::render(chart, input, context, backend);
     }
+    render_samples(chart, context, backend, DistributionLayout::Raincloud)
+}
 
-    let sample = crate::plots::distribution_sample::prepare(chart, context.data, "violin")?;
+fn render_samples(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+    backend: &mut dyn Backend,
+    distribution_layout: DistributionLayout,
+) -> Result<PlotRenderResult, Error> {
+    let palette = chart.palette();
+    let family = match distribution_layout {
+        DistributionLayout::Mirrored => "violin",
+        DistributionLayout::Raincloud => "raincloud",
+    };
+    let sample = crate::plots::distribution_sample::prepare(chart, context.data, family)?;
     let x_levels = &sample.x_levels;
     let group_levels = &sample.group_levels;
     let hue_levels = &sample.hue_levels;
-    let violin_layout = chart.violin_layout_spec();
-    if violin_layout == ViolinLayout::Raincloud {
+    if distribution_layout == DistributionLayout::Raincloud {
         let mut source_rows = std::collections::HashSet::new();
         for observation in sample.groups.iter().flat_map(|group| &group.observations) {
             if !source_rows.insert(observation.source_row) {
                 return Err(Error::Data(format!(
-                    "violin raincloud: duplicate source-row identity {}",
+                    "raincloud: duplicate source-row identity {}",
                     observation.source_row
                 )));
             }
@@ -89,9 +114,9 @@ pub(crate) fn render(
             (lo.min(v), hi.max(v))
         });
     if data_y_min >= data_y_max {
-        return Err(Error::Data(
-            "violin: data has zero variance (all y values are equal)".into(),
-        ));
+        return Err(Error::Data(format!(
+            "{family}: data has zero variance (all y values are equal)"
+        )));
     }
 
     let extent_groups: Vec<(String, Vec<f64>)> = sample
@@ -111,7 +136,7 @@ pub(crate) fn render(
         extent_groups.iter().map(|(_, values)| values.as_slice()),
         2.0,
     )
-    .ok_or_else(|| Error::Data("violin: no finite KDE support".into()))?;
+    .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
     let base_display_range =
         crate::layout::continuous_auto_range(support_range, chart.y_axis_spec());
     let rendered_maxima = vec![support_range.1; x_levels.len()];
@@ -124,7 +149,7 @@ pub(crate) fn render(
         .map(|(idx, label)| {
             Ok(LegendEntry::point(
                 label.clone(),
-                chart.point_style(chart.categorical_color("violin", label, idx)?, 3),
+                chart.point_style(chart.categorical_color(family, label, idx)?, 3),
             ))
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -201,13 +226,13 @@ pub(crate) fn render(
             };
 
             let fill = FillStyle {
-                color: group_color(chart, group, i, group_active)?,
+                color: group_color(chart, group, i, group_active, family)?,
                 stroke: palette.foreground,
                 stroke_width: 1.0,
                 opacity: 0.70,
             };
-            match violin_layout {
-                ViolinLayout::Mirrored => {
+            match distribution_layout {
+                DistributionLayout::Mirrored => {
                     // Violin shape
                     let mut pts: Vec<Point2D> = Vec::with_capacity(2 * n_grid + 1);
                     for (gy, d) in grid.iter().zip(densities.iter()) {
@@ -286,7 +311,7 @@ pub(crate) fn render(
                         &median_line,
                     )?;
                 }
-                ViolinLayout::Raincloud => {
+                DistributionLayout::Raincloud => {
                     let baseline = center_x_data - violin_w_data * 0.10;
                     let mut cloud = Vec::with_capacity(n_grid + 2);
                     for (gy, density) in grid.iter().zip(&densities) {
@@ -335,7 +360,7 @@ pub(crate) fn render(
                 }
             }
         }
-        if violin_layout == ViolinLayout::Raincloud {
+        if distribution_layout == DistributionLayout::Raincloud {
             let violin_w_data = if group_active {
                 (0.72 / group_levels.len() as f64).min(0.34)
             } else {
@@ -351,11 +376,11 @@ pub(crate) fn render(
                 let strip_max = strip_right - point_radius;
                 if strip_min - point_radius <= box_right || strip_max < strip_min {
                     return Err(Error::Render(
-                        "violin raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce graphical groups"
+                        "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce graphical groups"
                             .into(),
                     ));
                 }
-                let color = group_color(chart, group, index, group_active)?;
+                let color = group_color(chart, group, index, group_active, family)?;
                 let points = group
                     .observations
                     .iter()
@@ -382,7 +407,7 @@ pub(crate) fn render(
             };
             for (index, group) in sample.groups.iter().enumerate() {
                 let center = crate::plots::distribution_sample::center(group, group_levels.len());
-                let color = group_color(chart, group, index, group_active)?;
+                let color = group_color(chart, group, index, group_active, family)?;
                 let points = group
                     .observations
                     .iter()
@@ -420,12 +445,13 @@ fn group_color(
     group: &crate::plots::distribution_sample::DistributionGroup,
     default_index: usize,
     group_active: bool,
+    family: &'static str,
 ) -> Result<(u8, u8, u8), Error> {
     let color_index = group
         .hue_index
         .unwrap_or(if group_active { 0 } else { default_index });
     if let Some(label) = group.hue_label.as_deref() {
-        chart.categorical_color("violin", label, color_index)
+        chart.categorical_color(family, label, color_index)
     } else {
         let palette = chart.palette();
         Ok(palette.colors[color_index % palette.colors.len()])

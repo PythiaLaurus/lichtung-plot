@@ -6,7 +6,7 @@ fn fixture() -> DataFrame {
     df!("x" => [1.0_f64, 2.0, 3.0], "y" => [3.0_f64, 1.0, 2.0]).unwrap()
 }
 
-fn plot(frame: &DataFrame) -> Plot {
+fn plot(frame: &DataFrame) -> Plot<lichtung_plot::kind::Scatter> {
     Plot::scatter(data::numeric(frame, "x"), data::numeric(frame, "y"))
         .title("Selectable scene text")
         .size(320, 240)

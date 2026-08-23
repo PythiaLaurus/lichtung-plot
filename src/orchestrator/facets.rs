@@ -20,7 +20,8 @@ impl Plot {
         kind: PlotKind,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+        {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}"
             )));

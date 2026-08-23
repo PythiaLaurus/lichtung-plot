@@ -9,7 +9,7 @@ use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
 };
-use crate::spec::{AxisDomain, LineMode, LinePathStyle, PlotRenderContext, PlotRenderResult};
+use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
 use crate::theme::ThemePalette;
 use crate::Plot;
 
@@ -55,10 +55,23 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    if chart.line_mode_spec() != LineMode::Series {
-        return render_trajectory(chart, context, backend);
-    }
     render_series(chart, context, backend)
+}
+
+pub(crate) fn render_trajectory(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+    backend: &mut dyn Backend,
+) -> Result<PlotRenderResult, Error> {
+    render_grouped(chart, context, backend, false)
+}
+
+pub(crate) fn render_path(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+    backend: &mut dyn Backend,
+) -> Result<PlotRenderResult, Error> {
+    render_grouped(chart, context, backend, true)
 }
 
 fn render_series(
@@ -232,19 +245,29 @@ fn draw_point_layers(
     })
 }
 
-fn render_trajectory(
+#[expect(
+    clippy::too_many_lines,
+    reason = "shared grouped-path layout and drawing remain one renderer lifecycle"
+)]
+fn render_grouped(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
+    ordered_path: bool,
 ) -> Result<PlotRenderResult, Error> {
-    let trajectory = prepare_trajectory(chart, context.data)?;
+    let trajectory = prepare_trajectory(chart, context.data, ordered_path)?;
+    let family = if ordered_path {
+        "line path"
+    } else {
+        "trajectory"
+    };
     let x_values = trajectory
         .groups
         .iter()
         .flat_map(|group| group.points.iter().map(|point| point.x));
     let (x_range, x_ticks, x_domain) = trajectory.condition_levels.as_ref().map_or_else(
         || {
-            let range = crate::data::min_max(x_values, "line trajectory")?;
+            let range = crate::data::min_max(x_values, family)?;
             Ok::<_, Error>((
                 crate::layout::continuous_auto_range(range, chart.x_axis_spec()),
                 Vec::new(),
@@ -272,7 +295,7 @@ fn render_trajectory(
                 .groups
                 .iter()
                 .flat_map(|group| group.points.iter().map(|point| point.y)),
-            "line trajectory",
+            family,
         )?,
         chart.y_axis_spec(),
     );
@@ -296,8 +319,7 @@ fn render_trajectory(
         &y_axis,
     );
     let palette = chart.palette();
-    let hue_paths = chart.line_mode_spec() == LineMode::Path
-        && chart.line_path_style_spec() == LinePathStyle::Hue;
+    let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for group in &trajectory.groups {
             let projected = group
@@ -315,7 +337,7 @@ fn render_trajectory(
             };
             backend.draw_line(&projected, &LineStyle::solid(color, 1.4))?;
         }
-        if chart.markers_visible() {
+        if !ordered_path || chart.markers_visible() {
             for group in &trajectory.groups {
                 for point in &group.points {
                     let (x, y) = layout.projection.project(point.x, point.y);
@@ -527,13 +549,13 @@ fn prepare<'a>(
 fn prepare_trajectory<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
+    ordered_path: bool,
 ) -> Result<TrajectoryData, Error> {
     let data = data.into();
-    let ordered_path = chart.line_mode_spec() == LineMode::Path;
     let context = if ordered_path {
         "line path"
     } else {
-        "line trajectory"
+        "trajectory"
     };
     let x_col = chart
         .x_col()
@@ -567,7 +589,7 @@ fn prepare_trajectory<'a>(
         ));
     } else {
         let labels =
-            crate::data::strict_normalized_strings(data, x_col, "line trajectory", "condition")?;
+            crate::data::strict_normalized_strings(data, x_col, "trajectory", "condition")?;
         let levels = chart.resolved_line_condition_levels(crate::data::stable_levels(&labels));
         let positions = labels
             .iter()
@@ -577,7 +599,7 @@ fn prepare_trajectory<'a>(
                     .position(|level| level == label)
                     .ok_or_else(|| {
                         Error::Data(format!(
-                            "line trajectory: condition {label:?} is absent from global order"
+                            "trajectory: condition {label:?} is absent from global order"
                         ))
                     })
                     .and_then(categorical_index)
@@ -612,7 +634,7 @@ fn prepare_trajectory<'a>(
             );
             if duplicate {
                 return Err(Error::Data(format!(
-                    "line trajectory: duplicate normalized (group, condition) ({:?}, {:?}) at source row {}",
+                    "trajectory: duplicate normalized (group, condition) ({:?}, {:?}) at source row {}",
                     groups[row],
                     condition_labels
                         .as_ref()
@@ -673,7 +695,7 @@ fn prepare_trajectory<'a>(
             .collect::<Vec<_>>();
         if points.len() < 2 {
             return Err(Error::Data(format!(
-                "line trajectory: graphical group {label:?} requires at least two retained conditions"
+                "trajectory: graphical group {label:?} requires at least two retained conditions"
             )));
         }
         if !ordered_path {
@@ -694,8 +716,7 @@ fn prepare_trajectory<'a>(
 fn categorical_index(index: usize) -> Result<f64, Error> {
     u32::try_from(index).map(f64::from).map_err(|_| {
         Error::Data(
-            "line trajectory: categorical condition count exceeds the supported coordinate range"
-                .into(),
+            "trajectory: categorical condition count exceeds the supported coordinate range".into(),
         )
     })
 }

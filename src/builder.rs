@@ -6,6 +6,8 @@
 //! Significance annotations are caller-owned display inputs. The renderer never
 //! performs hypothesis tests or adjusts p-values.
 
+use std::marker::PhantomData;
+
 mod accessors;
 mod configuration;
 mod facets;
@@ -17,27 +19,196 @@ use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointOutline;
 use crate::spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints,
-    EffectBandSemantics, EstimateSource, FacetScales, HeatmapAnnotations, HeatmapLabelFit,
-    HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
-    HistogramStat, IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand, ViolinLayout,
+    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetScales,
+    FacetSpec, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
+    HeatmapScale, HistogramBins, HistogramComposite, HistogramStat, LegendPosition, LinePathStyle,
+    NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
 use crate::{
-    BooleanValues, CategoryValues, HistogramCompositeGeometryInput, NumericValues,
-    RaincloudGeometryInput, Significance, SourceRows,
+    BarInput, BooleanValues, Bounds, CategoryValues, CoefficientInput, HistogramInput,
+    NumericValues, RaincloudInput, SourceRows,
 };
 
 /// One configured semantic plot backed by immutable Rust-native values.
+///
+/// `K` is a zero-sized plot-family marker from [`crate::kind`]. Omitting it
+/// means [`crate::kind::Any`], the erased form used by heterogeneous storage.
+/// Family-specific methods are available only when their marker has the
+/// corresponding sealed capability.
+///
+/// ```compile_fail
+/// use lichtung_plot::{HistogramBins, NumericValues, Plot};
+/// let mut plot = Plot::scatter(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// plot.histogram_bins(HistogramBins::Count(4));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{BarInput, CategoryValues, HeatmapScale, NumericValues, Plot};
+/// let plot = Plot::bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     BarInput::estimates(NumericValues::new("value", [1.0])),
+/// );
+/// let _ = plot.heatmap_scale(HeatmapScale::Sequential);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{HistogramInput, NumericValues, Plot, RawOverlay};
+/// let plot = Plot::histogram(HistogramInput::samples(NumericValues::new("value", [1.0])));
+/// let _ = plot.raw_overlay(RawOverlay::Points);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{Bounds, NumericValues, Plot};
+/// let plot = Plot::regression(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let bounds = Bounds::new(
+///     NumericValues::new("lower", [0.0]),
+///     NumericValues::new("upper", [3.0]),
+/// );
+/// let _ = plot.band(bounds);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{NumericValues, Plot, Significance, SignificanceMark};
+/// let plot = Plot::scatter(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let _ = plot.significance([
+///     Significance::at("a", SignificanceMark::OneStar),
+/// ]);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{NumericValues, Plot, Significance, SignificanceMark};
+/// let plot = Plot::scatter(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let _ = plot.significance([
+///     Significance::between("a", "b", SignificanceMark::OneStar),
+/// ]);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot, Significance, SignificanceMark};
+/// let plot = Plot::boxplot(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+/// );
+/// let _ = plot.significance([
+///     Significance::at("a", SignificanceMark::OneStar),
+/// ]);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, CoefficientInput, NumericValues, Plot, Significance, SignificanceMark};
+/// let plot = Plot::coefficient(
+///     CategoryValues::new("term", ["a", "b"]).unwrap(),
+///     CoefficientInput::estimates(NumericValues::new("estimate", [1.0, 2.0])),
+/// );
+/// let _ = plot.significance([
+///     Significance::between("a", "b", SignificanceMark::OneStar),
+/// ]);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{Bounds, CategoryValues, NumericValues, Plot};
+/// let plot = Plot::trajectory(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("subject", ["a", "a"]).unwrap(),
+/// );
+/// let _ = plot.band(Bounds::new(
+///     NumericValues::new("lower", [1.0, 2.0]),
+///     NumericValues::new("upper", [3.0, 4.0]),
+/// ));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::trajectory(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("subject", ["a", "a"]).unwrap(),
+/// );
+/// let _ = plot.markers(false);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{Bounds, CategoryValues, NumericValues, Plot};
+/// let plot = Plot::line_path(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("path", ["a", "a"]).unwrap(),
+/// );
+/// let _ = plot.band(Bounds::new(
+///     NumericValues::new("lower", [1.0, 2.0]),
+///     NumericValues::new("upper", [3.0, 4.0]),
+/// ));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot, PointLayer};
+/// let plot = Plot::line_path(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("path", ["a", "a"]).unwrap(),
+/// );
+/// let layer = PointLayer::new(
+///     NumericValues::new("x", [1.5]),
+///     NumericValues::new("y", [2.5]),
+///     (0, 0, 0),
+///     3,
+///     0.8,
+/// ).unwrap();
+/// let _ = plot.point_layer(layer);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{LinePathStyle, NumericValues, Plot};
+/// let plot = Plot::line(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+/// );
+/// let _ = plot.line_path_style(LinePathStyle::Hue);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, FacetSpec, NumericValues, Plot};
+/// let plot = Plot::matrix(vec![
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// ]);
+/// let _ = plot.facet(FacetSpec::column(
+///     CategoryValues::new("panel", ["a"]).unwrap(),
+/// ));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, FacetSpec, NumericValues, Plot};
+/// let plot = Plot::marginal(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let _ = plot.facet(FacetSpec::column(
+///     CategoryValues::new("panel", ["a"]).unwrap(),
+/// ));
+/// ```
 #[derive(Clone)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "independent chart visibility and rendering switches are typed builder options"
 )]
-pub struct Plot {
+pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     input: PlotInput,
     source_rows: Option<SourceRows>,
     series: Option<CategoryValues>,
@@ -58,17 +229,15 @@ pub struct Plot {
     y_tick_count_overridden: bool,
     y_ticks: Option<Vec<AxisTick>>,
     theme: Theme,
-    significance: Vec<Significance>,
+    significance: Vec<crate::significance::SignificanceAnnotation>,
     width: u32,
     height: u32,
     /// Ordered variable names for `PlotKind::Matrix` (pairplot).
     matrix_variables: Vec<String>,
-    bar_aggregation: BarAggregation,
     bar_spacing: BarSpacing,
     histogram_bins: HistogramBins,
     histogram_stat: HistogramStat,
     histogram_composite: HistogramComposite,
-    histogram_composite_geometry: Option<HistogramCompositeGeometryInput>,
     qq_line: QqLine,
     point_outline: Option<PointOutline>,
     legend_position: LegendPosition,
@@ -88,27 +257,18 @@ pub struct Plot {
     category_orders: CategoryOrders,
     color_by_sign: bool,
     zero_line: bool,
-    interval_lower: Option<NumericValues>,
-    interval_upper: Option<NumericValues>,
-    interval_semantics: Option<IntervalSemantics>,
+    line_band: Option<Bounds>,
     estimate_status: Option<CategoryValues>,
-    effect_band_semantics: Option<EffectBandSemantics>,
     markers_visible: bool,
     regression_band: RegressionBand,
-    line_mode: LineMode,
     line_path_style: LinePathStyle,
     raw_overlay: RawOverlay,
     raw_overlay_source_rows: Option<SourceRows>,
-    violin_layout: ViolinLayout,
-    raincloud_geometry: Option<RaincloudGeometryInput>,
-    reference_line: Option<f64>,
+    coefficient_reference_line: Option<f64>,
+    forest_reference: f64,
     axis_scale: AxisScale,
-    interaction_source: Option<EstimateSource>,
     interaction_connectors: Option<bool>,
-    facet_row: Option<CategoryValues>,
-    facet_col: Option<CategoryValues>,
-    facet_wrap: Option<CategoryValues>,
-    facet_wrap_columns: Option<usize>,
+    facet: Option<FacetSpec>,
     facet_scales: FacetScales,
     resolved_facet_x_range: Option<(f64, f64)>,
     global_hue_levels: Option<Vec<String>>,
@@ -134,6 +294,7 @@ pub struct Plot {
     /// Plot family selected by the semantic constructor and used for
     /// validation and rendering dispatch.
     kind: Option<PlotKind>,
+    marker: PhantomData<K>,
 }
 
 #[derive(Clone, Default)]
@@ -143,9 +304,9 @@ struct CategoryOrders {
     y: CategoryOrder,
 }
 
-impl Plot {
-    fn new(input: PlotInput, kind: PlotKind) -> Self {
-        Self {
+impl Plot<crate::kind::Any> {
+    fn new<K: crate::kind::Marker>(input: PlotInput, kind: PlotKind) -> Plot<K> {
+        Plot {
             input,
             source_rows: None,
             series: None,
@@ -170,12 +331,10 @@ impl Plot {
             width: 640,
             height: 480,
             matrix_variables: Vec::new(),
-            bar_aggregation: BarAggregation::default(),
             bar_spacing: BarSpacing::default(),
             histogram_bins: HistogramBins::default(),
             histogram_stat: HistogramStat::default(),
             histogram_composite: HistogramComposite::default(),
-            histogram_composite_geometry: None,
             qq_line: QqLine::default(),
             point_outline: Some(PointOutline::default()),
             legend_position: LegendPosition::Auto,
@@ -195,27 +354,18 @@ impl Plot {
             category_orders: CategoryOrders::default(),
             color_by_sign: false,
             zero_line: false,
-            interval_lower: None,
-            interval_upper: None,
-            interval_semantics: None,
+            line_band: None,
             estimate_status: None,
-            effect_band_semantics: None,
             markers_visible: true,
             regression_band: RegressionBand::default(),
-            line_mode: LineMode::default(),
             line_path_style: LinePathStyle::default(),
             raw_overlay: RawOverlay::default(),
             raw_overlay_source_rows: None,
-            violin_layout: ViolinLayout::default(),
-            raincloud_geometry: None,
-            reference_line: None,
+            coefficient_reference_line: None,
+            forest_reference: 0.0,
             axis_scale: AxisScale::Linear,
-            interaction_source: None,
             interaction_connectors: None,
-            facet_row: None,
-            facet_col: None,
-            facet_wrap: None,
-            facet_wrap_columns: None,
+            facet: None,
             facet_scales: FacetScales::Fixed,
             resolved_facet_x_range: None,
             global_hue_levels: None,
@@ -239,39 +389,36 @@ impl Plot {
             png_options: crate::PngOptions::default(),
             svg_text: crate::SvgText::default(),
             kind: Some(kind),
+            marker: PhantomData,
         }
     }
 
     /// Construct a scatter plot.
     #[must_use]
-    pub fn scatter(x: NumericValues, y: NumericValues) -> Self {
+    pub fn scatter(x: NumericValues, y: NumericValues) -> Plot<crate::kind::Scatter> {
         Self::new(PlotInput::Scatter { x, y }, PlotKind::Scatter)
     }
 
     /// Construct a histogram.
     #[must_use]
-    pub fn histogram(values: NumericValues) -> Self {
-        Self::new(PlotInput::Histogram { values }, PlotKind::Histogram)
-    }
-
-    /// Construct a histogram from complete caller-computed geometry.
-    #[must_use]
-    pub fn histogram_geometry(input: HistogramCompositeGeometryInput) -> Self {
-        let mut plot = Self::new(PlotInput::HistogramGeometry, PlotKind::Histogram);
-        plot.histogram_stat = HistogramStat::Density;
-        plot.histogram_composite_geometry = Some(input);
+    pub fn histogram(input: HistogramInput) -> Plot<crate::kind::Histogram> {
+        let geometry = input.geometry_input().is_some();
+        let mut plot = Self::new(PlotInput::Histogram { input }, PlotKind::Histogram);
+        if geometry {
+            plot.histogram_stat = HistogramStat::Density;
+        }
         plot
     }
 
     /// Construct a Gaussian density plot.
     #[must_use]
-    pub fn density(values: NumericValues) -> Self {
+    pub fn density(values: NumericValues) -> Plot<crate::kind::Density> {
         Self::new(PlotInput::Density { values }, PlotKind::Density)
     }
 
     /// Construct a normal Q-Q plot.
     #[must_use]
-    pub fn qq(values: NumericValues) -> Self {
+    pub fn qq(values: NumericValues) -> Plot<crate::kind::Qq> {
         Self::new(PlotInput::Qq { values }, PlotKind::Qq)
     }
 
@@ -280,22 +427,52 @@ impl Plot {
     pub fn point_interval(
         category: CategoryValues,
         estimate: NumericValues,
-        lower: NumericValues,
-        upper: NumericValues,
-    ) -> Self {
-        let mut plot = Self::new(
-            PlotInput::PointInterval { estimate, category },
+        bounds: Bounds,
+    ) -> Plot<crate::kind::PointInterval> {
+        Self::new(
+            PlotInput::PointInterval {
+                estimate,
+                category,
+                bounds,
+            },
             PlotKind::PointInterval,
-        );
-        plot.interval_lower = Some(lower);
-        plot.interval_upper = Some(upper);
-        plot
+        )
     }
 
     /// Construct an ordered line plot.
     #[must_use]
-    pub fn line(x: impl Into<AxisValues>, y: NumericValues) -> Self {
+    pub fn line(x: impl Into<AxisValues>, y: NumericValues) -> Plot<crate::kind::Line> {
         Self::new(PlotInput::Line { x: x.into(), y }, PlotKind::Line)
+    }
+
+    /// Construct explicit-group repeated trajectories.
+    #[must_use]
+    pub fn trajectory(
+        x: impl Into<AxisValues>,
+        y: NumericValues,
+        group: CategoryValues,
+    ) -> Plot<crate::kind::Trajectory> {
+        let mut plot = Self::new(PlotInput::Line { x: x.into(), y }, PlotKind::Trajectory);
+        plot.group = Some(group);
+        plot
+    }
+
+    /// Construct explicit-group numeric paths in source-row order.
+    #[must_use]
+    pub fn line_path(
+        x: NumericValues,
+        y: NumericValues,
+        group: CategoryValues,
+    ) -> Plot<crate::kind::LinePath> {
+        let mut plot = Self::new(
+            PlotInput::Line {
+                x: AxisValues::Numeric(x),
+                y,
+            },
+            PlotKind::LinePath,
+        );
+        plot.group = Some(group);
+        plot
     }
 
     /// Construct a precomputed interaction-profile plot.
@@ -304,48 +481,62 @@ impl Plot {
         condition: CategoryValues,
         estimate: NumericValues,
         group: CategoryValues,
-        lower: NumericValues,
-        upper: NumericValues,
-    ) -> Self {
+        bounds: Bounds,
+    ) -> Plot<crate::kind::Interaction> {
         let mut plot = Self::new(
             PlotInput::Interaction {
                 condition,
                 estimate,
+                bounds,
             },
             PlotKind::Interaction,
         );
         plot.group = Some(group);
-        plot.interval_lower = Some(lower);
-        plot.interval_upper = Some(upper);
         plot
     }
 
     /// Construct a model-coefficient plot.
     #[must_use]
-    pub fn coefficient(term: CategoryValues, estimate: NumericValues) -> Self {
+    pub fn coefficient(
+        term: CategoryValues,
+        input: impl Into<CoefficientInput>,
+    ) -> Plot<crate::kind::Coefficient> {
         Self::new(
-            PlotInput::Coefficient { estimate, term },
+            PlotInput::Coefficient {
+                input: input.into(),
+                term,
+            },
             PlotKind::Coefficient,
         )
     }
 
-    /// Construct a forest plot with complete intervals.
+    /// Construct a forest plot with complete bounds and a scientific reference.
     #[must_use]
     pub fn forest(
         term: CategoryValues,
         estimate: NumericValues,
-        lower: NumericValues,
-        upper: NumericValues,
-    ) -> Self {
-        let mut plot = Self::new(PlotInput::Forest { estimate, term }, PlotKind::Forest);
-        plot.interval_lower = Some(lower);
-        plot.interval_upper = Some(upper);
+        bounds: Bounds,
+        reference: f64,
+    ) -> Plot<crate::kind::Forest> {
+        let mut plot = Self::new(
+            PlotInput::Forest {
+                estimate,
+                term,
+                bounds,
+            },
+            PlotKind::Forest,
+        );
+        plot.forest_reference = reference;
         plot
     }
 
     /// Construct a horizontal paired-endpoint dumbbell plot.
     #[must_use]
-    pub fn dumbbell(category: CategoryValues, left: NumericValues, right: NumericValues) -> Self {
+    pub fn dumbbell(
+        category: CategoryValues,
+        left: NumericValues,
+        right: NumericValues,
+    ) -> Plot<crate::kind::Dumbbell> {
         let mut plot = Self::new(PlotInput::Dumbbell { category, left }, PlotKind::Dumbbell);
         plot.dumbbell_right = Some(right);
         plot
@@ -353,7 +544,11 @@ impl Plot {
 
     /// Construct a categorical heatmap.
     #[must_use]
-    pub fn heatmap(x: CategoryValues, y: CategoryValues, fill: NumericValues) -> Self {
+    pub fn heatmap(
+        x: CategoryValues,
+        y: CategoryValues,
+        fill: NumericValues,
+    ) -> Plot<crate::kind::Heatmap> {
         let mut plot = Self::new(PlotInput::Heatmap { x, y }, PlotKind::Heatmap);
         plot.color = Some(fill);
         plot
@@ -361,15 +556,27 @@ impl Plot {
 
     /// Construct a vertical bar plot.
     #[must_use]
-    pub fn bar(category: CategoryValues, value: NumericValues) -> Self {
-        Self::new(PlotInput::Bar { category, value }, PlotKind::Bar)
+    pub fn bar(category: CategoryValues, input: impl Into<BarInput>) -> Plot<crate::kind::Bar> {
+        Self::new(
+            PlotInput::Bar {
+                category,
+                input: input.into(),
+            },
+            PlotKind::Bar,
+        )
     }
 
     /// Construct a horizontal bar plot.
     #[must_use]
-    pub fn horizontal_bar(category: CategoryValues, value: NumericValues) -> Self {
+    pub fn horizontal_bar(
+        category: CategoryValues,
+        input: impl Into<BarInput>,
+    ) -> Plot<crate::kind::HorizontalBar> {
         Self::new(
-            PlotInput::HorizontalBar { category, value },
+            PlotInput::HorizontalBar {
+                category,
+                input: input.into(),
+            },
             PlotKind::HorizontalBar,
         )
     }
@@ -380,7 +587,7 @@ impl Plot {
         category: CategoryValues,
         value: NumericValues,
         group: CategoryValues,
-    ) -> Self {
+    ) -> Plot<crate::kind::StackedBar> {
         let mut plot = Self::new(
             PlotInput::StackedBar { category, value },
             PlotKind::StackedBar,
@@ -395,7 +602,7 @@ impl Plot {
         category: CategoryValues,
         value: NumericValues,
         group: CategoryValues,
-    ) -> Self {
+    ) -> Plot<crate::kind::StackedHorizontalBar> {
         let mut plot = Self::new(
             PlotInput::StackedHorizontalBar { category, value },
             PlotKind::StackedHorizontalBar,
@@ -406,40 +613,37 @@ impl Plot {
 
     /// Construct a box-and-whisker plot.
     #[must_use]
-    pub fn boxplot(category: CategoryValues, value: NumericValues) -> Self {
+    pub fn boxplot(category: CategoryValues, value: NumericValues) -> Plot<crate::kind::Boxplot> {
         Self::new(PlotInput::Boxplot { category, value }, PlotKind::Boxplot)
     }
 
     /// Construct a violin plot.
     #[must_use]
-    pub fn violin(category: CategoryValues, value: NumericValues) -> Self {
+    pub fn violin(category: CategoryValues, value: NumericValues) -> Plot<crate::kind::Violin> {
         Self::new(PlotInput::Violin { category, value }, PlotKind::Violin)
     }
 
-    /// Construct a raincloud plot from complete caller-computed geometry.
+    /// Construct a raincloud plot.
     #[must_use]
-    pub fn raincloud(input: RaincloudGeometryInput) -> Self {
-        let mut plot = Self::new(PlotInput::RaincloudGeometry, PlotKind::Violin);
-        plot.violin_layout = ViolinLayout::Raincloud;
-        plot.raincloud_geometry = Some(input);
-        plot
+    pub fn raincloud(input: RaincloudInput) -> Plot<crate::kind::Raincloud> {
+        Self::new(PlotInput::Raincloud { input }, PlotKind::Raincloud)
     }
 
     /// Construct a regression plot.
     #[must_use]
-    pub fn regression(x: NumericValues, y: NumericValues) -> Self {
+    pub fn regression(x: NumericValues, y: NumericValues) -> Plot<crate::kind::Regression> {
         Self::new(PlotInput::Regression { x, y }, PlotKind::Regression)
     }
 
     /// Construct a marginal plot.
     #[must_use]
-    pub fn marginal(x: NumericValues, y: NumericValues) -> Self {
+    pub fn marginal(x: NumericValues, y: NumericValues) -> Plot<crate::kind::Marginal> {
         Self::new(PlotInput::Marginal { x, y }, PlotKind::Marginal)
     }
 
     /// Construct a scatter matrix from ordered named numeric variables.
     #[must_use]
-    pub fn matrix(variables: Vec<NumericValues>) -> Self {
+    pub fn matrix(variables: Vec<NumericValues>) -> Plot<crate::kind::Matrix> {
         let names = variables
             .iter()
             .map(|values| values.name().to_owned())
@@ -451,7 +655,11 @@ impl Plot {
 
     /// Construct a categorical beeswarm plot with continuous color values.
     #[must_use]
-    pub fn beeswarm(category: CategoryValues, value: NumericValues, color: NumericValues) -> Self {
+    pub fn beeswarm(
+        category: CategoryValues,
+        value: NumericValues,
+        color: NumericValues,
+    ) -> Plot<crate::kind::Beeswarm> {
         let mut plot = Self::new(PlotInput::Beeswarm { value, category }, PlotKind::Beeswarm);
         plot.color = Some(color);
         plot
@@ -464,10 +672,400 @@ impl Plot {
         deltas: NumericValues,
         base: f64,
         terminal: f64,
-    ) -> Self {
+    ) -> Plot<crate::kind::Waterfall> {
         let mut plot = Self::new(PlotInput::Waterfall { labels, deltas }, PlotKind::Waterfall);
         plot.waterfall_base = Some(base);
         plot.waterfall_terminal = Some(terminal);
         plot
+    }
+}
+
+impl<K: crate::kind::Marker> Plot<K> {
+    /// Consume this plot and erase its compile-time family marker.
+    ///
+    /// Every owned input and configuration field is moved unchanged.
+    #[must_use]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "explicit full-field reconstruction makes marker erasure mechanically complete"
+    )]
+    pub fn erase(self) -> Plot<crate::kind::Any> {
+        let Plot {
+            input,
+            source_rows,
+            series,
+            hue,
+            group,
+            title,
+            subtitle,
+            caption,
+            x_label,
+            y_label,
+            labels,
+            x_axis_spec,
+            x_limits_user_explicit,
+            x_tick_count_overridden,
+            x_ticks,
+            y_axis_spec,
+            y_limits_user_explicit,
+            y_tick_count_overridden,
+            y_ticks,
+            theme,
+            significance,
+            width,
+            height,
+            matrix_variables,
+            bar_spacing,
+            histogram_bins,
+            histogram_stat,
+            histogram_composite,
+            qq_line,
+            point_outline,
+            legend_position,
+            legend_visible,
+            color,
+            color_label,
+            heatmap_scale,
+            heatmap_layout,
+            heatmap_label_fit,
+            heatmap_color_limits,
+            beeswarm_color_limits,
+            heatmap_annotations,
+            heatmap_null_row_annotations,
+            heatmap_highlight,
+            estimate_labels,
+            significance_mark_style,
+            category_orders,
+            color_by_sign,
+            zero_line,
+            line_band,
+            estimate_status,
+            markers_visible,
+            regression_band,
+            line_path_style,
+            raw_overlay,
+            raw_overlay_source_rows,
+            coefficient_reference_line,
+            forest_reference,
+            axis_scale,
+            interaction_connectors,
+            facet,
+            facet_scales,
+            resolved_facet_x_range,
+            global_hue_levels,
+            global_group_levels,
+            global_line_condition_levels,
+            interaction_styles,
+            categorical_colors,
+            render_scope,
+            axis_text_measured,
+            composed_axis_text_measured,
+            y_tick_labels_visible,
+            waterfall_base,
+            waterfall_terminal,
+            waterfall_labels,
+            dumbbell_right,
+            dumbbell_endpoints,
+            guides,
+            point_layers,
+            bar_point_layers,
+            panel_text_annotations,
+            png_options,
+            svg_text,
+            kind,
+            marker: _,
+        } = self;
+        Plot {
+            input,
+            source_rows,
+            series,
+            hue,
+            group,
+            title,
+            subtitle,
+            caption,
+            x_label,
+            y_label,
+            labels,
+            x_axis_spec,
+            x_limits_user_explicit,
+            x_tick_count_overridden,
+            x_ticks,
+            y_axis_spec,
+            y_limits_user_explicit,
+            y_tick_count_overridden,
+            y_ticks,
+            theme,
+            significance,
+            width,
+            height,
+            matrix_variables,
+            bar_spacing,
+            histogram_bins,
+            histogram_stat,
+            histogram_composite,
+            qq_line,
+            point_outline,
+            legend_position,
+            legend_visible,
+            color,
+            color_label,
+            heatmap_scale,
+            heatmap_layout,
+            heatmap_label_fit,
+            heatmap_color_limits,
+            beeswarm_color_limits,
+            heatmap_annotations,
+            heatmap_null_row_annotations,
+            heatmap_highlight,
+            estimate_labels,
+            significance_mark_style,
+            category_orders,
+            color_by_sign,
+            zero_line,
+            line_band,
+            estimate_status,
+            markers_visible,
+            regression_band,
+            line_path_style,
+            raw_overlay,
+            raw_overlay_source_rows,
+            coefficient_reference_line,
+            forest_reference,
+            axis_scale,
+            interaction_connectors,
+            facet,
+            facet_scales,
+            resolved_facet_x_range,
+            global_hue_levels,
+            global_group_levels,
+            global_line_condition_levels,
+            interaction_styles,
+            categorical_colors,
+            render_scope,
+            axis_text_measured,
+            composed_axis_text_measured,
+            y_tick_labels_visible,
+            waterfall_base,
+            waterfall_terminal,
+            waterfall_labels,
+            dumbbell_right,
+            dumbbell_endpoints,
+            guides,
+            point_layers,
+            bar_point_layers,
+            panel_text_annotations,
+            png_options,
+            svg_text,
+            kind,
+            marker: PhantomData,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::{HistogramDimensionsInput, RaincloudDimensionsInput};
+    use crate::Significance;
+
+    fn numeric(name: &str) -> NumericValues {
+        NumericValues::new(name, [1.0])
+    }
+
+    fn category(name: &str) -> CategoryValues {
+        CategoryValues::new(name, ["a"]).unwrap()
+    }
+
+    fn bounds() -> Bounds {
+        Bounds::new(numeric("lower"), numeric("upper"))
+    }
+
+    fn assert_marker<K: crate::kind::Marker>(_: Plot<K>) {}
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one exhaustive constructor inventory verifies every exact family marker"
+    )]
+    fn constructors_return_exact_family_markers() {
+        assert_marker::<crate::kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")));
+        assert_marker::<crate::kind::Histogram>(Plot::histogram(HistogramInput::samples(numeric(
+            "value",
+        ))));
+        assert_marker::<crate::kind::Histogram>(Plot::histogram(HistogramInput::geometry(
+            crate::HistogramCompositeGeometryInput {
+                dimensions: HistogramDimensionsInput {
+                    value: "value".into(),
+                    density: "density".into(),
+                },
+                bins: Vec::new(),
+                kde: Vec::new(),
+                rugs: Vec::new(),
+            },
+        )));
+        assert_marker::<crate::kind::Density>(Plot::density(numeric("value")));
+        assert_marker::<crate::kind::Qq>(Plot::qq(numeric("value")));
+        assert_marker::<crate::kind::PointInterval>(Plot::point_interval(
+            category("category"),
+            numeric("estimate"),
+            bounds(),
+        ));
+        assert_marker::<crate::kind::Line>(Plot::line(numeric("x"), numeric("y")));
+        assert_marker::<crate::kind::Trajectory>(Plot::trajectory(
+            numeric("x"),
+            numeric("y"),
+            category("group"),
+        ));
+        assert_marker::<crate::kind::LinePath>(Plot::line_path(
+            numeric("x"),
+            numeric("y"),
+            category("group"),
+        ));
+        assert_marker::<crate::kind::Interaction>(Plot::interaction(
+            category("condition"),
+            numeric("estimate"),
+            category("group"),
+            bounds(),
+        ));
+        assert_marker::<crate::kind::Coefficient>(Plot::coefficient(
+            category("term"),
+            CoefficientInput::estimates(numeric("estimate")),
+        ));
+        assert_marker::<crate::kind::Forest>(Plot::forest(
+            category("term"),
+            numeric("estimate"),
+            bounds(),
+            0.0,
+        ));
+        assert_marker::<crate::kind::Dumbbell>(Plot::dumbbell(
+            category("category"),
+            numeric("left"),
+            numeric("right"),
+        ));
+        assert_marker::<crate::kind::Heatmap>(Plot::heatmap(
+            category("x"),
+            category("y"),
+            numeric("fill"),
+        ));
+        assert_marker::<crate::kind::Bar>(Plot::bar(
+            category("category"),
+            BarInput::estimates(numeric("value")),
+        ));
+        assert_marker::<crate::kind::HorizontalBar>(Plot::horizontal_bar(
+            category("category"),
+            BarInput::estimates(numeric("value")),
+        ));
+        assert_marker::<crate::kind::StackedBar>(Plot::stacked_bar(
+            category("category"),
+            numeric("value"),
+            category("group"),
+        ));
+        assert_marker::<crate::kind::StackedHorizontalBar>(Plot::stacked_horizontal_bar(
+            category("category"),
+            numeric("value"),
+            category("group"),
+        ));
+        assert_marker::<crate::kind::Boxplot>(Plot::boxplot(
+            category("category"),
+            numeric("value"),
+        ));
+        assert_marker::<crate::kind::Violin>(Plot::violin(category("category"), numeric("value")));
+        assert_marker::<crate::kind::Raincloud>(Plot::raincloud(RaincloudInput::samples(
+            category("category"),
+            numeric("value"),
+        )));
+        assert_marker::<crate::kind::Raincloud>(Plot::raincloud(RaincloudInput::geometry(
+            crate::RaincloudGeometryInput {
+                dimensions: RaincloudDimensionsInput {
+                    category: "category".into(),
+                    value: "value".into(),
+                    hue: None,
+                },
+                groups: Vec::new(),
+            },
+        )));
+        assert_marker::<crate::kind::Regression>(Plot::regression(numeric("x"), numeric("y")));
+        assert_marker::<crate::kind::Marginal>(Plot::marginal(numeric("x"), numeric("y")));
+        assert_marker::<crate::kind::Matrix>(Plot::matrix(vec![numeric("x"), numeric("y")]));
+        assert_marker::<crate::kind::Beeswarm>(Plot::beeswarm(
+            category("category"),
+            numeric("value"),
+            numeric("color"),
+        ));
+        assert_marker::<crate::kind::Waterfall>(Plot::waterfall(
+            category("category"),
+            numeric("delta"),
+            0.0,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn erase_preserves_configuration_and_returns_any() {
+        let erased: Plot<crate::kind::Any> = Plot::scatter(numeric("x"), numeric("y"))
+            .title("Configured")
+            .size(320, 240)
+            .erase();
+
+        assert_eq!(erased.kind, Some(PlotKind::Scatter));
+        assert_eq!(erased.title.as_deref(), Some("Configured"));
+        assert_eq!((erased.width, erased.height), (320, 240));
+    }
+
+    #[test]
+    fn significance_placements_compile_for_exact_supported_families() {
+        let categories = || CategoryValues::new("category", ["a", "b"]).unwrap();
+        let values = || NumericValues::new("value", [1.0, 2.0]);
+        let groups = || CategoryValues::new("group", ["first", "second"]).unwrap();
+        let attached = || Significance::at("a", crate::SignificanceMark::OneStar);
+        let pairwise = || Significance::between("a", "b", crate::SignificanceMark::TwoStars);
+
+        assert_marker::<crate::kind::Bar>(
+            Plot::bar(categories(), BarInput::estimates(values()))
+                .significance([attached()])
+                .significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::HorizontalBar>(
+            Plot::horizontal_bar(categories(), BarInput::estimates(values()))
+                .significance([attached()])
+                .significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::Coefficient>(
+            Plot::coefficient(categories(), CoefficientInput::estimates(values()))
+                .significance([attached()]),
+        );
+        assert_marker::<crate::kind::StackedBar>(
+            Plot::stacked_bar(categories(), values(), groups()).significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::StackedHorizontalBar>(
+            Plot::stacked_horizontal_bar(categories(), values(), groups())
+                .significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::Boxplot>(
+            Plot::boxplot(categories(), values()).significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::Violin>(
+            Plot::violin(categories(), values()).significance([pairwise()]),
+        );
+        assert_marker::<crate::kind::Raincloud>(
+            Plot::raincloud(RaincloudInput::samples(categories(), values()))
+                .significance([pairwise()]),
+        );
+    }
+
+    #[test]
+    fn canvas_accepts_distinct_typed_plot_families() {
+        let canvas = crate::Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, Plot::scatter(numeric("x"), numeric("y")))
+            .unwrap()
+            .panel(
+                0,
+                1,
+                Plot::bar(category("category"), BarInput::estimates(numeric("value"))),
+            );
+
+        assert!(canvas.is_ok());
     }
 }

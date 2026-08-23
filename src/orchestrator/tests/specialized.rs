@@ -17,7 +17,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
 
     let horizontal = Plot::horizontal_bar(
         crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "y"),
+        crate::BarInput::samples(crate::test_support::numeric(&data, "y")),
     );
     let outer_panel = horizontal.figure_layout().panel_box;
     let mut horizontal_backend = RecordingBackend::default();
@@ -120,7 +120,11 @@ fn point_layer_label_uses_math_space_y() {
     )
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["2.0"]).unwrap());
-    let chart = configured_chart(&data, PlotKind::Line).point_layer(layer);
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .point_layer(layer);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Line, &mut backend).unwrap();
@@ -147,10 +151,13 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     )
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["-0.1", "2.0", "3.5"]).unwrap());
-    let chart = configured_chart(&data, PlotKind::Line)
-        .point_layer(layer)
-        .x_limits(0.0, 3.0)
-        .y_limits(0.0, 6.0);
+    let chart = Plot::line(
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .point_layer(layer)
+    .x_limits(0.0, 3.0)
+    .y_limits(0.0, 6.0);
     let dir = test_directory("mass-label-explicit-limits");
     let output = dir.join("figure.svg");
 
@@ -189,34 +196,5 @@ fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
 
     assert!(!svg.contains(">base 10.000</text>"));
     assert!(svg.contains(">total 11.000</text>"));
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
-fn waterfall_annotation_requires_visible_source_category() {
-    let category = Series::new("category".into(), ["a", "b"]);
-    let delta = Series::new("delta".into(), [2.0_f64, -1.0]);
-    let base = Series::new("base".into(), [10.0_f64, 10.0]);
-    let terminal = Series::new("terminal".into(), [11.0_f64, 11.0]);
-    let data = DataFrame::new(
-        category.len(),
-        vec![category.into(), delta.into(), base.into(), terminal.into()],
-    )
-    .unwrap();
-    let chart = Plot::waterfall(
-        crate::test_support::category(&data, "category"),
-        crate::test_support::numeric(&data, "delta"),
-        10.0,
-        11.0,
-    )
-    .y_limits(0.0, 1.5);
-    let dir = test_directory("waterfall-label-category-limits");
-    let output = dir.join("figure.svg");
-
-    chart.svg(&output).unwrap();
-    let svg = std::fs::read_to_string(&output).unwrap();
-
-    assert!(!svg.contains(">base 10.000</text>"));
-    assert!(!svg.contains(">total 11.000</text>"));
     std::fs::remove_dir_all(dir).unwrap();
 }

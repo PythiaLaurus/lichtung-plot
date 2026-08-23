@@ -1,45 +1,24 @@
 use super::*;
 
-fn line(data_frame: &DataFrame) -> Plot {
+fn line(data_frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
     Plot::line(
         data::numeric(data_frame, "x"),
         data::numeric(data_frame, "estimate"),
     )
 }
 
-fn identity_bar(data_frame: &DataFrame) -> Plot {
+fn identity_bar(data_frame: &DataFrame) -> Plot<lichtung_plot::kind::Bar> {
     Plot::bar(
         data::category(data_frame, "factor"),
-        data::numeric(data_frame, "estimate"),
+        BarInput::estimates(data::numeric(data_frame, "estimate")),
     )
-    .bar_aggregation(BarAggregation::Identity)
 }
 
 #[test]
 fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     let frame = estimate_data();
-    let comparison = Significance::between("before", "after", SignificanceMark::PValue(0.01))
-        .facet("facet", "one");
-    let interaction = Plot::interaction(
-        data::category(&frame, "factor"),
-        data::numeric(&frame, "estimate"),
-        data::category(&frame, "trace"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(confidence(InferentialScale::Response))
-    .interaction_source(EstimateSource::ObservedCellSummary)
-    .hue(data::category(&frame, "trace"))
-    .facet_col(data::category(&frame, "facet"))
-    .significance([comparison]);
-    assert!(interaction
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("not supported"));
-
     let svg = render_svg(
-        line(&frame).facet_col(data::category(&frame, "facet")),
+        line(&frame).facet(FacetSpec::column(data::category(&frame, "facet"))),
         "faceted-line",
     )
     .unwrap();
@@ -47,7 +26,7 @@ fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     assert_unique_svg_ids(&svg);
 
     let bar = identity_bar(&frame)
-        .facet_col(data::category(&frame, "facet"))
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
         .facet_scales(FacetScales::Free)
         .significance([
             Significance::between("before", "after", SignificanceMark::PValue(0.01))
@@ -65,7 +44,7 @@ fn contradictory_duplicate_facet_ownership_fails_preflight() {
         .facet("facet", "one")
         .facet("facet", "two");
     let error = identity_bar(&frame)
-        .facet_col(data::category(&frame, "facet"))
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
         .significance([comparison])
         .preflight()
         .unwrap_err();
@@ -92,12 +71,11 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
     let svg = render_svg(
         Plot::bar(
             data::category(&frame, "category"),
-            data::numeric(&frame, "value"),
+            BarInput::estimates(data::numeric(&frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
         .group(data::category(&frame, "hue"))
         .hue(data::category(&frame, "hue"))
-        .facet_col(data::category(&frame, "facet"))
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
         .significance(comparisons),
         "facet-hue-panel-comparisons",
     )
@@ -111,9 +89,8 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
 fn facet_owned_comparison_on_unfaceted_plot_fails_preflight() {
     let error = Plot::bar(
         lichtung_plot::CategoryValues::new("factor", ["before", "after"]).unwrap(),
-        lichtung_plot::NumericValues::new("estimate", [1.0, 2.0]),
+        BarInput::estimates(lichtung_plot::NumericValues::new("estimate", [1.0, 2.0])),
     )
-    .bar_aggregation(BarAggregation::Identity)
     .significance([
         Significance::between("before", "after", SignificanceMark::PValue(0.01))
             .facet("facet", "one"),
@@ -141,7 +118,7 @@ fn fixed_facets_use_renderer_stacks_and_reject_incompatible_categories() {
             data::category(&stacked, "hue"),
         )
         .hue(data::category(&stacked, "hue"))
-        .facet_col(data::category(&stacked, "facet")),
+        .facet(FacetSpec::column(data::category(&stacked, "facet"))),
         "facet-stacked-domain",
     )
     .unwrap();
@@ -157,10 +134,9 @@ fn fixed_facets_use_renderer_stacks_and_reject_incompatible_categories() {
     .unwrap();
     let error = Plot::bar(
         data::category(&incompatible, "category"),
-        data::numeric(&incompatible, "value"),
+        BarInput::estimates(data::numeric(&incompatible, "value")),
     )
-    .bar_aggregation(BarAggregation::Identity)
-    .facet_col(data::category(&incompatible, "facet"))
+    .facet(FacetSpec::column(data::category(&incompatible, "facet")))
     .preflight()
     .unwrap_err();
     assert!(error
@@ -181,8 +157,10 @@ fn sparse_cartesian_facets_draw_global_legend_on_first_rendered_panel() {
     let svg = render_svg(
         Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .hue(data::category(&frame, "trace"))
-            .facet_row(data::category(&frame, "row"))
-            .facet_col(data::category(&frame, "column"))
+            .facet(FacetSpec::grid(
+                data::category(&frame, "row"),
+                data::category(&frame, "column"),
+            ))
             .size(760, 520),
         "sparse-facet-legend",
     )
@@ -209,10 +187,12 @@ fn long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells() {
     let svg = render_svg(
         Plot::horizontal_bar(
             data::category(&frame, "category"),
-            data::numeric(&frame, "value"),
+            BarInput::estimates(data::numeric(&frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
-        .facet_col(data::category(&frame, "facet_dimension_with_long_name"))
+        .facet(FacetSpec::column(data::category(
+            &frame,
+            "facet_dimension_with_long_name",
+        )))
         .size(1_100, 420),
         "long-label-facets",
     )
@@ -234,7 +214,7 @@ fn faceted_shared_axis_titles_preserve_explicit_multiline_text() {
     .unwrap();
     let svg = render_svg(
         Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
-            .facet_col(data::category(&frame, "facet"))
+            .facet(FacetSpec::column(data::category(&frame, "facet")))
             .x_label("Shared horizontal axis\ncontinued horizontally")
             .y_label("Shared vertical axis\ncontinued vertically")
             .size(760, 420),
@@ -265,7 +245,7 @@ fn shared_facet_axis_titles_clear_outside_legends() {
             Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
                 .group(data::category(&frame, "trace"))
                 .hue(data::category(&frame, "trace"))
-                .facet_col(data::category(&frame, "facet"))
+                .facet(FacetSpec::column(data::category(&frame, "facet")))
                 .x_label("Shared horizontal")
                 .y_label("Shared vertical")
                 .legend_position(position)
@@ -292,8 +272,10 @@ fn crossed_facets_order_valid_hues_by_original_source_rows() {
     let svg = render_svg(
         Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .hue(data::category(&frame, "trace"))
-            .facet_row(data::category(&frame, "row"))
-            .facet_col(data::category(&frame, "column"))
+            .facet(FacetSpec::grid(
+                data::category(&frame, "row"),
+                data::category(&frame, "column"),
+            ))
             .size(760, 520),
         "crossed-facet-source-hue-order",
     )
@@ -316,7 +298,7 @@ fn faceted_line_allows_repeated_hue_x_keys_and_keeps_one_global_legend() {
         Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .group(data::category(&frame, "trace"))
             .hue(data::category(&frame, "trace"))
-            .facet_col(data::category(&frame, "facet"))
+            .facet(FacetSpec::column(data::category(&frame, "facet")))
             .size(760, 360),
         "line-repeated-facet-keys",
     )
@@ -335,13 +317,13 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
             [10.0, 20.0, 11.0, 21.0],
         ),
     )
-    .interval_bounds(
+    .band(Bounds::new(
         lichtung_plot::NumericValues::new("lower", [9.0, 19.0, 10.0, 20.0]),
         lichtung_plot::NumericValues::new("upper", [11.0, 21.0, 12.0, 22.0]),
-    )
-    .facet_col(
+    ))
+    .facet(FacetSpec::column(
         lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"]).unwrap(),
-    );
+    ));
     assert!(render_svg(numeric, "reserved-numeric")
         .unwrap()
         .contains("<svg "));
@@ -354,9 +336,9 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
         .unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
     )
-    .facet_col(
+    .facet(FacetSpec::column(
         lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"]).unwrap(),
-    )
+    ))
     .facet_scales(FacetScales::FreeX)
     .size(760, 360);
     let svg = render_svg(categorical, "reserved-categorical").unwrap();
@@ -364,13 +346,15 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
 
     let current_internal_name = Plot::bar(
         lichtung_plot::CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+        BarInput::estimates(lichtung_plot::NumericValues::new(
+            "value",
+            [1.0, 2.0, 3.0, 4.0],
+        )),
     )
     .group(lichtung_plot::CategoryValues::new("__series", ["g1", "g2", "g1", "g2"]).unwrap())
-    .facet_col(
+    .facet(FacetSpec::column(
         lichtung_plot::CategoryValues::new("__series", ["left", "left", "right", "right"]).unwrap(),
-    )
-    .bar_aggregation(BarAggregation::Identity)
+    ))
     .size(760, 360);
     let svg = render_svg(current_internal_name, "current-internal-facet-name").unwrap();
     assert_eq!(svg.matches("<clipPath id=").count(), 2);
@@ -382,11 +366,12 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
 fn row_and_column_facets_require_distinct_variable_names() {
     let plot = Plot::bar(
         lichtung_plot::CategoryValues::new("category", ["a", "b"]).unwrap(),
-        lichtung_plot::NumericValues::new("value", [1.0, 2.0]),
+        BarInput::estimates(lichtung_plot::NumericValues::new("value", [1.0, 2.0])),
     )
-    .facet_row(lichtung_plot::CategoryValues::new("facet", ["r1", "r2"]).unwrap())
-    .facet_col(lichtung_plot::CategoryValues::new("facet", ["c1", "c2"]).unwrap())
-    .bar_aggregation(BarAggregation::Identity);
+    .facet(FacetSpec::grid(
+        lichtung_plot::CategoryValues::new("facet", ["r1", "r2"]).unwrap(),
+        lichtung_plot::CategoryValues::new("facet", ["c1", "c2"]).unwrap(),
+    ));
 
     let error = plot.preflight().unwrap_err();
     assert!(matches!(error, lichtung_plot::Error::Data(_)));
@@ -407,11 +392,10 @@ fn faceted_explicit_category_order_validates_globally_and_filters_panel_subsets(
     let plot = |order| {
         Plot::bar(
             data::category(&frame, "category"),
-            data::numeric(&frame, "value"),
+            BarInput::estimates(data::numeric(&frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
         .category_order(CategoryOrder::explicit(order))
-        .facet_col(data::category(&frame, "panel"))
+        .facet(FacetSpec::column(data::category(&frame, "panel")))
         .facet_scales(FacetScales::FreeX)
     };
 
@@ -431,11 +415,10 @@ fn faceted_bar_rejects_panel_local_value_order() {
     .unwrap();
     let plot = Plot::bar(
         data::category(&frame, "category"),
-        data::numeric(&frame, "value"),
+        BarInput::estimates(data::numeric(&frame, "value")),
     )
-    .bar_aggregation(BarAggregation::Identity)
     .category_order(lichtung_plot::ValueSort::Descending)
-    .facet_col(data::category(&frame, "panel"));
+    .facet(FacetSpec::column(data::category(&frame, "panel")));
 
     let error = plot.preflight().unwrap_err();
 
@@ -470,7 +453,7 @@ fn faceted_stacked_bar_preflights_extreme_finite_panels_without_pooling() {
         .contains("positive stack geometry"));
     let svg = render_svg(
         base()
-            .facet_col(data::category(&frame, "facet"))
+            .facet(FacetSpec::column(data::category(&frame, "facet")))
             .size(760, 360),
         "facet-extreme-stacked-bar",
     )
@@ -494,13 +477,13 @@ fn faceted_interaction_allows_repeated_trace_x_keys() {
         data::category(&frame, "factor"),
         data::numeric(&frame, "estimate"),
         data::category(&frame, "trace"),
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
+        Bounds::new(
+            data::numeric(&frame, "lower"),
+            data::numeric(&frame, "upper"),
+        ),
     )
     .hue(data::category(&frame, "trace"))
-    .facet_col(data::category(&frame, "facet"))
-    .interval_semantics(confidence(InferentialScale::Response))
-    .interaction_source(EstimateSource::EstimatedMarginalMean)
+    .facet(FacetSpec::column(data::category(&frame, "facet")))
     .size(760, 360);
     assert!(render_svg(plot, "faceted-interaction")
         .unwrap()
@@ -516,7 +499,7 @@ fn faceted_errors_report_original_source_rows_before_output_creation() {
     )
     .unwrap();
     let error = Plot::line(data::numeric(&numeric, "x"), data::numeric(&numeric, "y"))
-        .facet_col(data::category(&numeric, "facet"))
+        .facet(FacetSpec::column(data::category(&numeric, "facet")))
         .preflight()
         .unwrap_err()
         .to_string();
@@ -532,7 +515,7 @@ fn faceted_errors_report_original_source_rows_before_output_creation() {
         data::category(&categorical, "category"),
         data::numeric(&categorical, "value"),
     )
-    .facet_col(data::category(&categorical, "facet"))
+    .facet(FacetSpec::column(data::category(&categorical, "facet")))
     .preflight()
     .unwrap_err()
     .to_string();
@@ -550,7 +533,7 @@ fn facet_null_hue_contract_differs_between_scatter_and_strict_line() {
     .unwrap();
     let scatter_error = Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
         .hue(data::category(&frame, "trace"))
-        .facet_col(data::category(&frame, "facet"))
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
         .preflight()
         .unwrap_err();
     assert!(scatter_error
@@ -558,7 +541,7 @@ fn facet_null_hue_contract_differs_between_scatter_and_strict_line() {
         .contains("value \"trace\" contains null at source row 1"));
     let line_error = Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
         .hue(data::category(&frame, "trace"))
-        .facet_col(data::category(&frame, "facet"))
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
         .preflight()
         .unwrap_err();
     assert!(line_error.to_string().contains("contains null"));

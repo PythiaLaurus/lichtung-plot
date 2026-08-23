@@ -1,4 +1,4 @@
-use lichtung_plot::{LegendPosition, PanelCorner, PanelTextAnnotation, Plot, Theme};
+use lichtung_plot::{FacetSpec, LegendPosition, PanelCorner, PanelTextAnnotation, Plot, Theme};
 
 use super::{data, df, render_svg, DataFrame};
 
@@ -11,11 +11,11 @@ fn scatter_data() -> DataFrame {
     .unwrap()
 }
 
-fn scatter(data: &DataFrame) -> Plot {
+fn scatter(data: &DataFrame) -> Plot<lichtung_plot::kind::Scatter> {
     Plot::scatter(data::numeric(data, "x"), data::numeric(data, "y")).size(420, 300)
 }
 
-fn svg(chart: &Plot) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(chart: &Plot<K>) -> String {
     render_svg(chart.clone(), "panel-text-svg").unwrap()
 }
 
@@ -84,25 +84,17 @@ fn panel_text_rejects_duplicate_corner() {
 }
 
 #[test]
-fn panel_text_rejects_facets_and_self_managed_matrix() {
+fn panel_text_rejects_facets() {
     let data = scatter_data();
     let annotation = || PanelTextAnnotation::new(PanelCorner::TopLeft, "Note").unwrap();
     let faceted = scatter(&data)
         .panel_text_annotation(annotation())
-        .facet_row(data::category(&data, "group"));
-    let matrix = Plot::matrix(vec![data::numeric(&data, "x"), data::numeric(&data, "y")])
-        .panel_text_annotation(annotation());
-
+        .facet(FacetSpec::row(data::category(&data, "group")));
     assert!(faceted
         .preflight()
         .unwrap_err()
         .to_string()
         .contains("faceting"));
-    assert!(matrix
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("one standard chart panel"));
 }
 
 #[test]

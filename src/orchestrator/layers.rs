@@ -4,7 +4,7 @@ use crate::Error;
 
 use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, Point2D};
-use crate::spec::{LineMode, PlotKind, PlotRenderResult};
+use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{GuideSpec, Plot};
 
 const MAX_EXPLICIT_TICKS: usize = 10_000;
@@ -66,11 +66,9 @@ impl Plot {
             }
         }
 
-        if !self.point_layers().is_empty()
-            && (kind != PlotKind::Line || self.line_mode_spec() != LineMode::Series)
-        {
+        if !self.point_layers().is_empty() && kind != PlotKind::Line {
             return Err(Error::Data(format!(
-                "{kind:?}: borrowed point layers are supported only by LineMode::Series"
+                "{kind:?}: borrowed point layers are supported only by Line"
             )));
         }
         if !self.bar_point_layers().is_empty()
@@ -212,8 +210,16 @@ fn numeric_axes(chart: &Plot, kind: PlotKind) -> (bool, bool) {
         | PlotKind::Density
         | PlotKind::Qq
         | PlotKind::Regression
-        | PlotKind::Marginal => (true, true),
-        PlotKind::Line if chart.line_mode_spec() != LineMode::Trajectory => (true, true),
+        | PlotKind::Marginal
+        | PlotKind::Line
+        | PlotKind::LinePath => (true, true),
+        PlotKind::Trajectory => {
+            let numeric_x = chart
+                .x_col()
+                .and_then(|column| chart.data().column(column).ok())
+                .is_some_and(crate::data::DataColumn::is_numeric);
+            (numeric_x, true)
+        }
         PlotKind::PointInterval
         | PlotKind::Coefficient
         | PlotKind::Forest
@@ -226,7 +232,8 @@ fn numeric_axes(chart: &Plot, kind: PlotKind) -> (bool, bool) {
         | PlotKind::Bar
         | PlotKind::StackedBar
         | PlotKind::Boxplot
-        | PlotKind::Violin => (false, true),
-        PlotKind::Line | PlotKind::Heatmap | PlotKind::Matrix => (false, false),
+        | PlotKind::Violin
+        | PlotKind::Raincloud => (false, true),
+        PlotKind::Heatmap | PlotKind::Matrix => (false, false),
     }
 }

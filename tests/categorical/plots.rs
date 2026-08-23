@@ -42,9 +42,11 @@ fn bar_with_hue_renders_grouped_bars_and_hue_legend() {
 
     let dir = unique_dir("bar-hue-grouped");
     let out = dir.join("bar.svg");
-    let chart = Plot::bar(data::category(&df, "group"), data::numeric(&df, "value"))
-        .hue(data::category(&df, "series"))
-        .bar_aggregation(BarAggregation::Identity);
+    let chart = Plot::bar(
+        data::category(&df, "group"),
+        BarInput::estimates(data::numeric(&df, "value")),
+    )
+    .hue(data::category(&df, "series"));
     chart
         .size(420, 300)
         .svg(&out)
@@ -92,9 +94,11 @@ fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
 
     let dir = unique_dir("horizontal-bar-hue-grouped");
     let out = dir.join("horizontal_bar.svg");
-    let chart = Plot::horizontal_bar(data::category(&df, "group"), data::numeric(&df, "value"))
-        .hue(data::category(&df, "series"))
-        .bar_aggregation(BarAggregation::Identity);
+    let chart = Plot::horizontal_bar(
+        data::category(&df, "group"),
+        BarInput::estimates(data::numeric(&df, "value")),
+    )
+    .hue(data::category(&df, "series"));
     chart
         .size(420, 300)
         .svg(&out)
@@ -153,11 +157,13 @@ fn categorical_plots_preserve_observed_order() {
 
     let dir = unique_dir("bar-observed-order");
     let out = dir.join("bar.svg");
-    Plot::bar(data::category(&df, "species"), data::numeric(&df, "value"))
-        .bar_aggregation(BarAggregation::Identity)
-        .size(320, 240)
-        .svg(&out)
-        .expect("bar render must succeed");
+    Plot::bar(
+        data::category(&df, "species"),
+        BarInput::estimates(data::numeric(&df, "value")),
+    )
+    .size(320, 240)
+    .svg(&out)
+    .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
     let b_pos = svg.find(">B</text>").expect("b tick label");
@@ -179,12 +185,12 @@ fn bar_order_is_plot_owned_and_value_sort_runs_after_mean_aggregation() {
     let explicit_path = dir.join("explicit.svg");
     let sorted_path = dir.join("sorted.svg");
 
-    Plot::bar(categories.clone(), values.clone())
+    Plot::bar(categories.clone(), BarInput::samples(values.clone()))
         .category_order(CategoryOrder::explicit(["c", "a", "b"]))
         .size(320, 240)
         .svg(&explicit_path)
         .unwrap();
-    Plot::bar(categories, values)
+    Plot::bar(categories, BarInput::samples(values))
         .category_order(ValueSort::Descending)
         .size(320, 240)
         .svg(&sorted_path)
@@ -207,13 +213,15 @@ fn grouped_bar_rejects_ambiguous_value_order() {
     )
     .unwrap();
 
-    let error = Plot::bar(data::category(&df, "category"), data::numeric(&df, "value"))
-        .group(data::category(&df, "group"))
-        .bar_aggregation(BarAggregation::Identity)
-        .category_order(ValueSort::Descending)
-        .preflight()
-        .unwrap_err()
-        .to_string();
+    let error = Plot::bar(
+        data::category(&df, "category"),
+        BarInput::estimates(data::numeric(&df, "value")),
+    )
+    .group(data::category(&df, "group"))
+    .category_order(ValueSort::Descending)
+    .preflight()
+    .unwrap_err()
+    .to_string();
 
     assert!(error.contains("requires one ungrouped bar per category"));
 }
@@ -228,9 +236,11 @@ fn positive_bars_preserve_zero_baseline() {
 
     let dir = unique_dir("bar-zero-baseline");
     let out = dir.join("bar.svg");
-    let chart = Plot::bar(data::category(&df, "group"), data::numeric(&df, "value"))
-        .bar_aggregation(BarAggregation::Identity)
-        .size(320, 240);
+    let chart = Plot::bar(
+        data::category(&df, "group"),
+        BarInput::estimates(data::numeric(&df, "value")),
+    )
+    .size(320, 240);
     let panel = chart.figure_layout().panel_box;
     chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");

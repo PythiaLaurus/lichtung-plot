@@ -1,5 +1,5 @@
 use super::{
-    assert_rejected_before_begin, categorical_fault_fixture, configured_chart, fixture,
+    assert_rejected_before_begin, categorical_fault_fixture, configured_chart,
     numeric_fault_fixture, DataFrame, HeatmapLayout, Plot, PlotKind, RecordingBackend, Series,
 };
 use crate::{RawOverlay, SourceRows};
@@ -151,36 +151,6 @@ fn structural_triangle_rejects_source_cells_outside_active_half() {
 }
 
 #[test]
-fn non_heatmap_kinds_reject_triangular_layout() {
-    let data = fixture();
-    for &kind in PlotKind::ALL {
-        if kind == PlotKind::Heatmap {
-            continue;
-        }
-        let chart = configured_chart(&data, kind)
-            .heatmap_layout(HeatmapLayout::UpperTriangle { diagonal: true });
-        let error = assert_rejected_before_begin(&chart, kind);
-        assert!(error.contains("HeatmapLayout"), "{kind:?}: {error}");
-    }
-}
-
-#[test]
-fn unsupported_channels_fail_before_canvas_begin() {
-    let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Regression)
-        .hue(crate::test_support::category(&data, "hue"));
-    let figure = crate::Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, chart)
-        .unwrap();
-    let mut backend = RecordingBackend::default();
-
-    let error = figure.render_with_backend(&mut backend).unwrap_err();
-    assert!(error.to_string().contains("regression-plot: hue column"));
-    assert_eq!((backend.begins, backend.ends), (0, 0));
-}
-
-#[test]
 fn source_rows_drive_standalone_facet_and_canvas_diagnostics() {
     let data = DataFrame::new(
         1,
@@ -201,7 +171,9 @@ fn source_rows_drive_standalone_facet_and_canvas_diagnostics() {
 
     let faceted = chart
         .clone()
-        .facet_row(crate::test_support::category(&data, "facet"));
+        .facet(crate::FacetSpec::row(crate::test_support::category(
+            &data, "facet",
+        )));
     assert!(assert_rejected_before_begin(&faceted, PlotKind::Scatter).contains("source row 4"));
 
     let figure = crate::Canvas::grid(1, 1)

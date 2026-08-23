@@ -1,6 +1,68 @@
 //! Line, interaction, and estimate-family display policies.
 
-use crate::Error;
+use crate::{Error, NumericValues};
+
+/// Explicit drawable lower and upper bounds.
+#[derive(Debug, Clone)]
+pub struct Bounds {
+    lower: NumericValues,
+    upper: NumericValues,
+}
+
+impl Bounds {
+    /// Construct aligned drawable bounds.
+    #[must_use]
+    pub fn new(lower: NumericValues, upper: NumericValues) -> Self {
+        Self { lower, upper }
+    }
+
+    /// Borrow the lower endpoints.
+    #[must_use]
+    pub const fn lower(&self) -> &NumericValues {
+        &self.lower
+    }
+
+    /// Borrow the upper endpoints.
+    #[must_use]
+    pub const fn upper(&self) -> &NumericValues {
+        &self.upper
+    }
+}
+
+/// Closed owned input for a model-coefficient plot.
+#[derive(Debug, Clone)]
+pub struct CoefficientInput {
+    values: NumericValues,
+    bounds: Option<Bounds>,
+}
+
+impl CoefficientInput {
+    /// Use one precomputed estimate per term without bounds.
+    #[must_use]
+    pub fn estimates(values: NumericValues) -> Self {
+        Self {
+            values,
+            bounds: None,
+        }
+    }
+
+    /// Use one precomputed estimate and explicit drawable bounds per term.
+    #[must_use]
+    pub fn estimates_with_intervals(values: NumericValues, bounds: Bounds) -> Self {
+        Self {
+            values,
+            bounds: Some(bounds),
+        }
+    }
+
+    pub(crate) const fn values(&self) -> &NumericValues {
+        &self.values
+    }
+
+    pub(crate) const fn bounds(&self) -> Option<&Bounds> {
+        self.bounds.as_ref()
+    }
+}
 
 /// Closed text weights used by renderer-owned emphasis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -121,18 +183,6 @@ pub enum QqLine {
     Hidden,
 }
 
-/// Semantic mode for line plots.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum LineMode {
-    /// Draw ordinary ordered numeric series, partitioned only by explicit group.
-    #[default]
-    Series,
-    /// Draw explicit-group repeated trajectories with neutral connectors.
-    Trajectory,
-    /// Draw explicit-group numeric paths in source-row order, including repeated x values.
-    Path,
-}
-
 /// Color and legend policy for source-ordered line paths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LinePathStyle {
@@ -248,24 +298,4 @@ pub enum AxisScale {
     Linear,
     /// Base-10 logarithmic scale for strictly positive multiplicative estimates.
     Log10,
-}
-
-/// Provenance of estimates displayed by an interaction plot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EstimateSource {
-    /// Unadjusted summaries computed for observed cells.
-    ObservedCellSummary,
-    /// Model-adjusted estimated marginal means.
-    EstimatedMarginalMean,
-}
-
-impl EstimateSource {
-    /// Stable report-visible description of the estimand source.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::ObservedCellSummary => "observed cell summary",
-            Self::EstimatedMarginalMean => "estimated marginal mean",
-        }
-    }
 }

@@ -19,20 +19,18 @@ fn grouped_and_horizontal_significance_use_category_series_targets() {
 
     Plot::bar(
         data::category(&data, "category"),
-        data::numeric(&data, "value"),
+        BarInput::estimates(data::numeric(&data, "value")),
     )
     .group(data::category(&data, "hue"))
-    .bar_aggregation(BarAggregation::Identity)
     .significance([comparison.clone()])
     .svg(&vertical_path)
     .unwrap();
 
     Plot::horizontal_bar(
         data::category(&data, "category"),
-        data::numeric(&data, "value"),
+        BarInput::estimates(data::numeric(&data, "value")),
     )
     .hue(data::category(&data, "hue"))
-    .bar_aggregation(BarAggregation::Identity)
     .significance([comparison])
     .svg(&horizontal_path)
     .unwrap();

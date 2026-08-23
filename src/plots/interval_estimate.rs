@@ -6,9 +6,7 @@ use crate::Error;
 
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor, TextStyle};
-use crate::spec::{
-    AxisScale, EstimateStatus, FacetScales, IntervalKind, PlotRenderContext, PlotRenderResult,
-};
+use crate::spec::{AxisScale, EstimateStatus, FacetScales, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
@@ -277,7 +275,7 @@ pub(crate) fn render(
     backend: &mut dyn Backend,
     family: &'static str,
     require_intervals: bool,
-    require_reference: bool,
+    reference: f64,
 ) -> Result<PlotRenderResult, Error> {
     let estimate_col = chart
         .x_col()
@@ -298,15 +296,6 @@ pub(crate) fn render(
             "{family}: numeric estimate labels are supported only for point-only displays without intervals"
         )));
     }
-    let interval_semantics = if has_intervals {
-        Some(chart.interval_semantics_spec().ok_or_else(|| {
-            Error::Data(format!(
-                "{family}: typed interval semantics are required; call interval_semantics(...)"
-            ))
-        })?)
-    } else {
-        None
-    };
     let mut coefficient_significance = vec![None; labels.len()];
     for annotation in chart.significance_annotations() {
         let Some(target) = annotation.at_target() else {
@@ -337,35 +326,11 @@ pub(crate) fn render(
         }
         coefficient_significance[index] = Some(annotation.mark().glyph()?.to_owned());
     }
-    if coefficient_significance.iter().any(Option::is_some) {
-        if !has_intervals {
-            return Err(Error::Data(
-                "coefficient: significance marks require complete confidence interval columns"
-                    .into(),
-            ));
-        }
-        if interval_semantics.map(crate::IntervalSemantics::kind) != Some(IntervalKind::Confidence)
-        {
-            return Err(Error::Data(
-                "coefficient: significance marks require confidence intervals, not credible intervals"
-                    .into(),
-            ));
-        }
+    if !reference.is_finite() {
+        return Err(Error::Data(format!(
+            "{family}: reference value must be finite, got {reference}"
+        )));
     }
-    let reference = match chart.reference_line_value() {
-        Some(value) if value.is_finite() => value,
-        Some(value) => {
-            return Err(Error::Data(format!(
-                "{family}: reference value must be finite, got {value}"
-            )))
-        }
-        None if require_reference => {
-            return Err(Error::Data(format!(
-                "{family}: an explicit scientific reference value is required"
-            )))
-        }
-        None => 0.0,
-    };
     if labels.is_empty() || labels.len() != estimates.len() {
         return Err(Error::Data(format!(
             "{family}: label, estimate, and interval columns must have equal non-zero lengths"

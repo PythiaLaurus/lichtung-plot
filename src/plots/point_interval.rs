@@ -355,17 +355,22 @@ mod tests {
         )
     }
 
-    fn chart(data: &Fixture) -> Plot {
+    fn chart(data: &Fixture) -> Plot<crate::kind::PointInterval> {
         Plot::point_interval(
             crate::test_support::category(data, "category"),
             crate::test_support::numeric(data, "estimate"),
-            crate::test_support::numeric(data, "lower"),
-            crate::test_support::numeric(data, "upper"),
+            crate::Bounds::new(
+                crate::test_support::numeric(data, "lower"),
+                crate::test_support::numeric(data, "upper"),
+            ),
         )
     }
 
-    fn prepare_chart(chart: &Plot) -> Result<Vec<PointIntervalRow>, Error> {
-        prepare(chart, chart)
+    fn prepare_chart(
+        chart: &Plot<crate::kind::PointInterval>,
+    ) -> Result<Vec<PointIntervalRow>, Error> {
+        let chart = chart.clone().erase();
+        prepare(&chart, &chart)
     }
 
     #[test]
@@ -496,33 +501,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("lower <= estimate <= upper"));
-    }
-
-    #[test]
-    fn prepare_rejects_hue_and_color() {
-        let data = valid_data();
-        let hue_error =
-            prepare_chart(&chart(&data).hue(crate::test_support::category(&data, "category")))
-                .unwrap_err();
-        let color_error =
-            prepare_chart(&chart(&data).color(crate::test_support::numeric(&data, "estimate")))
-                .unwrap_err();
-
-        assert!(
-            hue_error.to_string().contains("hue column")
-                && color_error.to_string().contains("color column")
-        );
-    }
-
-    #[test]
-    fn prepare_rejects_categorical_y_axis_overrides() {
-        let data = valid_data();
-
-        let error = prepare_chart(&chart(&data).y_limits(0.0, 1.0))
-            .unwrap_err()
-            .to_string();
-
-        assert!(error.contains("categorical y-axis"));
     }
 
     #[test]

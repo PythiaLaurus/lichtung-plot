@@ -1,19 +1,9 @@
 use lichtung_plot::{
-    BarAggregation, DumbbellEndpoints, EstimateSource, InferentialScale, IntervalKind,
-    IntervalSemantics, Plot, PlotKind, Significance, SignificanceMark, SignificanceTarget,
+    BarInput, Bounds, DumbbellEndpoints, FacetSpec, Plot, PlotKind, Significance, SignificanceMark,
+    SignificanceTarget,
 };
 
 use super::{data, df, parse_polygon_bounds, unique_dir, DataFrame};
-
-fn confidence() -> IntervalSemantics {
-    IntervalSemantics::new(
-        IntervalKind::Confidence,
-        0.95,
-        InferentialScale::Response,
-        "group aesthetics fixture",
-    )
-    .unwrap()
-}
 
 fn shared_hue_data() -> DataFrame {
     df!(
@@ -60,52 +50,100 @@ fn interaction_data() -> DataFrame {
     .unwrap()
 }
 
-fn configured_group_plot(data: &DataFrame, kind: PlotKind) -> Plot {
+fn configured_hue<K: lichtung_plot::kind::Marker + lichtung_plot::kind::Hue>(
+    plot: Plot<K>,
+    data: &DataFrame,
+    with_hue: bool,
+) -> Plot {
+    if with_hue {
+        plot.hue(data::category(data, "hue"))
+    } else {
+        plot
+    }
+    .erase()
+}
+
+fn configured_group_plot(data: &DataFrame, kind: PlotKind, with_hue: bool) -> Plot {
     let group = || data::category(data, "group");
     match kind {
-        PlotKind::Line => {
-            Plot::line(data::numeric(data, "x"), data::numeric(data, "y")).group(group())
-        }
-        PlotKind::Interaction => Plot::interaction(
-            data::category(data, "condition"),
-            data::numeric(data, "estimate"),
-            group(),
-            data::numeric(data, "lower"),
-            data::numeric(data, "upper"),
-        )
-        .group(group())
-        .interval_semantics(confidence())
-        .interaction_source(EstimateSource::EstimatedMarginalMean),
-        PlotKind::Density => Plot::density(data::numeric(data, "y")).group(group()),
-        PlotKind::Marginal => {
-            Plot::marginal(data::numeric(data, "x"), data::numeric(data, "y")).group(group())
-        }
-        PlotKind::Matrix => {
-            Plot::matrix(vec![data::numeric(data, "x"), data::numeric(data, "y")]).group(group())
-        }
-        PlotKind::Bar => {
-            Plot::bar(data::category(data, "category"), data::numeric(data, "y")).group(group())
-        }
-        PlotKind::HorizontalBar => {
-            Plot::horizontal_bar(data::category(data, "category"), data::numeric(data, "y"))
-                .group(group())
-        }
-        PlotKind::StackedBar => Plot::stacked_bar(
-            data::category(data, "category"),
-            data::numeric(data, "y"),
-            group(),
+        PlotKind::Line => configured_hue(
+            Plot::line(data::numeric(data, "x"), data::numeric(data, "y")).group(group()),
+            data,
+            with_hue,
         ),
-        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
-            data::category(data, "category"),
-            data::numeric(data, "y"),
-            group(),
+        PlotKind::Interaction => configured_hue(
+            Plot::interaction(
+                data::category(data, "condition"),
+                data::numeric(data, "estimate"),
+                group(),
+                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
+            )
+            .group(group()),
+            data,
+            with_hue,
         ),
-        PlotKind::Boxplot => {
-            Plot::boxplot(data::category(data, "category"), data::numeric(data, "y")).group(group())
-        }
-        PlotKind::Violin => {
-            Plot::violin(data::category(data, "category"), data::numeric(data, "y")).group(group())
-        }
+        PlotKind::Density => configured_hue(
+            Plot::density(data::numeric(data, "y")).group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::Marginal => configured_hue(
+            Plot::marginal(data::numeric(data, "x"), data::numeric(data, "y")).group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::Matrix => configured_hue(
+            Plot::matrix(vec![data::numeric(data, "x"), data::numeric(data, "y")]).group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::Bar => configured_hue(
+            Plot::bar(
+                data::category(data, "category"),
+                BarInput::samples(data::numeric(data, "y")),
+            )
+            .group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::HorizontalBar => configured_hue(
+            Plot::horizontal_bar(
+                data::category(data, "category"),
+                BarInput::samples(data::numeric(data, "y")),
+            )
+            .group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::StackedBar => configured_hue(
+            Plot::stacked_bar(
+                data::category(data, "category"),
+                data::numeric(data, "y"),
+                group(),
+            ),
+            data,
+            with_hue,
+        ),
+        PlotKind::StackedHorizontalBar => configured_hue(
+            Plot::stacked_horizontal_bar(
+                data::category(data, "category"),
+                data::numeric(data, "y"),
+                group(),
+            ),
+            data,
+            with_hue,
+        ),
+        PlotKind::Boxplot => configured_hue(
+            Plot::boxplot(data::category(data, "category"), data::numeric(data, "y"))
+                .group(group()),
+            data,
+            with_hue,
+        ),
+        PlotKind::Violin => configured_hue(
+            Plot::violin(data::category(data, "category"), data::numeric(data, "y")).group(group()),
+            data,
+            with_hue,
+        ),
         PlotKind::Dumbbell => Plot::dumbbell(
             data::category(data, "category"),
             data::numeric(data, "left"),
@@ -114,12 +152,16 @@ fn configured_group_plot(data: &DataFrame, kind: PlotKind) -> Plot {
         .group(group())
         .dumbbell_endpoints(
             DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
-        ),
+        )
+        .erase(),
         _ => panic!("unsupported grouped fixture kind {kind:?}"),
     }
 }
 
-fn render(plot: Plot, name: &str) -> Result<String, lichtung_plot::Error> {
+fn render<K: lichtung_plot::kind::Marker>(
+    plot: Plot<K>,
+    name: &str,
+) -> Result<String, lichtung_plot::Error> {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
@@ -159,8 +201,11 @@ fn separate_group_hue_families_render_group_only_without_group_legends() {
         } else {
             &data
         };
-        let svg = render(configured_group_plot(source, kind), "group-only-family")
-            .unwrap_or_else(|error| panic!("{kind:?} should support group: {error}"));
+        let svg = render(
+            configured_group_plot(source, kind, false),
+            "group-only-family",
+        )
+        .unwrap_or_else(|error| panic!("{kind:?} should support group: {error}"));
         assert!(!svg.contains(">G 1</text>") && !svg.contains(">G 2</text>"));
     }
 }
@@ -176,35 +221,20 @@ fn unified_categorical_families_treat_group_as_colored_series() {
         PlotKind::Boxplot,
         PlotKind::Violin,
     ] {
-        let svg = render(configured_group_plot(&data, kind), "unified-group-family")
-            .unwrap_or_else(|error| panic!("{kind:?} should support group as its series: {error}"));
+        let svg = render(
+            configured_group_plot(&data, kind, false),
+            "unified-group-family",
+        )
+        .unwrap_or_else(|error| panic!("{kind:?} should support group as its series: {error}"));
         assert!(svg.contains(">G 1</text>") && svg.contains(">G 2</text>"));
-    }
-}
-
-#[test]
-fn every_other_plot_kind_rejects_group_before_backend_begin() {
-    let data = collective_data();
-    let group = || data::category(&data, "group");
-    let unsupported = [
-        Plot::scatter(data::numeric(&data, "x"), data::numeric(&data, "y")).group(group()),
-        Plot::histogram(data::numeric(&data, "x")).group(group()),
-        Plot::qq(data::numeric(&data, "x")).group(group()),
-        Plot::regression(data::numeric(&data, "x"), data::numeric(&data, "y")).group(group()),
-    ];
-    for plot in unsupported {
-        assert!(plot
-            .preflight()
-            .unwrap_err()
-            .to_string()
-            .contains("graphical group column"));
     }
 }
 
 #[test]
 fn explicit_group_controls_paths_while_hue_controls_color_and_legend() {
     let data = collective_data();
-    let group_only = configured_group_plot(&data, PlotKind::Line);
+    let group_only = Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
+        .group(data::category(&data, "group"));
     let plain = render(group_only.clone(), "line-group-only").unwrap();
     assert!(!plain.contains(">H 1</text>") && !plain.contains(">H 2</text>"));
 
@@ -269,7 +299,7 @@ fn faceted_group_hue_error_reports_original_source_row_before_begin() {
     let error = Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
         .group(data::category(&data, "group"))
         .hue(data::category(&data, "hue"))
-        .facet_col(data::category(&data, "facet"))
+        .facet(FacetSpec::column(data::category(&data, "facet")))
         .preflight()
         .unwrap_err();
     assert!(error.to_string().contains("source row 3"), "{error}");
@@ -281,12 +311,11 @@ fn shared_hue_uses_one_chart_wide_color_across_collective_families() {
     let interaction = shared_hue_interaction_data();
     let expected = lichtung_plot::Theme::Publication.palette().colors;
     let plots = vec![
-        configured_group_plot(&data, PlotKind::Line).hue(data::category(&data, "hue")),
-        configured_group_plot(&data, PlotKind::Density).hue(data::category(&data, "hue")),
-        configured_group_plot(&data, PlotKind::Marginal).hue(data::category(&data, "hue")),
-        configured_group_plot(&data, PlotKind::Matrix).hue(data::category(&data, "hue")),
-        configured_group_plot(&interaction, PlotKind::Interaction)
-            .hue(data::category(&interaction, "hue")),
+        configured_group_plot(&data, PlotKind::Line, true),
+        configured_group_plot(&data, PlotKind::Density, true),
+        configured_group_plot(&data, PlotKind::Marginal, true),
+        configured_group_plot(&data, PlotKind::Matrix, true),
+        configured_group_plot(&interaction, PlotKind::Interaction, true),
     ];
     for (index, plot) in plots.into_iter().enumerate() {
         let svg = render(plot, &format!("shared-hue-{index}")).unwrap();
@@ -300,7 +329,7 @@ fn group_only_density_uses_default_color_for_every_curve_and_fill() {
     let data = collective_data();
     let expected = rgb(lichtung_plot::Theme::Publication.palette().colors[0]);
     let svg = render(
-        configured_group_plot(&data, PlotKind::Density),
+        configured_group_plot(&data, PlotKind::Density, false),
         "group-only-density",
     )
     .unwrap();
@@ -319,11 +348,10 @@ fn faceted_explicit_groups_keep_global_dodge_slots_when_a_panel_omits_a_group() 
     let svg = render(
         Plot::bar(
             data::category(&data, "category"),
-            data::numeric(&data, "value"),
+            BarInput::estimates(data::numeric(&data, "value")),
         )
         .group(data::category(&data, "group"))
-        .facet_col(data::category(&data, "facet"))
-        .bar_aggregation(BarAggregation::Identity),
+        .facet(FacetSpec::column(data::category(&data, "facet"))),
         "faceted-dodge",
     )
     .unwrap();
@@ -368,40 +396,46 @@ fn hue_last_replaces_group_for_every_unified_categorical_family() {
     let plots = vec![
         Plot::bar(
             data::category(&data, "category"),
-            data::numeric(&data, "value"),
+            BarInput::samples(data::numeric(&data, "value")),
         )
         .group(group())
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
         Plot::horizontal_bar(
             data::category(&data, "category"),
-            data::numeric(&data, "value"),
+            BarInput::samples(data::numeric(&data, "value")),
         )
         .group(group())
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
         Plot::stacked_bar(
             data::category(&data, "category"),
             data::numeric(&data, "value"),
             group(),
         )
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
         Plot::stacked_horizontal_bar(
             data::category(&data, "category"),
             data::numeric(&data, "value"),
             group(),
         )
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
         Plot::boxplot(
             data::category(&data, "category"),
             data::numeric(&data, "value"),
         )
         .group(group())
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
         Plot::violin(
             data::category(&data, "category"),
             data::numeric(&data, "value"),
         )
         .group(group())
-        .hue(hue()),
+        .hue(hue())
+        .erase(),
     ];
     for plot in plots {
         plot.preflight().unwrap();
@@ -421,7 +455,7 @@ fn faceted_collectives_keep_global_first_observed_hue_color_order() {
     let svg = render(
         Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
             .hue(data::category(&data, "hue"))
-            .facet_col(data::category(&data, "facet")),
+            .facet(FacetSpec::column(data::category(&data, "facet"))),
         "faceted-hue-order",
     )
     .unwrap();
@@ -439,9 +473,12 @@ fn horizontal_significance_uses_hue_when_hue_is_last_series_alias() {
         SignificanceMark::PValue(0.01),
     );
     let base = || {
-        Plot::horizontal_bar(data::category(&data, "category"), data::numeric(&data, "y"))
-            .group(data::category(&data, "group"))
-            .hue(data::category(&data, "hue"))
+        Plot::horizontal_bar(
+            data::category(&data, "category"),
+            BarInput::samples(data::numeric(&data, "y")),
+        )
+        .group(data::category(&data, "group"))
+        .hue(data::category(&data, "hue"))
     };
     let svg = render(
         base().significance([valid]),

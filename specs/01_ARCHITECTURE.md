@@ -56,9 +56,25 @@ display values.
 
 - `NumericValues`, `CategoryValues`, `BooleanValues`, and `SourceRows` own
   immutable semantic input values.
-- `Plot` owns one selected plot family and all its rendering configuration.
-- `Canvas` owns a typed grid of `Plot` and `TextPanel` values.
-- `Significance` owns one explicit attached or pairwise display annotation.
+- `HistogramInput` and `RaincloudInput` are closed source selections. Each owns
+  either native samples or complete caller-computed geometry, so one constructor
+  cannot be combined with a second source setter.
+- `FacetSpec` owns one complete generic-facet layout: row, column, grid, or wrap.
+  Mixed grid and wrap storage is not representable.
+- `Plot<K = kind::Any>` owns one selected plot family and all its rendering
+  configuration. Semantic constructors return an exact zero-sized family marker
+  `K`; sealed capability traits expose only configuration supported by that
+  family.
+- `Plot::erase` is the sole public transition from an exact family marker to
+  `Plot<kind::Any>`. Omitting `K` denotes this erased form, which retains common,
+  introspection, preflight, and terminal-output operations but no family-specific
+  configuration.
+- `Canvas` owns a heterogeneous grid of internally erased plots and `TextPanel`
+  values. `Canvas::panel` accepts any exact `Plot<K>` and erases it at the storage
+  boundary.
+- `Significance<Attached>` and `Significance<Pairwise>` own placement-typed
+  display annotations. Plots erase admitted annotations only at their private
+  storage boundary.
 - `Error` owns the renderer's I/O, data, and rendering failure domains.
 - `Output` privately owns one rendered scene and can publish additional formats
   without rerunning layout.

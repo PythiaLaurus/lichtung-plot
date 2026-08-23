@@ -3,7 +3,7 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{BarAggregation, BarSpacing, NumericValues, Plot};
+use lichtung_plot::{BarInput, BarSpacing, NumericValues, Plot};
 
 pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
     let xs: Vec<f64> = (0..30).map(|i| f64::from(i) * 0.5).collect();
@@ -280,11 +280,10 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
     let out = dir.join("bar.svg");
     let chart = Plot::bar(
         crate::data::category(&data, "group"),
-        crate::data::numeric(&data, "value"),
+        BarInput::estimates(crate::data::numeric(&data, "value")),
     )
     .group(crate::data::category(&data, "series"))
     .hue(crate::data::category(&data, "series"))
-    .bar_aggregation(BarAggregation::Identity)
     .bar_spacing(spacing)
     .size(360, 260);
     chart.svg(&out).expect("bar render must succeed");
@@ -458,8 +457,8 @@ pub(super) fn circle_bounds(circles: &[(f64, f64)]) -> (f64, f64, f64, f64) {
     )
 }
 
-pub(super) fn marginal_central_panel(
-    chart: &Plot,
+pub(super) fn marginal_central_panel<K: lichtung_plot::kind::Marker>(
+    chart: &Plot<K>,
     right_w: f64,
     top_h: f64,
     gap: f64,

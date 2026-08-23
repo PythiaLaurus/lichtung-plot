@@ -80,7 +80,8 @@ const fn is_inside(position: LegendPosition) -> bool {
 }
 
 impl PanelPlan {
-    pub(crate) fn chart_for_render(&self, chart: &Plot) -> Plot {
+    pub(crate) fn chart_for_render<K: crate::kind::Marker>(&self, chart: &Plot<K>) -> Plot {
+        let chart = chart.clone().erase();
         let chart = self.planned_x_limits.map_or_else(
             || chart.clone(),
             |limits| chart.clone().with_planned_x_limits(limits),
@@ -98,15 +99,16 @@ impl PanelPlan {
     }
 }
 
-pub(crate) fn plan_panel(
-    chart: &Plot,
+pub(crate) fn plan_panel<K: crate::kind::Marker>(
+    chart: &Plot<K>,
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
 ) -> Result<PanelPlan, Error> {
+    let chart = chart.clone().erase();
     let source_rows = chart.configured_source_rows()?;
     plan_panel_with_data(
-        chart,
+        &chart,
         kind,
         cell,
         role,

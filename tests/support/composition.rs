@@ -3,7 +3,7 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{Canvas, InferentialScale, IntervalKind, IntervalSemantics, Plot};
+use lichtung_plot::{Canvas, Plot};
 
 use crate::{df, DataFrame};
 
@@ -21,11 +21,10 @@ pub(super) fn estimate_data() -> DataFrame {
     .unwrap()
 }
 
-pub(super) fn confidence(scale: InferentialScale) -> IntervalSemantics {
-    IntervalSemantics::new(IntervalKind::Confidence, 0.95, scale, "model fit").unwrap()
-}
-
-pub(super) fn render_svg(plot: Plot, name: &str) -> Result<String, lichtung_plot::Error> {
+pub(super) fn render_svg<K: lichtung_plot::kind::Marker>(
+    plot: Plot<K>,
+    name: &str,
+) -> Result<String, lichtung_plot::Error> {
     let directory = tempdir(name);
     let output = directory.join("plot.svg");
     let result = plot

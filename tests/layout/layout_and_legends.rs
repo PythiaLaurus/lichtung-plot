@@ -1,6 +1,6 @@
 use super::*;
 
-fn render(plot: Plot, name: &str) -> String {
+fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     plot.svg(&output).unwrap();
@@ -9,7 +9,7 @@ fn render(plot: Plot, name: &str) -> String {
     svg
 }
 
-fn fixture_scatter() -> Plot {
+fn fixture_scatter() -> Plot<lichtung_plot::kind::Scatter> {
     let (x, y) = fixture_values();
     Plot::scatter(x, y)
 }
@@ -190,21 +190,25 @@ fn translated_spectrum_legend_does_not_cover_graphics_or_axes() {
 }
 
 fn grouped_bar(frame: &data::DataFrame, horizontal: bool) -> Plot {
-    let plot = if horizontal {
+    if horizontal {
         Plot::horizontal_bar(
             data::category(frame, "group"),
-            data::numeric(frame, "count"),
+            BarInput::estimates(data::numeric(frame, "count")),
         )
+        .group(data::category(frame, "series"))
+        .hue(data::category(frame, "series"))
+        .size(420, 300)
+        .erase()
     } else {
         Plot::bar(
             data::category(frame, "group"),
-            data::numeric(frame, "count"),
+            BarInput::estimates(data::numeric(frame, "count")),
         )
-    };
-    plot.group(data::category(frame, "series"))
+        .group(data::category(frame, "series"))
         .hue(data::category(frame, "series"))
-        .bar_aggregation(BarAggregation::Identity)
         .size(420, 300)
+        .erase()
+    }
 }
 
 #[test]
@@ -231,10 +235,9 @@ fn horizontal_bar_long_ticks_clear_y_axis_label() {
     let svg = render(
         Plot::horizontal_bar(
             data::category(&frame, "group"),
-            data::numeric(&frame, "count"),
+            BarInput::estimates(data::numeric(&frame, "count")),
         )
         .labels(Labels::raw())
-        .bar_aggregation(BarAggregation::Identity)
         .y_label("Locus and genotype")
         .size(420, 300),
         "horizontal-long-labels",
@@ -255,7 +258,7 @@ fn single_series_bar_does_not_draw_legend() {
     let svg = render(
         Plot::bar(
             data::category(&frame, "group"),
-            data::numeric(&frame, "value"),
+            BarInput::samples(data::numeric(&frame, "value")),
         )
         .size(360, 260),
         "bar-no-legend",
@@ -278,14 +281,19 @@ fn grouped_distribution_legends_do_not_cover_graphics_or_axes() {
     )
     .unwrap();
     let grouped = |frame: &data::DataFrame, violin| {
-        let plot = if violin {
+        if violin {
             Plot::violin(data::category(frame, "dose"), data::numeric(frame, "value"))
+                .group(data::category(frame, "batch"))
+                .hue(data::category(frame, "batch"))
+                .size(420, 300)
+                .erase()
         } else {
             Plot::boxplot(data::category(frame, "dose"), data::numeric(frame, "value"))
-        };
-        plot.group(data::category(frame, "batch"))
-            .hue(data::category(frame, "batch"))
-            .size(420, 300)
+                .group(data::category(frame, "batch"))
+                .hue(data::category(frame, "batch"))
+                .size(420, 300)
+                .erase()
+        }
     };
     for (plot, name) in [
         (grouped(&box_frame, false), "boxplot"),
@@ -389,7 +397,7 @@ fn publication_theme_uses_larger_default_text() {
     assert!(palette.title_font_size >= 20);
 }
 
-fn assert_range_padding(plot: Plot, name: &str, padded: bool) {
+fn assert_range_padding<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str, padded: bool) {
     let svg = render(plot.size(360, 260), name);
     let clip = parse_first_clip_rect(&svg);
     let circles = parse_circles(&svg);

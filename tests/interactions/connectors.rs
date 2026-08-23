@@ -26,29 +26,18 @@ fn connector_collision_data() -> DataFrame {
     .unwrap()
 }
 
-fn chart(frame: &DataFrame) -> Plot {
+fn chart(frame: &DataFrame) -> Plot<lichtung_plot::kind::Interaction> {
     Plot::interaction(
         data::category(frame, "condition"),
         data::numeric(frame, "estimate"),
         data::category(frame, "series"),
-        data::numeric(frame, "lower"),
-        data::numeric(frame, "upper"),
+        Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
     )
     .hue(data::category(frame, "series"))
-    .interval_semantics(
-        IntervalSemantics::new(
-            IntervalKind::Confidence,
-            0.95,
-            InferentialScale::Response,
-            "connector fixture",
-        )
-        .unwrap(),
-    )
-    .interaction_source(EstimateSource::EstimatedMarginalMean)
     .size(480, 320)
 }
 
-fn svg(plot: Plot, name: &str) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     render_svg(plot, name).unwrap()
 }
 
@@ -98,21 +87,6 @@ fn hidden_interaction_connectors_reject_line_pattern_styles() {
         .unwrap_err()
         .to_string()
         .contains("incompatible with line-pattern style columns"));
-}
-
-#[test]
-fn interaction_connectors_reject_non_interaction_kinds() {
-    let frame = interaction_data();
-    let scatter = Plot::scatter(
-        data::numeric(&frame, "estimate"),
-        data::numeric(&frame, "upper"),
-    )
-    .interaction_connectors(false);
-    assert!(scatter
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("supported only by Interaction"));
 }
 
 #[test]

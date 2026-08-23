@@ -4,7 +4,7 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::layout::PanelBox;
-use crate::spec::{LineMode, PlotKind};
+use crate::spec::PlotKind;
 
 #[derive(Clone)]
 pub(super) struct FacetSelector {
@@ -177,16 +177,16 @@ pub(super) fn base_chart(
         )?);
         base = base.with_global_group_levels(levels);
     }
-    if kind == PlotKind::Line && chart.line_mode_spec() == LineMode::Trajectory {
+    if kind == PlotKind::Trajectory {
         if let Some(x_column) = chart.x_col() {
             let source = chart.data().column(x_column).map_err(|error| {
-                Error::Data(format!("line trajectory: column {x_column:?}: {error}"))
+                Error::Data(format!("trajectory: column {x_column:?}: {error}"))
             })?;
             if !source.is_numeric() {
                 let levels = stable_levels(crate::data::strict_normalized_strings(
                     data,
                     x_column,
-                    "line trajectory",
+                    "trajectory",
                     "condition",
                 )?);
                 base = base.with_global_line_condition_levels(levels);

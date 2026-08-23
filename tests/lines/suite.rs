@@ -1,6 +1,5 @@
 use lichtung_plot::{
-    AxisTick, Canvas, EffectBandSemantics, GuideSpec, GuideStyle, InferentialScale, IntervalKind,
-    IntervalSemantics, LineMode, LinePattern, Plot, PointLayer,
+    AxisTick, Bounds, Canvas, FacetSpec, GuideSpec, GuideStyle, LinePattern, Plot, PointLayer,
 };
 
 #[path = "../support/data.rs"]

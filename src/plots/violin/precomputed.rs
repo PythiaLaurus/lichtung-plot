@@ -60,7 +60,7 @@ pub(super) fn render(
             Ok(LegendEntry::point(
                 hue.clone(),
                 chart.point_style(
-                    chart.categorical_color("violin", hue, chart.hue_color_index(hue, index))?,
+                    chart.categorical_color("raincloud", hue, chart.hue_color_index(hue, index))?,
                     3,
                 ),
             ))
@@ -162,7 +162,7 @@ fn draw_strip(
     let strip_max = strip_right - point_radius;
     if strip_min - point_radius <= box_right || strip_max < strip_min {
         return Err(Error::Render(
-            "violin raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width"
+            "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width"
                 .into(),
         ));
     }
@@ -195,7 +195,7 @@ fn group_color(
             .position(|level| level == hue)
             .unwrap_or(index);
         let color_index = chart.hue_color_index(hue, local_index);
-        chart.categorical_color("violin", hue, color_index)
+        chart.categorical_color("raincloud", hue, color_index)
     } else {
         let palette = chart.palette();
         Ok(palette.colors[index % palette.colors.len()])

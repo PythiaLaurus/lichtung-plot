@@ -19,15 +19,18 @@ fn observations() -> DataFrame {
     .unwrap()
 }
 
-fn line_plot(frame: &DataFrame) -> Plot {
+fn line_plot(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
     Plot::line(
         data::numeric(frame, "grid_x"),
         data::numeric(frame, "estimate"),
     )
-    .interval_bounds(data::numeric(frame, "lower"), data::numeric(frame, "upper"))
+    .band(Bounds::new(
+        data::numeric(frame, "lower"),
+        data::numeric(frame, "upper"),
+    ))
 }
 
-fn svg(plot: Plot) -> String {
+fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     render_svg(plot, "numeric-layers").unwrap()
 }
 
@@ -208,35 +211,19 @@ fn point_layers_reject_incomplete_or_non_finite_rows() {
 }
 
 #[test]
-fn supplemental_geometry_rejects_incompatible_kinds_and_facets() {
+fn supplemental_geometry_rejects_facets_and_incompatible_guides() {
     let frame = line_data();
     let observed = observations();
     let layer = point_layer(&observed, "observed_x", "observed_y", 3, 0.5);
-    let scatter = Plot::scatter(
-        data::numeric(&frame, "grid_x"),
-        data::numeric(&frame, "estimate"),
-    )
-    .point_layer(layer.clone())
-    .preflight()
-    .unwrap_err()
-    .to_string();
     let faceted = line_plot(&frame)
-        .facet_col(data::category(&frame, "panel"))
+        .facet(FacetSpec::column(data::category(&frame, "panel")))
         .point_layer(layer)
         .preflight()
         .unwrap_err()
         .to_string();
-    let categorical = Plot::bar(
-        data::category(&frame, "panel"),
-        data::numeric(&frame, "estimate"),
-    )
-    .x_ticks(vec![AxisTick::new(0.5, "bad")])
-    .preflight()
-    .unwrap_err()
-    .to_string();
     let segment = Plot::bar(
         data::category(&frame, "panel"),
-        data::numeric(&frame, "estimate"),
+        lichtung_plot::BarInput::samples(data::numeric(&frame, "estimate")),
     )
     .guide(GuideSpec::segment(
         0.0,
@@ -248,9 +235,7 @@ fn supplemental_geometry_rejects_incompatible_kinds_and_facets() {
     .preflight()
     .unwrap_err()
     .to_string();
-    assert!(scatter.contains("only by LineMode::Series"));
     assert!(faceted.contains("not supported with faceting"));
-    assert!(categorical.contains("numeric x axis"));
     assert!(segment.contains("requires numeric x and y axes"));
 }
 

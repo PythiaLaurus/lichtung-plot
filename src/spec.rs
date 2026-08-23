@@ -4,19 +4,23 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{Layout, PanelBox};
 use crate::render::backend::SignificanceBracket;
 
+mod bar;
 mod categorical;
 mod estimate;
-mod inference;
+mod facet;
 mod output;
 
+pub use bar::{
+    BarInput, BarSamples, Bootstrap, ConfidenceInterval, ConfidenceIntervalAlgorithm, ErrorBar,
+    PercentileInterval, StandardDeviation, StandardError,
+};
+pub(crate) use bar::{BarSource, ErrorBarKind};
 pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
 pub use estimate::{
-    AxisScale, EstimateSource, EstimateStatus, LineMode, LinePathStyle, LinePattern, PointShape,
+    AxisScale, Bounds, CoefficientInput, EstimateStatus, LinePathStyle, LinePattern, PointShape,
     QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
-pub use inference::{
-    EffectBandCoverage, EffectBandSemantics, InferentialScale, IntervalKind, IntervalSemantics,
-};
+pub use facet::FacetSpec;
 #[cfg(feature = "png")]
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
@@ -29,31 +33,6 @@ pub enum BarSpacing {
     Comfort,
     /// Make hue bars within each category touch side-by-side.
     Compact,
-}
-
-/// Value construction for ordinary and grouped bar cells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BarAggregation {
-    /// Render the sample arithmetic mean with an exact two-sided Student-t 95% CI.
-    #[default]
-    Mean,
-    /// Render one already-computed finite value per cell without an interval.
-    Identity,
-}
-
-impl BarAggregation {
-    /// Fixed plot-owned provenance included in reports.
-    #[must_use]
-    pub const fn provenance(self) -> &'static str {
-        match self {
-            Self::Mean => {
-                "sample arithmetic mean with exact two-sided Student-t 95% confidence interval on the response scale"
-            }
-            Self::Identity => {
-                "identity/precomputed value with exactly one finite row per rendered cell and no confidence interval"
-            }
-        }
-    }
 }
 
 /// Histogram bin-selection strategy.
@@ -198,17 +177,6 @@ impl RawOverlay {
             }
         }
     }
-}
-
-/// Body and observation layout for violin-family plots.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ViolinLayout {
-    /// Draw the existing mirrored KDE body and centered inner summary.
-    #[default]
-    Mirrored,
-    /// Draw a one-sided KDE cloud, separated median/IQR box, and complete
-    /// deterministic source-row-offset observation strip.
-    Raincloud,
 }
 
 /// Continuous color-scale policy for heatmap cells.
@@ -608,8 +576,10 @@ define_plot_kinds! {
     Qq => ("Quantile-quantile plot against a standard normal distribution.", "Q-Q plot", "qq-plot"),
     PointInterval => ("Point estimates with explicit lower and upper interval bounds.", "point-interval plot", "point-interval-plot"),
     Line => ("Grouped ordered numeric series with optional precomputed ribbons.", "line plot", "line-plot"),
-    Interaction => ("Precomputed interaction profiles with explicit estimate provenance and optional closed trace styles.", "interaction plot", "interaction-plot"),
-    Coefficient => ("Named model coefficients with optional genuine intervals.", "coefficient plot", "coefficient-plot"),
+    Trajectory => ("Explicit-group repeated trajectories with neutral connectors.", "trajectory plot", "trajectory-plot"),
+    LinePath => ("Explicit-group numeric paths in source-row order.", "line-path plot", "line-path-plot"),
+    Interaction => ("Precomputed interaction profiles with explicit bounds and optional closed trace styles.", "interaction plot", "interaction-plot"),
+    Coefficient => ("Named model coefficients with optional drawable bounds.", "coefficient plot", "coefficient-plot"),
     Forest => ("Complete interval estimates with an explicit scientific null.", "forest plot", "forest-plot"),
     Dumbbell => ("Horizontal paired endpoint estimates with optional replicate identity.", "dumbbell plot", "dumbbell-plot"),
     Heatmap => ("Categorical grid with a continuous numeric fill.", "heatmap", "heatmap"),
@@ -618,7 +588,8 @@ define_plot_kinds! {
     StackedBar => ("Stacked vertical bar plot using one categorical series.", "stacked bar plot", "stacked-bar-plot"),
     StackedHorizontalBar => ("Stacked horizontal bar plot using one categorical series.", "stacked horizontal bar plot", "stacked-horizontal-bar-plot"),
     Boxplot => ("Box-and-whisker plot.", "boxplot", "boxplot"),
-    Violin => ("Violin plot with mirrored or raincloud KDE, summary, and observation geometry.", "violin plot", "violin-plot"),
+    Violin => ("Mirrored KDE violins with centered inner summaries.", "violin plot", "violin-plot"),
+    Raincloud => ("One-sided KDE clouds with separated summaries and complete observation strips.", "raincloud plot", "raincloud-plot"),
     Regression => ("Regression plot (scatter + fit line).", "regression plot", "regression-plot"),
     Marginal => ("Marginal plot (marginal histograms + central scatter).", "marginal plot", "marginal-plot"),
     Matrix => ("Scatter matrix (small multiples).", "scatter matrix", "scatter-matrix"),
@@ -636,10 +607,11 @@ impl PlotKind {
                 | Self::StackedHorizontalBar
                 | Self::Boxplot
                 | Self::Violin
+                | Self::Raincloud
         )
     }
 
-    pub(crate) const fn supports_significance(self) -> bool {
+    pub(crate) const fn supports_significance_annotations(self) -> bool {
         matches!(
             self,
             Self::Bar
@@ -648,6 +620,7 @@ impl PlotKind {
                 | Self::StackedHorizontalBar
                 | Self::Boxplot
                 | Self::Violin
+                | Self::Raincloud
                 | Self::Coefficient
         )
     }
@@ -660,9 +633,12 @@ impl PlotKind {
             Self::Bar
             | Self::StackedBar
             | Self::Line
+            | Self::Trajectory
+            | Self::LinePath
             | Self::Interaction
             | Self::Boxplot
             | Self::Violin
+            | Self::Raincloud
             | Self::Regression => LegendDefault::TopRight(LegendClearance::VerticalMaximum),
             Self::Scatter | Self::Marginal if !explicit_y_limits => {
                 LegendDefault::TopRight(LegendClearance::VerticalMaximum)

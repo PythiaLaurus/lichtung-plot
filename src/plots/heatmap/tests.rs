@@ -15,7 +15,7 @@ fn valid_data() -> Fixture {
     )
 }
 
-fn chart(data: &Fixture) -> Plot {
+fn chart(data: &Fixture) -> Plot<crate::kind::Heatmap> {
     Plot::heatmap(
         crate::test_support::category(data, "x"),
         crate::test_support::category(data, "y"),
@@ -23,8 +23,9 @@ fn chart(data: &Fixture) -> Plot {
     )
 }
 
-fn prepare_chart(chart: &Plot) -> Result<HeatmapData, Error> {
-    prepare(chart, chart)
+fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Error> {
+    let chart = chart.clone().erase();
+    prepare(&chart, &chart)
 }
 
 #[test]
@@ -297,11 +298,10 @@ fn colorbar_gradient_stops_preserve_sequential_diverging_and_constant_scales() {
 fn validate_options_rejects_heatmap_incompatible_configuration() {
     let data = valid_data();
     let charts = [
-        chart(&data).x_limits(0.0, 1.0),
-        chart(&data).y_tick_count(2),
-        chart(&data).x_category_order(ValueSort::Ascending),
-        chart(&data).hue(crate::test_support::category(&data, "x")),
-        chart(&data).heatmap_scale(HeatmapScale::Diverging { center: f64::NAN }),
+        chart(&data).x_category_order(ValueSort::Ascending).erase(),
+        chart(&data)
+            .heatmap_scale(HeatmapScale::Diverging { center: f64::NAN })
+            .erase(),
     ];
 
     assert!(charts.iter().all(|chart| validate_options(chart).is_err()));

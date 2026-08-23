@@ -26,9 +26,6 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    chart.interaction_source_spec().ok_or_else(|| {
-        Error::Data("interaction: estimate source is required; call interaction_source(...)".into())
-    })?;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
@@ -40,12 +37,6 @@ pub(crate) fn render(
         .ok_or_else(|| Error::Data("interaction: graphical group column not set".into()))?;
     let (lower_col, upper_col) = chart.interval_bound_cols().ok_or_else(|| {
         Error::Data("interaction: complete precomputed interval columns are required".into())
-    })?;
-    chart.interval_semantics_spec().ok_or_else(|| {
-        Error::Data(
-            "interaction: typed interval semantics are required; call interval_semantics(...)"
-                .into(),
-        )
     })?;
     let x = crate::data::strict_strings(context.data, x_col, "interaction")?;
     let channels = crate::data::collective_channels(

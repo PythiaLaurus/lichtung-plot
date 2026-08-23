@@ -2,7 +2,8 @@
 
 mod spec;
 
-pub use spec::{Significance, SignificanceMark, SignificanceTarget};
+pub(crate) use spec::SignificanceAnnotation;
+pub use spec::{Attached, Pairwise, Significance, SignificanceMark, SignificanceTarget};
 
 use crate::Error;
 
@@ -66,7 +67,7 @@ pub(crate) fn plan(
     reason = "the wrapper preserves the existing validated significance planner inputs"
 )]
 fn plan_comparisons(
-    annotations: &[Significance],
+    annotations: &[SignificanceAnnotation],
     categories: &[String],
     rendered_maxima: &[f64],
     y_range: (f64, f64),
@@ -98,7 +99,7 @@ fn plan_comparisons(
     reason = "the private planner keeps validated anchors, ranges, and panel geometry together"
 )]
 fn plan_comparisons_at(
-    annotations: &[Significance],
+    annotations: &[SignificanceAnnotation],
     categories: &[String],
     rendered_maxima: &[f64],
     anchor_positions: Option<&[f64]>,
@@ -545,7 +546,7 @@ fn plan_grouped_oriented(
                 resolve_grouped_endpoint(endpoint_a, categories, groups, rendered_maxima)?;
             let endpoint_b =
                 resolve_grouped_endpoint(endpoint_b, categories, groups, rendered_maxima)?;
-            Ok(Significance::between(
+            Ok(SignificanceAnnotation::pairwise(
                 endpoint_a,
                 endpoint_b,
                 annotation.mark(),
@@ -644,7 +645,10 @@ fn validate_range(range: (f64, f64), explicit: bool) -> Result<(), Error> {
     )))
 }
 
-fn validate_bracket(annotation: &Significance, categories: &[String]) -> Result<(), Error> {
+fn validate_bracket(
+    annotation: &SignificanceAnnotation,
+    categories: &[String],
+) -> Result<(), Error> {
     let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
         return Ok(());
     };

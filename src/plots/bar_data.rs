@@ -6,8 +6,12 @@ use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
 use crate::render::backend::PointStyle;
+use crate::spec::{
+    BarInput, BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
+    StandardDeviation, StandardError,
+};
 use crate::theme::ThemePalette;
-use crate::{BarAggregation, CategoryOrder, Plot, ValueSort};
+use crate::{CategoryOrder, Plot, ValueSort};
 
 /// Bar arrangement mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +79,30 @@ pub(crate) struct PreparedBars {
     pub(crate) significance: Vec<PreparedBarSignificance>,
 }
 
+#[derive(Clone, Copy)]
+struct BarSummaryInput<'a> {
+    units: Option<&'a [String]>,
+    input: &'a BarInput,
+    facet_identity: &'a FacetIdentity,
+}
+
+struct FacetIdentity(Vec<(String, String)>);
+
+struct SingleBarCell {
+    category_index: usize,
+    hue_index: Option<usize>,
+    values: Vec<f64>,
+    units: Vec<String>,
+}
+
+struct GroupedBarCell {
+    category_index: usize,
+    series_index: usize,
+    hue_index: Option<usize>,
+    values: Vec<f64>,
+    units: Vec<String>,
+}
+
 /// Build prepared bar data from x/y and optional graphical group and hue channels.
 pub(crate) fn prepare<'a>(
     chart: &Plot,
@@ -104,13 +132,24 @@ pub(crate) fn prepare<'a>(
     )?;
     let group_order = chart.resolved_group_levels(channels.group_levels.clone());
     let hue_order = chart.resolved_hue_levels(channels.hue_levels.clone());
+    let units = chart
+        .bar_units_col()
+        .map(|column| crate::data::strict_strings(data, column, "bar sampling units"))
+        .transpose()?;
+    let facet_identity = facet_identity(chart, data)?;
     let mut prepared = match mode {
         BarMode::Single => prepare_single(
             categories,
             channels.hues.as_deref(),
             values,
             hue_order,
-            chart.bar_aggregation_spec(),
+            BarSummaryInput {
+                units: units.as_deref(),
+                input: chart
+                    .bar_input()
+                    .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?,
+                facet_identity: &facet_identity,
+            },
         ),
         BarMode::Grouped => {
             let groups = channels.groups.ok_or_else(|| {
@@ -123,7 +162,13 @@ pub(crate) fn prepare<'a>(
                 values,
                 group_order,
                 hue_order,
-                chart.bar_aggregation_spec(),
+                BarSummaryInput {
+                    units: units.as_deref(),
+                    input: chart.bar_input().ok_or_else(|| {
+                        Error::Data("ordinary bar input is not configured".into())
+                    })?,
+                    facet_identity: &facet_identity,
+                },
             )
         }
         BarMode::Stacked => {
@@ -146,10 +191,8 @@ pub(crate) fn prepare<'a>(
         mode,
         !data.is_full_plot(),
     )?;
-    if chart.bar_aggregation_spec() == BarAggregation::Identity {
-        if let Some(bounds) = chart.interval_bound_cols() {
-            apply_identity_bounds(chart, data, &mut prepared, bounds)?;
-        }
+    if let Some(bounds) = chart.bar_bound_cols() {
+        apply_precomputed_bounds(chart, data, &mut prepared, bounds)?;
     }
     apply_attached_significance(chart, &mut prepared, mode)?;
     prepared.points = prepare_point_layers(chart, &prepared, mode)?;
@@ -158,6 +201,25 @@ pub(crate) fn prepare<'a>(
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
     }
     Ok(prepared)
+}
+
+fn facet_identity(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<FacetIdentity, Error> {
+    let (row, column, wrap, _) = chart.facet_columns();
+    let mut identity = Vec::new();
+    for facet_column in [row, column, wrap].into_iter().flatten() {
+        let values = crate::data::strict_strings(data, facet_column, "bar facet identity")?;
+        let level = values
+            .first()
+            .ok_or_else(|| Error::Data("bar facet cell contains no observations".into()))?;
+        if values.iter().any(|value| value != level) {
+            return Err(Error::Data(
+                "bar facet preparation mixed multiple levels in one panel".into(),
+            ));
+        }
+        let name = data.column(facet_column)?.name();
+        identity.push((name.to_owned(), level.clone()));
+    }
+    Ok(FacetIdentity(identity))
 }
 
 fn apply_attached_significance(
@@ -244,7 +306,7 @@ fn apply_attached_significance(
     Ok(())
 }
 
-fn apply_identity_bounds(
+fn apply_precomputed_bounds(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
     prepared: &mut PreparedBars,
@@ -253,16 +315,16 @@ fn apply_identity_bounds(
     let category_column = chart
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
-    let categories = crate::data::strict_strings(data, category_column, "bar identity interval")?;
+    let categories = crate::data::strict_strings(data, category_column, "bar estimate bounds")?;
     let groups = chart
         .group_col()
-        .map(|column| crate::data::strict_strings(data, column, "bar identity interval"))
+        .map(|column| crate::data::strict_strings(data, column, "bar estimate bounds"))
         .transpose()?;
-    let lower = crate::data::strict_finite_f64(data, lower_column, "bar identity interval")?;
-    let upper = crate::data::strict_finite_f64(data, upper_column, "bar identity interval")?;
+    let lower = crate::data::strict_finite_f64(data, lower_column, "bar estimate bounds")?;
+    let upper = crate::data::strict_finite_f64(data, upper_column, "bar estimate bounds")?;
     if lower.len() != categories.len() || upper.len() != categories.len() {
         return Err(Error::Data(
-            "bar identity interval: category/lower/upper length mismatch".into(),
+            "bar estimate bounds: category/lower/upper length mismatch".into(),
         ));
     }
     for row in 0..categories.len() {
@@ -271,7 +333,7 @@ fn apply_identity_bounds(
             .iter()
             .position(|category| category == &categories[row])
             .ok_or_else(|| {
-                Error::Data("bar identity interval category disappeared during preparation".into())
+                Error::Data("bar estimate bounds category disappeared during preparation".into())
             })?;
         let series_index = groups
             .as_ref()
@@ -282,7 +344,7 @@ fn apply_identity_bounds(
                     .position(|group| group == &values[row])
                     .ok_or_else(|| {
                         Error::Data(
-                            "bar identity interval graphical group disappeared during preparation"
+                            "bar estimate bounds graphical group disappeared during preparation"
                                 .into(),
                         )
                     })
@@ -293,11 +355,11 @@ fn apply_identity_bounds(
             .iter_mut()
             .find(|bar| bar.category_index == category_index && bar.series_index == series_index)
             .ok_or_else(|| {
-                Error::Data("bar identity interval cell disappeared during preparation".into())
+                Error::Data("bar estimate bounds cell disappeared during preparation".into())
             })?;
         if lower[row] > bar.end || bar.end > upper[row] {
             return Err(Error::Data(format!(
-                "bar identity interval row {row} requires finite lower <= value <= upper; got {} <= {} <= {}",
+                "bar estimate bounds row {row} requires finite lower <= value <= upper; got {} <= {} <= {}",
                 lower[row], bar.end, upper[row]
             )));
         }
@@ -386,16 +448,12 @@ fn prepare_point_layers(
     Ok(points)
 }
 
-/// Validate cell cardinality for the selected ordinary-bar value construction.
+/// Validate cardinality and strict values for typed ordinary-bar inputs.
 #[expect(
     clippy::too_many_lines,
     reason = "one pass preserves source-row, facet, category, and graphical-group validation context"
 )]
-pub(crate) fn validate_aggregation_cells(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-    aggregation: BarAggregation,
-) -> Result<(), Error> {
+pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<(), Error> {
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
@@ -422,12 +480,17 @@ pub(crate) fn validate_aggregation_cells(
         .collect::<Result<Vec<_>, _>>()?;
     let mark_cells = (0..values.len())
         .map(|index| {
-            facet_values
+            let mut identity = String::new();
+            for field in facet_values
                 .iter()
                 .map(|facet| facet[index].as_str())
                 .chain(std::iter::once(categories[index].as_str()))
-                .collect::<Vec<_>>()
-                .join("\u{1f}")
+            {
+                identity.push_str(&field.len().to_string());
+                identity.push(':');
+                identity.push_str(field);
+            }
+            identity
         })
         .collect::<Vec<_>>();
     let channels = crate::data::collective_channels(
@@ -449,7 +512,7 @@ pub(crate) fn validate_aggregation_cells(
         ));
     }
 
-    let mut cells: Vec<(Vec<String>, usize, usize)> = Vec::new();
+    let mut cells: Vec<(Vec<String>, usize)> = Vec::new();
     for index in 0..values.len() {
         let mut key = facet_values
             .iter()
@@ -459,20 +522,36 @@ pub(crate) fn validate_aggregation_cells(
         if let Some(groups) = &channels.groups {
             key.push(groups[index].clone());
         }
-        if let Some((_, rows, finite)) = cells.iter_mut().find(|(existing, _, _)| existing == &key)
-        {
+        if let Some((_, rows)) = cells.iter_mut().find(|(existing, _)| existing == &key) {
             *rows += 1;
-            *finite += usize::from(values[index].is_finite());
         } else {
-            cells.push((key, 1, usize::from(values[index].is_finite())));
+            cells.push((key, 1));
         }
     }
     if cells.is_empty() {
-        return Err(Error::Data(format!(
-            "bar aggregation {aggregation:?} requires at least one rendered category cell"
-        )));
+        return Err(Error::Data(
+            "bar input requires at least one rendered category cell".into(),
+        ));
     }
-    for (key, rows, finite) in cells {
+    let input = chart
+        .bar_input()
+        .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?;
+    if let Some(units_column) = chart.bar_units_col() {
+        crate::data::strict_strings(data, units_column, "bar sampling units")?;
+    }
+    if let Some((lower_column, upper_column)) = chart.bar_bound_cols() {
+        let lower = crate::data::strict_finite_f64(data, lower_column, "bar estimate bounds")?;
+        let upper = crate::data::strict_finite_f64(data, upper_column, "bar estimate bounds")?;
+        for row in 0..values.len() {
+            if lower[row] > values[row] || values[row] > upper[row] {
+                return Err(Error::Data(format!(
+                    "bar estimate bounds row {row} requires finite lower <= value <= upper; got {} <= {} <= {}",
+                    lower[row], values[row], upper[row]
+                )));
+            }
+        }
+    }
+    for (key, rows) in cells {
         let mut labels = facet_names
             .iter()
             .zip(&key)
@@ -487,24 +566,10 @@ pub(crate) fn validate_aggregation_cells(
             ));
         }
         let cell = labels.join(", ");
-        if finite != rows {
+        if !input.is_samples() && rows != 1 {
             return Err(Error::Data(format!(
-                "generated bar interval cell `{cell}` contains {} non-finite observation(s); all rendered observations must be finite",
-                rows - finite
+                "bar estimate cell `{cell}` has {rows} finite observations; exactly one is required"
             )));
-        }
-        match aggregation {
-            BarAggregation::Mean if finite < 2 => {
-                return Err(Error::Data(format!(
-                    "bar mean cell `{cell}` has {finite} finite observation; at least two are required for a Student-t confidence interval"
-                )));
-            }
-            BarAggregation::Identity if finite != 1 => {
-                return Err(Error::Data(format!(
-                    "bar identity cell `{cell}` has {finite} finite observations; exactly one is required"
-                )));
-            }
-            BarAggregation::Mean | BarAggregation::Identity => {}
         }
     }
     Ok(())
@@ -598,35 +663,52 @@ fn prepare_single(
     hues: Option<&[String]>,
     values: Vec<f64>,
     mut hue_levels: Vec<String>,
-    aggregation: BarAggregation,
+    summary: BarSummaryInput<'_>,
 ) -> Result<PreparedBars, Error> {
-    let mut groups: Vec<(String, Option<usize>, Vec<f64>)> = Vec::new();
+    let mut category_levels = Vec::new();
+    let mut groups: Vec<SingleBarCell> = Vec::new();
     for (row, (category, value)) in categories.into_iter().zip(values).enumerate() {
+        let category_index = level_index(&mut category_levels, category);
         let hue_index = hues.map(|hues| level_index(&mut hue_levels, hues[row].clone()));
-        if let Some((_, _, category_values)) = groups
+        if let Some(cell) = groups
             .iter_mut()
-            .find(|(seen_category, _, _)| seen_category == &category)
+            .find(|cell| cell.category_index == category_index)
         {
-            category_values.push(value);
+            cell.values.push(value);
+            if let Some(units) = summary.units {
+                cell.units.push(units[row].clone());
+            }
         } else {
-            groups.push((category, hue_index, vec![value]));
+            groups.push(SingleBarCell {
+                category_index,
+                hue_index,
+                values: vec![value],
+                units: summary
+                    .units
+                    .map_or_else(Vec::new, |units| vec![units[row].clone()]),
+            });
         }
     }
     if groups.is_empty() {
         return Err(Error::Data("bar: no groups".into()));
     }
 
-    let categories: Vec<String> = groups
-        .iter()
-        .map(|(category, _, _)| category.clone())
-        .collect();
     let mut bars = Vec::with_capacity(groups.len());
-    for (category_index, (category, hue_index, ys)) in groups.iter().enumerate() {
-        let (value, interval) = summarize(ys, &format!("category {category:?}"), aggregation)?;
+    for cell in &groups {
+        let category = &category_levels[cell.category_index];
+        let (value, interval) = summarize(
+            &cell.values,
+            summary.units.map(|_| cell.units.as_slice()),
+            &format!("category {category:?}"),
+            summary.facet_identity,
+            category,
+            None,
+            summary.input,
+        )?;
         bars.push(PreparedBar {
-            category_index,
+            category_index: cell.category_index,
             series_index: None,
-            hue_index: *hue_index,
+            hue_index: cell.hue_index,
             start: 0.0,
             end: value,
             interval,
@@ -634,7 +716,7 @@ fn prepare_single(
     }
     let value_range = value_range(&bars)?;
     Ok(PreparedBars {
-        categories,
+        categories: category_levels,
         series: Vec::new(),
         hues: hue_levels,
         value_range,
@@ -651,7 +733,7 @@ fn prepare_grouped(
     values: Vec<f64>,
     series_order: Vec<String>,
     hue_order: Vec<String>,
-    aggregation: BarAggregation,
+    summary: BarSummaryInput<'_>,
 ) -> Result<PreparedBars, Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
         return Err(Error::Data("bar: x/y/hue length mismatch".into()));
@@ -659,7 +741,7 @@ fn prepare_grouped(
     let mut category_levels = Vec::new();
     let mut series_levels = series_order;
     let mut hue_levels = hue_order;
-    let mut groups: Vec<(usize, usize, Option<usize>, Vec<f64>)> = Vec::new();
+    let mut groups: Vec<GroupedBarCell> = Vec::new();
 
     for (row, ((category, series_label), value)) in
         categories.into_iter().zip(series).zip(values).enumerate()
@@ -669,13 +751,24 @@ fn prepare_grouped(
         let hue_index = hues
             .as_ref()
             .map(|hues| level_index(&mut hue_levels, hues[row].clone()));
-        if let Some((_, _, _, ys)) = groups
+        if let Some(cell) = groups
             .iter_mut()
-            .find(|(c, s, _, _)| *c == category_index && *s == series_index)
+            .find(|cell| cell.category_index == category_index && cell.series_index == series_index)
         {
-            ys.push(value);
+            cell.values.push(value);
+            if let Some(units) = summary.units {
+                cell.units.push(units[row].clone());
+            }
         } else {
-            groups.push((category_index, series_index, hue_index, vec![value]));
+            groups.push(GroupedBarCell {
+                category_index,
+                series_index,
+                hue_index,
+                values: vec![value],
+                units: summary
+                    .units
+                    .map_or_else(Vec::new, |units| vec![units[row].clone()]),
+            });
         }
     }
     if groups.is_empty() {
@@ -683,16 +776,24 @@ fn prepare_grouped(
     }
 
     let mut bars = Vec::with_capacity(groups.len());
-    for (category_index, series_index, hue_index, ys) in groups {
+    for cell in groups {
         let context = format!(
             "category {:?}, graphical group {:?}",
-            category_levels[category_index], series_levels[series_index]
+            category_levels[cell.category_index], series_levels[cell.series_index]
         );
-        let (value, interval) = summarize(&ys, &context, aggregation)?;
+        let (value, interval) = summarize(
+            &cell.values,
+            summary.units.map(|_| cell.units.as_slice()),
+            &context,
+            summary.facet_identity,
+            &category_levels[cell.category_index],
+            Some(&series_levels[cell.series_index]),
+            summary.input,
+        )?;
         bars.push(PreparedBar {
-            category_index,
-            series_index: Some(series_index),
-            hue_index,
+            category_index: cell.category_index,
+            series_index: Some(cell.series_index),
+            hue_index: cell.hue_index,
             start: 0.0,
             end: value,
             interval,
@@ -826,40 +927,273 @@ fn level_index(levels: &mut Vec<String>, label: String) -> usize {
     }
 }
 
-fn mean_summary(values: &[f64], context: &str) -> Result<(f64, f64), Error> {
-    let mean =
-        stable_mean(values).map_err(|reason| Error::Data(format!("bar: {context} {reason}")))?;
-    let ci = mean_ci95(values, mean)
-        .map_err(|reason| Error::Data(format!("bar: {context} {reason}")))?;
-    if !mean.is_finite() || !ci.is_finite() || ci < 0.0 {
-        return Err(Error::Data(format!(
-            "bar: {context} produced non-finite mean or confidence interval"
-        )));
-    }
-    if !(mean - ci).is_finite() || !(mean + ci).is_finite() {
-        return Err(Error::Data(format!(
-            "bar: {context} confidence interval geometry is not representable"
-        )));
-    }
-    Ok((mean, ci))
-}
-
 fn summarize(
     values: &[f64],
+    units: Option<&[String]>,
     context: &str,
-    aggregation: BarAggregation,
+    facet_identity: &FacetIdentity,
+    category: &str,
+    series: Option<&str>,
+    input: &BarInput,
 ) -> Result<(f64, Option<(f64, f64)>), Error> {
-    match aggregation {
-        BarAggregation::Mean => {
-            mean_summary(values, context).map(|(mean, ci)| (mean, Some((mean - ci, mean + ci))))
+    match &input.source {
+        BarSource::Samples { error_bar, .. } => {
+            let mean = stable_mean(values)
+                .map_err(|reason| Error::Data(format!("bar: {context} {reason}")))?;
+            let interval = generated_interval(
+                values,
+                units,
+                mean,
+                error_bar.kind(),
+                facet_identity,
+                category,
+                series,
+            )
+            .map_err(|reason| Error::Data(format!("bar: {context} {reason}")))?;
+            Ok((mean, interval))
         }
-        BarAggregation::Identity => match values {
+        BarSource::Estimates { .. } => match values {
             [value] if value.is_finite() => Ok((*value, None)),
             _ => Err(Error::Data(format!(
-                "bar: {context} identity aggregation requires exactly one finite value, got {}",
+                "bar: {context} precomputed estimates require exactly one finite value, got {}",
                 values.len()
             ))),
         },
+    }
+}
+
+fn generated_interval(
+    values: &[f64],
+    units: Option<&[String]>,
+    mean: f64,
+    error_bar: &ErrorBarKind,
+    facet_identity: &FacetIdentity,
+    category: &str,
+    series: Option<&str>,
+) -> Result<Option<(f64, f64)>, &'static str> {
+    if values.len() == 1 || matches!(error_bar, ErrorBarKind::Hidden) {
+        return Ok(None);
+    }
+    match error_bar {
+        ErrorBarKind::Hidden => Ok(None),
+        ErrorBarKind::StandardDeviation(StandardDeviation { scale }) => {
+            symmetric_interval(mean, sample_standard_deviation(values)? * scale)
+        }
+        ErrorBarKind::PercentileInterval(PercentileInterval { level }) => {
+            central_quantiles(values, *level).map(Some)
+        }
+        ErrorBarKind::StandardError(StandardError { scale }) => symmetric_interval(
+            mean,
+            sample_standard_deviation(values)? / (values.len() as f64).sqrt() * scale,
+        ),
+        ErrorBarKind::ConfidenceInterval(interval) => match &interval.algorithm {
+            ConfidenceIntervalAlgorithm::Bootstrap(bootstrap) => {
+                if units.is_some_and(|units| effective_unit_count(units) == 1) {
+                    return Ok(None);
+                }
+                let seed = stable_cell_seed(bootstrap.seed, facet_identity, category, series);
+                percentile_bootstrap(values, units, interval.level, bootstrap.resamples, seed)
+                    .map(Some)
+            }
+            ConfidenceIntervalAlgorithm::StudentT => {
+                let critical = crate::stats::student_t_critical(values.len() - 1, interval.level)?;
+                symmetric_interval(
+                    mean,
+                    critical * sample_standard_deviation(values)? / (values.len() as f64).sqrt(),
+                )
+            }
+        },
+    }
+}
+
+fn symmetric_interval(mean: f64, half_width: f64) -> Result<Option<(f64, f64)>, &'static str> {
+    let lower = mean - half_width;
+    let upper = mean + half_width;
+    if !half_width.is_finite() || half_width < 0.0 || !lower.is_finite() || !upper.is_finite() {
+        return Err("error-bar geometry is not numerically representable");
+    }
+    Ok(Some((lower, upper)))
+}
+
+fn sample_standard_deviation(values: &[f64]) -> Result<f64, &'static str> {
+    if values.len() < 2 {
+        return Err("sample standard deviation requires at least two observations");
+    }
+    let scale = values.iter().map(|value| value.abs()).fold(0.0, f64::max);
+    if !scale.is_finite() {
+        return Err("contains non-finite observations");
+    }
+    if scale == 0.0 {
+        return Ok(0.0);
+    }
+    let mut mean = 0.0;
+    let mut squared_deviations = 0.0;
+    for (index, value) in values.iter().enumerate() {
+        let normalized = value / scale;
+        let count = (index + 1) as f64;
+        let delta = normalized - mean;
+        mean += delta / count;
+        squared_deviations += delta * (normalized - mean);
+    }
+    let deviation = (squared_deviations / (values.len() - 1) as f64).sqrt() * scale;
+    if deviation.is_finite() {
+        Ok(deviation)
+    } else {
+        Err("sample standard deviation is not numerically representable")
+    }
+}
+
+fn central_quantiles(values: &[f64], level: f64) -> Result<(f64, f64), &'static str> {
+    let tail = (1.0 - level) / 2.0;
+    let lower = crate::stats::distribution::quantile(values, tail)
+        .map_err(|_| "could not compute the lower error-bar percentile")?;
+    let upper = crate::stats::distribution::quantile(values, 1.0 - tail)
+        .map_err(|_| "could not compute the upper error-bar percentile")?;
+    if lower.is_finite() && upper.is_finite() && lower <= upper {
+        Ok((lower, upper))
+    } else {
+        Err("percentile error-bar geometry is not numerically representable")
+    }
+}
+
+fn percentile_bootstrap(
+    values: &[f64],
+    units: Option<&[String]>,
+    level: f64,
+    resamples: usize,
+    seed: u64,
+) -> Result<(f64, f64), &'static str> {
+    if units.is_some_and(|units| units.len() != values.len()) {
+        return Err("sampling units must align with observations");
+    }
+    let mut rng = SplitMix64::new(seed);
+    let mut means = Vec::with_capacity(resamples);
+    if let Some(units) = units {
+        let grouped = grouped_unit_values(values, units);
+        for _ in 0..resamples {
+            let mut sample = Vec::new();
+            for _ in 0..grouped.len() {
+                let unit = &grouped[rng.index(grouped.len())].1;
+                for _ in 0..unit.len() {
+                    sample.push(unit[rng.index(unit.len())]);
+                }
+            }
+            means.push(stable_mean(&sample)?);
+        }
+    } else {
+        let mut sorted = values.to_vec();
+        sorted.sort_by(f64::total_cmp);
+        let mut sample = vec![0.0; sorted.len()];
+        for _ in 0..resamples {
+            for value in &mut sample {
+                *value = sorted[rng.index(sorted.len())];
+            }
+            means.push(stable_mean(&sample)?);
+        }
+    }
+    central_quantiles(&means, level)
+}
+
+fn grouped_unit_values(values: &[f64], units: &[String]) -> Vec<(String, Vec<f64>)> {
+    let mut grouped: Vec<(String, Vec<f64>)> = Vec::new();
+    for (value, unit) in values.iter().copied().zip(units) {
+        if let Some((_, observations)) = grouped.iter_mut().find(|(label, _)| label == unit) {
+            observations.push(value);
+        } else {
+            grouped.push((unit.clone(), vec![value]));
+        }
+    }
+    grouped.sort_by(|left, right| left.0.cmp(&right.0));
+    for (_, observations) in &mut grouped {
+        observations.sort_by(f64::total_cmp);
+    }
+    grouped
+}
+
+fn effective_unit_count(units: &[String]) -> usize {
+    let mut unique: Vec<&str> = Vec::new();
+    for unit in units {
+        if !unique.contains(&unit.as_str()) {
+            unique.push(unit);
+        }
+    }
+    unique.len()
+}
+
+fn stable_cell_seed(
+    seed: u64,
+    facets: &FacetIdentity,
+    category: &str,
+    series: Option<&str>,
+) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    hash_bytes(&mut hash, &seed.to_le_bytes());
+    hash_bytes(
+        &mut hash,
+        &u64::try_from(facets.0.len())
+            .unwrap_or(u64::MAX)
+            .to_le_bytes(),
+    );
+    for (name, level) in &facets.0 {
+        hash_field(&mut hash, name);
+        hash_field(&mut hash, level);
+    }
+    hash_field(&mut hash, category);
+    if let Some(series) = series {
+        hash_bytes(&mut hash, &[1]);
+        hash_field(&mut hash, series);
+    } else {
+        hash_bytes(&mut hash, &[0]);
+    }
+    splitmix64(hash)
+}
+
+fn hash_field(hash: &mut u64, field: &str) {
+    let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+    hash_bytes(hash, &length.to_le_bytes());
+    hash_bytes(hash, field.as_bytes());
+}
+
+fn hash_bytes(hash: &mut u64, bytes: &[u8]) {
+    for byte in bytes {
+        *hash ^= u64::from(*byte);
+        *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+}
+
+fn splitmix64(mut value: u64) -> u64 {
+    value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^ (value >> 31)
+}
+
+struct SplitMix64 {
+    state: u64,
+}
+
+impl SplitMix64 {
+    const fn new(seed: u64) -> Self {
+        Self { state: seed }
+    }
+
+    fn next(&mut self) -> u64 {
+        self.state = self.state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut value = self.state;
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        value ^ (value >> 31)
+    }
+
+    fn index(&mut self, upper: usize) -> usize {
+        let upper = u64::try_from(upper).unwrap_or(u64::MAX);
+        let limit = u64::MAX - u64::MAX % upper;
+        loop {
+            let value = self.next();
+            if value < limit {
+                return usize::try_from(value % upper).unwrap_or(0);
+            }
+        }
     }
 }
 
@@ -960,78 +1294,231 @@ fn compensated_sum(values: &[f64]) -> Option<f64> {
     result.is_finite().then_some(result)
 }
 
-pub(crate) fn mean_ci95(values: &[f64], mean: f64) -> Result<f64, &'static str> {
-    if values.len() < 2 {
-        return Err("sample mean confidence interval requires at least two observations");
-    }
-    let scale = values
-        .iter()
-        .map(|value| value.abs())
-        .fold(mean.abs(), f64::max);
-    if !scale.is_finite() {
-        return Err("contains non-finite observations or mean");
-    }
-    if scale == 0.0 {
-        return Ok(0.0);
-    }
-    let n = values.len() as f64;
-    let mut normalized_mean = 0.0;
-    let mut squared_deviations = 0.0;
-    for (index, value) in values.iter().enumerate() {
-        let normalized = value / scale;
-        let count = (index + 1) as f64;
-        let delta = normalized - normalized_mean;
-        normalized_mean += delta / count;
-        squared_deviations += delta * (normalized - normalized_mean);
-    }
-    let sem_normalized = (squared_deviations / (n - 1.0) / n).sqrt();
-    let ci = (t_critical_975(values.len() - 1)? * sem_normalized) * scale;
-    if ci.is_finite() {
-        Ok(ci)
-    } else {
-        Err("confidence interval is not numerically representable")
-    }
-}
-
-pub(crate) fn t_critical_975(df: usize) -> Result<f64, &'static str> {
-    crate::stats::student_t_critical_975(df)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{mean_ci95, stable_mean, stable_sum, summarize, t_critical_975};
-    use crate::BarAggregation;
+    use super::{
+        generated_interval, prepare, stable_cell_seed, stable_mean, stable_sum, BarMode,
+        FacetIdentity,
+    };
+    use crate::spec::{
+        Bootstrap, ConfidenceInterval, ConfidenceIntervalAlgorithm, ErrorBarKind,
+        PercentileInterval, StandardDeviation, StandardError,
+    };
+    use crate::{BarInput, Bounds, CategoryValues, ErrorBar, NumericValues, Plot};
 
-    #[test]
-    fn t_critical_uses_small_sample_values() {
-        assert!((t_critical_975(1).unwrap() - 12.706_204_736_432_095).abs() < 1e-9);
-        assert!((t_critical_975(10).unwrap() - 2.228_138_851_964_938_5).abs() < 1e-9);
+    fn bootstrap(resamples: usize, seed: u64) -> ErrorBarKind {
+        ErrorBarKind::ConfidenceInterval(ConfidenceInterval {
+            level: 0.95,
+            algorithm: ConfidenceIntervalAlgorithm::Bootstrap(Bootstrap {
+                resamples,
+                seed,
+                units: None,
+            }),
+        })
+    }
+
+    fn interval(
+        values: &[f64],
+        units: Option<&[String]>,
+        error_bar: &ErrorBarKind,
+    ) -> Option<(f64, f64)> {
+        generated_interval(
+            values,
+            units,
+            stable_mean(values).unwrap(),
+            error_bar,
+            &FacetIdentity(vec![("facet".to_owned(), "one".to_owned())]),
+            "category",
+            Some("group"),
+        )
+        .unwrap()
     }
 
     #[test]
-    fn t_critical_retains_finite_df_tail_for_large_samples() {
-        assert!((t_critical_975(120).unwrap() - 1.979_930_405_052_777).abs() < 1e-9);
-        assert!((t_critical_975(500).unwrap() - 1.964_719_837_467_343_8).abs() < 1e-9);
+    fn percentile_bootstrap_is_deterministic_for_a_stable_cell() {
+        let values = [1.0, 2.0, 4.0, 8.0, 16.0];
+        let spec = bootstrap(1_000, 0);
+
+        assert_eq!(
+            interval(&values, None, &spec),
+            interval(&values, None, &spec)
+        );
     }
 
     #[test]
-    fn mean_ci95_matches_student_t_oracle_and_scales_affinely() {
+    fn percentile_bootstrap_custom_resamples_and_seed_change_the_interval() {
+        let values = [1.0, 2.0, 4.0, 8.0, 16.0];
+
+        assert_ne!(
+            interval(&values, None, &bootstrap(37, 9)),
+            interval(&values, None, &bootstrap(73, 12))
+        );
+    }
+
+    #[test]
+    fn bootstrap_stream_identity_distinguishes_facets_categories_and_optional_series() {
+        let left = FacetIdentity(vec![("panel".to_owned(), "left".to_owned())]);
+        let right = FacetIdentity(vec![("panel".to_owned(), "right".to_owned())]);
+        let seeds = [
+            stable_cell_seed(0, &left, "a", None),
+            stable_cell_seed(0, &right, "a", None),
+            stable_cell_seed(0, &left, "b", None),
+            stable_cell_seed(0, &left, "a", Some("")),
+            stable_cell_seed(0, &left, "a", Some("group")),
+        ];
+
+        for (index, seed) in seeds.iter().enumerate() {
+            assert!(!seeds[..index].contains(seed));
+        }
+    }
+
+    #[test]
+    fn student_t_confidence_interval_matches_small_sample_oracle() {
         let values = [1.0, 3.0];
-        let mean = 2.0;
-        let ci = mean_ci95(&values, mean).unwrap();
-        let transformed = [14.0, 22.0];
-        let transformed_ci = mean_ci95(&transformed, 18.0).unwrap();
+        let spec = ErrorBarKind::ConfidenceInterval(ConfidenceInterval {
+            level: 0.95,
+            algorithm: ConfidenceIntervalAlgorithm::StudentT,
+        });
+        let (lower, upper) = interval(&values, None, &spec).unwrap();
 
-        assert!((ci - 12.706_204_736_432_095).abs() < 1e-9);
-        assert!((transformed_ci - 4.0 * ci).abs() < 1e-9);
+        assert!((lower - (2.0 - 12.706_204_736_432_095)).abs() < 1e-9);
+        assert!((upper - (2.0 + 12.706_204_736_432_095)).abs() < 1e-9);
     }
 
     #[test]
-    fn identity_summary_emits_no_confidence_interval_geometry() {
-        let (value, interval) = summarize(&[3.5], "fixture", BarAggregation::Identity).unwrap();
+    fn singleton_sample_omits_every_generated_error_bar() {
+        let variants = [
+            ErrorBarKind::Hidden,
+            ErrorBarKind::StandardDeviation(StandardDeviation { scale: 1.0 }),
+            ErrorBarKind::PercentileInterval(PercentileInterval { level: 0.95 }),
+            ErrorBarKind::StandardError(StandardError { scale: 1.0 }),
+            bootstrap(100, 0),
+        ];
 
-        assert_eq!(value.to_bits(), 3.5_f64.to_bits());
-        assert_eq!(interval, None);
+        assert!(variants
+            .iter()
+            .all(|spec| interval(&[3.5], None, spec).is_none()));
+    }
+
+    #[test]
+    fn generated_error_bar_taxonomy_has_distinct_numeric_meanings() {
+        let values = [1.0, 2.0, 7.0, 10.0];
+        let intervals = [
+            ErrorBarKind::StandardDeviation(StandardDeviation { scale: 1.0 }),
+            ErrorBarKind::PercentileInterval(PercentileInterval { level: 0.8 }),
+            ErrorBarKind::StandardError(StandardError { scale: 1.0 }),
+            bootstrap(200, 0),
+        ]
+        .map(|spec| interval(&values, None, &spec).unwrap());
+
+        assert!(intervals.windows(2).all(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn multilevel_bootstrap_resamples_units_and_within_unit_observations() {
+        let values = [0.0, 2.0, 10.0, 14.0];
+        let units = ["a", "a", "b", "b"].map(str::to_owned);
+        let spec = bootstrap(500, 4);
+
+        assert_ne!(
+            interval(&values, Some(&units), &spec),
+            interval(&values, None, &spec)
+        );
+    }
+
+    #[test]
+    fn one_effective_sampling_unit_omits_bootstrap_interval() {
+        let units = ["same", "same", "same"].map(str::to_owned);
+
+        assert!(interval(&[1.0, 2.0, 3.0], Some(&units), &bootstrap(100, 0)).is_none());
+    }
+
+    #[test]
+    fn grouped_sample_cells_compute_independent_means() {
+        let chart = Plot::bar(
+            CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
+            BarInput::samples(NumericValues::new("value", [1.0, 3.0, 10.0, 30.0]))
+                .error_bar(ErrorBar::hidden()),
+        )
+        .group(CategoryValues::new("group", ["left", "left", "right", "right"]).unwrap())
+        .erase();
+
+        let prepared = prepare(&chart, chart.data(), BarMode::Grouped).unwrap();
+        let mut means = prepared.bars.iter().map(|bar| bar.end).collect::<Vec<_>>();
+        means.sort_by(f64::total_cmp);
+
+        assert_eq!(means, [2.0, 20.0]);
+    }
+
+    #[test]
+    fn faceted_sample_cells_compute_independent_means() {
+        let chart = Plot::bar(
+            CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
+            BarInput::samples(NumericValues::new("value", [1.0, 3.0, 10.0, 30.0]))
+                .error_bar(ErrorBar::hidden()),
+        )
+        .facet(crate::FacetSpec::column(
+            CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
+        ))
+        .erase();
+        let left_rows = [0, 1];
+        let right_rows = [2, 3];
+        let left = prepare(
+            &chart,
+            crate::data::PlotData::with_rows(&chart, &left_rows, &left_rows),
+            BarMode::Single,
+        )
+        .unwrap();
+        let right = prepare(
+            &chart,
+            crate::data::PlotData::with_rows(&chart, &right_rows, &right_rows),
+            BarMode::Single,
+        )
+        .unwrap();
+
+        assert!((left.bars[0].end - 2.0).abs() < f64::EPSILON);
+        assert!((right.bars[0].end - 20.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn precomputed_bounds_are_retained_exactly() {
+        let chart = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            BarInput::estimates_with_error_bars(
+                NumericValues::new("estimate", [2.0, 5.0]),
+                Bounds::new(
+                    NumericValues::new("lower", [1.0, 3.5]),
+                    NumericValues::new("upper", [4.0, 8.0]),
+                ),
+            ),
+        )
+        .erase();
+
+        let prepared = prepare(&chart, chart.data(), BarMode::Single).unwrap();
+        let intervals = prepared
+            .bars
+            .iter()
+            .map(|bar| bar.interval.unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(intervals, [(1.0, 4.0), (3.5, 8.0)]);
+    }
+
+    #[test]
+    fn configured_sampling_units_are_scoped_to_each_group() {
+        let units = CategoryValues::new("participant", ["p1", "p1", "p2", "p2"]).unwrap();
+        let bootstrap = Bootstrap::new().resamples(50).unwrap().seed(7).units(units);
+        let chart = Plot::bar(
+            CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
+            BarInput::samples(NumericValues::new("value", [1.0, 3.0, 10.0, 30.0]))
+                .error_bar(ErrorBar::confidence_interval().bootstrap(bootstrap)),
+        )
+        .group(CategoryValues::new("group", ["left", "left", "right", "right"]).unwrap())
+        .erase();
+
+        let prepared = prepare(&chart, chart.data(), BarMode::Grouped).unwrap();
+
+        assert!(prepared.bars.iter().all(|bar| bar.interval.is_none()));
     }
 
     #[test]
@@ -1054,25 +1541,5 @@ mod tests {
         let sum = stable_sum(&[f64::MAX, f64::MAX, -f64::MAX]).unwrap();
 
         assert_eq!(sum.to_bits(), f64::MAX.to_bits());
-    }
-
-    #[test]
-    fn mean_ci95_avoids_intermediate_variance_overflow() {
-        let mut values = [0.0; 16];
-        values[8..].fill(f64::MAX / 2.0);
-        let mean = stable_mean(&values).unwrap();
-
-        assert!(mean_ci95(&values, mean).unwrap().is_finite());
-    }
-
-    #[test]
-    fn mean_ci95_rejects_unrepresentable_interval() {
-        let values = [-f64::MAX, f64::MAX];
-        let mean = stable_mean(&values).unwrap();
-
-        assert_eq!(
-            mean_ci95(&values, mean).unwrap_err(),
-            "confidence interval is not numerically representable"
-        );
     }
 }

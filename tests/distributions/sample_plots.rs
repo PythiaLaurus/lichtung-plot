@@ -136,7 +136,7 @@ fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     for path in [&first, &second] {
-        let mut plot = Plot::histogram(data::numeric(&df, "value"))
+        let mut plot = Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
             .title("Deterministic histogram")
             .size(420, 300);
         let _ = plot
@@ -157,7 +157,7 @@ fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
     let df = df!("value" => [1.0_f64, 2.0, 3.0]).unwrap();
     let dir = unique_dir("histogram-implicit-label-layout");
     let output = dir.join("histogram.svg");
-    Plot::histogram(data::numeric(&df, "value"))
+    Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
         .svg(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -177,7 +177,8 @@ fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
     let df = df!("value" => [0.0_f64, 2.0, 4.0, 6.0, 8.0, 10.0]).unwrap();
     let dir = unique_dir("histogram-explicit-limits");
     let output = dir.join("histogram.svg");
-    let mut plot = Plot::histogram(data::numeric(&df, "value")).x_limits(2.0, 8.0);
+    let mut plot =
+        Plot::histogram(HistogramInput::samples(data::numeric(&df, "value"))).x_limits(2.0, 8.0);
     let _ = plot.histogram_bins(HistogramBins::Count(5));
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -185,26 +186,6 @@ fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
     assert_eq!(svg.matches("<polygon points=").count(), 5);
     assert!(svg.contains("<g clip-path=\"url(#clip-0)\">"));
     assert!(svg.contains("<polygon points=\"-"));
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
-fn histogram_rejects_hue_with_actionable_error() {
-    let df = df!(
-        "value" => [1.0_f64, 2.0, 3.0],
-        "group" => ["a", "a", "b"]
-    )
-    .unwrap();
-    let dir = unique_dir("histogram-hue-rejection");
-    let output = dir.join("histogram.svg");
-    let error = Plot::histogram(data::numeric(&df, "value"))
-        .hue(data::category(&df, "group"))
-        .svg(&output)
-        .err()
-        .unwrap()
-        .to_string();
-
-    assert!(error.contains("hue column \"group\" is not supported yet"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -219,7 +200,7 @@ fn histogram_rejects_null_nonfinite_and_empty_columns() {
         let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
         let dir = unique_dir(&format!("histogram-invalid-{index}"));
         let output = dir.join("histogram.svg");
-        let chart = Plot::histogram(data::numeric(&data, "value"));
+        let chart = Plot::histogram(HistogramInput::samples(data::numeric(&data, "value")));
         assert!(chart.svg(&output).is_err(), "invalid case {index}");
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -413,26 +394,6 @@ fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
         .contains("stroke-width=\"1.2\""));
     assert!(svg.contains(">Theoretical normal quantiles</text>"));
     assert!(svg.contains(">Value</text>"));
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
-fn qq_rejects_hue_with_actionable_error() {
-    let df = df!(
-        "value" => [1.0_f64, 2.0, 3.0],
-        "group" => ["a", "a", "b"]
-    )
-    .unwrap();
-    let dir = unique_dir("qq-hue-rejection");
-    let output = dir.join("qq.svg");
-    let error = Plot::qq(data::numeric(&df, "value"))
-        .hue(data::category(&df, "group"))
-        .svg(&output)
-        .err()
-        .unwrap()
-        .to_string();
-
-    assert!(error.contains("hue column \"group\" is not supported"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 

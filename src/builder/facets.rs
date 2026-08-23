@@ -2,35 +2,25 @@ use crate::Error;
 
 use super::Plot;
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
-use crate::spec::{AxisScale, FacetScales, PlotKind};
-use crate::CategoryValues;
+use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
-impl Plot {
-    /// Split the selected plot into rows by categorical values.
+impl<K: crate::kind::Marker> Plot<K> {
+    /// Apply one complete generic-facet layout.
     #[must_use]
-    pub fn facet_row(mut self, values: CategoryValues) -> Self {
-        self.facet_row = Some(values);
-        self
-    }
-
-    /// Split the selected plot into columns by categorical values.
-    #[must_use]
-    pub fn facet_col(mut self, values: CategoryValues) -> Self {
-        self.facet_col = Some(values);
-        self
-    }
-
-    /// Wrap categorical facet values into the requested number of columns.
-    #[must_use]
-    pub fn facet_wrap(mut self, values: CategoryValues, columns: usize) -> Self {
-        self.facet_wrap = Some(values);
-        self.facet_wrap_columns = Some(columns);
+    pub fn facet(mut self, facet: FacetSpec) -> Self
+    where
+        K: crate::kind::Facet,
+    {
+        self.facet = Some(facet);
         self
     }
 
     /// Configure whether facet panels share numeric axes.
     #[must_use]
-    pub fn facet_scales(mut self, scales: FacetScales) -> Self {
+    pub fn facet_scales(mut self, scales: FacetScales) -> Self
+    where
+        K: crate::kind::Facet,
+    {
         self.facet_scales = scales;
         self
     }
@@ -48,26 +38,41 @@ impl Plot {
         Option<usize>,
     ) {
         (
-            self.facet_row.as_ref().map(|_| FACET_ROW),
-            self.facet_col.as_ref().map(|_| FACET_COLUMN),
-            self.facet_wrap.as_ref().map(|_| FACET_WRAP),
-            self.facet_wrap_columns,
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::row_values)
+                .map(|_| FACET_ROW),
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::column_values)
+                .map(|_| FACET_COLUMN),
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::wrap_values)
+                .map(|_| FACET_WRAP),
+            self.facet.as_ref().and_then(FacetSpec::wrap_columns),
         )
     }
 
     pub(crate) fn facet_names(&self) -> (Option<&str>, Option<&str>, Option<&str>) {
         (
-            self.facet_row.as_ref().map(crate::CategoryValues::name),
-            self.facet_col.as_ref().map(crate::CategoryValues::name),
-            self.facet_wrap.as_ref().map(crate::CategoryValues::name),
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::row_values)
+                .map(crate::CategoryValues::name),
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::column_values)
+                .map(crate::CategoryValues::name),
+            self.facet
+                .as_ref()
+                .and_then(FacetSpec::wrap_values)
+                .map(crate::CategoryValues::name),
         )
     }
 
     pub(crate) fn without_facets(mut self) -> Self {
-        self.facet_row = None;
-        self.facet_col = None;
-        self.facet_wrap = None;
-        self.facet_wrap_columns = None;
+        self.facet = None;
         self
     }
 
@@ -111,7 +116,7 @@ impl Plot {
     }
 
     pub(crate) const fn has_facets(&self) -> bool {
-        self.facet_row.is_some() || self.facet_col.is_some() || self.facet_wrap.is_some()
+        self.facet.is_some()
     }
 
     pub(crate) fn with_resolved_facet_ranges(

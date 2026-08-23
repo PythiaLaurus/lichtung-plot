@@ -229,70 +229,57 @@ fn valid_grouped_bar_fixture() -> Fixture {
 
 #[expect(
     clippy::too_many_lines,
-    reason = "the exhaustive fixture keeps every plot kind's canonical construction in one place"
+    reason = "one exhaustive test factory keeps every PlotKind arm visible"
 )]
 fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
     use crate::test_support::{axis, category, constant_numeric, numeric};
 
     match kind {
-        PlotKind::Scatter => Plot::scatter(numeric(data, "x"), numeric(data, "y")),
-        PlotKind::Histogram => Plot::histogram(numeric(data, "x")),
-        PlotKind::Density => Plot::density(numeric(data, "x")),
-        PlotKind::Qq => Plot::qq(numeric(data, "x")),
+        PlotKind::Scatter => Plot::scatter(numeric(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Histogram => {
+            Plot::histogram(crate::HistogramInput::samples(numeric(data, "x"))).erase()
+        }
+        PlotKind::Density => Plot::density(numeric(data, "x")).erase(),
+        PlotKind::Qq => Plot::qq(numeric(data, "x")).erase(),
         PlotKind::PointInterval => Plot::point_interval(
             category(data, "interval_group"),
             numeric(data, "x"),
-            numeric(data, "lower"),
-            numeric(data, "upper"),
-        ),
-        PlotKind::Line => Plot::line(axis(data, "x"), numeric(data, "y")),
+            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+        )
+        .erase(),
+        PlotKind::Line => Plot::line(axis(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Trajectory => {
+            Plot::trajectory(axis(data, "x"), numeric(data, "y"), category(data, "group")).erase()
+        }
+        PlotKind::LinePath => Plot::line_path(
+            numeric(data, "x"),
+            numeric(data, "y"),
+            category(data, "group"),
+        )
+        .erase(),
         PlotKind::Interaction => Plot::interaction(
             category(data, "group"),
             numeric(data, "y"),
             category(data, "hue"),
-            numeric(data, "lower"),
-            numeric(data, "upper"),
+            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
         )
         .hue(category(data, "hue"))
-        .interval_semantics(
-            crate::IntervalSemantics::new(
-                crate::IntervalKind::Confidence,
-                0.95,
-                crate::InferentialScale::Response,
-                "orchestrator fixture",
-            )
-            .unwrap(),
+        .erase(),
+        PlotKind::Coefficient => Plot::coefficient(
+            category(data, "interval_group"),
+            crate::CoefficientInput::estimates_with_intervals(
+                numeric(data, "x"),
+                crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+            ),
         )
-        .interaction_source(crate::EstimateSource::EstimatedMarginalMean),
-        PlotKind::Coefficient => {
-            Plot::coefficient(category(data, "interval_group"), numeric(data, "x"))
-                .interval_bounds(numeric(data, "lower"), numeric(data, "upper"))
-                .interval_semantics(
-                    crate::IntervalSemantics::new(
-                        crate::IntervalKind::Confidence,
-                        0.95,
-                        crate::InferentialScale::Coefficient,
-                        "orchestrator fixture",
-                    )
-                    .unwrap(),
-                )
-        }
+        .erase(),
         PlotKind::Forest => Plot::forest(
             category(data, "interval_group"),
             numeric(data, "x"),
-            numeric(data, "lower"),
-            numeric(data, "upper"),
+            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+            0.0,
         )
-        .interval_semantics(
-            crate::IntervalSemantics::new(
-                crate::IntervalKind::Confidence,
-                0.95,
-                crate::InferentialScale::Coefficient,
-                "orchestrator fixture",
-            )
-            .unwrap(),
-        )
-        .reference_line(0.0),
+        .erase(),
         PlotKind::Dumbbell => Plot::dumbbell(
             category(data, "group"),
             numeric(data, "x"),
@@ -301,44 +288,61 @@ fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
         .group(category(data, "interval_group"))
         .dumbbell_endpoints(
             crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
-        ),
+        )
+        .erase(),
         PlotKind::Heatmap => Plot::heatmap(
             category(data, "interval_group"),
             category(data, "group"),
             numeric(data, "color"),
-        ),
-        PlotKind::Bar => Plot::bar(category(data, "group"), numeric(data, "y")),
-        PlotKind::HorizontalBar => {
-            Plot::horizontal_bar(category(data, "group"), numeric(data, "y"))
-        }
+        )
+        .erase(),
+        PlotKind::Bar => Plot::bar(
+            category(data, "group"),
+            crate::BarInput::samples(numeric(data, "y")),
+        )
+        .erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(
+            category(data, "group"),
+            crate::BarInput::samples(numeric(data, "y")),
+        )
+        .erase(),
         PlotKind::StackedBar => Plot::stacked_bar(
             category(data, "group"),
             numeric(data, "y"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue")),
+        .hue(category(data, "hue"))
+        .erase(),
         PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
             category(data, "group"),
             numeric(data, "y"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue")),
-        PlotKind::Boxplot => Plot::boxplot(category(data, "group"), numeric(data, "y")),
-        PlotKind::Violin => Plot::violin(category(data, "group"), numeric(data, "y")),
-        PlotKind::Regression => Plot::regression(numeric(data, "x"), numeric(data, "y")),
-        PlotKind::Marginal => Plot::marginal(numeric(data, "x"), numeric(data, "y")),
-        PlotKind::Matrix => Plot::matrix(vec![numeric(data, "x"), numeric(data, "y")]),
+        .hue(category(data, "hue"))
+        .erase(),
+        PlotKind::Boxplot => Plot::boxplot(category(data, "group"), numeric(data, "y")).erase(),
+        PlotKind::Violin => Plot::violin(category(data, "group"), numeric(data, "y")).erase(),
+        PlotKind::Raincloud => Plot::raincloud(crate::RaincloudInput::samples(
+            category(data, "group"),
+            numeric(data, "y"),
+        ))
+        .erase(),
+        PlotKind::Regression => Plot::regression(numeric(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Marginal => Plot::marginal(numeric(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Matrix => Plot::matrix(vec![numeric(data, "x"), numeric(data, "y")]).erase(),
         PlotKind::Beeswarm => Plot::beeswarm(
             category(data, "group"),
             numeric(data, "x"),
             numeric(data, "color"),
-        ),
+        )
+        .erase(),
         PlotKind::Waterfall => Plot::waterfall(
             category(data, "group"),
             numeric(data, "delta"),
             constant_numeric(data, "base"),
             constant_numeric(data, "terminal"),
-        ),
+        )
+        .erase(),
     }
 }
 
@@ -346,22 +350,30 @@ fn configured_bar_chart(data: &Fixture, kind: PlotKind) -> Plot {
     use crate::test_support::{category, numeric};
 
     match kind {
-        PlotKind::Bar => Plot::bar(category(data, "group"), numeric(data, "value")),
-        PlotKind::HorizontalBar => {
-            Plot::horizontal_bar(category(data, "group"), numeric(data, "value"))
-        }
+        PlotKind::Bar => Plot::bar(
+            category(data, "group"),
+            crate::BarInput::samples(numeric(data, "value")),
+        )
+        .erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(
+            category(data, "group"),
+            crate::BarInput::samples(numeric(data, "value")),
+        )
+        .erase(),
         PlotKind::StackedBar => Plot::stacked_bar(
             category(data, "group"),
             numeric(data, "value"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue")),
+        .hue(category(data, "hue"))
+        .erase(),
         PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
             category(data, "group"),
             numeric(data, "value"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue")),
+        .hue(category(data, "hue"))
+        .erase(),
         _ => panic!("unsupported bar fixture kind {kind:?}"),
     }
 }
@@ -405,7 +417,7 @@ fn categorical_fault_fixture(column: &str) -> Fixture {
     data
 }
 
-fn assert_rejected_before_begin(chart: &Plot, kind: PlotKind) -> String {
+fn assert_rejected_before_begin<K: crate::kind::Marker>(chart: &Plot<K>, kind: PlotKind) -> String {
     let mut backend = RecordingBackend::default();
     let error = chart.render_kind(kind, &mut backend).unwrap_err();
     assert_eq!((backend.begins, backend.ends), (0, 0), "{kind:?}");
@@ -422,7 +434,7 @@ fn test_directory(name: &str) -> PathBuf {
     path
 }
 
-fn svg_bytes(plot: Plot) -> Vec<u8> {
+fn svg_bytes<K: crate::kind::Marker>(plot: Plot<K>) -> Vec<u8> {
     let directory = test_directory("svg-bytes");
     let output = directory.join("figure.svg");
     plot.svg(&output).unwrap();

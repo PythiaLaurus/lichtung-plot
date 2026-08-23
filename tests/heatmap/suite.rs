@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use lichtung_plot::{
     Canvas, CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
-    HeatmapNullRowAnnotation, HeatmapScale, LegendPosition, NumericLabelFormat, Plot, ValueSort,
+    HeatmapNullRowAnnotation, HeatmapScale, NumericLabelFormat, Plot, ValueSort,
 };
 
 #[path = "../support/data.rs"]
@@ -20,7 +20,7 @@ fn fixture() -> DataFrame {
     .unwrap()
 }
 
-fn chart(data_frame: &DataFrame) -> Plot {
+fn chart(data_frame: &DataFrame) -> Plot<lichtung_plot::kind::Heatmap> {
     Plot::heatmap(
         data::category(data_frame, "column"),
         data::category(data_frame, "row"),
@@ -29,7 +29,10 @@ fn chart(data_frame: &DataFrame) -> Plot {
     .size(560, 360)
 }
 
-fn render(data: &DataFrame, configure: impl FnOnce(Plot) -> Plot) -> Result<String, String> {
+fn render(
+    data: &DataFrame,
+    configure: impl FnOnce(Plot<lichtung_plot::kind::Heatmap>) -> Plot<lichtung_plot::kind::Heatmap>,
+) -> Result<String, String> {
     let directory = std::env::temp_dir().join(format!(
         "lichtung-heatmap-{}-{}",
         std::process::id(),
@@ -652,21 +655,11 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
 }
 
 #[test]
-fn heatmap_rejects_incompatible_public_options() {
+fn heatmap_rejects_value_sorted_category_order() {
     let data = fixture();
-    let errors = [
-        render(&data, |chart| chart.x_limits(0.0, 1.0)).unwrap_err(),
-        render(&data, |chart| chart.y_tick_count(2)).unwrap_err(),
-        render(&data, |chart| chart.x_category_order(ValueSort::Descending)).unwrap_err(),
-        render(&data, |chart| chart.hue(data::category(&data, "row"))).unwrap_err(),
-        render(&data, |chart| {
-            chart.legend_position(LegendPosition::OutsideRight)
-        })
-        .unwrap_err(),
-        render(&data, Plot::hide_legend).unwrap_err(),
-    ];
+    let error = render(&data, |chart| chart.x_category_order(ValueSort::Descending)).unwrap_err();
 
-    assert!(errors.iter().all(|error| error.contains("heatmap:")));
+    assert!(error.contains("heatmap:"));
 }
 
 #[test]

@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use super::{
-    EffectBandCoverage, EffectBandSemantics, InferentialScale, IntervalKind, IntervalSemantics,
-    LegendClearance, LegendDefault, PlotKind,
-};
+use super::{LegendClearance, LegendDefault, PlotKind};
 
 #[test]
 fn plot_kinds_expose_their_semantic_legend_defaults() {
@@ -11,9 +8,12 @@ fn plot_kinds_expose_their_semantic_legend_defaults() {
         PlotKind::Bar,
         PlotKind::StackedBar,
         PlotKind::Line,
+        PlotKind::Trajectory,
+        PlotKind::LinePath,
         PlotKind::Interaction,
         PlotKind::Boxplot,
         PlotKind::Violin,
+        PlotKind::Raincloud,
         PlotKind::Regression,
     ] {
         assert_eq!(
@@ -56,109 +56,6 @@ fn plot_kinds_expose_their_semantic_legend_defaults() {
 }
 
 #[test]
-fn interval_semantics_reject_closed_probability_boundaries() {
-    for level in [0.0, 1.0, f64::NAN] {
-        assert!(IntervalSemantics::new(
-            IntervalKind::Confidence,
-            level,
-            InferentialScale::Response,
-            "fixture",
-        )
-        .is_err());
-    }
-}
-
-#[test]
-fn interval_semantics_reject_empty_provenance() {
-    assert!(IntervalSemantics::new(
-        IntervalKind::Confidence,
-        0.95,
-        InferentialScale::Response,
-        "  ",
-    )
-    .is_err());
-}
-
-#[test]
-fn interval_semantics_defensive_validation_rejects_forged_state() {
-    let invalid_level = IntervalSemantics {
-        kind: IntervalKind::Confidence,
-        level: 1.5,
-        scale: InferentialScale::Response,
-        provenance: "fit".into(),
-    };
-    let invalid_provenance = IntervalSemantics {
-        kind: IntervalKind::Confidence,
-        level: 0.95,
-        scale: InferentialScale::Response,
-        provenance: " ".into(),
-    };
-
-    assert!(invalid_level.validate().is_err());
-    assert!(invalid_provenance.validate().is_err());
-}
-
-#[test]
-fn interval_semantics_accessors_preserve_validated_claim() {
-    let semantics = IntervalSemantics::new(
-        IntervalKind::Credible,
-        0.9,
-        InferentialScale::Link,
-        "posterior quantiles",
-    )
-    .unwrap();
-
-    assert_eq!(semantics.kind(), IntervalKind::Credible);
-    assert!((semantics.level() - 0.9).abs() < f64::EPSILON);
-    assert_eq!(semantics.scale(), InferentialScale::Link);
-    assert_eq!(semantics.provenance(), "posterior quantiles");
-}
-
-fn effect_interval() -> IntervalSemantics {
-    IntervalSemantics::new(
-        IntervalKind::Confidence,
-        0.95,
-        InferentialScale::Response,
-        "precomputed covariance projection",
-    )
-    .unwrap()
-}
-
-#[test]
-fn effect_band_rejects_empty_provenance_and_simultaneous_identity() {
-    assert!(EffectBandSemantics::pointwise(effect_interval(), "", "grid").is_err());
-    assert!(EffectBandSemantics::pointwise(effect_interval(), "model", " ").is_err());
-    assert!(
-        EffectBandSemantics::simultaneous(effect_interval(), "", "x grid", "model", "grid",)
-            .is_err()
-    );
-    assert!(
-        EffectBandSemantics::simultaneous(effect_interval(), "Scheffe", " ", "model", "grid",)
-            .is_err()
-    );
-}
-
-#[test]
-fn simultaneous_effect_band_retains_named_method_and_family() {
-    let effect = EffectBandSemantics::simultaneous(
-        effect_interval(),
-        "Scheffe projection",
-        "all x values in the declared grid",
-        "externally fitted Gaussian model",
-        "declared adjusted grid",
-    )
-    .unwrap();
-
-    assert_eq!(effect.coverage(), EffectBandCoverage::Simultaneous);
-    assert_eq!(effect.simultaneous_method(), Some("Scheffe projection"));
-    assert_eq!(
-        effect.simultaneous_family(),
-        Some("all x values in the declared grid")
-    );
-    assert!(effect.label().contains("simultaneous"));
-}
-
-#[test]
 fn plot_kind_metadata_is_pinned_in_stable_order() {
     let expected = [
         (PlotKind::Scatter, "scatter plot", "scatter-plot"),
@@ -171,6 +68,8 @@ fn plot_kind_metadata_is_pinned_in_stable_order() {
             "point-interval-plot",
         ),
         (PlotKind::Line, "line plot", "line-plot"),
+        (PlotKind::Trajectory, "trajectory plot", "trajectory-plot"),
+        (PlotKind::LinePath, "line-path plot", "line-path-plot"),
         (
             PlotKind::Interaction,
             "interaction plot",
@@ -198,6 +97,7 @@ fn plot_kind_metadata_is_pinned_in_stable_order() {
         ),
         (PlotKind::Boxplot, "boxplot", "boxplot"),
         (PlotKind::Violin, "violin plot", "violin-plot"),
+        (PlotKind::Raincloud, "raincloud plot", "raincloud-plot"),
         (PlotKind::Regression, "regression plot", "regression-plot"),
         (PlotKind::Marginal, "marginal plot", "marginal-plot"),
         (PlotKind::Matrix, "scatter matrix", "scatter-matrix"),

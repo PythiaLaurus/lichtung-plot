@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use lichtung_plot::{BarAggregation, Canvas, Labels, Plot};
+use lichtung_plot::{BarInput, Canvas, Labels, Plot};
 
 use super::{data, df, DataFrame};
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn render(plot: Plot) -> String {
+fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     let directory = std::env::temp_dir().join(format!(
         "lichtung-labels-{}-{}",
         std::process::id(),
@@ -20,10 +20,10 @@ fn render(plot: Plot) -> String {
     svg
 }
 
-fn horizontal_bar(data: &DataFrame) -> Plot {
+fn horizontal_bar(data: &DataFrame) -> Plot<lichtung_plot::kind::HorizontalBar> {
     Plot::horizontal_bar(
         data::category(data, "treatment_group"),
-        data::numeric(data, "mean_score"),
+        BarInput::estimates(data::numeric(data, "mean_score")),
     )
 }
 
@@ -35,11 +35,7 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
         "study_arm" => ["control_arm", "active_arm"]
     )
     .unwrap();
-    let svg = render(
-        horizontal_bar(&data)
-            .hue(data::category(&data, "study_arm"))
-            .bar_aggregation(BarAggregation::Identity),
-    );
+    let svg = render(horizontal_bar(&data).hue(data::category(&data, "study_arm")));
 
     for label in [
         "Mean score",
@@ -104,7 +100,7 @@ fn svg_preserves_repeated_spaces_in_vertical_axis_labels() {
     let svg = render(
         Plot::bar(
             data::category(&data, "category"),
-            data::numeric(&data, "value"),
+            BarInput::samples(data::numeric(&data, "value")),
         )
         .y_label("Response  score"),
     );
@@ -130,10 +126,9 @@ fn aliases_override_every_automatic_horizontal_bar_surface_and_escape_svg() {
     let svg = render(
         Plot::horizontal_bar(
             data::category(&data, "feature_name"),
-            data::numeric(&data, "mean_score"),
+            BarInput::estimates(data::numeric(&data, "mean_score")),
         )
-        .labels(labels)
-        .bar_aggregation(BarAggregation::Identity),
+        .labels(labels),
     );
 
     assert!(svg.contains(">Score</text>") && svg.contains(">(points)</text>"));
@@ -150,9 +145,8 @@ fn ambiguous_display_labels_fail_during_preflight() {
     .unwrap();
     let plot = Plot::bar(
         data::category(&data, "group"),
-        data::numeric(&data, "value"),
-    )
-    .bar_aggregation(BarAggregation::Identity);
+        BarInput::estimates(data::numeric(&data, "value")),
+    );
 
     let error = plot.preflight().unwrap_err().to_string();
 

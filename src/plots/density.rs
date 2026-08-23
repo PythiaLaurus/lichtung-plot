@@ -430,6 +430,7 @@ mod tests {
         if hued {
             plot = plot.hue(crate::test_support::category(data, "group"));
         }
+        let plot = plot.erase();
         prepare_density(
             &plot,
             crate::data::X,

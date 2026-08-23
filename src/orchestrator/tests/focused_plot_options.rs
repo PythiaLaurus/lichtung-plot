@@ -1,7 +1,7 @@
 use super::{svg_bytes, PanelBox, Plot, PlotKind, RecordingBackend};
 use crate::render::backend::{TextAnchor, TextStyle};
 use crate::test_support::{DataFrame, Series};
-use crate::{CategoricalColors, LineMode, LinePathStyle, NumericLabelFormat, WaterfallLabels};
+use crate::{CategoricalColors, LinePathStyle, NumericLabelFormat, WaterfallLabels};
 
 fn path_data() -> DataFrame {
     DataFrame::new(
@@ -20,14 +20,30 @@ fn path_data() -> DataFrame {
     .unwrap()
 }
 
-fn path_chart(data: &DataFrame, style: LinePathStyle) -> Plot {
-    Plot::line(
+fn trajectory_data() -> DataFrame {
+    DataFrame::new(
+        6,
+        vec![
+            Series::new("path".into(), ["a", "b", "a", "b", "a", "b"]).into(),
+            Series::new(
+                "hue".into(),
+                ["first", "second", "first", "second", "first", "second"],
+            )
+            .into(),
+            Series::new("x".into(), [2.0_f64, 0.0, 1.0, 1.0, 0.0, 2.0]).into(),
+            Series::new("y".into(), [0.0_f64, 0.0, 1.0, 0.5, 2.0, 1.0]).into(),
+        ],
+    )
+    .unwrap()
+}
+
+fn path_chart(data: &DataFrame, style: LinePathStyle) -> Plot<crate::kind::LinePath> {
+    Plot::line_path(
         crate::test_support::numeric(data, "x"),
         crate::test_support::numeric(data, "y"),
+        crate::test_support::category(data, "path"),
     )
-    .group(crate::test_support::category(data, "path"))
     .hue(crate::test_support::category(data, "hue"))
-    .line_mode(LineMode::Path)
     .line_path_style(style)
 }
 
@@ -37,7 +53,7 @@ fn hue_path_style_colors_complete_paths_preserves_order_and_draws_line_legends()
     let chart = path_chart(&data, LinePathStyle::Hue);
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Line, &mut backend).unwrap();
+    chart.render_kind(PlotKind::LinePath, &mut backend).unwrap();
 
     let path_lines = backend
         .line_draws
@@ -76,7 +92,7 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
     let chart = path_chart(&data, LinePathStyle::Hue).categorical_colors(colors);
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Line, &mut backend).unwrap();
+    chart.render_kind(PlotKind::LinePath, &mut backend).unwrap();
 
     let path_colors = backend
         .line_draws
@@ -127,7 +143,9 @@ fn hue_path_style_rejects_nonconstant_path_hue_before_backend_begin() {
     let chart = path_chart(&data, LinePathStyle::Hue);
     let mut backend = RecordingBackend::default();
 
-    let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
+    let error = chart
+        .render_kind(PlotKind::LinePath, &mut backend)
+        .unwrap_err();
 
     assert!(error.to_string().contains("must have one constant hue"));
     assert_eq!(backend.begins, 0);
@@ -139,7 +157,7 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
     let chart = path_chart(&data, LinePathStyle::Hue).markers(false);
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Line, &mut backend).unwrap();
+    chart.render_kind(PlotKind::LinePath, &mut backend).unwrap();
 
     let path_lines = backend
         .line_draws
@@ -170,23 +188,28 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
 }
 
 #[test]
-fn trajectory_still_rejects_hidden_markers_before_backend_begin() {
-    let data = path_data();
-    let chart = Plot::line(
+fn trajectory_always_renders_observation_markers() {
+    let data = trajectory_data();
+    let chart = Plot::trajectory(
         crate::test_support::numeric(&data, "x"),
         crate::test_support::numeric(&data, "y"),
+        crate::test_support::category(&data, "path"),
     )
-    .group(crate::test_support::category(&data, "path"))
-    .hue(crate::test_support::category(&data, "hue"))
-    .line_mode(LineMode::Trajectory)
-    .markers(false);
+    .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend::default();
 
-    let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
+    chart
+        .render_kind(PlotKind::Trajectory, &mut backend)
+        .unwrap();
 
-    assert!(error.to_string().contains("line trajectory"));
-    assert!(error.to_string().contains("markers(false)"));
-    assert_eq!(backend.begins, 0);
+    assert_eq!(
+        backend
+            .scatter_draws
+            .iter()
+            .filter(|(_, _, clip_depth)| *clip_depth == 1)
+            .count(),
+        6
+    );
 }
 
 #[test]
@@ -196,7 +219,9 @@ fn hue_path_rejects_constant_hue_absent_from_resolved_order() {
         path_chart(&data, LinePathStyle::Hue).with_global_hue_levels(vec!["unrelated".into()]);
     let mut backend = RecordingBackend::default();
 
-    let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
+    let error = chart
+        .render_kind(PlotKind::LinePath, &mut backend)
+        .unwrap_err();
 
     assert!(error
         .to_string()
@@ -239,7 +264,7 @@ fn beeswarm_data(colors: &[f64]) -> DataFrame {
     .unwrap()
 }
 
-fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Plot {
+fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Plot<crate::kind::Beeswarm> {
     let mut chart = Plot::beeswarm(
         crate::test_support::category(data, "category"),
         crate::test_support::numeric(data, "x"),
@@ -346,7 +371,10 @@ fn waterfall_data() -> DataFrame {
     .unwrap()
 }
 
-fn waterfall_chart(data: &DataFrame, labels: Option<WaterfallLabels>) -> Plot {
+fn waterfall_chart(
+    data: &DataFrame,
+    labels: Option<WaterfallLabels>,
+) -> Plot<crate::kind::Waterfall> {
     let mut chart = Plot::waterfall(
         crate::test_support::category(data, "step"),
         crate::test_support::numeric(data, "delta"),
@@ -469,7 +497,10 @@ fn affected_detail_text_uses_publication_detail_typography() {
     .unwrap();
     let coefficient = Plot::coefficient(
         crate::test_support::category(&estimate_data, "term"),
-        crate::test_support::numeric(&estimate_data, "estimate"),
+        crate::CoefficientInput::estimates(crate::test_support::numeric(
+            &estimate_data,
+            "estimate",
+        )),
     )
     .estimate_labels(NumericLabelFormat::with_suffix(2, " detail").unwrap());
     let mut coefficient_backend = RecordingBackend::default();
@@ -521,52 +552,26 @@ fn rectangles_intersect(left: PanelBox, right: PanelBox) -> bool {
 #[test]
 fn line_path_style_requires_path_mode_and_hue_before_backend_begin() {
     let data = path_data();
-    let cases = [
-        Plot::line(
+    let cases = vec![
+        path_chart(&data, LinePathStyle::Hue).erase(),
+        Plot::line_path(
             crate::test_support::numeric(&data, "x"),
             crate::test_support::numeric(&data, "y"),
+            crate::test_support::category(&data, "path"),
         )
-        .line_path_style(LinePathStyle::Hue),
-        Plot::line(
-            crate::test_support::numeric(&data, "x"),
-            crate::test_support::numeric(&data, "y"),
-        )
-        .group(crate::test_support::category(&data, "path"))
-        .line_mode(LineMode::Path)
-        .line_path_style(LinePathStyle::Hue),
+        .line_path_style(LinePathStyle::Hue)
+        .erase(),
     ];
-    for chart in cases {
+    for (index, chart) in cases.into_iter().enumerate() {
         let mut backend = RecordingBackend::default();
-        let error = chart.render_kind(PlotKind::Line, &mut backend).unwrap_err();
+        let kind = if index == 0 {
+            PlotKind::Line
+        } else {
+            PlotKind::LinePath
+        };
+        let error = chart.render_kind(kind, &mut backend).unwrap_err();
 
         assert!(error.to_string().contains("LinePathStyle::Hue"));
-        assert_eq!(backend.begins, 0);
-    }
-}
-
-#[test]
-fn focused_options_are_rejected_by_unrelated_plot_kinds() {
-    let data = waterfall_data();
-    let labels = WaterfallLabels::new("Expected output", "Final prediction").unwrap();
-    let cases = [
-        Plot::scatter(
-            crate::test_support::numeric(&data, "base"),
-            crate::test_support::numeric(&data, "terminal"),
-        )
-        .beeswarm_color_limits(0.0, 1.0),
-        Plot::scatter(
-            crate::test_support::numeric(&data, "base"),
-            crate::test_support::numeric(&data, "terminal"),
-        )
-        .waterfall_labels(labels),
-    ];
-    for chart in cases {
-        let mut backend = RecordingBackend::default();
-        let error = chart
-            .render_kind(PlotKind::Scatter, &mut backend)
-            .unwrap_err();
-
-        assert!(error.to_string().contains("supported only"));
         assert_eq!(backend.begins, 0);
     }
 }

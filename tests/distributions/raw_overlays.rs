@@ -1,4 +1,4 @@
-use lichtung_plot::{Canvas, Plot, PlotKind, RawOverlay, SourceRows, Theme};
+use lichtung_plot::{Canvas, FacetSpec, Plot, PlotKind, RawOverlay, SourceRows, Theme};
 
 use super::{parse_circles, unique_dir};
 
@@ -11,15 +11,17 @@ fn values(values: &[f64]) -> (lichtung_plot::CategoryValues, lichtung_plot::Nume
 
 fn plot(samples: &[f64], kind: PlotKind, overlay: RawOverlay) -> Plot {
     let (category, values) = values(samples);
-    let plot = match kind {
-        PlotKind::Boxplot => Plot::boxplot(category, values),
-        PlotKind::Violin => Plot::violin(category, values),
+    match kind {
+        PlotKind::Boxplot => Plot::boxplot(category, values).raw_overlay(overlay).erase(),
+        PlotKind::Violin => Plot::violin(category, values).raw_overlay(overlay).erase(),
         _ => panic!("unsupported raw-overlay fixture kind {kind:?}"),
-    };
-    plot.raw_overlay(overlay)
+    }
 }
 
-fn render(plot: Plot, name: &str) -> Result<String, lichtung_plot::Error> {
+fn render<K: lichtung_plot::kind::Marker>(
+    plot: Plot<K>,
+    name: &str,
+) -> Result<String, lichtung_plot::Error> {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
@@ -92,11 +94,15 @@ fn singleton_two_point_and_repeated_cells_preserve_one_overlay_point_per_row() {
     let value = lichtung_plot::NumericValues::new("value", [1.0, 2.0, 4.0, 3.0, 3.0, 3.0]);
     for kind in [PlotKind::Boxplot, PlotKind::Violin] {
         let plot = match kind {
-            PlotKind::Boxplot => Plot::boxplot(category.clone(), value.clone()),
-            PlotKind::Violin => Plot::violin(category.clone(), value.clone()),
+            PlotKind::Boxplot => Plot::boxplot(category.clone(), value.clone())
+                .raw_overlay(RawOverlay::Points)
+                .erase(),
+            PlotKind::Violin => Plot::violin(category.clone(), value.clone())
+                .raw_overlay(RawOverlay::Points)
+                .erase(),
             _ => unreachable!(),
         };
-        let svg = render(plot.raw_overlay(RawOverlay::Points), "overlay-cell-count").unwrap();
+        let svg = render(plot, "overlay-cell-count").unwrap();
         assert_eq!(overlay_circles(&svg).len(), 6, "{kind:?}");
         let mut xs = overlay_circles(&svg)
             .into_iter()
@@ -105,32 +111,6 @@ fn singleton_two_point_and_repeated_cells_preserve_one_overlay_point_per_row() {
         xs.sort_unstable();
         xs.dedup();
         assert_eq!(xs.len(), 3, "{kind:?}");
-    }
-}
-
-#[test]
-fn visible_overlay_rejects_every_other_kind_before_backend_begin() {
-    let category = || lichtung_plot::CategoryValues::new("category", ["a", "a", "a"]).unwrap();
-    let numeric = || lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0]);
-    let unsupported = vec![
-        Plot::scatter(numeric(), numeric()),
-        Plot::histogram(numeric()),
-        Plot::density(numeric()),
-        Plot::qq(numeric()),
-        Plot::line(numeric(), numeric()),
-        Plot::bar(category(), numeric()),
-        Plot::horizontal_bar(category(), numeric()),
-        Plot::regression(numeric(), numeric()),
-        Plot::beeswarm(category(), numeric(), numeric()),
-    ]
-    .into_boxed_slice();
-    for plot in unsupported {
-        assert!(plot
-            .raw_overlay(RawOverlay::Points)
-            .preflight()
-            .unwrap_err()
-            .to_string()
-            .contains("visible RawOverlay"));
     }
 }
 
@@ -213,7 +193,7 @@ fn facets_keep_original_source_rows_for_jitter() {
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
     )
     .raw_overlay(RawOverlay::Jittered)
-    .facet_col(
+    .facet(FacetSpec::column(
         lichtung_plot::CategoryValues::new(
             "facet",
             [
@@ -221,7 +201,7 @@ fn facets_keep_original_source_rows_for_jitter() {
             ],
         )
         .unwrap(),
-    )
+    ))
     .size(900, 480);
     let svg = render(plot, "faceted-jitter").unwrap();
     assert_eq!(svg.matches("<g clip-path=").count(), 2);
@@ -236,7 +216,9 @@ fn faceted_raw_overlay_does_not_draw_provenance_inside_panels() {
             lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
         )
         .raw_overlay(RawOverlay::Jittered)
-        .facet_col(lichtung_plot::CategoryValues::new("facet", ["only"; 4]).unwrap()),
+        .facet(FacetSpec::column(
+            lichtung_plot::CategoryValues::new("facet", ["only"; 4]).unwrap(),
+        )),
         "faceted-provenance",
     )
     .unwrap();
@@ -288,8 +270,11 @@ fn visible_boxplot_overlay_suppresses_separate_fliers_but_keeps_all_rows() {
 
 #[test]
 fn overlay_is_clipped_by_explicit_limits_and_drawn_between_summaries_and_axes() {
+    let (category, values) = values(&[1.0, 2.0, 3.0, 4.0]);
     let svg = render(
-        plot(&[1.0, 2.0, 3.0, 4.0], PlotKind::Boxplot, RawOverlay::Points).y_limits(0.0, 2.0),
+        Plot::boxplot(category, values)
+            .raw_overlay(RawOverlay::Points)
+            .y_limits(0.0, 2.0),
         "overlay-clipping",
     )
     .unwrap();

@@ -1,7 +1,7 @@
 use lichtung_plot::Error;
 use lichtung_plot::{
-    BarAggregation, LegendPosition, Plot, Significance, SignificanceMark, SignificanceMarkStyle,
-    SignificanceTarget, TextWeight,
+    BarInput, LegendPosition, Pairwise, Plot, Significance, SignificanceMark,
+    SignificanceMarkStyle, SignificanceTarget, TextWeight,
 };
 
 use super::{data, df, render_svg, DataFrame};
@@ -225,24 +225,6 @@ fn bottom_inside_legend_never_moves_positive_bar_zero_minimum() {
 }
 
 #[test]
-fn categorical_x_limits_reject_visible_comparisons() {
-    let df = df!(
-        "group" => ["a", "b"],
-        "value" => [2.0_f64, 4.0]
-    )
-    .unwrap();
-    let dir = tempdir("comparison-x-limits");
-    let path = dir.join("bar.svg");
-    let chart = identity_bar_chart(&df)
-        .x_limits(0.0, 2.0)
-        .significance([comparison("a", "b", 0.01)]);
-
-    let error = chart.svg(&path).err().unwrap();
-    assert!(matches!(error, Error::Render(_)));
-    assert!(error.to_string().contains("categorical x_limits"));
-}
-
-#[test]
 fn horizontal_inside_legend_is_a_transposed_annotation_obstacle() {
     let svg = render_grouped_horizontal_bar_with_legend(None, "horizontal-inside");
     assert!(svg.contains("class=\"significance-bracket horizontal\""));
@@ -258,24 +240,6 @@ fn horizontal_centered_inside_legend_uses_generic_geometry() {
 
     assert!(svg.contains("class=\"significance-bracket horizontal\""));
     assert!(svg.contains("<g id=\"legend\">"));
-}
-
-#[test]
-fn categorical_y_limits_reject_horizontal_visible_comparisons() {
-    let df = df!(
-        "group" => ["a", "b"],
-        "value" => [2.0_f64, 4.0]
-    )
-    .unwrap();
-    let dir = tempdir("horizontal-comparison-y-limits");
-    let path = dir.join("horizontal.svg");
-    let chart = identity_horizontal_bar_chart(&df)
-        .y_limits(0.0, 2.0)
-        .significance([comparison("a", "b", 0.01)]);
-
-    let error = chart.svg(&path).err().unwrap();
-
-    assert!(error.to_string().contains("categorical y_limits"));
 }
 
 #[test]
@@ -296,7 +260,6 @@ fn category_series_comparisons_render_exact_spans_in_both_orientations() {
 
     let vertical = identity_bar_chart(&df)
         .group(data::category(&df, "condition"))
-        .bar_aggregation(BarAggregation::Identity)
         .significance([
             annotation("d-prime", SignificanceMark::TwoStars),
             annotation("criterion", SignificanceMark::OneStar),
@@ -305,7 +268,6 @@ fn category_series_comparisons_render_exact_spans_in_both_orientations() {
 
     let horizontal = identity_horizontal_bar_chart(&df)
         .hue(data::category(&df, "condition"))
-        .bar_aggregation(BarAggregation::Identity)
         .significance([
             annotation("d-prime", SignificanceMark::TwoStars),
             annotation("criterion", SignificanceMark::OneStar),
@@ -341,11 +303,8 @@ fn attached_category_marks_do_not_create_missing_series_targets() {
     );
     let chart = identity_bar_chart(&df)
         .group(data::category(&df, "condition"))
-        .bar_aggregation(BarAggregation::Identity)
-        .significance([
-            Significance::at("criterion", SignificanceMark::TwoStars),
-            annotation,
-        ]);
+        .significance([Significance::at("criterion", SignificanceMark::TwoStars)])
+        .significance([annotation]);
 
     let error = render_svg(chart, "missing-grouped-factor")
         .unwrap_err()
@@ -368,7 +327,6 @@ fn category_and_center_series_cannot_form_a_zero_width_bracket() {
     );
     let chart = identity_bar_chart(&df)
         .group(data::category(&df, "condition"))
-        .bar_aggregation(BarAggregation::Identity)
         .significance([annotation]);
 
     let error = render_svg(chart, "same-grouped-anchor")
@@ -393,13 +351,11 @@ fn exact_per_bar_marks_render_with_independent_weight_in_both_orientations() {
     };
 
     let vertical = identity_bar_chart(&df)
-        .bar_aggregation(BarAggregation::Identity)
         .significance(marks())
         .significance_mark_style(style);
     let vertical = render_svg(vertical, "bar-marks-vertical").unwrap();
 
     let horizontal = identity_horizontal_bar_chart(&df)
-        .bar_aggregation(BarAggregation::Identity)
         .significance(marks())
         .significance_mark_style(style);
     let horizontal = render_svg(horizontal, "bar-marks-horizontal").unwrap();
@@ -411,28 +367,29 @@ fn exact_per_bar_marks_render_with_independent_weight_in_both_orientations() {
 }
 
 #[test]
+fn ordinary_bar_accumulates_attached_and_pairwise_placements_across_calls() {
+    let df = df!(
+        "group" => ["a", "b"],
+        "value" => [1.0_f64, 2.0]
+    )
+    .unwrap();
+    let chart = identity_bar_chart(&df)
+        .significance([Significance::at("a", SignificanceMark::OneStar)])
+        .significance([Significance::between("a", "b", SignificanceMark::TwoStars)]);
+
+    let svg = render_svg(chart, "bar-mixed-significance-calls").unwrap();
+
+    assert!(svg.contains(">*</text>"));
+    assert!(svg.contains(">**</text>"));
+    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+}
+
+#[test]
 fn default_per_bar_mark_weight_is_normal() {
     assert_eq!(
         SignificanceMarkStyle::default().weight(),
         TextWeight::Normal
     );
-}
-
-#[test]
-fn unsupported_plot_kind_rejects_significance() {
-    let df = df!(
-        "x" => [1.0_f64, 2.0],
-        "y" => [2.0_f64, 3.0]
-    )
-    .unwrap();
-    let dir = tempdir("unsupported-comparison-kind");
-    let path = dir.join("scatter.svg");
-    let chart = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
-        .significance([comparison("a", "b", 0.01)]);
-
-    let error = chart.svg(&path).err().unwrap();
-    assert!(matches!(error, Error::Data(_)));
-    assert!(error.to_string().contains("not supported for Scatter"));
 }
 
 #[test]
@@ -595,28 +552,32 @@ fn attribute<'a>(line: &'a str, name: &str) -> &'a str {
     &line[start..end]
 }
 
-fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> Significance {
+fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> Significance<Pairwise> {
     Significance::between(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
 }
 
-fn identity_bar_chart(data: &DataFrame) -> Plot {
+fn identity_bar_chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Bar> {
     let category = if data.has_column("group") {
         "group"
     } else {
         "outcome"
     };
-    Plot::bar(data::category(data, category), data::numeric(data, "value"))
-        .bar_aggregation(BarAggregation::Identity)
+    Plot::bar(
+        data::category(data, category),
+        BarInput::estimates(data::numeric(data, "value")),
+    )
 }
 
-fn identity_horizontal_bar_chart(data: &DataFrame) -> Plot {
+fn identity_horizontal_bar_chart(data: &DataFrame) -> Plot<lichtung_plot::kind::HorizontalBar> {
     let category = if data.has_column("group") {
         "group"
     } else {
         "outcome"
     };
-    Plot::horizontal_bar(data::category(data, category), data::numeric(data, "value"))
-        .bar_aggregation(BarAggregation::Identity)
+    Plot::horizontal_bar(
+        data::category(data, category),
+        BarInput::estimates(data::numeric(data, "value")),
+    )
 }
 
 fn tempdir(name: &str) -> std::path::PathBuf {

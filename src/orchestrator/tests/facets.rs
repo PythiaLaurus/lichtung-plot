@@ -7,16 +7,39 @@ fn bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
     let category = crate::test_support::category(data, "group");
     let value = crate::test_support::numeric(data, "y");
     match kind {
-        PlotKind::Bar => Plot::bar(category, value),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value),
+        PlotKind::Bar => Plot::bar(category, crate::BarInput::samples(value)).erase(),
+        PlotKind::HorizontalBar => {
+            Plot::horizontal_bar(category, crate::BarInput::samples(value)).erase()
+        }
+        _ => panic!("unsupported bar kind {kind:?}"),
+    }
+}
+
+fn estimate_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+    let category = crate::test_support::category(data, "group");
+    let value = crate::BarInput::estimates(crate::test_support::numeric(data, "y"));
+    match kind {
+        PlotKind::Bar => Plot::bar(category, value).erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value).erase(),
         _ => panic!("unsupported bar kind {kind:?}"),
     }
 }
 
 fn grouped_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
-    bar_chart(data, kind)
-        .group(crate::test_support::category(data, "hue"))
-        .hue(crate::test_support::category(data, "hue"))
+    let category = crate::test_support::category(data, "group");
+    let value = || crate::BarInput::samples(crate::test_support::numeric(data, "y"));
+    let group = || crate::test_support::category(data, "hue");
+    match kind {
+        PlotKind::Bar => Plot::bar(category, value())
+            .group(group())
+            .hue(group())
+            .erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value())
+            .group(group())
+            .hue(group())
+            .erase(),
+        _ => panic!("unsupported bar kind {kind:?}"),
+    }
 }
 
 #[test]
@@ -71,7 +94,9 @@ fn facets_reserve_one_complete_outside_legend_band() {
         crate::test_support::numeric(&data, "y"),
     )
     .hue(crate::test_support::category(&data, "hue"))
-    .facet_col(crate::test_support::category(&data, "facet"))
+    .facet(crate::FacetSpec::column(crate::test_support::category(
+        &data, "facet",
+    )))
     .legend_position(crate::LegendPosition::OutsideRight)
     .size(760, 420);
     let mut backend = RecordingBackend::default();
@@ -140,7 +165,9 @@ fn dense_fixed_facets_share_planner_headroom() {
         crate::test_support::numeric(&data, "y"),
     )
     .hue(crate::test_support::category(&data, "hue"))
-    .facet_col(crate::test_support::category(&data, "facet"))
+    .facet(crate::FacetSpec::column(crate::test_support::category(
+        &data, "facet",
+    )))
     .size(760, 420);
     let mut backend = RecordingBackend::default();
 
@@ -164,86 +191,25 @@ fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation()
     }
 }
 
-fn caller_interval_semantics() -> crate::IntervalSemantics {
-    crate::IntervalSemantics::new(
-        crate::IntervalKind::Confidence,
-        0.95,
-        crate::InferentialScale::Response,
-        "caller-provided interval",
-    )
-    .unwrap()
-}
-
 #[test]
-fn caller_interval_semantics_cannot_forge_generated_bar_claims() {
-    let data = fixture();
-    for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = configured_chart(&data, kind).interval_semantics(caller_interval_semantics());
-        let mut backend = RecordingBackend::default();
-        let error = chart.render_kind(kind, &mut backend).unwrap_err();
-        assert!(error.to_string().contains("owned by BarAggregation"));
-        assert_eq!(backend.begins, 0, "{kind:?}");
-    }
-}
-
-#[test]
-fn every_bar_family_rejects_ignored_bounds_before_backend_begin() {
-    let data = fixture();
-    for kind in [
-        PlotKind::Bar,
-        PlotKind::HorizontalBar,
-        PlotKind::StackedBar,
-        PlotKind::StackedHorizontalBar,
-    ] {
-        let chart = configured_chart(&data, kind).interval_bounds(
-            crate::test_support::numeric(&data, "lower"),
-            crate::test_support::numeric(&data, "upper"),
-        );
-        let mut backend = RecordingBackend::default();
-        assert!(chart.render_kind(kind, &mut backend).is_err(), "{kind:?}");
-        assert_eq!(backend.begins, 0, "{kind:?}");
-    }
-}
-
-#[test]
-fn unsupported_bar_subfamilies_reject_semantics_before_backend_begin() {
-    let data = fixture();
-    for kind in [PlotKind::StackedBar, PlotKind::StackedHorizontalBar] {
-        let chart = configured_chart(&data, kind).interval_semantics(caller_interval_semantics());
-        let mut backend = RecordingBackend::default();
-        assert!(chart.render_kind(kind, &mut backend).is_err(), "{kind:?}");
-        assert_eq!(backend.begins, 0, "{kind:?}");
-    }
-}
-
-#[test]
-fn singleton_grouped_generated_bar_cells_fail_before_backend_begin() {
+fn singleton_grouped_generated_bar_cells_render_without_error_bars() {
     let data = fixture();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
         let chart = grouped_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
-        let error = chart.render_kind(kind, &mut backend).unwrap_err();
-        assert!(error.to_string().contains("at least two are required"));
-        assert_eq!(backend.begins, 0, "{kind:?}");
+        chart.render_kind(kind, &mut backend).unwrap();
+        assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
     }
 }
 
 #[test]
-fn empty_singleton_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
+fn empty_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
     let fixtures = [
         DataFrame::new(
             0,
             vec![
                 Series::new("group".into(), Vec::<String>::new()).into(),
                 Series::new("y".into(), Vec::<f64>::new()).into(),
-            ],
-        )
-        .unwrap(),
-        DataFrame::new(
-            2,
-            vec![
-                Series::new("group".into(), ["a", "b"]).into(),
-                Series::new("y".into(), [1.0_f64, 2.0]).into(),
             ],
         )
         .unwrap(),
@@ -279,12 +245,12 @@ fn valid_grouped_vertical_and_horizontal_bars_keep_provenance_off_canvas() {
             .map(|(_, _, text)| text.as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        assert!(!rendered_text.contains(crate::BarAggregation::Mean.provenance()));
+        assert!(!rendered_text.contains("bootstrap"));
     }
 }
 
 #[test]
-fn generated_bar_sample_sizes_are_not_pooled_across_facets() {
+fn singleton_generated_bar_samples_are_isolated_across_facets() {
     let data = DataFrame::new(
         2,
         vec![
@@ -295,16 +261,26 @@ fn generated_bar_sample_sizes_are_not_pooled_across_facets() {
     )
     .unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = bar_chart(&data, kind).facet_col(crate::test_support::category(&data, "facet"));
+        let category = crate::test_support::category(&data, "group");
+        let value = || crate::BarInput::samples(crate::test_support::numeric(&data, "y"));
+        let facet = || crate::test_support::category(&data, "facet");
+        let chart = match kind {
+            PlotKind::Bar => Plot::bar(category, value())
+                .facet(crate::FacetSpec::column(facet()))
+                .erase(),
+            PlotKind::HorizontalBar => Plot::horizontal_bar(category, value())
+                .facet(crate::FacetSpec::column(facet()))
+                .erase(),
+            _ => unreachable!(),
+        };
         let mut backend = RecordingBackend::default();
-        let error = chart.render_kind(kind, &mut backend).unwrap_err();
-        assert!(error.to_string().contains("facet facet=left"), "{error}");
-        assert_eq!(backend.begins, 0, "{kind:?}");
+        chart.render_kind(kind, &mut backend).unwrap();
+        assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
     }
 }
 
 #[test]
-fn identity_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
+fn estimate_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
     let valid = DataFrame::new(
         2,
         vec![
@@ -322,15 +298,15 @@ fn identity_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
     )
     .unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = bar_chart(&valid, kind).bar_aggregation(crate::BarAggregation::Identity);
+        let chart = estimate_bar_chart(&valid, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert!(backend
             .texts
             .iter()
-            .all(|(_, _, text)| !text.contains(crate::BarAggregation::Identity.provenance())));
+            .all(|(_, _, text)| !text.contains("mean")));
 
-        let chart = bar_chart(&duplicate, kind).bar_aggregation(crate::BarAggregation::Identity);
+        let chart = estimate_bar_chart(&duplicate, kind);
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
         assert!(error.to_string().contains("exactly one is required"));

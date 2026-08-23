@@ -2,20 +2,16 @@ use super::Plot;
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisTick;
 use crate::spec::{
-    AxisScale, BarAggregation, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints,
-    EffectBandSemantics, EstimateSource, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout,
-    HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite, HistogramStat,
-    IntervalSemantics, LegendPosition, LineMode, LinePathStyle, NumericLabelFormat,
-    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, ViolinLayout, WaterfallLabels,
+    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, HeatmapAnnotations,
+    HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins,
+    HistogramComposite, HistogramStat, LegendPosition, LinePathStyle, NumericLabelFormat,
+    PanelTextAnnotation, QqLine, RawOverlay, RegressionBand, WaterfallLabels,
 };
 use crate::theme::Theme;
 use crate::Labels;
-use crate::{
-    BooleanValues, CategoryValues, HistogramCompositeGeometryInput, NumericValues,
-    RaincloudGeometryInput, Significance, SourceRows,
-};
+use crate::{BooleanValues, Bounds, CategoryValues, NumericValues, Significance, SourceRows};
 
-impl Plot {
+impl<K: crate::kind::Marker> Plot<K> {
     /// Configure PNG sizing and compression before the first terminal output.
     #[must_use]
     pub const fn png_options(mut self, options: crate::PngOptions) -> Self {
@@ -35,17 +31,24 @@ impl Plot {
     /// An explicitly configured raw-overlay source-row column takes precedence
     /// for charts that configure both forms of identity.
     #[must_use]
-    pub fn source_rows(mut self, source_rows: SourceRows) -> Self {
+    pub fn source_rows(mut self, source_rows: SourceRows) -> Self
+    where
+        K: crate::kind::SourceRows,
+    {
         self.source_rows = Some(source_rows);
         self
     }
 
     /// Set categorical color identity.
     ///
-    /// For bars, boxplots, and sample-derived violins, this configures the same
-    /// positioned, colored series as [`Self::group`]; the last call wins.
+    /// For bars, boxplots, sample-derived violins, and sample-derived
+    /// rainclouds, this configures the same positioned, colored series as
+    /// [`Self::group`]; the last call wins.
     #[must_use]
-    pub fn hue(mut self, values: CategoryValues) -> Self {
+    pub fn hue(mut self, values: CategoryValues) -> Self
+    where
+        K: crate::kind::Hue,
+    {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
             self.series = Some(values);
         } else {
@@ -56,10 +59,14 @@ impl Plot {
 
     /// Set the graphical-group column used to partition collective marks.
     ///
-    /// For bars, boxplots, and sample-derived violins, this configures the same
-    /// positioned, colored series as [`Self::hue`]; the last call wins.
+    /// For bars, boxplots, sample-derived violins, and sample-derived
+    /// rainclouds, this configures the same positioned, colored series as
+    /// [`Self::hue`]; the last call wins.
     #[must_use]
-    pub fn group(mut self, values: CategoryValues) -> Self {
+    pub fn group(mut self, values: CategoryValues) -> Self
+    where
+        K: crate::kind::Group,
+    {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
             self.series = Some(values);
         } else {
@@ -70,84 +77,120 @@ impl Plot {
 
     /// Set a continuous color-value column for plot kinds that support it.
     #[must_use]
-    pub fn color(mut self, values: NumericValues) -> Self {
+    pub fn color(mut self, values: NumericValues) -> Self
+    where
+        K: crate::kind::ContinuousColor,
+    {
         self.color = Some(values);
         self
     }
 
     /// Set the title shown beside a heatmap color scale.
     #[must_use]
-    pub fn color_label(mut self, label: impl Into<String>) -> Self {
+    pub fn color_label(mut self, label: impl Into<String>) -> Self
+    where
+        K: crate::kind::ContinuousColor,
+    {
         self.color_label = Some(label.into());
         self
     }
 
     /// Set the heatmap color-scale policy.
     #[must_use]
-    pub fn heatmap_scale(mut self, scale: HeatmapScale) -> Self {
+    pub fn heatmap_scale(mut self, scale: HeatmapScale) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_scale = scale;
         self
     }
 
     /// Select Cartesian or structural triangular heatmap cells.
     #[must_use]
-    pub fn heatmap_layout(mut self, layout: HeatmapLayout) -> Self {
+    pub fn heatmap_layout(mut self, layout: HeatmapLayout) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_layout = layout;
         self
     }
 
     /// Configure whether crowded heatmap category labels are elided or wrapped.
     #[must_use]
-    pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self {
+    pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_label_fit = fit;
         self
     }
 
     /// Set exact heatmap color-domain limits. Values outside them saturate.
     #[must_use]
-    pub fn heatmap_color_limits(mut self, min: f64, max: f64) -> Self {
+    pub fn heatmap_color_limits(mut self, min: f64, max: f64) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_color_limits = Some((min, max));
         self
     }
 
     /// Set exact beeswarm continuous-color limits. Values outside them saturate.
     #[must_use]
-    pub fn beeswarm_color_limits(mut self, min: f64, max: f64) -> Self {
+    pub fn beeswarm_color_limits(mut self, min: f64, max: f64) -> Self
+    where
+        K: crate::kind::BeeswarmOptions,
+    {
         self.beeswarm_color_limits = Some((min, max));
         self
     }
 
     /// Configure optional heatmap cell-value annotations.
     #[must_use]
-    pub fn heatmap_annotations(mut self, annotations: HeatmapAnnotations) -> Self {
+    pub fn heatmap_annotations(mut self, annotations: HeatmapAnnotations) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_annotations = annotations;
         self
     }
 
     /// Add caller-owned wrapped text for one fully-null Cartesian heatmap row.
     #[must_use]
-    pub fn heatmap_null_row_annotation(mut self, annotation: HeatmapNullRowAnnotation) -> Self {
+    pub fn heatmap_null_row_annotation(mut self, annotation: HeatmapNullRowAnnotation) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_null_row_annotations.push(annotation);
         self
     }
 
     /// Set a strict Boolean column whose true heatmap cells receive a prominent border.
     #[must_use]
-    pub fn heatmap_highlight(mut self, values: BooleanValues) -> Self {
+    pub fn heatmap_highlight(mut self, values: BooleanValues) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.heatmap_highlight = Some(values);
         self
     }
 
     /// Draw fixed-format numeric labels beside point-only coefficient estimates.
     #[must_use]
-    pub fn estimate_labels(mut self, format: NumericLabelFormat) -> Self {
+    pub fn estimate_labels(mut self, format: NumericLabelFormat) -> Self
+    where
+        K: crate::kind::CoefficientOptions,
+    {
         self.estimate_labels = Some(format);
         self
     }
 
     /// Configure significance typography independently of axis text.
     #[must_use]
-    pub const fn significance_mark_style(mut self, style: crate::SignificanceMarkStyle) -> Self {
+    pub const fn significance_mark_style(mut self, style: crate::SignificanceMarkStyle) -> Self
+    where
+        K: crate::kind::SignificanceStyle,
+    {
         self.significance_mark_style = style;
         self
     }
@@ -196,7 +239,10 @@ impl Plot {
 
     /// Set explicit x-axis limits.
     #[must_use]
-    pub fn x_limits(mut self, min: f64, max: f64) -> Self {
+    pub fn x_limits(mut self, min: f64, max: f64) -> Self
+    where
+        K: crate::kind::NumericX,
+    {
         self.x_axis_spec = self.x_axis_spec.limits(min, max);
         self.x_limits_user_explicit = true;
         self
@@ -204,7 +250,10 @@ impl Plot {
 
     /// Set explicit y-axis limits.
     #[must_use]
-    pub fn y_limits(mut self, min: f64, max: f64) -> Self {
+    pub fn y_limits(mut self, min: f64, max: f64) -> Self
+    where
+        K: crate::kind::NumericY,
+    {
         self.y_axis_spec = self.y_axis_spec.limits(min, max);
         self.y_limits_user_explicit = true;
         self
@@ -212,7 +261,10 @@ impl Plot {
 
     /// Set target x-axis tick count.
     #[must_use]
-    pub fn x_tick_count(mut self, count: usize) -> Self {
+    pub fn x_tick_count(mut self, count: usize) -> Self
+    where
+        K: crate::kind::NumericX,
+    {
         self.x_axis_spec = self.x_axis_spec.tick_count(count);
         self.x_tick_count_overridden = true;
         self
@@ -220,14 +272,20 @@ impl Plot {
 
     /// Replace automatic x-axis ticks with caller-labeled numeric positions.
     #[must_use]
-    pub fn x_ticks(mut self, ticks: Vec<AxisTick>) -> Self {
+    pub fn x_ticks(mut self, ticks: Vec<AxisTick>) -> Self
+    where
+        K: crate::kind::NumericX,
+    {
         self.x_ticks = Some(ticks);
         self
     }
 
     /// Set target y-axis tick count.
     #[must_use]
-    pub fn y_tick_count(mut self, count: usize) -> Self {
+    pub fn y_tick_count(mut self, count: usize) -> Self
+    where
+        K: crate::kind::NumericY,
+    {
         self.y_axis_spec = self.y_axis_spec.tick_count(count);
         self.y_tick_count_overridden = true;
         self
@@ -235,81 +293,90 @@ impl Plot {
 
     /// Replace automatic y-axis ticks with caller-labeled numeric positions.
     #[must_use]
-    pub fn y_ticks(mut self, ticks: Vec<AxisTick>) -> Self {
+    pub fn y_ticks(mut self, ticks: Vec<AxisTick>) -> Self
+    where
+        K: crate::kind::NumericY,
+    {
         self.y_ticks = Some(ticks);
         self
     }
 
     /// Append a numeric guide rendered in data space.
     #[must_use]
-    pub fn guide(mut self, guide: GuideSpec) -> Self {
+    pub fn guide(mut self, guide: GuideSpec) -> Self
+    where
+        K: crate::kind::Guides,
+    {
         self.guides.push(guide);
         self
     }
 
     /// Append a separately borrowed strict point layer to a numeric line chart.
     #[must_use]
-    pub fn point_layer(mut self, layer: PointLayer) -> Self {
+    pub fn point_layer(mut self, layer: PointLayer) -> Self
+    where
+        K: crate::kind::PointLayers,
+    {
         self.point_layers.push(layer);
         self
     }
 
     /// Append a separately borrowed strict point layer to an ordinary bar chart.
     #[must_use]
-    pub fn bar_point_layer(mut self, layer: BarPointLayer) -> Self {
+    pub fn bar_point_layer(mut self, layer: BarPointLayer) -> Self
+    where
+        K: crate::kind::BarPointLayers,
+    {
         self.bar_point_layers.push(layer);
         self
     }
 
     /// Set grouped-bar spacing.
     #[must_use]
-    pub fn bar_spacing(mut self, spacing: BarSpacing) -> Self {
+    pub fn bar_spacing(mut self, spacing: BarSpacing) -> Self
+    where
+        K: crate::kind::BarSpacing,
+    {
         self.bar_spacing = spacing;
-        self
-    }
-
-    /// Select sample-mean inference or one-row identity values for ordinary bars.
-    #[must_use]
-    pub const fn bar_aggregation(mut self, aggregation: BarAggregation) -> Self {
-        self.bar_aggregation = aggregation;
         self
     }
 
     /// Set the histogram bin-selection strategy.
     #[must_use]
-    pub fn histogram_bins(&mut self, bins: HistogramBins) -> &mut Self {
+    pub fn histogram_bins(&mut self, bins: HistogramBins) -> &mut Self
+    where
+        K: crate::kind::HistogramOptions,
+    {
         self.histogram_bins = bins;
         self
     }
 
     /// Set the histogram vertical-axis normalization.
     #[must_use]
-    pub fn histogram_stat(&mut self, stat: HistogramStat) -> &mut Self {
+    pub fn histogram_stat(&mut self, stat: HistogramStat) -> &mut Self
+    where
+        K: crate::kind::HistogramOptions,
+    {
         self.histogram_stat = stat;
         self
     }
 
     /// Add a KDE density curve and complete source-observation rug to a histogram.
     #[must_use]
-    pub fn histogram_composite(mut self, composite: HistogramComposite) -> Self {
+    pub fn histogram_composite(mut self, composite: HistogramComposite) -> Self
+    where
+        K: crate::kind::HistogramOptions,
+    {
         self.histogram_composite = composite;
-        self
-    }
-
-    /// Use complete caller-computed density-axis histogram composite geometry.
-    ///
-    /// This selects [`HistogramStat::Density`]. Rendering maps the supplied bins,
-    /// KDE points, and rug segments to the panel without deriving sample statistics.
-    #[must_use]
-    pub fn histogram_composite_geometry(mut self, input: HistogramCompositeGeometryInput) -> Self {
-        self.histogram_stat = HistogramStat::Density;
-        self.histogram_composite_geometry = Some(input);
         self
     }
 
     /// Set the normal Q-Q reference-line policy.
     #[must_use]
-    pub fn qq_line(&mut self, line: QqLine) -> &mut Self {
+    pub fn qq_line(&mut self, line: QqLine) -> &mut Self
+    where
+        K: crate::kind::QqOptions,
+    {
         self.qq_line = line;
         self
     }
@@ -321,7 +388,10 @@ impl Plot {
     /// option is supported by bar families and point-interval plots; heatmaps
     /// use [`Self::x_category_order`] and [`Self::y_category_order`].
     #[must_use]
-    pub fn category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+    pub fn category_order(mut self, order: impl Into<CategoryOrder>) -> Self
+    where
+        K: crate::kind::CategoryOrder,
+    {
         self.category_orders.primary = order.into();
         self
     }
@@ -331,7 +401,10 @@ impl Plot {
     /// Heatmap axes accept observed or explicit ordering. Value-derived
     /// ordering is ambiguous because one axis category owns multiple cells.
     #[must_use]
-    pub fn x_category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+    pub fn x_category_order(mut self, order: impl Into<CategoryOrder>) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.category_orders.x = order.into();
         self
     }
@@ -341,109 +414,110 @@ impl Plot {
     /// Heatmap axes accept observed or explicit ordering. Value-derived
     /// ordering is ambiguous because one axis category owns multiple cells.
     #[must_use]
-    pub fn y_category_order(mut self, order: impl Into<CategoryOrder>) -> Self {
+    pub fn y_category_order(mut self, order: impl Into<CategoryOrder>) -> Self
+    where
+        K: crate::kind::HeatmapOptions,
+    {
         self.category_orders.y = order.into();
         self
     }
 
     /// Color positive and negative bars with distinct theme colors.
     #[must_use]
-    pub fn color_by_sign(mut self) -> Self {
+    pub fn color_by_sign(mut self) -> Self
+    where
+        K: crate::kind::SignedBars,
+    {
         self.color_by_sign = true;
         self
     }
 
     /// Draw a reference line at zero on the continuous axis.
     #[must_use]
-    pub fn zero_line(mut self) -> Self {
+    pub fn zero_line(mut self) -> Self
+    where
+        K: crate::kind::ZeroLine,
+    {
         self.zero_line = true;
         self
     }
 
-    /// Set columns containing lower and upper bounds for a bounds-consuming plot.
-    /// Ordinary identity bars consume these columns with matching semantics;
-    /// generated mean and stacked bars reject them.
+    /// Add a drawable band to an ordinary line series.
     #[must_use]
-    pub fn interval_bounds(mut self, lower: NumericValues, upper: NumericValues) -> Self {
-        self.interval_lower = Some(lower);
-        self.interval_upper = Some(upper);
-        self
-    }
-
-    /// Attach the statistical interpretation and provenance of rendered intervals.
-    #[must_use]
-    pub fn interval_semantics(mut self, semantics: IntervalSemantics) -> Self {
-        self.interval_semantics = Some(semantics);
+    pub fn band(mut self, bounds: Bounds) -> Self
+    where
+        K: crate::kind::LineOptions,
+    {
+        self.line_band = Some(bounds);
         self
     }
 
     /// Set an exact `estimated`/`not_estimable` availability column for estimate rows.
     #[must_use]
-    pub fn estimate_status(mut self, values: CategoryValues) -> Self {
+    pub fn estimate_status(mut self, values: CategoryValues) -> Self
+    where
+        K: crate::kind::EstimateStatus,
+    {
         self.estimate_status = Some(values);
-        self
-    }
-
-    /// Attach model-adjusted pointwise or simultaneous semantics to a Line ribbon.
-    #[must_use]
-    pub fn effect_band_semantics(mut self, semantics: EffectBandSemantics) -> Self {
-        self.interval_semantics = Some(semantics.interval().clone());
-        self.effect_band_semantics = Some(semantics);
         self
     }
 
     /// Set whether line-like plot families draw markers at estimates.
     #[must_use]
-    pub fn markers(mut self, visible: bool) -> Self {
+    pub fn markers(mut self, visible: bool) -> Self
+    where
+        K: crate::kind::Markers,
+    {
         self.markers_visible = visible;
         self
     }
 
     /// Select the generated regression confidence-band policy.
     #[must_use]
-    pub const fn regression_band(mut self, band: RegressionBand) -> Self {
+    pub const fn regression_band(mut self, band: RegressionBand) -> Self
+    where
+        K: crate::kind::RegressionOptions,
+    {
         self.regression_band = band;
         self
     }
 
-    /// Select ordinary series, repeated trajectory, or source-ordered path semantics.
+    /// Select the complete-path color and legend policy.
     #[must_use]
-    pub const fn line_mode(mut self, mode: LineMode) -> Self {
-        self.line_mode = mode;
-        self
-    }
-
-    /// Select the complete-path color and legend policy for `LineMode::Path`.
-    #[must_use]
-    pub const fn line_path_style(mut self, style: LinePathStyle) -> Self {
+    pub const fn line_path_style(mut self, style: LinePathStyle) -> Self
+    where
+        K: crate::kind::LinePathOptions,
+    {
         self.line_path_style = style;
         self
     }
 
-    /// Set the scientific reference/null line for an estimate plot.
+    /// Set the scientific reference/null line for a coefficient plot.
     #[must_use]
-    pub fn reference_line(mut self, value: f64) -> Self {
-        self.reference_line = Some(value);
+    pub fn reference_line(mut self, value: f64) -> Self
+    where
+        K: crate::kind::CoefficientOptions,
+    {
+        self.coefficient_reference_line = Some(value);
         self
     }
 
     /// Set the numeric axis scale used by a forest plot.
     #[must_use]
-    pub fn axis_scale(mut self, scale: AxisScale) -> Self {
+    pub fn axis_scale(mut self, scale: AxisScale) -> Self
+    where
+        K: crate::kind::ForestOptions,
+    {
         self.axis_scale = scale;
-        self
-    }
-
-    /// Identify interaction estimates as raw summaries or model-adjusted means.
-    #[must_use]
-    pub fn interaction_source(mut self, source: EstimateSource) -> Self {
-        self.interaction_source = Some(source);
         self
     }
 
     /// Set whether an interaction plot draws connectors between category estimates.
     #[must_use]
-    pub const fn interaction_connectors(mut self, visible: bool) -> Self {
+    pub const fn interaction_connectors(mut self, visible: bool) -> Self
+    where
+        K: crate::kind::InteractionOptions,
+    {
         self.interaction_connectors = Some(visible);
         self
     }
@@ -458,42 +532,60 @@ impl Plot {
         mut self,
         point_shapes: CategoryValues,
         line_patterns: CategoryValues,
-    ) -> Self {
+    ) -> Self
+    where
+        K: crate::kind::InteractionOptions,
+    {
         self.interaction_styles = Some((point_shapes, line_patterns));
         self
     }
 
     /// Sets exact caller-owned colors for every categorical level used by the plot.
     #[must_use]
-    pub fn categorical_colors(mut self, colors: CategoricalColors) -> Self {
+    pub fn categorical_colors(mut self, colors: CategoricalColors) -> Self
+    where
+        K: crate::kind::CategoricalColors,
+    {
         self.categorical_colors = Some(colors);
         self
     }
 
     /// Add caller-owned single-line text at one corner inside the chart panel.
     #[must_use]
-    pub fn panel_text_annotation(mut self, annotation: PanelTextAnnotation) -> Self {
+    pub fn panel_text_annotation(mut self, annotation: PanelTextAnnotation) -> Self
+    where
+        K: crate::kind::PanelText,
+    {
         self.panel_text_annotations.push(annotation);
         self
     }
 
     /// Set caller-owned labels for waterfall base and terminal annotations.
     #[must_use]
-    pub fn waterfall_labels(mut self, labels: WaterfallLabels) -> Self {
+    pub fn waterfall_labels(mut self, labels: WaterfallLabels) -> Self
+    where
+        K: crate::kind::WaterfallOptions,
+    {
         self.waterfall_labels = Some(labels);
         self
     }
 
     /// Set required caller-owned labels and colors for both dumbbell endpoints.
     #[must_use]
-    pub fn dumbbell_endpoints(mut self, endpoints: DumbbellEndpoints) -> Self {
+    pub fn dumbbell_endpoints(mut self, endpoints: DumbbellEndpoints) -> Self
+    where
+        K: crate::kind::DumbbellOptions,
+    {
         self.dumbbell_endpoints = Some(endpoints);
         self
     }
 
     /// Render scatter-like point marks without the default white outline.
     #[must_use]
-    pub fn hide_point_outline(mut self) -> Self {
+    pub fn hide_point_outline(mut self) -> Self
+    where
+        K: crate::kind::PointOutline,
+    {
         self.point_outline = None;
         self
     }
@@ -505,10 +597,17 @@ impl Plot {
         self
     }
 
-    /// Append caller-owned significance marks and pairwise brackets.
+    /// Append caller-owned significance annotations of one placement.
+    ///
+    /// Ordinary bars accept attached and pairwise annotations through separate
+    /// calls. Other plot families expose only their supported placement.
     #[must_use]
-    pub fn significance(mut self, annotations: impl IntoIterator<Item = Significance>) -> Self {
-        self.significance.extend(annotations);
+    pub fn significance<P>(mut self, annotations: impl IntoIterator<Item = Significance<P>>) -> Self
+    where
+        K: crate::kind::Significance<P>,
+    {
+        self.significance
+            .extend(annotations.into_iter().map(Significance::into_annotation));
         self
     }
 
@@ -522,7 +621,10 @@ impl Plot {
 
     /// Request a specific legend placement.
     #[must_use]
-    pub fn legend_position(mut self, position: LegendPosition) -> Self {
+    pub fn legend_position(mut self, position: LegendPosition) -> Self
+    where
+        K: crate::kind::Legend,
+    {
         self.legend_position = position;
         self.legend_visible = Some(position != LegendPosition::Hidden);
         self
@@ -530,14 +632,20 @@ impl Plot {
 
     /// Force the legend to be rendered when the selected plot can produce one.
     #[must_use]
-    pub fn show_legend(mut self) -> Self {
+    pub fn show_legend(mut self) -> Self
+    where
+        K: crate::kind::Legend,
+    {
         self.legend_visible = Some(true);
         self
     }
 
     /// Suppress the legend even when the selected plot can produce one.
     #[must_use]
-    pub fn hide_legend(mut self) -> Self {
+    pub fn hide_legend(mut self) -> Self
+    where
+        K: crate::kind::Legend,
+    {
         self.legend_visible = Some(false);
         self
     }
@@ -545,7 +653,10 @@ impl Plot {
     /// Select a centered or deterministic source-row-displaced raw-observation
     /// overlay for a boxplot or violin plot.
     #[must_use]
-    pub const fn raw_overlay(mut self, overlay: RawOverlay) -> Self {
+    pub const fn raw_overlay(mut self, overlay: RawOverlay) -> Self
+    where
+        K: crate::kind::RawOverlay,
+    {
         self.raw_overlay = overlay;
         self
     }
@@ -553,27 +664,11 @@ impl Plot {
     /// Set the integer column carrying original row identities for a visible
     /// raw-observation overlay after the caller has filtered or compacted data.
     #[must_use]
-    pub fn raw_overlay_source_rows(mut self, source_rows: SourceRows) -> Self {
+    pub fn raw_overlay_source_rows(mut self, source_rows: SourceRows) -> Self
+    where
+        K: crate::kind::RawOverlay,
+    {
         self.raw_overlay_source_rows = Some(source_rows);
-        self
-    }
-
-    /// Select the mirrored or raincloud violin geometry.
-    #[must_use]
-    pub const fn violin_layout(mut self, layout: ViolinLayout) -> Self {
-        self.violin_layout = layout;
-        self
-    }
-
-    /// Use complete caller-computed raincloud geometry.
-    ///
-    /// This selects [`ViolinLayout::Raincloud`]. Rendering maps the supplied
-    /// density boundaries, summaries, and strip points without KDE, quantile,
-    /// or jitter calculation.
-    #[must_use]
-    pub fn raincloud_geometry(mut self, input: RaincloudGeometryInput) -> Self {
-        self.violin_layout = ViolinLayout::Raincloud;
-        self.raincloud_geometry = Some(input);
         self
     }
 }

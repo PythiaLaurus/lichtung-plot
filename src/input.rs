@@ -1,6 +1,100 @@
 //! Closed semantic inputs for supported plot families.
 
-use crate::{CategoryValues, NumericValues};
+use crate::{
+    BarInput, Bounds, CategoryValues, CoefficientInput, HistogramCompositeGeometryInput,
+    NumericValues, RaincloudGeometryInput,
+};
+
+/// Closed owned source for a histogram.
+#[derive(Debug, Clone)]
+pub struct HistogramInput {
+    source: HistogramSource,
+}
+
+#[derive(Debug, Clone)]
+enum HistogramSource {
+    Samples(NumericValues),
+    Geometry(HistogramCompositeGeometryInput),
+}
+
+impl HistogramInput {
+    /// Compute histogram geometry from one numeric sample.
+    #[must_use]
+    pub fn samples(values: NumericValues) -> Self {
+        Self {
+            source: HistogramSource::Samples(values),
+        }
+    }
+
+    /// Render complete caller-computed density-axis geometry.
+    #[must_use]
+    pub fn geometry(input: HistogramCompositeGeometryInput) -> Self {
+        Self {
+            source: HistogramSource::Geometry(input),
+        }
+    }
+
+    pub(crate) const fn samples_input(&self) -> Option<&NumericValues> {
+        match &self.source {
+            HistogramSource::Samples(values) => Some(values),
+            HistogramSource::Geometry(_) => None,
+        }
+    }
+
+    pub(crate) const fn geometry_input(&self) -> Option<&HistogramCompositeGeometryInput> {
+        match &self.source {
+            HistogramSource::Samples(_) => None,
+            HistogramSource::Geometry(input) => Some(input),
+        }
+    }
+}
+
+/// Closed owned source for a raincloud plot.
+#[derive(Debug, Clone)]
+pub struct RaincloudInput {
+    source: RaincloudSource,
+}
+
+#[derive(Debug, Clone)]
+enum RaincloudSource {
+    Samples {
+        category: CategoryValues,
+        values: NumericValues,
+    },
+    Geometry(RaincloudGeometryInput),
+}
+
+impl RaincloudInput {
+    /// Compute raincloud geometry from aligned categories and numeric samples.
+    #[must_use]
+    pub fn samples(category: CategoryValues, values: NumericValues) -> Self {
+        Self {
+            source: RaincloudSource::Samples { category, values },
+        }
+    }
+
+    /// Render complete caller-computed raincloud geometry.
+    #[must_use]
+    pub fn geometry(input: RaincloudGeometryInput) -> Self {
+        Self {
+            source: RaincloudSource::Geometry(input),
+        }
+    }
+
+    pub(crate) const fn samples_input(&self) -> Option<(&CategoryValues, &NumericValues)> {
+        match &self.source {
+            RaincloudSource::Samples { category, values } => Some((category, values)),
+            RaincloudSource::Geometry(_) => None,
+        }
+    }
+
+    pub(crate) const fn geometry_input(&self) -> Option<&RaincloudGeometryInput> {
+        match &self.source {
+            RaincloudSource::Samples { .. } => None,
+            RaincloudSource::Geometry(input) => Some(input),
+        }
+    }
+}
 
 /// Native values accepted by a line plot's horizontal axis.
 #[derive(Debug, Clone)]
@@ -48,9 +142,8 @@ pub(crate) enum PlotInput {
         y: NumericValues,
     },
     Histogram {
-        values: NumericValues,
+        input: HistogramInput,
     },
-    HistogramGeometry,
     Density {
         values: NumericValues,
     },
@@ -60,6 +153,7 @@ pub(crate) enum PlotInput {
     PointInterval {
         estimate: NumericValues,
         category: CategoryValues,
+        bounds: Bounds,
     },
     Line {
         x: AxisValues,
@@ -68,14 +162,16 @@ pub(crate) enum PlotInput {
     Interaction {
         condition: CategoryValues,
         estimate: NumericValues,
+        bounds: Bounds,
     },
     Coefficient {
-        estimate: NumericValues,
+        input: CoefficientInput,
         term: CategoryValues,
     },
     Forest {
         estimate: NumericValues,
         term: CategoryValues,
+        bounds: Bounds,
     },
     Dumbbell {
         category: CategoryValues,
@@ -87,11 +183,11 @@ pub(crate) enum PlotInput {
     },
     Bar {
         category: CategoryValues,
-        value: NumericValues,
+        input: BarInput,
     },
     HorizontalBar {
         category: CategoryValues,
-        value: NumericValues,
+        input: BarInput,
     },
     StackedBar {
         category: CategoryValues,
@@ -109,7 +205,9 @@ pub(crate) enum PlotInput {
         category: CategoryValues,
         value: NumericValues,
     },
-    RaincloudGeometry,
+    Raincloud {
+        input: RaincloudInput,
+    },
     Regression {
         x: NumericValues,
         y: NumericValues,
@@ -137,13 +235,12 @@ impl PlotInput {
             Self::Scatter { x, .. } | Self::Regression { x, .. } | Self::Marginal { x, .. } => {
                 x.len()
             }
-            Self::Histogram { values } | Self::Density { values } | Self::Qq { values } => {
-                values.len()
-            }
+            Self::Histogram { input } => input.samples_input().map_or(0, NumericValues::len),
+            Self::Density { values } | Self::Qq { values } => values.len(),
             Self::PointInterval { estimate, .. }
             | Self::Interaction { estimate, .. }
-            | Self::Coefficient { estimate, .. }
             | Self::Forest { estimate, .. } => estimate.len(),
+            Self::Coefficient { input, .. } => input.values().len(),
             Self::Line { x, .. } => x.len(),
             Self::Dumbbell { left, .. } => left.len(),
             Self::Heatmap { x, .. }
@@ -154,9 +251,11 @@ impl PlotInput {
             | Self::Boxplot { category: x, .. }
             | Self::Violin { category: x, .. }
             | Self::Beeswarm { category: x, .. } => x.len(),
+            Self::Raincloud { input } => input
+                .samples_input()
+                .map_or(0, |(category, _)| category.len()),
             Self::Matrix { variables } => variables.first().map_or(0, NumericValues::len),
             Self::Waterfall { labels, .. } => labels.len(),
-            Self::HistogramGeometry | Self::RaincloudGeometry => 0,
         }
     }
 
@@ -165,12 +264,12 @@ impl PlotInput {
             Self::Scatter { x, .. } | Self::Regression { x, .. } | Self::Marginal { x, .. } => {
                 Some(x.name())
             }
-            Self::Histogram { values } | Self::Density { values } | Self::Qq { values } => {
-                Some(values.name())
+            Self::Histogram { input } => input.samples_input().map(NumericValues::name),
+            Self::Density { values } | Self::Qq { values } => Some(values.name()),
+            Self::PointInterval { estimate, .. } | Self::Forest { estimate, .. } => {
+                Some(estimate.name())
             }
-            Self::PointInterval { estimate, .. }
-            | Self::Coefficient { estimate, .. }
-            | Self::Forest { estimate, .. } => Some(estimate.name()),
+            Self::Coefficient { input, .. } => Some(input.values().name()),
             Self::Line { x, .. } => Some(x.name()),
             Self::Interaction { condition, .. }
             | Self::Dumbbell {
@@ -205,8 +304,9 @@ impl PlotInput {
             | Self::Waterfall {
                 labels: condition, ..
             } => Some(condition.name()),
+            Self::Raincloud { input } => input.samples_input().map(|(category, _)| category.name()),
             Self::Beeswarm { value, .. } => Some(value.name()),
-            Self::HistogramGeometry | Self::RaincloudGeometry | Self::Matrix { .. } => None,
+            Self::Matrix { .. } => None,
         }
     }
 
@@ -222,12 +322,6 @@ impl PlotInput {
             | Self::Beeswarm { category, .. } => Some(category.name()),
             Self::Interaction { estimate, .. }
             | Self::Dumbbell { left: estimate, .. }
-            | Self::Bar {
-                value: estimate, ..
-            }
-            | Self::HorizontalBar {
-                value: estimate, ..
-            }
             | Self::StackedBar {
                 value: estimate, ..
             }
@@ -243,12 +337,14 @@ impl PlotInput {
             | Self::Waterfall {
                 deltas: estimate, ..
             } => Some(estimate.name()),
+            Self::Raincloud { input } => input.samples_input().map(|(_, values)| values.name()),
+            Self::Bar { input, .. } | Self::HorizontalBar { input, .. } => {
+                Some(input.values().name())
+            }
             Self::Heatmap { y, .. } => Some(y.name()),
             Self::Histogram { .. }
-            | Self::HistogramGeometry
             | Self::Density { .. }
             | Self::Qq { .. }
-            | Self::RaincloudGeometry
             | Self::Matrix { .. } => None,
         }
     }

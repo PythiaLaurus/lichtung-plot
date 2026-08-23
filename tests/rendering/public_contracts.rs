@@ -1,6 +1,6 @@
 use super::*;
 
-fn render(plot: Plot, name: &str) -> String {
+fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     plot.svg(&output).unwrap();
@@ -24,12 +24,22 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
 
     for kind in ["bar", "boxplot", "violin"] {
         let plot = match kind {
-            "bar" => Plot::bar(data::category(&df, "group"), data::numeric(&df, "value")),
-            "boxplot" => Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value")),
-            _ => Plot::violin(data::category(&df, "group"), data::numeric(&df, "value")),
-        }
-        .significance(comparisons.clone())
-        .size(360, 280);
+            "bar" => Plot::bar(
+                data::category(&df, "group"),
+                BarInput::samples(data::numeric(&df, "value")),
+            )
+            .significance(comparisons.clone())
+            .size(360, 280)
+            .erase(),
+            "boxplot" => Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value"))
+                .significance(comparisons.clone())
+                .size(360, 280)
+                .erase(),
+            _ => Plot::violin(data::category(&df, "group"), data::numeric(&df, "value"))
+                .significance(comparisons.clone())
+                .size(360, 280)
+                .erase(),
+        };
         let svg = render(plot, &format!("significance-{kind}"));
 
         assert!(svg.contains(">*<"));
@@ -138,11 +148,13 @@ fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
     )
     .unwrap();
     let svg = render(
-        Plot::horizontal_bar(data::category(&df, "label"), data::numeric(&df, "value"))
-            .bar_aggregation(BarAggregation::Identity)
-            .category_order(ValueSort::Descending)
-            .color_by_sign()
-            .zero_line(),
+        Plot::horizontal_bar(
+            data::category(&df, "label"),
+            BarInput::estimates(data::numeric(&df, "value")),
+        )
+        .category_order(ValueSort::Descending)
+        .color_by_sign()
+        .zero_line(),
         "signed-horizontal-bar",
     );
 

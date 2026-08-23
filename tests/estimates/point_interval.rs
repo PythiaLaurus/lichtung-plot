@@ -10,13 +10,20 @@ fn fixture() -> DataFrame {
     .unwrap()
 }
 
-fn render(data_frame: &DataFrame, configure: impl FnOnce(Plot) -> Plot) -> String {
+fn render(
+    data_frame: &DataFrame,
+    configure: impl FnOnce(
+        Plot<lichtung_plot::kind::PointInterval>,
+    ) -> Plot<lichtung_plot::kind::PointInterval>,
+) -> String {
     render_svg(
         configure(Plot::point_interval(
             data::category(data_frame, "category"),
             data::numeric(data_frame, "estimate"),
-            data::numeric(data_frame, "lower"),
-            data::numeric(data_frame, "upper"),
+            Bounds::new(
+                data::numeric(data_frame, "lower"),
+                data::numeric(data_frame, "upper"),
+            ),
         ))
         .size(520, 280),
         "point-interval",
@@ -24,7 +31,9 @@ fn render(data_frame: &DataFrame, configure: impl FnOnce(Plot) -> Plot) -> Strin
     .unwrap()
 }
 
-fn enable_zero_line(plot: Plot) -> Plot {
+fn enable_zero_line(
+    plot: Plot<lichtung_plot::kind::PointInterval>,
+) -> Plot<lichtung_plot::kind::PointInterval> {
     plot.zero_line()
 }
 
@@ -34,29 +43,10 @@ fn point_interval_constructor_accepts_complete_typed_bounds() {
     Plot::point_interval(
         data::category(&data, "category"),
         data::numeric(&data, "estimate"),
-        data::numeric(&data, "lower"),
-        data::numeric(&data, "upper"),
+        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
     )
     .preflight()
     .unwrap();
-}
-
-#[test]
-fn typed_interval_provenance_is_not_drawn_on_canvas() {
-    let data = fixture();
-    let semantics = || {
-        IntervalSemantics::new(
-            IntervalKind::Confidence,
-            0.95,
-            InferentialScale::Response,
-            "registered model",
-        )
-        .unwrap()
-    };
-    let svg = render(&data, |chart| chart.interval_semantics(semantics()));
-
-    assert!(!svg.contains("semantic-note"));
-    assert!(!svg.contains("registered model"));
 }
 
 #[test]

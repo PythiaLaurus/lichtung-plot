@@ -8,8 +8,8 @@ fn panel() -> PanelBox {
     PanelBox::new(50.0, 350.0, 40.0, 240.0)
 }
 
-fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> Significance {
-    Significance::between(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
+fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceAnnotation {
+    SignificanceAnnotation::pairwise(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn planner_packing_is_stable_across_input_permutations() {
         first[0].clone(),
         first[1].clone(),
     ];
-    let plan = |comparisons: &[Significance]| {
+    let plan = |comparisons: &[SignificanceAnnotation]| {
         plan_comparisons(
             comparisons,
             &categories(),

@@ -111,7 +111,7 @@ pub(super) fn reserve_shared_legend(
                     .map(|result| result.legend_entries.as_slice())
             });
             if let Some(entries) = entries {
-                let legend_chart = shared.clone().legend_position(facet_legend_position);
+                let legend_chart = shared.clone().with_legend_position(facet_legend_position);
                 let (reserved, legend) =
                     crate::decorations::plan::plan_outside_legend(&legend_chart, entries, outer)?;
                 outer = reserved;

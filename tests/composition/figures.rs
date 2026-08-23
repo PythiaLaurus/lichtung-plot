@@ -1,6 +1,6 @@
 use super::*;
 
-fn estimate_line(frame: &DataFrame) -> Plot {
+fn estimate_line(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
     Plot::line(data::numeric(frame, "x"), data::numeric(frame, "estimate"))
         .group(data::category(frame, "trace"))
         .hue(data::category(frame, "trace"))
@@ -158,9 +158,8 @@ fn composed_offset_panel_reserves_long_y_tick_labels_locally() {
                 1,
                 Plot::horizontal_bar(
                     data::category(&bar_frame, "category"),
-                    data::numeric(&bar_frame, "value"),
-                )
-                .bar_aggregation(BarAggregation::Identity),
+                    BarInput::estimates(data::numeric(&bar_frame, "value")),
+                ),
             )
             .unwrap(),
         "composed-local-gutter",
@@ -188,9 +187,8 @@ fn composed_right_panel_keeps_y_axis_title_out_of_the_left_panel() {
                 1,
                 Plot::horizontal_bar(
                     data::category(&bar_frame, "category"),
-                    data::numeric(&bar_frame, "value"),
+                    BarInput::estimates(data::numeric(&bar_frame, "value")),
                 )
-                .bar_aggregation(BarAggregation::Identity)
                 .y_label("Outcome"),
             )
             .unwrap(),
@@ -216,9 +214,8 @@ fn multiline_y_axis_title_keeps_every_line_inside_the_canvas() {
                 0,
                 Plot::horizontal_bar(
                     data::category(&frame, "category"),
-                    data::numeric(&frame, "value"),
+                    BarInput::estimates(data::numeric(&frame, "value")),
                 )
-                .bar_aggregation(BarAggregation::Identity)
                 .y_label("Linguistic\nproperty\ncontribution"),
             )
             .unwrap(),
@@ -246,9 +243,8 @@ fn composed_panel_reserves_categorical_y_axis_text_once() {
                 0,
                 Plot::horizontal_bar(
                     data::category(&frame, "category"),
-                    data::numeric(&frame, "value"),
-                )
-                .bar_aggregation(BarAggregation::Identity),
+                    BarInput::estimates(data::numeric(&frame, "value")),
+                ),
             )
             .unwrap(),
         "category-gutter-once",
@@ -265,9 +261,8 @@ fn composed_horizontal_bars_support_shared_headers_labels_and_range_groups() {
     let bars = |frame: &DataFrame| {
         Plot::horizontal_bar(
             data::category(frame, "outcome"),
-            data::numeric(frame, "value"),
+            BarInput::estimates(data::numeric(frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
     };
     let svg = render_canvas(
         Canvas::grid(1, 2)
@@ -341,9 +336,8 @@ fn shared_category_labels_reject_different_row_domains_preflight() {
     let bar = |frame: &DataFrame| {
         Plot::horizontal_bar(
             data::category(frame, "outcome"),
-            data::numeric(frame, "value"),
+            BarInput::estimates(data::numeric(frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
     };
     let error = Canvas::grid(1, 2)
         .unwrap()
@@ -364,9 +358,8 @@ fn shared_category_labels_compare_rendered_explicit_orders() {
     let bar = |frame: &DataFrame, order| {
         Plot::horizontal_bar(
             data::category(frame, "outcome"),
-            data::numeric(frame, "value"),
+            BarInput::estimates(data::numeric(frame, "value")),
         )
-        .bar_aggregation(BarAggregation::Identity)
         .category_order(CategoryOrder::explicit(order))
     };
 
@@ -393,24 +386,6 @@ fn shared_category_labels_compare_rendered_explicit_orders() {
 }
 
 #[test]
-fn composed_panel_rejects_unsupported_category_order() {
-    let frame = df!("x" => [1.0_f64], "y" => [2.0_f64]).unwrap();
-    let plot = Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
-        .category_order(CategoryOrder::explicit(["unused"]));
-
-    let error = Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, plot)
-        .unwrap()
-        .preflight()
-        .unwrap_err();
-
-    assert!(error
-        .to_string()
-        .contains("primary category ordering is not supported"));
-}
-
-#[test]
 fn composed_svg_is_byte_deterministic() {
     let build = || {
         let frame = estimate_data();
@@ -424,11 +399,12 @@ fn composed_svg_is_byte_deterministic() {
                 Plot::forest(
                     data::category(&frame, "term"),
                     data::numeric(&frame, "estimate"),
-                    data::numeric(&frame, "lower"),
-                    data::numeric(&frame, "upper"),
-                )
-                .interval_semantics(confidence(InferentialScale::Response))
-                .reference_line(0.0),
+                    Bounds::new(
+                        data::numeric(&frame, "lower"),
+                        data::numeric(&frame, "upper"),
+                    ),
+                    0.0,
+                ),
             )
             .unwrap()
             .title("Composed in-memory parity")
@@ -538,13 +514,14 @@ fn heterogeneous_canvas_is_deterministic_and_clipped_once_per_plot() {
                 1,
                 Plot::coefficient(
                     data::category(&frame, "term"),
-                    data::numeric(&frame, "estimate"),
-                )
-                .interval_bounds(
-                    data::numeric(&frame, "lower"),
-                    data::numeric(&frame, "upper"),
-                )
-                .interval_semantics(confidence(InferentialScale::Coefficient)),
+                    CoefficientInput::estimates_with_intervals(
+                        data::numeric(&frame, "estimate"),
+                        Bounds::new(
+                            data::numeric(&frame, "lower"),
+                            data::numeric(&frame, "upper"),
+                        ),
+                    ),
+                ),
             )
             .unwrap()
             .legend_policy(CanvasLegendPolicy::PerPlot)
@@ -584,30 +561,11 @@ fn invalid_canvas_layouts_and_panel_data_fail_before_artifact_creation() {
 }
 
 #[test]
-fn invalid_panel_semantics_and_facet_ownership_fail_canvas_preflight() {
+fn invalid_panel_band_and_facet_ownership_fail_canvas_preflight() {
     let frame = estimate_data();
-    let scatter = Plot::scatter(
-        data::numeric(&frame, "x"),
-        data::numeric(&frame, "estimate"),
-    )
-    .interval_bounds(
-        data::numeric(&frame, "lower"),
-        data::numeric(&frame, "upper"),
-    )
-    .interval_semantics(confidence(InferentialScale::Response));
-    let error = Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, scatter)
-        .unwrap()
-        .preflight()
-        .unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("interval semantics are not consumed by Scatter"));
-
     let bar = Plot::bar(
         data::category(&frame, "factor"),
-        data::numeric(&frame, "estimate"),
+        BarInput::samples(data::numeric(&frame, "estimate")),
     )
     .significance([
         Significance::between("before", "after", SignificanceMark::PValue(0.01))

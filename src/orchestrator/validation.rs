@@ -6,8 +6,8 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::spec::{
-    BarAggregation, CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat,
-    LineMode, LinePathStyle, PlotKind, RegressionBand, ViolinLayout,
+    CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat, LinePathStyle,
+    PlotKind, RegressionBand,
 };
 
 impl Plot {
@@ -189,24 +189,13 @@ impl Plot {
     }
 
     pub(crate) fn validate_facet_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        let (row, column, wrap, wrap_columns) = self.facet_columns();
         let (row_name, column_name, _) = self.facet_names();
-        if wrap.is_some() && (row.is_some() || column.is_some()) {
-            return Err(Error::Data(
-                "facet_wrap cannot be combined with facet_row or facet_col".into(),
-            ));
-        }
         if row_name
             .zip(column_name)
             .is_some_and(|(row_name, column_name)| row_name == column_name)
         {
             return Err(Error::Data(
-                "facet_row and facet_col must use different columns".into(),
-            ));
-        }
-        if wrap.is_some() && wrap_columns == Some(0) {
-            return Err(Error::Data(
-                "facet_wrap columns must be greater than zero".into(),
+                "facet grid row and column must use different columns".into(),
             ));
         }
         if self.has_facets() && matches!(kind, PlotKind::Matrix | PlotKind::Marginal) {
@@ -230,87 +219,31 @@ impl Plot {
                 .any(|annotation| annotation.facet_ownership().next().is_some())
         {
             return Err(Error::Render(
-                "facet-owned significance annotations require facet_row, facet_col, or facet_wrap; ownership is never ignored on an unfaceted chart".into(),
+                "facet-owned significance annotations require Plot::facet; ownership is never ignored on an unfaceted chart".into(),
             ));
         }
         Ok(())
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one exhaustive validator keeps mutually exclusive generated and caller interval contracts together"
-    )]
     pub(crate) fn validate_interval_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        if let Some(effect) = self.effect_band_semantics_spec() {
-            effect.validate()?;
-            if kind != PlotKind::Line {
-                return Err(Error::Data(format!(
-                    "effect-band semantics are only supported by Line, not {kind:?}"
-                )));
-            }
-            if self.line_mode_spec() != LineMode::Series {
-                return Err(Error::Data(
-                    "effect-band semantics require LineMode::Series".into(),
-                ));
-            }
-            if self.interval_bound_cols().is_none() {
-                return Err(Error::Data(
-                    "effect-band semantics require complete lower and upper bound columns".into(),
-                ));
-            }
-            if self.interval_semantics_spec() != Some(effect.interval()) {
-                return Err(Error::Data(
-                    "effect-band interval semantics do not match the configured interval semantics"
-                        .into(),
-                ));
-            }
-        }
-        if self.line_mode_spec() != LineMode::Series
-            && (self.interval_bound_cols().is_some() || self.interval_semantics_spec().is_some())
-        {
-            return Err(Error::Data(
-                "non-series line modes do not support ribbons or interval bounds".into(),
-            ));
+        if self.line_band_configured() && kind != PlotKind::Line {
+            return Err(Error::Data(format!(
+                "{kind:?}: band is supported only by Line"
+            )));
         }
         if matches!(kind, PlotKind::Bar | PlotKind::HorizontalBar) {
-            let has_bounds = self.interval_bound_cols().is_some();
-            let has_semantics = self.interval_semantics_spec().is_some();
-            if self.bar_aggregation_spec() == BarAggregation::Mean && (has_bounds || has_semantics)
-            {
+            if self.interval_bound_cols().is_some() {
                 return Err(Error::Data(format!(
-                    "{kind:?} generated mean intervals are owned by BarAggregation and reject caller-provided bounds and interval semantics"
+                    "{kind:?} does not consume line bands; use BarInput::estimates_with_error_bars for precomputed bar bounds"
                 )));
             }
-            if self.bar_aggregation_spec() == BarAggregation::Identity
-                && has_bounds != has_semantics
-            {
-                return Err(Error::Data(format!(
-                    "{kind:?} identity interval bounds and IntervalSemantics must be configured together"
-                )));
-            }
-            if let Some(semantics) = self.interval_semantics_spec() {
-                semantics.validate()?;
-            }
-            return crate::plots::bar_data::validate_aggregation_cells(
-                self,
-                self.data(),
-                self.bar_aggregation_spec(),
-            );
+            return crate::plots::bar_data::validate_cells(self, self.data());
         }
-        if matches!(kind, PlotKind::StackedBar | PlotKind::StackedHorizontalBar) {
-            if self.bar_aggregation_spec() == BarAggregation::Identity {
-                return Err(Error::Data(format!(
-                    "BarAggregation::Identity is not consumed by {kind:?}"
-                )));
-            }
-            if self.interval_bound_cols().is_some() || self.interval_semantics_spec().is_some() {
-                return Err(Error::Data(format!(
-                    "explicit interval bounds and semantics are not consumed by {kind:?}"
-                )));
-            }
-        } else if self.bar_aggregation_spec() != BarAggregation::Mean {
+        if matches!(kind, PlotKind::StackedBar | PlotKind::StackedHorizontalBar)
+            && self.interval_bound_cols().is_some()
+        {
             return Err(Error::Data(format!(
-                "BarAggregation is supported only by Bar and HorizontalBar, not {kind:?}"
+                "line bands are not consumed by {kind:?}"
             )));
         }
         if kind != PlotKind::Regression
@@ -318,27 +251,6 @@ impl Plot {
         {
             return Err(Error::Data(format!(
                 "RegressionBand is supported only by Regression, not {kind:?}"
-            )));
-        }
-        let Some(semantics) = self.interval_semantics_spec() else {
-            return Ok(());
-        };
-        semantics.validate()?;
-        if self.interval_bound_cols().is_none() {
-            return Err(Error::Data(format!(
-                "interval semantics for {kind:?} require complete lower and upper bound columns"
-            )));
-        }
-        if !matches!(
-            kind,
-            PlotKind::PointInterval
-                | PlotKind::Line
-                | PlotKind::Interaction
-                | PlotKind::Coefficient
-                | PlotKind::Forest
-        ) {
-            return Err(Error::Data(format!(
-                "interval semantics are not consumed by {kind:?}"
             )));
         }
         Ok(())
@@ -410,20 +322,14 @@ impl Plot {
             }
         }
         if self.raincloud_geometry_input().is_some() {
-            if kind != PlotKind::Violin {
+            if kind != PlotKind::Raincloud {
                 return Err(Error::Data(format!(
-                    "{family}: precomputed raincloud geometry is supported only by Violin"
+                    "{family}: precomputed raincloud geometry is supported only by Raincloud"
                 )));
-            }
-            if self.violin_layout_spec() != ViolinLayout::Raincloud {
-                return Err(Error::Data(
-                    "violin: precomputed raincloud geometry requires ViolinLayout::Raincloud"
-                        .into(),
-                ));
             }
             if self.has_facets() {
                 return Err(Error::Data(
-                    "violin: precomputed raincloud geometry is not supported with faceting".into(),
+                    "raincloud: precomputed geometry is not supported with faceting".into(),
                 ));
             }
             if self.x_col().is_some()
@@ -432,19 +338,18 @@ impl Plot {
                 || self.group_col().is_some()
             {
                 return Err(Error::Data(
-                    "violin: precomputed raincloud geometry is self-contained and does not accept x, y, hue, or group data channels"
+                    "raincloud: precomputed geometry is self-contained and does not accept x, y, hue, or group data channels"
                         .into(),
                 ));
             }
             if self.source_row_map().is_some() || self.raw_overlay_source_row_map().is_some() {
                 return Err(Error::Data(
-                    "violin: precomputed raincloud geometry does not accept source-row inputs"
-                        .into(),
+                    "raincloud: precomputed geometry does not accept source-row inputs".into(),
                 ));
             }
             if !self.significance_annotations().is_empty() {
                 return Err(Error::Data(
-                    "violin: precomputed raincloud geometry does not support significance annotations"
+                    "raincloud: precomputed geometry does not support significance annotations"
                         .into(),
                 ));
             }
@@ -462,19 +367,6 @@ impl Plot {
                 ));
             }
         }
-        if self.violin_layout_spec() != ViolinLayout::Mirrored && kind != PlotKind::Violin {
-            return Err(Error::Data(format!(
-                "{family}: ViolinLayout::Raincloud is supported only by Violin"
-            )));
-        }
-        if self.violin_layout_spec() == ViolinLayout::Raincloud
-            && self.raw_overlay_spec().is_visible()
-        {
-            return Err(Error::Data(
-                "violin: ViolinLayout::Raincloud already includes every raw observation and cannot be combined with a visible RawOverlay"
-                    .into(),
-            ));
-        }
         if self.raw_overlay_spec().is_visible()
             && !matches!(kind, PlotKind::Boxplot | PlotKind::Violin)
         {
@@ -482,50 +374,32 @@ impl Plot {
                 "{family}: visible RawOverlay is supported only by Boxplot and Violin"
             )));
         }
-        let raincloud_uses_source_rows = kind == PlotKind::Violin
-            && self.violin_layout_spec() == ViolinLayout::Raincloud
-            && self.raincloud_geometry_input().is_none();
-        if self.raw_overlay_source_row_map().is_some()
-            && !self.raw_overlay_spec().is_visible()
-            && !raincloud_uses_source_rows
-        {
+        if self.raw_overlay_source_row_map().is_some() && !self.raw_overlay_spec().is_visible() {
             return Err(Error::Data(format!(
-                "{family}: a raw-observation source-row column requires a visible RawOverlay or ViolinLayout::Raincloud"
+                "{family}: a raw-observation source-row column requires a visible RawOverlay"
             )));
         }
-        if matches!(self.line_mode_spec(), LineMode::Trajectory | LineMode::Path) {
-            let mode = if self.line_mode_spec() == LineMode::Path {
+        if matches!(kind, PlotKind::Trajectory | PlotKind::LinePath) {
+            let mode = if kind == PlotKind::LinePath {
                 "path"
             } else {
                 "trajectory"
             };
-            if kind != PlotKind::Line {
-                return Err(Error::Data(format!(
-                    "{family}: LineMode::{:?} is only supported by Line",
-                    self.line_mode_spec()
-                )));
-            }
             if self.group_col().is_none() {
                 return Err(Error::Data(format!(
                     "line {mode}: an explicit graphical group column is required; hue is color-only"
                 )));
             }
-            if self.line_mode_spec() == LineMode::Trajectory && !self.markers_visible() {
-                return Err(Error::Data(
-                    "line trajectory: markers(false) is not supported because observations must remain visible"
-                        .into(),
-                ));
-            }
-            if self.line_mode_spec() == LineMode::Path {
+            if kind == PlotKind::LinePath {
                 self.validate_path_x_axis()?;
             } else {
                 self.validate_trajectory_x_axis()?;
             }
         }
         if self.line_path_style_spec() != LinePathStyle::Neutral {
-            if kind != PlotKind::Line || self.line_mode_spec() != LineMode::Path {
+            if kind != PlotKind::LinePath {
                 return Err(Error::Data(format!(
-                    "{family}: LinePathStyle::Hue is supported only by LineMode::Path"
+                    "{family}: LinePathStyle::Hue is supported only by LinePath"
                 )));
             }
             if self.hue_col().is_none() {
@@ -539,6 +413,8 @@ impl Plot {
             PlotKind::Scatter
                 | PlotKind::Density
                 | PlotKind::Line
+                | PlotKind::Trajectory
+                | PlotKind::LinePath
                 | PlotKind::Interaction
                 | PlotKind::Bar
                 | PlotKind::HorizontalBar
@@ -546,6 +422,7 @@ impl Plot {
                 | PlotKind::StackedHorizontalBar
                 | PlotKind::Boxplot
                 | PlotKind::Violin
+                | PlotKind::Raincloud
                 | PlotKind::Marginal
                 | PlotKind::Matrix
         );
@@ -562,6 +439,8 @@ impl Plot {
         let supports_group = matches!(
             kind,
             PlotKind::Line
+                | PlotKind::Trajectory
+                | PlotKind::LinePath
                 | PlotKind::Interaction
                 | PlotKind::Density
                 | PlotKind::Marginal
@@ -572,6 +451,7 @@ impl Plot {
                 | PlotKind::StackedHorizontalBar
                 | PlotKind::Boxplot
                 | PlotKind::Violin
+                | PlotKind::Raincloud
                 | PlotKind::Dumbbell
         );
         if let Some(column) = self.group_col().filter(|_| !supports_group) {
@@ -581,7 +461,11 @@ impl Plot {
         }
         if matches!(
             kind,
-            PlotKind::Interaction | PlotKind::StackedBar | PlotKind::StackedHorizontalBar
+            PlotKind::Trajectory
+                | PlotKind::LinePath
+                | PlotKind::Interaction
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar
         ) && self.group_col().is_none()
         {
             return Err(Error::Data(format!(
@@ -666,28 +550,10 @@ impl Plot {
                 "{family}: numeric estimate labels are supported only by Coefficient"
             )));
         }
-        let has_attached_significance = self
-            .significance_annotations()
-            .iter()
-            .any(|annotation| annotation.at_target().is_some());
-        let has_bracket_significance = self
-            .significance_annotations()
-            .iter()
-            .any(|annotation| annotation.endpoints().is_some());
-        if has_attached_significance
-            && !matches!(
-                kind,
-                PlotKind::Bar | PlotKind::HorizontalBar | PlotKind::Coefficient
-            )
-        {
+        if self.coefficient_reference_line_value().is_some() && kind != PlotKind::Coefficient {
             return Err(Error::Data(format!(
-                "{family}: attached significance marks are supported only by ordinary Bar, HorizontalBar, and Coefficient"
+                "{family}: reference_line is supported only by Coefficient; Forest receives its reference in Plot::forest"
             )));
-        }
-        if has_bracket_significance && kind == PlotKind::Coefficient {
-            return Err(Error::Data(
-                "coefficient: bracket significance annotations are not supported".into(),
-            ));
         }
         if self.estimate_status_col().is_some()
             && !matches!(
@@ -719,8 +585,6 @@ impl Plot {
                 | PlotKind::Interaction
                 | PlotKind::Coefficient
                 | PlotKind::Forest
-                | PlotKind::Bar
-                | PlotKind::HorizontalBar
         );
         if self.interval_bound_cols().is_some() && !supports_bounds {
             return Err(Error::Data(format!(
@@ -780,20 +644,21 @@ impl Plot {
         let Some(x_column) = self.x_col() else {
             return Ok(());
         };
-        let source = self.data().column(x_column).map_err(|error| {
-            Error::Data(format!("line trajectory: column {x_column:?}: {error}"))
-        })?;
+        let source = self
+            .data()
+            .column(x_column)
+            .map_err(|error| Error::Data(format!("trajectory: column {x_column:?}: {error}")))?;
         if source.is_numeric() {
             return Ok(());
         }
         if self.x_axis_spec().limits.is_some() {
             return Err(Error::Data(
-                "line trajectory: categorical condition x does not support numeric x limits".into(),
+                "trajectory: categorical condition x does not support numeric x limits".into(),
             ));
         }
         if self.x_tick_count_overridden() {
             return Err(Error::Data(
-                "line trajectory: categorical condition x does not support numeric x tick-count overrides"
+                "trajectory: categorical condition x does not support numeric x tick-count overrides"
                     .into(),
             ));
         }

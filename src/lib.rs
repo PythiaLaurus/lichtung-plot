@@ -11,6 +11,8 @@ mod error;
 mod font;
 mod geometry;
 mod input;
+/// Plot-family markers and sealed configuration capabilities.
+pub mod kind;
 mod labels;
 mod layers;
 /// Shared plot layout core: scales, projection, axes, frames.
@@ -41,21 +43,22 @@ pub use geometry::{
     HistogramKdePoint, HistogramRugInput, RaincloudDensityPoint, RaincloudDimensionsInput,
     RaincloudGeometryInput, RaincloudGroupInput, RaincloudPoint,
 };
-pub use input::AxisValues;
+pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
 pub use output::{Output, SvgText};
-pub use significance::{Significance, SignificanceMark, SignificanceTarget};
+pub use significance::{Attached, Pairwise, Significance, SignificanceMark, SignificanceTarget};
 pub use spec::{
-    AxisScale, BarAggregation, BarSpacing, CanvasLegendPolicy, CategoricalColors, CategoryOrder,
-    DumbbellEndpoints, EffectBandCoverage, EffectBandSemantics, EstimateSource, EstimateStatus,
-    FacetScales, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
-    HeatmapScale, HistogramBins, HistogramComposite, HistogramKde, HistogramStat, InferentialScale,
-    IntervalKind, IntervalSemantics, LegendPosition, LineMode, LinePathStyle, LinePattern,
-    NumericLabelFormat, PanelCorner, PanelTextAnnotation, PlotKind, PngCompression, PngOptions,
-    PngSizing, PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, TextWeight,
-    ValueSort, ViolinLayout, WaterfallLabels,
+    AxisScale, BarInput, BarSamples, BarSpacing, Bootstrap, Bounds, CanvasLegendPolicy,
+    CategoricalColors, CategoryOrder, CoefficientInput, ConfidenceInterval,
+    ConfidenceIntervalAlgorithm, DumbbellEndpoints, ErrorBar, EstimateStatus, FacetScales,
+    FacetSpec, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
+    HeatmapScale, HistogramBins, HistogramComposite, HistogramKde, HistogramStat, LegendPosition,
+    LinePathStyle, LinePattern, NumericLabelFormat, PanelCorner, PanelTextAnnotation,
+    PercentileInterval, PlotKind, PngCompression, PngOptions, PngSizing, PointShape, QqLine,
+    RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError,
+    TextWeight, ValueSort, WaterfallLabels,
 };
 pub use theme::Theme;
 pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

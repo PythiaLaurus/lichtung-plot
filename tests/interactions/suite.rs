@@ -1,6 +1,5 @@
 use lichtung_plot::{
-    Canvas, CanvasLegendPolicy, CategoricalColors, EstimateSource, InferentialScale, IntervalKind,
-    IntervalSemantics, Labels, LinePattern, Plot, PointShape,
+    Bounds, Canvas, CanvasLegendPolicy, CategoricalColors, Labels, LinePattern, Plot, PointShape,
 };
 
 #[path = "../support/data.rs"]

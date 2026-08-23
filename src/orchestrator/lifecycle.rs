@@ -10,7 +10,7 @@ use crate::spec::{
 };
 
 impl Plot {
-    pub(super) fn render_kind(
+    pub(super) fn render_kind_erased(
         &self,
         kind: PlotKind,
         backend: &mut dyn Backend,
@@ -48,7 +48,8 @@ impl Plot {
     }
 
     fn render_open_canvas(&self, kind: PlotKind, backend: &mut dyn Backend) -> Result<(), Error> {
-        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+        {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
@@ -101,7 +102,8 @@ impl Plot {
         panel: crate::layout::PanelBox,
     ) -> Result<PlotRenderResult, Error> {
         self.validate_category_order_configuration(kind)?;
-        if !self.significance_annotations().is_empty() && !kind.supports_significance() {
+        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+        {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));

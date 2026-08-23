@@ -76,8 +76,14 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let facet = Series::new("facet".into(), ["left", "left", "right", "right"]);
     let mut faceted_data = data.clone();
     faceted_data.with_column(facet.into()).unwrap();
-    let faceted = configured_chart(&faceted_data, PlotKind::Scatter)
-        .facet_col(crate::test_support::category(&faceted_data, "facet"));
+    let faceted = Plot::scatter(
+        crate::test_support::numeric(&faceted_data, "x"),
+        crate::test_support::numeric(&faceted_data, "y"),
+    )
+    .facet(crate::FacetSpec::column(crate::test_support::category(
+        &faceted_data,
+        "facet",
+    )));
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
     faceted
         .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
@@ -145,7 +151,12 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
 #[test]
 fn heatmap_validation_failure_happens_before_canvas_begin() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Heatmap).x_category_order(ValueSort::Ascending);
+    let chart = Plot::heatmap(
+        crate::test_support::category(&data, "interval_group"),
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "color"),
+    )
+    .x_category_order(ValueSort::Ascending);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -154,20 +165,6 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
         .to_string();
 
     assert!(error.contains("cannot use ValueSort::Ascending"));
-    assert_eq!((backend.begins, backend.ends), (0, 0));
-}
-
-#[test]
-fn unsupported_significance_fails_before_canvas_begin() {
-    let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Scatter).significance([Significance::between(
-        "a",
-        "b",
-        SignificanceMark::PValue(0.01),
-    )]);
-    let mut backend = RecordingBackend::default();
-
-    assert!(chart.render_kind(PlotKind::Scatter, &mut backend).is_err());
     assert_eq!((backend.begins, backend.ends), (0, 0));
 }
 
@@ -199,7 +196,10 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
     ];
     for limits in invalid_ranges {
         for x_axis in [true, false] {
-            let mut chart = configured_chart(&data, PlotKind::Scatter);
+            let mut chart = Plot::scatter(
+                crate::test_support::numeric(&data, "x"),
+                crate::test_support::numeric(&data, "y"),
+            );
             chart = if x_axis {
                 chart.x_limits(limits.0, limits.1)
             } else {
@@ -239,7 +239,11 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Boxplot).significance([Significance::between(
+    let chart = Plot::boxplot(
+        crate::test_support::category(&data, "group"),
+        crate::test_support::numeric(&data, "y"),
+    )
+    .significance([Significance::between(
         "a",
         "b",
         SignificanceMark::PValue(0.01),
@@ -328,9 +332,12 @@ fn decoration_layer_closes_after_inner_draw_error() {
 #[test]
 fn matrix_legend_layer_closes_after_inner_draw_error() {
     let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Matrix)
-        .group(crate::test_support::category(&data, "hue"))
-        .hue(crate::test_support::category(&data, "hue"));
+    let chart = Plot::matrix(vec![
+        crate::test_support::numeric(&data, "x"),
+        crate::test_support::numeric(&data, "y"),
+    ])
+    .group(crate::test_support::category(&data, "hue"))
+    .hue(crate::test_support::category(&data, "hue"));
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::PolygonInLayer, BackendFailure::LayerEnd],
         ..RecordingBackend::default()

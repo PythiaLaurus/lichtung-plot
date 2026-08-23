@@ -11,5 +11,12 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    crate::plots::interval_estimate::render(chart, context, backend, "forest", true, true)
+    crate::plots::interval_estimate::render(
+        chart,
+        context,
+        backend,
+        "forest",
+        true,
+        chart.forest_reference_value(),
+    )
 }

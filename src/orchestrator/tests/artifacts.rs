@@ -2,22 +2,21 @@
 use std::path::PathBuf;
 
 use super::{
-    assert_no_staging_files, configured_chart, fixture, publish_staged,
-    reserve_unique_sibling_temp_path, test_directory, with_temporary_artifacts, Error, PlotKind,
-    Significance, SignificanceMark,
+    assert_no_staging_files, publish_staged, reserve_unique_sibling_temp_path, test_directory,
+    with_temporary_artifacts, Error,
 };
+#[cfg(feature = "png")]
+use super::{configured_chart, fixture, PlotKind};
 
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
     let dir = test_directory("failed-svg-publication");
     let output = dir.join("figure.svg");
     std::fs::write(&output, "existing artifact").unwrap();
-    let data = fixture();
-    let chart = configured_chart(&data, PlotKind::Scatter).significance([Significance::between(
-        "a",
-        "b",
-        SignificanceMark::PValue(0.01),
-    )]);
+    let chart = crate::Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0]),
+        crate::NumericValues::new("y", [1.0]),
+    );
 
     assert!(chart.svg(&output).is_err());
     assert_eq!(

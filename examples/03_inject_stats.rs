@@ -1,7 +1,7 @@
 //! Example 03: injecting owned pairwise comparisons into a plot.
 //!
 //! The standalone plot crate performs no hypothesis test. It consumes its own
-//! [`Significance`] display values supplied by the caller.
+//! [`Significance<lichtung_plot::Pairwise>`] display values supplied by the caller.
 //!
 //! This example supplies the adjusted display p-value for each named pair.
 //!

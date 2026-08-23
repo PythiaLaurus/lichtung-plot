@@ -4,10 +4,18 @@
 
 ## Inputs
 
-`Plot` consumes owned immutable semantic values. Plot families validate aligned
-lengths, finite numeric values, categorical identities, source-row provenance,
-bounds, channel compatibility, and representable geometry before opening a
-backend canvas. Conversion from external data containers belongs to callers.
+`Plot` consumes owned immutable semantic values. Constructors return
+`Plot<kind::Family>` values, and sealed capabilities reject configuration that is
+categorically unsupported by that family at compile time. Validation before
+opening a backend canvas remains responsible for data-dependent constraints such
+as aligned lengths, finite numeric values, categorical identities, source-row
+provenance, bounds, and representable geometry. Conversion from external data
+containers belongs to callers.
+
+Exact family markers are erased explicitly with `Plot::erase` when a caller needs
+heterogeneous storage. `Plot<kind::Any>` does not regain family-specific
+configuration methods. `Canvas::panel` performs this erasure after accepting a
+typed plot.
 
 Categorical ordering is plot-owned rather than encoded by physical input row
 order. First-observed order is the deterministic default. An explicit order
@@ -15,11 +23,49 @@ must name every rendered category exactly once. Value-derived ordering is
 applied only after a supported family prepares one scalar rendered value per
 category; ambiguous multi-value categorical dimensions reject it.
 
+Ordinary bars consume one closed `BarInput`: raw samples, one precomputed
+estimate per cell, or one precomputed estimate with explicit drawable `Bounds`.
+Raw samples render per-cell arithmetic means and default to a deterministic
+two-sided 95% percentile-bootstrap confidence interval with 1,000 resamples and
+seed zero. Optional sampling units select multilevel resampling within each
+category, group, and facet cell. A singleton observation or sampling unit
+renders its mean without an error bar. Stacked bars remain separate sum inputs.
+
+`Bounds` is the sole caller-provided lower/upper representation and carries no
+inferential classification, level, scale, or provenance. Point-interval and
+interaction constructors require bounds atomically; interaction also requires
+its graphical group. Forest construction requires bounds and its scientific
+reference. Coefficients consume `CoefficientInput::estimates` or
+`CoefficientInput::estimates_with_intervals`, and ordinary line series add an
+optional drawable band with `Plot::band`. Rendering validates aligned lengths,
+finite endpoints, and `lower <= estimate <= upper`.
+
+Histograms consume exactly one `HistogramInput`: `samples` computes bins and
+optional composite layers, while `geometry` renders one complete
+caller-computed density-axis geometry input. Rainclouds likewise consume exactly
+one `RaincloudInput`: aligned categorical samples or complete caller-computed
+geometry. Precomputed geometry is self-contained and rejects sample-only
+channels such as facets and source-row identities during preflight.
+
+`Plot::line` is an ordinary sorted line series and is the only line family that
+accepts bands or supplemental point layers. `Plot::trajectory` requires an
+explicit graphical group, sorts points within each group, and always draws an
+observation marker. `Plot::line_path` requires numeric x values and an explicit
+group, preserves source-row order and repeated x values, and alone accepts
+`LinePathStyle`. Marker visibility is configurable for ordinary lines and line
+paths, but not trajectories.
+
+Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
+with a positive column count. A grid requires distinct row and column variable
+names. Marginal and matrix plots do not implement the generic facet capability.
+Precomputed histogram and raincloud geometry reject generic faceting before a
+backend canvas is opened.
+
 For bars, horizontal bars, stacked bars, stacked horizontal bars, boxplots,
-and sample-derived violins, `Plot::group` and `Plot::hue` are last-write-wins
-aliases for one positioned, colored categorical series. That series owns
-geometry, partitioning, color, legend identity, and significance targeting
-where the plot family admits the requested placement.
+sample-derived violins, and sample-derived rainclouds, `Plot::group` and
+`Plot::hue` are last-write-wins aliases for one positioned, colored categorical
+series. That series owns geometry, partitioning, color, legend identity, and
+significance targeting where the plot family admits the requested placement.
 The two channels remain independent for plot families whose geometry requires
 separate grouping and color dimensions. Precomputed raincloud geometry is
 self-contained and accepts neither setter.
@@ -77,17 +123,22 @@ environment.
 
 ## Significance Annotations
 
-`Significance` is plot-owned display data with exactly one of two placements:
-`Significance::at` attaches a label to one category or positioned series, while
-`Significance::between` draws one bracket between exactly two such targets.
+`Significance<Attached>` and `Significance<Pairwise>` are plot-owned display
+data. `Significance::at` constructs the attached placement for one category or
+positioned series, while `Significance::between` constructs a pairwise bracket
+between exactly two such targets. `Plot::significance` is available only when
+the exact plot-family marker supports the annotation's placement.
 Raw strings identify complete categories; `SignificanceTarget::category_series`
 identifies one exact positioned series.
 
 Attached marks are supported by ordinary bars, ordinary horizontal bars, and
 coefficient plots. Pairwise brackets are supported by bar variants, boxplots,
-and sample-derived violins. Stacked bars accept category-level bracket targets;
-their partitioned series do not provide distinct bracket anchors. Coefficients
-accept attached term targets only and require complete confidence intervals.
+violins, and sample-derived rainclouds. Precomputed raincloud geometry rejects
+significance at runtime because its source mode is not encoded in the plot
+family marker. Stacked bars accept category-level bracket targets; their
+partitioned series do not provide distinct bracket anchors. Coefficients accept
+attached term targets only. Their significance marks are independent of whether
+the coefficient input includes drawable bounds.
 
 `SignificanceMark` accepts an explicit `ns` or one-through-four-star mark, or
 one caller-selected display p-value. A p-value at or above `0.05` renders `ns`;

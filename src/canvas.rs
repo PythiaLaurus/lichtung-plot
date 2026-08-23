@@ -216,7 +216,12 @@ impl Canvas {
     }
 
     /// Place one chart in an unoccupied zero-based grid cell.
-    pub fn panel(mut self, row: usize, column: usize, chart: Plot) -> Result<Self, Error> {
+    pub fn panel<K: crate::kind::Marker>(
+        mut self,
+        row: usize,
+        column: usize,
+        chart: Plot<K>,
+    ) -> Result<Self, Error> {
         if row >= self.rows || column >= self.columns {
             return Err(Error::Data(format!(
                 "figure panel ({row}, {column}) is outside {}x{} grid",
@@ -229,7 +234,7 @@ impl Canvas {
                 "figure panel ({row}, {column}) is already occupied"
             )));
         }
-        self.panels[index] = Some(chart);
+        self.panels[index] = Some(chart.erase());
         Ok(self)
     }
 
