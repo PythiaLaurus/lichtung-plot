@@ -10,12 +10,9 @@ recipes over ad hoc command sequences.
 `lichtung-plot` is a standalone scientific renderer. It must not depend on,
 import, or dispatch into any other `lichtung-*` crate. It owns its errors,
 visual annotation types, rendering lifecycle, output contracts, and font
-policy. Callers own analysis and convert scientific results into plot-owned
-display values before calling this crate.
+policy.
 
-Do not add network access, asset provisioning, managed runtimes, dynamic
-dispatch, analysis algorithms, report generation, or plot-level PDF output.
-SVG is always available; PNG is the sole optional output feature.
+Do not add network access, asset provisioning.
 
 ## Current Contract
 
@@ -34,10 +31,9 @@ source change that intentionally alters SVG output.
 
 ## Commits
 
-Use Conventional Commits with mandatory scopes. Valid scopes are `plot`,
-`docs`, `workspace`, `deps`, and `ci`. Keep commits to one logical change.
+Use Conventional Commits with mandatory scopes. Keep commits to one logical
+change.
 
-## Generated Artifacts
-
-Track `Cargo.lock` and SVG snapshots. Do not commit `target/`, generated PNG or
-SVG examples, editor state, caches, or manual visual-audit output.
+After achieving a phased objective, commit the completed work before moving on.
+Do not leave finished work uncommitted unless the user explicitly asks not to
+commit.
