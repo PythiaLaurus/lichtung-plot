@@ -19,9 +19,9 @@ use crate::layout::AxisSpec;
 use crate::layout::AxisTick;
 use crate::render::backend::PointOutline;
 use crate::spec::{
-    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetScales,
-    FacetSpec, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
-    HeatmapScale, HistogramBins, HistogramComposite, HistogramStat, LegendPolicy, LinePathStyle,
+    AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetSpec,
+    HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,
+    HistogramBins, HistogramComposite, HistogramStat, LegendPolicy, LinePathStyle,
     NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
@@ -295,7 +295,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     axis_scale: AxisScale,
     interaction_connectors: Option<bool>,
     facet: Option<FacetSpec>,
-    facet_scales: FacetScales,
     resolved_facet_x_range: Option<(f64, f64)>,
     global_hue_levels: Option<Vec<String>>,
     global_group_levels: Option<Vec<String>>,
@@ -387,7 +386,6 @@ impl Plot<crate::kind::Any> {
             axis_scale: AxisScale::Linear,
             interaction_connectors: None,
             facet: None,
-            facet_scales: FacetScales::Fixed,
             resolved_facet_x_range: None,
             global_hue_levels: None,
             global_group_levels: None,
@@ -782,7 +780,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             axis_scale,
             interaction_connectors,
             facet,
-            facet_scales,
             resolved_facet_x_range,
             global_hue_levels,
             global_group_levels,
@@ -862,7 +859,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             axis_scale,
             interaction_connectors,
             facet,
-            facet_scales,
             resolved_facet_x_range,
             global_hue_levels,
             global_group_levels,

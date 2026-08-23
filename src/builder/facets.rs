@@ -1,5 +1,3 @@
-use crate::Error;
-
 use super::Plot;
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
@@ -15,18 +13,11 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Configure whether facet panels share numeric axes.
-    #[must_use]
-    pub fn facet_scales(mut self, scales: FacetScales) -> Self
-    where
-        K: crate::kind::Facet,
-    {
-        self.facet_scales = scales;
-        self
-    }
-
     pub(crate) const fn facet_scales_spec(&self) -> FacetScales {
-        self.facet_scales
+        match &self.facet {
+            Some(facet) => facet.scale_policy(),
+            None => FacetScales::Fixed,
+        }
     }
 
     pub(crate) fn facet_columns(
@@ -79,40 +70,14 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn with_significance_subset<'a>(
         mut self,
         selectors: impl IntoIterator<Item = (&'a str, &'a str)>,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         let selectors = selectors.into_iter().collect::<Vec<_>>();
-        for annotation in &self.significance {
-            for (variable, _) in &selectors {
-                if !annotation
-                    .facet_ownership()
-                    .any(|(owned_variable, _)| owned_variable == *variable)
-                {
-                    return Err(Error::Render(format!(
-                        "faceted significance annotation must name facet variable {variable:?}; annotations are never replicated across facets"
-                    )));
-                }
-            }
-            if annotation.facet_ownership().any(|(owned_variable, _)| {
-                !selectors
-                    .iter()
-                    .any(|(variable, _)| *variable == owned_variable)
-            }) {
-                return Err(Error::Render(
-                    "significance annotation references a facet variable not configured on this chart"
-                        .into(),
-                ));
-            }
-        }
         self.significance.retain(|annotation| {
-            selectors.iter().all(|(variable, level)| {
-                annotation
-                    .facet_ownership()
-                    .any(|(owned_variable, owned_level)| {
-                        owned_variable == *variable && owned_level == *level
-                    })
-            })
+            annotation
+                .facet_cell()
+                .is_some_and(|cell| cell.matches(selectors.iter().map(|(_, level)| *level)))
         });
-        Ok(self)
+        self
     }
 
     pub(crate) const fn has_facets(&self) -> bool {

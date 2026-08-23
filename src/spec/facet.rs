@@ -2,13 +2,29 @@
 
 use crate::{CategoryValues, Error};
 
-/// One complete generic-facet layout.
+/// Numeric-axis sharing policy for generic facet panels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FacetScales {
+    /// Share both numeric axes where applicable.
+    #[default]
+    Fixed,
+    /// Resolve the x axis independently per panel.
+    FreeX,
+    /// Resolve the y axis independently per panel.
+    FreeY,
+    /// Resolve both axes independently per panel.
+    Free,
+}
+
+/// One complete generic-facet layout and numeric-axis sharing policy.
 ///
 /// A facet is either a row, a column, a row-by-column grid, or one wrapped
-/// categorical dimension. Mixed grid and wrap layouts are not representable.
+/// categorical dimension. Mixed grid and wrap layouts are not representable,
+/// and numeric axes are fixed unless [`Self::scales`] selects otherwise.
 #[derive(Debug, Clone)]
 pub struct FacetSpec {
     layout: FacetLayout,
+    scales: FacetScales,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +47,7 @@ impl FacetSpec {
     pub fn row(values: CategoryValues) -> Self {
         Self {
             layout: FacetLayout::Row(values),
+            scales: FacetScales::Fixed,
         }
     }
 
@@ -39,6 +56,7 @@ impl FacetSpec {
     pub fn column(values: CategoryValues) -> Self {
         Self {
             layout: FacetLayout::Column(values),
+            scales: FacetScales::Fixed,
         }
     }
 
@@ -47,6 +65,7 @@ impl FacetSpec {
     pub fn grid(row: CategoryValues, column: CategoryValues) -> Self {
         Self {
             layout: FacetLayout::Grid { row, column },
+            scales: FacetScales::Fixed,
         }
     }
 
@@ -59,7 +78,19 @@ impl FacetSpec {
         }
         Ok(Self {
             layout: FacetLayout::Wrap { values, columns },
+            scales: FacetScales::Fixed,
         })
+    }
+
+    /// Configure whether facet panels share numeric axes.
+    #[must_use]
+    pub const fn scales(mut self, scales: FacetScales) -> Self {
+        self.scales = scales;
+        self
+    }
+
+    pub(crate) const fn scale_policy(&self) -> FacetScales {
+        self.scales
     }
 
     pub(crate) const fn row_values(&self) -> Option<&CategoryValues> {

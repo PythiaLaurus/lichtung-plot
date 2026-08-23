@@ -32,7 +32,7 @@ pub(super) fn render_scene(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_significance_subset(facet.significance_selectors())?;
+            .with_significance_subset(facet.significance_selectors());
         crate::decorations::apply::apply_grid(
             &panel_chart,
             &plan.result,
@@ -45,7 +45,7 @@ pub(super) fn render_scene(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_significance_subset(facet.significance_selectors())?;
+            .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
             plan.panel,

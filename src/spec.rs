@@ -20,7 +20,7 @@ pub use estimate::{
     AxisScale, Bounds, CoefficientInput, EstimateStatus, LinePathStyle, LinePattern, PointShape,
     QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
-pub use facet::FacetSpec;
+pub use facet::{FacetScales, FacetSpec};
 #[cfg(feature = "png")]
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
@@ -444,20 +444,6 @@ impl WaterfallLabels {
     pub fn terminal(&self) -> &str {
         &self.terminal
     }
-}
-
-/// Axis-sharing policy for chart facets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FacetScales {
-    /// Share both numeric axes where applicable.
-    #[default]
-    Fixed,
-    /// Resolve the x axis independently per panel.
-    FreeX,
-    /// Resolve the y axis independently per panel.
-    FreeY,
-    /// Resolve both axes independently per panel.
-    Free,
 }
 
 /// Legend policy for a heterogeneous composed figure.

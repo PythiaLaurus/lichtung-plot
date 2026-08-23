@@ -26,29 +26,85 @@ fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     assert_unique_svg_ids(&svg);
 
     let bar = identity_bar(&frame)
-        .facet(FacetSpec::column(data::category(&frame, "facet")))
-        .facet_scales(FacetScales::Free)
+        .facet(FacetSpec::column(data::category(&frame, "facet")).scales(FacetScales::Free))
         .significance([
             Significance::between("before", "after", SignificanceMark::PValue(0.01))
-                .facet("facet", "one")
-                .facet("facet", "one"),
+                .facet(FacetCell::single("one")),
         ]);
     let svg = render_svg(bar, "faceted-annotation").unwrap();
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
 }
 
 #[test]
-fn contradictory_duplicate_facet_ownership_fails_preflight() {
+fn significance_cell_shape_must_match_facet_layout() {
     let frame = estimate_data();
     let comparison = Significance::between("before", "after", SignificanceMark::PValue(0.01))
-        .facet("facet", "one")
-        .facet("facet", "two");
+        .facet(FacetCell::grid("one", "two"));
     let error = identity_bar(&frame)
         .facet(FacetSpec::column(data::category(&frame, "facet")))
         .significance([comparison])
         .preflight()
         .unwrap_err();
-    assert!(error.to_string().contains("names facet variable"));
+    assert!(error
+        .to_string()
+        .contains("shape does not match the configured facet layout"));
+}
+
+#[test]
+fn grid_facet_cell_owns_exactly_one_significance_panel() {
+    let frame = df!(
+        "row" => ["top", "top", "top", "top", "bottom", "bottom", "bottom", "bottom"],
+        "column" => ["left", "left", "right", "right", "left", "left", "right", "right"],
+        "factor" => ["before", "after", "before", "after", "before", "after", "before", "after"],
+        "estimate" => [1.0_f64, 2.0, 1.5, 2.5, 3.0, 4.0, 3.5, 4.5]
+    )
+    .unwrap();
+    let chart = identity_bar(&frame)
+        .facet(FacetSpec::grid(
+            data::category(&frame, "row"),
+            data::category(&frame, "column"),
+        ))
+        .significance([
+            Significance::between("before", "after", SignificanceMark::OneStar)
+                .facet(FacetCell::grid("top", "right")),
+        ]);
+
+    let svg = render_svg(chart, "grid-facet-cell").unwrap();
+
+    assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+}
+
+#[test]
+fn faceted_significance_requires_explicit_cell_ownership() {
+    let frame = estimate_data();
+    let error = identity_bar(&frame)
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
+        .significance([Significance::between(
+            "before",
+            "after",
+            SignificanceMark::OneStar,
+        )])
+        .preflight()
+        .unwrap_err();
+
+    assert!(error.to_string().contains("must identify one FacetCell"));
+}
+
+#[test]
+fn significance_cell_must_identify_an_observed_panel() {
+    let frame = estimate_data();
+    let error = identity_bar(&frame)
+        .facet(FacetSpec::column(data::category(&frame, "facet")))
+        .significance([
+            Significance::between("before", "after", SignificanceMark::OneStar)
+                .facet(FacetCell::single("missing")),
+        ])
+        .preflight()
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("does not identify an observed facet panel"));
 }
 
 #[test]
@@ -66,7 +122,7 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
             SignificanceTarget::category_series("before", "active"),
             SignificanceMark::PValue(0.01),
         )
-        .facet("facet", facet)
+        .facet(FacetCell::single(facet))
     });
     let svg = render_svg(
         Plot::bar(
@@ -93,7 +149,7 @@ fn facet_owned_comparison_on_unfaceted_plot_fails_preflight() {
     )
     .significance([
         Significance::between("before", "after", SignificanceMark::PValue(0.01))
-            .facet("facet", "one"),
+            .facet(FacetCell::single("one")),
     ])
     .preflight()
     .unwrap_err();
@@ -336,10 +392,13 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
         .unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
     )
-    .facet(FacetSpec::column(
-        lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"]).unwrap(),
-    ))
-    .facet_scales(FacetScales::FreeX)
+    .facet(
+        FacetSpec::column(
+            lichtung_plot::CategoryValues::new("facet", ["left", "right", "left", "right"])
+                .unwrap(),
+        )
+        .scales(FacetScales::FreeX),
+    )
     .size(760, 360);
     let svg = render_svg(categorical, "reserved-categorical").unwrap();
     assert!(svg.contains(">Alpha</text>") && svg.contains(">Beta</text>"));
@@ -395,8 +454,7 @@ fn faceted_explicit_category_order_validates_globally_and_filters_panel_subsets(
             BarInput::estimates(data::numeric(&frame, "value")),
         )
         .category_order(CategoryOrder::explicit(order))
-        .facet(FacetSpec::column(data::category(&frame, "panel")))
-        .facet_scales(FacetScales::FreeX)
+        .facet(FacetSpec::column(data::category(&frame, "panel")).scales(FacetScales::FreeX))
     };
 
     plot(["b", "a"]).preflight().unwrap();

@@ -561,7 +561,7 @@ fn invalid_canvas_layouts_and_panel_data_fail_before_artifact_creation() {
 }
 
 #[test]
-fn invalid_panel_band_and_facet_ownership_fail_canvas_preflight() {
+fn invalid_panel_band_and_facet_cell_fail_canvas_preflight() {
     let frame = estimate_data();
     let bar = Plot::bar(
         data::category(&frame, "factor"),
@@ -569,7 +569,7 @@ fn invalid_panel_band_and_facet_ownership_fail_canvas_preflight() {
     )
     .significance([
         Significance::between("before", "after", SignificanceMark::PValue(0.01))
-            .facet("facet", "one"),
+            .facet(FacetCell::single("one")),
     ]);
     let error = Canvas::grid(1, 1)
         .unwrap()

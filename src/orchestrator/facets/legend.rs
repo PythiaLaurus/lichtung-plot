@@ -22,7 +22,7 @@ pub(super) fn preflight_panels(
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
-            .with_significance_subset(facet.significance_selectors())?;
+            .with_significance_subset(facet.significance_selectors());
         preflight.push(panel_chart.render_panel(
             kind,
             PlotRenderContext::new(

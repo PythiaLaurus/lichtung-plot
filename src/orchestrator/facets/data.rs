@@ -247,16 +247,21 @@ pub(super) fn validate_significance_facet_anchors(
     chart: &Plot,
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
+    let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
     for annotation in chart.significance_annotations() {
-        let anchored = panels.iter().any(|panel| {
-            panel.cell.iter().all(|selector| {
-                annotation
-                    .facet_ownership()
-                    .any(|(owned_variable, owned_level)| {
-                        owned_variable == selector.variable && owned_level == selector.level
-                    })
-            })
-        });
+        let Some(cell) = annotation.facet_cell() else {
+            return Err(Error::Render(
+                "faceted significance annotation must identify one FacetCell; annotations are never replicated across facets".into(),
+            ));
+        };
+        if cell.dimensions() != dimensions {
+            return Err(Error::Render(
+                "significance FacetCell shape does not match the configured facet layout".into(),
+            ));
+        }
+        let anchored = panels
+            .iter()
+            .any(|panel| cell.matches(panel.cell.iter().map(|selector| selector.level.as_str())));
         if !anchored {
             return Err(Error::Render(
                 "faceted significance annotation does not identify an observed facet panel".into(),

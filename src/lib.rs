@@ -48,7 +48,9 @@ pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
 pub use output::{Output, SvgText};
-pub use significance::{Attached, Pairwise, Significance, SignificanceMark, SignificanceTarget};
+pub use significance::{
+    Attached, FacetCell, Pairwise, Significance, SignificanceMark, SignificanceTarget,
+};
 pub use spec::{
     AxisScale, BarInput, BarSamples, BarSpacing, Bootstrap, Bounds, CanvasLegendPolicy,
     CategoricalColors, CategoryOrder, CoefficientInput, ConfidenceInterval,

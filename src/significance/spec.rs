@@ -99,10 +99,68 @@ impl From<&str> for SignificanceTarget {
     }
 }
 
+/// One exact panel owned by a faceted significance annotation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct SignificanceFacet {
-    variable: String,
-    level: String,
+pub struct FacetCell {
+    layout: FacetCellLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum FacetCellLayout {
+    Single(String),
+    Grid { row: String, column: String },
+}
+
+impl FacetCell {
+    /// Select one level of a row, column, or wrapped facet.
+    #[must_use]
+    pub fn single(level: impl Into<String>) -> Self {
+        Self {
+            layout: FacetCellLayout::Single(level.into()),
+        }
+    }
+
+    /// Select one row-by-column facet cell.
+    #[must_use]
+    pub fn grid(row: impl Into<String>, column: impl Into<String>) -> Self {
+        Self {
+            layout: FacetCellLayout::Grid {
+                row: row.into(),
+                column: column.into(),
+            },
+        }
+    }
+
+    pub(crate) const fn dimensions(&self) -> usize {
+        match self.layout {
+            FacetCellLayout::Single(_) => 1,
+            FacetCellLayout::Grid { .. } => 2,
+        }
+    }
+
+    pub(crate) fn matches<'a>(&self, levels: impl IntoIterator<Item = &'a str>) -> bool {
+        let mut levels = levels.into_iter();
+        let matched = match &self.layout {
+            FacetCellLayout::Single(expected) => {
+                levels.next().is_some_and(|level| expected == level)
+            }
+            FacetCellLayout::Grid { row, column } => {
+                levels.next().is_some_and(|level| row == level)
+                    && levels.next().is_some_and(|level| column == level)
+            }
+        };
+        matched && levels.next().is_none()
+    }
+
+    fn validate(&self) -> Result<(), Error> {
+        match &self.layout {
+            FacetCellLayout::Single(level) => validate_text("facet level", level),
+            FacetCellLayout::Grid { row, column } => {
+                validate_text("facet row level", row)?;
+                validate_text("facet column level", column)
+            }
+        }
+    }
 }
 
 /// Marker for a significance mark attached to one rendered target.
@@ -118,13 +176,13 @@ pub(crate) enum SignificanceAnnotation {
     Attached {
         target: SignificanceTarget,
         mark: SignificanceMark,
-        facets: Vec<SignificanceFacet>,
+        facet: Option<FacetCell>,
     },
     Pairwise {
         endpoint_a: SignificanceTarget,
         endpoint_b: SignificanceTarget,
         mark: SignificanceMark,
-        facets: Vec<SignificanceFacet>,
+        facet: Option<FacetCell>,
     },
 }
 
@@ -143,7 +201,7 @@ impl Significance<Attached> {
             annotation: SignificanceAnnotation::Attached {
                 target: target.into(),
                 mark,
-                facets: Vec::new(),
+                facet: None,
             },
             placement: PhantomData,
         }
@@ -163,7 +221,7 @@ impl Significance<Pairwise> {
                 endpoint_a: endpoint_a.into(),
                 endpoint_b: endpoint_b.into(),
                 mark,
-                facets: Vec::new(),
+                facet: None,
             },
             placement: PhantomData,
         }
@@ -171,17 +229,10 @@ impl Significance<Pairwise> {
 }
 
 impl<P> Significance<P> {
-    /// Restrict this annotation to one level of a configured facet dimension.
+    /// Restrict this annotation to one exact configured facet cell.
     #[must_use]
-    pub fn facet(mut self, variable: impl Into<String>, level: impl Into<String>) -> Self {
-        let facet = SignificanceFacet {
-            variable: variable.into(),
-            level: level.into(),
-        };
-        let facets = self.annotation.facets_mut();
-        if !facets.contains(&facet) {
-            facets.push(facet);
-        }
+    pub fn facet(mut self, cell: FacetCell) -> Self {
+        *self.annotation.facet_mut() = Some(cell);
         self
     }
 
@@ -200,7 +251,7 @@ impl SignificanceAnnotation {
             endpoint_a: endpoint_a.into(),
             endpoint_b: endpoint_b.into(),
             mark,
-            facets: Vec::new(),
+            facet: None,
         }
     }
 
@@ -228,10 +279,10 @@ impl SignificanceAnnotation {
         }
     }
 
-    pub(crate) fn facet_ownership(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.facets()
-            .iter()
-            .map(|facet| (facet.variable.as_str(), facet.level.as_str()))
+    pub(crate) const fn facet_cell(&self) -> Option<&FacetCell> {
+        match self {
+            Self::Attached { facet, .. } | Self::Pairwise { facet, .. } => facet.as_ref(),
+        }
     }
 
     pub(crate) fn validate(&self) -> Result<(), Error> {
@@ -252,32 +303,15 @@ impl SignificanceAnnotation {
                 }
             }
         }
-        let facets = self.facets();
-        for (index, facet) in facets.iter().enumerate() {
-            validate_text("facet variable", &facet.variable)?;
-            validate_text("facet level", &facet.level)?;
-            if facets[..index]
-                .iter()
-                .any(|previous| previous.variable == facet.variable)
-            {
-                return Err(Error::Data(format!(
-                    "significance annotation names facet variable {:?} more than once",
-                    facet.variable
-                )));
-            }
+        if let Some(cell) = self.facet_cell() {
+            cell.validate()?;
         }
         Ok(())
     }
 
-    fn facets(&self) -> &[SignificanceFacet] {
+    fn facet_mut(&mut self) -> &mut Option<FacetCell> {
         match self {
-            Self::Attached { facets, .. } | Self::Pairwise { facets, .. } => facets,
-        }
-    }
-
-    fn facets_mut(&mut self) -> &mut Vec<SignificanceFacet> {
-        match self {
-            Self::Attached { facets, .. } | Self::Pairwise { facets, .. } => facets,
+            Self::Attached { facet, .. } | Self::Pairwise { facet, .. } => facet,
         }
     }
 }
@@ -314,9 +348,12 @@ mod tests {
 
     #[test]
     fn facet_preserves_each_placement_type() {
-        assert_attached(Significance::at("a", SignificanceMark::OneStar).facet("panel", "one"));
+        assert_attached(
+            Significance::at("a", SignificanceMark::OneStar).facet(FacetCell::single("one")),
+        );
         assert_pairwise(
-            Significance::between("a", "b", SignificanceMark::TwoStars).facet("panel", "one"),
+            Significance::between("a", "b", SignificanceMark::TwoStars)
+                .facet(FacetCell::grid("row", "column")),
         );
     }
 }

@@ -64,8 +64,11 @@ hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
 are not independently configurable.
 
 Generic faceting consumes one complete `FacetSpec`: row, column, grid, or a wrap
-with a positive column count. A grid requires distinct row and column variable
-names. Marginal and matrix plots do not implement the generic facet capability.
+with a positive column count, together with its numeric-axis sharing policy. A
+grid requires distinct row and column variable names. Marginal and matrix plots
+do not implement the generic facet capability. Faceted significance annotations
+identify one `FacetCell::single(level)` or `FacetCell::grid(row, column)`; facet
+variable names come from the `FacetSpec` and are not repeated by annotations.
 Precomputed histogram and raincloud geometry reject generic faceting before a
 backend canvas is opened.
 

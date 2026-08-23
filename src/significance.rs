@@ -3,7 +3,7 @@
 mod spec;
 
 pub(crate) use spec::SignificanceAnnotation;
-pub use spec::{Attached, Pairwise, Significance, SignificanceMark, SignificanceTarget};
+pub use spec::{Attached, FacetCell, Pairwise, Significance, SignificanceMark, SignificanceTarget};
 
 use crate::Error;
 

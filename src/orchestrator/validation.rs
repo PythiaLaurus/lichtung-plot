@@ -216,7 +216,7 @@ impl Plot {
             && self
                 .significance_annotations()
                 .iter()
-                .any(|annotation| annotation.facet_ownership().next().is_some())
+                .any(|annotation| annotation.facet_cell().is_some())
         {
             return Err(Error::Render(
                 "facet-owned significance annotations require Plot::facet; ownership is never ignored on an unfaceted chart".into(),
