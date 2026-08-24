@@ -17,6 +17,10 @@ heterogeneous storage. `Plot<kind::Any>` does not regain family-specific
 configuration methods. `Canvas::panel` performs this erasure after accepting a
 typed plot.
 
+Required constructor channels have one owner. Trajectory, line-path,
+interaction, and stacked-series groups and heatmap and beeswarm continuous color
+values are stored in their closed inputs and have no replacement setter.
+
 Categorical ordering is plot-owned rather than encoded by physical input row
 order. First-observed order is the deterministic default. An explicit order
 must name every rendered category exactly once. Value-derived ordering is
@@ -57,11 +61,10 @@ and line paths, but not trajectories.
 
 Dumbbell construction atomically consumes both numeric endpoints and their
 explicit labels and colors. Waterfall construction consumes a finite base;
-rendering derives its finite terminal as the base plus all supplied deltas.
-
-Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
-hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
-are not independently configurable.
+rendering derives every span and the terminal through one ordered cumulative
+pass. Every intermediate endpoint must be finite. The final cumulative endpoint
+is the sole terminal used by ranges, guides, and labels; a separately associated
+sum of deltas is never substituted for rendered geometry.
 
 `Plot::source_rows` is the sole source-row identity authority for all
 plot-aligned values, faceting, composition, and raw-observation overlays.
@@ -76,14 +79,79 @@ variable names come from the `FacetSpec` and are not repeated by annotations.
 Precomputed histogram and raincloud geometry reject generic faceting before a
 backend canvas is opened.
 
-For bars, horizontal bars, stacked bars, stacked horizontal bars, boxplots,
-sample-derived violins, and sample-derived rainclouds, `Plot::group` and
-`Plot::hue` are last-write-wins aliases for one positioned, colored categorical
-series. That series owns geometry, partitioning, color, legend identity, and
-significance targeting where the plot family admits the requested placement.
-The two channels remain independent for plot families whose geometry requires
-separate grouping and color dimensions. Precomputed raincloud geometry is
-self-contained and accepts neither setter.
+Fixed numeric facet axes share one resolved domain. `FreeX`, `FreeY`, and `Free`
+axes resolve the selected dimensions independently in every panel. A free
+interval-estimate axis containing only `NotEstimable` rows has no implicit
+numeric domain and requires explicit limits; it never borrows an estimated
+sibling's range.
+
+For ordinary bars, horizontal bars, boxplots, sample-derived violins, and
+sample-derived rainclouds, one optional `Plot::series` channel owns positioning,
+color, legend identity, and significance targeting where supported. Stacked
+bars require that series in their constructor and expose no replacement setter.
+Precomputed raincloud geometry is self-contained and accepts no series setter.
+
+For density, ordinary line, interaction, marginal, matrix, and
+`LinePathStyle::Hue`, graphical group and hue remain independent semantic
+dimensions. Every observed `(group, hue)` pair owns one collective mark. Hue
+without group partitions marks by hue; no unobserved Cartesian combinations are
+created. Different groups may reuse one hue, and one group may own multiple
+hue-specific marks. Pair order is stable first-observed group order followed by
+first-observed hue order within that group. Density, marginal, and matrix reject
+an observed pair that cannot independently produce its required geometry.
+
+Interaction cells are unique by `(condition, group, hue)`. `InteractionStyle`
+is keyed only by group and supplies every hue-specific mark for that group with
+the same point shape and connector pattern. `CategoricalColors` is keyed only by
+hue. A group-only styled interaction still emits the complete configured group
+glyph. Plain grouping without hue or group-specific visible style partitions
+geometry but creates no legend identity.
+
+Trajectory and neutral line-path grouping remain different: group owns the
+connector while hue may vary point by point inside that group. Their legends
+identify visible point hues only. If neutral line-path markers are hidden, the
+inert hue legend is suppressed.
+
+If group and hue have the same semantic name, their aligned categorical values
+must be identical and they collapse to one semantic dimension. Same-named but
+different values reject. Distinct semantic fields remain distinct even when one
+observed pair contains equal display values.
+
+## Numeric Ticks
+
+Automatic numeric tick positions and density are deterministic renderer-owned
+layout decisions based on resolved range, available panel space, and measured
+labels. The current API exposes no caller-selected automatic tick count.
+
+`Plot::x_ticks` and `Plot::y_ticks` accept complete exact `AxisTick` lists. An
+exact list replaces all generated ticks on that axis; generated and exact ticks
+are never merged. Positions are finite, strictly ascending data-space values
+inside the resolved range. Preflight projects the requested positions, measures
+their labels, and rejects collisions rather than omitting, moving, or rotating
+caller-owned ticks.
+
+## Legends
+
+Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
+hidden, or explicitly visible at one `LegendPosition`. Visibility and placement
+are not independently configurable. Same-corner inside positions with different
+edge names intentionally select different data-clearance edges.
+
+Legend entries preserve the visible family mark. Point presence and outline,
+line presence and pattern, and fill presence and opacity match the geometry that
+the entry explains. Density entries contain both curve line and translucent fill
+representations. Facet and Canvas shared legends stable-merge exact entries by
+typed raw semantic identity and reject conflicting labels or glyphs; they never
+reconstruct generic palette points in place of renderer-owned entries.
+
+When independent group and hue fields are both present, the legend title is the
+independently resolved `group × hue`, and each entry label is the independently
+resolved `group, hue`. When the two channels are the same semantic field with
+identical values, title and entry labels collapse to the one resolved identity.
+Distinct fields always display both values, including an entry whose resolved
+values happen to be equal. The multiplication sign and comma are display
+separators only; raw pair identity remains typed and is never encoded by joining
+strings.
 
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
@@ -96,6 +164,11 @@ does not select scientific tests or infer caller intent.
 preflight and render one private immutable scene. The terminal call consumes the
 plot or canvas, publishes its requested file immediately, and returns an opaque
 `Output`. Consuming `Output::svg` and `Output::png` calls reuse that exact scene.
+
+Every Canvas plot runs the same canonical plot-level validation as its
+standalone form before Canvas-only composition validation. Moving a plot into a
+Canvas cannot make aligned values, family-owned options, facets, intervals,
+ticks, guides, or supplemental layers more permissive.
 
 `Canvas` renders all panels through one backend begin/end lifecycle. Marks are
 clipped to their panel; titles, axes, legends, captions, and other decorations
