@@ -36,39 +36,34 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set categorical color identity.
-    ///
-    /// For ordinary bars, horizontal bars, boxplots, sample-derived violins,
-    /// and sample-derived rainclouds, this configures the same positioned,
-    /// colored series as [`Self::group`]; the last call wins.
+    /// Set categorical color identity independently of graphical grouping.
     #[must_use]
     pub fn hue(mut self, values: CategoryValues) -> Self
     where
         K: crate::kind::Hue,
     {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series = Some(values);
-        } else {
-            self.hue = Some(values);
-        }
+        self.hue = Some(values);
         self
     }
 
     /// Set the graphical-group column used to partition collective marks.
-    ///
-    /// For ordinary bars, horizontal bars, boxplots, sample-derived violins,
-    /// and sample-derived rainclouds, this configures the same positioned,
-    /// colored series as [`Self::hue`]; the last call wins.
     #[must_use]
     pub fn group(mut self, values: CategoryValues) -> Self
     where
         K: crate::kind::Group,
     {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series = Some(values);
-        } else {
-            self.group = Some(values);
-        }
+        self.group = Some(values);
+        self
+    }
+
+    /// Set one positioned categorical series that owns dodge, color, legend,
+    /// and significance identity where supported.
+    #[must_use]
+    pub fn series(mut self, values: CategoryValues) -> Self
+    where
+        K: crate::kind::Series,
+    {
+        self.series = Some(values);
         self
     }
 

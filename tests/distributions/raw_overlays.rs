@@ -235,24 +235,17 @@ fn faceted_raw_overlay_does_not_draw_provenance_inside_panels() {
 }
 
 #[test]
-fn grouped_hue_points_follow_dodge_color_and_global_first_observed_order() {
+fn series_points_follow_dodge_color_and_global_first_observed_order() {
     let plot = Plot::violin(
         lichtung_plot::CategoryValues::new("category", ["a"; 8]).unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
     )
-    .group(
-        lichtung_plot::CategoryValues::new(
-            "group",
-            ["g2", "g2", "g2", "g2", "g1", "g1", "g1", "g1"],
-        )
-        .unwrap(),
-    )
-    .hue(
+    .series(
         lichtung_plot::CategoryValues::new("hue", ["h2", "h2", "h2", "h2", "h1", "h1", "h1", "h1"])
             .unwrap(),
     )
     .raw_overlay(RawOverlay::Points);
-    let svg = render(plot, "grouped-overlay").unwrap();
+    let svg = render(plot, "series-overlay").unwrap();
     let palette = Theme::Publication.palette().colors;
     for color in [palette[0], palette[1]] {
         let hex = format!("#{:02X}{:02X}{:02X}", color.0, color.1, color.2);

@@ -35,7 +35,7 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
         "study_arm" => ["control_arm", "active_arm"]
     )
     .unwrap();
-    let svg = render(horizontal_bar(&data).hue(data::category(&data, "study_arm")));
+    let svg = render(horizontal_bar(&data).series(data::category(&data, "study_arm")));
 
     for label in [
         "Mean score",

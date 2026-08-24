@@ -89,7 +89,8 @@ For ordinary bars, horizontal bars, boxplots, sample-derived violins, and
 sample-derived rainclouds, one optional `Plot::series` channel owns positioning,
 color, legend identity, and significance targeting where supported. Stacked
 bars require that series in their constructor and expose no replacement setter.
-Precomputed raincloud geometry is self-contained and accepts no series setter.
+Precomputed raincloud geometry shares the family marker, so `.series` type-checks
+without source typestate but rejects during preflight as sample-only configuration.
 
 For density, ordinary line, interaction, marginal, matrix, and
 `LinePathStyle::Hue`, graphical group and hue remain independent semantic

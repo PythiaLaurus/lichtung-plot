@@ -29,6 +29,12 @@ impl Plot {
                 "{kind:?}: fully-null heatmap row annotations are supported only by PlotKind::Heatmap"
             )));
         }
+        if self.raincloud_geometry_input().is_some() && self.group_col().is_some() {
+            return Err(Error::Data(
+                "raincloud: Plot::series requires RaincloudInput::samples; remove .series(...) or construct the raincloud from samples"
+                    .into(),
+            ));
+        }
         self.validate_value_alignment()?;
         self.validate_category_order_configuration(kind)?;
         self.validate_channel_configuration(kind)?;
@@ -363,7 +369,7 @@ impl Plot {
                 || self.group_col().is_some()
             {
                 return Err(Error::Data(
-                    "raincloud: precomputed geometry is self-contained and does not accept x, y, hue, or group data channels"
+                    "raincloud: precomputed geometry is self-contained and does not accept external sample data channels"
                         .into(),
                 ));
             }

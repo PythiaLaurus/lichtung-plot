@@ -282,8 +282,7 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
         crate::data::category(&data, "group"),
         BarInput::estimates(crate::data::numeric(&data, "value")),
     )
-    .group(crate::data::category(&data, "series"))
-    .hue(crate::data::category(&data, "series"))
+    .series(crate::data::category(&data, "series"))
     .bar_spacing(spacing)
     .size(360, 260);
     chart.svg(&out).expect("bar render must succeed");
@@ -293,7 +292,7 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
     assert_eq!(
         bars.len(),
         2,
-        "single category × 2 hue levels should draw 2 bars"
+        "single category × 2 series levels should draw 2 bars"
     );
     bars[1].x - (bars[0].x + bars[0].width)
 }

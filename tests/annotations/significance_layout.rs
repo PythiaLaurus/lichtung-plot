@@ -178,7 +178,7 @@ fn auto_bar_legend_keeps_top_right_beside_tall_uncompared_category() {
     let dir = tempdir("uncompared-global-maximum");
     let path = dir.join("bar.svg");
     let chart = identity_bar_chart(&df)
-        .group(data::category(&df, "series"))
+        .series(data::category(&df, "series"))
         .significance([comparison("a", "b", 0.01)])
         .size(460, 320);
 
@@ -216,7 +216,7 @@ fn bottom_inside_legend_never_moves_positive_bar_zero_minimum() {
         let dir = tempdir("bottom-inside-zero-anchor");
         let path = dir.join("bar.svg");
         let mut chart = identity_bar_chart(&df)
-            .hue(data::category(&df, "series"))
+            .series(data::category(&df, "series"))
             .legend(LegendPolicy::Visible(LegendPosition::InsideBottomRight));
         if with_comparison {
             chart = chart.significance([comparison("a", "b", 0.01)]);
@@ -262,7 +262,7 @@ fn category_series_comparisons_render_exact_spans_in_both_orientations() {
     };
 
     let vertical = identity_bar_chart(&df)
-        .group(data::category(&df, "condition"))
+        .series(data::category(&df, "condition"))
         .significance([
             annotation("d-prime", SignificanceMark::TwoStars),
             annotation("criterion", SignificanceMark::OneStar),
@@ -270,7 +270,7 @@ fn category_series_comparisons_render_exact_spans_in_both_orientations() {
     let vertical = render_svg(vertical, "grouped-factor-vertical").unwrap();
 
     let horizontal = identity_horizontal_bar_chart(&df)
-        .hue(data::category(&df, "condition"))
+        .series(data::category(&df, "condition"))
         .significance([
             annotation("d-prime", SignificanceMark::TwoStars),
             annotation("criterion", SignificanceMark::OneStar),
@@ -305,7 +305,7 @@ fn attached_category_marks_do_not_create_missing_series_targets() {
         SignificanceMark::OneStar,
     );
     let chart = identity_bar_chart(&df)
-        .group(data::category(&df, "condition"))
+        .series(data::category(&df, "condition"))
         .significance([Significance::at("criterion", SignificanceMark::TwoStars)])
         .significance([annotation]);
 
@@ -329,7 +329,7 @@ fn category_and_center_series_cannot_form_a_zero_width_bracket() {
         SignificanceMark::OneStar,
     );
     let chart = identity_bar_chart(&df)
-        .group(data::category(&df, "condition"))
+        .series(data::category(&df, "condition"))
         .significance([annotation]);
 
     let error = render_svg(chart, "same-grouped-anchor")
@@ -512,7 +512,7 @@ fn render_grouped_bar_with_legend(
     .unwrap();
     let dir = tempdir(name);
     let path = dir.join("bar.svg");
-    let mut chart = identity_bar_chart(&df).group(data::category(&df, "series"));
+    let mut chart = identity_bar_chart(&df).series(data::category(&df, "series"));
     if let Some(policy) = policy {
         chart = chart.legend(policy);
     }
@@ -533,7 +533,7 @@ fn render_grouped_horizontal_bar_with_legend(policy: Option<LegendPolicy>, name:
     .unwrap();
     let dir = tempdir(name);
     let path = dir.join("horizontal.svg");
-    let mut chart = identity_horizontal_bar_chart(&df).hue(data::category(&df, "series"));
+    let mut chart = identity_horizontal_bar_chart(&df).series(data::category(&df, "series"));
     if let Some(policy) = policy {
         chart = chart.legend(policy);
     }

@@ -25,18 +25,14 @@ fn estimate_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
     }
 }
 
-fn grouped_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
+fn positioned_series_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
     let category = crate::test_support::category(data, "group");
     let value = || crate::BarInput::samples(crate::test_support::numeric(data, "y"));
-    let group = || crate::test_support::category(data, "hue");
+    let series = || crate::test_support::category(data, "hue");
     match kind {
-        PlotKind::Bar => Plot::bar(category, value())
-            .group(group())
-            .hue(group())
-            .erase(),
+        PlotKind::Bar => Plot::bar(category, value()).series(series()).erase(),
         PlotKind::HorizontalBar => Plot::horizontal_bar(category, value())
-            .group(group())
-            .hue(group())
+            .series(series())
             .erase(),
         _ => panic!("unsupported bar kind {kind:?}"),
     }
@@ -198,10 +194,10 @@ fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation()
 }
 
 #[test]
-fn singleton_grouped_generated_bar_cells_render_without_error_bars() {
+fn singleton_positioned_series_bar_cells_render_without_error_bars() {
     let data = fixture();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = grouped_bar_chart(&data, kind);
+        let chart = positioned_series_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
@@ -239,10 +235,10 @@ fn empty_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
 }
 
 #[test]
-fn valid_grouped_vertical_and_horizontal_bars_keep_provenance_off_canvas() {
+fn valid_positioned_series_bars_keep_provenance_off_canvas() {
     let data = valid_grouped_bar_fixture();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = grouped_bar_chart(&data, kind);
+        let chart = positioned_series_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         let rendered_text = backend

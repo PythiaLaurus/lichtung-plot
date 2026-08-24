@@ -188,16 +188,17 @@ fn violin_rejects_null_y_exactly() {
 }
 
 #[test]
-fn violin_rejects_null_hue_exactly() {
+fn violin_rejects_null_positioned_series_exactly() {
     let group = Series::new("group".into(), ["a", "a", "a"]);
-    let hue = Series::new("hue".into(), [Some("x"), None, Some("y")]);
+    let series = Series::new("series".into(), [Some("x"), None, Some("y")]);
     let value = Series::new("value".into(), [1.0_f64, 2.0, 3.0]);
-    let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
+    let data =
+        DataFrame::new(group.len(), vec![group.into(), series.into(), value.into()]).unwrap();
     let chart = Plot::violin(
         crate::test_support::category(&data, "group"),
         crate::test_support::numeric(&data, "value"),
     )
-    .hue(crate::test_support::category(&data, "hue"));
+    .series(crate::test_support::category(&data, "series"));
 
     let error = chart
         .render_kind(PlotKind::Violin, &mut RecordingBackend::default())
@@ -205,7 +206,7 @@ fn violin_rejects_null_hue_exactly() {
 
     assert_eq!(
         error.to_string(),
-        "data error: violin: value \"hue\" contains null at source row 1"
+        "data error: violin: value \"series\" contains null at source row 1"
     );
 }
 
@@ -260,18 +261,22 @@ fn line_rejects_non_finite_supplemental_point_before_begin() {
 }
 
 #[test]
-fn boxplot_rejects_null_category_and_hue_with_source_rows() {
-    let group = Series::new("group".into(), [Some("a"), None]);
-    let hue = Series::new("hue".into(), [Some("x"), None]);
+fn boxplot_rejects_null_category_before_positioned_series_with_source_rows() {
+    let category = Series::new("category".into(), [Some("a"), None]);
+    let series = Series::new("series".into(), [Some("x"), None]);
     let value = Series::new("value".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
-    for (hue_column, expected_column) in [(None, "group"), (Some("hue"), "group")] {
+    let data = DataFrame::new(
+        category.len(),
+        vec![category.into(), series.into(), value.into()],
+    )
+    .unwrap();
+    for with_series in [false, true] {
         let mut chart = Plot::boxplot(
-            crate::test_support::category(&data, "group"),
+            crate::test_support::category(&data, "category"),
             crate::test_support::numeric(&data, "value"),
         );
-        if hue_column.is_some() {
-            chart = chart.hue(crate::test_support::category(&data, "hue"));
+        if with_series {
+            chart = chart.series(crate::test_support::category(&data, "series"));
         }
         let mut backend = RecordingBackend::default();
 
@@ -281,25 +286,27 @@ fn boxplot_rejects_null_category_and_hue_with_source_rows() {
 
         assert_eq!(
             error.to_string(),
-            format!(
-                "data error: boxplot: value \"{expected_column}\" contains null at source row 1"
-            )
+            "data error: boxplot: value \"category\" contains null at source row 1"
         );
         assert_eq!(backend.begins, 0);
     }
 }
 
 #[test]
-fn boxplot_rejects_null_hue_after_valid_categories() {
-    let group = Series::new("group".into(), ["a", "a"]);
-    let hue = Series::new("hue".into(), [Some("x"), None]);
+fn boxplot_rejects_null_positioned_series_after_valid_categories() {
+    let category = Series::new("category".into(), ["a", "a"]);
+    let series = Series::new("series".into(), [Some("x"), None]);
     let value = Series::new("value".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(group.len(), vec![group.into(), hue.into(), value.into()]).unwrap();
+    let data = DataFrame::new(
+        category.len(),
+        vec![category.into(), series.into(), value.into()],
+    )
+    .unwrap();
     let chart = Plot::boxplot(
-        crate::test_support::category(&data, "group"),
+        crate::test_support::category(&data, "category"),
         crate::test_support::numeric(&data, "value"),
     )
-    .hue(crate::test_support::category(&data, "hue"));
+    .series(crate::test_support::category(&data, "series"));
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -308,7 +315,7 @@ fn boxplot_rejects_null_hue_after_valid_categories() {
 
     assert_eq!(
         error.to_string(),
-        "data error: boxplot: value \"hue\" contains null at source row 1"
+        "data error: boxplot: value \"series\" contains null at source row 1"
     );
     assert_eq!(backend.begins, 0);
 }

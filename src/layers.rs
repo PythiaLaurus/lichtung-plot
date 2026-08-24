@@ -121,13 +121,12 @@ pub struct PointLayer {
 
 /// A complete strict point layer positioned at prepared ordinary-bar centers.
 ///
-/// Category and optional graphical-group values resolve against the bar cells;
-/// hue is never used as dodge identity. Every row creates exactly one point and
-/// the layer creates no legend.
+/// Category and optional series values resolve against the bar cells. Every row
+/// creates exactly one point and the layer creates no legend.
 #[derive(Debug, Clone)]
 pub struct BarPointLayer {
     category: CategoryValues,
-    group: Option<CategoryValues>,
+    series: Option<CategoryValues>,
     value: NumericValues,
     color: (u8, u8, u8),
     radius: u32,
@@ -135,13 +134,13 @@ pub struct BarPointLayer {
 }
 
 impl BarPointLayer {
-    /// Construct an owned grouped or ungrouped bar point layer.
+    /// Construct an owned bar point layer with optional positioned series.
     ///
-    /// Pass `None` for an ungrouped bar and `Some(column)` for a chart whose
-    /// ordinary bars use an explicit graphical group.
+    /// Pass `None` for a single-series bar and `Some(column)` for a chart whose
+    /// ordinary bars use an explicit positioned series.
     pub fn new(
         category: CategoryValues,
-        group: Option<CategoryValues>,
+        series: Option<CategoryValues>,
         value: NumericValues,
         color: (u8, u8, u8),
         radius: u32,
@@ -150,7 +149,7 @@ impl BarPointLayer {
         validate_point_style("bar-point-layer", radius, opacity)?;
         Ok(Self {
             category,
-            group,
+            series,
             value,
             color,
             radius,
@@ -164,10 +163,10 @@ impl BarPointLayer {
         &self.category
     }
 
-    /// Optional graphical-group values resolved against prepared bar groups.
+    /// Optional series values resolved against prepared bar series.
     #[must_use]
-    pub const fn group_values(&self) -> Option<&CategoryValues> {
-        self.group.as_ref()
+    pub const fn series_values(&self) -> Option<&CategoryValues> {
+        self.series.as_ref()
     }
 
     /// Strict finite numeric point values.

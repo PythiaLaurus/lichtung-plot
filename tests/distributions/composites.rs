@@ -225,7 +225,7 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
         ],
     )
     .unwrap();
-    let hues = lichtung_plot::CategoryValues::new(
+    let series = lichtung_plot::CategoryValues::new(
         "treatment",
         [
             "control", "control", "control", "control", "control", "active", "active", "active",
@@ -240,7 +240,7 @@ fn supplied_and_sample_rainclouds_preserve_labels_colors_legend_and_recorded_mar
             [1.0, 2.0, 3.0, 4.0, 5.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         ),
     ))
-    .hue(hues);
+    .series(series);
     let supplied = Plot::raincloud(RaincloudInput::geometry(parity_raincloud_geometry()));
 
     let supplied = render(supplied, "supplied-raincloud").unwrap();
@@ -286,6 +286,19 @@ fn precomputed_raincloud_rejects_pairwise_significance_at_runtime() {
 }
 
 #[test]
+fn precomputed_raincloud_series_type_checks_but_preflight_rejects_it() {
+    let error = Plot::raincloud(RaincloudInput::geometry(explicit_raincloud()))
+        .series(lichtung_plot::CategoryValues::new("series", ["configured"; 2]).unwrap())
+        .preflight()
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "data error: raincloud: Plot::series requires RaincloudInput::samples; remove .series(...) or construct the raincloud from samples"
+    );
+}
+
+#[test]
 fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
     let values = [0.0_f64, 0.5, 1.5, 2.0];
     let sample = histogram_plot(
@@ -318,7 +331,7 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
 }
 
 #[test]
-fn embedded_raincloud_hues_coordinate_with_sample_hues_in_shared_figure_legend() {
+fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_figure_legend() {
     let colors = CategoricalColors::new([
         ("control".to_owned(), (51, 51, 51)),
         ("active".to_owned(), (0, 114, 178)),
@@ -328,7 +341,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_hues_in_shared_figure_legend()
         lichtung_plot::CategoryValues::new("condition", ["control"; 5]).unwrap(),
         lichtung_plot::NumericValues::new("score", [1.0, 2.0, 3.0, 4.0, 5.0]),
     ))
-    .hue(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
+    .series(lichtung_plot::CategoryValues::new("treatment", ["control"; 5]).unwrap())
     .categorical_colors(colors.clone());
     let mut input = parity_raincloud_geometry();
     input.groups.remove(0);
@@ -511,7 +524,7 @@ fn raincloud_uses_exact_categorical_colors_for_bodies_points_and_legend() {
             .unwrap(),
         lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
     ))
-    .hue(
+    .series(
         lichtung_plot::CategoryValues::new(
             "condition",
             [

@@ -17,9 +17,9 @@ use crate::{CategoryOrder, Plot, ValueSort};
 pub(crate) enum BarMode {
     /// One aggregate bar per x category.
     Single,
-    /// One bar per x category and graphical group, dodged side-by-side.
+    /// One bar per x category and series, dodged side-by-side.
     Grouped,
-    /// One additive segment per x category and graphical group.
+    /// One additive segment per x category and series.
     Stacked,
 }
 
@@ -64,15 +64,15 @@ pub(crate) struct PreparedBarPoint {
 pub(crate) struct PreparedBars {
     /// Primary category labels in observed order.
     pub(crate) categories: Vec<String>,
-    /// Graphical-group labels in observed order. Empty for `Single` mode.
+    /// Series labels in observed order. Empty for `Single` mode.
     pub(crate) series: Vec<String>,
-    /// Hue labels in observed order. These alone own color and legend identity.
+    /// Color labels derived from positioned series in observed order.
     pub(crate) hues: Vec<String>,
     /// Prepared bars/segments.
     pub(crate) bars: Vec<PreparedBar>,
     /// Numeric value range including zero and CI/stack extents.
     pub(crate) value_range: (f64, f64),
-    /// Supplemental points at resolved category/group centers.
+    /// Supplemental points at resolved category/series centers.
     pub(crate) points: Vec<PreparedBarPoint>,
     /// Significance labels attached to exact bar/category anchors.
     pub(crate) significance: Vec<PreparedBarSignificance>,
@@ -102,7 +102,7 @@ struct GroupedBarCell {
     units: Vec<String>,
 }
 
-/// Build prepared bar data from x/y and optional graphical group and hue channels.
+/// Build prepared bar data from category, value, and optional series channels.
 pub(crate) fn prepare<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
@@ -151,9 +151,9 @@ pub(crate) fn prepare<'a>(
             },
         ),
         BarMode::Grouped => {
-            let groups = channels.groups.ok_or_else(|| {
-                Error::Data("clustered bar requires a graphical group column".into())
-            })?;
+            let groups = channels
+                .groups
+                .ok_or_else(|| Error::Data("clustered bar requires a series column".into()))?;
             prepare_grouped(
                 categories,
                 groups,
@@ -171,9 +171,9 @@ pub(crate) fn prepare<'a>(
             )
         }
         BarMode::Stacked => {
-            let groups = channels.groups.ok_or_else(|| {
-                Error::Data("stacked bar requires a graphical group column".into())
-            })?;
+            let groups = channels
+                .groups
+                .ok_or_else(|| Error::Data("stacked bar requires a series column".into()))?;
             prepare_stacked(
                 categories,
                 groups,
@@ -343,8 +343,7 @@ fn apply_precomputed_bounds(
                     .position(|group| group == &values[row])
                     .ok_or_else(|| {
                         Error::Data(
-                            "bar estimate bounds graphical group disappeared during preparation"
-                                .into(),
+                            "bar estimate bounds series disappeared during preparation".into(),
                         )
                     })
             })
@@ -381,18 +380,18 @@ fn prepare_point_layers(
             "bar point layers are not supported by stacked bars".into(),
         ));
     }
-    let grouped = chart.group_col().is_some();
+    let has_series = chart.group_col().is_some();
     let mut points = Vec::new();
     for (layer_index, layer) in chart.bar_point_layers().iter().enumerate() {
         let context = format!("bar point layer {layer_index}");
-        if layer.group_values().is_some() != grouped {
+        if layer.series_values().is_some() != has_series {
             return Err(Error::Data(format!(
-                "{context}: layer graphical-group configuration must match the bar chart"
+                "{context}: layer series configuration must match the bar chart"
             )));
         }
         let categories = crate::data::strict_category_values(layer.category_values(), &context)?;
-        let groups = layer
-            .group_values()
+        let series = layer
+            .series_values()
             .map(|values| crate::data::strict_category_values(values, &context))
             .transpose()?;
         let values = crate::data::strict_numeric_values(layer.values(), &context)?;
@@ -412,17 +411,17 @@ fn prepare_point_layers(
                         categories[row]
                     ))
                 })?;
-            let series_index = groups
+            let series_index = series
                 .as_ref()
-                .map(|group_values| {
+                .map(|series_values| {
                     prepared
                         .series
                         .iter()
-                        .position(|value| value == &group_values[row])
+                        .position(|value| value == &series_values[row])
                         .ok_or_else(|| {
                             Error::Data(format!(
-                                "{context}: unknown graphical group {:?} at row {row}",
-                                group_values[row]
+                                "{context}: unknown series {:?} at row {row}",
+                                series_values[row]
                             ))
                         })
                 })
@@ -433,7 +432,7 @@ fn prepare_point_layers(
                 .any(|bar| bar.category_index == category_index && bar.series_index == series_index)
             {
                 return Err(Error::Data(format!(
-                    "{context}: category/group at row {row} does not resolve to a prepared bar cell"
+                    "{context}: category/series at row {row} does not resolve to a prepared bar cell"
                 )));
             }
             points.push(PreparedBarPoint {
@@ -450,7 +449,7 @@ fn prepare_point_layers(
 /// Validate cardinality and strict values for typed ordinary-bar inputs.
 #[expect(
     clippy::too_many_lines,
-    reason = "one pass preserves source-row, facet, category, and graphical-group validation context"
+    reason = "one pass preserves source-row, facet, category, and series validation context"
 )]
 pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<(), Error> {
     let x_col = chart
@@ -507,7 +506,7 @@ pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> R
         || facet_values.iter().any(|facet| facet.len() != values.len())
     {
         return Err(Error::Data(
-            "bar: category/value/hue/facet length mismatch".into(),
+            "bar: category/value/series/facet length mismatch".into(),
         ));
     }
 
@@ -558,11 +557,8 @@ pub(crate) fn validate_cells(chart: &Plot, data: crate::data::PlotData<'_>) -> R
             .collect::<Vec<_>>();
         let category_index = facet_columns.len();
         labels.push(format!("category {category_name}={}", key[category_index]));
-        if let Some(group_name) = chart.group_name() {
-            labels.push(format!(
-                "graphical group {group_name}={}",
-                key[category_index + 1]
-            ));
+        if let Some(series_name) = chart.group_name() {
+            labels.push(format!("series {series_name}={}", key[category_index + 1]));
         }
         let cell = labels.join(", ");
         if !input.is_samples() && rows != 1 {
@@ -642,7 +638,7 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
     prepared.bars = bars;
 }
 
-/// Legend entries for hue series.
+/// Legend entries for positioned series.
 pub(crate) fn legend_entries(prepared: &PreparedBars, chart: &Plot) -> Vec<LegendEntry> {
     let palette = chart.palette();
     prepared
@@ -741,7 +737,9 @@ fn prepare_grouped(
     summary: BarSummaryInput<'_>,
 ) -> Result<PreparedBars, Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
-        return Err(Error::Data("bar: x/y/hue length mismatch".into()));
+        return Err(Error::Data(
+            "bar: category/value/series length mismatch".into(),
+        ));
     }
     let mut category_levels = Vec::new();
     let mut series_levels = series_order;
@@ -783,7 +781,7 @@ fn prepare_grouped(
     let mut bars = Vec::with_capacity(groups.len());
     for cell in groups {
         let context = format!(
-            "category {:?}, graphical group {:?}",
+            "category {:?}, series {:?}",
             category_levels[cell.category_index], series_levels[cell.series_index]
         );
         let (value, interval) = summarize(
@@ -826,7 +824,9 @@ fn prepare_stacked(
     hue_order: Vec<String>,
 ) -> Result<PreparedBars, Error> {
     if categories.len() != series.len() || categories.len() != values.len() {
-        return Err(Error::Data("bar: x/y/hue length mismatch".into()));
+        return Err(Error::Data(
+            "bar: category/value/series length mismatch".into(),
+        ));
     }
     let mut category_levels = Vec::new();
     let mut series_levels = series_order;
@@ -857,7 +857,7 @@ fn prepare_stacked(
         .into_iter()
         .map(|(category_index, series_index, hue_index, values)| {
             let context = format!(
-                "stacked category {:?}, graphical group {:?}",
+                "stacked category {:?}, series {:?}",
                 category_levels[category_index], series_levels[series_index]
             );
             stable_sum(&values).map_or_else(
@@ -1439,13 +1439,13 @@ mod tests {
     }
 
     #[test]
-    fn grouped_sample_cells_compute_independent_means() {
+    fn positioned_series_sample_cells_compute_independent_means() {
         let chart = Plot::bar(
             CategoryValues::new("category", ["a", "a", "a", "a"]).unwrap(),
             BarInput::samples(NumericValues::new("value", [1.0, 3.0, 10.0, 30.0]))
                 .error_bar(ErrorBar::hidden()),
         )
-        .group(CategoryValues::new("group", ["left", "left", "right", "right"]).unwrap())
+        .series(CategoryValues::new("series", ["left", "left", "right", "right"]).unwrap())
         .erase();
 
         let prepared = prepare(&chart, chart.data(), BarMode::Grouped).unwrap();
@@ -1510,7 +1510,7 @@ mod tests {
     }
 
     #[test]
-    fn configured_sampling_units_are_scoped_to_each_group() {
+    fn configured_sampling_units_are_scoped_to_each_positioned_series() {
         let units = CategoryValues::new("participant", ["p1", "p1", "p2", "p2"]).unwrap();
         let bootstrap = Bootstrap::new().resamples(50).unwrap().seed(7).units(units);
         let chart = Plot::bar(
@@ -1518,7 +1518,7 @@ mod tests {
             BarInput::samples(NumericValues::new("value", [1.0, 3.0, 10.0, 30.0]))
                 .error_bar(ErrorBar::confidence_interval().bootstrap(bootstrap)),
         )
-        .group(CategoryValues::new("group", ["left", "left", "right", "right"]).unwrap())
+        .series(CategoryValues::new("series", ["left", "left", "right", "right"]).unwrap())
         .erase();
 
         let prepared = prepare(&chart, chart.data(), BarMode::Grouped).unwrap();

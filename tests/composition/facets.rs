@@ -163,7 +163,7 @@ fn significance_cell_must_identify_an_observed_panel() {
 }
 
 #[test]
-fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
+fn facet_series_preflight_keeps_repeated_endpoint_pairs_panel_local() {
     let frame = df!(
         "facet" => ["one", "one", "two", "two"],
         "category" => ["before", "before", "before", "before"],
@@ -184,11 +184,10 @@ fn facet_hue_preflight_keeps_repeated_endpoint_pairs_panel_local() {
             data::category(&frame, "category"),
             BarInput::estimates(data::numeric(&frame, "value")),
         )
-        .group(data::category(&frame, "hue"))
-        .hue(data::category(&frame, "hue"))
+        .series(data::category(&frame, "hue"))
         .facet(FacetSpec::column(data::category(&frame, "facet")))
         .significance(comparisons),
-        "facet-hue-panel-comparisons",
+        "facet-series-panel-comparisons",
     )
     .unwrap();
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 2);
@@ -507,7 +506,7 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
             [1.0, 2.0, 3.0, 4.0],
         )),
     )
-    .group(lichtung_plot::CategoryValues::new("__series", ["g1", "g2", "g1", "g2"]).unwrap())
+    .series(lichtung_plot::CategoryValues::new("__series", ["g1", "g2", "g1", "g2"]).unwrap())
     .facet(FacetSpec::column(
         lichtung_plot::CategoryValues::new("__series", ["left", "left", "right", "right"]).unwrap(),
     ))

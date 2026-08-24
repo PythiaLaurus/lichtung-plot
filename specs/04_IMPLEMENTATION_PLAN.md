@@ -218,7 +218,11 @@ No old constructor or setter alias remains.
 
 ## Final API Phase A2: Unified Positioned Series
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: all no-feature library and integration tests, compile-fail
+doctests, both Clippy feature configurations, independent review, and `just
+verify` passed on 2026-08-25.
 
 Replace `.group` and `.hue` last-write-wins aliases with one `.series` method on
 ordinary bars, horizontal bars, boxplots, sample-derived violins, and

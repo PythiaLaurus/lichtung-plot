@@ -30,13 +30,11 @@ fn dense_bar_chart(data: &Fixture, horizontal: bool) -> Plot {
     let input = crate::BarInput::estimates(crate::test_support::numeric(data, "value"));
     if horizontal {
         Plot::horizontal_bar(category, input)
-            .group(crate::test_support::category(data, "hue"))
-            .hue(crate::test_support::category(data, "hue"))
+            .series(crate::test_support::category(data, "hue"))
             .erase()
     } else {
         Plot::bar(category, input)
-            .group(crate::test_support::category(data, "hue"))
-            .hue(crate::test_support::category(data, "hue"))
+            .series(crate::test_support::category(data, "hue"))
             .erase()
     }
 }

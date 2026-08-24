@@ -263,7 +263,7 @@ use crate::{
 ///     NumericValues::new("value", [1.0]),
 ///     CategoryValues::new("series", ["g"]).unwrap(),
 /// );
-/// let _ = plot.group(CategoryValues::new("replacement", ["h"]).unwrap());
+/// let _ = plot.series(CategoryValues::new("replacement", ["h"]).unwrap());
 /// ```
 ///
 /// ```compile_fail
@@ -273,7 +273,61 @@ use crate::{
 ///     NumericValues::new("value", [1.0]),
 ///     CategoryValues::new("series", ["g"]).unwrap(),
 /// );
-/// let _ = plot.hue(CategoryValues::new("replacement", ["h"]).unwrap());
+/// let _ = plot.series(CategoryValues::new("replacement", ["h"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{BarInput, CategoryValues, NumericValues, Plot};
+/// let plot = Plot::bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     BarInput::estimates(NumericValues::new("value", [1.0])),
+/// );
+/// let _ = plot.group(CategoryValues::new("series", ["g"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::horizontal_bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     lichtung_plot::BarInput::estimates(NumericValues::new("value", [1.0])),
+/// );
+/// let _ = plot.hue(CategoryValues::new("series", ["g"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::boxplot(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+/// );
+/// let _ = plot.group(CategoryValues::new("series", ["g"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::violin(
+///     CategoryValues::new("category", ["a", "a"]).unwrap(),
+///     NumericValues::new("value", [1.0, 2.0]),
+/// );
+/// let _ = plot.hue(CategoryValues::new("series", ["g", "g"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot, RaincloudInput};
+/// let plot = Plot::raincloud(RaincloudInput::samples(
+///     CategoryValues::new("category", ["a", "a"]).unwrap(),
+///     NumericValues::new("value", [1.0, 2.0]),
+/// ));
+/// let _ = plot.hue(CategoryValues::new("series", ["g", "g"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::line(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+/// );
+/// let _ = plot.series(CategoryValues::new("series", ["g", "g"]).unwrap());
 /// ```
 ///
 /// ```compile_fail

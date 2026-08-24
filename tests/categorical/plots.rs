@@ -32,7 +32,7 @@ fn violin_auto_range_includes_kde_support_beyond_raw_counts() {
 }
 
 #[test]
-fn bar_with_hue_renders_grouped_bars_and_hue_legend() {
+fn bar_with_series_renders_grouped_bars_and_series_legend() {
     let df = df!(
         "group" => ["A", "A", "B", "B"],
         "series" => ["control", "treatment", "control", "treatment"],
@@ -40,13 +40,13 @@ fn bar_with_hue_renders_grouped_bars_and_hue_legend() {
     )
     .unwrap();
 
-    let dir = unique_dir("bar-hue-grouped");
+    let dir = unique_dir("bar-series-grouped");
     let out = dir.join("bar.svg");
     let chart = Plot::bar(
         data::category(&df, "group"),
         BarInput::estimates(data::numeric(&df, "value")),
     )
-    .hue(data::category(&df, "series"));
+    .series(data::category(&df, "series"));
     chart
         .size(420, 300)
         .svg(&out)
@@ -54,14 +54,14 @@ fn bar_with_hue_renders_grouped_bars_and_hue_legend() {
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bar_count = parse_polygon_bounds(&svg).len();
 
-    assert!(has_legend(&svg), "hue bar should draw a legend");
+    assert!(has_legend(&svg), "series bar should draw a legend");
     assert!(
         svg.contains(">Control</text>") && svg.contains(">Treatment</text>"),
-        "hue labels should be rendered in the legend"
+        "series labels should be rendered in the legend"
     );
     assert_eq!(
         bar_count, 4,
-        "2 categories × 2 hue levels should draw 4 bars"
+        "2 categories × 2 series levels should draw 4 bars"
     );
 }
 
@@ -84,7 +84,7 @@ fn grouped_bar_compact_spacing_places_internal_items_side_by_side() {
 }
 
 #[test]
-fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
+fn horizontal_bar_with_series_renders_grouped_bars_and_series_legend() {
     let df = df!(
         "group" => ["A", "A", "B", "B"],
         "series" => ["control", "treatment", "control", "treatment"],
@@ -92,13 +92,13 @@ fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
     )
     .unwrap();
 
-    let dir = unique_dir("horizontal-bar-hue-grouped");
+    let dir = unique_dir("horizontal-bar-series-grouped");
     let out = dir.join("horizontal_bar.svg");
     let chart = Plot::horizontal_bar(
         data::category(&df, "group"),
         BarInput::estimates(data::numeric(&df, "value")),
     )
-    .hue(data::category(&df, "series"));
+    .series(data::category(&df, "series"));
     chart
         .size(420, 300)
         .svg(&out)
@@ -106,10 +106,13 @@ fn horizontal_bar_with_hue_renders_grouped_bars_and_hue_legend() {
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bar_count = parse_polygon_bounds(&svg).len();
 
-    assert!(has_legend(&svg), "hue horizontal bar should draw a legend");
+    assert!(
+        has_legend(&svg),
+        "series horizontal bar should draw a legend"
+    );
     assert_eq!(
         bar_count, 4,
-        "2 categories × 2 hue levels should draw 4 bars"
+        "2 categories × 2 series levels should draw 4 bars"
     );
 }
 
@@ -217,7 +220,7 @@ fn grouped_bar_rejects_ambiguous_value_order() {
         data::category(&df, "category"),
         BarInput::estimates(data::numeric(&df, "value")),
     )
-    .group(data::category(&df, "group"))
+    .series(data::category(&df, "group"))
     .category_order(ValueSort::Descending)
     .preflight()
     .unwrap_err()

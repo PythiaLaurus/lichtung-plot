@@ -198,8 +198,7 @@ fn grouped_bar(frame: &data::DataFrame, horizontal: bool) -> Plot {
             data::category(frame, "group"),
             BarInput::estimates(data::numeric(frame, "count")),
         )
-        .group(data::category(frame, "series"))
-        .hue(data::category(frame, "series"))
+        .series(data::category(frame, "series"))
         .size(420, 300)
         .erase()
     } else {
@@ -207,8 +206,7 @@ fn grouped_bar(frame: &data::DataFrame, horizontal: bool) -> Plot {
             data::category(frame, "group"),
             BarInput::estimates(data::numeric(frame, "count")),
         )
-        .group(data::category(frame, "series"))
-        .hue(data::category(frame, "series"))
+        .series(data::category(frame, "series"))
         .size(420, 300)
         .erase()
     }
@@ -286,14 +284,12 @@ fn grouped_distribution_legends_do_not_cover_graphics_or_axes() {
     let grouped = |frame: &data::DataFrame, violin| {
         if violin {
             Plot::violin(data::category(frame, "dose"), data::numeric(frame, "value"))
-                .group(data::category(frame, "batch"))
-                .hue(data::category(frame, "batch"))
+                .series(data::category(frame, "batch"))
                 .size(420, 300)
                 .erase()
         } else {
             Plot::boxplot(data::category(frame, "dose"), data::numeric(frame, "value"))
-                .group(data::category(frame, "batch"))
-                .hue(data::category(frame, "batch"))
+                .series(data::category(frame, "batch"))
                 .size(420, 300)
                 .erase()
         }

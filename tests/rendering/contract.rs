@@ -114,7 +114,7 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
                     data::category(&bars, "category"),
                     BarInput::estimates(data::numeric(&bars, "value")),
                 )
-                .group(data::category(&bars, "group"))
+                .series(data::category(&bars, "group"))
                 .bar_point_layer(layer()),
                 "horizontal-bar-point-layer",
             )
@@ -124,7 +124,7 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
                     data::category(&bars, "category"),
                     BarInput::estimates(data::numeric(&bars, "value")),
                 )
-                .group(data::category(&bars, "group"))
+                .series(data::category(&bars, "group"))
                 .bar_point_layer(layer()),
                 "vertical-bar-point-layer",
             )
@@ -212,7 +212,7 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
         data::category(&bars, "category"),
         BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .group(data::category(&bars, "group"))
+    .series(data::category(&bars, "group"))
     .bar_point_layer(
         BarPointLayer::new(
             data::category(&grouped_points, "category"),
@@ -228,7 +228,7 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
         data::category(&bars, "category"),
         BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .group(data::category(&bars, "group"))
+    .series(data::category(&bars, "group"))
     .bar_point_layer(grouped)
     .facet(FacetSpec::wrap(data::category(&bars, "facet"), 2).unwrap());
 

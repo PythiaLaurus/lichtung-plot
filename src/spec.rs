@@ -25,13 +25,13 @@ pub use facet::{FacetScales, FacetSpec};
 pub(crate) use output::SVG_CSS_DPI;
 pub use output::{PngCompression, PngOptions, PngSizing};
 
-/// Spacing preset for bars within a grouped bar category.
+/// Spacing preset for multiple series within one bar category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BarSpacing {
-    /// Keep visible space between hue bars inside each category.
+    /// Keep visible space between series bars inside each category.
     #[default]
     Comfort,
-    /// Make hue bars within each category touch side-by-side.
+    /// Make series bars within each category touch side-by-side.
     Compact,
 }
 

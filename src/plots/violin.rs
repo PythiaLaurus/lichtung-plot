@@ -389,7 +389,7 @@ fn render_samples(
                 let strip_max = strip_right - point_radius;
                 if strip_min - point_radius <= box_right || strip_max < strip_min {
                     return Err(Error::Render(
-                        "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce graphical groups"
+                        "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce series"
                             .into(),
                     ));
                 }

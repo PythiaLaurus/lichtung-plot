@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn grouped_and_horizontal_significance_use_category_series_targets() {
+fn vertical_and_horizontal_significance_use_category_series_targets() {
     let data = df!(
         "category" => ["a", "a", "b", "b"],
         "hue" => ["left", "right", "left", "right"],
@@ -21,7 +21,7 @@ fn grouped_and_horizontal_significance_use_category_series_targets() {
         data::category(&data, "category"),
         BarInput::estimates(data::numeric(&data, "value")),
     )
-    .group(data::category(&data, "hue"))
+    .series(data::category(&data, "hue"))
     .significance([comparison.clone()])
     .svg(&vertical_path)
     .unwrap();
@@ -30,7 +30,7 @@ fn grouped_and_horizontal_significance_use_category_series_targets() {
         data::category(&data, "category"),
         BarInput::estimates(data::numeric(&data, "value")),
     )
-    .hue(data::category(&data, "hue"))
+    .series(data::category(&data, "hue"))
     .significance([comparison])
     .svg(&horizontal_path)
     .unwrap();
