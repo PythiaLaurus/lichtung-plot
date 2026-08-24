@@ -488,15 +488,10 @@ impl Canvas {
             ));
         }
         for chart in self.panels.iter().flatten() {
-            chart.x_axis_spec().validate("x-axis")?;
-            chart.y_axis_spec().validate("y-axis")?;
             let kind = chart
                 .plot_kind()
                 .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
-            chart.validate_category_order_configuration(kind)?;
-            chart.validate_facet_configuration(kind)?;
-            chart.validate_interval_configuration(kind)?;
-            chart.validate_channel_configuration(kind)?;
+            chart.validate_configuration(kind)?;
             if chart.has_facets() {
                 return Err(Error::Render(
                     "a faceted chart cannot be nested inside a composed figure".into(),

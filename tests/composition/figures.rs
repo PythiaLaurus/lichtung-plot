@@ -561,6 +561,97 @@ fn invalid_canvas_layouts_and_panel_data_fail_before_artifact_creation() {
 }
 
 #[test]
+fn canvas_and_plot_reject_misaligned_values_with_the_same_error() {
+    let plot = Plot::line(
+        lichtung_plot::NumericValues::new("x", [1.0, 2.0]),
+        lichtung_plot::NumericValues::new("y", [3.0, 4.0, 5.0]),
+    );
+    let plot_error = plot.clone().preflight().unwrap_err().to_string();
+    let canvas_error = Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(plot_error, canvas_error);
+    assert_eq!(
+        canvas_error,
+        "data error: plot value \"y\" has length 3, expected 2"
+    );
+}
+
+#[test]
+fn canvas_and_plot_reject_misaligned_estimate_status_with_the_same_error() {
+    let plot = Plot::point_interval(
+        lichtung_plot::CategoryValues::new("term", ["first", "second"]).unwrap(),
+        lichtung_plot::NumericValues::new("estimate", [1.0, 2.0]),
+        Bounds::new(
+            lichtung_plot::NumericValues::new("lower", [0.8, 1.8]),
+            lichtung_plot::NumericValues::new("upper", [1.2, 2.2]),
+        ),
+    )
+    .estimate_status([
+        EstimateStatus::Estimated,
+        EstimateStatus::Estimated,
+        EstimateStatus::Estimated,
+    ]);
+    let plot_error = plot.clone().preflight().unwrap_err().to_string();
+    let canvas_error = Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(plot_error, canvas_error);
+    assert_eq!(
+        canvas_error,
+        "data error: plot estimate status values have length 3, expected 2"
+    );
+}
+
+#[test]
+fn canvas_and_plot_reject_incompatible_guides_with_the_same_error() {
+    let style = GuideStyle::new((31, 73, 125), 1.0, LinePattern::Solid).unwrap();
+    let plot = Plot::bar(
+        lichtung_plot::CategoryValues::new("category", ["a", "b"]).unwrap(),
+        BarInput::samples(lichtung_plot::NumericValues::new("value", [1.0, 2.0])),
+    )
+    .guide(GuideSpec::segment(0.0, 0.5, 1.0, 1.5, style));
+    let plot_error = plot.clone().preflight().unwrap_err().to_string();
+    let canvas_error = Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(plot_error, canvas_error);
+    assert!(canvas_error.contains("requires numeric x and y axes"));
+}
+
+#[test]
+fn canvas_renders_valid_supplemental_numeric_geometry() {
+    let style = GuideStyle::new((123, 45, 67), 1.5, LinePattern::Dashed).unwrap();
+    let plot = Plot::line(
+        lichtung_plot::NumericValues::new("x", [0.0, 1.0, 2.0]),
+        lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0]),
+    )
+    .guide(GuideSpec::segment(0.5, 1.5, 1.5, 2.5, style));
+    let output = render_canvas(
+        Canvas::grid(1, 1).unwrap().panel(0, 0, plot).unwrap(),
+        "canvas-valid-guide",
+    )
+    .unwrap();
+
+    assert!(output.contains("stroke=\"#7B2D43\"") && output.contains("stroke-dasharray="));
+}
+
+#[test]
 fn invalid_panel_band_and_facet_cell_fail_canvas_preflight() {
     let frame = estimate_data();
     let bar = Plot::bar(

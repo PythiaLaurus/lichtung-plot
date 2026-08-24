@@ -42,6 +42,26 @@ fn invalid_chart_preflights_before_output_path_access() {
 }
 
 #[test]
+fn invalid_canvas_alignment_fails_before_backend_begin() {
+    let chart = Plot::line(
+        crate::NumericValues::new("x", [1.0, 2.0]),
+        crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
+    );
+    let canvas = crate::Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, chart)
+        .unwrap();
+    let mut backend = RecordingBackend::default();
+
+    let error = canvas.render_with_backend(&mut backend).unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("plot value \"y\" has length 3, expected 2"));
+    assert_eq!((backend.begins, backend.ends), (0, 0));
+}
+
+#[test]
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
     let data = fixture();
     let chart = configured_chart(&data, PlotKind::Scatter);

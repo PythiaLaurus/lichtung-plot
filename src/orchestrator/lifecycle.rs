@@ -5,9 +5,7 @@ use crate::Error;
 use super::backend::{DeferredBackend, NullBackend};
 use crate::builder::Plot;
 use crate::render::backend::Backend;
-use crate::spec::{
-    DecorationMode, HeatmapLabelFit, HeatmapLayout, PlotKind, PlotRenderContext, PlotRenderResult,
-};
+use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
 
 impl Plot {
     pub(super) fn render_kind_erased(
@@ -15,29 +13,7 @@ impl Plot {
         kind: PlotKind,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        self.x_axis_spec().validate("x-axis")?;
-        self.y_axis_spec().validate("y-axis")?;
-        if kind != PlotKind::Heatmap && self.heatmap_layout_spec() != HeatmapLayout::Cartesian {
-            return Err(Error::Data(format!(
-                "{kind:?}: non-Cartesian HeatmapLayout is supported only by PlotKind::Heatmap"
-            )));
-        }
-        if kind != PlotKind::Heatmap && self.heatmap_label_fit_spec() != HeatmapLabelFit::Elide {
-            return Err(Error::Data(format!(
-                "{kind:?}: HeatmapLabelFit::Wrap is supported only by PlotKind::Heatmap"
-            )));
-        }
-        if kind != PlotKind::Heatmap && !self.heatmap_null_row_annotations_spec().is_empty() {
-            return Err(Error::Data(format!(
-                "{kind:?}: fully-null heatmap row annotations are supported only by PlotKind::Heatmap"
-            )));
-        }
-        self.validate_value_alignment()?;
-        self.validate_category_order_configuration(kind)?;
-        self.validate_channel_configuration(kind)?;
-        self.validate_interval_configuration(kind)?;
-        self.validate_facet_configuration(kind)?;
-        self.validate_supplemental_configuration(kind)?;
+        self.validate_configuration(kind)?;
         let mut backend = DeferredBackend::new(backend, self.width(), self.height());
         let rendered = if self.has_facets() {
             self.render_facets(kind, &mut backend)

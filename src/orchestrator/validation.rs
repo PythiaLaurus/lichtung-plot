@@ -6,11 +6,37 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::spec::{
-    CategoryOrder, HeatmapLayout, HistogramBins, HistogramComposite, HistogramStat, LinePathStyle,
-    PlotKind, RegressionBand,
+    CategoryOrder, HeatmapLabelFit, HeatmapLayout, HistogramBins, HistogramComposite,
+    HistogramStat, LinePathStyle, PlotKind, RegressionBand,
 };
 
 impl Plot {
+    pub(crate) fn validate_configuration(&self, kind: PlotKind) -> Result<(), Error> {
+        self.x_axis_spec().validate("x-axis")?;
+        self.y_axis_spec().validate("y-axis")?;
+        if kind != PlotKind::Heatmap && self.heatmap_layout_spec() != HeatmapLayout::Cartesian {
+            return Err(Error::Data(format!(
+                "{kind:?}: non-Cartesian HeatmapLayout is supported only by PlotKind::Heatmap"
+            )));
+        }
+        if kind != PlotKind::Heatmap && self.heatmap_label_fit_spec() != HeatmapLabelFit::Elide {
+            return Err(Error::Data(format!(
+                "{kind:?}: HeatmapLabelFit::Wrap is supported only by PlotKind::Heatmap"
+            )));
+        }
+        if kind != PlotKind::Heatmap && !self.heatmap_null_row_annotations_spec().is_empty() {
+            return Err(Error::Data(format!(
+                "{kind:?}: fully-null heatmap row annotations are supported only by PlotKind::Heatmap"
+            )));
+        }
+        self.validate_value_alignment()?;
+        self.validate_category_order_configuration(kind)?;
+        self.validate_channel_configuration(kind)?;
+        self.validate_interval_configuration(kind)?;
+        self.validate_facet_configuration(kind)?;
+        self.validate_supplemental_configuration(kind)
+    }
+
     pub(crate) fn validate_category_order_configuration(
         &self,
         kind: PlotKind,
