@@ -453,7 +453,7 @@ impl WaterfallLabels {
     }
 }
 
-/// Legend policy for a heterogeneous composed figure.
+/// Legend policy for a heterogeneous composed canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CanvasLegendPolicy {
     /// Render each panel's own legend.
@@ -572,7 +572,7 @@ macro_rules! define_plot_kinds {
                 match self { $(Self::$variant => $label),+ }
             }
 
-            /// Stable kebab-case segment used in generated figure keys.
+            /// Stable kebab-case segment used in generated canvas keys.
             #[must_use]
             pub const fn key_segment(self) -> &'static str {
                 match self { $(Self::$variant => $key),+ }

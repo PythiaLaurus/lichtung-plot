@@ -17,19 +17,19 @@
     clippy::cast_precision_loss
 )]
 
-use crate::layout::FigureLayout;
+use crate::layout::CanvasLayout;
 use crate::render::backend::{Backend, TextAnchor, TextStyle};
 use crate::theme::ThemePalette;
 use crate::Error;
 
-/// A figure-level title / subtitle / caption block.
+/// A canvas-level title / subtitle / caption block.
 #[derive(Debug, Clone, Default)]
 pub struct TitleBlock {
-    /// Main title text (top of the figure).
+    /// Main title text (top of the canvas).
     pub title: Option<String>,
     /// Subtitle text (below the title, smaller).
     pub subtitle: Option<String>,
-    /// Caption text (bottom of the figure).
+    /// Caption text (bottom of the canvas).
     pub caption: Option<String>,
     /// Font family for all three text lines.
     pub font_family: String,
@@ -96,7 +96,7 @@ impl TitleBlock {
         &self,
         backend: &mut dyn Backend,
         canvas_width: u32,
-        figure: &FigureLayout,
+        canvas: &CanvasLayout,
         palette: &ThemePalette,
     ) -> Result<(), Error> {
         let cx = f64::from(canvas_width) / 2.0;
@@ -110,14 +110,14 @@ impl TitleBlock {
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
-            for (line, y) in crate::layout::figure::try_wrap_text(
+            for (line, y) in crate::layout::canvas::try_wrap_text(
                 title,
                 palette.title_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
-                "figure title",
+                "canvas title",
             )?
             .iter()
-            .zip(&figure.title_lines_y)
+            .zip(&canvas.title_lines_y)
             {
                 backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
             }
@@ -132,14 +132,14 @@ impl TitleBlock {
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
-            for (line, y) in crate::layout::figure::try_wrap_text(
+            for (line, y) in crate::layout::canvas::try_wrap_text(
                 subtitle,
                 palette.subtitle_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
-                "figure subtitle",
+                "canvas subtitle",
             )?
             .iter()
-            .zip(&figure.subtitle_lines_y)
+            .zip(&canvas.subtitle_lines_y)
             {
                 backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
             }
@@ -154,14 +154,14 @@ impl TitleBlock {
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
-            for (line, y) in crate::layout::figure::try_wrap_text(
+            for (line, y) in crate::layout::canvas::try_wrap_text(
                 caption,
                 palette.caption_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
-                "figure caption",
+                "canvas caption",
             )?
             .iter()
-            .zip(&figure.caption_lines_y)
+            .zip(&canvas.caption_lines_y)
             {
                 backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
             }

@@ -355,7 +355,7 @@ fn interaction_duplicate_identity_includes_condition_group_and_hue() {
 }
 
 #[test]
-fn shared_figure_legend_preserves_caller_colors_and_composite_trace_glyphs() {
+fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
     let control = df!(
         "condition" => ["Before", "After"],
         "series" => ["Control", "Control"],
@@ -393,7 +393,7 @@ fn shared_figure_legend_preserves_caller_colors_and_composite_trace_glyphs() {
     )
     .unwrap();
     let legend = output
-        .split_once("<g id=\"figure-shared-legend\">")
+        .split_once("<g id=\"canvas-shared-legend\">")
         .unwrap()
         .1
         .split_once("</g>")
@@ -418,7 +418,7 @@ fn shared_figure_legend_preserves_caller_colors_and_composite_trace_glyphs() {
 }
 
 #[test]
-fn shared_figure_legend_rejects_conflicting_caller_color_mapping() {
+fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
     let data = df!(
         "condition" => ["Before", "After"],
         "series" => ["Control", "Control"],
@@ -443,7 +443,7 @@ fn shared_figure_legend_rejects_conflicting_caller_color_mapping() {
 }
 
 #[test]
-fn shared_figure_legend_rejects_conflicting_point_outline_mapping() {
+fn shared_canvas_legend_rejects_conflicting_point_outline_mapping() {
     let data = df!(
         "x" => [1.0_f64, 2.0],
         "y" => [2.0_f64, 3.0],

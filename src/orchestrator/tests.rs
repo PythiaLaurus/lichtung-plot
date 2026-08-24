@@ -429,7 +429,7 @@ fn test_directory(name: &str) -> PathBuf {
 
 fn svg_bytes<K: crate::kind::Marker>(plot: Plot<K>) -> Vec<u8> {
     let directory = test_directory("svg-bytes");
-    let output = directory.join("figure.svg");
+    let output = directory.join("canvas.svg");
     plot.svg(&output).unwrap();
     let bytes = std::fs::read(&output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();

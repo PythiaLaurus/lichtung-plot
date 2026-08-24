@@ -122,7 +122,7 @@ pub(crate) fn render(
 
 fn render_precomputed_composite(
     chart: &Plot,
-    input: &crate::HistogramCompositeGeometryInput,
+    input: &crate::HistogramGeometry,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {

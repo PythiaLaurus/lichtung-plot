@@ -450,7 +450,7 @@ fn panel_box_for_y_tick_labels_impl(
         palette.tick_length,
         palette.label_font_size,
     );
-    let base_left = chart.base_figure_layout().panel_box.x0;
+    let base_left = chart.base_canvas_layout().panel_box.x0;
     let additional_inset = (required_left - base_left.min(panel.x0)).max(0.0);
     if additional_inset > 0.0 {
         panel.x0 = (panel.x0 + additional_inset).min(panel.x1 - min_panel_w);

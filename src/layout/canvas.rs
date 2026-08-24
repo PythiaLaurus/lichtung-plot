@@ -1,7 +1,7 @@
 //! Canvas-level layout: canvas reservations and panel placement.
 //!
 //! `Layout` owns a plot panel's data range and projection. This module
-//! owns the figure geometry around that panel: title, subtitle, caption,
+//! owns the canvas geometry around that panel: title, subtitle, caption,
 //! axis labels, tick labels, and future legend reservations.
 
 use crate::Error;
@@ -357,9 +357,9 @@ pub(crate) fn allocate_composed_grid(
         .collect())
 }
 
-/// Reserved figure margins around the plot panel.
+/// Reserved canvas margins around the plot panel.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FigureInsets {
+pub struct CanvasInsets {
     /// Space reserved at the left of the canvas.
     pub left: f64,
     /// Space reserved at the right of the canvas.
@@ -370,10 +370,10 @@ pub struct FigureInsets {
     pub top: f64,
 }
 
-/// Caller-provided figure content flags.
+/// Caller-provided canvas content flags.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FigureLayoutSpec {
+pub struct CanvasLayoutSpec {
     /// Reserve space for a title.
     pub has_title: bool,
     /// Reserve space for a subtitle.
@@ -386,13 +386,13 @@ pub struct FigureLayoutSpec {
     pub has_y_label: bool,
 }
 
-/// A resolved figure layout for one chart canvas.
+/// A resolved canvas layout for one chart canvas.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FigureLayout {
+pub struct CanvasLayout {
     /// Plot panel available for data marks, axes, grid, and frame.
     pub panel_box: PanelBox,
     /// Resolved reserved margins.
-    pub insets: FigureInsets,
+    pub insets: CanvasInsets,
     /// Title baseline in math-style pixel coordinates.
     pub title_y: Option<f64>,
     /// Subtitle baseline in math-style pixel coordinates.
@@ -404,14 +404,14 @@ pub struct FigureLayout {
     pub(crate) caption_lines_y: Vec<f64>,
 }
 
-impl FigureLayout {
+impl CanvasLayout {
     /// Resolve a single-panel chart layout from canvas size, theme, and text flags.
     #[must_use]
     pub(crate) fn single_panel(
         canvas_width: u32,
         canvas_height: u32,
         palette: &ThemePalette,
-        spec: FigureLayoutSpec,
+        spec: CanvasLayoutSpec,
     ) -> Self {
         Self::resolve(
             canvas_width,
@@ -422,14 +422,14 @@ impl FigureLayout {
             false,
             true,
         )
-        .expect("unchecked figure layout always clamps to the minimum panel")
+        .expect("unchecked canvas layout always clamps to the minimum panel")
     }
 
     pub(crate) fn measured_single_panel(
         canvas_width: u32,
         canvas_height: u32,
         palette: &ThemePalette,
-        spec: FigureLayoutSpec,
+        spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
@@ -449,7 +449,7 @@ impl FigureLayout {
         canvas_width: u32,
         canvas_height: u32,
         palette: &ThemePalette,
-        spec: FigureLayoutSpec,
+        spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
@@ -474,7 +474,7 @@ impl FigureLayout {
         canvas_width: u32,
         canvas_height: u32,
         palette: &ThemePalette,
-        spec: FigureLayoutSpec,
+        spec: CanvasLayoutSpec,
         line_counts: (usize, usize, usize),
         checked: bool,
         reserve_axes: bool,
@@ -538,7 +538,7 @@ impl FigureLayout {
             0.0
         };
 
-        let insets = FigureInsets {
+        let insets = CanvasInsets {
             left: if reserve_axes {
                 (y_tick_w + y_label_w + 4.0).max(62.0)
             } else {
@@ -554,7 +554,7 @@ impl FigureLayout {
                 || h - insets.bottom - insets.top < MIN_PANEL_HEIGHT)
         {
             return Err(Error::Render(format!(
-                "measured figure text does not fit on {canvas_width}x{canvas_height} canvas while preserving the minimum 80x60 plot panel"
+                "measured canvas text does not fit on {canvas_width}x{canvas_height} canvas while preserving the minimum 80x60 plot panel"
             )));
         }
         let x0 = insets.left.min((w - MIN_PANEL_WIDTH).max(0.0));
@@ -612,7 +612,7 @@ fn measured_line_counts(
                     value,
                     palette.title_font_size,
                     maximum_width,
-                    "figure title",
+                    "canvas title",
                 )?
                 .len(),
             )
@@ -623,7 +623,7 @@ fn measured_line_counts(
                     value,
                     palette.subtitle_font_size,
                     maximum_width,
-                    "figure subtitle",
+                    "canvas subtitle",
                 )?
                 .len(),
             )
@@ -634,7 +634,7 @@ fn measured_line_counts(
                     value,
                     palette.caption_font_size,
                     maximum_width,
-                    "figure caption",
+                    "canvas caption",
                 )?
                 .len(),
             )
@@ -667,14 +667,14 @@ mod tests {
         let palette = Theme::Publication.palette();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
-        let spec = FigureLayoutSpec {
+        let spec = CanvasLayoutSpec {
             has_title: false,
             has_subtitle: false,
             has_caption: true,
             has_x_label: true,
             has_y_label: true,
         };
-        let layout = FigureLayout::measured_single_panel(
+        let layout = CanvasLayout::measured_single_panel(
             360,
             240,
             &palette,
@@ -687,7 +687,7 @@ mod tests {
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
         assert_eq!(layout.caption_lines_y.len(), lines.len());
-        assert!(FigureLayout::measured_single_panel(
+        assert!(CanvasLayout::measured_single_panel(
             160,
             120,
             &palette,

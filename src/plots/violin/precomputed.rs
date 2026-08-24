@@ -4,11 +4,11 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::{Plot, RaincloudGeometryInput, RaincloudGroupInput};
+use crate::{Plot, RaincloudGeometry, RaincloudGroup};
 
 pub(super) fn render(
     chart: &Plot,
-    input: &RaincloudGeometryInput,
+    input: &RaincloudGeometry,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
@@ -88,7 +88,7 @@ pub(super) fn render(
 fn draw_cloud_and_summary(
     chart: &Plot,
     layout: &Layout,
-    group: &RaincloudGroupInput,
+    group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
     backend: &mut dyn Backend,
@@ -152,7 +152,7 @@ fn draw_cloud_and_summary(
 fn draw_strip(
     chart: &Plot,
     layout: &Layout,
-    group: &RaincloudGroupInput,
+    group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
     backend: &mut dyn Backend,
@@ -190,7 +190,7 @@ fn draw_strip(
 
 fn group_color(
     chart: &Plot,
-    group: &RaincloudGroupInput,
+    group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
 ) -> Result<(u8, u8, u8), Error> {

@@ -6,42 +6,42 @@ use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendEntry};
 use crate::decorations::title_block::TitleBlock;
-use crate::layout::figure::{
+use crate::layout::canvas::{
     allocate_composed_grid, try_wrap_text, PanelRequirements, PANEL_HEADER_GAP,
 };
-use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox};
+use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox};
 use crate::render::backend::{with_layer, Backend};
 use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, PngOptions, SvgText, Theme};
 
-struct FigurePanelPreflight {
+struct CanvasPanelPreflight {
     index: usize,
     kind: PlotKind,
     cell: PanelBox,
     plan: crate::decorations::plan::PanelPlan,
 }
 
-struct FigurePreflight {
+struct CanvasPreflight {
     charts: Vec<Option<Plot>>,
-    figure_layout: FigureLayout,
+    canvas_layout: CanvasLayout,
     full_outer: PanelBox,
     outer: PanelBox,
     shared_legend: Option<(String, Vec<LegendEntry>)>,
-    panels: Vec<FigurePanelPreflight>,
+    panels: Vec<CanvasPanelPreflight>,
     text_panels: Vec<TextPanelPlan>,
-    headers: Vec<FigureHeaderPlan>,
-    row_titles: Vec<FigureHeaderPlan>,
+    headers: Vec<CanvasHeaderPlan>,
+    row_titles: Vec<CanvasHeaderPlan>,
 }
 
-struct FigureHeaderPlan {
+struct CanvasHeaderPlan {
     text: String,
     x: f64,
     y: f64,
 }
 
-/// Categorical tick-label policy for composed figure grids.
+/// Categorical tick-label policy for composed canvas grids.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CanvasCategoryLabels {
     /// Render categorical tick labels in every panel.
@@ -52,7 +52,7 @@ pub enum CanvasCategoryLabels {
 }
 
 #[derive(Debug, Clone)]
-struct FigureHeader {
+struct CanvasHeader {
     start: usize,
     span: usize,
     text: String,
@@ -65,7 +65,7 @@ struct TextPanelPlan {
     body: crate::layout::TextBlock,
 }
 
-/// Validated prose content for one composed-figure grid cell.
+/// Validated prose content for one composed-canvas grid cell.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextPanel {
     title: String,
@@ -109,30 +109,30 @@ fn validate_text_panel_value(value: &str, role: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn figure_header(
+fn canvas_header(
     start: usize,
     span: usize,
     text: String,
     limit: usize,
     role: &str,
-) -> Result<FigureHeader, Error> {
+) -> Result<CanvasHeader, Error> {
     if span == 0 || start.checked_add(span).is_none_or(|end| end > limit) {
         return Err(Error::Data(format!(
-            "figure {role} header range {start}..{} is outside 0..{limit}",
+            "canvas {role} header range {start}..{} is outside 0..{limit}",
             start.saturating_add(span)
         )));
     }
     if text.trim().is_empty() || text.trim() != text || text.chars().any(char::is_control) {
         return Err(Error::Data(format!(
-            "figure {role} header must be nonempty, trimmed, and free of control characters"
+            "canvas {role} header must be nonempty, trimmed, and free of control characters"
         )));
     }
-    Ok(FigureHeader { start, span, text })
+    Ok(CanvasHeader { start, span, text })
 }
 
 fn validate_header_overlap(
-    headers: &[FigureHeader],
-    candidate: &FigureHeader,
+    headers: &[CanvasHeader],
+    candidate: &CanvasHeader,
     role: &str,
 ) -> Result<(), Error> {
     let end = candidate.start + candidate.span;
@@ -141,7 +141,7 @@ fn validate_header_overlap(
         candidate.start < other_end && header.start < end
     }) {
         return Err(Error::Data(format!(
-            "figure {role} headers must not overlap"
+            "canvas {role} headers must not overlap"
         )));
     }
     Ok(())
@@ -162,9 +162,9 @@ pub struct Canvas {
     caption: Option<String>,
     labels: Option<Labels>,
     category_labels: CanvasCategoryLabels,
-    column_headers: Vec<FigureHeader>,
-    row_headers: Vec<FigureHeader>,
-    row_titles: Vec<FigureHeader>,
+    column_headers: Vec<CanvasHeader>,
+    row_headers: Vec<CanvasHeader>,
+    row_titles: Vec<CanvasHeader>,
     x_range_groups: Vec<Vec<usize>>,
     png_options: PngOptions,
     svg_text: SvgText,
@@ -175,12 +175,12 @@ impl Canvas {
     pub fn grid(rows: usize, columns: usize) -> Result<Self, Error> {
         if rows == 0 || columns == 0 {
             return Err(Error::Data(
-                "figure grid rows and columns must both be greater than zero".into(),
+                "canvas grid rows and columns must both be greater than zero".into(),
             ));
         }
         let panel_count = rows
             .checked_mul(columns)
-            .ok_or_else(|| Error::Data("figure grid dimensions exceed allocation limits".into()))?;
+            .ok_or_else(|| Error::Data("canvas grid dimensions exceed allocation limits".into()))?;
         Ok(Self {
             rows,
             columns,
@@ -213,14 +213,14 @@ impl Canvas {
     ) -> Result<Self, Error> {
         if row >= self.rows || column >= self.columns {
             return Err(Error::Data(format!(
-                "figure panel ({row}, {column}) is outside {}x{} grid",
+                "canvas panel ({row}, {column}) is outside {}x{} grid",
                 self.rows, self.columns
             )));
         }
         let index = row * self.columns + column;
         if self.panels[index].is_some() || self.text_panels[index].is_some() {
             return Err(Error::Data(format!(
-                "figure panel ({row}, {column}) is already occupied"
+                "canvas panel ({row}, {column}) is already occupied"
             )));
         }
         self.panels[index] = Some(chart.erase());
@@ -236,14 +236,14 @@ impl Canvas {
     ) -> Result<Self, Error> {
         if row >= self.rows || column >= self.columns {
             return Err(Error::Data(format!(
-                "figure panel ({row}, {column}) is outside {}x{} grid",
+                "canvas panel ({row}, {column}) is outside {}x{} grid",
                 self.rows, self.columns
             )));
         }
         let index = row * self.columns + column;
         if self.panels[index].is_some() || self.text_panels[index].is_some() {
             return Err(Error::Data(format!(
-                "figure panel ({row}, {column}) is already occupied"
+                "canvas panel ({row}, {column}) is already occupied"
             )));
         }
         self.text_panels[index] = Some(panel);
@@ -261,42 +261,42 @@ impl Canvas {
     pub fn shared_legend_gap(mut self, gap: f64) -> Result<Self, Error> {
         if !gap.is_finite() || gap < 0.0 {
             return Err(Error::Data(
-                "figure shared legend gap must be finite and nonnegative".into(),
+                "canvas shared legend gap must be finite and nonnegative".into(),
             ));
         }
         self.shared_legend_gap = Some(gap);
         Ok(self)
     }
 
-    /// Add one measured header spanning contiguous figure columns.
+    /// Add one measured header spanning contiguous canvas columns.
     pub fn column_header(
         mut self,
         start_column: usize,
         span: usize,
         text: impl Into<String>,
     ) -> Result<Self, Error> {
-        let header = figure_header(start_column, span, text.into(), self.columns, "column")?;
+        let header = canvas_header(start_column, span, text.into(), self.columns, "column")?;
         validate_header_overlap(&self.column_headers, &header, "column")?;
         self.column_headers.push(header);
         Ok(self)
     }
 
-    /// Add one measured header spanning contiguous figure rows.
+    /// Add one measured header spanning contiguous canvas rows.
     pub fn row_header(
         mut self,
         start_row: usize,
         span: usize,
         text: impl Into<String>,
     ) -> Result<Self, Error> {
-        let header = figure_header(start_row, span, text.into(), self.rows, "row")?;
+        let header = canvas_header(start_row, span, text.into(), self.rows, "row")?;
         validate_header_overlap(&self.row_headers, &header, "row")?;
         self.row_headers.push(header);
         Ok(self)
     }
 
-    /// Add one measured title centered above every panel in one figure row.
+    /// Add one measured title centered above every panel in one canvas row.
     pub fn row_title(mut self, row: usize, text: impl Into<String>) -> Result<Self, Error> {
-        let title = figure_header(row, 1, text.into(), self.rows, "row title")?;
+        let title = canvas_header(row, 1, text.into(), self.rows, "row title")?;
         validate_header_overlap(&self.row_titles, &title, "row title")?;
         self.row_titles.push(title);
         Ok(self)
@@ -318,7 +318,7 @@ impl Canvas {
         for (row, column) in cells {
             if row >= self.rows || column >= self.columns {
                 return Err(Error::Data(format!(
-                    "figure x-range group cell ({row}, {column}) is outside {}x{} grid",
+                    "canvas x-range group cell ({row}, {column}) is outside {}x{} grid",
                     self.rows, self.columns
                 )));
             }
@@ -330,14 +330,14 @@ impl Canvas {
                     .any(|group| group.contains(&index))
             {
                 return Err(Error::Data(format!(
-                    "figure x-range group repeats panel ({row}, {column})"
+                    "canvas x-range group repeats panel ({row}, {column})"
                 )));
             }
             indices.push(index);
         }
         if indices.is_empty() {
             return Err(Error::Data(
-                "figure x-range group must contain at least one panel".into(),
+                "canvas x-range group must contain at least one panel".into(),
             ));
         }
         self.x_range_groups.push(indices);
@@ -352,21 +352,21 @@ impl Canvas {
         self
     }
 
-    /// Set one figure-level title.
+    /// Set one canvas-level title.
     #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }
 
-    /// Set one figure-level subtitle.
+    /// Set one canvas-level subtitle.
     #[must_use]
     pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
         self.subtitle = Some(subtitle.into());
         self
     }
 
-    /// Set one figure-level caption.
+    /// Set one canvas-level caption.
     #[must_use]
     pub fn caption(mut self, caption: impl Into<String>) -> Self {
         self.caption = Some(caption.into());
@@ -396,16 +396,16 @@ impl Canvas {
 
     fn render_preflighted(
         &self,
-        preflight: FigurePreflight,
+        preflight: CanvasPreflight,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let mut backend =
             crate::orchestrator::DeferredBackend::new(backend, self.width, self.height);
         let rendered = self.render_open_canvas(preflight, &mut backend);
-        backend.finish(rendered, "composed figure canvas")
+        backend.finish(rendered, "composed canvas")
     }
 
-    /// Validate the complete composed figure without opening a backend or creating files.
+    /// Validate the complete composed canvas without opening a backend or creating files.
     ///
     /// This checks canvas and grid layout, every chart's plot-specific data and
     /// representability preflight, channel and interval contracts, shared legend
@@ -424,7 +424,7 @@ impl Canvas {
     ///
     /// # Errors
     ///
-    /// Returns an error when figure preflight or SVG rendering fails.
+    /// Returns an error when canvas preflight or SVG rendering fails.
     fn render_scene(&self) -> Result<RenderedScene, Error> {
         let preflight = self.preflight_plan()?;
         let mut backend = SvgBackend::in_memory(self.width, self.height);
@@ -462,18 +462,16 @@ impl Canvas {
 
     fn validate_structure(&self) -> Result<(), Error> {
         if self.width < 160 || self.height < 120 {
-            return Err(Error::Data(
-                "figure canvas must be at least 160x120 pixels".into(),
-            ));
+            return Err(Error::Data("canvas must be at least 160x120 pixels".into()));
         }
         if self.panels.iter().all(Option::is_none) && self.text_panels.iter().all(Option::is_none) {
             return Err(Error::Data(
-                "figure requires at least one configured panel".into(),
+                "canvas requires at least one configured panel".into(),
             ));
         }
         if self.shared_legend_gap.is_some() && self.legend_policy != CanvasLegendPolicy::Shared {
             return Err(Error::Data(
-                "figure shared legend gap requires CanvasLegendPolicy::Shared".into(),
+                "canvas shared legend gap requires CanvasLegendPolicy::Shared".into(),
             ));
         }
         for chart in self.panels.iter().flatten() {
@@ -481,7 +479,7 @@ impl Canvas {
             chart.validate_configuration(kind)?;
             if chart.has_facets() {
                 return Err(Error::Render(
-                    "a faceted chart cannot be nested inside a composed figure".into(),
+                    "a faceted chart cannot be nested inside a composed canvas".into(),
                 ));
             }
         }
@@ -493,7 +491,7 @@ impl Canvas {
                     || chart.subtitle_text().is_some_and(|text| !text.is_empty())
             }) {
                 return Err(Error::Data(format!(
-                    "figure row title cannot coexist with a panel title or subtitle in row {}",
+                    "canvas row title cannot coexist with a panel title or subtitle in row {}",
                     title.start
                 )));
             }
@@ -503,7 +501,7 @@ impl Canvas {
 
     fn row_title_lines(
         &self,
-        title: &FigureHeader,
+        title: &CanvasHeader,
         cells: &[PanelBox],
         palette: &crate::theme::ThemePalette,
     ) -> Result<Vec<String>, Error> {
@@ -514,13 +512,13 @@ impl Canvas {
             &title.text,
             palette.title_font_size,
             maximum_width,
-            "figure row title",
+            "canvas row title",
         )
     }
 
     #[expect(
         clippy::cast_precision_loss,
-        reason = "wrapped row-title line counts are bounded by the finite figure canvas"
+        reason = "wrapped row-title line counts are bounded by the finite canvas"
     )]
     fn add_row_title_requirements(
         &self,
@@ -545,13 +543,13 @@ impl Canvas {
 
     #[expect(
         clippy::cast_precision_loss,
-        reason = "wrapped row-title line indices are bounded by the finite figure canvas"
+        reason = "wrapped row-title line indices are bounded by the finite canvas"
     )]
     fn plan_row_titles(
         &self,
         cells: &[PanelBox],
         palette: &crate::theme::ThemePalette,
-    ) -> Result<Vec<FigureHeaderPlan>, Error> {
+    ) -> Result<Vec<CanvasHeaderPlan>, Error> {
         let mut plans = Vec::new();
         let line_height = f64::from(palette.title_font_size) + 6.0;
         for title in &self.row_titles {
@@ -564,7 +562,7 @@ impl Canvas {
                 .rev()
                 .enumerate()
             {
-                plans.push(FigureHeaderPlan {
+                plans.push(CanvasHeaderPlan {
                     text: line,
                     x,
                     y: cells[first].y1 + 14.0 + index as f64 * line_height,
@@ -578,14 +576,14 @@ impl Canvas {
         clippy::too_many_lines,
         reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
     )]
-    fn preflight_plan(&self) -> Result<FigurePreflight, Error> {
+    fn preflight_plan(&self) -> Result<CanvasPreflight, Error> {
         self.validate_structure()?;
         let palette = Theme::Publication.palette();
-        let figure_layout = FigureLayout::measured_composed_canvas(
+        let canvas_layout = CanvasLayout::measured_composed_canvas(
             self.width,
             self.height,
             &palette,
-            FigureLayoutSpec {
+            CanvasLayoutSpec {
                 has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
                 has_subtitle: self
                     .subtitle
@@ -601,9 +599,9 @@ impl Canvas {
                 self.caption.as_deref(),
             ),
         )?;
-        let full_outer = figure_layout.panel_box;
+        let full_outer = canvas_layout.panel_box;
         let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            self.figure_hue_groups(full_outer)?
+            self.canvas_hue_groups(full_outer)?
         } else {
             Vec::new()
         };
@@ -647,7 +645,7 @@ impl Canvas {
             );
             if legend.compute_box_height() > full_outer.height() {
                 return Err(Error::Render(
-                    "measured shared figure legend is taller than the available figure band".into(),
+                    "measured shared canvas legend is taller than the available canvas band".into(),
                 ));
             }
             let gap = self.resolved_shared_legend_gap(&legend);
@@ -680,17 +678,17 @@ impl Canvas {
         outer.x0 += row_header_width;
         if outer.width() < 80.0 || outer.height() < 60.0 {
             return Err(Error::Render(
-                "figure shared headers leave insufficient panel space; enlarge the canvas".into(),
+                "canvas shared headers leave insufficient panel space; enlarge the canvas".into(),
             ));
         }
         let provisional =
-            allocate_composed_grid(outer, self.rows, self.columns, &[], "figure layout")?;
+            allocate_composed_grid(outer, self.rows, self.columns, &[], "canvas layout")?;
         if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
             for row in 0..self.rows {
                 let first_index = row * self.columns;
                 let first = charts[first_index].as_ref().ok_or_else(|| {
                     Error::Data(format!(
-                        "figure row {row} requires a configured first-column panel for shared category labels"
+                        "canvas row {row} requires a configured first-column panel for shared category labels"
                     ))
                 })?;
                 let expected = chart_category_domain(first, provisional[first_index])?;
@@ -698,12 +696,12 @@ impl Canvas {
                     let index = first_index + column;
                     let chart = charts[index].as_ref().ok_or_else(|| {
                         Error::Data(format!(
-                            "figure row {row} requires panel ({row}, {column}) for shared category labels"
+                            "canvas row {row} requires panel ({row}, {column}) for shared category labels"
                         ))
                     })?;
                     if chart_category_domain(chart, provisional[index])? != expected {
                         return Err(Error::Data(format!(
-                            "figure row {row} category domains differ across panels"
+                            "canvas row {row} category domains differ across panels"
                         )));
                     }
                     charts[index] = Some(chart.clone().with_y_tick_labels_visible(false));
@@ -723,7 +721,7 @@ impl Canvas {
                 for &index in group {
                     let range = ranges[index].ok_or_else(|| {
                         Error::Data(format!(
-                            "figure x-range group references unconfigured panel {index}"
+                            "canvas x-range group references unconfigured panel {index}"
                         ))
                     })?;
                     shared = Some(shared.map_or(range, |current| {
@@ -746,7 +744,7 @@ impl Canvas {
             let result = chart.preflight_panel(kind, provisional[index])?;
             if result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
-                    "{kind:?} manages its own canvas and cannot be nested in a composed figure"
+                    "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
             let palette = chart.palette();
@@ -779,14 +777,14 @@ impl Canvas {
             self.rows,
             self.columns,
             &requirements,
-            "figure layout",
+            "canvas layout",
         )?;
         let mut requirements = measured
             .iter()
             .map(|(index, row, column, _, result, _)| {
                 let chart = charts[*index]
                     .as_ref()
-                    .expect("measured figure panel remains configured");
+                    .expect("measured canvas panel remains configured");
                 let palette = chart.palette();
                 let title = palette
                     .show_title
@@ -817,13 +815,13 @@ impl Canvas {
             self.rows,
             self.columns,
             &requirements,
-            "figure layout",
+            "canvas layout",
         )?;
         let mut headers = Vec::new();
         for header in &self.column_headers {
             let left = cells[header.start].x0;
             let right = cells[header.start + header.span - 1].x1;
-            headers.push(FigureHeaderPlan {
+            headers.push(CanvasHeaderPlan {
                 text: header.text.clone(),
                 x: f64::midpoint(left, right),
                 y: header_outer.y1 - column_header_height / 2.0,
@@ -841,7 +839,7 @@ impl Canvas {
                 .iter()
                 .map(|index| cells[*index].y1)
                 .fold(f64::NEG_INFINITY, f64::max);
-            headers.push(FigureHeaderPlan {
+            headers.push(CanvasHeaderPlan {
                 text: header.text.clone(),
                 x: header_outer.x0 + row_header_width / 2.0,
                 y: f64::midpoint(bottom, top),
@@ -871,7 +869,7 @@ impl Canvas {
             let required_height = title.height() + 12.0 + body.height();
             if required_height > cell.height() - 32.0 {
                 return Err(Error::Render(format!(
-                    "text panel at ({}, {}) requires {required_height:.1}px but only {:.1}px is available; increase figure size or shorten text",
+                    "text panel at ({}, {}) requires {required_height:.1}px but only {:.1}px is available; increase canvas size or shorten text",
                     index / self.columns,
                     index % self.columns,
                     (cell.height() - 32.0).max(0.0)
@@ -893,7 +891,7 @@ impl Canvas {
         for (index, _, _, kind, _, _) in measured {
             let chart = charts[index]
                 .as_ref()
-                .expect("measured figure panel remains configured");
+                .expect("measured canvas panel remains configured");
             let cell = cells[index];
             let role = if self.legend_policy == CanvasLegendPolicy::PerPlot {
                 crate::decorations::plan::LegendRole::Panel
@@ -903,19 +901,19 @@ impl Canvas {
             let plan = crate::decorations::plan::plan_panel(chart, kind, cell, role)?;
             if plan.result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
-                    "{kind:?} manages its own canvas and cannot be nested in a composed figure"
+                    "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
-            panels.push(FigurePanelPreflight {
+            panels.push(CanvasPanelPreflight {
                 index,
                 kind,
                 cell,
                 plan,
             });
         }
-        Ok(FigurePreflight {
+        Ok(CanvasPreflight {
             charts,
-            figure_layout,
+            canvas_layout,
             full_outer,
             outer,
             shared_legend,
@@ -928,7 +926,7 @@ impl Canvas {
 
     fn render_open_canvas(
         &self,
-        preflight: FigurePreflight,
+        preflight: CanvasPreflight,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let palette = Theme::Publication.palette();
@@ -940,7 +938,7 @@ impl Canvas {
             .map_or_else(|| palette.clone(), Plot::palette);
         for panel in &preflight.panels {
             let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
-                Error::Render("composed figure panel disappeared during preflight".into())
+                Error::Render("composed canvas panel disappeared during preflight".into())
             })?;
             crate::decorations::apply::apply_grid(
                 chart,
@@ -951,7 +949,7 @@ impl Canvas {
         }
         for panel in preflight.panels {
             let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
-                Error::Render("composed figure panel disappeared during render".into())
+                Error::Render("composed canvas panel disappeared during render".into())
             })?;
             let source_rows = chart.configured_source_rows()?;
             let render_chart = panel.plan.chart_for_render(chart);
@@ -989,8 +987,8 @@ impl Canvas {
         for panel in &preflight.text_panels {
             draw_text_panel(panel, &palette, backend)?;
         }
-        draw_figure_row_titles(&preflight.row_titles, &row_title_palette, backend)?;
-        draw_figure_headers(&preflight.headers, &palette, backend)?;
+        draw_canvas_row_titles(&preflight.row_titles, &row_title_palette, backend)?;
+        draw_canvas_headers(&preflight.headers, &palette, backend)?;
         if let Some((title, entries)) = preflight.shared_legend {
             let legend = Legend::new(
                 title,
@@ -1002,7 +1000,7 @@ impl Canvas {
             let bottom = (preflight.full_outer.y1 - legend.compute_box_height())
                 .max(preflight.full_outer.y0);
             let (x, y) = legend.box_at(left, bottom).anchor();
-            with_layer(backend, "figure-shared-legend", |backend| {
+            with_layer(backend, "canvas-shared-legend", |backend| {
                 legend.draw(backend, x, y)
             })?;
         }
@@ -1016,10 +1014,10 @@ impl Canvas {
         if let Some(caption) = &self.caption {
             titles = titles.caption(caption.clone());
         }
-        titles.draw(backend, self.width, &preflight.figure_layout, &palette)
+        titles.draw(backend, self.width, &preflight.canvas_layout, &palette)
     }
 
-    fn figure_hue_groups(&self, panel: PanelBox) -> Result<Vec<(String, Vec<String>)>, Error> {
+    fn canvas_hue_groups(&self, panel: PanelBox) -> Result<Vec<(String, Vec<String>)>, Error> {
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
         for chart in self.panels.iter().flatten() {
             let chart = self.labels.as_ref().map_or_else(
@@ -1063,7 +1061,7 @@ impl Canvas {
             entries.extend(result.legend_entries);
         }
         let entries =
-            crate::decorations::legend::merge_exact_entries(entries, "shared figure legend")?;
+            crate::decorations::legend::merge_exact_entries(entries, "shared canvas legend")?;
         if entries.is_empty() {
             Ok(None)
         } else {
@@ -1105,10 +1103,10 @@ fn chart_category_domain(chart: &Plot, panel: PanelBox) -> Result<Vec<String>, E
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "validated shared-header positions are bounded by the figure canvas"
+    reason = "validated shared-header positions are bounded by the canvas"
 )]
-fn draw_figure_headers(
-    headers: &[FigureHeaderPlan],
+fn draw_canvas_headers(
+    headers: &[CanvasHeaderPlan],
     palette: &crate::theme::ThemePalette,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -1123,7 +1121,7 @@ fn draw_figure_headers(
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
     };
-    with_layer(backend, "figure-shared-headers", |backend| {
+    with_layer(backend, "canvas-shared-headers", |backend| {
         for header in headers {
             backend.draw_text(
                 header.x.round() as u32,
@@ -1139,10 +1137,10 @@ fn draw_figure_headers(
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "validated row-title positions are bounded by the figure canvas"
+    reason = "validated row-title positions are bounded by the canvas"
 )]
-fn draw_figure_row_titles(
-    titles: &[FigureHeaderPlan],
+fn draw_canvas_row_titles(
+    titles: &[CanvasHeaderPlan],
     palette: &crate::theme::ThemePalette,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -1157,7 +1155,7 @@ fn draw_figure_row_titles(
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
     };
-    with_layer(backend, "figure-row-titles", |backend| {
+    with_layer(backend, "canvas-row-titles", |backend| {
         for title in titles {
             backend.draw_text(
                 title.x.round() as u32,
@@ -1173,7 +1171,7 @@ fn draw_figure_row_titles(
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "validated text-panel positions are bounded by the figure canvas"
+    reason = "validated text-panel positions are bounded by the canvas"
 )]
 fn draw_text_panel(
     panel: &TextPanelPlan,
@@ -1203,7 +1201,7 @@ fn draw_text_panel(
     };
     with_layer(
         backend,
-        &format!("figure-text-panel-{}", panel.index),
+        &format!("canvas-text-panel-{}", panel.index),
         |backend| {
             for line in panel.title.lines() {
                 backend.draw_text(

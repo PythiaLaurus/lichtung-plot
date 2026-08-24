@@ -36,7 +36,7 @@ pub(crate) fn apply_axes(
     })
 }
 
-pub(crate) fn apply_figure_text(
+pub(crate) fn apply_canvas_text(
     chart: &Plot,
     palette: &ThemePalette,
     backend: &mut dyn Backend,
@@ -61,7 +61,7 @@ pub(crate) fn apply_figure_text(
         title_block.draw(
             backend,
             chart.width(),
-            &chart.measured_figure_layout()?,
+            &chart.measured_canvas_layout()?,
             palette,
         )?;
     }

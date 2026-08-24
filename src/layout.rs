@@ -1,10 +1,10 @@
-//! Private plot and figure layout modules.
+//! Private plot and canvas layout modules.
 
-pub(crate) mod figure;
+pub(crate) mod canvas;
 mod panel;
 mod text;
 
-pub(crate) use figure::{FigureLayout, FigureLayoutSpec, PanelBox};
+pub(crate) use canvas::{CanvasLayout, CanvasLayoutSpec, PanelBox};
 pub use panel::AxisTick;
 pub(crate) use panel::{
     anchored_auto_range, automatic_numeric_ticks, continuous_auto_range, display_axis_spec,

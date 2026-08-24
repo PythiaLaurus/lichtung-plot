@@ -14,5 +14,5 @@ mod support;
 
 use support::*;
 
+mod canvases;
 mod facets;
-mod figures;

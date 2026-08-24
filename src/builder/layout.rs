@@ -1,7 +1,7 @@
 use crate::Error;
 
 use super::Plot;
-use crate::layout::{FigureLayout, FigureLayoutSpec, Layout, PanelBox, TextBlock};
+use crate::layout::{CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, TextBlock};
 use crate::spec::PlotKind;
 use crate::theme::ThemePalette;
 
@@ -12,55 +12,55 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.theme.palette()
     }
 
-    /// Resolve the figure layout for this chart's canvas and configured text.
+    /// Resolve the canvas layout for this chart's canvas and configured text.
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn figure_layout(&self) -> FigureLayout {
-        self.clone().erase().figure_layout_erased()
+    pub(crate) fn canvas_layout(&self) -> CanvasLayout {
+        self.clone().erase().canvas_layout_erased()
     }
 }
 
 impl Plot {
     #[cfg(test)]
-    fn figure_layout_erased(&self) -> FigureLayout {
-        let mut figure = self
-            .measured_figure_layout()
-            .unwrap_or_else(|_| self.resolve_figure_layout());
+    fn canvas_layout_erased(&self) -> CanvasLayout {
+        let mut canvas = self
+            .measured_canvas_layout()
+            .unwrap_or_else(|_| self.resolve_canvas_layout());
         if self.has_facets() {
-            return figure;
+            return canvas;
         }
         let kind = self.kind;
         if kind == PlotKind::Matrix {
-            return figure;
+            return canvas;
         }
-        let cell = figure.panel_box;
+        let cell = canvas.panel_box;
         if let Ok(plan) = crate::decorations::plan::plan_panel(
             self,
             kind,
             cell,
             crate::decorations::plan::LegendRole::Panel,
         ) {
-            figure.insets.left += plan.panel.x0 - cell.x0;
-            figure.insets.right += cell.x1 - plan.panel.x1;
-            figure.insets.bottom += plan.panel.y0 - cell.y0;
-            figure.insets.top += cell.y1 - plan.panel.y1;
-            figure.panel_box = plan.panel;
+            canvas.insets.left += plan.panel.x0 - cell.x0;
+            canvas.insets.right += cell.x1 - plan.panel.x1;
+            canvas.insets.bottom += plan.panel.y0 - cell.y0;
+            canvas.insets.top += cell.y1 - plan.panel.y1;
+            canvas.panel_box = plan.panel;
         }
-        figure
+        canvas
     }
 
-    pub(crate) fn base_figure_layout(&self) -> FigureLayout {
-        self.resolve_figure_layout()
+    pub(crate) fn base_canvas_layout(&self) -> CanvasLayout {
+        self.resolve_canvas_layout()
     }
 
-    pub(crate) fn measured_figure_layout(&self) -> Result<FigureLayout, Error> {
+    pub(crate) fn measured_canvas_layout(&self) -> Result<CanvasLayout, Error> {
         let palette = self.palette();
         let labels_present = self.axis_label_presence();
-        let mut figure = FigureLayout::measured_single_panel(
+        let mut canvas = CanvasLayout::measured_single_panel(
             self.width,
             self.height,
             &palette,
-            FigureLayoutSpec {
+            CanvasLayoutSpec {
                 has_title: palette.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
                 has_subtitle: palette.show_subtitle
                     && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
@@ -75,8 +75,8 @@ impl Plot {
                 self.caption.as_deref(),
             ),
         )?;
-        self.reserve_multiline_axis_titles(&mut figure, true)?;
-        Ok(figure)
+        self.reserve_multiline_axis_titles(&mut canvas, true)?;
+        Ok(canvas)
     }
 
     fn axis_label_presence(&self) -> (bool, bool) {
@@ -84,14 +84,14 @@ impl Plot {
         (!x.is_empty(), !y.is_empty())
     }
 
-    fn resolve_figure_layout(&self) -> FigureLayout {
+    fn resolve_canvas_layout(&self) -> CanvasLayout {
         let palette = self.palette();
         let labels_present = self.axis_label_presence();
-        let mut figure = FigureLayout::single_panel(
+        let mut canvas = CanvasLayout::single_panel(
             self.width,
             self.height,
             &palette,
-            FigureLayoutSpec {
+            CanvasLayoutSpec {
                 has_title: palette.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
                 has_subtitle: palette.show_subtitle
                     && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
@@ -101,23 +101,23 @@ impl Plot {
                 has_y_label: palette.show_y_label && labels_present.1,
             },
         );
-        let _ = self.reserve_multiline_axis_titles(&mut figure, false);
-        figure
+        let _ = self.reserve_multiline_axis_titles(&mut canvas, false);
+        canvas
     }
 
     fn reserve_multiline_axis_titles(
         &self,
-        figure: &mut FigureLayout,
+        canvas: &mut CanvasLayout,
         checked: bool,
     ) -> Result<(), Error> {
         let kind = self.kind;
-        let baseline = self.axis_title_line_counts(kind, figure.panel_box)?;
+        let baseline = self.axis_title_line_counts(kind, canvas.panel_box)?;
         let baseline = (baseline.0.min(1), baseline.1.min(1));
         let (panel, extra_left, extra_bottom) =
-            self.adjusted_axis_title_panel(kind, baseline, figure.panel_box, checked)?;
-        figure.panel_box = panel;
-        figure.insets.left += extra_left;
-        figure.insets.bottom += extra_bottom;
+            self.adjusted_axis_title_panel(kind, baseline, canvas.panel_box, checked)?;
+        canvas.panel_box = panel;
+        canvas.insets.left += extra_left;
+        canvas.insets.bottom += extra_bottom;
         Ok(())
     }
 

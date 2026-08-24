@@ -10,7 +10,7 @@
 //! policy, the `Plot` render orchestrator applies the theme's
 //! `ThemePalette` layout grammar (frame on/off, grid on/off, etc.)
 //! after each plot renderer returns, so callers get a
-//! publication-quality figure by default.
+//! publication-quality canvas by default.
 
 // `Backend::draw_text` takes `u32` pixel coords, so f64 → u32
 // rounding is unavoidable when emitting text. The `usize → f64`

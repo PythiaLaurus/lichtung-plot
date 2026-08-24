@@ -434,7 +434,7 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
     .unwrap();
     let labels = WaterfallLabels::new("Expected model output", "Final model prediction").unwrap();
     let chart = waterfall_chart(&data, Some(labels)).size(520, 280);
-    let outer_panel = chart.figure_layout().panel_box;
+    let outer_panel = chart.canvas_layout().panel_box;
     let mut backend = RecordingBackend::default();
 
     chart

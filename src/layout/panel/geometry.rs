@@ -212,7 +212,7 @@ pub(crate) fn estimated_text_width(text: &str, font_size: u32) -> f64 {
 
 /// Estimate the rendered width of text with the deterministic layout model.
 ///
-/// Wide glyphs and combining marks are handled consistently with figure,
+/// Wide glyphs and combining marks are handled consistently with canvas,
 /// legend, geometry, and axis-inset planning.
 #[must_use]
 pub fn deterministic_text_width(text: &str, font_size: f64) -> f64 {

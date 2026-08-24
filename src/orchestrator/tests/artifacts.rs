@@ -11,7 +11,7 @@ use super::{configured_chart, fixture, PlotKind};
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
     let dir = test_directory("failed-svg-publication");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
     let chart = crate::Plot::scatter(
         crate::NumericValues::new("x", [1.0, 2.0]),
@@ -30,7 +30,7 @@ fn render_failure_preserves_existing_svg_and_removes_staging_files() {
 #[test]
 fn finalization_failure_removes_staging_files_without_touching_destination() {
     let dir = test_directory("failed-finalization-cleanup");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
     let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
 
@@ -51,7 +51,7 @@ fn finalization_failure_removes_staging_files_without_touching_destination() {
 #[test]
 fn publication_rename_failure_removes_staging_files_and_preserves_destination() {
     let dir = test_directory("failed-rename-cleanup");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
     std::fs::create_dir(&output).unwrap();
     std::fs::write(output.join("existing"), "existing artifact").unwrap();
     let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
@@ -76,7 +76,7 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     use crate::spec::{PngCompression, PngOptions, PngSizing};
 
     let dir = test_directory("failed-png-publication");
-    let output = dir.join("figure.png");
+    let output = dir.join("canvas.png");
     std::fs::write(&output, b"existing png artifact").unwrap();
     let data = fixture();
     let options = PngOptions {
@@ -97,8 +97,8 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
 #[test]
 fn chained_outputs_publish_each_file_independently() {
     let dir = test_directory("successful-chained-publication");
-    let svg = dir.join("figure.svg");
-    let png = dir.join("figure.png");
+    let svg = dir.join("canvas.svg");
+    let png = dir.join("canvas.png");
     let data = fixture();
 
     configured_chart(&data, PlotKind::Scatter)

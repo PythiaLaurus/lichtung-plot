@@ -71,7 +71,7 @@ use crate::{
 /// ```compile_fail
 /// use lichtung_plot::{kind, Plot};
 /// fn internal_layout(plot: &Plot<kind::Scatter>) {
-///     let _ = plot.figure_layout();
+///     let _ = plot.canvas_layout();
 /// }
 /// ```
 ///
@@ -1075,7 +1075,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::{HistogramDimensionsInput, RaincloudDimensionsInput};
+    use crate::geometry::{HistogramDimensions, RaincloudDimensions};
     use crate::Significance;
 
     fn numeric(name: &str) -> NumericValues {
@@ -1112,17 +1112,15 @@ mod tests {
             PlotKind::Histogram,
         );
         assert_constructor::<crate::kind::Histogram>(
-            Plot::histogram(HistogramInput::geometry(
-                crate::HistogramCompositeGeometryInput {
-                    dimensions: HistogramDimensionsInput {
-                        value: "value".into(),
-                        density: "density".into(),
-                    },
-                    bins: Vec::new(),
-                    kde: Vec::new(),
-                    rugs: Vec::new(),
+            Plot::histogram(HistogramInput::geometry(crate::HistogramGeometry {
+                dimensions: HistogramDimensions {
+                    value: "value".into(),
+                    density: "density".into(),
                 },
-            )),
+                bins: Vec::new(),
+                kde: Vec::new(),
+                rugs: Vec::new(),
+            })),
             PlotKind::Histogram,
         );
         assert_constructor::<crate::kind::Density>(
@@ -1211,8 +1209,8 @@ mod tests {
             PlotKind::Raincloud,
         );
         assert_constructor::<crate::kind::Raincloud>(
-            Plot::raincloud(RaincloudInput::geometry(crate::RaincloudGeometryInput {
-                dimensions: RaincloudDimensionsInput {
+            Plot::raincloud(RaincloudInput::geometry(crate::RaincloudGeometry {
+                dimensions: RaincloudDimensions {
                     category: "category".into(),
                     value: "value".into(),
                     hue: None,

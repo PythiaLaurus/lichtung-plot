@@ -61,7 +61,7 @@ fn composed_per_panel_outside_legends_remain_in_their_cells() {
         crate::LegendPosition::OutsideRight,
     ))
     .size(900, 360);
-    let figure = crate::Canvas::grid(1, 2)
+    let canvas = crate::Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, left)
         .unwrap()
@@ -70,7 +70,7 @@ fn composed_per_panel_outside_legends_remain_in_their_cells() {
         .size(900, 360);
     let mut backend = RecordingBackend::default();
 
-    figure.render_with_backend(&mut backend).unwrap();
+    canvas.render_with_backend(&mut backend).unwrap();
 
     assert_eq!(backend.rounded_rects.len(), 2);
     assert!(backend.rounded_rects[0].x1 < 450.0);

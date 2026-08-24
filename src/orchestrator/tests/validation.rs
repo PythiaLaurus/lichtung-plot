@@ -176,11 +176,11 @@ fn source_rows_drive_standalone_facet_and_canvas_diagnostics() {
         )));
     assert!(assert_rejected_before_begin(&faceted, PlotKind::Scatter).contains("source row 4"));
 
-    let figure = crate::Canvas::grid(1, 1)
+    let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, chart)
         .unwrap();
-    let error = figure
+    let error = canvas
         .render_with_backend(&mut RecordingBackend::default())
         .unwrap_err();
     assert!(error.to_string().contains("source row 4"));

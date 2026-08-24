@@ -16,7 +16,7 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
 
-    assert!(error.to_string().contains("measured figure text"));
+    assert!(error.to_string().contains("measured canvas text"));
     assert_eq!(backend.begins, 0);
 }
 
@@ -65,7 +65,7 @@ fn invalid_canvas_alignment_fails_before_backend_begin() {
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
     let data = fixture();
     let chart = configured_chart(&data, PlotKind::Scatter);
-    let expected_panel = chart.figure_layout().panel_box;
+    let expected_panel = chart.canvas_layout().panel_box;
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Scatter, &mut backend).unwrap();
@@ -111,44 +111,44 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
     let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
     let panel = configured_chart(&data, PlotKind::Scatter);
-    let figure = crate::Canvas::grid(1, 1)
+    let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, panel)
         .unwrap();
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    figure
+    canvas
         .render_with_backend(&mut RecordingBackend::default())
         .unwrap();
-    let figure_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
+    let canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
     let preflight_panel = configured_chart(&data, PlotKind::Scatter);
-    let preflight_figure = crate::Canvas::grid(1, 1)
+    let preflight_canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, preflight_panel)
         .unwrap();
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    preflight_figure.preflight().unwrap();
+    preflight_canvas.preflight().unwrap();
     let preflight_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let directory = test_directory("figure-single-preflight");
-    let output = directory.join("figure.svg");
+    let directory = test_directory("canvas-single-preflight");
+    let output = directory.join("canvas.svg");
     let rendered_panel = configured_chart(&data, PlotKind::Scatter);
-    let rendered_figure = crate::Canvas::grid(1, 1)
+    let rendered_canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, rendered_panel)
         .unwrap();
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    rendered_figure.svg(&output).unwrap();
-    let rendered_figure_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
+    rendered_canvas.svg(&output).unwrap();
+    let rendered_canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
     std::fs::remove_dir_all(directory).unwrap();
 
     assert_eq!(
         (
             chart_calls,
             facet_calls,
-            figure_calls,
+            canvas_calls,
             preflight_calls,
-            rendered_figure_calls
+            rendered_canvas_calls
         ),
         (2, 8, 3, 2, 3)
     );
@@ -296,7 +296,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
     assert!(backend.scatter_points[2].x > panel.x1);
 
     let dir = test_directory("out-of-range-svg");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
     chart.clone().svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[0].x)));

@@ -287,7 +287,7 @@ fn overlay_is_clipped_by_explicit_limits_and_drawn_between_summaries_and_axes() 
 }
 
 #[test]
-fn composed_figure_preserves_overlay_points_and_one_canvas_lifecycle() {
+fn composed_canvas_preserves_overlay_points_and_one_canvas_lifecycle() {
     let canvas = Canvas::grid(1, 2)
         .unwrap()
         .panel(
@@ -312,7 +312,7 @@ fn composed_figure_preserves_overlay_points_and_one_canvas_lifecycle() {
 }
 
 #[test]
-fn narrow_composed_figure_rejects_before_lifecycle_or_artifact_creation() {
+fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
     let canvas = Canvas::grid(1, 1)
         .unwrap()
         .panel(
@@ -329,13 +329,13 @@ fn narrow_composed_figure_rejects_before_lifecycle_or_artifact_creation() {
     let directory = unique_dir("narrow-overlay-canvas");
     let output = directory.join("plot.svg");
     let error = canvas.svg(&output).err().unwrap();
-    assert!(error.to_string().contains("figure layout is too dense"));
+    assert!(error.to_string().contains("canvas layout is too dense"));
     assert!(!output.exists());
     std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
-fn adequate_composed_figure_accepts_raw_overlay() {
+fn adequate_composed_canvas_accepts_raw_overlay() {
     Canvas::grid(1, 1)
         .unwrap()
         .panel(

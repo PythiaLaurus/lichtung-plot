@@ -53,7 +53,7 @@ define_themes! {
 /// layout grammar (whether to draw the frame, grid, ticks, etc.).
 ///
 /// Defaults are tuned so that every semantic `Plot` constructor produces a
-/// publication-quality figure without the caller having to manually request
+/// publication-quality canvas without the caller having to manually request
 /// decorations.
 ///
 /// The flag-style fields (show_frame / show_grid / show_ticks / ...)
@@ -103,13 +103,13 @@ pub(crate) struct ThemePalette {
     /// left of the plot area. Default `true` when the chart has
     /// a y label set.
     pub show_y_label: bool,
-    /// Whether to draw the figure title above the plot area.
+    /// Whether to draw the canvas title above the plot area.
     /// Default `true` when the chart has a title set.
     pub show_title: bool,
-    /// Whether to draw the figure subtitle. Default `true`
+    /// Whether to draw the canvas subtitle. Default `true`
     /// when set.
     pub show_subtitle: bool,
-    /// Whether to draw the figure caption below the plot area.
+    /// Whether to draw the canvas caption below the plot area.
     /// Default `true` when set.
     pub show_caption: bool,
     /// Length of the axis tick marks in pixels. Default `4`.
@@ -120,11 +120,11 @@ pub(crate) struct ThemePalette {
     pub detail_font_size: u32,
     /// Font size in points for axis labels. Default `17`.
     pub label_font_size: u32,
-    /// Font size in points for the figure title. Default `20`.
+    /// Font size in points for the canvas title. Default `20`.
     pub title_font_size: u32,
-    /// Font size in points for the figure subtitle. Default `14`.
+    /// Font size in points for the canvas subtitle. Default `14`.
     pub subtitle_font_size: u32,
-    /// Font size in points for the figure caption. Default `14`.
+    /// Font size in points for the canvas caption. Default `14`.
     pub caption_font_size: u32,
     /// Color of the grid lines (RGB). Default light gray.
     pub grid_color: (u8, u8, u8),

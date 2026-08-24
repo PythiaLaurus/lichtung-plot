@@ -42,9 +42,8 @@ pub use canvas::{Canvas, CanvasCategoryLabels, TextPanel};
 pub use error::{Error, Result};
 pub use font::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_FAMILY_STACK, SYSTEM_FONT_FAMILIES};
 pub use geometry::{
-    HistogramBinInput, HistogramCompositeGeometryInput, HistogramDimensionsInput,
-    HistogramKdePoint, HistogramRugInput, RaincloudDensityPoint, RaincloudDimensionsInput,
-    RaincloudGeometryInput, RaincloudGroupInput, RaincloudPoint,
+    HistogramBin, HistogramDimensions, HistogramGeometry, HistogramKdePoint, HistogramRug,
+    RaincloudDensityPoint, RaincloudDimensions, RaincloudGeometry, RaincloudGroup, RaincloudPoint,
 };
 pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;

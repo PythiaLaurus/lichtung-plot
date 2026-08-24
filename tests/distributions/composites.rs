@@ -1,9 +1,9 @@
 use lichtung_plot::{
-    Canvas, CanvasLegendPolicy, CategoricalColors, HistogramBinInput, HistogramBins,
-    HistogramComposite, HistogramCompositeGeometryInput, HistogramDimensionsInput, HistogramInput,
-    HistogramKde, HistogramKdePoint, HistogramRugInput, HistogramStat, Labels, Plot,
-    RaincloudDensityPoint, RaincloudDimensionsInput, RaincloudGeometryInput, RaincloudGroupInput,
-    RaincloudInput, RaincloudPoint, Significance, SignificanceMark, SourceRows,
+    Canvas, CanvasLegendPolicy, CategoricalColors, HistogramBin, HistogramBins, HistogramComposite,
+    HistogramDimensions, HistogramGeometry, HistogramInput, HistogramKde, HistogramKdePoint,
+    HistogramRug, HistogramStat, Labels, Plot, RaincloudDensityPoint, RaincloudDimensions,
+    RaincloudGeometry, RaincloudGroup, RaincloudInput, RaincloudPoint, Significance,
+    SignificanceMark, SourceRows,
 };
 
 use super::{parse_circle_bounds, parse_polygon_bounds, unique_dir};
@@ -43,14 +43,14 @@ fn render<K: lichtung_plot::kind::Marker>(
     result
 }
 
-fn explicit_raincloud() -> RaincloudGeometryInput {
-    RaincloudGeometryInput {
-        dimensions: RaincloudDimensionsInput {
+fn explicit_raincloud() -> RaincloudGeometry {
+    RaincloudGeometry {
+        dimensions: RaincloudDimensions {
             category: "category".into(),
             value: "value".into(),
             hue: Some("condition".into()),
         },
-        groups: vec![RaincloudGroupInput {
+        groups: vec![RaincloudGroup {
             category: "Control".into(),
             hue: Some("Control".into()),
             density: vec![
@@ -84,19 +84,19 @@ fn explicit_raincloud() -> RaincloudGeometryInput {
     }
 }
 
-fn explicit_histogram() -> HistogramCompositeGeometryInput {
-    HistogramCompositeGeometryInput {
-        dimensions: HistogramDimensionsInput {
+fn explicit_histogram() -> HistogramGeometry {
+    HistogramGeometry {
+        dimensions: HistogramDimensions {
             value: "value".into(),
             density: "density".into(),
         },
         bins: vec![
-            HistogramBinInput {
+            HistogramBin {
                 lower: 0.0,
                 upper: 1.0,
                 density: 0.4,
             },
-            HistogramBinInput {
+            HistogramBin {
                 lower: 1.0,
                 upper: 2.0,
                 density: 0.4,
@@ -107,7 +107,7 @@ fn explicit_histogram() -> HistogramCompositeGeometryInput {
             HistogramKdePoint { x: 1.0, y: 0.2 },
             HistogramKdePoint { x: 2.0, y: 0.1 },
         ],
-        rugs: vec![HistogramRugInput {
+        rugs: vec![HistogramRug {
             x: 1.0,
             baseline: 0.1,
             top: 0.2,
@@ -119,7 +119,7 @@ fn explicit_histogram() -> HistogramCompositeGeometryInput {
     clippy::cast_precision_loss,
     reason = "small focused test samples map their counts and hash mantissas to f64"
 )]
-fn parity_raincloud_geometry() -> RaincloudGeometryInput {
+fn parity_raincloud_geometry() -> RaincloudGeometry {
     let groups = [
         ("control", "control", vec![1.0, 2.0, 3.0, 4.0, 5.0]),
         ("active", "active", vec![2.0, 3.0, 4.0, 5.0, 6.0]),
@@ -178,7 +178,7 @@ fn parity_raincloud_geometry() -> RaincloudGeometryInput {
                     point
                 })
                 .collect();
-            RaincloudGroupInput {
+            RaincloudGroup {
                 category: category.into(),
                 hue: Some(hue.into()),
                 density,
@@ -189,8 +189,8 @@ fn parity_raincloud_geometry() -> RaincloudGeometryInput {
             }
         })
         .collect();
-    RaincloudGeometryInput {
-        dimensions: RaincloudDimensionsInput {
+    RaincloudGeometry {
+        dimensions: RaincloudDimensions {
             category: "condition".into(),
             value: "score".into(),
             hue: Some("treatment".into()),
@@ -312,7 +312,7 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
     ];
     supplied.rugs = values
         .into_iter()
-        .map(|x| HistogramRugInput {
+        .map(|x| HistogramRug {
             x,
             baseline: 0.0,
             top: rug_top,
@@ -329,7 +329,7 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
 }
 
 #[test]
-fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_figure_legend() {
+fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend() {
     let colors = CategoricalColors::new([
         ("control".to_owned(), (51, 51, 51)),
         ("active".to_owned(), (0, 114, 178)),
@@ -356,7 +356,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_figure_legend
     let output = directory.join("plot.svg");
     canvas.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
-    assert_eq!(svg.matches("id=\"figure-shared-legend\"").count(), 1);
+    assert_eq!(svg.matches("id=\"canvas-shared-legend\"").count(), 1);
     assert!(svg.contains(">Study arm</text>"));
     assert!(svg.contains("#333333") && svg.contains("#0072B2"));
     std::fs::remove_dir_all(directory).unwrap();

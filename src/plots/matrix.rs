@@ -23,7 +23,7 @@
 
 use crate::decorations::legend::{Legend, LegendEntry};
 use crate::decorations::title_block::TitleBlock;
-use crate::layout::{self, FigureLayout, FigureLayoutSpec, Layout, PanelBox};
+use crate::layout::{self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox};
 use crate::render::backend::{
     with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
@@ -69,10 +69,10 @@ pub(crate) fn render(
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
-    let figure = matrix_figure_layout(chart)?;
+    let canvas = matrix_canvas_layout(chart)?;
     let outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
-        (legend_total_width(legend) + 32.0 - figure.insets.right).max(0.0)
+        (legend_total_width(legend) + 32.0 - canvas.insets.right).max(0.0)
     });
     let gap = 8.0;
     let provisional_grid_width =
@@ -433,7 +433,7 @@ pub(crate) fn render(
 }
 
 pub(crate) fn panel_box(chart: &Plot) -> Result<crate::layout::PanelBox, Error> {
-    Ok(matrix_figure_layout(chart)?.panel_box)
+    Ok(matrix_canvas_layout(chart)?.panel_box)
 }
 
 fn matrix_legend(chart: &Plot, groups: &[HueGroup]) -> Result<Option<Legend>, Error> {
@@ -490,19 +490,19 @@ fn draw_title_block(chart: &Plot, backend: &mut dyn Backend) -> Result<(), Error
         }
     }
     if title_block.has_content() {
-        let figure = matrix_figure_layout(chart)?;
-        title_block.draw(backend, chart.width(), &figure, &palette)?;
+        let canvas = matrix_canvas_layout(chart)?;
+        title_block.draw(backend, chart.width(), &canvas, &palette)?;
     }
     Ok(())
 }
 
-fn matrix_figure_layout(chart: &Plot) -> Result<FigureLayout, Error> {
+fn matrix_canvas_layout(chart: &Plot) -> Result<CanvasLayout, Error> {
     let palette = chart.palette();
-    FigureLayout::measured_single_panel(
+    CanvasLayout::measured_single_panel(
         chart.width(),
         chart.height(),
         &palette,
-        FigureLayoutSpec {
+        CanvasLayoutSpec {
             has_title: palette.show_title && chart.title_text().is_some_and(|s| !s.is_empty()),
             has_subtitle: palette.show_subtitle
                 && chart.subtitle_text().is_some_and(|s| !s.is_empty()),

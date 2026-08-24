@@ -2,7 +2,7 @@ use crate::Error;
 
 use super::geometry::y_axis_label_half_width;
 use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection};
-use crate::layout::figure::{
+use crate::layout::canvas::{
     X_AXIS_TICK_LABEL_GAP, X_AXIS_TITLE_GAP, X_AXIS_TITLE_WITHOUT_TICKS_GAP,
 };
 use crate::layout::TextBlock;

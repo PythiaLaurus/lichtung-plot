@@ -339,7 +339,12 @@ remains fallible for zero columns.
 
 ## Final API Phase A9: Geometry And Canvas Vocabulary
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused geometry, distribution, composition, interaction,
+output, and internal layout tests, 46 doctests, both Clippy feature
+configurations, independent geometry and canvas-vocabulary reviews, exhaustive
+old-name greps, and `just verify` passed on 2026-08-25.
 
 Rename public geometry atomically:
 

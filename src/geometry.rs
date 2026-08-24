@@ -12,18 +12,18 @@ const MAX_HISTOGRAM_BINS: usize = 1_000_000;
 const MAX_HISTOGRAM_KDE_POINTS: usize = 2_048;
 const MAX_HISTOGRAM_RUGS: usize = 1_000_000;
 
-/// Complete ordered geometry for a raincloud figure.
+/// Complete ordered geometry for a raincloud canvas.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RaincloudGeometryInput {
+pub struct RaincloudGeometry {
     /// Semantic dimensions used for inferred axis and legend titles.
-    pub dimensions: RaincloudDimensionsInput,
+    pub dimensions: RaincloudDimensions,
     /// Raincloud groups in exact left-to-right display order.
-    pub groups: Vec<RaincloudGroupInput>,
+    pub groups: Vec<RaincloudGroup>,
 }
 
 /// Semantic dimensions carried by self-contained raincloud geometry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RaincloudDimensionsInput {
+pub struct RaincloudDimensions {
     /// Raw semantic identity used for the categorical x-axis title.
     pub category: String,
     /// Raw semantic identity used for the continuous y-axis title.
@@ -34,7 +34,7 @@ pub struct RaincloudDimensionsInput {
 
 /// Caller-computed geometry and categorical identity for one raincloud group.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RaincloudGroupInput {
+pub struct RaincloudGroup {
     /// Raw categorical x-axis identity, resolved through the chart's [`crate::Labels`].
     pub category: String,
     /// Optional raw categorical color and legend identity.
@@ -71,20 +71,20 @@ pub struct RaincloudPoint {
 
 /// Complete caller-computed density-axis histogram composite geometry.
 #[derive(Debug, Clone, PartialEq)]
-pub struct HistogramCompositeGeometryInput {
+pub struct HistogramGeometry {
     /// Semantic dimensions used for inferred axis titles.
-    pub dimensions: HistogramDimensionsInput,
+    pub dimensions: HistogramDimensions,
     /// Contiguous bins in strictly increasing x order.
-    pub bins: Vec<HistogramBinInput>,
+    pub bins: Vec<HistogramBin>,
     /// KDE polyline points in strictly increasing x order.
     pub kde: Vec<HistogramKdePoint>,
     /// Rug segments in caller-supplied display order.
-    pub rugs: Vec<HistogramRugInput>,
+    pub rugs: Vec<HistogramRug>,
 }
 
 /// Semantic dimensions carried by self-contained histogram geometry.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HistogramDimensionsInput {
+pub struct HistogramDimensions {
     /// Raw semantic identity used for the numeric x-axis title.
     pub value: String,
     /// Raw semantic identity used for the density y-axis title.
@@ -93,7 +93,7 @@ pub struct HistogramDimensionsInput {
 
 /// One precomputed histogram bin.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HistogramBinInput {
+pub struct HistogramBin {
     /// Inclusive lower x edge.
     pub lower: f64,
     /// Upper x edge.
@@ -113,7 +113,7 @@ pub struct HistogramKdePoint {
 
 /// One explicit rug segment in a precomputed histogram composite.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HistogramRugInput {
+pub struct HistogramRug {
     /// Data-space x coordinate.
     pub x: f64,
     /// Density-axis segment baseline.
@@ -122,7 +122,7 @@ pub struct HistogramRugInput {
     pub top: f64,
 }
 
-impl RaincloudGeometryInput {
+impl RaincloudGeometry {
     pub(crate) fn validate(&self) -> Result<(f64, f64), Error> {
         validate_dimension(&self.dimensions.category, "raincloud category dimension")?;
         validate_dimension(&self.dimensions.value, "raincloud value dimension")?;
@@ -195,7 +195,7 @@ impl RaincloudGeometryInput {
 }
 
 fn validate_raincloud_group(
-    group: &RaincloudGroupInput,
+    group: &RaincloudGroup,
     group_index: usize,
 ) -> Result<(f64, f64), Error> {
     if group.density.len() < 2 {
@@ -273,7 +273,7 @@ fn validate_raincloud_group(
     Ok((lower, upper))
 }
 
-impl HistogramCompositeGeometryInput {
+impl HistogramGeometry {
     pub(crate) fn validate(&self) -> Result<(f64, f64), Error> {
         validate_dimension(&self.dimensions.value, "histogram value dimension")?;
         validate_dimension(&self.dimensions.density, "histogram density dimension")?;
@@ -366,7 +366,7 @@ fn validate_histogram_kde(points: &[HistogramKdePoint], range: (f64, f64)) -> Re
     Ok(())
 }
 
-fn validate_histogram_rugs(rugs: &[HistogramRugInput], range: (f64, f64)) -> Result<(), Error> {
+fn validate_histogram_rugs(rugs: &[HistogramRug], range: (f64, f64)) -> Result<(), Error> {
     if rugs.is_empty() {
         return Err(data_error(
             "histogram composite geometry requires at least one rug segment",

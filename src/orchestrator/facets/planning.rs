@@ -6,23 +6,23 @@ use super::data::FacetPanel;
 use super::rendering::facet_label;
 use crate::builder::Plot;
 use crate::decorations::plan::{LegendRole, PanelPlan, ResolvedLegend};
-use crate::layout::figure::{allocate_composed_grid, PanelRequirements};
-use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox, TextBlock};
+use crate::layout::canvas::{allocate_composed_grid, PanelRequirements};
+use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, TextBlock};
 use crate::render::backend::Backend;
 use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ThemePalette;
 
-pub(super) fn figure_layout(
+pub(super) fn canvas_layout(
     chart: &Plot,
     palette: &ThemePalette,
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-) -> Result<FigureLayout, Error> {
-    let mut figure = FigureLayout::measured_composed_canvas(
+) -> Result<CanvasLayout, Error> {
+    let mut canvas = CanvasLayout::measured_composed_canvas(
         chart.width(),
         chart.height(),
         palette,
-        FigureLayoutSpec {
+        CanvasLayoutSpec {
             has_title: palette.show_title
                 && chart.title_text().is_some_and(|value| !value.is_empty()),
             has_subtitle: palette.show_subtitle
@@ -47,12 +47,12 @@ pub(super) fn figure_layout(
         vertical_axis_label,
         palette,
         baseline,
-        figure.panel_box,
+        canvas.panel_box,
     )?;
-    figure.panel_box = panel;
-    figure.insets.left += extra_left;
-    figure.insets.bottom += extra_bottom;
-    Ok(figure)
+    canvas.panel_box = panel;
+    canvas.insets.left += extra_left;
+    canvas.insets.bottom += extra_bottom;
+    Ok(canvas)
 }
 
 pub(super) fn reserve_rewrapped_shared_axis_titles(

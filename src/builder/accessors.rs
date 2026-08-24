@@ -19,7 +19,7 @@ use crate::spec::{
     NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
-use crate::{HistogramCompositeGeometryInput, RaincloudGeometryInput};
+use crate::{HistogramGeometry, RaincloudGeometry};
 
 impl Plot {
     pub(crate) const fn data(&self) -> crate::data::PlotData<'_> {
@@ -508,9 +508,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.histogram_composite
     }
 
-    pub(crate) const fn histogram_composite_geometry_input(
-        &self,
-    ) -> Option<&HistogramCompositeGeometryInput> {
+    pub(crate) const fn histogram_composite_geometry_input(&self) -> Option<&HistogramGeometry> {
         match &self.input {
             PlotInput::Histogram { input } => input.geometry_input(),
             _ => None,
@@ -597,7 +595,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.raw_overlay
     }
 
-    pub(crate) const fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometryInput> {
+    pub(crate) const fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometry> {
         match &self.input {
             PlotInput::Raincloud { input } => input.geometry_input(),
             _ => None,

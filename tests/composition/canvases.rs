@@ -46,7 +46,7 @@ fn shared_legend_is_global_complete_and_semantically_validated() {
         "shared-global-legend",
     )
     .unwrap();
-    assert_eq!(svg.matches("id=\"figure-shared-legend\"").count(), 1);
+    assert_eq!(svg.matches("id=\"canvas-shared-legend\"").count(), 1);
     assert!(svg.contains(">Control</text>") && svg.contains(">Active</text>"));
     assert_unique_svg_ids(&svg);
     assert_grid_layers_before_marks(&svg, &["panel-0-grid", "panel-1-grid"]);
@@ -100,7 +100,7 @@ fn shared_canvas_legend_merges_typed_collective_pairs() {
     assert_eq!(svg.matches(">G 1, H 1</text>").count(), 1);
     assert_eq!(svg.matches(">G 2, H 2</text>").count(), 1);
     let legend = svg
-        .split_once("<g id=\"figure-shared-legend\">")
+        .split_once("<g id=\"canvas-shared-legend\">")
         .unwrap()
         .1
         .split_once("</g>")
@@ -134,7 +134,7 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
         render_canvas(canvas, "shared-legend-gap").unwrap()
     };
     let legend_x = |svg: &str| {
-        let layer = svg.split("<g id=\"figure-shared-legend\">").nth(1).unwrap();
+        let layer = svg.split("<g id=\"canvas-shared-legend\">").nth(1).unwrap();
         let rect = layer
             .lines()
             .find(|line| line.starts_with("<rect "))
@@ -335,7 +335,7 @@ fn composed_horizontal_bars_support_shared_headers_labels_and_range_groups() {
         assert!(svg.contains(&format!(">{text}</text>")));
     }
     let headers = svg
-        .split("<g id=\"figure-shared-headers\">")
+        .split("<g id=\"canvas-shared-headers\">")
         .nth(1)
         .unwrap()
         .split("</g>")
@@ -361,7 +361,7 @@ fn composed_row_title_spans_all_columns_and_rejects_panel_titles() {
     )
     .unwrap();
     assert_eq!(svg.matches(">Shared outcome</text>").count(), 1);
-    assert_eq!(svg.matches("id=\"figure-row-titles\"").count(), 1);
+    assert_eq!(svg.matches("id=\"canvas-row-titles\"").count(), 1);
     let error = Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, line().title("Panel title"))

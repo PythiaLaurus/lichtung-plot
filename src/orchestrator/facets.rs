@@ -5,7 +5,7 @@ use crate::Error;
 use super::backend::NullBackend;
 use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
-use crate::layout::figure::allocate_composed_grid;
+use crate::layout::canvas::allocate_composed_grid;
 use crate::render::backend::Backend;
 use crate::spec::{FacetScales, LegendPosition, PlotKind};
 
@@ -34,13 +34,13 @@ impl Plot {
             .then_some(horizontal_axis_label);
         let vertical_axis_label = (palette.show_y_label && !vertical_axis_label.is_empty())
             .then_some(vertical_axis_label);
-        let figure_layout = planning::figure_layout(
+        let canvas_layout = planning::canvas_layout(
             self,
             &palette,
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
         )?;
-        let mut outer = figure_layout.panel_box;
+        let mut outer = canvas_layout.panel_box;
         let provisional = allocate_composed_grid(
             outer,
             selectors.rows,
@@ -72,12 +72,12 @@ impl Plot {
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
             &palette,
-            figure_layout.panel_box,
+            canvas_layout.panel_box,
             reserved_outer,
         )?;
         let shared_axis_origin = position_shared_axis_guides(
             self.legend_position_spec(),
-            figure_layout.panel_box,
+            canvas_layout.panel_box,
             reserved_outer,
             outer,
             outside_legend.as_mut(),
@@ -119,7 +119,7 @@ impl Plot {
 
 fn position_shared_axis_guides(
     position: LegendPosition,
-    figure_panel: crate::layout::PanelBox,
+    canvas_panel: crate::layout::PanelBox,
     reserved_outer: crate::layout::PanelBox,
     outer: crate::layout::PanelBox,
     legend: Option<&mut ResolvedLegend>,
@@ -134,13 +134,13 @@ fn position_shared_axis_guides(
         LegendPosition::OutsideLeftTop
         | LegendPosition::OutsideLeft
         | LegendPosition::OutsideLeftBottom => {
-            origin.0 = figure_panel.x0 + extra_left;
+            origin.0 = canvas_panel.x0 + extra_left;
             legend.bounds = legend.bounds.translated(extra_left, 0.0);
         }
         LegendPosition::OutsideBottomLeft
         | LegendPosition::OutsideBottom
         | LegendPosition::OutsideBottomRight => {
-            origin.1 = figure_panel.y0 + extra_bottom;
+            origin.1 = canvas_panel.y0 + extra_bottom;
             legend.bounds = legend.bounds.translated(0.0, extra_bottom);
         }
         _ => {}

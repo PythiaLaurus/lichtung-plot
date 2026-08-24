@@ -33,7 +33,7 @@ impl Plot {
         let palette = self.palette();
         let cell = match kind {
             PlotKind::Matrix => crate::plots::matrix::panel_box(self)?,
-            _ => self.measured_figure_layout()?.panel_box,
+            _ => self.measured_canvas_layout()?.panel_box,
         };
         let plan = crate::decorations::plan::plan_panel(
             self,
@@ -64,7 +64,7 @@ impl Plot {
                     plan.legend.as_ref(),
                     backend,
                 )?;
-                crate::decorations::apply::apply_figure_text(self, &palette, backend)?;
+                crate::decorations::apply::apply_canvas_text(self, &palette, backend)?;
             }
             DecorationMode::SelfManaged => {}
         }

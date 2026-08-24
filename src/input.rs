@@ -1,8 +1,8 @@
 //! Closed semantic inputs for supported plot families.
 
 use crate::{
-    BarInput, Bounds, CategoryValues, CoefficientInput, DumbbellEndpoints,
-    HistogramCompositeGeometryInput, NumericValues, RaincloudGeometryInput,
+    BarInput, Bounds, CategoryValues, CoefficientInput, DumbbellEndpoints, HistogramGeometry,
+    NumericValues, RaincloudGeometry,
 };
 
 /// Closed owned source for a histogram.
@@ -14,7 +14,7 @@ pub struct HistogramInput {
 #[derive(Debug, Clone)]
 enum HistogramSource {
     Samples(NumericValues),
-    Geometry(HistogramCompositeGeometryInput),
+    Geometry(HistogramGeometry),
 }
 
 impl HistogramInput {
@@ -28,7 +28,7 @@ impl HistogramInput {
 
     /// Render complete caller-computed density-axis geometry.
     #[must_use]
-    pub fn geometry(input: HistogramCompositeGeometryInput) -> Self {
+    pub fn geometry(input: HistogramGeometry) -> Self {
         Self {
             source: HistogramSource::Geometry(input),
         }
@@ -41,7 +41,7 @@ impl HistogramInput {
         }
     }
 
-    pub(crate) const fn geometry_input(&self) -> Option<&HistogramCompositeGeometryInput> {
+    pub(crate) const fn geometry_input(&self) -> Option<&HistogramGeometry> {
         match &self.source {
             HistogramSource::Samples(_) => None,
             HistogramSource::Geometry(input) => Some(input),
@@ -61,7 +61,7 @@ enum RaincloudSource {
         category: CategoryValues,
         values: NumericValues,
     },
-    Geometry(RaincloudGeometryInput),
+    Geometry(RaincloudGeometry),
 }
 
 impl RaincloudInput {
@@ -75,7 +75,7 @@ impl RaincloudInput {
 
     /// Render complete caller-computed raincloud geometry.
     #[must_use]
-    pub fn geometry(input: RaincloudGeometryInput) -> Self {
+    pub fn geometry(input: RaincloudGeometry) -> Self {
         Self {
             source: RaincloudSource::Geometry(input),
         }
@@ -88,7 +88,7 @@ impl RaincloudInput {
         }
     }
 
-    pub(crate) const fn geometry_input(&self) -> Option<&RaincloudGeometryInput> {
+    pub(crate) const fn geometry_input(&self) -> Option<&RaincloudGeometry> {
         match &self.source {
             RaincloudSource::Samples { .. } => None,
             RaincloudSource::Geometry(input) => Some(input),

@@ -18,7 +18,7 @@ fn canvas(frame: &DataFrame) -> Canvas {
         .panel(0, 0, plot(frame))
         .unwrap()
         .size(320, 260)
-        .title("Selectable figure text")
+        .title("Selectable canvas text")
 }
 
 fn temp_dir(name: &str) -> PathBuf {

@@ -5,7 +5,7 @@ use crate::Error;
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::layout::figure::try_wrap_text;
+use crate::layout::canvas::try_wrap_text;
 use crate::layout::{PanelBox, TextBlock};
 use crate::render::backend::{Backend, TextAnchor, TextStyle};
 use crate::spec::{PlotKind, PlotRenderContext};
@@ -77,7 +77,7 @@ pub(super) fn render_scene(
         palette,
         backend,
     )?;
-    crate::decorations::apply::apply_figure_text(source, &source.palette(), backend)
+    crate::decorations::apply::apply_canvas_text(source, &source.palette(), backend)
 }
 
 #[expect(

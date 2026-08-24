@@ -19,7 +19,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         crate::test_support::category(&data, "group"),
         crate::BarInput::samples(crate::test_support::numeric(&data, "y")),
     );
-    let outer_panel = horizontal.figure_layout().panel_box;
+    let outer_panel = horizontal.canvas_layout().panel_box;
     let mut horizontal_backend = RecordingBackend::default();
     horizontal
         .render_kind(PlotKind::HorizontalBar, &mut horizontal_backend)
@@ -37,7 +37,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .render_kind(PlotKind::Beeswarm, &mut beeswarm_backend)
         .unwrap();
     let beeswarm_panel = beeswarm_backend.clips[0];
-    assert!(beeswarm_panel.x1 < beeswarm.figure_layout().panel_box.x1);
+    assert!(beeswarm_panel.x1 < beeswarm.canvas_layout().panel_box.x1);
     let height = beeswarm_panel.height().min(150.0);
     let bottom = beeswarm_panel.y0 + (beeswarm_panel.height() - height) / 2.0;
     let high_label = beeswarm_backend
@@ -88,7 +88,7 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
     for (kind, name, expected_clips) in cases {
         let chart = configured_chart(&data, kind).title(format!("{name} title"));
         let dir = test_directory(name);
-        let output = dir.join("figure.svg");
+        let output = dir.join("canvas.svg");
         chart.svg(&output).unwrap();
         let svg = std::fs::read_to_string(&output).unwrap();
         assert_eq!(
@@ -159,7 +159,7 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     .x_limits(0.0, 3.0)
     .y_limits(0.0, 6.0);
     let dir = test_directory("mass-label-explicit-limits");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
@@ -187,7 +187,7 @@ fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
     )
     .x_limits(10.5, 11.5);
     let dir = test_directory("waterfall-label-explicit-limits");
-    let output = dir.join("figure.svg");
+    let output = dir.join("canvas.svg");
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
