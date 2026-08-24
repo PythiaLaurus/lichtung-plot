@@ -242,6 +242,15 @@ fn panel_lane_filter_removes_automatic_labels_that_cross_its_edges() {
 }
 
 #[test]
+fn y_axis_inset_preserves_measured_tick_width_and_label_gap() {
+    let tick_width = deterministic_text_width("locus_0 aa", 16.0);
+    let inset = y_axis_left_inset_for_tick_labels(tick_width, 5, 17);
+    let gap = inset - 5.0 - 6.0 - tick_width - 12.0 - 17.0;
+
+    assert!((gap - 16.0).abs() < f64::EPSILON * 100.0);
+}
+
+#[test]
 fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
     let y_ticks = (0..7)
         .map(|index| AxisTick::new(f64::from(index) + 0.5, format!("row {index}")))
@@ -250,11 +259,10 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
         .iter()
         .map(|tick| (tick.position, tick.label.clone()))
         .collect::<Vec<_>>();
-    let layout = Layout::new_with_ticks_and_axis_specs(
+    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (0.0, 10.0),
         (0.0, 7.0),
-        640,
-        480,
+        crate::layout::PanelBox::new(0.0, 640.0, 0.0, 480.0),
         "x".into(),
         "y".into(),
         Vec::new(),

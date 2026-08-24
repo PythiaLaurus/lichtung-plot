@@ -41,18 +41,9 @@ pub(crate) use range_ticks::{nice_ticks, AUTOMATIC_TICK_TARGET};
 #[cfg(test)]
 use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 
-/// Axis scale transform.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Scale {
-    /// Linear data-to-pixel mapping.
-    Linear,
-}
-
 /// User-configurable axis behavior.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AxisSpec {
-    /// Axis scale transform.
-    pub scale: Scale,
     /// Explicit visible data range. When `None`, the renderer computes one.
     pub limits: Option<(f64, f64)>,
 }
@@ -93,8 +84,6 @@ pub struct Axis {
     pub label: String,
     /// Tick positions + labels in data space.
     pub ticks: Vec<AxisTick>,
-    /// Whether this axis is log scale.
-    pub log_scale: bool,
 }
 
 /// A four-sided frame for a plot area.
@@ -121,10 +110,6 @@ pub struct Projection {
 pub struct Layout {
     /// The data-to-pixel projection.
     pub projection: Projection,
-    /// The plot frame.
-    pub frame: Frame,
-    /// The plot grid.
-    pub grid: Grid,
     /// The x-axis.
     pub x_axis: Axis,
     /// The y-axis.

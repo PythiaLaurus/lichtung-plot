@@ -88,7 +88,6 @@ impl Layout {
                     AxisSide::Bottom,
                     TICK_FONT_SIZE,
                 ),
-                log_scale: false,
             },
             y_axis: Axis {
                 label: y_label,
@@ -98,68 +97,9 @@ impl Layout {
                     AxisSide::Left,
                     TICK_FONT_SIZE,
                 ),
-                log_scale: false,
             },
             projection,
-            frame: Frame,
-            grid: Grid,
         }
-    }
-
-    /// Create a new layout with explicit (position, label) ticks
-    /// on both axes. Use this for categorical x-axes (bar,
-    /// boxplot, violin).
-    ///
-    /// `x_ticks` and `y_ticks` are exactly the ticks to render;
-    /// the `x_range` and `y_range` should cover the tick
-    /// positions (typically `0..n` for categorical x, and the
-    /// data's numeric min/max for y).
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub fn new_with_ticks(
-        x_range: (f64, f64),
-        y_range: (f64, f64),
-        canvas_width: u32,
-        canvas_height: u32,
-        x_label: String,
-        y_label: String,
-        x_ticks: Vec<AxisTick>,
-        y_ticks: Vec<AxisTick>,
-    ) -> Self {
-        Self::new_with_ticks_and_axis_specs(
-            x_range,
-            y_range,
-            canvas_width,
-            canvas_height,
-            x_label,
-            y_label,
-            x_ticks,
-            y_ticks,
-            &AxisSpec::default(),
-            &AxisSpec::default(),
-        )
-    }
-
-    /// Create a new layout with explicit ticks and axis specs.
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub fn new_with_ticks_and_axis_specs(
-        x_range: (f64, f64),
-        y_range: (f64, f64),
-        canvas_width: u32,
-        canvas_height: u32,
-        x_label: String,
-        y_label: String,
-        x_ticks: Vec<AxisTick>,
-        y_ticks: Vec<AxisTick>,
-        x_spec: &AxisSpec,
-        y_spec: &AxisSpec,
-    ) -> Self {
-        let pixel_box = default_panel_box(canvas_width, canvas_height);
-
-        Self::new_with_ticks_and_axis_specs_in_panel_box(
-            x_range, y_range, pixel_box, x_label, y_label, x_ticks, y_ticks, x_spec, y_spec,
-        )
     }
 
     /// Create a new layout with explicit ticks and axis specs inside an explicit panel box.
@@ -214,17 +154,13 @@ impl Layout {
 
         Self {
             projection,
-            frame: Frame,
-            grid: Grid,
             x_axis: Axis {
                 label: x_label,
                 ticks: x_ticks,
-                log_scale: false,
             },
             y_axis: Axis {
                 label: y_label,
                 ticks: y_ticks,
-                log_scale: false,
             },
         }
     }
@@ -236,7 +172,7 @@ impl Layout {
         palette: &ThemePalette,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        self.frame.draw(&self.projection, palette, backend)?;
+        Frame::draw(&self.projection, palette, backend)?;
         self.x_axis
             .draw(&self.projection, AxisSide::Bottom, palette, backend)?;
         self.y_axis
@@ -251,7 +187,7 @@ impl Layout {
         palette: &ThemePalette,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        self.grid.draw(
+        Grid::draw(
             &self.projection,
             &self.x_axis,
             &self.y_axis,

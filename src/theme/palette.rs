@@ -2,8 +2,7 @@
 //!
 //! Every theme is hardcoded so visual regressions remain reviewable and
 //! re-renders are byte-stable under the same font environment.
-//! Themes are pure data: a `ThemePalette` is just colors, font, and
-//! layout style. The rendering engine applies them per `Backend` impl.
+//! Each built-in theme resolves privately to colors, fonts, and layout style.
 
 #![deny(missing_docs)]
 
@@ -13,6 +12,10 @@ pub(crate) const TICK_FONT_SIZE: u32 = 16;
 macro_rules! define_themes {
     ($($variant:ident => ($documentation:literal, $palette:ident)),+ $(,)?) => {
         /// Predefined publication themes with hardcoded journal/venue palettes.
+        ///
+        /// ```compile_fail
+        /// let _ = lichtung_plot::Theme::Publication.palette();
+        /// ```
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Theme {
             $(
@@ -31,9 +34,7 @@ macro_rules! define_themes {
                 match self { $(Self::$variant => stringify!($variant)),+ }
             }
 
-            /// Resolve this theme to its hardcoded [`ThemePalette`].
-            #[must_use]
-            pub fn palette(self) -> ThemePalette {
+            pub(crate) fn palette(self) -> ThemePalette {
                 match self { $(Self::$variant => $palette()),+ }
             }
         }
@@ -62,7 +63,7 @@ define_themes! {
 /// into enums would add boilerplate without changing behavior.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq)]
-pub struct ThemePalette {
+pub(crate) struct ThemePalette {
     /// Series colors in draw order. Index 0 is the first series.
     pub colors: Vec<(u8, u8, u8)>,
     /// CSS-compatible system-font family stack.
@@ -133,7 +134,7 @@ pub struct ThemePalette {
 
 /// Convert an (R, G, B) tuple to a CSS hex string for use in SVG.
 #[must_use]
-pub fn rgb_to_hex(c: (u8, u8, u8)) -> String {
+pub(crate) fn rgb_to_hex(c: (u8, u8, u8)) -> String {
     format!("#{:02X}{:02X}{:02X}", c.0, c.1, c.2)
 }
 

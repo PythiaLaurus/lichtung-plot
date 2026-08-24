@@ -1,7 +1,7 @@
 use crate::Error;
 
 use super::geometry::y_axis_label_half_width;
-use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection, Scale};
+use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection};
 use crate::layout::figure::{
     X_AXIS_TICK_LABEL_GAP, X_AXIS_TITLE_GAP, X_AXIS_TITLE_WITHOUT_TICKS_GAP,
 };
@@ -11,15 +11,6 @@ use crate::theme::ThemePalette;
 
 const Y_AXIS_LABEL_EDGE_PADDING: f64 = 12.0;
 const Y_AXIS_LABEL_TICK_GAP: f64 = 16.0;
-
-impl Default for AxisSpec {
-    fn default() -> Self {
-        Self {
-            scale: Scale::Linear,
-            limits: None,
-        }
-    }
-}
 
 impl AxisSpec {
     /// Return a copy of this spec with explicit limits.
@@ -354,7 +345,6 @@ impl Frame {
     /// top and right spines are drawn in addition to the bottom
     /// and left ones.
     pub fn draw(
-        &self,
         projection: &Projection,
         palette: &ThemePalette,
         backend: &mut dyn Backend,
@@ -380,7 +370,6 @@ impl Grid {
     /// `palette.show_grid` is `false` or `palette.grid_width == 0`,
     /// this is a no-op.
     pub fn draw(
-        &self,
         projection: &Projection,
         x_axis: &Axis,
         y_axis: &Axis,

@@ -689,6 +689,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn not_estimable_text_clears_vertical_guide_by_measured_half_width() {
+        let panel = crate::layout::PanelBox::new(0.0, 200.0, 0.0, 100.0);
+        let width = 80.0;
+        let guide = 100.0;
+        let center = not_estimable_text_x(panel, width, Some(guide)).unwrap();
+
+        assert!(guide - (center + width / 2.0) >= 6.0);
+    }
+
+    #[test]
     fn wide_log_ticks_cover_the_full_domain_without_exceeding_the_maximum() {
         let ticks = log_ticks(
             (-100.0, 100.0),

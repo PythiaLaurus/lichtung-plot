@@ -92,7 +92,7 @@ impl TitleBlock {
     ///   baseline (bottom of the canvas).
     ///
     /// All three lines are drawn centered. Missing lines are skipped.
-    pub fn draw(
+    pub(crate) fn draw(
         &self,
         backend: &mut dyn Backend,
         canvas_width: u32,

@@ -440,8 +440,7 @@ fn unavailable_text_avoids_estimate_guides() {
         point_interval(&frame, true).zero_line().x_limits(-1.0, 1.0),
         "unavailable-point-guide",
     );
-    let separation =
-        lichtung_plot::layout::deterministic_text_width("Not estimable", 12.0) / 2.0 + 5.0;
+    let separation = 45.0;
     for output in [&coefficient, &forest] {
         assert!(
             (text_x(output, "Not estimable") - vertical_line_x(output, "stroke-dasharray")).abs()

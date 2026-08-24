@@ -142,17 +142,13 @@ pub(crate) fn render(
     );
     let layout = Layout {
         projection,
-        frame: crate::layout::Frame,
-        grid: crate::layout::Grid,
         x_axis: crate::layout::Axis {
             label: chart.x_label_text().unwrap_or("").to_string(),
             ticks: x_ticks,
-            log_scale: false,
         },
         y_axis: crate::layout::Axis {
             label: chart.y_label_text().unwrap_or("").to_string(),
             ticks: y_ticks,
-            log_scale: false,
         },
     };
 

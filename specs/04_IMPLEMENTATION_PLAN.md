@@ -311,7 +311,12 @@ verify` passed on 2026-08-25.
 
 ## Final API Phase A7: Internal Rendering Surface
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused layout, categorical, composition, distributions, and
+estimate tests, 46 doctests including compile-fail API-boundary cases, both
+Clippy feature configurations, independent contract review, and `just verify`
+passed on 2026-08-25.
 
 - Make renderer-facing layout modules and types private.
 - Retain `AxisTick` only at `lichtung_plot::AxisTick`.

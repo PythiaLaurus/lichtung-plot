@@ -5,6 +5,8 @@ use lichtung_plot::{
 
 use super::{data, df, parse_polygon_bounds, remove_legend_layers, unique_dir, DataFrame};
 
+const PUBLICATION_COLORS: [(u8, u8, u8); 2] = [(0, 114, 178), (213, 94, 0)];
+
 fn shared_hue_data() -> DataFrame {
     df!(
         "group" => ["g1", "g1", "g1", "g2", "g2", "g2", "g3", "g3", "g3"],
@@ -331,7 +333,7 @@ fn explicit_group_and_hue_render_only_observed_pair_paths() {
         .lines()
         .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
         .collect::<Vec<_>>();
-    let colors = lichtung_plot::Theme::Publication.palette().colors;
+    let colors = PUBLICATION_COLORS;
 
     assert_eq!(paths.len(), 3);
     assert_eq!(
@@ -542,7 +544,7 @@ fn faceted_group_hue_pairs_keep_global_hue_colors() {
         "faceted-line-observed-pairs",
     )
     .unwrap();
-    let colors = lichtung_plot::Theme::Publication.palette().colors;
+    let colors = PUBLICATION_COLORS;
     let marks = remove_legend_layers(&svg);
     let paths = marks
         .lines()
@@ -570,7 +572,7 @@ fn faceted_group_hue_pairs_keep_global_hue_colors() {
 fn shared_hue_uses_one_chart_wide_color_across_collective_families() {
     let data = shared_hue_data();
     let interaction = shared_hue_interaction_data();
-    let expected = lichtung_plot::Theme::Publication.palette().colors;
+    let expected = PUBLICATION_COLORS;
     let plots = vec![
         configured_separate_semantic_plot(&data, PlotKind::Line, true),
         configured_separate_semantic_plot(&data, PlotKind::Density, true),
@@ -588,7 +590,7 @@ fn shared_hue_uses_one_chart_wide_color_across_collective_families() {
 #[test]
 fn group_only_density_uses_default_color_for_every_curve_and_fill() {
     let data = collective_data();
-    let expected = rgb(lichtung_plot::Theme::Publication.palette().colors[0]);
+    let expected = rgb(PUBLICATION_COLORS[0]);
     let svg = render(
         configured_separate_semantic_plot(&data, PlotKind::Density, false),
         "group-only-density",
@@ -620,7 +622,7 @@ fn faceted_series_keep_global_dodge_slots_when_a_panel_omits_a_series() {
     bars.sort_by(|left, right| left.x.total_cmp(&right.x));
     assert_eq!(bars.len(), 3);
     assert!(bars[1].x - bars[0].x < bars[2].x - bars[1].x);
-    let expected = lichtung_plot::Theme::Publication.palette().colors;
+    let expected = PUBLICATION_COLORS;
     let marks = remove_legend_layers(&svg);
     let polygons = marks
         .lines()
@@ -653,7 +655,7 @@ fn faceted_collectives_keep_global_first_observed_hue_color_order() {
         "y" => [1.0_f64, 2.0, 3.0, 4.0],
     )
     .unwrap();
-    let expected = lichtung_plot::Theme::Publication.palette().colors;
+    let expected = PUBLICATION_COLORS;
     let svg = render(
         Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
             .hue(data::category(&data, "hue"))

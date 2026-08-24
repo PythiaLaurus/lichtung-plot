@@ -297,8 +297,7 @@ fn composed_panel_reserves_categorical_y_axis_text_once() {
         "category-gutter-once",
     )
     .unwrap();
-    let label_width = lichtung_plot::layout::deterministic_text_width(category, 12.0);
-    assert!(clip_rects(&svg)[0].0 < label_width * 1.75);
+    assert!(clip_rects(&svg)[0].0 < 300.0);
 }
 
 #[test]

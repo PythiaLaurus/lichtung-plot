@@ -1,4 +1,8 @@
 //! A strongly typed scientific plotting and SVG rendering library.
+//!
+//! ```compile_fail
+//! use lichtung_plot::layout::Layout;
+//! ```
 
 #![deny(missing_docs)]
 
@@ -15,8 +19,7 @@ mod input;
 pub mod kind;
 mod labels;
 mod layers;
-/// Shared plot layout core: scales, projection, axes, frames.
-pub mod layout;
+mod layout;
 mod orchestrator;
 mod output;
 #[cfg(any(feature = "png", test))]

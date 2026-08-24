@@ -407,7 +407,7 @@ pub struct FigureLayout {
 impl FigureLayout {
     /// Resolve a single-panel chart layout from canvas size, theme, and text flags.
     #[must_use]
-    pub fn single_panel(
+    pub(crate) fn single_panel(
         canvas_width: u32,
         canvas_height: u32,
         palette: &ThemePalette,

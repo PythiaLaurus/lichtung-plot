@@ -1,4 +1,4 @@
-use lichtung_plot::{Canvas, FacetSpec, Plot, PlotKind, RawOverlay, SourceRows, Theme};
+use lichtung_plot::{Canvas, FacetSpec, Plot, PlotKind, RawOverlay, SourceRows};
 
 use super::{parse_circles, unique_dir};
 
@@ -246,8 +246,7 @@ fn series_points_follow_dodge_color_and_global_first_observed_order() {
     )
     .raw_overlay(RawOverlay::Points);
     let svg = render(plot, "series-overlay").unwrap();
-    let palette = Theme::Publication.palette().colors;
-    for color in [palette[0], palette[1]] {
+    for color in [(0, 114, 178), (213, 94, 0)] {
         let hex = format!("#{:02X}{:02X}{:02X}", color.0, color.1, color.2);
         assert!(svg.contains(&hex));
     }
