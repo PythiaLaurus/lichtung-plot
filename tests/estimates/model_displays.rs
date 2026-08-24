@@ -223,3 +223,52 @@ fn forest_narrow_log_range_keeps_raw_multiplicative_ticks() {
         svg.contains(">1</text>") && svg.contains(">1.3</text>") && svg.contains(">1.6</text>")
     );
 }
+
+#[test]
+fn forest_log_scale_projects_exact_ticks_from_raw_data_space() {
+    let svg = render_svg(
+        Plot::forest(
+            lichtung_plot::CategoryValues::new("term", ["a", "b"]).unwrap(),
+            lichtung_plot::NumericValues::new("estimate", [0.5, 2.0]),
+            Bounds::new(
+                lichtung_plot::NumericValues::new("lower", [0.1, 1.0]),
+                lichtung_plot::NumericValues::new("upper", [1.0, 10.0]),
+            ),
+            1.0,
+        )
+        .scale(AxisScale::Log10)
+        .x_limits(0.1, 10.0)
+        .x_ticks(vec![
+            AxisTick::new(0.1, "low exact"),
+            AxisTick::new(1.0, "center exact"),
+            AxisTick::new(10.0, "high exact"),
+        ]),
+        "forest-log-exact-ticks",
+    )
+    .unwrap();
+
+    assert!(svg.contains(">low exact</text>"));
+    assert!(svg.contains(">center exact</text>"));
+    assert!(svg.contains(">high exact</text>"));
+}
+
+#[test]
+fn forest_log_scale_rejects_raw_limits_that_collapse_after_transformation() {
+    let maximum = f64::MAX;
+    let error = Plot::forest(
+        lichtung_plot::CategoryValues::new("term", ["a"]).unwrap(),
+        lichtung_plot::NumericValues::new("estimate", [maximum]),
+        Bounds::new(
+            lichtung_plot::NumericValues::new("lower", [maximum.next_down()]),
+            lichtung_plot::NumericValues::new("upper", [maximum]),
+        ),
+        1.0,
+    )
+    .scale(AxisScale::Log10)
+    .x_limits(maximum.next_down(), maximum)
+    .preflight()
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("must remain distinguishable after transformation"));
+}

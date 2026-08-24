@@ -303,8 +303,8 @@ fn categorical_trajectory_rejects_numeric_x_axis_overrides_in_plot_and_canvas() 
             "categorical condition x does not support numeric x limits",
         ),
         (
-            trajectory(&frame).x_tick_count(5),
-            "categorical condition x does not support numeric x tick-count overrides",
+            trajectory(&frame).x_ticks(vec![AxisTick::new(0.0, "before")]),
+            "explicit numeric x ticks require a numeric x axis",
         ),
     ];
     for (plot, expected) in configurations {
@@ -322,14 +322,21 @@ fn categorical_trajectory_rejects_numeric_x_axis_overrides_in_plot_and_canvas() 
 }
 
 #[test]
-fn numeric_trajectory_preserves_x_limits_and_tick_count_behavior() {
+fn numeric_trajectory_preserves_x_limits_and_exact_ticks() {
     let output = svg(
         trajectory_with_hue(&numeric_trajectory_data())
             .x_limits(0.5, 2.5)
-            .x_tick_count(3),
+            .x_ticks(vec![
+                AxisTick::new(0.5, "early"),
+                AxisTick::new(1.5, "middle"),
+                AxisTick::new(2.5, "late"),
+            ]),
         "numeric-trajectory-limits",
     );
     assert_eq!(connector_tags(&output).len(), 2);
+    assert!(output.contains(">early</text>"));
+    assert!(output.contains(">middle</text>"));
+    assert!(output.contains(">late</text>"));
 }
 
 #[test]

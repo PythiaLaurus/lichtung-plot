@@ -858,10 +858,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.x_axis_spec
     }
 
-    pub(crate) const fn x_tick_count_overridden(&self) -> bool {
-        self.x_tick_count_overridden
-    }
-
     pub(crate) fn explicit_x_ticks(&self) -> Option<&[AxisTick]> {
         self.x_ticks.as_deref()
     }
@@ -870,10 +866,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[must_use]
     pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
         &self.y_axis_spec
-    }
-
-    pub(crate) const fn y_tick_count_overridden(&self) -> bool {
-        self.y_tick_count_overridden
     }
 
     pub(crate) fn explicit_y_ticks(&self) -> Option<&[AxisTick]> {

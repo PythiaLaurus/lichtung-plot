@@ -32,8 +32,11 @@ mod range_ticks;
 pub use geometry::deterministic_text_width;
 pub(crate) use geometry::{estimated_text_width, y_axis_left_inset_for_tick_labels};
 pub(crate) use range_ticks::{
-    anchored_auto_range, continuous_auto_range, display_axis_spec, format_tick, nice_ticks,
+    anchored_auto_range, automatic_numeric_ticks, continuous_auto_range, display_axis_spec,
+    fit_automatic_tick_candidates, format_tick, retain_automatic_ticks_inside_panel,
 };
+#[cfg(test)]
+pub(crate) use range_ticks::{nice_ticks, AUTOMATIC_TICK_TARGET};
 
 #[cfg(test)]
 use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
@@ -52,8 +55,6 @@ pub struct AxisSpec {
     pub scale: Scale,
     /// Explicit visible data range. When `None`, the renderer computes one.
     pub limits: Option<(f64, f64)>,
-    /// Desired tick count for auto-generated numeric ticks.
-    pub tick_count: usize,
 }
 
 /// A single tick on an axis: a data-space position and the

@@ -191,17 +191,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set target x-axis tick count.
-    #[must_use]
-    pub fn x_tick_count(mut self, count: usize) -> Self
-    where
-        K: crate::kind::NumericX,
-    {
-        self.x_axis_spec = self.x_axis_spec.tick_count(count);
-        self.x_tick_count_overridden = true;
-        self
-    }
-
     /// Replace automatic x-axis ticks with caller-labeled numeric positions.
     #[must_use]
     pub fn x_ticks(mut self, ticks: Vec<AxisTick>) -> Self
@@ -209,17 +198,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::NumericX,
     {
         self.x_ticks = Some(ticks);
-        self
-    }
-
-    /// Set target y-axis tick count.
-    #[must_use]
-    pub fn y_tick_count(mut self, count: usize) -> Self
-    where
-        K: crate::kind::NumericY,
-    {
-        self.y_axis_spec = self.y_axis_spec.tick_count(count);
-        self.y_tick_count_overridden = true;
         self
     }
 

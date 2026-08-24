@@ -76,6 +76,24 @@ use crate::{
 /// ```
 ///
 /// ```compile_fail
+/// use lichtung_plot::{NumericValues, Plot};
+/// let plot = Plot::scatter(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let _ = plot.x_tick_count(3);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{NumericValues, Plot};
+/// let plot = Plot::scatter(
+///     NumericValues::new("x", [1.0]),
+///     NumericValues::new("y", [2.0]),
+/// );
+/// let _ = plot.y_tick_count(3);
+/// ```
+///
+/// ```compile_fail
 /// use lichtung_plot::{HistogramBins, NumericValues, Plot};
 /// let plot = Plot::scatter(
 ///     NumericValues::new("x", [1.0]),
@@ -433,11 +451,9 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     labels: Labels,
     x_axis_spec: AxisSpec,
     x_limits_user_explicit: bool,
-    x_tick_count_overridden: bool,
     x_ticks: Option<Vec<AxisTick>>,
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
-    y_tick_count_overridden: bool,
     y_ticks: Option<Vec<AxisTick>>,
     theme: Theme,
     significance: Vec<crate::significance::SignificanceAnnotation>,
@@ -524,11 +540,9 @@ impl Plot<crate::kind::Any> {
             labels: Labels::default(),
             x_axis_spec: AxisSpec::default(),
             x_limits_user_explicit: false,
-            x_tick_count_overridden: false,
             x_ticks: None,
             y_axis_spec: AxisSpec::default(),
             y_limits_user_explicit: false,
-            y_tick_count_overridden: false,
             y_ticks: None,
             theme: Theme::Publication,
             significance: Vec::new(),
@@ -917,11 +931,9 @@ impl<K: crate::kind::Marker> Plot<K> {
             labels,
             x_axis_spec,
             x_limits_user_explicit,
-            x_tick_count_overridden,
             x_ticks,
             y_axis_spec,
             y_limits_user_explicit,
-            y_tick_count_overridden,
             y_ticks,
             theme,
             significance,
@@ -995,11 +1007,9 @@ impl<K: crate::kind::Marker> Plot<K> {
             labels,
             x_axis_spec,
             x_limits_user_explicit,
-            x_tick_count_overridden,
             x_ticks,
             y_axis_spec,
             y_limits_user_explicit,
-            y_tick_count_overridden,
             y_ticks,
             theme,
             significance,

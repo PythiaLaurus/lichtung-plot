@@ -159,7 +159,7 @@ impl Plot {
             let extra = (maximum_height - f64::from(palette.tick_font_size) * 1.2).max(0.0);
             if candidate_panel.height() - extra < 60.0 {
                 return Err(Error::Render(
-                    "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or reduce the tick count"
+                    "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or shorten the tick labels"
                         .into(),
                 ));
             }

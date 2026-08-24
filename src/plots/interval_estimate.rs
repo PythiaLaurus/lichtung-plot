@@ -375,6 +375,14 @@ pub(crate) fn render(
             .limits
             .map(|(lower, upper)| Ok::<_, Error>((transform(lower)?, transform(upper)?)))
             .transpose()?;
+        if transformed_x_spec
+            .limits
+            .is_some_and(|(lower, upper)| lower >= upper)
+        {
+            return Err(Error::Data(format!(
+                "{family}: logarithmic x-axis limits must remain distinguishable after transformation"
+            )));
+        }
     }
     let facet_fallback = if data_range.is_none() && transformed_x_spec.limits.is_none() {
         fixed_facet_estimate_tuples(chart, context, family, require_intervals)?
@@ -444,7 +452,7 @@ pub(crate) fn render(
         &display_labels,
     )?;
     let x_ticks = if scale == AxisScale::Log10 {
-        log_ticks(x_range)
+        log_ticks(x_range, panel, palette.tick_font_size)
     } else {
         Vec::new()
     };
@@ -574,19 +582,169 @@ pub(crate) fn render(
 
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "finite logarithmic display powers are bounded to 32 emitted ticks"
+    reason = "base-10 exponents of positive finite f64 values fit in i32"
 )]
-fn log_ticks(range: (f64, f64)) -> Vec<AxisTick> {
-    let first = range.0.ceil() as i32;
-    let last = range.1.floor() as i32;
-    let powers = (first..=last).take(32).map(f64::from).collect::<Vec<_>>();
+fn log_ticks(
+    range: (f64, f64),
+    panel: crate::layout::PanelBox,
+    tick_font_size: u32,
+) -> Vec<AxisTick> {
+    let representable_range = (
+        range.0.max(f64::from_bits(1).log10()),
+        range.1.min(f64::MAX.log10()),
+    );
+    let first = representable_range.0.ceil() as i32;
+    let last = representable_range.1.floor() as i32;
+    let powers = (first..=last).map(f64::from).collect::<Vec<_>>();
+    let projection = crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
     let positions = if powers.len() >= 2 {
         powers
     } else {
-        crate::layout::nice_ticks(range.0, range.1, 4)
-    };
-    positions
+        crate::layout::automatic_numeric_ticks(
+            representable_range,
+            &projection,
+            crate::layout::AxisSide::Bottom,
+            tick_font_size,
+        )
         .into_iter()
-        .map(|position| AxisTick::new(position, crate::layout::format_tick(10_f64.powf(position))))
+        .map(|tick| tick.position)
         .collect()
+    };
+    let mut positioned_values = positions
+        .into_iter()
+        .filter_map(|position| finite_raw_log_value(position).map(|value| (position, value)))
+        .collect::<Vec<_>>();
+    positioned_values.dedup_by(|left, right| left.1.to_bits() == right.1.to_bits());
+    let raw_values = positioned_values
+        .iter()
+        .map(|(_, value)| *value)
+        .collect::<Vec<_>>();
+    let ticks = positioned_values
+        .into_iter()
+        .zip(finite_log_labels(&raw_values))
+        .map(|((position, _), label)| AxisTick::new(position, label))
+        .collect();
+    let midpoint = f64::midpoint(representable_range.0, representable_range.1);
+    let fallback_value = finite_raw_log_value(midpoint).unwrap_or(f64::MIN_POSITIVE);
+    let fallback_label = finite_log_labels(&[fallback_value])
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| format!("{fallback_value:?}"));
+    crate::layout::fit_automatic_tick_candidates(
+        ticks,
+        &projection,
+        crate::layout::AxisSide::Bottom,
+        tick_font_size,
+        AxisTick::new(midpoint, fallback_label),
+    )
+}
+
+fn finite_raw_log_value(position: f64) -> Option<f64> {
+    let value = 10_f64.powf(position);
+    (value.is_finite() && value > 0.0).then_some(value)
+}
+
+fn finite_log_labels(values: &[f64]) -> Vec<String> {
+    let labels = values
+        .iter()
+        .copied()
+        .map(crate::layout::format_tick)
+        .collect::<Vec<_>>();
+    if log_labels_are_unique_and_finite(&labels) {
+        return labels;
+    }
+    for precision in 2..=17 {
+        let labels = values
+            .iter()
+            .map(|value| format!("{value:.precision$e}"))
+            .collect::<Vec<_>>();
+        if log_labels_are_unique_and_finite(&labels) {
+            return labels;
+        }
+    }
+    values.iter().map(|value| format!("{value:?}")).collect()
+}
+
+fn log_labels_are_unique_and_finite(labels: &[String]) -> bool {
+    labels.iter().enumerate().all(|(index, label)| {
+        !labels[..index].contains(label)
+            && if let Some(value) = label.strip_suffix('k') {
+                value
+                    .parse::<f64>()
+                    .is_ok_and(|value| (value * 1_000.0).is_finite() && value > 0.0)
+            } else if let Some(value) = label.strip_suffix('M') {
+                value
+                    .parse::<f64>()
+                    .is_ok_and(|value| (value * 1_000_000.0).is_finite() && value > 0.0)
+            } else {
+                label
+                    .parse::<f64>()
+                    .is_ok_and(|value| value.is_finite() && value > 0.0)
+            }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wide_log_ticks_cover_the_full_domain_without_exceeding_the_maximum() {
+        let ticks = log_ticks(
+            (-100.0, 100.0),
+            crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
+            crate::theme::TICK_FONT_SIZE,
+        );
+
+        assert!(ticks.len() <= crate::layout::AUTOMATIC_TICK_TARGET);
+        assert!(ticks.first().is_some_and(|tick| tick.position <= -90.0));
+        assert!(ticks.last().is_some_and(|tick| tick.position >= 90.0));
+    }
+
+    #[test]
+    fn extreme_log_ticks_keep_every_label_finite_and_nonzero() {
+        let ticks = log_ticks(
+            (-400.0, 400.0),
+            crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
+            crate::theme::TICK_FONT_SIZE,
+        );
+
+        assert!(ticks.iter().all(|tick| {
+            tick.label != "0"
+                && tick.label != "inf"
+                && tick.label.parse::<f64>().is_ok_and(f64::is_finite)
+        }));
+    }
+
+    #[test]
+    fn upper_extreme_log_ticks_have_unique_round_trippable_labels() {
+        let ticks = log_ticks(
+            (308.0, f64::MAX.log10()),
+            crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
+            crate::theme::TICK_FONT_SIZE,
+        );
+
+        assert!(ticks.iter().enumerate().all(|(index, tick)| {
+            !ticks[..index]
+                .iter()
+                .any(|previous| previous.label == tick.label)
+                && tick.label.parse::<f64>().is_ok_and(f64::is_finite)
+        }));
+    }
+
+    #[test]
+    fn lower_subnormal_log_ticks_omit_duplicate_rounded_values() {
+        let lower = f64::from_bits(1).log10();
+        let ticks = log_ticks(
+            (lower, -323.0),
+            crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
+            crate::theme::TICK_FONT_SIZE,
+        );
+
+        assert!(ticks.iter().enumerate().all(|(index, tick)| {
+            !ticks[..index]
+                .iter()
+                .any(|previous| previous.label == tick.label)
+        }));
+    }
 }

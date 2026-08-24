@@ -1,7 +1,9 @@
-use super::{AxisSpec, AxisTick};
+use super::geometry::{deterministic_text_width, measured_text_line_height};
+use super::{AxisSide, AxisSpec, AxisTick, Projection};
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
+pub(crate) const AUTOMATIC_TICK_TARGET: usize = 5;
 
 pub(super) fn resolve_range(range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
     if let Some(limits) = spec.limits {
@@ -16,7 +18,7 @@ pub(crate) fn continuous_auto_range(range: (f64, f64), spec: &AxisSpec) -> (f64,
     if let Some(limits) = spec.limits {
         limits
     } else {
-        broaden_nice_range(range, spec.tick_count, DEFAULT_RANGE_MARGIN_FRACTION)
+        broaden_nice_range(range, AUTOMATIC_TICK_TARGET, DEFAULT_RANGE_MARGIN_FRACTION)
     }
 }
 
@@ -47,7 +49,7 @@ pub(crate) fn anchored_auto_range(range: (f64, f64), spec: &AxisSpec, anchor: f6
         };
     }
 
-    let (nice_min, nice_max) = nice_range(lo, hi, spec.tick_count);
+    let (nice_min, nice_max) = nice_range(lo, hi, AUTOMATIC_TICK_TARGET);
     let pad = relative_padding(nice_min, nice_max);
     if lo >= anchor {
         (anchor, pad_up(nice_max.max(hi), pad))
@@ -129,14 +131,161 @@ fn broaden_nice_range(range: (f64, f64), target_ticks: usize, margin_fraction: f
     }
 }
 
-pub(super) fn numeric_ticks(range: (f64, f64), spec: &AxisSpec) -> Vec<AxisTick> {
-    let positions = nice_ticks(range.0, range.1, spec.tick_count);
-    let labels = distinct_tick_labels(&positions);
-    positions
+pub(crate) fn automatic_numeric_ticks(
+    range: (f64, f64),
+    projection: &Projection,
+    side: AxisSide,
+    tick_font_size: u32,
+) -> Vec<AxisTick> {
+    let mut best: Option<Vec<AxisTick>> = None;
+
+    for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
+        let positions = nice_ticks(range.0, range.1, target);
+        if positions.len() < 2 {
+            continue;
+        }
+        let labels = distinct_tick_labels(&positions);
+        let ticks = positions
+            .into_iter()
+            .zip(labels)
+            .map(|(position, label)| AxisTick::new(position, label))
+            .collect::<Vec<_>>();
+        if ticks.len() > AUTOMATIC_TICK_TARGET {
+            continue;
+        }
+        if !automatic_tick_labels_fit(&ticks, projection, side, tick_font_size) {
+            continue;
+        }
+        if best
+            .as_ref()
+            .is_none_or(|current| ticks.len() > current.len())
+        {
+            best = Some(ticks);
+        }
+    }
+
+    best.unwrap_or_else(|| {
+        let midpoint = finite_midpoint(range);
+        vec![AxisTick::new(midpoint, format_tick(midpoint))]
+    })
+}
+
+pub(crate) fn fit_automatic_tick_candidates(
+    ticks: Vec<AxisTick>,
+    projection: &Projection,
+    side: AxisSide,
+    tick_font_size: u32,
+    fallback: AxisTick,
+) -> Vec<AxisTick> {
+    if !ticks.is_empty()
+        && ticks.len() <= AUTOMATIC_TICK_TARGET
+        && automatic_tick_labels_fit(&ticks, projection, side, tick_font_size)
+    {
+        return ticks;
+    }
+
+    for desired in (2..=ticks.len().min(AUTOMATIC_TICK_TARGET)).rev() {
+        let last = ticks.len() - 1;
+        let denominator = desired - 1;
+        let candidate = (0..desired)
+            .map(|index| {
+                let numerator = index * last;
+                let source = (numerator + denominator / 2) / denominator;
+                ticks[source].clone()
+            })
+            .collect::<Vec<_>>();
+        if automatic_tick_labels_fit(&candidate, projection, side, tick_font_size) {
+            return candidate;
+        }
+    }
+
+    vec![fallback]
+}
+
+pub(crate) fn retain_automatic_ticks_inside_panel(
+    ticks: Vec<AxisTick>,
+    projection: &Projection,
+    side: AxisSide,
+    tick_font_size: u32,
+) -> Vec<AxisTick> {
+    let (x0, x1, y0, y1) = projection.pixel_box();
+    let bounds = match side {
+        AxisSide::Bottom => (x0, x1),
+        AxisSide::Left => (y0, y1),
+    };
+    let retained = ticks
         .into_iter()
-        .zip(labels)
-        .map(|(position, label)| AxisTick::new(position, label))
+        .filter(|tick| {
+            projected_tick_extent(tick, projection, side, tick_font_size)
+                .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
+        })
+        .collect::<Vec<_>>();
+    if !retained.is_empty() {
+        return retained;
+    }
+
+    let range = match side {
+        AxisSide::Bottom => projection.x_range(),
+        AxisSide::Left => projection.y_range(),
+    };
+    let midpoint = finite_midpoint(range);
+    let fallback = AxisTick::new(midpoint, format_tick(midpoint));
+    projected_tick_extent(&fallback, projection, side, tick_font_size)
+        .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
+        .then_some(fallback)
+        .into_iter()
         .collect()
+}
+
+fn automatic_tick_labels_fit(
+    ticks: &[AxisTick],
+    projection: &Projection,
+    side: AxisSide,
+    tick_font_size: u32,
+) -> bool {
+    let mut previous_end = None;
+
+    ticks.iter().all(|tick| {
+        let Some((start, end)) = projected_tick_extent(tick, projection, side, tick_font_size)
+        else {
+            return false;
+        };
+        let fits = previous_end.is_none_or(|previous| start >= previous);
+        previous_end = Some(end);
+        fits
+    })
+}
+
+fn projected_tick_extent(
+    tick: &AxisTick,
+    projection: &Projection,
+    side: AxisSide,
+    tick_font_size: u32,
+) -> Option<(f64, f64)> {
+    let center = match side {
+        AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
+        AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
+    }
+    .round();
+    let half_extent = match side {
+        AxisSide::Bottom => deterministic_text_width(&tick.label, f64::from(tick_font_size)) / 2.0,
+        AxisSide::Left => measured_text_line_height(tick_font_size) / 2.0,
+    };
+    (center.is_finite() && half_extent.is_finite())
+        .then_some((center - half_extent, center + half_extent))
+}
+
+fn finite_midpoint(range: (f64, f64)) -> f64 {
+    let midpoint = f64::midpoint(range.0, range.1);
+    if midpoint.is_finite() {
+        midpoint
+    } else if range.0.is_finite() {
+        range.0
+    } else if range.1.is_finite() {
+        range.1
+    } else {
+        0.0
+    }
 }
 
 pub(super) fn distinct_tick_labels(positions: &[f64]) -> Vec<String> {

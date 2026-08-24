@@ -279,9 +279,7 @@ fn density_explicit_limits_clip_full_sample_kde() {
     let output = dir.join("density.svg");
     let chart = Plot::density(data::numeric(&df, "value"))
         .x_limits(1.0, 2.0)
-        .y_limits(0.0, 0.5)
-        .x_tick_count(2)
-        .y_tick_count(2);
+        .y_limits(0.0, 0.5);
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -301,8 +299,6 @@ fn density_explicit_limits_clip_full_sample_kde() {
             && bounds.x + bounds.width <= panel.x + panel.width + 1.0
             && bounds.y + bounds.height <= panel.y + panel.height + 1.0
     }));
-    assert!(svg.contains(">1</text>") && svg.contains(">2</text>"));
-    assert!(svg.contains(">0</text>") && svg.contains(">0.5</text>"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -423,17 +419,13 @@ fn qq_explicit_limits_clip_points_and_reference_line() {
     let output = dir.join("qq.svg");
     let chart = Plot::qq(data::numeric(&df, "value"))
         .x_limits(-0.5, 0.5)
-        .y_limits(2.0, 4.0)
-        .x_tick_count(2)
-        .y_tick_count(2);
+        .y_limits(2.0, 4.0);
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert!(svg.contains("<g clip-path=\"url(#clip-0)\">"));
     assert!(svg.matches("<circle ").count() < 5);
-    assert!(svg.contains(">-0.5</text>") && svg.contains(">0.5</text>"));
-    assert!(svg.contains(">2</text>") && svg.contains(">4</text>"));
     std::fs::remove_dir_all(dir).unwrap();
 }
 

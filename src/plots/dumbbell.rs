@@ -115,7 +115,7 @@ fn prepare<'a>(
     let data = data.into();
     if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
-            "dumbbell: categorical y-axis limits and tick-count overrides are not supported".into(),
+            "dumbbell: categorical y-axis limits are not supported".into(),
         ));
     }
     if chart.hue_col().is_some() || chart.color_col().is_some() {

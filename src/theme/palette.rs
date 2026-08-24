@@ -7,6 +7,9 @@
 
 #![deny(missing_docs)]
 
+/// Built-in axis tick-label font size in points.
+pub(crate) const TICK_FONT_SIZE: u32 = 16;
+
 macro_rules! define_themes {
     ($($variant:ident => ($documentation:literal, $palette:ident)),+ $(,)?) => {
         /// Predefined publication themes with hardcoded journal/venue palettes.
@@ -166,7 +169,7 @@ fn publication_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 16,
+        tick_font_size: TICK_FONT_SIZE,
         detail_font_size: 14,
         label_font_size: 17,
         title_font_size: 20,
@@ -205,7 +208,7 @@ fn nature_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 16,
+        tick_font_size: TICK_FONT_SIZE,
         detail_font_size: 14,
         label_font_size: 16,
         title_font_size: 19,
@@ -244,7 +247,7 @@ fn science_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 16,
+        tick_font_size: TICK_FONT_SIZE,
         detail_font_size: 14,
         label_font_size: 17,
         title_font_size: 21,
@@ -283,7 +286,7 @@ fn chi_palette() -> ThemePalette {
         show_subtitle: true,
         show_caption: true,
         tick_length: 5,
-        tick_font_size: 16,
+        tick_font_size: TICK_FONT_SIZE,
         detail_font_size: 14,
         label_font_size: 17,
         title_font_size: 19,
@@ -352,7 +355,7 @@ mod tests {
         assert!(Theme::ALL
             .iter()
             .copied()
-            .all(|theme| theme.palette().tick_font_size == 16));
+            .all(|theme| theme.palette().tick_font_size == TICK_FONT_SIZE));
     }
 
     #[test]

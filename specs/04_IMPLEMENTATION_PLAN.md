@@ -296,7 +296,12 @@ independent review, and `just verify` passed on 2026-08-25.
 
 ## Final API Phase A6: Tick Surface
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused layout, lines, estimates, distributions, and
+marginal-matrix tests, compile-fail doctests, both Clippy feature
+configurations, independent contract and numeric-edge reviews, and `just
+verify` passed on 2026-08-25.
 
 - Retain root `AxisTick` and exact `.x_ticks` / `.y_ticks` replacement.
 - Remove `.x_tick_count` and `.y_tick_count`.

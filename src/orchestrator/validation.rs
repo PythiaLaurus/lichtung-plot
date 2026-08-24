@@ -657,12 +657,6 @@ impl Plot {
                 "trajectory: categorical condition x does not support numeric x limits".into(),
             ));
         }
-        if self.x_tick_count_overridden() {
-            return Err(Error::Data(
-                "trajectory: categorical condition x does not support numeric x tick-count overrides"
-                    .into(),
-            ));
-        }
         Ok(())
     }
 

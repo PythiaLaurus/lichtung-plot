@@ -17,7 +17,6 @@ impl Default for AxisSpec {
         Self {
             scale: Scale::Linear,
             limits: None,
-            tick_count: 5,
         }
     }
 }
@@ -29,13 +28,6 @@ impl AxisSpec {
     #[must_use]
     pub fn limits(mut self, min: f64, max: f64) -> Self {
         self.limits = Some((min, max));
-        self
-    }
-
-    /// Return a copy of this spec with an auto tick target.
-    #[must_use]
-    pub fn tick_count(mut self, count: usize) -> Self {
-        self.tick_count = count.max(1);
         self
     }
 

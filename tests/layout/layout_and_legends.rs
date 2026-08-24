@@ -15,9 +15,9 @@ fn fixture_scatter() -> Plot<lichtung_plot::kind::Scatter> {
 }
 
 #[test]
-fn layout_respects_explicit_limits_and_tick_count() {
-    let x_spec = AxisSpec::default().limits(0.0, 10.0).tick_count(3);
-    let y_spec = AxisSpec::default().limits(-1.0, 1.0).tick_count(5);
+fn layout_respects_explicit_limits_with_automatic_ticks() {
+    let x_spec = AxisSpec::default().limits(0.0, 10.0);
+    let y_spec = AxisSpec::default().limits(-1.0, 1.0);
     let layout = Layout::new_with_axis_specs(
         (2.0, 3.0),
         (4.0, 5.0),
@@ -30,9 +30,17 @@ fn layout_respects_explicit_limits_and_tick_count() {
     );
     assert_eq!(layout.projection.x_range(), (0.0, 10.0));
     assert_eq!(layout.projection.y_range(), (-1.0, 1.0));
-    assert_eq!(layout.x_axis.ticks.len(), 3);
-    assert!((layout.x_axis.ticks[0].position - 0.0).abs() < f64::EPSILON);
-    assert!((layout.x_axis.ticks[2].position - 10.0).abs() < f64::EPSILON);
+    assert!(!layout.x_axis.ticks.is_empty());
+    assert!(layout
+        .x_axis
+        .ticks
+        .iter()
+        .all(|tick| (0.0..=10.0).contains(&tick.position)));
+    assert!(layout
+        .y_axis
+        .ticks
+        .iter()
+        .all(|tick| (-1.0..=1.0).contains(&tick.position)));
 }
 
 #[test]

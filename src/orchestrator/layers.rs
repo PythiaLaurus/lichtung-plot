@@ -4,7 +4,7 @@ use crate::Error;
 
 use crate::layout::{AxisSide, AxisTick};
 use crate::render::backend::{with_clip, Backend, Point2D};
-use crate::spec::{PlotKind, PlotRenderResult};
+use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
 use crate::{GuideSpec, Plot};
 
 const MAX_EXPLICIT_TICKS: usize = 10_000;
@@ -34,17 +34,6 @@ impl Plot {
                 "{kind:?}: explicit numeric y ticks require a numeric y axis"
             )));
         }
-        if self.explicit_x_ticks().is_some() && self.x_tick_count_overridden() {
-            return Err(Error::Data(
-                "explicit numeric x ticks cannot be combined with x_tick_count".into(),
-            ));
-        }
-        if self.explicit_y_ticks().is_some() && self.y_tick_count_overridden() {
-            return Err(Error::Data(
-                "explicit numeric y ticks cannot be combined with y_tick_count".into(),
-            ));
-        }
-
         for guide in self.guides() {
             match guide {
                 GuideSpec::Horizontal { .. } if !numeric_y => {
@@ -89,8 +78,9 @@ pub(crate) fn apply(
 ) -> Result<(), Error> {
     let projection = &result.layout.projection;
     if let Some(ticks) = chart.explicit_x_ticks() {
-        validate_ticks(ticks, projection.x_range(), "x-axis")?;
-        result.layout.x_axis.ticks = ticks.to_vec();
+        let ticks = projected_x_ticks(chart, ticks)?;
+        validate_ticks(&ticks, projection.x_range(), "x-axis")?;
+        result.layout.x_axis.ticks = ticks;
         result.layout.x_axis.validate_explicit_tick_collisions(
             projection,
             AxisSide::Bottom,
@@ -126,6 +116,25 @@ pub(crate) fn apply(
         }
         Ok(())
     })
+}
+
+fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
+    if chart.axis_scale_spec() == AxisScale::Linear {
+        return Ok(ticks.to_vec());
+    }
+    ticks
+        .iter()
+        .enumerate()
+        .map(|(index, tick)| {
+            if tick.position <= 0.0 {
+                return Err(Error::Data(format!(
+                    "x-axis explicit tick {index} position must be strictly positive on a logarithmic scale; got {}",
+                    tick.position
+                )));
+            }
+            Ok(AxisTick::new(tick.position.log10(), tick.label.clone()))
+        })
+        .collect()
 }
 
 fn validate_ticks(ticks: &[AxisTick], range: (f64, f64), axis: &str) -> Result<(), Error> {

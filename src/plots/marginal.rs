@@ -113,28 +113,45 @@ pub(crate) fn render(
     let (y_low, y_high) = y_display_range;
 
     // --- Build Layout for the central scatter ---
+    let projection = crate::layout::Projection::new(
+        (x_low, x_high),
+        (y_low, y_high),
+        (central_x0, central_x1, central_y0, central_y1),
+    );
+    let x_ticks = chart.explicit_x_ticks().map_or_else(
+        || {
+            layout::automatic_numeric_ticks(
+                (x_low, x_high),
+                &projection,
+                crate::layout::AxisSide::Bottom,
+                palette.tick_font_size,
+            )
+        },
+        <[crate::layout::AxisTick]>::to_vec,
+    );
+    let y_ticks = chart.explicit_y_ticks().map_or_else(
+        || {
+            layout::automatic_numeric_ticks(
+                (y_low, y_high),
+                &projection,
+                crate::layout::AxisSide::Left,
+                palette.tick_font_size,
+            )
+        },
+        <[crate::layout::AxisTick]>::to_vec,
+    );
     let layout = Layout {
-        projection: crate::layout::Projection::new(
-            (x_low, x_high),
-            (y_low, y_high),
-            (central_x0, central_x1, central_y0, central_y1),
-        ),
+        projection,
         frame: crate::layout::Frame,
         grid: crate::layout::Grid,
         x_axis: crate::layout::Axis {
             label: chart.x_label_text().unwrap_or("").to_string(),
-            ticks: layout::nice_ticks(x_low, x_high, chart.x_axis_spec().tick_count)
-                .into_iter()
-                .map(|p| crate::layout::AxisTick::new(p, layout::format_tick(p)))
-                .collect(),
+            ticks: x_ticks,
             log_scale: false,
         },
         y_axis: crate::layout::Axis {
             label: chart.y_label_text().unwrap_or("").to_string(),
-            ticks: layout::nice_ticks(y_low, y_high, chart.y_axis_spec().tick_count)
-                .into_iter()
-                .map(|p| crate::layout::AxisTick::new(p, layout::format_tick(p)))
-                .collect(),
+            ticks: y_ticks,
             log_scale: false,
         },
     };

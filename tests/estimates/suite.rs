@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    AxisScale, Bounds, CategoryOrder, CoefficientInput, FacetScales, FacetSpec, NumericLabelFormat,
-    Plot, Significance, SignificanceMark, ValueSort,
+    AxisScale, AxisTick, Bounds, CategoryOrder, CoefficientInput, FacetScales, FacetSpec,
+    NumericLabelFormat, Plot, Significance, SignificanceMark, ValueSort,
 };
 
 #[path = "../support/data.rs"]

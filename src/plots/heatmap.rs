@@ -322,7 +322,7 @@ fn prepare<'a>(
 fn validate_options(chart: &Plot) -> Result<(), Error> {
     if chart.x_axis_spec() != &AxisSpec::default() || chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
-            "heatmap: categorical axis limits and tick-count overrides are not supported".into(),
+            "heatmap: categorical axis limits are not supported".into(),
         ));
     }
     if let Some(hue_col) = chart.hue_col() {

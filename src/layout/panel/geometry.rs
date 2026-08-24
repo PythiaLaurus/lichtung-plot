@@ -1,20 +1,21 @@
 use crate::Error;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::range_ticks::{numeric_ticks, resolve_range};
-use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Layout, Projection};
-use crate::layout::PanelBox;
+use super::range_ticks::resolve_range;
+use super::{
+    automatic_numeric_ticks, Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Layout, Projection,
+};
+use crate::layout::{PanelBox, TextBlock};
 use crate::render::backend::Backend;
-use crate::theme::ThemePalette;
+use crate::theme::{ThemePalette, TICK_FONT_SIZE};
 
 const Y_AXIS_LABEL_EDGE_PADDING: f64 = 12.0;
 const Y_AXIS_LABEL_TICK_GAP: f64 = 16.0;
 
 impl Layout {
     /// Create a new layout for the given numeric data ranges
-    /// and canvas area. The x and y axis tick labels are
-    /// auto-generated from `nice_ticks(lo, hi, 5)` and formatted
-    /// with one decimal place.
+    /// and canvas area. Numeric tick density is selected automatically from the
+    /// resolved ranges, available panel space, and measured labels.
     pub fn new(
         x_range: (f64, f64),
         y_range: (f64, f64),
@@ -35,7 +36,7 @@ impl Layout {
         )
     }
 
-    /// Create a new layout using explicit axis specs for limits and tick counts.
+    /// Create a new layout using explicit axis specs for limits.
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn new_with_axis_specs(
@@ -72,25 +73,36 @@ impl Layout {
 
         let x_range = resolve_range(x_range, x_spec);
         let y_range = resolve_range(y_range, y_spec);
+        let projection = Projection {
+            x_range,
+            y_range,
+            pixel_box,
+        };
 
         Self {
-            projection: Projection {
-                x_range,
-                y_range,
-                pixel_box,
-            },
-            frame: Frame,
-            grid: Grid,
             x_axis: Axis {
                 label: x_label,
-                ticks: numeric_ticks(x_range, x_spec),
+                ticks: automatic_numeric_ticks(
+                    x_range,
+                    &projection,
+                    AxisSide::Bottom,
+                    TICK_FONT_SIZE,
+                ),
                 log_scale: false,
             },
             y_axis: Axis {
                 label: y_label,
-                ticks: numeric_ticks(y_range, y_spec),
+                ticks: automatic_numeric_ticks(
+                    y_range,
+                    &projection,
+                    AxisSide::Left,
+                    TICK_FONT_SIZE,
+                ),
                 log_scale: false,
             },
+            projection,
+            frame: Frame,
+            grid: Grid,
         }
     }
 
@@ -182,25 +194,26 @@ impl Layout {
         } else {
             y_range
         };
+        let projection = Projection {
+            x_range,
+            y_range,
+            pixel_box,
+        };
 
         // Auto-generate numeric ticks when none were provided.
         let x_ticks = if x_ticks.is_empty() {
-            numeric_ticks(x_range, x_spec)
+            automatic_numeric_ticks(x_range, &projection, AxisSide::Bottom, TICK_FONT_SIZE)
         } else {
             x_ticks
         };
         let y_ticks = if y_ticks.is_empty() {
-            numeric_ticks(y_range, y_spec)
+            automatic_numeric_ticks(y_range, &projection, AxisSide::Left, TICK_FONT_SIZE)
         } else {
             y_ticks
         };
 
         Self {
-            projection: Projection {
-                x_range,
-                y_range,
-                pixel_box,
-            },
+            projection,
             frame: Frame,
             grid: Grid,
             x_axis: Axis {
@@ -317,6 +330,10 @@ fn character_width_em(character: char) -> f64 {
         'm' | 'w' | 'M' | 'W' | '@' | '%' => 0.85,
         _ => 0.60,
     }
+}
+
+pub(super) fn measured_text_line_height(font_size: u32) -> f64 {
+    TextBlock::unwrapped("", font_size).line_height()
 }
 
 pub(super) fn y_axis_label_half_width(font_size: u32) -> f64 {

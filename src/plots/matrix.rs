@@ -260,8 +260,35 @@ pub(crate) fn render(
             // --- X-axis ticks ---
             {
                 let (x_lo, x_hi) = variable_ranges[col];
-                let ticks = layout::nice_ticks(x_lo, x_hi, 4);
-                for &tv in &ticks {
+                let projection = crate::layout::Projection::new(
+                    (x_lo, x_hi),
+                    variable_ranges[row],
+                    (x0, x1, y0, y1),
+                );
+                let ticks = layout::automatic_numeric_ticks(
+                    (x_lo, x_hi),
+                    &projection,
+                    crate::layout::AxisSide::Bottom,
+                    palette.tick_font_size,
+                );
+                let ticks = if row == n - 1 {
+                    layout::retain_automatic_ticks_inside_panel(
+                        ticks,
+                        &projection,
+                        crate::layout::AxisSide::Bottom,
+                        palette.tick_font_size,
+                    )
+                } else {
+                    ticks
+                };
+                if row == n - 1 && ticks.is_empty() {
+                    return Err(Error::Render(
+                        "matrix x-axis tick labels do not fit within their cells; increase chart width or reduce the variable count"
+                            .into(),
+                    ));
+                }
+                for tick in &ticks {
+                    let tv = tick.position;
                     let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
                     let px = x0 + t * cell_w;
                     // Tick mark on every cell
@@ -276,7 +303,7 @@ pub(crate) fn render(
                         backend.draw_text(
                             px.round() as u32,
                             (y0 - tick_len - 8.0).round() as u32,
-                            &layout::format_tick(tv),
+                            &tick.label,
                             &tick_text_style,
                         )?;
                     }
@@ -299,12 +326,39 @@ pub(crate) fn render(
             // --- Y-axis ticks ---
             {
                 let (y_lo, y_hi) = variable_ranges[row];
-                let ticks = layout::nice_ticks(y_lo, y_hi, 6);
+                let projection = crate::layout::Projection::new(
+                    variable_ranges[col],
+                    (y_lo, y_hi),
+                    (x0, x1, y0, y1),
+                );
+                let ticks = layout::automatic_numeric_ticks(
+                    (y_lo, y_hi),
+                    &projection,
+                    crate::layout::AxisSide::Left,
+                    palette.tick_font_size,
+                );
+                let ticks = if col == 0 {
+                    layout::retain_automatic_ticks_inside_panel(
+                        ticks,
+                        &projection,
+                        crate::layout::AxisSide::Left,
+                        palette.tick_font_size,
+                    )
+                } else {
+                    ticks
+                };
+                if col == 0 && ticks.is_empty() {
+                    return Err(Error::Render(
+                        "matrix y-axis tick labels do not fit within their cells; increase chart height or reduce the variable count"
+                            .into(),
+                    ));
+                }
                 let y_tick_text = TextStyle {
                     anchor: TextAnchor::End,
                     ..tick_text_style.clone()
                 };
-                for &tv in &ticks {
+                for tick in &ticks {
+                    let tv = tick.position;
                     let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
                     let py = y0 + t * cell_h;
                     // Tick mark on every cell
@@ -319,7 +373,7 @@ pub(crate) fn render(
                         backend.draw_text(
                             (x0 - tick_len - 4.0).max(0.0).round() as u32,
                             py.round() as u32,
-                            &layout::format_tick(tv),
+                            &tick.label,
                             &y_tick_text,
                         )?;
                     }
