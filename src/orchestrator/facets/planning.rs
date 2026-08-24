@@ -9,7 +9,7 @@ use crate::decorations::plan::{LegendRole, PanelPlan, ResolvedLegend};
 use crate::layout::figure::{allocate_composed_grid, PanelRequirements};
 use crate::layout::{FigureLayout, FigureLayoutSpec, PanelBox, TextBlock};
 use crate::render::backend::Backend;
-use crate::spec::{DecorationMode, PlotKind, PlotRenderContext};
+use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ThemePalette;
 
 pub(super) fn figure_layout(
@@ -157,10 +157,11 @@ pub(super) fn layout_panels(
     kind: PlotKind,
     panels: &mut [FacetPanel],
     outer: PanelBox,
-    rows: usize,
-    columns: usize,
+    shape: (usize, usize),
+    facet_scales: FacetScales,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
+    let (rows, columns) = shape;
     let provisional = allocate_composed_grid(outer, rows, columns, &[], "facet layout")?;
     let mut measured = Vec::with_capacity(panels.len());
     for facet in panels.iter() {
@@ -173,7 +174,8 @@ pub(super) fn layout_panels(
             PlotRenderContext::new(
                 crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                 provisional[facet.row * columns + facet.column],
-            ),
+            )
+            .with_facet_scales(facet_scales),
             backend,
         )?;
         let label = facet_label(&panel_chart, &facet.cell);
@@ -215,9 +217,10 @@ pub(super) fn plan_panels(
     panels: &[FacetPanel],
     outside_legend: Option<ResolvedLegend>,
     legend_entries: &[crate::decorations::legend::LegendEntry],
-    fix_x: bool,
-    fix_y: bool,
+    facet_scales: FacetScales,
 ) -> Result<(Plot, Vec<PanelPlan>), Error> {
+    let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
+    let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
     let mut final_plans = Vec::new();
     for _ in 0..2 {
         final_plans = Vec::with_capacity(panels.len());
@@ -232,13 +235,16 @@ pub(super) fn plan_panels(
             } else {
                 LegendRole::Suppressed
             };
-            let plan = crate::decorations::plan::plan_panel_with_data(
+            let context = PlotRenderContext::new(
+                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                facet.panel,
+            )
+            .with_facet_scales(facet_scales);
+            let plan = crate::decorations::plan::plan_panel_with_context(
                 &panel_chart,
                 kind,
-                facet.panel,
                 role,
-                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
-                None,
+                context,
                 (role == LegendRole::Panel).then_some(legend_entries),
             )?;
             if plan.result.decoration_mode == DecorationMode::SelfManaged {

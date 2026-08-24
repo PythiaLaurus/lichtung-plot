@@ -34,7 +34,7 @@ pub(crate) fn render(
     let facet_fallback = if x_data_range.is_none() && chart.x_axis_spec().limits.is_none() {
         crate::plots::interval_estimate::fixed_facet_estimate_tuples(
             chart,
-            context.data,
+            context,
             "point_interval",
             true,
         )?

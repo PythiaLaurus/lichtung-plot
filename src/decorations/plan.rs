@@ -108,7 +108,11 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
 ) -> Result<PanelPlan, Error> {
     let chart = chart.clone().erase();
     let source_rows = chart.configured_source_rows()?;
-    plan_panel_with_data(&chart, kind, cell, role, chart.data(), source_rows, None)
+    let context = source_rows.map_or_else(
+        || PlotRenderContext::new(chart.data(), cell),
+        |rows| PlotRenderContext::with_source_rows(chart.data(), rows, cell),
+    );
+    plan_panel_with_context(&chart, kind, role, context, None)
 }
 
 #[expect(
@@ -116,29 +120,21 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
     clippy::similar_names,
     reason = "the two-pass panel lifecycle keeps discovery, reservation, collision resolution, and frozen output together"
 )]
-pub(crate) fn plan_panel_with_data(
+pub(crate) fn plan_panel_with_context(
     chart: &Plot,
     kind: PlotKind,
-    cell: PanelBox,
     role: LegendRole,
-    data: crate::data::PlotData<'_>,
-    source_rows: Option<&[usize]>,
+    context: PlotRenderContext<'_>,
     legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
 ) -> Result<PanelPlan, Error> {
+    let cell = context.panel;
     let legend_default = kind.legend_default(chart.user_y_limits().is_some());
     let mut planning_chart = match role {
         LegendRole::Panel => chart.clone(),
         LegendRole::Suppressed => chart.clone().with_suppressed_legend(),
     };
     let mut discovery = GeometryBackend::default();
-    let mut discovered = render(
-        &planning_chart,
-        kind,
-        cell,
-        data,
-        source_rows,
-        &mut discovery,
-    )?;
+    let mut discovered = render(&planning_chart, kind, context, &mut discovery)?;
     if let Some(entries) = legend_entries {
         discovered.legend_entries = entries.to_vec();
     }
@@ -168,9 +164,7 @@ pub(crate) fn plan_panel_with_data(
         render(
             &planning_chart,
             kind,
-            panel,
-            data,
-            source_rows,
+            context.with_panel(panel),
             &mut geometry,
         )?
     };
@@ -297,9 +291,7 @@ pub(crate) fn plan_panel_with_data(
         result = render(
             &planning_chart,
             kind,
-            panel,
-            data,
-            source_rows,
+            context.with_panel(panel),
             &mut geometry,
         )?;
         record_brackets(&planning_chart, &result, &mut geometry)?;
@@ -724,15 +716,9 @@ fn bar_expansion_moves_zero_anchor(
 fn render(
     chart: &Plot,
     kind: PlotKind,
-    panel: PanelBox,
-    data: crate::data::PlotData<'_>,
-    source_rows: Option<&[usize]>,
+    context: PlotRenderContext<'_>,
     backend: &mut GeometryBackend,
 ) -> Result<PlotRenderResult, Error> {
-    let context = source_rows.map_or_else(
-        || PlotRenderContext::new(data, panel),
-        |rows| PlotRenderContext::with_source_rows(data, rows, panel),
-    );
     chart.render_panel(kind, context, backend)
 }
 

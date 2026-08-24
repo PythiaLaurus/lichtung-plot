@@ -71,9 +71,7 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let result = render(
         &final_chart,
         PlotKind::Line,
-        plan.panel,
-        crate::data::PlotData::new(&final_chart),
-        None,
+        PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
         &mut geometry,
     )
     .unwrap();
@@ -283,9 +281,7 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     let initial = render(
         &chart,
         PlotKind::HorizontalBar,
-        cell,
-        crate::data::PlotData::new(&chart),
-        None,
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
         &mut initial_geometry,
     )
     .unwrap();
@@ -318,9 +314,7 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     let final_result = render(
         &final_chart,
         PlotKind::HorizontalBar,
-        plan.panel,
-        crate::data::PlotData::new(&final_chart),
-        None,
+        PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
         &mut final_geometry,
     )
     .unwrap();
@@ -422,9 +416,7 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     let mut result = render(
         &chart,
         PlotKind::HorizontalBar,
-        cell,
-        crate::data::PlotData::new(&chart),
-        None,
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
         &mut geometry,
     )
     .unwrap();

@@ -161,7 +161,10 @@ Acceptance:
 
 ## Correctness Phase C5: Facet Scale Context
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused `estimates` and panel-planning tests plus `just verify`
+passed on 2026-08-25.
 
 Carry the originating `FacetScales` through private panel render context after
 the layout itself is removed. Do not store a second public facet representation

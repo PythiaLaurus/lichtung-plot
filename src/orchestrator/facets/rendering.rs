@@ -49,7 +49,8 @@ pub(super) fn render_scene(
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
             plan.panel,
-        );
+        )
+        .with_facet_scales(source.facet_scales_spec());
         plan.chart_for_render(&panel_chart)
             .render_panel(kind, context, backend)?;
         if !plan.result.significance_brackets.is_empty() {

@@ -56,18 +56,13 @@ impl Plot {
         )?;
         let mut panels = data::extract_panels(self, &selectors, &provisional)?;
         data::validate_significance_facet_anchors(self, &panels)?;
+        let facet_scales = self.facet_scales_spec();
 
         let mut null_backend = NullBackend;
         let (base, preflight) =
             legend::preflight_coordinated_panels(self, base, kind, &panels, &mut null_backend)?;
-        let fix_x = matches!(
-            self.facet_scales_spec(),
-            FacetScales::Fixed | FacetScales::FreeY
-        );
-        let fix_y = matches!(
-            self.facet_scales_spec(),
-            FacetScales::Fixed | FacetScales::FreeX
-        );
+        let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
+        let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
         let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
         let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
         let shared = base.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
@@ -93,8 +88,8 @@ impl Plot {
             kind,
             &mut panels,
             outer,
-            selectors.rows,
-            selectors.columns,
+            (selectors.rows, selectors.columns),
+            facet_scales,
             &mut null_backend,
         )?;
         let shared = shared.with_measured_axis_text();
@@ -104,8 +99,7 @@ impl Plot {
             &panels,
             outside_legend,
             &legend_entries,
-            fix_x,
-            fix_y,
+            facet_scales,
         )?;
         rendering::render_scene(
             self,

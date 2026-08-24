@@ -158,14 +158,14 @@ pub(crate) fn estimate_data_range(estimates: &[Option<EstimateTuple>]) -> Option
 
 pub(crate) fn fixed_facet_estimate_tuples(
     chart: &Plot,
-    panel_data: crate::data::PlotData<'_>,
+    context: PlotRenderContext<'_>,
     family: &str,
     require_intervals: bool,
 ) -> Result<Option<Vec<Option<EstimateTuple>>>, Error> {
-    if panel_data.is_full_plot()
+    if context.data.is_full_plot()
         || !matches!(
-            chart.facet_scales_spec(),
-            FacetScales::Fixed | FacetScales::FreeY
+            context.facet_scales(),
+            Some(FacetScales::Fixed | FacetScales::FreeY)
         )
     {
         return Ok(None);
@@ -377,7 +377,7 @@ pub(crate) fn render(
             .transpose()?;
     }
     let facet_fallback = if data_range.is_none() && transformed_x_spec.limits.is_none() {
-        fixed_facet_estimate_tuples(chart, context.data, family, require_intervals)?
+        fixed_facet_estimate_tuples(chart, context, family, require_intervals)?
             .map(|estimates| {
                 estimates
                     .into_iter()

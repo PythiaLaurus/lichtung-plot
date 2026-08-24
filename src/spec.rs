@@ -672,11 +672,16 @@ pub(crate) enum LegendClearance {
 pub(crate) struct PlotRenderContext<'a> {
     pub(crate) data: crate::data::PlotData<'a>,
     pub(crate) panel: PanelBox,
+    facet_scales: Option<FacetScales>,
 }
 
 impl<'a> PlotRenderContext<'a> {
     pub(crate) const fn new(data: crate::data::PlotData<'a>, panel: PanelBox) -> Self {
-        Self { data, panel }
+        Self {
+            data,
+            panel,
+            facet_scales: None,
+        }
     }
 
     pub(crate) fn with_source_rows(
@@ -687,7 +692,22 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
+            facet_scales: None,
         }
+    }
+
+    pub(crate) const fn with_facet_scales(mut self, facet_scales: FacetScales) -> Self {
+        self.facet_scales = Some(facet_scales);
+        self
+    }
+
+    pub(crate) const fn with_panel(mut self, panel: PanelBox) -> Self {
+        self.panel = panel;
+        self
+    }
+
+    pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
+        self.facet_scales
     }
 }
 

@@ -32,6 +32,17 @@ fn all_unavailable_facet_data() -> DataFrame {
     .unwrap()
 }
 
+fn estimated_sibling_facet_data() -> DataFrame {
+    df!(
+        "panel" => ["estimated", "estimated", "unavailable", "unavailable"],
+        "term" => ["first", "second", "first", "second"],
+        "estimate" => [Some(10.0_f64), Some(20.0), None, None],
+        "lower" => [Some(9.0_f64), Some(18.0), None, None],
+        "upper" => [Some(12.0_f64), Some(23.0), None, None],
+    )
+    .unwrap()
+}
+
 fn with_status<K: lichtung_plot::kind::Marker + lichtung_plot::kind::EstimateStatus>(
     plot: Plot<K>,
     frame: &DataFrame,
@@ -92,6 +103,34 @@ fn forest(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::Forest> 
         status,
     )
     .size(480, 300)
+}
+
+fn faceted_estimate_plots(
+    frame: &DataFrame,
+    scales: FacetScales,
+    limits: Option<(f64, f64)>,
+) -> [(&'static str, Plot); 3] {
+    let facet = || FacetSpec::column(data::category(frame, "panel")).scales(scales);
+    let point = point_interval(frame, true).facet(facet()).size(960, 300);
+    let coefficient = coefficient(frame, true).facet(facet()).size(960, 300);
+    let forest = forest(frame, true).facet(facet()).size(960, 300);
+    let point = match limits {
+        Some((lower, upper)) => point.x_limits(lower, upper),
+        None => point,
+    };
+    let coefficient = match limits {
+        Some((lower, upper)) => coefficient.x_limits(lower, upper),
+        None => coefficient,
+    };
+    let forest = match limits {
+        Some((lower, upper)) => forest.x_limits(lower, upper),
+        None => forest,
+    };
+    [
+        ("point", point.erase()),
+        ("coefficient", coefficient.erase()),
+        ("forest", forest.erase()),
+    ]
 }
 
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
@@ -292,60 +331,66 @@ fn estimate_status_rows_accept_explicit_category_order() {
 }
 
 #[test]
-fn fixed_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
-    let frame = df!(
-        "panel" => ["estimated", "estimated", "unavailable", "unavailable"],
-        "term" => ["first", "second", "first", "second"],
-        "estimate" => [Some(10.0_f64), Some(20.0), None, None],
-        "lower" => [Some(9.0_f64), Some(18.0), None, None],
-        "upper" => [Some(12.0_f64), Some(23.0), None, None],
-    )
-    .unwrap();
-    for (plot, name) in [
-        (
-            point_interval(&frame, true)
-                .facet(FacetSpec::column(data::category(&frame, "panel")))
-                .size(960, 300)
-                .erase(),
-            "facet-point",
-        ),
-        (
-            coefficient(&frame, true)
-                .facet(FacetSpec::column(data::category(&frame, "panel")))
-                .size(960, 300)
-                .erase(),
-            "facet-coefficient",
-        ),
-        (
-            forest(&frame, true)
-                .facet(FacetSpec::column(data::category(&frame, "panel")))
-                .size(960, 300)
-                .erase(),
-            "facet-forest",
-        ),
-    ] {
-        let output = svg(plot, name);
-        assert_eq!(output.matches(">Not estimable</text>").count(), 2);
-        assert_eq!(output.matches("<circle ").count(), 2);
-        let first = text_ys(&output, "First");
-        let second = text_ys(&output, "Second");
-        assert_eq!((first.len(), second.len()), (2, 2));
-        assert!(first
-            .iter()
-            .zip(second)
-            .all(|(first, second)| first < &second));
+fn shared_x_facets_inherit_estimated_sibling_range_for_unavailable_panels() {
+    let frame = estimated_sibling_facet_data();
+    for scales in [FacetScales::Fixed, FacetScales::FreeY] {
+        for (family, plot) in faceted_estimate_plots(&frame, scales, None) {
+            let output = svg(plot, &format!("facet-{scales:?}-{family}"));
+            assert_eq!(output.matches(">Not estimable</text>").count(), 2);
+            assert_eq!(output.matches("<circle ").count(), 2);
+            let first = text_ys(&output, "First");
+            let second = text_ys(&output, "Second");
+            assert_eq!((first.len(), second.len()), (2, 2));
+            assert!(first
+                .iter()
+                .zip(second)
+                .all(|(first, second)| first < &second));
+        }
+    }
+}
+
+#[test]
+fn free_x_facets_require_explicit_limits_for_unavailable_panels() {
+    let frame = estimated_sibling_facet_data();
+    for scales in [FacetScales::FreeX, FacetScales::Free] {
+        for (family, plot) in faceted_estimate_plots(&frame, scales, None) {
+            let error = plot.preflight().unwrap_err().to_string();
+            assert!(
+                error.contains("all rows are not_estimable; set explicit x-axis limits"),
+                "{family} with {scales:?}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn explicit_limits_allow_unavailable_panels_with_free_x_scales() {
+    let frame = estimated_sibling_facet_data();
+    for scales in [FacetScales::FreeX, FacetScales::Free] {
+        for (family, plot) in faceted_estimate_plots(&frame, scales, Some((-5.0, 30.0))) {
+            let output = svg(plot, &format!("facet-explicit-{scales:?}-{family}"));
+            assert_eq!(output.matches(">Not estimable</text>").count(), 2);
+            assert_eq!(output.matches("<circle ").count(), 2);
+        }
     }
 }
 
 #[test]
 fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
     let frame = all_unavailable_facet_data();
-    assert!(point_interval(&frame, true)
-        .facet(FacetSpec::column(data::category(&frame, "panel")))
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("set explicit x-axis limits"));
+    for scales in [FacetScales::Fixed, FacetScales::FreeY] {
+        for (family, plot) in faceted_estimate_plots(&frame, scales, None) {
+            let error = plot.preflight().unwrap_err().to_string();
+            assert!(
+                error.contains("set explicit x-axis limits"),
+                "{family} with {scales:?}: {error}"
+            );
+        }
+    }
+    for (family, plot) in faceted_estimate_plots(&frame, FacetScales::FreeY, Some((-2.0, 2.0))) {
+        let output = svg(plot, &format!("all-unavailable-facets-{family}"));
+        assert_eq!(output.matches(">Not estimable</text>").count(), 4);
+    }
     let narrow = point_interval(&frame, true)
         .facet(FacetSpec::column(data::category(&frame, "panel")))
         .x_limits(-2.0, 2.0);
