@@ -122,24 +122,41 @@ fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
 }
 
 #[test]
-fn waterfall_derives_terminal_total() {
+fn waterfall_terminal_follows_ordered_cancellation() {
     let df = df!(
         "label" => ["a", "b"],
-        "delta" => [2.0_f64, -1.0]
+        "delta" => [-10_000_000_000_000_000.0_f64, 1.0]
     )
     .unwrap();
     let plot = Plot::waterfall(
         data::category(&df, "label"),
         data::numeric(&df, "delta"),
-        10.0,
+        10_000_000_000_000_000.0,
     );
 
     plot.preflight().unwrap();
-    assert!(render(plot, "waterfall-derived-total").contains(">total 11.000</text>"));
+    assert!(render(plot, "waterfall-ordered-total").contains(">total 1.000</text>"));
 }
 
 #[test]
-fn waterfall_rejects_nonfinite_derived_terminal() {
+fn waterfall_accepts_finite_ordered_geometry_when_detached_delta_sum_overflows() {
+    let df = df!(
+        "label" => ["a", "b", "c"],
+        "delta" => [f64::MAX, f64::MAX, -f64::MAX]
+    )
+    .unwrap();
+    let plot = Plot::waterfall(
+        data::category(&df, "label"),
+        data::numeric(&df, "delta"),
+        -f64::MAX,
+    )
+    .size(4_000, 240);
+
+    plot.preflight().unwrap();
+}
+
+#[test]
+fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
     let df = df!(
         "label" => ["a", "b"],
         "delta" => [f64::MAX, f64::MAX]
@@ -151,11 +168,10 @@ fn waterfall_rejects_nonfinite_derived_terminal() {
         0.0,
     );
 
-    assert!(plot
-        .preflight()
-        .unwrap_err()
-        .to_string()
-        .contains("base plus deltas must be finite"));
+    assert_eq!(
+        plot.preflight().unwrap_err().to_string(),
+        "data error: waterfall: cumulative endpoint is non-finite at source row 1"
+    );
 }
 
 #[test]

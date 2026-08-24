@@ -74,7 +74,10 @@ Acceptance:
 
 ## Correctness Phase C2: Ordered Waterfall Geometry
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
+
+Verification: focused `rendering` tests plus `just verify` passed on
+2026-08-24.
 
 Build waterfall spans, range, and terminal in one sequential checked pass.
 Reject each non-finite cumulative endpoint with source-row context. Use the
@@ -90,7 +93,7 @@ Acceptance:
 
 ## Correctness Phase C3: Independent Collective Pairs
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Replace the hidden one-hue-per-group invariant with typed observed collective
 identity. Density, ordinary line, interaction, marginal, matrix, and

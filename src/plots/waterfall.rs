@@ -41,22 +41,23 @@ pub(crate) fn render(
     if !base.is_finite() {
         return Err(Error::Data("waterfall: base value must be finite".into()));
     }
-    let terminal = base + deltas.iter().sum::<f64>();
-    if !terminal.is_finite() {
-        return Err(Error::Data(
-            "waterfall: base plus deltas must be finite".into(),
-        ));
-    }
     let mut running = base;
     let mut spans = Vec::with_capacity(deltas.len());
-    let mut range = (base.min(terminal), base.max(terminal));
-    for delta in &deltas {
+    let mut range = (base, base);
+    for (index, delta) in deltas.iter().enumerate() {
         let next = running + delta;
-        range.0 = range.0.min(running).min(next);
-        range.1 = range.1.max(running).max(next);
+        if !next.is_finite() {
+            return Err(Error::Data(format!(
+                "waterfall: cumulative endpoint is non-finite at source row {}",
+                context.data.source_row(index)
+            )));
+        }
+        range.0 = range.0.min(next);
+        range.1 = range.1.max(next);
         spans.push((running, next));
         running = next;
     }
+    let terminal = running;
     let x_range = crate::layout::continuous_auto_range(range, chart.x_axis_spec());
     let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
     let y_ticks = labels
