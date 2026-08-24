@@ -265,7 +265,11 @@ implementations. Do not retain aliases.
 
 ## Final API Phase A4: Selective Value Builders
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused library, annotations, estimates, and heatmap tests,
+compile-fail doctests, both Clippy feature configurations, independent review,
+and `just verify` passed on 2026-08-25.
 
 - `NumericLabelFormat::default()` uses two decimal places and no suffix.
 - Precision and suffix become validated selective builders; remove the duplicate

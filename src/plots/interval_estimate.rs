@@ -520,17 +520,17 @@ pub(crate) fn render(
             if let Some((label, is_significance)) = adjacent_label {
                 let significance_style = chart.significance_mark_style_spec();
                 let font_size = if is_significance {
-                    significance_style.font_size()
+                    significance_style.font_size_spec()
                 } else {
                     palette.detail_font_size
                 };
                 let weight = if is_significance {
-                    significance_style.weight()
+                    significance_style.weight_spec()
                 } else {
                     crate::TextWeight::Normal
                 };
                 let gap = if is_significance {
-                    significance_style.gap()
+                    significance_style.gap_spec()
                 } else {
                     7.0
                 };

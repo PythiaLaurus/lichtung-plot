@@ -849,8 +849,8 @@ fn data_fits_below_ceiling(
 
 fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
     BracketMetrics {
-        label_gap: style.gap(),
-        label_font_size: style.font_size(),
+        label_gap: style.gap_spec(),
+        label_font_size: style.font_size_spec(),
         ..SIGNIFICANCE_BRACKET_METRICS
     }
 }
@@ -866,9 +866,9 @@ pub(crate) fn render(
         color: palette.foreground,
         width: palette.bracket_width,
         font_family: palette.font_family,
-        font_size: mark_style.font_size(),
-        weight: mark_style.weight(),
-        label_gap: mark_style.gap(),
+        font_size: mark_style.font_size_spec(),
+        weight: mark_style.weight_spec(),
+        label_gap: mark_style.gap_spec(),
     };
     for bracket in brackets {
         backend.draw_bracket(bracket, &style)?;

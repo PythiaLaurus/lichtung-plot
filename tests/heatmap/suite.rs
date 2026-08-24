@@ -62,9 +62,7 @@ fn heatmap_constructor_accepts_typed_configuration() {
             .layout(HeatmapLayout::UpperTriangle { diagonal: true })
             .scale(HeatmapScale::Diverging { center: 0.5 })
             .color_limits(-1.0, 2.0)
-            .annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::new(2).unwrap(),
-            ))
+            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
     })
     .unwrap();
     assert!(svg.contains(">Response</text>"));
@@ -443,23 +441,35 @@ fn heatmap_diverging_colorbar_places_neutral_stop_at_normalized_center() {
 }
 
 #[test]
-fn heatmap_annotations_use_raw_precision_and_contrasting_text() {
+fn heatmap_annotations_use_default_and_chained_formats_with_contrasting_text() {
     let data = df!(
         "column" => ["light", "dark"],
         "row" => ["row", "row"],
         "value" => [0.125_f64, 9.875]
     )
     .unwrap();
-    let svg = render(&data, |chart| {
+    let default_svg = render(&data, |chart| {
+        chart.annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+    })
+    .unwrap();
+    let configured_svg = render(&data, |chart| {
         chart.annotations(HeatmapAnnotations::Values(
-            NumericLabelFormat::new(2).unwrap(),
+            NumericLabelFormat::default()
+                .precision(1)
+                .unwrap()
+                .suffix("%")
+                .unwrap(),
         ))
     })
     .unwrap();
-    let marks = clipped_marks(&svg);
+    let default_marks = clipped_marks(&default_svg);
+    let configured_marks = clipped_marks(&configured_svg);
 
-    assert!(marks.contains(">0.12</text>") && marks.contains(">9.88</text>"));
-    assert!(marks.contains("fill=\"#000000\"") && marks.contains("fill=\"#FFFFFF\""));
+    assert!(default_marks.contains(">0.12</text>") && default_marks.contains(">9.88</text>"));
+    assert!(configured_marks.contains(">0.1%</text>") && configured_marks.contains(">9.9%</text>"));
+    assert!(
+        default_marks.contains("fill=\"#000000\"") && default_marks.contains("fill=\"#FFFFFF\"")
+    );
 }
 
 #[test]
@@ -478,9 +488,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     let svg = render(&data, |chart| {
         chart
             .size(480, 300)
-            .annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::new(2).unwrap(),
-            ))
+            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
             .heatmap_null_row_annotation(annotation)
     })
     .unwrap();
@@ -590,7 +598,11 @@ fn heatmap_annotations_append_suffix_and_border_only_selected_cells() {
         chart
             .heatmap_highlight(data::boolean(&data, "selected"))
             .annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::with_suffix(1, "%").unwrap(),
+                NumericLabelFormat::default()
+                    .precision(1)
+                    .unwrap()
+                    .suffix("%")
+                    .unwrap(),
             ))
     })
     .unwrap();
@@ -621,11 +633,16 @@ fn heatmap_highlight_requires_complete_boolean_values() {
 #[test]
 fn numeric_label_format_rejects_invalid_precision_and_suffix() {
     let errors = [
-        NumericLabelFormat::new(13).unwrap_err().to_string(),
-        NumericLabelFormat::with_suffix(2, "\n")
+        NumericLabelFormat::default()
+            .precision(13)
             .unwrap_err()
             .to_string(),
-        NumericLabelFormat::with_suffix(2, "")
+        NumericLabelFormat::default()
+            .suffix("")
+            .unwrap_err()
+            .to_string(),
+        NumericLabelFormat::default()
+            .suffix("\n")
             .unwrap_err()
             .to_string(),
     ];
@@ -641,7 +658,7 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
     let data = df!("column" => columns, "row" => rows, "value" => values).unwrap();
     let error = render(&data, |chart| {
         chart.size(360, 220).annotations(HeatmapAnnotations::Values(
-            NumericLabelFormat::new(4).unwrap(),
+            NumericLabelFormat::default().precision(4).unwrap(),
         ))
     })
     .unwrap_err();

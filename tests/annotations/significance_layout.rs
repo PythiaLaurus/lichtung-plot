@@ -345,7 +345,12 @@ fn exact_per_bar_marks_render_with_independent_weight_in_both_orientations() {
         "value" => [1.0_f64, -0.8]
     )
     .unwrap();
-    let style = SignificanceMarkStyle::new(18, TextWeight::Semibold, 9.0).unwrap();
+    let style = SignificanceMarkStyle::default()
+        .font_size(18)
+        .unwrap()
+        .weight(TextWeight::Semibold)
+        .gap(9.0)
+        .unwrap();
     let marks = || {
         [
             Significance::at("positive", SignificanceMark::TwoStars),
@@ -389,9 +394,23 @@ fn ordinary_bar_accumulates_attached_and_pairwise_placements_across_calls() {
 
 #[test]
 fn default_per_bar_mark_weight_is_normal() {
-    assert_eq!(
-        SignificanceMarkStyle::default().weight(),
-        TextWeight::Normal
+    let df = df!(
+        "group" => ["a"],
+        "value" => [1.0_f64]
+    )
+    .unwrap();
+    let chart =
+        identity_bar_chart(&df).significance([Significance::at("a", SignificanceMark::OneStar)]);
+
+    let svg = render_svg(chart, "default-bar-mark-weight").unwrap();
+    let mark = svg
+        .lines()
+        .find(|line| line.ends_with(">*</text>"))
+        .unwrap();
+
+    assert!(
+        !mark.contains("font-weight="),
+        "default significance marks must use SVG's normal 400 weight: {mark}"
     );
 }
 

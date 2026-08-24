@@ -97,34 +97,52 @@ pub struct SignificanceMarkStyle {
 impl SignificanceMarkStyle {
     /// Construct a validated mark style.
     pub fn new(font_size: u32, weight: TextWeight, gap: f64) -> Result<Self, Error> {
-        if font_size == 0 || !gap.is_finite() || gap < 0.0 {
+        Self {
+            font_size,
+            weight,
+            gap,
+        }
+        .validate()
+    }
+
+    /// Set the positive mark font size.
+    pub fn font_size(mut self, font_size: u32) -> Result<Self, Error> {
+        self.font_size = font_size;
+        self.validate()
+    }
+
+    /// Set the mark font weight.
+    #[must_use]
+    pub const fn weight(mut self, weight: TextWeight) -> Self {
+        self.weight = weight;
+        self
+    }
+
+    /// Set the finite nonnegative mark-to-data gap in pixels.
+    pub fn gap(mut self, gap: f64) -> Result<Self, Error> {
+        self.gap = gap;
+        self.validate()
+    }
+
+    fn validate(self) -> Result<Self, Error> {
+        if self.font_size == 0 || !self.gap.is_finite() || self.gap < 0.0 {
             return Err(Error::Data(
                 "significance mark style requires positive font size and finite nonnegative gap"
                     .into(),
             ));
         }
-        Ok(Self {
-            font_size,
-            weight,
-            gap,
-        })
+        Ok(self)
     }
 
-    #[must_use]
-    /// Return the mark font size.
-    pub const fn font_size(self) -> u32 {
+    pub(crate) const fn font_size_spec(self) -> u32 {
         self.font_size
     }
 
-    #[must_use]
-    /// Return the mark font weight.
-    pub const fn weight(self) -> TextWeight {
+    pub(crate) const fn weight_spec(self) -> TextWeight {
         self.weight
     }
 
-    #[must_use]
-    /// Return the mark-to-data gap in pixels.
-    pub const fn gap(self) -> f64 {
+    pub(crate) const fn gap_spec(self) -> f64 {
         self.gap
     }
 }

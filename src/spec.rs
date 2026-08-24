@@ -221,6 +221,11 @@ pub enum HeatmapLabelFit {
 }
 
 /// Fixed decimal formatting shared by optional numeric value labels.
+///
+/// ```compile_fail
+/// use lichtung_plot::NumericLabelFormat;
+/// let _ = NumericLabelFormat::with_suffix(2, "%");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumericLabelFormat {
     precision: usize,
@@ -230,41 +235,34 @@ pub struct NumericLabelFormat {
 impl NumericLabelFormat {
     /// Construct fixed decimal formatting without a suffix.
     pub fn new(precision: usize) -> Result<Self, crate::Error> {
-        Self::build(precision, None)
+        Self::default().precision(precision)
     }
 
-    /// Construct fixed decimal formatting followed by a non-empty suffix.
-    pub fn with_suffix(precision: usize, suffix: impl Into<String>) -> Result<Self, crate::Error> {
-        Self::build(precision, Some(suffix.into()))
-    }
-
-    fn build(precision: usize, suffix: Option<String>) -> Result<Self, crate::Error> {
+    /// Set the number of digits rendered after the decimal point.
+    pub fn precision(mut self, precision: usize) -> Result<Self, crate::Error> {
         if precision > 12 {
             return Err(crate::Error::Data(format!(
                 "numeric label precision {precision} exceeds the supported maximum of 12"
             )));
         }
-        if suffix
-            .as_ref()
-            .is_some_and(|value| value.is_empty() || value.chars().any(char::is_control))
-        {
+        self.precision = precision;
+        Ok(self)
+    }
+
+    /// Set non-empty verbatim text rendered immediately after the number.
+    pub fn suffix(mut self, suffix: impl Into<String>) -> Result<Self, crate::Error> {
+        let suffix = suffix.into();
+        if suffix.is_empty() || suffix.chars().any(char::is_control) {
             return Err(crate::Error::Data(
                 "numeric label suffix must be non-empty and contain no control characters".into(),
             ));
         }
-        Ok(Self { precision, suffix })
+        self.suffix = Some(suffix);
+        Ok(self)
     }
 
-    /// Digits rendered after the decimal point.
-    #[must_use]
-    pub const fn precision(&self) -> usize {
+    pub(crate) const fn configured_precision(&self) -> usize {
         self.precision
-    }
-
-    /// Optional verbatim text rendered immediately after the number.
-    #[must_use]
-    pub fn suffix(&self) -> Option<&str> {
-        self.suffix.as_deref()
     }
 
     pub(crate) fn format(&self, value: f64) -> String {
@@ -273,6 +271,15 @@ impl NumericLabelFormat {
             label.push_str(suffix);
         }
         label
+    }
+}
+
+impl Default for NumericLabelFormat {
+    fn default() -> Self {
+        Self {
+            precision: 2,
+            suffix: None,
+        }
     }
 }
 

@@ -504,7 +504,7 @@ fn affected_detail_text_uses_publication_detail_typography() {
             "estimate",
         )),
     )
-    .estimate_labels(NumericLabelFormat::with_suffix(2, " detail").unwrap());
+    .estimate_labels(NumericLabelFormat::default().suffix(" detail").unwrap());
     let mut coefficient_backend = RecordingBackend::default();
     coefficient
         .render_kind(PlotKind::Coefficient, &mut coefficient_backend)

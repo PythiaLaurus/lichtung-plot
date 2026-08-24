@@ -76,7 +76,8 @@ pub(crate) fn render(
     let mark_style = chart.significance_mark_style_spec();
     for mark in prepared.significance.iter().filter(|mark| mark.positive) {
         let clearance = mark.edge
-            + (mark_style.gap() + f64::from(mark_style.font_size()) * 1.2 + 2.0) * value_per_pixel;
+            + (mark_style.gap_spec() + f64::from(mark_style.font_size_spec()) * 1.2 + 2.0)
+                * value_per_pixel;
         rendered_maxima[mark.category_index] = rendered_maxima[mark.category_index].max(clearance);
         if let Some(series_index) = mark.series_index {
             grouped_maxima[mark.category_index][series_index] =
@@ -202,7 +203,8 @@ fn range_for_bar_marks(
     }
     let style = chart.significance_mark_style_spec();
     let units_per_pixel = (range.1 - range.0) / panel.height();
-    let clearance = (style.gap() + f64::from(style.font_size()) * 1.2 + 2.0) * units_per_pixel;
+    let clearance =
+        (style.gap_spec() + f64::from(style.font_size_spec()) * 1.2 + 2.0) * units_per_pixel;
     let mut extent = prepared.value_range;
     for mark in &prepared.significance {
         if mark.positive {
@@ -226,12 +228,12 @@ fn draw_bar_significance(
     let x = significance_center(mark.category_index, mark.series_index, prepared, mode);
     let (x, edge_y) = layout.projection.project(x, mark.edge);
     let y = if mark.positive {
-        edge_y + style.gap()
+        edge_y + style.gap_spec()
     } else {
-        edge_y - style.gap() - f64::from(style.font_size())
+        edge_y - style.gap_spec() - f64::from(style.font_size_spec())
     };
     let panel = layout.projection.panel_box();
-    if y < panel.y0 || y + f64::from(style.font_size()) * 1.2 > panel.y1 {
+    if y < panel.y0 || y + f64::from(style.font_size_spec()) * 1.2 > panel.y1 {
         return Err(Error::Render(format!(
             "bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the y-axis range",
             mark.label
@@ -244,8 +246,8 @@ fn draw_bar_significance(
         &TextStyle {
             color: chart.palette().foreground,
             font_family: chart.palette().font_family,
-            font_size: style.font_size(),
-            weight: style.weight(),
+            font_size: style.font_size_spec(),
+            weight: style.weight_spec(),
             anchor: TextAnchor::Middle,
             rotation: 0.0,
         },
@@ -263,12 +265,12 @@ fn validate_bar_significance_collisions(
     for mark in &prepared.significance {
         let center = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (x, edge_y) = layout.projection.project(center, mark.edge);
-        let width = crate::layout::estimated_text_width(&mark.label, style.font_size());
-        let height = f64::from(style.font_size()) * 1.2;
+        let width = crate::layout::estimated_text_width(&mark.label, style.font_size_spec());
+        let height = f64::from(style.font_size_spec()) * 1.2;
         let y0 = if mark.positive {
-            edge_y + style.gap()
+            edge_y + style.gap_spec()
         } else {
-            edge_y - style.gap() - height
+            edge_y - style.gap_spec() - height
         };
         let candidate = (x - width / 2.0, x + width / 2.0, y0, y0 + height);
         if bounds.iter().any(|&(x0, x1, y0, y1)| {

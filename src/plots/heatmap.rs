@@ -753,7 +753,7 @@ fn validate_annotation_fit(
         if cell_height < f64::from(ANNOTATION_FONT_SIZE) + 5.0 || cell_width < widest + 6.0 {
             return Err(Error::Render(format!(
                 "heatmap: cells are too small for value annotations at precision {} (cell {cell_width:.1}x{cell_height:.1}px, need at least {:.1}x{:.1}px); increase chart size, reduce precision, or hide annotations",
-                format.precision(),
+                format.configured_precision(),
                 widest + 6.0,
                 f64::from(ANNOTATION_FONT_SIZE) + 5.0
             )));
