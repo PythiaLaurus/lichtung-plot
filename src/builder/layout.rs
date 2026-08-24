@@ -8,25 +8,28 @@ use crate::theme::ThemePalette;
 impl<K: crate::kind::Marker> Plot<K> {
     /// Borrow the active theme palette.
     #[must_use]
-    pub fn palette(&self) -> ThemePalette {
+    pub(crate) fn palette(&self) -> ThemePalette {
         self.theme.palette()
     }
 
     /// Resolve the figure layout for this chart's canvas and configured text.
     #[must_use]
-    pub fn figure_layout(&self) -> FigureLayout {
+    #[cfg(test)]
+    pub(crate) fn figure_layout(&self) -> FigureLayout {
         self.clone().erase().figure_layout_erased()
     }
 }
 
 impl Plot {
+    #[cfg(test)]
     fn figure_layout_erased(&self) -> FigureLayout {
         let mut figure = self
             .measured_figure_layout()
             .unwrap_or_else(|_| self.resolve_figure_layout());
-        let Some(kind) = self.kind.filter(|_| !self.has_facets()) else {
+        if self.has_facets() {
             return figure;
-        };
+        }
+        let kind = self.kind;
         if kind == PlotKind::Matrix {
             return figure;
         }
@@ -77,10 +80,8 @@ impl Plot {
     }
 
     fn axis_label_presence(&self) -> (bool, bool) {
-        self.kind.map_or((false, false), |kind| {
-            let (x, y) = self.resolved_axis_labels(kind);
-            (!x.is_empty(), !y.is_empty())
-        })
+        let (x, y) = self.resolved_axis_labels(self.kind);
+        (!x.is_empty(), !y.is_empty())
     }
 
     fn resolve_figure_layout(&self) -> FigureLayout {
@@ -109,9 +110,7 @@ impl Plot {
         figure: &mut FigureLayout,
         checked: bool,
     ) -> Result<(), Error> {
-        let Some(kind) = self.kind else {
-            return Ok(());
-        };
+        let kind = self.kind;
         let baseline = self.axis_title_line_counts(kind, figure.panel_box)?;
         let baseline = (baseline.0.min(1), baseline.1.min(1));
         let (panel, extra_left, extra_bottom) =

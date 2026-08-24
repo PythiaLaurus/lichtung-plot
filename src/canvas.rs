@@ -477,9 +477,7 @@ impl Canvas {
             ));
         }
         for chart in self.panels.iter().flatten() {
-            let kind = chart
-                .plot_kind()
-                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let kind = chart.kind();
             chart.validate_configuration(kind)?;
             if chart.has_facets() {
                 return Err(Error::Render(
@@ -716,9 +714,7 @@ impl Canvas {
             let mut ranges = vec![None; charts.len()];
             for (index, chart) in charts.iter().enumerate() {
                 let Some(chart) = chart else { continue };
-                let kind = chart.plot_kind().ok_or_else(|| {
-                    Error::Data("every figure panel must select a plot kind".into())
-                })?;
+                let kind = chart.kind();
                 let result = chart.preflight_panel(kind, provisional[index])?;
                 ranges[index] = Some(result.layout.projection.x_range());
             }
@@ -746,9 +742,7 @@ impl Canvas {
             let Some(chart) = chart else { continue };
             let row = index / self.columns;
             let column = index % self.columns;
-            let kind = chart
-                .plot_kind()
-                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let kind = chart.kind();
             let result = chart.preflight_panel(kind, provisional[index])?;
             if result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
@@ -1035,9 +1029,7 @@ impl Canvas {
             let Some(dimension) = chart.hue_dimension_key() else {
                 continue;
             };
-            let kind = chart
-                .plot_kind()
-                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let kind = chart.kind();
             let observed = chart.preflight_hue_levels(kind, panel)?;
             let levels =
                 if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
@@ -1066,9 +1058,7 @@ impl Canvas {
     ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
         let mut entries = Vec::new();
         for chart in charts.iter().flatten() {
-            let kind = chart
-                .plot_kind()
-                .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
+            let kind = chart.kind();
             let result = chart.preflight_panel(kind, panel)?;
             entries.extend(result.legend_entries);
         }
@@ -1086,9 +1076,7 @@ impl Canvas {
 }
 
 fn chart_category_domain(chart: &Plot, panel: PanelBox) -> Result<Vec<String>, Error> {
-    let kind = chart
-        .plot_kind()
-        .ok_or_else(|| Error::Data("shared category labels require a selected plot kind".into()))?;
+    let kind = chart.kind();
     if !matches!(
         kind,
         PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar

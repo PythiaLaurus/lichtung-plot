@@ -41,6 +41,41 @@ use crate::{
 /// implementations or a corresponding sealed capability.
 ///
 /// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn removed_identity_alias(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.plot_kind();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn internal_family_options(plot: &Plot<kind::Histogram>) {
+///     let _ = plot.histogram_bins_spec();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn internal_renderer_configuration(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.x_axis_spec();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn internal_palette(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.palette();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{kind, Plot};
+/// fn internal_layout(plot: &Plot<kind::Scatter>) {
+///     let _ = plot.figure_layout();
+/// }
+/// ```
+///
+/// ```compile_fail
 /// use lichtung_plot::{HistogramBins, NumericValues, Plot};
 /// let plot = Plot::scatter(
 ///     NumericValues::new("x", [1.0]),
@@ -462,7 +497,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     svg_text: crate::SvgText,
     /// Plot family selected by the semantic constructor and used for
     /// validation and rendering dispatch.
-    kind: Option<PlotKind>,
+    kind: PlotKind,
     marker: PhantomData<K>,
 }
 
@@ -550,7 +585,7 @@ impl Plot<crate::kind::Any> {
             panel_text_annotations: Vec::new(),
             png_options: crate::PngOptions::default(),
             svg_text: crate::SvgText::default(),
-            kind: Some(kind),
+            kind,
             marker: PhantomData,
         }
     }
@@ -1047,122 +1082,155 @@ mod tests {
 
     fn assert_marker<K: crate::kind::Marker>(_: Plot<K>) {}
 
+    fn assert_constructor<K: crate::kind::Marker>(plot: Plot<K>, expected_kind: PlotKind) {
+        assert_eq!(plot.kind(), expected_kind);
+        assert_eq!(plot.erase().kind(), expected_kind);
+    }
+
     #[test]
     #[expect(
         clippy::too_many_lines,
         reason = "one exhaustive constructor inventory verifies every exact family marker"
     )]
     fn constructors_return_exact_family_markers() {
-        assert_marker::<crate::kind::Scatter>(Plot::scatter(numeric("x"), numeric("y")));
-        assert_marker::<crate::kind::Histogram>(Plot::histogram(HistogramInput::samples(numeric(
-            "value",
-        ))));
-        assert_marker::<crate::kind::Histogram>(Plot::histogram(HistogramInput::geometry(
-            crate::HistogramCompositeGeometryInput {
-                dimensions: HistogramDimensionsInput {
-                    value: "value".into(),
-                    density: "density".into(),
+        assert_constructor::<crate::kind::Scatter>(
+            Plot::scatter(numeric("x"), numeric("y")),
+            PlotKind::Scatter,
+        );
+        assert_constructor::<crate::kind::Histogram>(
+            Plot::histogram(HistogramInput::samples(numeric("value"))),
+            PlotKind::Histogram,
+        );
+        assert_constructor::<crate::kind::Histogram>(
+            Plot::histogram(HistogramInput::geometry(
+                crate::HistogramCompositeGeometryInput {
+                    dimensions: HistogramDimensionsInput {
+                        value: "value".into(),
+                        density: "density".into(),
+                    },
+                    bins: Vec::new(),
+                    kde: Vec::new(),
+                    rugs: Vec::new(),
                 },
-                bins: Vec::new(),
-                kde: Vec::new(),
-                rugs: Vec::new(),
-            },
-        )));
-        assert_marker::<crate::kind::Density>(Plot::density(numeric("value")));
-        assert_marker::<crate::kind::Qq>(Plot::qq(numeric("value")));
-        assert_marker::<crate::kind::PointInterval>(Plot::point_interval(
-            category("category"),
-            numeric("estimate"),
-            bounds(),
-        ));
-        assert_marker::<crate::kind::Line>(Plot::line(numeric("x"), numeric("y")));
-        assert_marker::<crate::kind::Trajectory>(Plot::trajectory(
-            numeric("x"),
-            numeric("y"),
-            category("group"),
-        ));
-        assert_marker::<crate::kind::LinePath>(Plot::line_path(
-            numeric("x"),
-            numeric("y"),
-            category("group"),
-        ));
-        assert_marker::<crate::kind::Interaction>(Plot::interaction(
-            category("condition"),
-            numeric("estimate"),
-            category("group"),
-            bounds(),
-        ));
-        assert_marker::<crate::kind::Coefficient>(Plot::coefficient(
-            category("term"),
-            CoefficientInput::estimates(numeric("estimate")),
-        ));
-        assert_marker::<crate::kind::Forest>(Plot::forest(
-            category("term"),
-            numeric("estimate"),
-            bounds(),
-            0.0,
-        ));
-        assert_marker::<crate::kind::Dumbbell>(Plot::dumbbell(
-            category("category"),
-            numeric("left"),
-            numeric("right"),
-            DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
-        ));
-        assert_marker::<crate::kind::Heatmap>(Plot::heatmap(
-            category("x"),
-            category("y"),
-            numeric("fill"),
-        ));
-        assert_marker::<crate::kind::Bar>(Plot::bar(
-            category("category"),
-            BarInput::estimates(numeric("value")),
-        ));
-        assert_marker::<crate::kind::HorizontalBar>(Plot::horizontal_bar(
-            category("category"),
-            BarInput::estimates(numeric("value")),
-        ));
-        assert_marker::<crate::kind::StackedBar>(Plot::stacked_bar(
-            category("category"),
-            numeric("value"),
-            category("group"),
-        ));
-        assert_marker::<crate::kind::StackedHorizontalBar>(Plot::stacked_horizontal_bar(
-            category("category"),
-            numeric("value"),
-            category("group"),
-        ));
-        assert_marker::<crate::kind::Boxplot>(Plot::boxplot(
-            category("category"),
-            numeric("value"),
-        ));
-        assert_marker::<crate::kind::Violin>(Plot::violin(category("category"), numeric("value")));
-        assert_marker::<crate::kind::Raincloud>(Plot::raincloud(RaincloudInput::samples(
-            category("category"),
-            numeric("value"),
-        )));
-        assert_marker::<crate::kind::Raincloud>(Plot::raincloud(RaincloudInput::geometry(
-            crate::RaincloudGeometryInput {
+            )),
+            PlotKind::Histogram,
+        );
+        assert_constructor::<crate::kind::Density>(
+            Plot::density(numeric("value")),
+            PlotKind::Density,
+        );
+        assert_constructor::<crate::kind::Qq>(Plot::qq(numeric("value")), PlotKind::Qq);
+        assert_constructor::<crate::kind::PointInterval>(
+            Plot::point_interval(category("category"), numeric("estimate"), bounds()),
+            PlotKind::PointInterval,
+        );
+        assert_constructor::<crate::kind::Line>(
+            Plot::line(numeric("x"), numeric("y")),
+            PlotKind::Line,
+        );
+        assert_constructor::<crate::kind::Trajectory>(
+            Plot::trajectory(numeric("x"), numeric("y"), category("group")),
+            PlotKind::Trajectory,
+        );
+        assert_constructor::<crate::kind::LinePath>(
+            Plot::line_path(numeric("x"), numeric("y"), category("group")),
+            PlotKind::LinePath,
+        );
+        assert_constructor::<crate::kind::Interaction>(
+            Plot::interaction(
+                category("condition"),
+                numeric("estimate"),
+                category("group"),
+                bounds(),
+            ),
+            PlotKind::Interaction,
+        );
+        assert_constructor::<crate::kind::Coefficient>(
+            Plot::coefficient(
+                category("term"),
+                CoefficientInput::estimates(numeric("estimate")),
+            ),
+            PlotKind::Coefficient,
+        );
+        assert_constructor::<crate::kind::Forest>(
+            Plot::forest(category("term"), numeric("estimate"), bounds(), 0.0),
+            PlotKind::Forest,
+        );
+        assert_constructor::<crate::kind::Dumbbell>(
+            Plot::dumbbell(
+                category("category"),
+                numeric("left"),
+                numeric("right"),
+                DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+            ),
+            PlotKind::Dumbbell,
+        );
+        assert_constructor::<crate::kind::Heatmap>(
+            Plot::heatmap(category("x"), category("y"), numeric("fill")),
+            PlotKind::Heatmap,
+        );
+        assert_constructor::<crate::kind::Bar>(
+            Plot::bar(category("category"), BarInput::estimates(numeric("value"))),
+            PlotKind::Bar,
+        );
+        assert_constructor::<crate::kind::HorizontalBar>(
+            Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value"))),
+            PlotKind::HorizontalBar,
+        );
+        assert_constructor::<crate::kind::StackedBar>(
+            Plot::stacked_bar(category("category"), numeric("value"), category("group")),
+            PlotKind::StackedBar,
+        );
+        assert_constructor::<crate::kind::StackedHorizontalBar>(
+            Plot::stacked_horizontal_bar(category("category"), numeric("value"), category("group")),
+            PlotKind::StackedHorizontalBar,
+        );
+        assert_constructor::<crate::kind::Boxplot>(
+            Plot::boxplot(category("category"), numeric("value")),
+            PlotKind::Boxplot,
+        );
+        assert_constructor::<crate::kind::Violin>(
+            Plot::violin(category("category"), numeric("value")),
+            PlotKind::Violin,
+        );
+        assert_constructor::<crate::kind::Raincloud>(
+            Plot::raincloud(RaincloudInput::samples(
+                category("category"),
+                numeric("value"),
+            )),
+            PlotKind::Raincloud,
+        );
+        assert_constructor::<crate::kind::Raincloud>(
+            Plot::raincloud(RaincloudInput::geometry(crate::RaincloudGeometryInput {
                 dimensions: RaincloudDimensionsInput {
                     category: "category".into(),
                     value: "value".into(),
                     hue: None,
                 },
                 groups: Vec::new(),
-            },
-        )));
-        assert_marker::<crate::kind::Regression>(Plot::regression(numeric("x"), numeric("y")));
-        assert_marker::<crate::kind::Marginal>(Plot::marginal(numeric("x"), numeric("y")));
-        assert_marker::<crate::kind::Matrix>(Plot::matrix(vec![numeric("x"), numeric("y")]));
-        assert_marker::<crate::kind::Beeswarm>(Plot::beeswarm(
-            category("category"),
-            numeric("value"),
-            numeric("color"),
-        ));
-        assert_marker::<crate::kind::Waterfall>(Plot::waterfall(
-            category("category"),
-            numeric("delta"),
-            0.0,
-        ));
+            })),
+            PlotKind::Raincloud,
+        );
+        assert_constructor::<crate::kind::Regression>(
+            Plot::regression(numeric("x"), numeric("y")),
+            PlotKind::Regression,
+        );
+        assert_constructor::<crate::kind::Marginal>(
+            Plot::marginal(numeric("x"), numeric("y")),
+            PlotKind::Marginal,
+        );
+        assert_constructor::<crate::kind::Matrix>(
+            Plot::matrix(vec![numeric("x"), numeric("y")]),
+            PlotKind::Matrix,
+        );
+        assert_constructor::<crate::kind::Beeswarm>(
+            Plot::beeswarm(category("category"), numeric("value"), numeric("color")),
+            PlotKind::Beeswarm,
+        );
+        assert_constructor::<crate::kind::Waterfall>(
+            Plot::waterfall(category("category"), numeric("delta"), 0.0),
+            PlotKind::Waterfall,
+        );
     }
 
     #[test]
@@ -1172,7 +1240,7 @@ mod tests {
             .size(320, 240)
             .erase();
 
-        assert_eq!(erased.kind, Some(PlotKind::Scatter));
+        assert_eq!(erased.kind(), PlotKind::Scatter);
         assert_eq!(erased.title.as_deref(), Some("Configured"));
         assert_eq!((erased.width, erased.height), (320, 240));
     }

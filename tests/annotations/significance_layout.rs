@@ -25,18 +25,18 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
     let annotated = identity_bar_chart(&df)
         .size(500, 360)
         .significance(comparisons);
-    let annotated_panel = annotated.figure_layout().panel_box;
     annotated.svg(&annotated_path).unwrap();
 
     let plain = identity_bar_chart(&df).size(500, 360);
-    let plain_panel = plain.figure_layout().panel_box;
     plain.svg(&plain_path).unwrap();
 
     let annotated_svg = std::fs::read_to_string(annotated_path).unwrap();
     let plain_svg = std::fs::read_to_string(plain_path).unwrap();
+    let annotated_panel = clip_rect(&annotated_svg);
+    let plain_panel = clip_rect(&plain_svg);
     let bracket_y = bracket_line_y_values(&annotated_svg);
     let data_top = polygon_top(&annotated_svg);
-    let panel_top = 360.0 - annotated_panel.y1;
+    let panel_top = annotated_panel.1;
 
     assert_eq!(
         annotated_panel, plain_panel,
@@ -569,6 +569,17 @@ fn attribute<'a>(line: &'a str, name: &str) -> &'a str {
     let start = line.find(&start_marker).unwrap() + start_marker.len();
     let end = line[start..].find('"').unwrap() + start;
     &line[start..end]
+}
+
+fn clip_rect(svg: &str) -> (f64, f64, f64, f64) {
+    let clip = &svg[svg.find("<clipPath id=").unwrap()..];
+    let rect = clip.lines().find(|line| line.contains("<rect ")).unwrap();
+    (
+        attribute(rect, "x").parse().unwrap(),
+        attribute(rect, "y").parse().unwrap(),
+        attribute(rect, "width").parse().unwrap(),
+        attribute(rect, "height").parse().unwrap(),
+    )
 }
 
 fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> Significance<Pairwise> {

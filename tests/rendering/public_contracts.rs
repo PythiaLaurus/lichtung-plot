@@ -10,6 +10,30 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 }
 
 #[test]
+fn stable_plot_introspection_survives_erasure_and_canvas_storage() {
+    use lichtung_plot::{Canvas, PlotKind};
+
+    let df = fixture_df();
+    let exact = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y")).size(321, 234);
+
+    assert_eq!(exact.kind(), PlotKind::Scatter);
+    assert_eq!((exact.width(), exact.height()), (321, 234));
+    exact.preflight().unwrap();
+
+    let erased: Plot = exact.erase();
+    assert_eq!(erased.kind(), PlotKind::Scatter);
+    assert_eq!((erased.width(), erased.height()), (321, 234));
+    erased.preflight().unwrap();
+
+    Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, erased)
+        .unwrap()
+        .preflight()
+        .unwrap();
+}
+
+#[test]
 fn contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
         kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,

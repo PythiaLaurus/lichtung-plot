@@ -283,9 +283,9 @@ fn density_explicit_limits_clip_full_sample_kde() {
         .x_tick_count(2)
         .y_tick_count(2);
 
-    let panel = panel_to_svg_rect(chart.figure_layout().panel_box, f64::from(chart.height()));
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
+    let panel = parse_first_clip_rect(&svg);
     let marks = svg
         .split("<g clip-path=\"url(#clip-0)\">")
         .nth(1)
@@ -316,10 +316,9 @@ fn density_clips_large_finite_support_before_projection() {
     let chart = Plot::density(data::numeric(&df, "value"))
         .x_limits(values[1], values[2])
         .y_limits(0.0, 2.4e-294);
-    let panel = panel_to_svg_rect(chart.figure_layout().panel_box, f64::from(chart.height()));
-
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
+    let panel = parse_first_clip_rect(&svg);
     let marks = svg
         .split("<g clip-path=\"url(#clip-0)\">")
         .nth(1)

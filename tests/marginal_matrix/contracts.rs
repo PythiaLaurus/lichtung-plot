@@ -242,8 +242,8 @@ fn matrix_pair_error_identifies_group_and_hue() {
 fn marginal_auto_range_pads_central_points_from_frame() {
     let frame = df!("x" => [0.0_f64, 10.0], "y" => [0.0_f64, 10.0]).unwrap();
     let plot = marginal(&frame).size(360, 260);
-    let central = panel_to_svg_rect(marginal_central_panel(&plot, 96.0, 82.0, 12.0), 260.0);
     let svg = render(plot, "marginal-auto-range-padding");
+    let central = parse_first_clip_rect(&svg);
     let (min_x, max_x, min_y, max_y) = circle_bounds(&parse_circles(&svg));
     assert!(min_x > central.x + 2.0 && max_x < central.x + central.width - 2.0);
     assert!(min_y > central.y + 2.0 && max_y < central.y + central.height - 2.0);
@@ -261,8 +261,8 @@ fn marginal_auto_range_includes_kde_support_beyond_raw_data() {
         .group(data::category(&frame, "group"))
         .hue(data::category(&frame, "group"))
         .size(420, 300);
-    let central = panel_to_svg_rect(marginal_central_panel(&plot, 96.0, 82.0, 12.0), 300.0);
     let svg = render(plot, "marginal-kde-support");
+    let central = parse_first_clip_rect(&svg);
     let text = parse_text_elements(&svg);
     let x_ticks = numeric_text_values(
         text.iter()
@@ -345,8 +345,8 @@ fn marginal_hue_legend_headroom_is_bounded_and_avoids_cluster() {
         .group(data::category(&frame, "group"))
         .hue(data::category(&frame, "group"))
         .size(420, 320);
-    let central = panel_to_svg_rect(marginal_central_panel(&plot, 96.0, 82.0, 12.0), 320.0);
     let svg = render(plot, "marginal-legend");
+    let central = parse_first_clip_rect(&svg);
     assert!(
         !svg.contains(">100</text>")
             && !svg.contains(">150</text>")

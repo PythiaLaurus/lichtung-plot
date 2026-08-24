@@ -67,13 +67,10 @@ impl Plot {
     ///
     /// # Errors
     ///
-    /// Returns an error when no plot kind has been selected, backend startup or
-    /// finalization fails, or the selected renderer rejects its data or options.
+    /// Returns an error when backend startup or finalization fails, or the
+    /// selected renderer rejects its data or options.
     fn render_with_backend_erased(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        let kind = self
-            .plot_kind()
-            .ok_or_else(|| Error::Data("render called before selecting a plot kind".into()))?;
-        self.render_kind_erased(kind, backend)
+        self.render_kind_erased(self.kind(), backend)
     }
 
     fn preflight_erased(&self) -> Result<(), Error> {

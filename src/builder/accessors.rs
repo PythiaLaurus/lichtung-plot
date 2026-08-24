@@ -19,7 +19,6 @@ use crate::spec::{
     NumericLabelFormat, PanelTextAnnotation, PlotKind, QqLine, RawOverlay, RegressionBand,
     WaterfallLabels,
 };
-use crate::Labels;
 use crate::{HistogramCompositeGeometryInput, RaincloudGeometryInput};
 
 impl Plot {
@@ -58,7 +57,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn hue_col(&self) -> Option<&'static str> {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+        if self.kind.uses_unified_series() {
             self.series_values().map(|_| SERIES)
         } else {
             self.hue.as_ref().map(|_| HUE)
@@ -66,7 +65,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn hue_name(&self) -> Option<&str> {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+        if self.kind.uses_unified_series() {
             self.series_values().map(crate::CategoryValues::name)
         } else {
             self.hue.as_ref().map(crate::CategoryValues::name)
@@ -74,7 +73,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn group_col(&self) -> Option<&'static str> {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+        if self.kind.uses_unified_series() {
             self.series_values().map(|_| SERIES)
         } else {
             self.group_values().map(|_| GROUP)
@@ -82,7 +81,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn group_name(&self) -> Option<&str> {
-        if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
+        if self.kind.uses_unified_series() {
             self.series_values().map(crate::CategoryValues::name)
         } else {
             self.group_values().map(crate::CategoryValues::name)
@@ -419,49 +418,49 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Heatmap colorbar title, if explicitly configured.
     #[must_use]
-    pub fn color_label_text(&self) -> Option<&str> {
+    pub(crate) fn color_label_text(&self) -> Option<&str> {
         self.color_label.as_deref()
     }
 
     /// Requested heatmap color scale.
     #[must_use]
-    pub fn heatmap_scale_spec(&self) -> HeatmapScale {
+    pub(crate) fn heatmap_scale_spec(&self) -> HeatmapScale {
         self.heatmap_scale
     }
 
     /// Requested heatmap coordinate layout.
     #[must_use]
-    pub fn heatmap_layout_spec(&self) -> HeatmapLayout {
+    pub(crate) fn heatmap_layout_spec(&self) -> HeatmapLayout {
         self.heatmap_layout
     }
 
     /// Requested categorical heatmap label-fit policy.
     #[must_use]
-    pub const fn heatmap_label_fit_spec(&self) -> HeatmapLabelFit {
+    pub(crate) const fn heatmap_label_fit_spec(&self) -> HeatmapLabelFit {
         self.heatmap_label_fit
     }
 
     /// Exact heatmap color limits, if configured.
     #[must_use]
-    pub fn heatmap_color_limits_spec(&self) -> Option<(f64, f64)> {
+    pub(crate) fn heatmap_color_limits_spec(&self) -> Option<(f64, f64)> {
         self.heatmap_color_limits
     }
 
     /// Exact beeswarm continuous-color limits, if configured.
     #[must_use]
-    pub const fn beeswarm_color_limits_spec(&self) -> Option<(f64, f64)> {
+    pub(crate) const fn beeswarm_color_limits_spec(&self) -> Option<(f64, f64)> {
         self.beeswarm_color_limits
     }
 
     /// Requested heatmap annotation policy.
     #[must_use]
-    pub const fn heatmap_annotations_spec(&self) -> &HeatmapAnnotations {
+    pub(crate) const fn heatmap_annotations_spec(&self) -> &HeatmapAnnotations {
         &self.heatmap_annotations
     }
 
     /// Caller-owned annotations for fully-null heatmap rows.
     #[must_use]
-    pub fn heatmap_null_row_annotations_spec(&self) -> &[HeatmapNullRowAnnotation] {
+    pub(crate) fn heatmap_null_row_annotations_spec(&self) -> &[HeatmapNullRowAnnotation] {
         &self.heatmap_null_row_annotations
     }
 
@@ -471,7 +470,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Fixed numeric labels configured for point-only coefficient estimates.
     #[must_use]
-    pub const fn estimate_labels_spec(&self) -> Option<&NumericLabelFormat> {
+    pub(crate) const fn estimate_labels_spec(&self) -> Option<&NumericLabelFormat> {
         self.estimate_labels.as_ref()
     }
 
@@ -493,19 +492,19 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Requested histogram bin-selection strategy.
     #[must_use]
-    pub fn histogram_bins_spec(&self) -> HistogramBins {
+    pub(crate) fn histogram_bins_spec(&self) -> HistogramBins {
         self.histogram_bins
     }
 
     /// Requested histogram vertical-axis normalization.
     #[must_use]
-    pub fn histogram_stat_spec(&self) -> HistogramStat {
+    pub(crate) fn histogram_stat_spec(&self) -> HistogramStat {
         self.histogram_stat
     }
 
     /// Requested optional histogram density-and-rug composition.
     #[must_use]
-    pub const fn histogram_composite_spec(&self) -> &HistogramComposite {
+    pub(crate) const fn histogram_composite_spec(&self) -> &HistogramComposite {
         &self.histogram_composite
     }
 
@@ -520,19 +519,19 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Requested normal Q-Q reference-line policy.
     #[must_use]
-    pub fn qq_line_spec(&self) -> QqLine {
+    pub(crate) fn qq_line_spec(&self) -> QqLine {
         self.qq_line
     }
 
     /// Whether values should be colored according to their sign.
     #[must_use]
-    pub fn colors_by_sign(&self) -> bool {
+    pub(crate) fn colors_by_sign(&self) -> bool {
         self.color_by_sign
     }
 
     /// Whether the renderer should draw a zero reference line.
     #[must_use]
-    pub fn zero_line_visible(&self) -> bool {
+    pub(crate) fn zero_line_visible(&self) -> bool {
         self.zero_line
     }
 
@@ -582,19 +581,19 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Configured confidence-band policy for generated regression plots.
     #[must_use]
-    pub const fn regression_band_spec(&self) -> RegressionBand {
+    pub(crate) const fn regression_band_spec(&self) -> RegressionBand {
         self.regression_band
     }
 
     /// Configured complete-path color and legend policy.
     #[must_use]
-    pub const fn line_path_style_spec(&self) -> LinePathStyle {
+    pub(crate) const fn line_path_style_spec(&self) -> LinePathStyle {
         self.line_path_style
     }
 
     /// Configured original-observation overlay.
     #[must_use]
-    pub const fn raw_overlay_spec(&self) -> RawOverlay {
+    pub(crate) const fn raw_overlay_spec(&self) -> RawOverlay {
         self.raw_overlay
     }
 
@@ -638,7 +637,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Caller-owned panel-corner text annotations.
     #[must_use]
-    pub fn panel_text_annotations(&self) -> &[PanelTextAnnotation] {
+    pub(crate) fn panel_text_annotations(&self) -> &[PanelTextAnnotation] {
         &self.panel_text_annotations
     }
 
@@ -669,7 +668,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Caller-owned waterfall annotation labels, if configured.
     #[must_use]
-    pub const fn waterfall_labels_spec(&self) -> Option<&WaterfallLabels> {
+    pub(crate) const fn waterfall_labels_spec(&self) -> Option<&WaterfallLabels> {
         self.waterfall_labels.as_ref()
     }
 
@@ -679,7 +678,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Required endpoint labels and colors for a dumbbell plot.
     #[must_use]
-    pub const fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
+    pub(crate) const fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
         match &self.input {
             PlotInput::Dumbbell { endpoints, .. } => Some(endpoints),
             _ => None,
@@ -688,38 +687,32 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// The chart title, if any.
     #[must_use]
-    pub fn title_text(&self) -> Option<&str> {
+    pub(crate) fn title_text(&self) -> Option<&str> {
         self.title.as_deref()
     }
 
     /// The chart subtitle, if any.
     #[must_use]
-    pub fn subtitle_text(&self) -> Option<&str> {
+    pub(crate) fn subtitle_text(&self) -> Option<&str> {
         self.subtitle.as_deref()
     }
 
     /// The chart caption, if any.
     #[must_use]
-    pub fn caption_text(&self) -> Option<&str> {
+    pub(crate) fn caption_text(&self) -> Option<&str> {
         self.caption.as_deref()
     }
 
     /// The x-axis label, if any.
     #[must_use]
-    pub fn x_label_text(&self) -> Option<&str> {
+    pub(crate) fn x_label_text(&self) -> Option<&str> {
         self.x_label.as_deref()
     }
 
     /// The y-axis label, if any.
     #[must_use]
-    pub fn y_label_text(&self) -> Option<&str> {
+    pub(crate) fn y_label_text(&self) -> Option<&str> {
         self.y_label.as_deref()
-    }
-
-    /// Borrow the presentation rules for automatically sourced labels.
-    #[must_use]
-    pub const fn labels_spec(&self) -> &Labels {
-        &self.labels
     }
 
     pub(crate) fn resolve_label(&self, raw: &str) -> String {
@@ -861,7 +854,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Borrow x-axis scale configuration.
     #[must_use]
-    pub fn x_axis_spec(&self) -> &AxisSpec {
+    pub(crate) fn x_axis_spec(&self) -> &AxisSpec {
         &self.x_axis_spec
     }
 
@@ -875,7 +868,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Borrow y-axis scale configuration.
     #[must_use]
-    pub fn y_axis_spec(&self) -> &AxisSpec {
+    pub(crate) fn y_axis_spec(&self) -> &AxisSpec {
         &self.y_axis_spec
     }
 
@@ -925,7 +918,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Grouped-bar spacing preset.
     #[must_use]
-    pub fn bar_spacing_spec(&self) -> BarSpacing {
+    pub(crate) fn bar_spacing_spec(&self) -> BarSpacing {
         self.bar_spacing
     }
 
@@ -935,10 +928,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         PointStyle::with_outline(color, radius, self.point_outline)
     }
 
-    /// Active plot kind, if a terminal method (`.scatter()` /
-    /// `.bar()` / `.boxplot()`) has been called.
+    /// Selected semantic plot kind.
     #[must_use]
-    pub fn plot_kind(&self) -> Option<PlotKind> {
+    pub const fn kind(&self) -> PlotKind {
         self.kind
     }
 

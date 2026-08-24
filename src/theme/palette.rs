@@ -48,10 +48,9 @@ define_themes! {
 /// impl reads this to decide colors, line widths, fonts, and the
 /// layout grammar (whether to draw the frame, grid, ticks, etc.).
 ///
-/// Defaults are tuned so that
-/// `Plot::new(df).x("a").y("b").scatter()` (or any other plot
-/// kind) produces a publication-quality figure without the caller
-/// having to manually request decorations.
+/// Defaults are tuned so that every semantic `Plot` constructor produces a
+/// publication-quality figure without the caller having to manually request
+/// decorations.
 ///
 /// The flag-style fields (show_frame / show_grid / show_ticks / ...)
 /// are intentionally grouped together as a configuration block:

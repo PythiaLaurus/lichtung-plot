@@ -244,11 +244,11 @@ fn positive_bars_preserve_zero_baseline() {
         BarInput::estimates(data::numeric(&df, "value")),
     )
     .size(320, 240);
-    let panel = chart.figure_layout().panel_box;
     chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
+    let panel = parse_first_clip_rect(&svg);
     let bar_bounds = parse_polygon_bounds(&svg);
-    let panel_bottom = 240.0 - panel.y0;
+    let panel_bottom = panel.y + panel.height;
 
     assert!(
         !bar_bounds.is_empty()

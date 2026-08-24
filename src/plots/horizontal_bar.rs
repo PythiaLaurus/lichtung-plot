@@ -25,8 +25,8 @@ pub(crate) fn render(
 ) -> Result<PlotRenderResult, Error> {
     let palette = chart.palette();
 
-    let mode = match chart.plot_kind() {
-        Some(PlotKind::StackedHorizontalBar) => BarMode::Stacked,
+    let mode = match chart.kind() {
+        PlotKind::StackedHorizontalBar => BarMode::Stacked,
         _ if chart.group_col().is_some() => BarMode::Grouped,
         _ => BarMode::Single,
     };

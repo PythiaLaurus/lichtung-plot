@@ -393,7 +393,7 @@ fn trajectory_legends(
             })
             .collect();
     }
-    if chart.plot_kind() == Some(crate::PlotKind::LinePath) && !chart.markers_visible() {
+    if chart.kind() == crate::PlotKind::LinePath && !chart.markers_visible() {
         return Ok(Vec::new());
     }
     trajectory

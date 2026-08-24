@@ -479,27 +479,3 @@ pub(super) fn circle_bounds(circles: &[(f64, f64)]) -> (f64, f64, f64, f64) {
         },
     )
 }
-
-pub(super) fn marginal_central_panel<K: lichtung_plot::kind::Marker>(
-    chart: &Plot<K>,
-    right_w: f64,
-    top_h: f64,
-    gap: f64,
-) -> lichtung_plot::layout::PanelBox {
-    let outer = chart.figure_layout().panel_box;
-    lichtung_plot::layout::PanelBox::new(
-        outer.x0,
-        outer.x1 - right_w - gap,
-        outer.y0,
-        outer.y1 - top_h - gap,
-    )
-}
-
-pub(super) fn panel_to_svg_rect(panel: lichtung_plot::layout::PanelBox, canvas_h: f64) -> SvgRect {
-    SvgRect {
-        x: panel.x0,
-        y: canvas_h - panel.y1,
-        width: panel.width(),
-        height: panel.height(),
-    }
-}

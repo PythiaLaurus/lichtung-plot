@@ -281,7 +281,12 @@ and `just verify` passed on 2026-08-25.
 
 ## Final API Phase A5: Plot Identity And Introspection
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: exhaustive constructor and erasure identity tests, focused
+categorical, annotations, distributions, marginal-matrix, and rendering suites,
+42 doctests including 40 compile-fail cases, both Clippy feature configurations,
+independent review, and `just verify` passed on 2026-08-25.
 
 - Store `PlotKind` directly, never `Option<PlotKind>`.
 - Replace `plot_kind() -> Option<PlotKind>` with `kind() -> PlotKind`.
