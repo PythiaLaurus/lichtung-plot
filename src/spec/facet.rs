@@ -61,12 +61,16 @@ impl FacetSpec {
     }
 
     /// Split the plot into a row-by-column grid.
-    #[must_use]
-    pub fn grid(row: CategoryValues, column: CategoryValues) -> Self {
-        Self {
+    pub fn grid(row: CategoryValues, column: CategoryValues) -> Result<Self, Error> {
+        if row.name() == column.name() {
+            return Err(Error::Data(
+                "facet grid row and column must use different columns".into(),
+            ));
+        }
+        Ok(Self {
             layout: FacetLayout::Grid { row, column },
             scales: FacetScales::Fixed,
-        }
+        })
     }
 
     /// Wrap one categorical dimension into a positive number of columns.

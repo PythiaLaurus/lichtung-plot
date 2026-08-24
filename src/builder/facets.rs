@@ -45,23 +45,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         )
     }
 
-    pub(crate) fn facet_names(&self) -> (Option<&str>, Option<&str>, Option<&str>) {
-        (
-            self.facet
-                .as_ref()
-                .and_then(FacetSpec::row_values)
-                .map(crate::CategoryValues::name),
-            self.facet
-                .as_ref()
-                .and_then(FacetSpec::column_values)
-                .map(crate::CategoryValues::name),
-            self.facet
-                .as_ref()
-                .and_then(FacetSpec::wrap_values)
-                .map(crate::CategoryValues::name),
-        )
-    }
-
     pub(crate) fn without_facets(mut self) -> Self {
         self.facet = None;
         self

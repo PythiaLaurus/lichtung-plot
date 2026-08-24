@@ -327,7 +327,11 @@ passed on 2026-08-25.
 
 ## Final API Phase A8: Facet Construction
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: construction-time grid and wrap rejection tests, the focused
+composition suite, 46 doctests, both Clippy feature configurations, independent
+contract review, and `just verify` passed on 2026-08-25.
 
 Make `FacetSpec::grid` return `Result<Self>` and reject equal semantic dimension
 names at construction. Migrate every repository caller. `FacetSpec::wrap`

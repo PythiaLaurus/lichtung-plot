@@ -95,10 +95,13 @@ fn grid_facet_cell_owns_exactly_one_significance_panel() {
     )
     .unwrap();
     let chart = identity_bar(&frame)
-        .facet(FacetSpec::grid(
-            data::category(&frame, "row"),
-            data::category(&frame, "column"),
-        ))
+        .facet(
+            FacetSpec::grid(
+                data::category(&frame, "row"),
+                data::category(&frame, "column"),
+            )
+            .unwrap(),
+        )
         .significance([
             Significance::between("before", "after", SignificanceMark::OneStar)
                 .facet(FacetCell::grid("top", "right")),
@@ -266,10 +269,13 @@ fn sparse_cartesian_facets_draw_global_legend_on_first_rendered_panel() {
     let svg = render_svg(
         Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .hue(data::category(&frame, "trace"))
-            .facet(FacetSpec::grid(
-                data::category(&frame, "row"),
-                data::category(&frame, "column"),
-            ))
+            .facet(
+                FacetSpec::grid(
+                    data::category(&frame, "row"),
+                    data::category(&frame, "column"),
+                )
+                .unwrap(),
+            )
             .size(760, 520),
         "sparse-facet-legend",
     )
@@ -381,10 +387,13 @@ fn crossed_facets_order_valid_hues_by_original_source_rows() {
     let svg = render_svg(
         Plot::scatter(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
             .hue(data::category(&frame, "trace"))
-            .facet(FacetSpec::grid(
-                data::category(&frame, "row"),
-                data::category(&frame, "column"),
-            ))
+            .facet(
+                FacetSpec::grid(
+                    data::category(&frame, "row"),
+                    data::category(&frame, "column"),
+                )
+                .unwrap(),
+            )
             .size(760, 520),
         "crossed-facet-source-hue-order",
     )
@@ -525,21 +534,29 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
 
 #[test]
 fn row_and_column_facets_require_distinct_variable_names() {
-    let plot = Plot::bar(
-        lichtung_plot::CategoryValues::new("category", ["a", "b"]).unwrap(),
-        BarInput::estimates(lichtung_plot::NumericValues::new("value", [1.0, 2.0])),
-    )
-    .facet(FacetSpec::grid(
+    let error = FacetSpec::grid(
         lichtung_plot::CategoryValues::new("facet", ["r1", "r2"]).unwrap(),
         lichtung_plot::CategoryValues::new("facet", ["c1", "c2"]).unwrap(),
-    ));
+    )
+    .unwrap_err();
 
-    let error = plot.preflight().unwrap_err();
     assert!(matches!(error, lichtung_plot::Error::Data(_)));
     assert!(
         error.to_string().contains("must use different columns"),
         "{error}"
     );
+}
+
+#[test]
+fn wrapped_facets_require_at_least_one_column() {
+    let error = FacetSpec::wrap(
+        lichtung_plot::CategoryValues::new("facet", ["left", "right"]).unwrap(),
+        0,
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, lichtung_plot::Error::Data(_)));
+    assert!(error.to_string().contains("greater than zero"), "{error}");
 }
 
 #[test]

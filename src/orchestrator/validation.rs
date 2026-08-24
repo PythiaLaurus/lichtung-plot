@@ -220,15 +220,6 @@ impl Plot {
     }
 
     pub(crate) fn validate_facet_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        let (row_name, column_name, _) = self.facet_names();
-        if row_name
-            .zip(column_name)
-            .is_some_and(|(row_name, column_name)| row_name == column_name)
-        {
-            return Err(Error::Data(
-                "facet grid row and column must use different columns".into(),
-            ));
-        }
         if self.has_facets() && matches!(kind, PlotKind::Matrix | PlotKind::Marginal) {
             return Err(Error::Render(format!(
                 "{kind:?} manages its own panels and cannot be nested in generic faceting"
