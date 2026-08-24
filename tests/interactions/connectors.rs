@@ -42,10 +42,7 @@ fn explicit_visible_interaction_connectors_are_byte_identical_to_default() {
     let frame = interaction_data();
     assert_eq!(
         svg(chart(&frame), "connector-default"),
-        svg(
-            chart(&frame).interaction_connectors(true),
-            "connector-explicit",
-        )
+        svg(chart(&frame).connectors(true), "connector-explicit")
     );
 }
 
@@ -53,10 +50,7 @@ fn explicit_visible_interaction_connectors_are_byte_identical_to_default() {
 fn hidden_interaction_connectors_update_marks_and_exact_legend() {
     let frame = interaction_data();
     let visible = svg(chart(&frame), "connectors-visible");
-    let hidden = svg(
-        chart(&frame).interaction_connectors(false),
-        "connectors-hidden",
-    );
+    let hidden = svg(chart(&frame).connectors(false), "connectors-hidden");
     let visible_marks = clipped_marks(&visible);
     let hidden_marks = clipped_marks(&hidden);
     assert_eq!(visible_marks.matches("<polyline ").count(), 6);
@@ -76,11 +70,11 @@ fn hidden_interaction_connectors_update_marks_and_exact_legend() {
 fn hidden_interaction_connectors_reject_configured_styles() {
     let frame = interaction_data();
     let invalid = chart(&frame)
-        .interaction_styles([
+        .styles([
             InteractionStyle::new("Control"),
             InteractionStyle::new("Active"),
         ])
-        .interaction_connectors(false);
+        .connectors(false);
     assert!(invalid
         .preflight()
         .unwrap_err()
@@ -93,7 +87,7 @@ fn interaction_rejects_hiding_both_markers_and_connectors_preflight() {
     let frame = interaction_data();
     assert!(chart(&frame)
         .markers(false)
-        .interaction_connectors(false)
+        .connectors(false)
         .preflight()
         .unwrap_err()
         .to_string()
@@ -113,14 +107,9 @@ fn hidden_connectors_do_not_participate_in_legend_range_planning() {
         clipped_marks(&visible_without_legend)
     );
 
-    let hidden = svg(
-        chart(&frame).interaction_connectors(false),
-        "collision-hidden",
-    );
+    let hidden = svg(chart(&frame).connectors(false), "collision-hidden");
     let hidden_without_legend = svg(
-        chart(&frame)
-            .interaction_connectors(false)
-            .legend(LegendPolicy::Hidden),
+        chart(&frame).connectors(false).legend(LegendPolicy::Hidden),
         "collision-hidden-no-legend",
     );
     assert_eq!(

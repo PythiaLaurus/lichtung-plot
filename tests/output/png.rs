@@ -85,12 +85,12 @@ fn png_options_reject_invalid_scale_without_artifact() {
 fn histogram_density_and_qq_share_svg_png_paths() {
     let frame = df!("value" => [1.0_f64, 2.0, 2.0, 3.0, 4.0]).unwrap();
     let directory = unique_dir("distribution-png-paths");
-    let mut histogram = Plot::histogram(lichtung_plot::HistogramInput::samples(data::numeric(
+    let histogram = Plot::histogram(lichtung_plot::HistogramInput::samples(data::numeric(
         &frame, "value",
     )));
-    let _ = histogram
-        .histogram_bins(HistogramBins::Count(4))
-        .histogram_stat(HistogramStat::Density);
+    let histogram = histogram
+        .bins(HistogramBins::Count(4))
+        .stat(HistogramStat::Density);
     for (name, plot) in [
         ("histogram", histogram.erase()),
         (

@@ -93,16 +93,7 @@ capability!(Guides, "Plots with at least one numeric axis that accept explicit g
     Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Regression,
     Raincloud, Marginal, Beeswarm, Waterfall,
 ]);
-capability!(HistogramOptions, "Histogram-specific configuration." => [Histogram]);
-capability!(QqOptions, "Q-Q-specific configuration." => [Qq]);
 capability!(HeatmapOptions, "Heatmap-specific configuration." => [Heatmap]);
-capability!(BeeswarmOptions, "Beeswarm-specific continuous-color configuration." => [Beeswarm]);
-capability!(BarSpacing, "Bar-family spacing configuration." => [
-    Bar, HorizontalBar,
-]);
-capability!(BarPointLayers, "Ordinary bars that accept supplemental point layers." => [
-    Bar, HorizontalBar,
-]);
 capability!(CategoryOrder, "Plots that consume one primary categorical order." => [
     PointInterval, Bar, HorizontalBar, StackedBar, StackedHorizontalBar,
 ]);
@@ -110,20 +101,12 @@ capability!(SignedBars, "Bar plots that consume sign-based coloring." => [Horizo
 capability!(ZeroLine, "Plots that consume an explicit zero reference line." => [
     PointInterval, HorizontalBar, StackedHorizontalBar, Beeswarm,
 ]);
-capability!(LineOptions, "Ordinary line-series band configuration." => [Line]);
-capability!(PointLayers, "Ordinary line series that accept supplemental point layers." => [Line]);
-capability!(LinePathOptions, "Source-ordered line-path configuration." => [LinePath]);
 capability!(EstimateStatus, "Estimate displays that accept availability status." => [
     PointInterval, Coefficient, Forest,
 ]);
 capability!(Markers, "Line-like plots with configurable estimate markers." => [Line, LinePath, Interaction]);
-capability!(RegressionOptions, "Regression-specific band configuration." => [Regression]);
-capability!(CoefficientOptions, "Coefficient-specific labels and reference configuration." => [
+capability!(CoefficientOptions, "Coefficient-specific estimate-label configuration." => [
     Coefficient,
-]);
-capability!(ForestOptions, "Forest-specific axis-scale configuration." => [Forest]);
-capability!(InteractionOptions, "Interaction-specific connector and style configuration." => [
-    Interaction,
 ]);
 capability!(CategoricalColors, "Plots that consume caller-owned categorical colors." => [
     LinePath, Interaction, Violin, Raincloud,
@@ -133,7 +116,6 @@ capability!(PanelText, "Plots with one standard panel that accept corner text." 
     Dumbbell, Heatmap, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin,
     Raincloud, Regression, Marginal, Beeswarm, Waterfall,
 ]);
-capability!(WaterfallOptions, "Waterfall-specific annotation configuration." => [Waterfall]);
 capability!(PointOutline, "Point-rendering families with a configurable outline." => [
     Scatter, Density, Qq, PointInterval, Line, Trajectory, LinePath, Interaction, Coefficient, Forest,
     Dumbbell, Boxplot, Violin, Raincloud, Regression, Marginal, Matrix, Beeswarm,

@@ -191,7 +191,7 @@ fn forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values() {
             ),
             1.0,
         )
-        .axis_scale(AxisScale::Log10)
+        .scale(AxisScale::Log10)
     };
     let svg = render_svg(forest([0.5, 2.0], [0.1, 1.0], [1.0, 10.0]), "forest-log").unwrap();
     assert!(svg.contains(">0.1</text>") && svg.contains(">1</text>") && svg.contains(">10</text>"));
@@ -214,7 +214,7 @@ fn forest_narrow_log_range_keeps_raw_multiplicative_ticks() {
             ),
             1.0,
         )
-        .axis_scale(AxisScale::Log10)
+        .scale(AxisScale::Log10)
         .x_limits(1.0, 1.6),
         "forest-narrow-log",
     )

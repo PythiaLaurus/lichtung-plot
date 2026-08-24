@@ -232,7 +232,12 @@ preflight; source mode does not add public typestate markers.
 
 ## Final API Phase A3: Contextual Builder Names
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused library, categorical, distributions, estimates, heatmap,
+interactions, lines, output, and rendering tests, compile-fail doctests, both
+Clippy feature configurations, independent review, and `just verify` passed on
+2026-08-25.
 
 Apply the complete rename atomically through concrete `Plot<kind::...>`
 implementations. Do not retain aliases.

@@ -59,10 +59,10 @@ fn heatmap_constructor_accepts_typed_configuration() {
     .unwrap();
     let svg = render(&data, |plot| {
         plot.color_label("Response")
-            .heatmap_layout(HeatmapLayout::UpperTriangle { diagonal: true })
-            .heatmap_scale(HeatmapScale::Diverging { center: 0.5 })
-            .heatmap_color_limits(-1.0, 2.0)
-            .heatmap_annotations(HeatmapAnnotations::Values(
+            .layout(HeatmapLayout::UpperTriangle { diagonal: true })
+            .scale(HeatmapScale::Diverging { center: 0.5 })
+            .color_limits(-1.0, 2.0)
+            .annotations(HeatmapAnnotations::Values(
                 NumericLabelFormat::new(2).unwrap(),
             ))
     })
@@ -76,10 +76,7 @@ fn heatmap_cartesian_default_is_byte_identical_to_explicit_cartesian() {
     let data = fixture();
 
     let default = render(&data, |chart| chart).unwrap();
-    let explicit = render(&data, |chart| {
-        chart.heatmap_layout(HeatmapLayout::Cartesian)
-    })
-    .unwrap();
+    let explicit = render(&data, |chart| chart.layout(HeatmapLayout::Cartesian)).unwrap();
 
     assert_eq!(default, explicit);
 }
@@ -97,7 +94,7 @@ fn heatmap_hidden_annotations_and_all_false_highlights_are_byte_inert() {
     let default = render(&data, |chart| chart).unwrap();
     let explicit = render(&data, |chart| {
         chart
-            .heatmap_annotations(HeatmapAnnotations::Hidden)
+            .annotations(HeatmapAnnotations::Hidden)
             .heatmap_highlight(data::boolean(&data, "selected"))
     })
     .unwrap();
@@ -114,7 +111,7 @@ fn heatmap_lower_triangle_suppresses_structural_cells_without_missing_marks() {
     )
     .unwrap();
     let svg = render(&data, |chart| {
-        chart.heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: false })
+        chart.layout(HeatmapLayout::LowerTriangle { diagonal: false })
     })
     .unwrap();
     let marks = clipped_marks(&svg);
@@ -133,7 +130,7 @@ fn heatmap_triangle_marks_only_missing_cells_inside_active_triangle() {
     )
     .unwrap();
     let svg = render(&data, |chart| {
-        chart.heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: false })
+        chart.layout(HeatmapLayout::LowerTriangle { diagonal: false })
     })
     .unwrap();
     let marks = clipped_marks(&svg);
@@ -152,7 +149,7 @@ fn heatmap_triangle_active_diagonal_uses_missing_semantics() {
     )
     .unwrap();
     let svg = render(&data, |chart| {
-        chart.heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: true })
+        chart.layout(HeatmapLayout::LowerTriangle { diagonal: true })
     })
     .unwrap();
     let marks = clipped_marks(&svg);
@@ -306,7 +303,7 @@ fn heatmap_sequential_and_diverging_scales_use_pinned_endpoint_colors() {
     )
     .unwrap();
     let diverging = render(&diverging_data, |chart| {
-        chart.heatmap_scale(HeatmapScale::Diverging { center: 0.0 })
+        chart.scale(HeatmapScale::Diverging { center: 0.0 })
     })
     .unwrap();
 
@@ -325,7 +322,7 @@ fn heatmap_explicit_color_limits_are_exact_and_saturate_values() {
         "value" => [-10.0_f64, 10.0]
     )
     .unwrap();
-    let svg = render(&data, |chart| chart.heatmap_color_limits(0.0, 1.0)).unwrap();
+    let svg = render(&data, |chart| chart.color_limits(0.0, 1.0)).unwrap();
     let marks = clipped_marks(&svg);
 
     assert!(marks.contains("fill=\"#F7FBFF\""));
@@ -343,8 +340,8 @@ fn heatmap_endpoint_diverging_center_is_neutral() {
     .unwrap();
     let svg = render(&data, |chart| {
         chart
-            .heatmap_scale(HeatmapScale::Diverging { center: 0.0 })
-            .heatmap_color_limits(0.0, 1.0)
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(0.0, 1.0)
     })
     .unwrap();
 
@@ -359,7 +356,7 @@ fn heatmap_all_missing_grid_renders_with_explicit_color_limits() {
         "value" => [None::<f64>, None]
     )
     .unwrap();
-    let svg = render(&data, |chart| chart.heatmap_color_limits(0.0, 1.0)).unwrap();
+    let svg = render(&data, |chart| chart.color_limits(0.0, 1.0)).unwrap();
 
     assert_eq!(clipped_marks(&svg).matches("<polygon ").count(), 2);
     assert!(svg.contains(">Missing</text>"));
@@ -401,7 +398,7 @@ fn heatmap_handles_signed_zero_subnormal_and_opposite_extremes() {
     )
     .unwrap();
     let svg = render(&data, |chart| {
-        chart.heatmap_scale(HeatmapScale::Diverging { center: 0.0 })
+        chart.scale(HeatmapScale::Diverging { center: 0.0 })
     })
     .unwrap();
 
@@ -437,8 +434,8 @@ fn heatmap_diverging_colorbar_places_neutral_stop_at_normalized_center() {
     .unwrap();
     let svg = render(&data, |chart| {
         chart
-            .heatmap_scale(HeatmapScale::Diverging { center: 0.0 })
-            .heatmap_color_limits(-1.0, 3.0)
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-1.0, 3.0)
     })
     .unwrap();
 
@@ -454,7 +451,7 @@ fn heatmap_annotations_use_raw_precision_and_contrasting_text() {
     )
     .unwrap();
     let svg = render(&data, |chart| {
-        chart.heatmap_annotations(HeatmapAnnotations::Values(
+        chart.annotations(HeatmapAnnotations::Values(
             NumericLabelFormat::new(2).unwrap(),
         ))
     })
@@ -481,7 +478,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     let svg = render(&data, |chart| {
         chart
             .size(480, 300)
-            .heatmap_annotations(HeatmapAnnotations::Values(
+            .annotations(HeatmapAnnotations::Values(
                 NumericLabelFormat::new(2).unwrap(),
             ))
             .heatmap_null_row_annotation(annotation)
@@ -592,7 +589,7 @@ fn heatmap_annotations_append_suffix_and_border_only_selected_cells() {
     let svg = render(&data, |chart| {
         chart
             .heatmap_highlight(data::boolean(&data, "selected"))
-            .heatmap_annotations(HeatmapAnnotations::Values(
+            .annotations(HeatmapAnnotations::Values(
                 NumericLabelFormat::with_suffix(1, "%").unwrap(),
             ))
     })
@@ -643,11 +640,9 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
     let values = vec![12345.6789_f64; columns.len()];
     let data = df!("column" => columns, "row" => rows, "value" => values).unwrap();
     let error = render(&data, |chart| {
-        chart
-            .size(360, 220)
-            .heatmap_annotations(HeatmapAnnotations::Values(
-                NumericLabelFormat::new(4).unwrap(),
-            ))
+        chart.size(360, 220).annotations(HeatmapAnnotations::Values(
+            NumericLabelFormat::new(4).unwrap(),
+        ))
     })
     .unwrap_err();
 
@@ -666,15 +661,15 @@ fn heatmap_rejects_value_sorted_category_order() {
 fn heatmap_rejects_invalid_scale_options() {
     let data = fixture();
     let errors = [
-        render(&data, |chart| chart.heatmap_color_limits(1.0, 1.0)).unwrap_err(),
+        render(&data, |chart| chart.color_limits(1.0, 1.0)).unwrap_err(),
         render(&data, |chart| {
             chart
-                .heatmap_scale(HeatmapScale::Diverging { center: 0.0 })
-                .heatmap_color_limits(0.5, 1.0)
+                .scale(HeatmapScale::Diverging { center: 0.0 })
+                .color_limits(0.5, 1.0)
         })
         .unwrap_err(),
         render(&data, |chart| {
-            chart.heatmap_scale(HeatmapScale::Diverging {
+            chart.scale(HeatmapScale::Diverging {
                 center: f64::INFINITY,
             })
         })

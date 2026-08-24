@@ -77,26 +77,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set the heatmap color-scale policy.
-    #[must_use]
-    pub fn heatmap_scale(mut self, scale: HeatmapScale) -> Self
-    where
-        K: crate::kind::HeatmapOptions,
-    {
-        self.heatmap_scale = scale;
-        self
-    }
-
-    /// Select Cartesian or structural triangular heatmap cells.
-    #[must_use]
-    pub fn heatmap_layout(mut self, layout: HeatmapLayout) -> Self
-    where
-        K: crate::kind::HeatmapOptions,
-    {
-        self.heatmap_layout = layout;
-        self
-    }
-
     /// Configure whether crowded heatmap category labels are elided or wrapped.
     #[must_use]
     pub fn heatmap_label_fit(mut self, fit: HeatmapLabelFit) -> Self
@@ -104,36 +84,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::HeatmapOptions,
     {
         self.heatmap_label_fit = fit;
-        self
-    }
-
-    /// Set exact heatmap color-domain limits. Values outside them saturate.
-    #[must_use]
-    pub fn heatmap_color_limits(mut self, min: f64, max: f64) -> Self
-    where
-        K: crate::kind::HeatmapOptions,
-    {
-        self.heatmap_color_limits = Some((min, max));
-        self
-    }
-
-    /// Set exact beeswarm continuous-color limits. Values outside them saturate.
-    #[must_use]
-    pub fn beeswarm_color_limits(mut self, min: f64, max: f64) -> Self
-    where
-        K: crate::kind::BeeswarmOptions,
-    {
-        self.beeswarm_color_limits = Some((min, max));
-        self
-    }
-
-    /// Configure optional heatmap cell-value annotations.
-    #[must_use]
-    pub fn heatmap_annotations(mut self, annotations: HeatmapAnnotations) -> Self
-    where
-        K: crate::kind::HeatmapOptions,
-    {
-        self.heatmap_annotations = annotations;
         self
     }
 
@@ -293,76 +243,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Append a separately borrowed strict point layer to a numeric line chart.
-    #[must_use]
-    pub fn point_layer(mut self, layer: PointLayer) -> Self
-    where
-        K: crate::kind::PointLayers,
-    {
-        self.point_layers.push(layer);
-        self
-    }
-
-    /// Append a separately borrowed strict point layer to an ordinary bar chart.
-    #[must_use]
-    pub fn bar_point_layer(mut self, layer: BarPointLayer) -> Self
-    where
-        K: crate::kind::BarPointLayers,
-    {
-        self.bar_point_layers.push(layer);
-        self
-    }
-
-    /// Set grouped-bar spacing.
-    #[must_use]
-    pub fn bar_spacing(mut self, spacing: BarSpacing) -> Self
-    where
-        K: crate::kind::BarSpacing,
-    {
-        self.bar_spacing = spacing;
-        self
-    }
-
-    /// Set the histogram bin-selection strategy.
-    #[must_use]
-    pub fn histogram_bins(&mut self, bins: HistogramBins) -> &mut Self
-    where
-        K: crate::kind::HistogramOptions,
-    {
-        self.histogram_bins = bins;
-        self
-    }
-
-    /// Set the histogram vertical-axis normalization.
-    #[must_use]
-    pub fn histogram_stat(&mut self, stat: HistogramStat) -> &mut Self
-    where
-        K: crate::kind::HistogramOptions,
-    {
-        self.histogram_stat = stat;
-        self
-    }
-
-    /// Add a KDE density curve and complete source-observation rug to a histogram.
-    #[must_use]
-    pub fn histogram_composite(mut self, composite: HistogramComposite) -> Self
-    where
-        K: crate::kind::HistogramOptions,
-    {
-        self.histogram_composite = composite;
-        self
-    }
-
-    /// Set the normal Q-Q reference-line policy.
-    #[must_use]
-    pub fn qq_line(&mut self, line: QqLine) -> &mut Self
-    where
-        K: crate::kind::QqOptions,
-    {
-        self.qq_line = line;
-        self
-    }
-
     /// Set the primary categorical display order.
     ///
     /// Passing [`crate::ValueSort`] selects value-derived ordering after the
@@ -424,16 +304,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Add a drawable band to an ordinary line series.
-    #[must_use]
-    pub fn band(mut self, bounds: Bounds) -> Self
-    where
-        K: crate::kind::LineOptions,
-    {
-        self.line_band = Some(bounds);
-        self
-    }
-
     /// Set one typed availability value per aligned estimate row.
     #[must_use]
     pub fn estimate_status(mut self, statuses: impl IntoIterator<Item = EstimateStatus>) -> Self
@@ -454,66 +324,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Select the generated regression confidence-band policy.
-    #[must_use]
-    pub const fn regression_band(mut self, band: RegressionBand) -> Self
-    where
-        K: crate::kind::RegressionOptions,
-    {
-        self.regression_band = band;
-        self
-    }
-
-    /// Select the complete-path color and legend policy.
-    #[must_use]
-    pub const fn line_path_style(mut self, style: LinePathStyle) -> Self
-    where
-        K: crate::kind::LinePathOptions,
-    {
-        self.line_path_style = style;
-        self
-    }
-
-    /// Set the scientific reference/null line for a coefficient plot.
-    #[must_use]
-    pub fn reference_line(mut self, value: f64) -> Self
-    where
-        K: crate::kind::CoefficientOptions,
-    {
-        self.coefficient_reference_line = Some(value);
-        self
-    }
-
-    /// Set the numeric axis scale used by a forest plot.
-    #[must_use]
-    pub fn axis_scale(mut self, scale: AxisScale) -> Self
-    where
-        K: crate::kind::ForestOptions,
-    {
-        self.axis_scale = scale;
-        self
-    }
-
-    /// Set whether an interaction plot draws connectors between category estimates.
-    #[must_use]
-    pub const fn interaction_connectors(mut self, visible: bool) -> Self
-    where
-        K: crate::kind::InteractionOptions,
-    {
-        self.interaction_connectors = Some(visible);
-        self
-    }
-
-    /// Set exactly one typed point-and-connector style per interaction group.
-    #[must_use]
-    pub fn interaction_styles(mut self, styles: impl IntoIterator<Item = InteractionStyle>) -> Self
-    where
-        K: crate::kind::InteractionOptions,
-    {
-        self.interaction_styles = Some(styles.into_iter().collect());
-        self
-    }
-
     /// Sets exact caller-owned colors for every categorical level used by the plot.
     #[must_use]
     pub fn categorical_colors(mut self, colors: CategoricalColors) -> Self
@@ -531,16 +341,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::PanelText,
     {
         self.panel_text_annotations.push(annotation);
-        self
-    }
-
-    /// Set caller-owned labels for waterfall base and terminal annotations.
-    #[must_use]
-    pub fn waterfall_labels(mut self, labels: WaterfallLabels) -> Self
-    where
-        K: crate::kind::WaterfallOptions,
-    {
-        self.waterfall_labels = Some(labels);
         self
     }
 
@@ -601,6 +401,186 @@ impl<K: crate::kind::Marker> Plot<K> {
         K: crate::kind::RawOverlay,
     {
         self.raw_overlay = overlay;
+        self
+    }
+}
+
+impl Plot<crate::kind::Heatmap> {
+    /// Set the heatmap color-scale policy.
+    #[must_use]
+    pub fn scale(mut self, scale: HeatmapScale) -> Self {
+        self.heatmap_scale = scale;
+        self
+    }
+
+    /// Select Cartesian or structural triangular heatmap cells.
+    #[must_use]
+    pub fn layout(mut self, layout: HeatmapLayout) -> Self {
+        self.heatmap_layout = layout;
+        self
+    }
+
+    /// Configure optional heatmap cell-value annotations.
+    #[must_use]
+    pub fn annotations(mut self, annotations: HeatmapAnnotations) -> Self {
+        self.heatmap_annotations = annotations;
+        self
+    }
+
+    /// Set exact heatmap color-domain limits. Values outside them saturate.
+    #[must_use]
+    pub fn color_limits(mut self, min: f64, max: f64) -> Self {
+        self.heatmap_color_limits = Some((min, max));
+        self
+    }
+}
+
+impl Plot<crate::kind::Forest> {
+    /// Set the numeric axis scale used by a forest plot.
+    #[must_use]
+    pub fn scale(mut self, scale: AxisScale) -> Self {
+        self.axis_scale = scale;
+        self
+    }
+}
+
+impl Plot<crate::kind::Beeswarm> {
+    /// Set exact continuous-color limits. Values outside them saturate.
+    #[must_use]
+    pub fn color_limits(mut self, min: f64, max: f64) -> Self {
+        self.beeswarm_color_limits = Some((min, max));
+        self
+    }
+}
+
+impl Plot<crate::kind::Bar> {
+    /// Set spacing between series inside each category.
+    #[must_use]
+    pub fn spacing(mut self, spacing: BarSpacing) -> Self {
+        self.bar_spacing = spacing;
+        self
+    }
+
+    /// Append a strict point layer positioned at prepared bar centers.
+    #[must_use]
+    pub fn point_layer(mut self, layer: BarPointLayer) -> Self {
+        self.bar_point_layers.push(layer);
+        self
+    }
+}
+
+impl Plot<crate::kind::HorizontalBar> {
+    /// Set spacing between series inside each category.
+    #[must_use]
+    pub fn spacing(mut self, spacing: BarSpacing) -> Self {
+        self.bar_spacing = spacing;
+        self
+    }
+
+    /// Append a strict point layer positioned at prepared bar centers.
+    #[must_use]
+    pub fn point_layer(mut self, layer: BarPointLayer) -> Self {
+        self.bar_point_layers.push(layer);
+        self
+    }
+}
+
+impl Plot<crate::kind::Histogram> {
+    /// Set the histogram bin-selection strategy.
+    #[must_use]
+    pub fn bins(mut self, bins: HistogramBins) -> Self {
+        self.histogram_bins = bins;
+        self
+    }
+
+    /// Set the histogram vertical-axis normalization.
+    #[must_use]
+    pub fn stat(mut self, stat: HistogramStat) -> Self {
+        self.histogram_stat = stat;
+        self
+    }
+
+    /// Add a KDE density curve and complete source-observation rug.
+    #[must_use]
+    pub fn composite(mut self, composite: HistogramComposite) -> Self {
+        self.histogram_composite = composite;
+        self
+    }
+}
+
+impl Plot<crate::kind::Qq> {
+    /// Set the normal Q-Q reference-line policy.
+    #[must_use]
+    pub fn reference_line(mut self, line: QqLine) -> Self {
+        self.qq_line = line;
+        self
+    }
+}
+
+impl Plot<crate::kind::Line> {
+    /// Append a strict supplemental point layer.
+    #[must_use]
+    pub fn point_layer(mut self, layer: PointLayer) -> Self {
+        self.point_layers.push(layer);
+        self
+    }
+
+    /// Add a drawable band to the line series.
+    #[must_use]
+    pub fn band(mut self, bounds: Bounds) -> Self {
+        self.line_band = Some(bounds);
+        self
+    }
+}
+
+impl Plot<crate::kind::Regression> {
+    /// Select the generated confidence-band policy.
+    #[must_use]
+    pub const fn band(mut self, band: RegressionBand) -> Self {
+        self.regression_band = band;
+        self
+    }
+}
+
+impl Plot<crate::kind::LinePath> {
+    /// Select the complete-path color and legend policy.
+    #[must_use]
+    pub const fn style(mut self, style: LinePathStyle) -> Self {
+        self.line_path_style = style;
+        self
+    }
+}
+
+impl Plot<crate::kind::Coefficient> {
+    /// Set the scientific reference/null line.
+    #[must_use]
+    pub fn reference_line(mut self, value: f64) -> Self {
+        self.coefficient_reference_line = Some(value);
+        self
+    }
+}
+
+impl Plot<crate::kind::Interaction> {
+    /// Set whether connectors are drawn between category estimates.
+    #[must_use]
+    pub const fn connectors(mut self, visible: bool) -> Self {
+        self.interaction_connectors = Some(visible);
+        self
+    }
+
+    /// Set exactly one typed point-and-connector style per interaction group.
+    #[must_use]
+    pub fn styles(mut self, styles: impl IntoIterator<Item = InteractionStyle>) -> Self {
+        self.interaction_styles = Some(styles.into_iter().collect());
+        self
+    }
+}
+
+impl Plot<crate::kind::Waterfall> {
+    /// Set caller-owned labels for base and terminal annotations.
+    #[must_use]
+    pub fn total_labels(mut self, labels: WaterfallLabels) -> Self {
+        self.waterfall_labels = Some(labels);
         self
     }
 }

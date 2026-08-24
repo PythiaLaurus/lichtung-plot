@@ -10,6 +10,95 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 }
 
 #[test]
+fn contextual_builders_preserve_exact_plot_markers() {
+    use lichtung_plot::{
+        kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,
+        HeatmapAnnotations, HeatmapLayout, HeatmapScale, HistogramBins, HistogramComposite,
+        HistogramInput, HistogramStat, InteractionStyle, LinePathStyle, NumericValues, PointLayer,
+        QqLine, RegressionBand, WaterfallLabels,
+    };
+
+    fn numeric(name: &'static str) -> NumericValues {
+        NumericValues::new(name, [1.0, 2.0])
+    }
+
+    fn category(name: &'static str) -> CategoryValues {
+        CategoryValues::new(name, ["a", "b"]).unwrap()
+    }
+
+    fn bounds() -> Bounds {
+        Bounds::new(numeric("lower"), numeric("upper"))
+    }
+
+    let _: Plot<kind::Heatmap> = Plot::heatmap(category("x"), category("y"), numeric("fill"))
+        .scale(HeatmapScale::Sequential)
+        .layout(HeatmapLayout::Cartesian)
+        .annotations(HeatmapAnnotations::Hidden)
+        .color_limits(0.0, 3.0);
+    let _: Plot<kind::Forest> =
+        Plot::forest(category("term"), numeric("estimate"), bounds(), 1.0).scale(AxisScale::Log10);
+    let _: Plot<kind::Beeswarm> =
+        Plot::beeswarm(category("category"), numeric("value"), numeric("color"))
+            .color_limits(0.0, 3.0);
+    let _: Plot<kind::Bar> = Plot::bar(category("category"), BarInput::estimates(numeric("value")))
+        .spacing(BarSpacing::Compact)
+        .point_layer(
+            BarPointLayer::new(
+                category("point category"),
+                None,
+                numeric("point value"),
+                (1, 2, 3),
+                2,
+                0.5,
+            )
+            .unwrap(),
+        );
+    let _: Plot<kind::HorizontalBar> =
+        Plot::horizontal_bar(category("category"), BarInput::estimates(numeric("value")))
+            .spacing(BarSpacing::Comfort)
+            .point_layer(
+                BarPointLayer::new(
+                    category("point category"),
+                    None,
+                    numeric("point value"),
+                    (1, 2, 3),
+                    2,
+                    0.5,
+                )
+                .unwrap(),
+            );
+    let _: Plot<kind::Histogram> = Plot::histogram(HistogramInput::samples(numeric("value")))
+        .bins(HistogramBins::Count(4))
+        .stat(HistogramStat::Density)
+        .composite(HistogramComposite::HistogramOnly);
+    let _: Plot<kind::Qq> = Plot::qq(numeric("value")).reference_line(QqLine::Identity);
+    let _: Plot<kind::Line> = Plot::line(numeric("x"), numeric("y"))
+        .point_layer(
+            PointLayer::new(numeric("point x"), numeric("point y"), (1, 2, 3), 2, 0.5).unwrap(),
+        )
+        .band(bounds());
+    let _: Plot<kind::Regression> =
+        Plot::regression(numeric("x"), numeric("y")).band(RegressionBand::Hidden);
+    let _: Plot<kind::LinePath> =
+        Plot::line_path(numeric("x"), numeric("y"), category("group")).style(LinePathStyle::Hue);
+    let _: Plot<kind::Coefficient> = Plot::coefficient(
+        category("term"),
+        CoefficientInput::estimates(numeric("estimate")),
+    )
+    .reference_line(0.0);
+    let _: Plot<kind::Interaction> = Plot::interaction(
+        category("condition"),
+        numeric("estimate"),
+        category("group"),
+        bounds(),
+    )
+    .connectors(false)
+    .styles([InteractionStyle::new("a"), InteractionStyle::new("b")]);
+    let _: Plot<kind::Waterfall> = Plot::waterfall(category("label"), numeric("delta"), 0.0)
+        .total_labels(WaterfallLabels::new("Base", "Total").unwrap());
+}
+
+#[test]
 fn categorical_plots_render_stacked_pairwise_brackets() {
     let df = df!(
         "group" => ["a", "a", "b", "b", "c", "c"],

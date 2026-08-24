@@ -88,7 +88,7 @@ fn prepare_reorients_triangular_pairs_under_explicit_family_order() {
         into_column([1.0_f64, 2.0, 3.0]),
     );
     let chart = chart(&data)
-        .heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: false })
+        .layout(HeatmapLayout::LowerTriangle { diagonal: false })
         .x_category_order(CategoryOrder::explicit(["c", "b", "a"]));
 
     let prepared = prepare_chart(&chart).unwrap();
@@ -300,7 +300,7 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
     let charts = [
         chart(&data).x_category_order(ValueSort::Ascending).erase(),
         chart(&data)
-            .heatmap_scale(HeatmapScale::Diverging { center: f64::NAN })
+            .scale(HeatmapScale::Diverging { center: f64::NAN })
             .erase(),
     ];
 

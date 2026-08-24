@@ -136,12 +136,12 @@ fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     for path in [&first, &second] {
-        let mut plot = Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
+        let plot = Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
             .title("Deterministic histogram")
             .size(420, 300);
-        let _ = plot
-            .histogram_bins(HistogramBins::Count(3))
-            .histogram_stat(HistogramStat::Probability);
+        let plot = plot
+            .bins(HistogramBins::Count(3))
+            .stat(HistogramStat::Probability);
         plot.svg(path).unwrap();
     }
 
@@ -177,9 +177,9 @@ fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
     let df = df!("value" => [0.0_f64, 2.0, 4.0, 6.0, 8.0, 10.0]).unwrap();
     let dir = unique_dir("histogram-explicit-limits");
     let output = dir.join("histogram.svg");
-    let mut plot =
+    let plot =
         Plot::histogram(HistogramInput::samples(data::numeric(&df, "value"))).x_limits(2.0, 8.0);
-    let _ = plot.histogram_bins(HistogramBins::Count(5));
+    let plot = plot.bins(HistogramBins::Count(5));
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
@@ -383,8 +383,8 @@ fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
     for path in [&first, &second] {
         Plot::qq(data::numeric(&df, "value")).svg(path).unwrap();
     }
-    let mut hidden_plot = Plot::qq(data::numeric(&df, "value"));
-    let _ = hidden_plot.qq_line(QqLine::Hidden);
+    let hidden_plot = Plot::qq(data::numeric(&df, "value"));
+    let hidden_plot = hidden_plot.reference_line(QqLine::Hidden);
     hidden_plot.svg(&hidden).unwrap();
 
     let svg = std::fs::read_to_string(first).unwrap();
@@ -477,8 +477,8 @@ fn qq_renders_with_adjacent_finite_explicit_limits() {
     let df = df!("value" => [0.0_f64, upper]).unwrap();
     let dir = unique_dir("qq-adjacent-explicit-limits");
     let output = dir.join("qq.svg");
-    let mut plot = Plot::qq(data::numeric(&df, "value")).y_limits(0.0, upper);
-    let _ = plot.qq_line(QqLine::Hidden);
+    let plot = Plot::qq(data::numeric(&df, "value")).y_limits(0.0, upper);
+    let plot = plot.reference_line(QqLine::Hidden);
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
@@ -508,10 +508,10 @@ fn qq_explicit_limits_skip_opposite_sign_extreme_outliers_before_projection() {
     let df = df!("value" => [-f64::MAX, 0.0, f64::MAX]).unwrap();
     let dir = unique_dir("qq-opposite-extremes-explicit");
     let output = dir.join("qq.svg");
-    let mut plot = Plot::qq(data::numeric(&df, "value"))
+    let plot = Plot::qq(data::numeric(&df, "value"))
         .x_limits(-2.0, 2.0)
         .y_limits(-1.0, 1.0);
-    let _ = plot.qq_line(QqLine::Hidden);
+    let plot = plot.reference_line(QqLine::Hidden);
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
@@ -525,8 +525,8 @@ fn qq_hidden_line_renders_opposite_extremes_with_exact_auto_range() {
     let df = df!("value" => [-f64::MAX, f64::MAX]).unwrap();
     let dir = unique_dir("qq-opposite-extremes-auto-hidden");
     let output = dir.join("qq.svg");
-    let mut plot = Plot::qq(data::numeric(&df, "value"));
-    let _ = plot.qq_line(QqLine::Hidden);
+    let plot = Plot::qq(data::numeric(&df, "value"));
+    let plot = plot.reference_line(QqLine::Hidden);
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 

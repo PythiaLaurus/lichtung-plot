@@ -283,7 +283,7 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
         BarInput::estimates(crate::data::numeric(&data, "value")),
     )
     .series(crate::data::category(&data, "series"))
-    .bar_spacing(spacing)
+    .spacing(spacing)
     .size(360, 260);
     chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");

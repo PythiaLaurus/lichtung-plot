@@ -44,7 +44,7 @@ fn path_chart(data: &DataFrame, style: LinePathStyle) -> Plot<crate::kind::LineP
         crate::test_support::category(data, "path"),
     )
     .hue(crate::test_support::category(data, "hue"))
-    .line_path_style(style)
+    .style(style)
 }
 
 #[test]
@@ -276,7 +276,7 @@ fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Plot<crate::k
         crate::test_support::numeric(data, "color"),
     );
     if let Some((minimum, maximum)) = limits {
-        chart = chart.beeswarm_color_limits(minimum, maximum);
+        chart = chart.color_limits(minimum, maximum);
     }
     chart
 }
@@ -385,7 +385,7 @@ fn waterfall_chart(
         crate::test_support::constant_numeric(data, "base"),
     );
     if let Some(labels) = labels {
-        chart = chart.waterfall_labels(labels);
+        chart = chart.total_labels(labels);
     }
     chart
 }
@@ -561,7 +561,7 @@ fn line_path_style_requires_path_mode_and_hue_before_backend_begin() {
             crate::test_support::numeric(&data, "y"),
             crate::test_support::category(&data, "path"),
         )
-        .line_path_style(LinePathStyle::Hue)
+        .style(LinePathStyle::Hue)
         .erase(),
     ];
     for (index, chart) in cases.into_iter().enumerate() {

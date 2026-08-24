@@ -513,13 +513,12 @@ impl Plot {
         if let Some(connectors) = self.interaction_connectors_spec() {
             if kind != PlotKind::Interaction {
                 return Err(Error::Data(format!(
-                    "{family}: interaction_connectors is supported only by Interaction"
+                    "{family}: connectors is supported only by Interaction"
                 )));
             }
             if !connectors && self.interaction_styles_spec().is_some() {
                 return Err(Error::Data(
-                    "interaction: interaction_connectors(false) is incompatible with configured styles"
-                        .into(),
+                    "interaction: connectors(false) is incompatible with configured styles".into(),
                 ));
             }
         }

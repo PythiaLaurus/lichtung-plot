@@ -12,7 +12,7 @@ fn interaction_data() -> DataFrame {
 }
 
 fn chart(frame: &DataFrame, styled: bool) -> Plot<lichtung_plot::kind::Interaction> {
-    let mut plot = Plot::interaction(
+    let plot = Plot::interaction(
         data::category(frame, "condition"),
         data::numeric(frame, "estimate"),
         data::category(frame, "series"),
@@ -28,9 +28,10 @@ fn chart(frame: &DataFrame, styled: bool) -> Plot<lichtung_plot::kind::Interacti
                 "Semantic Agent" => InteractionStyle::new(group).shape(PointShape::TriangleUp),
                 _ => InteractionStyle::new(group),
             });
-        plot = plot.interaction_styles(configurations);
+        plot.styles(configurations)
+    } else {
+        plot
     }
-    plot
 }
 
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
@@ -106,7 +107,7 @@ fn interaction_style_legend_matches_each_trace_glyph() {
 fn interaction_styles_reject_unknown_groups() {
     let data = interaction_data();
     let error = chart(&data, false)
-        .interaction_styles([InteractionStyle::new("Unknown")])
+        .styles([InteractionStyle::new("Unknown")])
         .preflight()
         .unwrap_err()
         .to_string();
@@ -118,7 +119,7 @@ fn interaction_styles_reject_unknown_groups() {
 fn interaction_styles_require_one_style_per_group() {
     let data = interaction_data();
     let error = chart(&data, false)
-        .interaction_styles([InteractionStyle::new("Control")])
+        .styles([InteractionStyle::new("Control")])
         .preflight()
         .unwrap_err()
         .to_string();
@@ -130,7 +131,7 @@ fn interaction_styles_require_one_style_per_group() {
 fn interaction_styles_reject_duplicate_groups() {
     let data = interaction_data();
     let error = chart(&data, false)
-        .interaction_styles([
+        .styles([
             InteractionStyle::new("Control"),
             InteractionStyle::new("Control").pattern(LinePattern::Dashed),
         ])
@@ -192,7 +193,7 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
         Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
     )
     .hue(data::category(&data, "hue"))
-    .interaction_styles([
+    .styles([
         InteractionStyle::new("g1").pattern(LinePattern::Dashed),
         InteractionStyle::new("g2").shape(PointShape::TriangleUp),
     ])
@@ -287,7 +288,7 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
         Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
     )
     .hue(data::category(&data, "hue"))
-    .interaction_styles([
+    .styles([
         InteractionStyle::new("g1").pattern(LinePattern::Dashed),
         InteractionStyle::new("g2").shape(PointShape::TriangleUp),
     ])

@@ -411,7 +411,7 @@ fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values(
     .unwrap();
     let output = svg(
         forest(&frame, true)
-            .axis_scale(AxisScale::Log10)
+            .scale(AxisScale::Log10)
             .x_limits(0.1, 10.0),
         "all-unavailable-log-forest",
     );
@@ -432,7 +432,7 @@ fn unavailable_text_avoids_estimate_guides() {
     );
     let forest = svg(
         forest(&frame, true)
-            .axis_scale(AxisScale::Log10)
+            .scale(AxisScale::Log10)
             .x_limits(0.1, 10.0),
         "unavailable-forest-guide",
     );

@@ -115,7 +115,7 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
                     BarInput::estimates(data::numeric(&bars, "value")),
                 )
                 .series(data::category(&bars, "group"))
-                .bar_point_layer(layer()),
+                .point_layer(layer()),
                 "horizontal-bar-point-layer",
             )
         } else {
@@ -125,7 +125,7 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
                     BarInput::estimates(data::numeric(&bars, "value")),
                 )
                 .series(data::category(&bars, "group"))
-                .bar_point_layer(layer()),
+                .point_layer(layer()),
                 "vertical-bar-point-layer",
             )
         }
@@ -162,7 +162,7 @@ fn unknown_bar_point_category_rejects_during_preflight() {
         data::category(&bars, "category"),
         BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .bar_point_layer(layer);
+    .point_layer(layer);
 
     let error = plot.preflight().unwrap_err();
 
@@ -207,13 +207,13 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
         data::category(&bars, "category"),
         BarInput::estimates(data::numeric(&bars, "value")),
     )
-    .bar_point_layer(nonfinite);
+    .point_layer(nonfinite);
     let mismatch_plot = Plot::bar(
         data::category(&bars, "category"),
         BarInput::estimates(data::numeric(&bars, "value")),
     )
     .series(data::category(&bars, "group"))
-    .bar_point_layer(
+    .point_layer(
         BarPointLayer::new(
             data::category(&grouped_points, "category"),
             None,
@@ -229,7 +229,7 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
         BarInput::estimates(data::numeric(&bars, "value")),
     )
     .series(data::category(&bars, "group"))
-    .bar_point_layer(grouped)
+    .point_layer(grouped)
     .facet(FacetSpec::wrap(data::category(&bars, "facet"), 2).unwrap());
 
     let cases = [

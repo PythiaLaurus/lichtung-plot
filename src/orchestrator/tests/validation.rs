@@ -84,7 +84,7 @@ fn two_point_regression_requires_hidden_confidence_band() {
         crate::test_support::numeric(&data, "x"),
         crate::test_support::numeric(&data, "y"),
     )
-    .regression_band(crate::RegressionBand::Hidden);
+    .band(crate::RegressionBand::Hidden);
     let mut backend = RecordingBackend::default();
     hidden
         .render_kind(PlotKind::Regression, &mut backend)
@@ -144,7 +144,7 @@ fn structural_triangle_rejects_source_cells_outside_active_half() {
         crate::test_support::category(&data, "y"),
         crate::test_support::numeric(&data, "color"),
     )
-    .heatmap_layout(HeatmapLayout::LowerTriangle { diagonal: false });
+    .layout(HeatmapLayout::LowerTriangle { diagonal: false });
 
     let error = assert_rejected_before_begin(&chart, PlotKind::Heatmap);
     assert!(error.contains("outside the active"));

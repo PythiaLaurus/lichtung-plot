@@ -21,15 +21,13 @@ fn raincloud_plot(samples: &[f64]) -> Plot<lichtung_plot::kind::Raincloud> {
 }
 
 fn histogram_plot(values: &[f64], kde: HistogramKde) -> Plot<lichtung_plot::kind::Histogram> {
-    let mut plot = Plot::histogram(HistogramInput::samples(lichtung_plot::NumericValues::new(
+    Plot::histogram(HistogramInput::samples(lichtung_plot::NumericValues::new(
         "value",
         values.iter().copied(),
     )))
-    .histogram_composite(HistogramComposite::KdeAndRug(kde));
-    let _ = plot
-        .histogram_bins(HistogramBins::Count(2))
-        .histogram_stat(HistogramStat::Density);
-    plot
+    .composite(HistogramComposite::KdeAndRug(kde))
+    .bins(HistogramBins::Count(2))
+    .stat(HistogramStat::Density)
 }
 
 fn render<K: lichtung_plot::kind::Marker>(
@@ -595,7 +593,7 @@ fn histogram_composite_requires_density_before_backend_begin() {
         "value",
         [0.0, 1.0, 2.0],
     )))
-    .histogram_composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
+    .composite(HistogramComposite::KdeAndRug(HistogramKde::Internal))
     .preflight()
     .unwrap_err();
     assert!(error
@@ -640,7 +638,7 @@ fn explicit_inert_composite_options_match_default_svg_bytes() {
     let histogram_explicit = Plot::histogram(HistogramInput::samples(
         lichtung_plot::NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]),
     ))
-    .histogram_composite(HistogramComposite::HistogramOnly);
+    .composite(HistogramComposite::HistogramOnly);
     assert_eq!(
         render(histogram_default, "histogram-default").unwrap(),
         render(histogram_explicit, "histogram-explicit").unwrap(),

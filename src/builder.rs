@@ -37,16 +37,24 @@ use crate::{
 ///
 /// `K` is a zero-sized plot-family marker from [`crate::kind`]. Omitting it
 /// means [`crate::kind::Any`], the erased form used by heterogeneous storage.
-/// Family-specific methods are available only when their marker has the
-/// corresponding sealed capability.
+/// Family-specific methods are available only through exact-marker inherent
+/// implementations or a corresponding sealed capability.
 ///
 /// ```compile_fail
 /// use lichtung_plot::{HistogramBins, NumericValues, Plot};
-/// let mut plot = Plot::scatter(
+/// let plot = Plot::scatter(
 ///     NumericValues::new("x", [1.0]),
 ///     NumericValues::new("y", [2.0]),
 /// );
-/// plot.histogram_bins(HistogramBins::Count(4));
+/// let _ = plot.bins(HistogramBins::Count(4));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{HistogramBins, HistogramInput, NumericValues, Plot};
+/// let plot = Plot::histogram(HistogramInput::samples(
+///     NumericValues::new("value", [1.0]),
+/// )).erase();
+/// let _ = plot.bins(HistogramBins::Count(4));
 /// ```
 ///
 /// ```compile_fail
@@ -55,7 +63,7 @@ use crate::{
 ///     CategoryValues::new("category", ["a"]).unwrap(),
 ///     BarInput::estimates(NumericValues::new("value", [1.0])),
 /// );
-/// let _ = plot.heatmap_scale(HeatmapScale::Sequential);
+/// let _ = plot.scale(HeatmapScale::Sequential);
 /// ```
 ///
 /// ```compile_fail
@@ -226,7 +234,7 @@ use crate::{
 ///     NumericValues::new("x", [1.0, 2.0]),
 ///     NumericValues::new("y", [2.0, 3.0]),
 /// );
-/// let _ = plot.line_path_style(LinePathStyle::Hue);
+/// let _ = plot.style(LinePathStyle::Hue);
 /// ```
 ///
 /// ```compile_fail
@@ -253,7 +261,7 @@ use crate::{
 ///     NumericValues::new("value", [1.0]),
 ///     CategoryValues::new("group", ["g"]).unwrap(),
 /// );
-/// let _ = plot.bar_spacing(BarSpacing::Compact);
+/// let _ = plot.spacing(BarSpacing::Compact);
 /// ```
 ///
 /// ```compile_fail

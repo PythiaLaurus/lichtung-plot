@@ -102,7 +102,7 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
             PlotKind::LinePath,
             Plot::line_path(x(), y(), group())
                 .hue(hue())
-                .line_path_style(LinePathStyle::Hue)
+                .style(LinePathStyle::Hue)
                 .erase(),
         ),
     ]
