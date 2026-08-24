@@ -40,6 +40,195 @@ fn marginal_hue_smoke() {
 }
 
 #[test]
+fn hue_only_marginal_and_matrix_split_multiple_hues() {
+    let frame = df!(
+        "x" => [1.0_f64, 1.2, 1.4, 3.0, 3.2, 3.4],
+        "y" => [2.0_f64, 2.1, 2.3, 4.0, 4.2, 4.3],
+        "a" => [0.5_f64, 0.7, 0.9, 1.5, 1.7, 1.9],
+        "b" => [1.5_f64, 1.7, 1.9, 2.5, 2.7, 2.9],
+        "c" => [2.5_f64, 2.7, 2.9, 3.5, 3.7, 3.9],
+        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2"]
+    )
+    .unwrap();
+    let marginal_svg = render(
+        marginal(&frame)
+            .hue(data::category(&frame, "hue"))
+            .size(520, 400),
+        "marginal-hue-only",
+    );
+    let matrix_svg = render(
+        matrix(&frame)
+            .hue(data::category(&frame, "hue"))
+            .size(620, 520),
+        "matrix-hue-only",
+    );
+
+    assert!(marginal_svg.contains(">H 1</text>") && marginal_svg.contains(">H 2</text>"));
+    assert!(matrix_svg.contains(">H 1</text>") && matrix_svg.contains(">H 2</text>"));
+}
+
+#[test]
+fn marginal_and_matrix_render_each_observed_crossed_pair() {
+    let frame = df!(
+        "x" => [1.0_f64, 1.2, 1.4, 2.0, 2.2, 2.4, 3.0, 3.2, 3.4],
+        "y" => [2.0_f64, 2.2, 2.4, 3.0, 3.2, 3.4, 4.0, 4.2, 4.4],
+        "a" => [0.5_f64, 0.7, 0.9, 1.5, 1.7, 1.9, 2.5, 2.7, 2.9],
+        "b" => [1.5_f64, 1.7, 1.9, 2.5, 2.7, 2.9, 3.5, 3.7, 3.9],
+        "c" => [2.5_f64, 2.7, 2.9, 3.5, 3.7, 3.9, 4.5, 4.7, 4.9],
+        "group" => ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2", "g2"],
+        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2", "h2", "h2", "h2"]
+    )
+    .unwrap();
+    let marginal_svg = render(
+        marginal(&frame)
+            .group(data::category(&frame, "group"))
+            .hue(data::category(&frame, "hue"))
+            .size(520, 400),
+        "marginal-crossed-pairs",
+    );
+    let matrix_svg = render(
+        matrix(&frame)
+            .group(data::category(&frame, "group"))
+            .hue(data::category(&frame, "hue"))
+            .size(620, 520),
+        "matrix-crossed-pairs",
+    );
+
+    assert_eq!(marginal_svg.matches("fill-opacity=\"0.45\"").count(), 6);
+    assert_eq!(matrix_svg.matches("fill-opacity=\"0.40\"").count(), 9);
+}
+
+#[test]
+fn marginal_collectives_ignore_rows_dropped_from_numeric_geometry() {
+    let frame = DataFrame::from_columns(vec![
+        (
+            "x",
+            data::FixtureColumn::Numeric(vec![Some(1.0), Some(2.0), Some(3.0), None]),
+        ),
+        (
+            "y",
+            data::FixtureColumn::Numeric(vec![Some(2.0), Some(3.0), Some(5.0), Some(8.0)]),
+        ),
+        (
+            "group",
+            data::FixtureColumn::Category(vec![
+                Some("kept".to_owned()),
+                Some("kept".to_owned()),
+                Some("kept".to_owned()),
+                None,
+            ]),
+        ),
+        (
+            "hue",
+            data::FixtureColumn::Category(vec![
+                Some("visible".to_owned()),
+                Some("visible".to_owned()),
+                Some("visible".to_owned()),
+                None,
+            ]),
+        ),
+    ])
+    .unwrap();
+    let svg = render(
+        marginal(&frame)
+            .group(data::category(&frame, "group"))
+            .hue(data::category(&frame, "hue"))
+            .size(520, 400),
+        "marginal-retained-collectives",
+    );
+
+    assert!(!svg.contains("Dropped") && !svg.contains("null"));
+}
+
+#[test]
+fn marginal_same_name_validation_ignores_dropped_rows() {
+    let plot = Plot::marginal(
+        lichtung_plot::NumericValues::nullable("x", [Some(1.0), Some(2.0), Some(3.0), None]),
+        lichtung_plot::NumericValues::new("y", [2.0, 3.0, 5.0, 8.0]),
+    )
+    .group(
+        lichtung_plot::CategoryValues::new("identity", ["kept", "kept", "kept", "dropped group"])
+            .unwrap(),
+    )
+    .hue(
+        lichtung_plot::CategoryValues::new("identity", ["kept", "kept", "kept", "dropped hue"])
+            .unwrap(),
+    );
+
+    plot.preflight().unwrap();
+}
+
+#[test]
+fn marginal_reports_insufficient_retained_pair_with_group_and_hue() {
+    let frame = DataFrame::from_columns(vec![
+        (
+            "x",
+            data::FixtureColumn::Numeric(vec![Some(1.0), Some(2.0), Some(3.0), Some(4.0), None]),
+        ),
+        (
+            "y",
+            data::FixtureColumn::Numeric(vec![
+                Some(2.0),
+                Some(3.0),
+                Some(5.0),
+                Some(6.0),
+                Some(7.0),
+            ]),
+        ),
+        (
+            "group",
+            data::FixtureColumn::Category(
+                ["g1", "g1", "g1", "g2", "g2"]
+                    .into_iter()
+                    .map(|value| Some(value.to_owned()))
+                    .collect(),
+            ),
+        ),
+        (
+            "hue",
+            data::FixtureColumn::Category(
+                ["h1", "h1", "h1", "h2", "h2"]
+                    .into_iter()
+                    .map(|value| Some(value.to_owned()))
+                    .collect(),
+            ),
+        ),
+    ])
+    .unwrap();
+    let error = marginal(&frame)
+        .group(data::category(&frame, "group"))
+        .hue(data::category(&frame, "hue"))
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error
+        .contains("x distribution for graphical group \"g2\" with hue \"h2\" requires at least 2"));
+}
+
+#[test]
+fn matrix_pair_error_identifies_group_and_hue() {
+    let frame = df!(
+        "a" => [1.0_f64, 2.0, 3.0],
+        "b" => [2.0_f64, 3.0, 4.0],
+        "c" => [3.0_f64, 4.0, 5.0],
+        "group" => ["small", "valid", "valid"],
+        "hue" => ["red", "blue", "blue"]
+    )
+    .unwrap();
+    let error = matrix(&frame)
+        .group(data::category(&frame, "group"))
+        .hue(data::category(&frame, "hue"))
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains(
+        "column \"a\" in graphical group \"group\"=\"small\" with hue \"hue\"=\"red\" requires at least 2 observations"
+    ));
+}
+
+#[test]
 fn marginal_auto_range_pads_central_points_from_frame() {
     let frame = df!("x" => [0.0_f64, 10.0], "y" => [0.0_f64, 10.0]).unwrap();
     let plot = marginal(&frame).size(360, 260);
@@ -137,9 +326,9 @@ fn marginal_explicit_limits_override_kde_support_range() {
 #[test]
 fn marginal_hue_legend_headroom_is_bounded_and_avoids_cluster() {
     let frame = df!(
-        "x" => [8.0_f64, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0],
-        "y" => [8.0_f64, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5],
-        "group" => ["high", "high", "high", "high", "high", "low", "low", "mid"]
+        "x" => [8.0_f64, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0, 3.4],
+        "y" => [8.0_f64, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5, 1.8],
+        "group" => ["high", "high", "high", "high", "high", "low", "low", "mid", "mid"]
     )
     .unwrap();
     let plot = marginal(&frame)

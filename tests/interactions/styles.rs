@@ -169,6 +169,66 @@ fn interaction_styles_apply_by_group_across_facets() {
 }
 
 #[test]
+fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
+    let data = df!(
+        "panel" => ["Left", "Left", "Left", "Left", "Right", "Right", "Right", "Right"],
+        "condition" => ["Before", "After", "Before", "After", "Before", "After", "Before", "After"],
+        "group" => ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2"],
+        "hue" => ["h2", "h2", "h1", "h1", "h1", "h1", "h2", "h2"],
+        "estimate" => [1.0_f64, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
+        "lower" => [0.8_f64, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3],
+        "upper" => [1.2_f64, 1.7, 2.2, 2.7, 3.2, 3.7, 4.2, 4.7],
+    )
+    .unwrap();
+    let colors = CategoricalColors::new([
+        ("h1".to_owned(), (51, 51, 51)),
+        ("h2".to_owned(), (0, 114, 178)),
+    ])
+    .unwrap();
+    let output = svg(Plot::interaction(
+        data::category(&data, "condition"),
+        data::numeric(&data, "estimate"),
+        data::category(&data, "group"),
+        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
+    )
+    .hue(data::category(&data, "hue"))
+    .interaction_styles([
+        InteractionStyle::new("g1").pattern(LinePattern::Dashed),
+        InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+    ])
+    .categorical_colors(colors)
+    .facet(FacetSpec::column(data::category(&data, "panel")))
+    .size(960, 320));
+    let connectors = output
+        .lines()
+        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .collect::<Vec<_>>();
+
+    assert_eq!(connectors.len(), 4);
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke-dasharray=\"5 3\""))
+            .count(),
+        3
+    );
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke=\"#333333\""))
+            .count(),
+        2
+    );
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke=\"#0072B2\""))
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn unconfigured_interaction_styles_preserve_circle_solid_defaults() {
     let data = interaction_data();
     let first = svg(chart(&data, false));
@@ -191,6 +251,95 @@ fn categorical_colors_apply_exact_trace_rgb_to_marks_and_legend() {
 
     assert!(output.matches("#333333").count() >= 4);
     assert!(output.matches("#0072B2").count() >= 4);
+}
+
+#[test]
+fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
+    let data = df!(
+        "condition" => ["Before", "After", "Before", "After", "Before", "After"],
+        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
+        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
+        "estimate" => [1.0_f64, 1.5, 2.0, 2.5, 3.0, 3.5],
+        "lower" => [0.8_f64, 1.3, 1.8, 2.3, 2.8, 3.3],
+        "upper" => [1.2_f64, 1.7, 2.2, 2.7, 3.2, 3.7],
+    )
+    .unwrap();
+    let colors = CategoricalColors::new([
+        ("h1".to_owned(), (51, 51, 51)),
+        ("h2".to_owned(), (0, 114, 178)),
+    ])
+    .unwrap();
+    let output = svg(Plot::interaction(
+        data::category(&data, "condition"),
+        data::numeric(&data, "estimate"),
+        data::category(&data, "group"),
+        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
+    )
+    .hue(data::category(&data, "hue"))
+    .interaction_styles([
+        InteractionStyle::new("g1").pattern(LinePattern::Dashed),
+        InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+    ])
+    .categorical_colors(colors));
+    let marks = output
+        .split_once("<g clip-path=")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+    let connectors = marks
+        .lines()
+        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .collect::<Vec<_>>();
+
+    assert_eq!(connectors.len(), 3);
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke-dasharray=\"5 3\""))
+            .count(),
+        2
+    );
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke=\"#333333\""))
+            .count(),
+        1
+    );
+    assert_eq!(
+        connectors
+            .iter()
+            .filter(|line| line.contains("stroke=\"#0072B2\""))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn interaction_duplicate_identity_includes_condition_group_and_hue() {
+    let data = df!(
+        "condition" => ["Before", "Before", "Before"],
+        "group" => ["g1", "g1", "g1"],
+        "hue" => ["h1", "h2", "h1"],
+        "estimate" => [1.0_f64, 2.0, 3.0],
+        "lower" => [0.8_f64, 1.8, 2.8],
+        "upper" => [1.2_f64, 2.2, 3.2],
+    )
+    .unwrap();
+    let error = Plot::interaction(
+        data::category(&data, "condition"),
+        data::numeric(&data, "estimate"),
+        data::category(&data, "group"),
+        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
+    )
+    .hue(data::category(&data, "hue"))
+    .preflight()
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("duplicate (condition, group, hue)") && error.contains("source row 2"));
 }
 
 #[test]

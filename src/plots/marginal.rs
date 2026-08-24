@@ -23,7 +23,9 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{self, AxisSpec, Layout, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{kde, kde_support_range};
+use crate::stats::distribution::{
+    gaussian_kde_with_bandwidth, kde, kde_support_range, strict_scott_bandwidth,
+};
 use crate::Error;
 use crate::Plot;
 
@@ -34,10 +36,12 @@ const MARGINAL_DATA_MARGIN_FRACTION: f64 = 0.06;
 
 /// One graphical group's data and optional color identity.
 struct HueGroup {
-    label: String,
-    hue: Option<String>,
+    identity: crate::data::CollectivePair,
+    description: String,
     x: Vec<f64>,
     y: Vec<f64>,
+    x_bandwidth: f64,
+    y_bandwidth: f64,
     color: (u8, u8, u8),
 }
 
@@ -188,10 +192,10 @@ pub(crate) fn render(
     let mut x_densities: Vec<Vec<f64>> = groups
         .iter()
         .map(|group| {
-            kde(&group.x, &x_grid).map_err(|error| {
+            gaussian_kde_with_bandwidth(&group.x, &x_grid, group.x_bandwidth).map_err(|error| {
                 Error::Data(format!(
-                    "marginal: x distribution for group {:?}: {error}",
-                    group.label
+                    "marginal: x distribution for {}: {error}",
+                    group.description
                 ))
             })
         })
@@ -199,10 +203,10 @@ pub(crate) fn render(
     let mut y_densities: Vec<Vec<f64>> = groups
         .iter()
         .map(|group| {
-            kde(&group.y, &y_grid).map_err(|error| {
+            gaussian_kde_with_bandwidth(&group.y, &y_grid, group.y_bandwidth).map_err(|error| {
                 Error::Data(format!(
-                    "marginal: y distribution for group {:?}: {error}",
-                    group.label
+                    "marginal: y distribution for {}: {error}",
+                    group.description
                 ))
             })
         })
@@ -298,14 +302,14 @@ pub(crate) fn render(
 
         // Legend entries are owned only by hue, never graphical group.
         if hue_levels.len() > 1
-            && group.hue.as_ref().is_some_and(|hue| {
+            && group.identity.hue.as_ref().is_some_and(|hue| {
                 !legend_entries
                     .iter()
                     .any(|entry: &LegendEntry| entry.label == *hue)
             })
         {
             legend_entries.push(LegendEntry::point(
-                group.hue.clone().unwrap_or_default(),
+                group.identity.hue.clone().unwrap_or_default(),
                 point_style,
             ));
         }
@@ -331,9 +335,9 @@ fn validate_marginal_range<'a>(
                 .is_ok_and(|(minimum, maximum)| !(maximum - minimum).is_finite())
                 || kde_support_range(std::iter::once(samples), MARGINAL_KDE_CUT).is_none()
         })
-        .map_or("", |group| group.label.as_str());
+        .map_or("ungrouped series", |group| group.description.as_str());
     Err(Error::Data(format!(
-        "marginal: {channel} distribution for group {group:?}: support/grid is not representable at this numeric scale"
+        "marginal: {channel} distribution for {group}: support/grid is not representable at this numeric scale"
     )))
 }
 
@@ -351,48 +355,56 @@ fn build_groups<'a>(
     let y_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
-    let channels = crate::data::collective_channels(
+    let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
+    let retained_rows = rows.iter().map(|(row, _, _)| *row).collect::<Vec<_>>();
+    let channels = crate::data::observed_collectives(
         data,
         chart.group_col(),
+        chart.group_name(),
         chart.hue_col(),
-        None,
+        chart.hue_name(),
+        Some(&retained_rows),
         "marginal",
     )?;
-    let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
-    let group_levels = chart.resolved_group_levels(channels.group_levels.clone());
     let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let identities = channels.groups.as_ref().map_or_else(
-        || vec![None],
-        |_| group_levels.into_iter().map(Some).collect(),
-    );
     let mut groups = Vec::new();
-    for identity in identities {
-        let selected = rows.iter().filter(|(row, _, _)| {
-            channels
-                .groups
-                .as_ref()
-                .is_none_or(|values| identity.as_ref() == Some(&values[*row]))
-        });
+    for identity in &channels.identities {
+        let selected = rows
+            .iter()
+            .zip(&channels.rows)
+            .filter(|(_, row_identity)| *row_identity == identity);
         let mut x = Vec::new();
         let mut y = Vec::new();
-        let mut hue = None;
-        for (row, x_value, y_value) in selected {
+        for ((_, x_value, y_value), _) in selected {
             x.push(*x_value);
             y.push(*y_value);
-            hue = channels.hues.as_ref().map(|values| values[*row].clone());
         }
         if x.is_empty() {
             continue;
         }
-        let color_index = hue
+        let description = identity.description(channels.collapsed);
+        let x_bandwidth = strict_scott_bandwidth(&x).map_err(|reason| {
+            Error::Data(format!(
+                "marginal: x distribution for {description} {reason}"
+            ))
+        })?;
+        let y_bandwidth = strict_scott_bandwidth(&y).map_err(|reason| {
+            Error::Data(format!(
+                "marginal: y distribution for {description} {reason}"
+            ))
+        })?;
+        let color_index = identity
+            .hue
             .as_deref()
             .and_then(|label| hue_levels.iter().position(|level| level == label))
             .unwrap_or(0);
         groups.push(HueGroup {
-            label: identity.unwrap_or_default(),
-            hue,
+            identity: identity.clone(),
+            description,
             x,
             y,
+            x_bandwidth,
+            y_bandwidth,
             color: palette.colors[color_index % palette.colors.len()],
         });
     }

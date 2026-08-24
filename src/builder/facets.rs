@@ -129,6 +129,25 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.global_group_levels.clone().unwrap_or(observed)
     }
 
+    pub(crate) fn with_global_collective_pairs(
+        mut self,
+        identities: Vec<crate::data::CollectivePair>,
+    ) -> Self {
+        self.global_collective_pairs = Some(identities);
+        self
+    }
+
+    pub(crate) fn resolved_collective_pairs(
+        &self,
+        observed: Vec<crate::data::CollectivePair>,
+    ) -> Vec<crate::data::CollectivePair> {
+        self.global_collective_pairs.clone().unwrap_or(observed)
+    }
+
+    pub(crate) fn global_collective_pairs(&self) -> Option<&[crate::data::CollectivePair]> {
+        self.global_collective_pairs.as_deref()
+    }
+
     pub(crate) fn with_global_line_condition_levels(mut self, levels: Vec<String>) -> Self {
         self.global_line_condition_levels = Some(levels);
         self

@@ -18,7 +18,7 @@ const SUPPORT_BANDWIDTHS: f64 = 3.0;
 
 #[derive(Debug)]
 struct DensityCurve {
-    hue: Option<String>,
+    identity: crate::data::CollectivePair,
     hue_index: Option<usize>,
     grid: Vec<f64>,
     densities: Vec<f64>,
@@ -98,7 +98,7 @@ pub(crate) fn render(
     let mut legend_hues = prepared
         .curves
         .iter()
-        .filter_map(|curve| Some((curve.hue_index?, curve.hue.clone()?)))
+        .filter_map(|curve| Some((curve.hue_index?, curve.identity.hue.clone()?)))
         .collect::<Vec<_>>();
     legend_hues.sort_by_key(|(index, _)| *index);
     legend_hues.dedup_by(|left, right| left.1 == right.1);
@@ -119,9 +119,13 @@ fn prepare_density<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
     value_col: &str,
     group_col: Option<&str>,
+    group_name: Option<&str>,
     hue_col: Option<&str>,
+    hue_name: Option<&str>,
 ) -> Result<PreparedDensity, Error> {
-    prepare_density_ordered(data, value_col, group_col, hue_col, None, None)
+    prepare_density_ordered(
+        data, value_col, group_col, group_name, hue_col, hue_name, None, None,
+    )
 }
 
 fn prepare_density_for_chart<'a>(
@@ -129,72 +133,56 @@ fn prepare_density_for_chart<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
     value_col: &str,
 ) -> Result<PreparedDensity, Error> {
-    let data = data.into();
-    let observed_groups = chart
-        .group_col()
-        .map(|column| crate::data::strict_strings(data, column, "density"))
-        .transpose()?
-        .map_or_else(Vec::new, |values| crate::data::stable_levels(&values));
-    let group_order = chart.resolved_group_levels(observed_groups);
-    let hue_order = chart
-        .hue_col()
-        .map(|column| crate::data::strict_strings(data, column, "density"))
-        .transpose()?
-        .map_or_else(Vec::new, |values| crate::data::stable_levels(&values));
-    let hue_order = chart.resolved_hue_levels(hue_order);
     prepare_density_ordered(
         data,
         value_col,
         chart.group_col(),
+        chart.group_name(),
         chart.hue_col(),
-        Some(&group_order),
-        Some(&hue_order),
+        chart.hue_name(),
+        chart.global_collective_pairs(),
+        chart.global_hue_levels(),
     )
 }
 
 #[expect(
-    clippy::too_many_lines,
-    reason = "density grouping, strict KDE validation, and support construction remain one preparation pass"
+    clippy::too_many_arguments,
+    reason = "channel columns, semantic names, and global orders form one density preparation boundary"
 )]
 fn prepare_density_ordered<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
     value_col: &str,
     group_col: Option<&str>,
+    group_name: Option<&str>,
     hue_col: Option<&str>,
-    group_order: Option<&[String]>,
+    hue_name: Option<&str>,
+    identity_order: Option<&[crate::data::CollectivePair]>,
     hue_order: Option<&[String]>,
 ) -> Result<PreparedDensity, Error> {
     let data = data.into();
     let values = crate::data::strict_finite_f64(data, value_col, "density")?;
-    let channels = crate::data::collective_channels(data, group_col, hue_col, None, "density")?;
-    if channels
-        .groups
-        .as_ref()
-        .is_some_and(|groups| groups.len() != values.len())
-    {
+    let channels = crate::data::observed_collectives(
+        data, group_col, group_name, hue_col, hue_name, None, "density",
+    )?;
+    if channels.rows.len() != values.len() {
         return Err(Error::Data(
             "density: value, graphical group, and hue columns must have equal lengths".into(),
         ));
     }
 
-    let mut groups: Vec<(Option<String>, Option<String>, Vec<f64>)> = Vec::new();
-    for (index, value) in values.into_iter().enumerate() {
-        let group = channels.groups.as_ref().map(|groups| groups[index].clone());
-        let hue = channels.hues.as_ref().map(|hues| hues[index].clone());
-        if let Some((_, _, group_values)) = groups.iter_mut().find(|(seen, _, _)| seen == &group) {
-            group_values.push(value);
-        } else {
-            groups.push((group, hue, vec![value]));
-        }
-    }
-    if let Some(order) = group_order {
-        groups.sort_by_key(|(group, _, _)| {
-            group
-                .as_ref()
-                .and_then(|group| order.iter().position(|level| level == group))
-                .unwrap_or(usize::MAX)
-        });
-    }
+    let ordered_identities = identity_order.unwrap_or(&channels.identities);
+    let groups = ordered_identities
+        .iter()
+        .filter_map(|identity| {
+            let samples = channels
+                .rows
+                .iter()
+                .zip(&values)
+                .filter_map(|(row_identity, value)| (row_identity == identity).then_some(*value))
+                .collect::<Vec<_>>();
+            (!samples.is_empty()).then(|| (identity.clone(), samples))
+        })
+        .collect::<Vec<_>>();
     if groups.is_empty() {
         return Err(Error::Data(
             "density: value column contains no observations".into(),
@@ -204,11 +192,8 @@ fn prepare_density_ordered<'a>(
     let mut support_low = f64::INFINITY;
     let mut support_high = f64::NEG_INFINITY;
     let mut curves = Vec::with_capacity(groups.len());
-    for (group, hue, samples) in &groups {
-        let description = group.as_ref().map_or_else(
-            || "ungrouped series".to_string(),
-            |label| format!("graphical group {label:?}"),
-        );
+    for (identity, samples) in &groups {
+        let description = identity.description(channels.collapsed);
         if samples.len() < 2 {
             return Err(Error::Data(format!(
                 "density: {description} requires at least 2 observations, got {}",
@@ -257,8 +242,8 @@ fn prepare_density_ordered<'a>(
         let densities = gaussian_kde_with_bandwidth(samples, &grid, bandwidth)
             .map_err(|error| Error::Data(format!("density: {description}: {error}")))?;
         curves.push(DensityCurve {
-            hue: hue.clone(),
-            hue_index: hue.as_ref().and_then(|hue| {
+            identity: identity.clone(),
+            hue_index: identity.hue.as_ref().and_then(|hue| {
                 hue_order
                     .unwrap_or(&channels.hue_levels)
                     .iter()
@@ -435,7 +420,9 @@ mod tests {
             &plot,
             crate::data::X,
             grouped.then_some(crate::data::GROUP),
+            grouped.then_some("group"),
             hued.then_some(crate::data::HUE),
+            hued.then_some("group"),
         )
     }
 
@@ -448,8 +435,8 @@ mod tests {
 
         let prepared = prepare_frame(&data, true, true).unwrap();
 
-        assert_eq!(prepared.curves[0].hue.as_deref(), Some("b"));
-        assert_eq!(prepared.curves[1].hue.as_deref(), Some("a"));
+        assert_eq!(prepared.curves[0].identity.hue.as_deref(), Some("b"));
+        assert_eq!(prepared.curves[1].identity.hue.as_deref(), Some("a"));
         assert_eq!(
             prepared.curves[0].densities.len(),
             prepared.curves[0].grid.len()

@@ -431,7 +431,7 @@ fn matrix_rejects_degenerate_hue_group_with_column_and_group_context_before_begi
 
     assert_eq!(
         error.to_string(),
-        "data error: matrix: column \"x\" in graphical group \"cohort\"=\"singleton\" with hue \"cohort\"=\"singleton\" requires at least 2 observations for Scott bandwidth"
+        "data error: matrix: column \"x\" in graphical group \"cohort\"=\"singleton\" requires at least 2 observations for Scott bandwidth"
     );
     assert_eq!(backend.begins, 0);
 }
@@ -603,9 +603,9 @@ fn ungrouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() 
         .unwrap_err();
     let message = error.to_string();
 
-    assert!(message.contains("marginal: x distribution for group \"\""));
+    assert!(message.contains("marginal: x distribution for ungrouped series"));
     assert!(
-        message.contains("support/grid is not representable") || message.contains("kde:"),
+        message.contains("not numerically representable"),
         "{message}"
     );
     assert_eq!((backend.begins, backend.ends), (0, 0));
@@ -637,10 +637,8 @@ fn grouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
 
     assert!(error
         .to_string()
-        .contains("marginal: x distribution for group \"extreme\""));
-    assert!(error
-        .to_string()
-        .contains("support/grid is not representable"));
+        .contains("marginal: x distribution for graphical group \"extreme\""));
+    assert!(error.to_string().contains("not numerically representable"));
     assert_eq!((backend.begins, backend.ends), (0, 0));
 }
 

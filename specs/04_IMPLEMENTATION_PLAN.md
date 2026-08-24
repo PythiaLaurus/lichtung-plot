@@ -93,7 +93,10 @@ Acceptance:
 
 ## Correctness Phase C3: Independent Collective Pairs
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
+
+Verification: focused `categorical`, `interactions`, `lines`, and
+`marginal-matrix` tests plus `just verify` passed on 2026-08-24.
 
 Replace the hidden one-hue-per-group invariant with typed observed collective
 identity. Density, ordinary line, interaction, marginal, matrix, and

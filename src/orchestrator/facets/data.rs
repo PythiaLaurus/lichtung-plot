@@ -165,7 +165,26 @@ pub(super) fn base_chart(
     if has_vertical_axis_label {
         base = base.y_label("");
     }
-    if let Some(group_column) = chart.group_col() {
+    let independent_collectives = matches!(
+        kind,
+        PlotKind::Density | PlotKind::Line | PlotKind::Interaction
+    ) || kind == PlotKind::LinePath
+        && chart.line_path_style_spec() == crate::LinePathStyle::Hue;
+    if independent_collectives {
+        let channels = crate::data::observed_collectives(
+            data,
+            chart.group_col(),
+            chart.group_name(),
+            chart.hue_col(),
+            chart.hue_name(),
+            None,
+            "facet collective channels",
+        )?;
+        base = base
+            .with_global_group_levels(channels.group_levels)
+            .with_global_hue_levels(channels.hue_levels)
+            .with_global_collective_pairs(channels.identities);
+    } else if let Some(group_column) = chart.group_col() {
         let levels = stable_levels(crate::data::strict_strings(
             data,
             group_column,

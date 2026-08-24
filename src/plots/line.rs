@@ -15,7 +15,7 @@ use crate::Plot;
 
 #[derive(Debug)]
 struct SeriesData {
-    hue: Option<String>,
+    identity: crate::data::CollectivePair,
     hue_index: Option<usize>,
     points: Vec<SeriesPoint>,
 }
@@ -131,7 +131,7 @@ fn render_series(
 
     let mut legend_hues = series
         .iter()
-        .filter_map(|series| Some((series.hue_index?, series.hue.clone()?)))
+        .filter_map(|series| Some((series.hue_index?, series.identity.hue.clone()?)))
         .collect::<Vec<_>>();
     legend_hues.sort_by_key(|(index, _)| *index);
     legend_hues.dedup_by(|left, right| left.1 == right.1);
@@ -467,15 +467,16 @@ fn prepare<'a>(
         )),
         None => None,
     };
-    let channels =
-        crate::data::collective_channels(data, chart.group_col(), chart.hue_col(), None, "line")?;
-    if x.is_empty()
-        || x.len() != y.len()
-        || channels
-            .groups
-            .as_ref()
-            .is_some_and(|groups| groups.len() != x.len())
-    {
+    let channels = crate::data::observed_collectives(
+        data,
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
+        None,
+        "line",
+    )?;
+    if x.is_empty() || x.len() != y.len() || channels.rows.len() != x.len() {
         return Err(Error::Data(
             "line: aligned x, y, group, and hue columns must have equal non-zero lengths".into(),
         ));
@@ -490,24 +491,14 @@ fn prepare<'a>(
     }
 
     let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let group_levels = chart.resolved_group_levels(channels.group_levels.clone());
-    let labels = channels.groups.as_ref().map_or_else(
-        || vec![None],
-        |_| group_levels.into_iter().map(Some).collect(),
-    );
-    let mut output = Vec::with_capacity(labels.len());
-    for group in labels {
+    let identities = chart.resolved_collective_pairs(channels.identities.clone());
+    let mut output = Vec::with_capacity(identities.len());
+    for identity in identities {
         let mut points = Vec::new();
-        let mut hue = None;
         for index in 0..x.len() {
-            if channels
-                .groups
-                .as_ref()
-                .is_some_and(|groups| group.as_ref() != Some(&groups[index]))
-            {
+            if channels.rows[index] != identity {
                 continue;
             }
-            hue = channels.hues.as_ref().map(|hues| hues[index].clone());
             let interval = bounds
                 .as_ref()
                 .map(|(lower, upper)| (lower[index], upper[index]));
@@ -519,6 +510,9 @@ fn prepare<'a>(
             }
             points.push((x[index], y[index], interval));
         }
+        if points.is_empty() {
+            continue;
+        }
         points.sort_by(|left, right| left.0.total_cmp(&right.0));
         let mut seen = HashSet::with_capacity(points.len());
         if points.iter().any(|point| {
@@ -526,15 +520,16 @@ fn prepare<'a>(
             !seen.insert(canonical)
         }) {
             return Err(Error::Data(format!(
-                "line: duplicate x value within series {:?}",
-                group.as_deref().unwrap_or("ungrouped")
+                "line: duplicate x value within series {}",
+                identity.description(channels.collapsed)
             )));
         }
-        let hue_index = hue
+        let hue_index = identity
+            .hue
             .as_ref()
             .and_then(|hue| hue_levels.iter().position(|level| level == hue));
         output.push(SeriesData {
-            hue,
+            identity,
             hue_index,
             points,
         });
@@ -568,11 +563,39 @@ fn prepare_trajectory<'a>(
             "{context}: explicit graphical group column not set"
         ))
     })?;
-    let groups = crate::data::strict_strings(data, group_col, context)?;
-    let hues = chart
-        .hue_col()
-        .map(|column| crate::data::strict_strings(data, column, context))
-        .transpose()?;
+    let channels = crate::data::observed_collectives(
+        data,
+        Some(group_col),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
+        None,
+        context,
+    )?;
+    let groups = channels
+        .rows
+        .iter()
+        .map(|identity| {
+            identity.group.clone().ok_or_else(|| {
+                Error::Data(format!(
+                    "{context}: graphical group channel did not resolve"
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let hues = chart.hue_col().map(|_| {
+        channels
+            .rows
+            .iter()
+            .map(|identity| {
+                identity
+                    .hue
+                    .clone()
+                    .ok_or_else(|| Error::Data(format!("{context}: hue channel did not resolve")))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+    });
+    let hues = hues.transpose()?;
     let y = crate::data::strict_finite_f64(data, y_col, context)?;
     let x_source = data
         .column(x_col)
@@ -651,6 +674,59 @@ fn prepare_trajectory<'a>(
         .as_ref()
         .map_or_else(Vec::new, |values| crate::data::stable_levels(values));
     let hue_levels = chart.resolved_hue_levels(observed_hue_levels);
+    if ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue {
+        if hues.is_none() {
+            return Err(Error::Data(
+                "line path: LinePathStyle::Hue requires a categorical hue column".into(),
+            ));
+        }
+        let identities = chart.resolved_collective_pairs(channels.identities.clone());
+        let mut output = Vec::new();
+        for identity in identities {
+            let rows = (0..row_count)
+                .filter(|row| channels.rows[*row] == identity)
+                .collect::<Vec<_>>();
+            if rows.is_empty() {
+                continue;
+            }
+            if rows.len() < 2 {
+                return Err(Error::Data(format!(
+                    "line path: {} requires at least two retained points",
+                    identity.description(channels.collapsed)
+                )));
+            }
+            let hue = identity.hue.as_ref().ok_or_else(|| {
+                Error::Data(
+                    "line path: LinePathStyle::Hue requires a categorical hue column".into(),
+                )
+            })?;
+            let hue_index = hue_levels
+                .iter()
+                .position(|level| level == hue)
+                .ok_or_else(|| {
+                    Error::Data(format!(
+                        "line path: hue {hue:?} is absent from the resolved hue order"
+                    ))
+                })?;
+            let points = rows
+                .into_iter()
+                .map(|row| TrajectoryPoint {
+                    x: x[row],
+                    y: y[row],
+                    hue_index: Some(hue_index),
+                })
+                .collect();
+            output.push(TrajectoryGroup {
+                points,
+                hue_index: Some(hue_index),
+            });
+        }
+        return Ok(TrajectoryData {
+            groups: output,
+            hue_levels,
+            condition_levels,
+        });
+    }
     let mut output = Vec::new();
     for label in group_levels {
         let group_rows = (0..row_count)
@@ -659,30 +735,6 @@ fn prepare_trajectory<'a>(
         if group_rows.is_empty() {
             continue;
         }
-        let group_hue = if ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue {
-            let values = hues.as_ref().ok_or_else(|| {
-                Error::Data(
-                    "line path: LinePathStyle::Hue requires a categorical hue column".into(),
-                )
-            })?;
-            let first = &values[group_rows[0]];
-            if group_rows.iter().any(|row| &values[*row] != first) {
-                return Err(Error::Data(format!(
-                    "line path: graphical group {label:?} must have one constant hue for LinePathStyle::Hue"
-                )));
-            }
-            let hue_index = hue_levels
-                .iter()
-                .position(|level| level == first)
-                .ok_or_else(|| {
-                    Error::Data(format!(
-                        "line path: hue {first:?} for graphical group {label:?} is absent from the resolved hue order"
-                    ))
-                })?;
-            Some(hue_index)
-        } else {
-            None
-        };
         let mut points = (0..row_count)
             .filter(|row| groups[*row] == label)
             .map(|row| TrajectoryPoint {
@@ -703,7 +755,7 @@ fn prepare_trajectory<'a>(
         }
         output.push(TrajectoryGroup {
             points,
-            hue_index: group_hue,
+            hue_index: None,
         });
     }
     Ok(TrajectoryData {

@@ -39,23 +39,27 @@ pub(crate) fn render(
         Error::Data("interaction: complete precomputed interval columns are required".into())
     })?;
     let x = crate::data::strict_strings(context.data, x_col, "interaction")?;
-    let channels = crate::data::collective_channels(
+    let channels = crate::data::observed_collectives(
         context.data,
         chart.group_col(),
+        chart.group_name(),
         chart.hue_col(),
+        chart.hue_name(),
         None,
         "interaction",
     )?;
-    let trace = channels.groups.as_ref().ok_or_else(|| {
-        Error::Data("interaction: graphical group channel did not resolve".into())
-    })?;
     let estimate = crate::data::strict_finite_f64(context.data, estimate_col, "interaction")?;
     let lower = crate::data::strict_finite_f64(context.data, lower_col, "interaction")?;
     let upper = crate::data::strict_finite_f64(context.data, upper_col, "interaction")?;
     if x.is_empty()
-        || [trace.len(), estimate.len(), lower.len(), upper.len()]
-            .iter()
-            .any(|length| *length != x.len())
+        || [
+            channels.rows.len(),
+            estimate.len(),
+            lower.len(),
+            upper.len(),
+        ]
+        .iter()
+        .any(|length| *length != x.len())
     {
         return Err(Error::Data(
             "interaction: all channels must have equal non-zero lengths".into(),
@@ -64,6 +68,7 @@ pub(crate) fn render(
     let mut x_levels = Vec::new();
     let trace_levels = chart.resolved_group_levels(channels.group_levels.clone());
     let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
+    let identities = chart.resolved_collective_pairs(channels.identities.clone());
     let trace_styles = resolve_trace_styles(chart, &trace_levels)?;
     let mut cells = HashSet::new();
     for index in 0..x.len() {
@@ -73,11 +78,11 @@ pub(crate) fn render(
                 "interaction: source row {source_row} must satisfy lower <= estimate <= upper"
             )));
         }
-        if !cells.insert((x[index].clone(), trace[index].clone())) {
+        if !cells.insert((x[index].clone(), channels.rows[index].clone())) {
             let source_row = context.data.source_row(index);
             return Err(Error::Data(format!(
-                "interaction: duplicate x/trace cell {:?}/{:?} at source row {source_row}",
-                x[index], trace[index]
+                "interaction: duplicate (condition, group, hue) cell ({:?}, {:?}, {:?}) at source row {source_row}",
+                x[index], channels.rows[index].group, channels.rows[index].hue
             )));
         }
         if !x_levels.contains(&x[index]) {
@@ -108,10 +113,22 @@ pub(crate) fn render(
         &y_axis,
     );
     with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (trace_index, trace_level) in trace_levels.iter().enumerate() {
-            let hue = (0..trace.len())
-                .find(|row| &trace[*row] == trace_level)
-                .and_then(|row| channels.hues.as_ref().map(|hues| hues[row].as_str()));
+        for identity in &identities {
+            if !channels.rows.contains(identity) {
+                continue;
+            }
+            let trace_level = identity.group.as_ref().ok_or_else(|| {
+                Error::Data("interaction: graphical group channel did not resolve".into())
+            })?;
+            let trace_index = trace_levels
+                .iter()
+                .position(|level| level == trace_level)
+                .ok_or_else(|| {
+                    Error::Data(format!(
+                        "interaction: graphical group {trace_level:?} is absent from the resolved order"
+                    ))
+                })?;
+            let hue = identity.hue.as_deref();
             let color_index = hue
                 .and_then(|hue| hue_levels.iter().position(|level| level == hue))
                 .unwrap_or(0);
@@ -120,7 +137,7 @@ pub(crate) fn render(
             let mut points = Vec::new();
             for (x_index, x_level) in x_levels.iter().enumerate() {
                 if let Some(row) =
-                    (0..x.len()).find(|row| &x[*row] == x_level && &trace[*row] == trace_level)
+                    (0..x.len()).find(|row| &x[*row] == x_level && &channels.rows[*row] == identity)
                 {
                     let (px, py) = layout
                         .projection
@@ -158,9 +175,10 @@ pub(crate) fn render(
             .iter()
             .zip(styles)
             .map(|(trace_level, style)| {
-                let hue = (0..trace.len())
-                    .find(|row| &trace[*row] == trace_level)
-                    .and_then(|row| channels.hues.as_ref().map(|hues| hues[row].as_str()));
+                let hue = identities
+                    .iter()
+                    .find(|identity| identity.group.as_ref() == Some(trace_level))
+                    .and_then(|identity| identity.hue.as_deref());
                 let color_index = hue
                     .and_then(|hue| hue_levels.iter().position(|level| level == hue))
                     .unwrap_or(0);

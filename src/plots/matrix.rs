@@ -34,8 +34,8 @@ use crate::{LegendPosition, Plot};
 
 /// One graphical group for the matrix plot.
 struct HueGroup {
-    label: String,
-    hue: Option<String>,
+    identity: crate::data::CollectivePair,
+    collapsed: bool,
     /// Per-column data vectors (same order as `cols`).
     columns: Vec<Vec<f64>>,
     /// Strict Scott bandwidth per matrix column.
@@ -558,35 +558,36 @@ fn build_groups(
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let palette = chart.palette();
     let columns = extract_columns_f64(data, cols)?;
-    let channels =
-        crate::data::collective_channels(data, chart.group_col(), chart.hue_col(), None, "matrix")?;
-    let group_levels = chart.resolved_group_levels(channels.group_levels.clone());
+    let channels = crate::data::observed_collectives(
+        data,
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
+        None,
+        "matrix",
+    )?;
     let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let identities = channels.groups.as_ref().map_or_else(
-        || vec![None],
-        |_| group_levels.into_iter().map(Some).collect(),
-    );
+    let identities = chart.resolved_collective_pairs(channels.identities.clone());
     let mut groups = Vec::new();
     for identity in identities {
-        let rows = (0..data.height())
-            .filter(|row| {
-                channels
-                    .groups
-                    .as_ref()
-                    .is_none_or(|values| identity.as_ref() == Some(&values[*row]))
-            })
+        let rows = channels
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(row, row_identity)| (row_identity == &identity).then_some(row))
             .collect::<Vec<_>>();
         if rows.is_empty() {
             continue;
         }
-        let hue = channels.hues.as_ref().map(|values| values[rows[0]].clone());
-        let color_index = hue
+        let color_index = identity
+            .hue
             .as_deref()
             .and_then(|hue| hue_levels.iter().position(|level| level == hue))
             .unwrap_or(0);
         groups.push(HueGroup {
-            label: identity.unwrap_or_default(),
-            hue,
+            identity,
+            collapsed: channels.collapsed,
             columns: columns
                 .iter()
                 .map(|column| rows.iter().map(|row| column[*row]).collect())
@@ -683,20 +684,24 @@ fn matrix_group_context(
     hue_column: Option<&str>,
     group: &HueGroup,
 ) -> String {
-    match (group_column, hue_column, group.hue.as_deref()) {
-        (Some(group_column), Some(hue_column), Some(hue)) => format!(
-            "column {column:?} in graphical group {group_column:?}={:?} with hue {hue_column:?}={hue:?}",
-            group.label
+    match (
+        group_column,
+        hue_column,
+        group.identity.group.as_deref(),
+        group.identity.hue.as_deref(),
+        group.collapsed,
+    ) {
+        (Some(group_column), _, Some(value), _, true)
+        | (Some(group_column), None, Some(value), None, false) => {
+            format!("column {column:?} in graphical group {group_column:?}={value:?}")
+        }
+        (Some(group_column), Some(hue_column), Some(group_value), Some(hue_value), false) => format!(
+            "column {column:?} in graphical group {group_column:?}={group_value:?} with hue {hue_column:?}={hue_value:?}"
         ),
-        (Some(group_column), _, _) => format!(
-            "column {column:?} in graphical group {group_column:?}={:?}",
-            group.label
-        ),
-        (None, Some(hue_column), _) => format!(
-            "column {column:?} in hue {hue_column:?} group {:?}",
-            group.label
-        ),
-        (None, None, _) => format!("column {column:?} in the ungrouped data"),
+        (None, Some(hue_column), None, Some(value), _) => {
+            format!("column {column:?} in hue {hue_column:?}={value:?}")
+        }
+        _ => format!("column {column:?} in the ungrouped data"),
     }
 }
 

@@ -1,6 +1,6 @@
 use lichtung_plot::{
-    BarInput, Bounds, DumbbellEndpoints, FacetSpec, Plot, PlotKind, Significance, SignificanceMark,
-    SignificanceTarget,
+    BarInput, Bounds, DumbbellEndpoints, FacetSpec, LinePathStyle, Plot, PlotKind, Significance,
+    SignificanceMark, SignificanceTarget,
 };
 
 use super::{data, df, parse_polygon_bounds, unique_dir, DataFrame};
@@ -48,6 +48,64 @@ fn interaction_data() -> DataFrame {
         "upper" => [1.5_f64, 2.5, 2.5, 4.5],
     )
     .unwrap()
+}
+
+fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
+    let groups = ["g1", "g1", "g2", "g2", "g3", "g3"];
+    let group = || lichtung_plot::CategoryValues::new("identity", groups).unwrap();
+    let hue = || lichtung_plot::CategoryValues::new("identity", hues).unwrap();
+    let x = || lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]);
+    let y = || lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let condition = || {
+        lichtung_plot::CategoryValues::new(
+            "condition",
+            ["before", "after", "before", "after", "before", "after"],
+        )
+        .unwrap()
+    };
+
+    vec![
+        (
+            PlotKind::Line,
+            Plot::line(x(), y()).group(group()).hue(hue()).erase(),
+        ),
+        (
+            PlotKind::Density,
+            Plot::density(y()).group(group()).hue(hue()).erase(),
+        ),
+        (
+            PlotKind::Interaction,
+            Plot::interaction(
+                condition(),
+                y(),
+                group(),
+                Bounds::new(
+                    lichtung_plot::NumericValues::new("lower", [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]),
+                    lichtung_plot::NumericValues::new("upper", [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]),
+                ),
+            )
+            .hue(hue())
+            .erase(),
+        ),
+        (
+            PlotKind::Marginal,
+            Plot::marginal(x(), y()).group(group()).hue(hue()).erase(),
+        ),
+        (
+            PlotKind::Matrix,
+            Plot::matrix(vec![x(), y()])
+                .group(group())
+                .hue(hue())
+                .erase(),
+        ),
+        (
+            PlotKind::LinePath,
+            Plot::line_path(x(), y(), group())
+                .hue(hue())
+                .line_path_style(LinePathStyle::Hue)
+                .erase(),
+        ),
+    ]
 }
 
 fn configured_hue<K: lichtung_plot::kind::Marker + lichtung_plot::kind::Hue>(
@@ -246,23 +304,129 @@ fn explicit_group_controls_paths_while_hue_controls_color_and_legend() {
 }
 
 #[test]
-fn explicit_group_rejects_multiple_hues_per_collective_mark() {
+fn explicit_group_and_hue_render_only_observed_pair_paths() {
     let data = df!(
-        "group" => ["g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h2", "h2", "h2"],
-        "x" => [0.0_f64, 1.0, 0.0, 1.0],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0],
+        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
+        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
+        "x" => [0.0_f64, 1.0, 0.0, 1.0, 0.0, 1.0],
+        "y" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
     )
     .unwrap();
-    let error = Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
+    let svg = render(
+        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
+            .group(data::category(&data, "group"))
+            .hue(data::category(&data, "hue")),
+        "line-observed-pairs",
+    )
+    .unwrap();
+    let paths = svg
+        .lines()
+        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .collect::<Vec<_>>();
+    let colors = lichtung_plot::Theme::Publication.palette().colors;
+
+    assert_eq!(paths.len(), 3);
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|line| line.contains(&rgb(colors[0])))
+            .count(),
+        1
+    );
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|line| line.contains(&rgb(colors[1])))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn hue_only_line_and_density_create_one_mark_per_hue() {
+    let data = df!(
+        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2"],
+        "x" => [0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0],
+        "y" => [1.0_f64, 2.0, 4.0, 3.0, 5.0, 8.0],
+    )
+    .unwrap();
+    let line = render(
+        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
+            .hue(data::category(&data, "hue")),
+        "line-hue-only",
+    )
+    .unwrap();
+    let density = render(
+        Plot::density(data::numeric(&data, "y")).hue(data::category(&data, "hue")),
+        "density-hue-only",
+    )
+    .unwrap();
+
+    assert_eq!(
+        line.lines()
+            .filter(|tag| tag.starts_with("<polyline ") && tag.contains("stroke-width=\"1.8\""))
+            .count(),
+        2
+    );
+    assert_eq!(density.matches("fill-opacity=\"0.22\"").count(), 2);
+}
+
+#[test]
+fn density_renders_each_observed_crossed_pair() {
+    let data = df!(
+        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
+        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
+        "value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
+    )
+    .unwrap();
+    let svg = render(
+        Plot::density(data::numeric(&data, "value"))
+            .group(data::category(&data, "group"))
+            .hue(data::category(&data, "hue")),
+        "density-crossed-pairs",
+    )
+    .unwrap();
+
+    assert_eq!(svg.matches("fill-opacity=\"0.22\"").count(), 3);
+}
+
+#[test]
+fn density_pair_error_identifies_group_and_hue() {
+    let data = df!(
+        "group" => ["small", "valid", "valid"],
+        "hue" => ["red", "blue", "blue"],
+        "value" => [1.0_f64, 2.0, 3.0],
+    )
+    .unwrap();
+    let error = Plot::density(data::numeric(&data, "value"))
         .group(data::category(&data, "group"))
         .hue(data::category(&data, "hue"))
         .preflight()
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
+
     assert!(error
-        .to_string()
-        .contains("each collective mark must have exactly one hue"));
-    assert!(error.to_string().contains("source row 1"));
+        .contains("graphical group \"small\" with hue \"red\" requires at least 2 observations"));
+}
+
+#[test]
+fn equal_same_name_group_and_hue_channels_collapse_for_every_pair_family() {
+    for (kind, plot) in same_name_collective_plots(["g1", "g1", "g2", "g2", "g3", "g3"]) {
+        plot.preflight().unwrap_or_else(|error| {
+            panic!("{kind:?} should accept equal same-name channels: {error}")
+        });
+    }
+}
+
+#[test]
+fn conflicting_same_name_group_and_hue_channels_reject_for_every_pair_family() {
+    for (kind, plot) in same_name_collective_plots(["g1", "different", "g2", "g2", "g3", "g3"]) {
+        let error = plot.preflight().unwrap_err().to_string();
+        assert!(
+            error.contains("share semantic name \"identity\" but differ at source row 1"),
+            "{kind:?}: {error}"
+        );
+    }
 }
 
 #[test]
@@ -285,22 +449,44 @@ fn significance_endpoints_select_group_when_group_is_last_series_alias() {
 }
 
 #[test]
-fn faceted_group_hue_error_reports_original_source_row_before_begin() {
+fn faceted_group_hue_pairs_keep_global_hue_colors() {
     let data = df!(
-        "facet" => ["first", "first", "second", "second"],
-        "group" => ["g1", "g1", "g1", "g1"],
-        "hue" => ["h1", "h1", "h1", "h2"],
-        "x" => [0.0_f64, 1.0, 0.0, 1.0],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0],
+        "facet" => ["first", "first", "first", "first", "second", "second"],
+        "group" => ["g1", "g1", "g1", "g1", "g1", "g1"],
+        "hue" => ["h2", "h2", "h1", "h1", "h1", "h1"],
+        "x" => [0.0_f64, 1.0, 0.0, 1.0, 0.0, 1.0],
+        "y" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
     )
     .unwrap();
-    let error = Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-        .group(data::category(&data, "group"))
-        .hue(data::category(&data, "hue"))
-        .facet(FacetSpec::column(data::category(&data, "facet")))
-        .preflight()
-        .unwrap_err();
-    assert!(error.to_string().contains("source row 3"), "{error}");
+    let svg = render(
+        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
+            .group(data::category(&data, "group"))
+            .hue(data::category(&data, "hue"))
+            .facet(FacetSpec::column(data::category(&data, "facet"))),
+        "faceted-line-observed-pairs",
+    )
+    .unwrap();
+    let colors = lichtung_plot::Theme::Publication.palette().colors;
+    let paths = svg
+        .lines()
+        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .collect::<Vec<_>>();
+
+    assert_eq!(paths.len(), 3);
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|line| line.contains(&rgb(colors[0])))
+            .count(),
+        1
+    );
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|line| line.contains(&rgb(colors[1])))
+            .count(),
+        2
+    );
 }
 
 #[test]

@@ -129,26 +129,31 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
 }
 
 #[test]
-fn hue_path_style_rejects_nonconstant_path_hue_before_backend_begin() {
+fn hue_path_style_splits_one_group_into_observed_hue_paths() {
     let data = DataFrame::new(
-        3,
+        4,
         vec![
-            Series::new("path".into(), ["a", "a", "a"]).into(),
-            Series::new("hue".into(), ["first", "second", "first"]).into(),
-            Series::new("x".into(), [0.0_f64, 1.0, 2.0]).into(),
-            Series::new("y".into(), [0.0_f64, 1.0, 2.0]).into(),
+            Series::new("path".into(), ["a", "a", "a", "a"]).into(),
+            Series::new("hue".into(), ["first", "second", "first", "second"]).into(),
+            Series::new("x".into(), [0.0_f64, 1.0, 2.0, 3.0]).into(),
+            Series::new("y".into(), [0.0_f64, 1.0, 2.0, 3.0]).into(),
         ],
     )
     .unwrap();
     let chart = path_chart(&data, LinePathStyle::Hue);
     let mut backend = RecordingBackend::default();
 
-    let error = chart
-        .render_kind(PlotKind::LinePath, &mut backend)
-        .unwrap_err();
+    chart.render_kind(PlotKind::LinePath, &mut backend).unwrap();
+    let path_colors = backend
+        .line_draws
+        .iter()
+        .filter(|(_, style, clip_depth)| {
+            *clip_depth == 1 && (style.width - 1.4).abs() <= f32::EPSILON
+        })
+        .map(|(_, style, _)| style.color)
+        .collect::<Vec<_>>();
 
-    assert!(error.to_string().contains("must have one constant hue"));
-    assert_eq!(backend.begins, 0);
+    assert_eq!(path_colors, [(0, 114, 178), (213, 94, 0)]);
 }
 
 #[test]

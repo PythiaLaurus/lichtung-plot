@@ -337,6 +337,141 @@ pub(crate) struct CollectiveChannels {
     pub(crate) hue_levels: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct CollectivePair {
+    pub(crate) group: Option<String>,
+    pub(crate) hue: Option<String>,
+}
+
+impl CollectivePair {
+    pub(crate) fn description(&self, collapsed: bool) -> String {
+        match (&self.group, &self.hue, collapsed) {
+            (Some(group), _, true) | (Some(group), None, false) => {
+                format!("graphical group {group:?}")
+            }
+            (Some(group), Some(hue), false) => {
+                format!("graphical group {group:?} with hue {hue:?}")
+            }
+            (None, Some(hue), _) => format!("hue {hue:?}"),
+            (None, None, _) => "ungrouped series".to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ObservedCollectives {
+    pub(crate) rows: Vec<CollectivePair>,
+    pub(crate) identities: Vec<CollectivePair>,
+    pub(crate) group_levels: Vec<String>,
+    pub(crate) hue_levels: Vec<String>,
+    pub(crate) collapsed: bool,
+}
+
+pub(crate) fn observed_collectives<'a>(
+    data: impl Into<PlotData<'a>>,
+    group_column: Option<&str>,
+    group_name: Option<&str>,
+    hue_column: Option<&str>,
+    hue_name: Option<&str>,
+    retained_rows: Option<&[usize]>,
+    plot: &str,
+) -> Result<ObservedCollectives, Error> {
+    let data = data.into();
+    let row_indices = retained_rows.map_or_else(|| (0..data.height()).collect(), <[usize]>::to_vec);
+    let groups = group_column
+        .map(|column| strict_strings_for_rows(data, column, &row_indices, plot))
+        .transpose()?;
+    let hues = hue_column
+        .map(|column| strict_strings_for_rows(data, column, &row_indices, plot))
+        .transpose()?;
+    let collapsed = group_name
+        .zip(hue_name)
+        .is_some_and(|(group, hue)| group == hue);
+    if collapsed {
+        let (Some(groups), Some(hues)) = (groups.as_ref(), hues.as_ref()) else {
+            return Err(Error::Data(format!(
+                "{plot}: equal graphical group and hue names require both categorical channels"
+            )));
+        };
+        if let Some(index) = groups
+            .iter()
+            .zip(hues)
+            .position(|(group, hue)| group != hue)
+        {
+            return Err(Error::Data(format!(
+                "{plot}: graphical group and hue share semantic name {:?} but differ at source row {}",
+                group_name.unwrap_or_default(),
+                data.source_row(row_indices[index])
+            )));
+        }
+    }
+
+    let rows = (0..row_indices.len())
+        .map(|index| CollectivePair {
+            group: groups.as_ref().map(|values| values[index].clone()),
+            hue: hues.as_ref().map(|values| values[index].clone()),
+        })
+        .collect::<Vec<_>>();
+    let group_levels = groups
+        .as_ref()
+        .map_or_else(Vec::new, |values| stable_levels(values));
+    let hue_levels = hues
+        .as_ref()
+        .map_or_else(Vec::new, |values| stable_levels(values));
+    let mut identities = Vec::new();
+    if groups.is_some() {
+        for group in &group_levels {
+            for identity in rows
+                .iter()
+                .filter(|identity| identity.group.as_ref() == Some(group))
+            {
+                if !identities.contains(identity) {
+                    identities.push(identity.clone());
+                }
+            }
+        }
+    } else {
+        for identity in &rows {
+            if !identities.contains(identity) {
+                identities.push(identity.clone());
+            }
+        }
+    }
+
+    Ok(ObservedCollectives {
+        rows,
+        identities,
+        group_levels,
+        hue_levels,
+        collapsed,
+    })
+}
+
+fn strict_strings_for_rows(
+    data: PlotData<'_>,
+    column: &str,
+    rows: &[usize],
+    plot: &str,
+) -> Result<Vec<String>, Error> {
+    let DataColumn::Category(values) = data.column(column)? else {
+        return Err(Error::Data(format!(
+            "{plot}: value {:?} must be categorical",
+            data.column(column)?.name()
+        )));
+    };
+    rows.iter()
+        .map(|row| match values.get(data.row_index(*row)) {
+            Some(Some(value)) => Ok(value.to_owned()),
+            Some(None) => Err(Error::Data(format!(
+                "{plot}: value {:?} contains null at source row {}",
+                values.name(),
+                data.source_row(*row)
+            ))),
+            None => Err(length_error(plot, values.name(), *row)),
+        })
+        .collect()
+}
+
 pub(crate) fn collective_channels<'a>(
     data: impl Into<PlotData<'a>>,
     group_column: Option<&str>,
@@ -533,4 +668,54 @@ fn length_error(plot: &str, name: &str, row: usize) -> Error {
     Error::Data(format!(
         "{plot}: value {name:?} is shorter than the aligned plot input at row {row}"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Plot;
+
+    #[test]
+    fn observed_collectives_order_groups_then_hues_within_each_group() {
+        let plot = Plot::line(
+            crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [0.0, 1.0, 2.0, 3.0, 4.0]),
+        )
+        .group(crate::CategoryValues::new("group", ["g1", "g2", "g2", "g1", "g1"]).unwrap())
+        .hue(crate::CategoryValues::new("hue", ["h2", "h1", "h2", "h1", "h2"]).unwrap())
+        .erase();
+
+        let channels = observed_collectives(
+            &plot,
+            plot.group_col(),
+            plot.group_name(),
+            plot.hue_col(),
+            plot.hue_name(),
+            None,
+            "test",
+        )
+        .unwrap();
+
+        assert_eq!(
+            channels.identities,
+            [
+                CollectivePair {
+                    group: Some("g1".into()),
+                    hue: Some("h2".into()),
+                },
+                CollectivePair {
+                    group: Some("g1".into()),
+                    hue: Some("h1".into()),
+                },
+                CollectivePair {
+                    group: Some("g2".into()),
+                    hue: Some("h1".into()),
+                },
+                CollectivePair {
+                    group: Some("g2".into()),
+                    hue: Some("h2".into()),
+                },
+            ]
+        );
+    }
 }
