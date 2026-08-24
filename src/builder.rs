@@ -122,6 +122,18 @@ use crate::{
 /// ```
 ///
 /// ```compile_fail
+/// use lichtung_plot::{CategoryValues, CoefficientInput, NumericValues, Plot};
+/// struct Wrapped(CoefficientInput);
+/// impl Into<CoefficientInput> for Wrapped {
+///     fn into(self) -> CoefficientInput { self.0 }
+/// }
+/// let _ = Plot::coefficient(
+///     CategoryValues::new("term", ["a"]).unwrap(),
+///     Wrapped(CoefficientInput::estimates(NumericValues::new("estimate", [1.0]))),
+/// );
+/// ```
+///
+/// ```compile_fail
 /// use lichtung_plot::{Bounds, CategoryValues, NumericValues, Plot};
 /// let plot = Plot::trajectory(
 ///     NumericValues::new("x", [1.0, 2.0]),
@@ -142,6 +154,16 @@ use crate::{
 ///     CategoryValues::new("subject", ["a", "a"]).unwrap(),
 /// );
 /// let _ = plot.markers(false);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::trajectory(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("subject", ["a", "a"]).unwrap(),
+/// );
+/// let _ = plot.group(CategoryValues::new("replacement", ["b", "b"]).unwrap());
 /// ```
 ///
 /// ```compile_fail
@@ -172,6 +194,30 @@ use crate::{
 ///     0.8,
 /// ).unwrap();
 /// let _ = plot.point_layer(layer);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::line_path(
+///     NumericValues::new("x", [1.0, 2.0]),
+///     NumericValues::new("y", [2.0, 3.0]),
+///     CategoryValues::new("path", ["a", "a"]).unwrap(),
+/// );
+/// let _ = plot.group(CategoryValues::new("replacement", ["b", "b"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{Bounds, CategoryValues, NumericValues, Plot};
+/// let plot = Plot::interaction(
+///     CategoryValues::new("condition", ["before", "after"]).unwrap(),
+///     NumericValues::new("estimate", [1.0, 2.0]),
+///     CategoryValues::new("group", ["a", "a"]).unwrap(),
+///     Bounds::new(
+///         NumericValues::new("lower", [0.5, 1.5]),
+///         NumericValues::new("upper", [1.5, 2.5]),
+///     ),
+/// );
+/// let _ = plot.group(CategoryValues::new("replacement", ["b", "b"]).unwrap());
 /// ```
 ///
 /// ```compile_fail
@@ -208,6 +254,46 @@ use crate::{
 ///     CategoryValues::new("group", ["g"]).unwrap(),
 /// );
 /// let _ = plot.bar_spacing(BarSpacing::Compact);
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::stacked_bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+///     CategoryValues::new("series", ["g"]).unwrap(),
+/// );
+/// let _ = plot.group(CategoryValues::new("replacement", ["h"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::stacked_horizontal_bar(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+///     CategoryValues::new("series", ["g"]).unwrap(),
+/// );
+/// let _ = plot.hue(CategoryValues::new("replacement", ["h"]).unwrap());
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::heatmap(
+///     CategoryValues::new("x", ["a"]).unwrap(),
+///     CategoryValues::new("y", ["b"]).unwrap(),
+///     NumericValues::new("fill", [1.0]),
+/// );
+/// let _ = plot.color(NumericValues::new("replacement", [2.0]));
+/// ```
+///
+/// ```compile_fail
+/// use lichtung_plot::{CategoryValues, NumericValues, Plot};
+/// let plot = Plot::beeswarm(
+///     CategoryValues::new("category", ["a"]).unwrap(),
+///     NumericValues::new("value", [1.0]),
+///     NumericValues::new("color", [2.0]),
+/// );
+/// let _ = plot.color(NumericValues::new("replacement", [3.0]));
 /// ```
 ///
 /// ```compile_fail
@@ -269,7 +355,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     qq_line: QqLine,
     point_outline: Option<PointOutline>,
     legend_policy: LegendPolicy,
-    color: Option<NumericValues>,
     color_label: Option<String>,
     heatmap_scale: HeatmapScale,
     heatmap_layout: HeatmapLayout,
@@ -360,7 +445,6 @@ impl Plot<crate::kind::Any> {
             qq_line: QqLine::default(),
             point_outline: Some(PointOutline::default()),
             legend_policy: LegendPolicy::Automatic,
-            color: None,
             color_label: None,
             heatmap_scale: HeatmapScale::default(),
             heatmap_layout: HeatmapLayout::default(),
@@ -474,9 +558,14 @@ impl Plot<crate::kind::Any> {
         y: NumericValues,
         group: CategoryValues,
     ) -> Plot<crate::kind::Trajectory> {
-        let mut plot = Self::new(PlotInput::Line { x: x.into(), y }, PlotKind::Trajectory);
-        plot.group = Some(group);
-        plot
+        Self::new(
+            PlotInput::Trajectory {
+                x: x.into(),
+                y,
+                group,
+            },
+            PlotKind::Trajectory,
+        )
     }
 
     /// Construct explicit-group numeric paths in source-row order.
@@ -486,15 +575,7 @@ impl Plot<crate::kind::Any> {
         y: NumericValues,
         group: CategoryValues,
     ) -> Plot<crate::kind::LinePath> {
-        let mut plot = Self::new(
-            PlotInput::Line {
-                x: AxisValues::Numeric(x),
-                y,
-            },
-            PlotKind::LinePath,
-        );
-        plot.group = Some(group);
-        plot
+        Self::new(PlotInput::LinePath { x, y, group }, PlotKind::LinePath)
     }
 
     /// Construct a precomputed interaction-profile plot.
@@ -505,29 +586,25 @@ impl Plot<crate::kind::Any> {
         group: CategoryValues,
         bounds: Bounds,
     ) -> Plot<crate::kind::Interaction> {
-        let mut plot = Self::new(
+        Self::new(
             PlotInput::Interaction {
                 condition,
                 estimate,
+                group,
                 bounds,
             },
             PlotKind::Interaction,
-        );
-        plot.group = Some(group);
-        plot
+        )
     }
 
     /// Construct a model-coefficient plot.
     #[must_use]
     pub fn coefficient(
         term: CategoryValues,
-        input: impl Into<CoefficientInput>,
+        input: CoefficientInput,
     ) -> Plot<crate::kind::Coefficient> {
         Self::new(
-            PlotInput::Coefficient {
-                input: input.into(),
-                term,
-            },
+            PlotInput::Coefficient { input, term },
             PlotKind::Coefficient,
         )
     }
@@ -578,9 +655,7 @@ impl Plot<crate::kind::Any> {
         y: CategoryValues,
         fill: NumericValues,
     ) -> Plot<crate::kind::Heatmap> {
-        let mut plot = Self::new(PlotInput::Heatmap { x, y }, PlotKind::Heatmap);
-        plot.color = Some(fill);
-        plot
+        Self::new(PlotInput::Heatmap { x, y, fill }, PlotKind::Heatmap)
     }
 
     /// Construct a vertical bar plot.
@@ -615,14 +690,16 @@ impl Plot<crate::kind::Any> {
     pub fn stacked_bar(
         category: CategoryValues,
         value: NumericValues,
-        group: CategoryValues,
+        series: CategoryValues,
     ) -> Plot<crate::kind::StackedBar> {
-        let mut plot = Self::new(
-            PlotInput::StackedBar { category, value },
+        Self::new(
+            PlotInput::StackedBar {
+                category,
+                value,
+                series,
+            },
             PlotKind::StackedBar,
-        );
-        plot.series = Some(group);
-        plot
+        )
     }
 
     /// Construct a stacked horizontal bar plot.
@@ -630,14 +707,16 @@ impl Plot<crate::kind::Any> {
     pub fn stacked_horizontal_bar(
         category: CategoryValues,
         value: NumericValues,
-        group: CategoryValues,
+        series: CategoryValues,
     ) -> Plot<crate::kind::StackedHorizontalBar> {
-        let mut plot = Self::new(
-            PlotInput::StackedHorizontalBar { category, value },
+        Self::new(
+            PlotInput::StackedHorizontalBar {
+                category,
+                value,
+                series,
+            },
             PlotKind::StackedHorizontalBar,
-        );
-        plot.series = Some(group);
-        plot
+        )
     }
 
     /// Construct a box-and-whisker plot.
@@ -689,9 +768,14 @@ impl Plot<crate::kind::Any> {
         value: NumericValues,
         color: NumericValues,
     ) -> Plot<crate::kind::Beeswarm> {
-        let mut plot = Self::new(PlotInput::Beeswarm { value, category }, PlotKind::Beeswarm);
-        plot.color = Some(color);
-        plot
+        Self::new(
+            PlotInput::Beeswarm {
+                value,
+                category,
+                color,
+            },
+            PlotKind::Beeswarm,
+        )
     }
 
     /// Construct a cumulative signed-delta waterfall plot.
@@ -754,7 +838,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             qq_line,
             point_outline,
             legend_policy,
-            color,
             color_label,
             heatmap_scale,
             heatmap_layout,
@@ -833,7 +916,6 @@ impl<K: crate::kind::Marker> Plot<K> {
             qq_line,
             point_outline,
             legend_policy,
-            color,
             color_label,
             heatmap_scale,
             heatmap_layout,

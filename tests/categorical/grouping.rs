@@ -135,8 +135,7 @@ fn configured_group_plot(data: &DataFrame, kind: PlotKind, with_hue: bool) -> Pl
                 data::numeric(data, "estimate"),
                 group(),
                 Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
-            )
-            .group(group()),
+            ),
             data,
             with_hue,
         ),
@@ -173,24 +172,18 @@ fn configured_group_plot(data: &DataFrame, kind: PlotKind, with_hue: bool) -> Pl
             data,
             with_hue,
         ),
-        PlotKind::StackedBar => configured_hue(
-            Plot::stacked_bar(
-                data::category(data, "category"),
-                data::numeric(data, "y"),
-                group(),
-            ),
-            data,
-            with_hue,
-        ),
-        PlotKind::StackedHorizontalBar => configured_hue(
-            Plot::stacked_horizontal_bar(
-                data::category(data, "category"),
-                data::numeric(data, "y"),
-                group(),
-            ),
-            data,
-            with_hue,
-        ),
+        PlotKind::StackedBar => Plot::stacked_bar(
+            data::category(data, "category"),
+            data::numeric(data, "y"),
+            group(),
+        )
+        .erase(),
+        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
+            data::category(data, "category"),
+            data::numeric(data, "y"),
+            group(),
+        )
+        .erase(),
         PlotKind::Boxplot => configured_hue(
             Plot::boxplot(data::category(data, "category"), data::numeric(data, "y"))
                 .group(group()),
@@ -639,7 +632,7 @@ fn faceted_explicit_groups_keep_global_dodge_slots_when_a_panel_omits_a_group() 
 }
 
 #[test]
-fn hue_last_replaces_group_for_every_unified_categorical_family() {
+fn hue_last_replaces_group_for_setter_configured_unified_families() {
     let data = df!(
         "category" => ["a", "a", "a", "a", "a", "a"],
         "group" => ["replaced", "replaced", "replaced", "replaced", "replaced", "replaced"],
@@ -662,20 +655,6 @@ fn hue_last_replaces_group_for_every_unified_categorical_family() {
             BarInput::samples(data::numeric(&data, "value")),
         )
         .group(group())
-        .hue(hue())
-        .erase(),
-        Plot::stacked_bar(
-            data::category(&data, "category"),
-            data::numeric(&data, "value"),
-            group(),
-        )
-        .hue(hue())
-        .erase(),
-        Plot::stacked_horizontal_bar(
-            data::category(&data, "category"),
-            data::numeric(&data, "value"),
-            group(),
-        )
         .hue(hue())
         .erase(),
         Plot::boxplot(

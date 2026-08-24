@@ -310,14 +310,12 @@ fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
             numeric(data, "y"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue"))
         .erase(),
         PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
             category(data, "group"),
             numeric(data, "y"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue"))
         .erase(),
         PlotKind::Boxplot => Plot::boxplot(category(data, "group"), numeric(data, "y")).erase(),
         PlotKind::Violin => Plot::violin(category(data, "group"), numeric(data, "y")).erase(),
@@ -363,14 +361,12 @@ fn configured_bar_chart(data: &Fixture, kind: PlotKind) -> Plot {
             numeric(data, "value"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue"))
         .erase(),
         PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
             category(data, "group"),
             numeric(data, "value"),
             category(data, "hue"),
         )
-        .hue(category(data, "hue"))
         .erase(),
         _ => panic!("unsupported bar fixture kind {kind:?}"),
     }

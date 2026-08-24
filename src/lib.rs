@@ -53,14 +53,14 @@ pub use significance::{
 };
 pub use spec::{
     AxisScale, BarInput, BarSamples, BarSpacing, Bootstrap, Bounds, CanvasLegendPolicy,
-    CategoricalColors, CategoryOrder, CoefficientInput, ConfidenceInterval,
-    ConfidenceIntervalAlgorithm, DumbbellEndpoints, ErrorBar, EstimateStatus, FacetScales,
-    FacetSpec, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation,
-    HeatmapScale, HistogramBins, HistogramComposite, HistogramKde, HistogramStat, InteractionStyle,
-    LegendPolicy, LegendPosition, LinePathStyle, LinePattern, NumericLabelFormat, PanelCorner,
-    PanelTextAnnotation, PercentileInterval, PlotKind, PngCompression, PngOptions, PngSizing,
-    PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle, StandardDeviation,
-    StandardError, TextWeight, ValueSort, WaterfallLabels,
+    CategoricalColors, CategoryOrder, CoefficientInput, ConfidenceInterval, DumbbellEndpoints,
+    ErrorBar, EstimateStatus, FacetScales, FacetSpec, HeatmapAnnotations, HeatmapLabelFit,
+    HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale, HistogramBins, HistogramComposite,
+    HistogramKde, HistogramStat, InteractionStyle, LegendPolicy, LegendPosition, LinePathStyle,
+    LinePattern, NumericLabelFormat, PanelCorner, PanelTextAnnotation, PercentileInterval,
+    PlotKind, PngCompression, PngOptions, PngSizing, PointShape, QqLine, RawOverlay,
+    RegressionBand, SignificanceMarkStyle, StandardDeviation, StandardError, TextWeight, ValueSort,
+    WaterfallLabels,
 };
 pub use theme::Theme;
 pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

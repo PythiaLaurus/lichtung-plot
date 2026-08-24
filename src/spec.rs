@@ -11,10 +11,10 @@ mod facet;
 mod output;
 
 pub use bar::{
-    BarInput, BarSamples, Bootstrap, ConfidenceInterval, ConfidenceIntervalAlgorithm, ErrorBar,
-    PercentileInterval, StandardDeviation, StandardError,
+    BarInput, BarSamples, Bootstrap, ConfidenceInterval, ErrorBar, PercentileInterval,
+    StandardDeviation, StandardError,
 };
-pub(crate) use bar::{BarSource, ErrorBarKind};
+pub(crate) use bar::{BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind};
 pub use categorical::{CategoricalColors, CategoryOrder, ValueSort};
 pub use estimate::{
     AxisScale, Bounds, CoefficientInput, EstimateStatus, InteractionStyle, LinePathStyle,

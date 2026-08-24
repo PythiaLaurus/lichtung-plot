@@ -9,9 +9,7 @@ use crate::spec::{
 };
 use crate::theme::Theme;
 use crate::Labels;
-use crate::{
-    BooleanValues, Bounds, CategoryValues, EstimateStatus, NumericValues, Significance, SourceRows,
-};
+use crate::{BooleanValues, Bounds, CategoryValues, EstimateStatus, Significance, SourceRows};
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Configure PNG sizing and compression before the first terminal output.
@@ -40,9 +38,9 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Set categorical color identity.
     ///
-    /// For bars, boxplots, sample-derived violins, and sample-derived
-    /// rainclouds, this configures the same positioned, colored series as
-    /// [`Self::group`]; the last call wins.
+    /// For ordinary bars, horizontal bars, boxplots, sample-derived violins,
+    /// and sample-derived rainclouds, this configures the same positioned,
+    /// colored series as [`Self::group`]; the last call wins.
     #[must_use]
     pub fn hue(mut self, values: CategoryValues) -> Self
     where
@@ -58,9 +56,9 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Set the graphical-group column used to partition collective marks.
     ///
-    /// For bars, boxplots, sample-derived violins, and sample-derived
-    /// rainclouds, this configures the same positioned, colored series as
-    /// [`Self::hue`]; the last call wins.
+    /// For ordinary bars, horizontal bars, boxplots, sample-derived violins,
+    /// and sample-derived rainclouds, this configures the same positioned,
+    /// colored series as [`Self::hue`]; the last call wins.
     #[must_use]
     pub fn group(mut self, values: CategoryValues) -> Self
     where
@@ -74,17 +72,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set a continuous color-value column for plot kinds that support it.
-    #[must_use]
-    pub fn color(mut self, values: NumericValues) -> Self
-    where
-        K: crate::kind::ContinuousColor,
-    {
-        self.color = Some(values);
-        self
-    }
-
-    /// Set the title shown beside a heatmap color scale.
+    /// Set the title shown beside a continuous color scale.
     #[must_use]
     pub fn color_label(mut self, label: impl Into<String>) -> Self
     where

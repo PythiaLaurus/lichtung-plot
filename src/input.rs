@@ -159,9 +159,20 @@ pub(crate) enum PlotInput {
         x: AxisValues,
         y: NumericValues,
     },
+    Trajectory {
+        x: AxisValues,
+        y: NumericValues,
+        group: CategoryValues,
+    },
+    LinePath {
+        x: NumericValues,
+        y: NumericValues,
+        group: CategoryValues,
+    },
     Interaction {
         condition: CategoryValues,
         estimate: NumericValues,
+        group: CategoryValues,
         bounds: Bounds,
     },
     Coefficient {
@@ -182,6 +193,7 @@ pub(crate) enum PlotInput {
     Heatmap {
         x: CategoryValues,
         y: CategoryValues,
+        fill: NumericValues,
     },
     Bar {
         category: CategoryValues,
@@ -194,10 +206,12 @@ pub(crate) enum PlotInput {
     StackedBar {
         category: CategoryValues,
         value: NumericValues,
+        series: CategoryValues,
     },
     StackedHorizontalBar {
         category: CategoryValues,
         value: NumericValues,
+        series: CategoryValues,
     },
     Boxplot {
         category: CategoryValues,
@@ -224,6 +238,7 @@ pub(crate) enum PlotInput {
     Beeswarm {
         value: NumericValues,
         category: CategoryValues,
+        color: NumericValues,
     },
     Waterfall {
         labels: CategoryValues,
@@ -244,7 +259,8 @@ impl PlotInput {
             | Self::Interaction { estimate, .. }
             | Self::Forest { estimate, .. } => estimate.len(),
             Self::Coefficient { input, .. } => input.values().len(),
-            Self::Line { x, .. } => x.len(),
+            Self::Line { x, .. } | Self::Trajectory { x, .. } => x.len(),
+            Self::LinePath { x, .. } => x.len(),
             Self::Dumbbell { left, .. } => left.len(),
             Self::Heatmap { x, .. }
             | Self::Bar { category: x, .. }
@@ -273,7 +289,8 @@ impl PlotInput {
                 Some(estimate.name())
             }
             Self::Coefficient { input, .. } => Some(input.values().name()),
-            Self::Line { x, .. } => Some(x.name()),
+            Self::Line { x, .. } | Self::Trajectory { x, .. } => Some(x.name()),
+            Self::LinePath { x, .. } => Some(x.name()),
             Self::Interaction { condition, .. }
             | Self::Dumbbell {
                 category: condition,
@@ -317,6 +334,8 @@ impl PlotInput {
         match self {
             Self::Scatter { y, .. }
             | Self::Line { y, .. }
+            | Self::Trajectory { y, .. }
+            | Self::LinePath { y, .. }
             | Self::Regression { y, .. }
             | Self::Marginal { y, .. } => Some(y.name()),
             Self::PointInterval { category, .. }
@@ -349,6 +368,32 @@ impl PlotInput {
             | Self::Density { .. }
             | Self::Qq { .. }
             | Self::Matrix { .. } => None,
+        }
+    }
+
+    pub(crate) const fn required_group(&self) -> Option<&CategoryValues> {
+        match self {
+            Self::Trajectory { group, .. }
+            | Self::LinePath { group, .. }
+            | Self::Interaction { group, .. } => Some(group),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn required_series(&self) -> Option<&CategoryValues> {
+        match self {
+            Self::StackedBar { series, .. } | Self::StackedHorizontalBar { series, .. } => {
+                Some(series)
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn continuous_color(&self) -> Option<&NumericValues> {
+        match self {
+            Self::Heatmap { fill, .. } => Some(fill),
+            Self::Beeswarm { color, .. } => Some(color),
+            _ => None,
         }
     }
 }

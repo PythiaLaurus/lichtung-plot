@@ -69,14 +69,13 @@ capability!(SourceRows, "Plots that accept aligned source-row identities." => [
     Raincloud, Regression, Marginal, Matrix, Beeswarm, Waterfall,
 ]);
 capability!(Hue, "Plots that accept categorical color identity." => [
-    Scatter, Density, Line, Trajectory, LinePath, Interaction, Bar, HorizontalBar, StackedBar,
-    StackedHorizontalBar, Boxplot, Violin, Raincloud, Marginal, Matrix,
+    Scatter, Density, Line, Trajectory, LinePath, Interaction, Bar, HorizontalBar, Boxplot, Violin,
+    Raincloud, Marginal, Matrix,
 ]);
 capability!(Group, "Plots that accept graphical grouping identity." => [
-    Density, Line, Trajectory, LinePath, Interaction, Bar, HorizontalBar, StackedBar,
-    StackedHorizontalBar, Boxplot, Violin, Raincloud, Marginal, Matrix, Dumbbell,
+    Density, Line, Bar, HorizontalBar, Boxplot, Violin, Raincloud, Marginal, Matrix, Dumbbell,
 ]);
-capability!(ContinuousColor, "Plots that consume a continuous color channel and label." => [
+capability!(ContinuousColor, "Plots that configure a constructor-owned continuous color channel." => [
     Heatmap, Beeswarm,
 ]);
 capability!(NumericX, "Plots that can expose a numeric horizontal axis." => [

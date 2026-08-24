@@ -228,7 +228,6 @@ fn fixed_facets_use_renderer_stacks_and_reject_incompatible_categories() {
             data::numeric(&stacked, "value"),
             data::category(&stacked, "hue"),
         )
-        .hue(data::category(&stacked, "hue"))
         .facet(FacetSpec::column(data::category(&stacked, "facet"))),
         "facet-stacked-domain",
     )
@@ -605,7 +604,6 @@ fn faceted_stacked_bar_preflights_extreme_finite_panels_without_pooling() {
             data::numeric(&frame, "value"),
             data::category(&frame, "series"),
         )
-        .hue(data::category(&frame, "series"))
         .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
     };
     assert!(base()

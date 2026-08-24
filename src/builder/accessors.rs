@@ -37,6 +37,18 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.input.len()
     }
 
+    fn series_values(&self) -> Option<&crate::CategoryValues> {
+        self.input.required_series().or(self.series.as_ref())
+    }
+
+    fn group_values(&self) -> Option<&crate::CategoryValues> {
+        self.input.required_group().or(self.group.as_ref())
+    }
+
+    fn color_values(&self) -> Option<&crate::NumericValues> {
+        self.input.continuous_color()
+    }
+
     pub(crate) fn x_col(&self) -> Option<&'static str> {
         self.input.x_name().map(|_| X)
     }
@@ -47,7 +59,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn hue_col(&self) -> Option<&'static str> {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series.as_ref().map(|_| SERIES)
+            self.series_values().map(|_| SERIES)
         } else {
             self.hue.as_ref().map(|_| HUE)
         }
@@ -55,7 +67,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn hue_name(&self) -> Option<&str> {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series.as_ref().map(crate::CategoryValues::name)
+            self.series_values().map(crate::CategoryValues::name)
         } else {
             self.hue.as_ref().map(crate::CategoryValues::name)
         }
@@ -63,22 +75,22 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn group_col(&self) -> Option<&'static str> {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series.as_ref().map(|_| SERIES)
+            self.series_values().map(|_| SERIES)
         } else {
-            self.group.as_ref().map(|_| GROUP)
+            self.group_values().map(|_| GROUP)
         }
     }
 
     pub(crate) fn group_name(&self) -> Option<&str> {
         if self.kind.is_some_and(crate::PlotKind::uses_unified_series) {
-            self.series.as_ref().map(crate::CategoryValues::name)
+            self.series_values().map(crate::CategoryValues::name)
         } else {
-            self.group.as_ref().map(crate::CategoryValues::name)
+            self.group_values().map(crate::CategoryValues::name)
         }
     }
 
     pub(crate) fn color_col(&self) -> Option<&'static str> {
-        self.color.as_ref().map(|_| COLOR)
+        self.color_values().map(|_| COLOR)
     }
 
     pub(crate) fn data_column(&self, key: &str) -> Option<DataColumn<'_>> {
@@ -90,9 +102,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
         match key {
             HUE => self.hue.as_ref().map(DataColumn::Category),
-            GROUP => self.group.as_ref().map(DataColumn::Category),
-            SERIES => self.series.as_ref().map(DataColumn::Category),
-            COLOR => self.color.as_ref().map(DataColumn::Numeric),
+            GROUP => self.group_values().map(DataColumn::Category),
+            SERIES => self.series_values().map(DataColumn::Category),
+            COLOR => self.color_values().map(DataColumn::Numeric),
             HEATMAP_HIGHLIGHT => self.heatmap_highlight.as_ref().map(DataColumn::Boolean),
             INTERVAL_LOWER => self
                 .drawable_bounds()
@@ -167,7 +179,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         match &self.input {
             PlotInput::Scatter { x, .. }
             | PlotInput::Regression { x, .. }
-            | PlotInput::Marginal { x, .. } => Some(DataColumn::Numeric(x)),
+            | PlotInput::Marginal { x, .. }
+            | PlotInput::LinePath { x, .. } => Some(DataColumn::Numeric(x)),
             PlotInput::Histogram { input } => input.samples_input().map(DataColumn::Numeric),
             PlotInput::Density { values } | PlotInput::Qq { values } => {
                 Some(DataColumn::Numeric(values))
@@ -176,7 +189,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 Some(DataColumn::Numeric(estimate))
             }
             PlotInput::Coefficient { input, .. } => Some(DataColumn::Numeric(input.values())),
-            PlotInput::Line { x, .. } => match x {
+            PlotInput::Line { x, .. } | PlotInput::Trajectory { x, .. } => match x {
                 AxisValues::Numeric(values) => Some(DataColumn::Numeric(values)),
                 AxisValues::Category(values) => Some(DataColumn::Category(values)),
             },
@@ -225,6 +238,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         match &self.input {
             PlotInput::Scatter { y, .. }
             | PlotInput::Line { y, .. }
+            | PlotInput::Trajectory { y, .. }
+            | PlotInput::LinePath { y, .. }
             | PlotInput::Regression { y, .. }
             | PlotInput::Marginal { y, .. } => Some(DataColumn::Numeric(y)),
             PlotInput::PointInterval { category, .. }
@@ -262,6 +277,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one exhaustive closed-input match keeps every family's aligned channels auditable"
+    )]
     pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
         let mut columns = match &self.input {
             PlotInput::Scatter { x, y }
@@ -297,13 +316,27 @@ impl<K: crate::kind::Marker> Plot<K> {
                 };
                 vec![x, DataColumn::Numeric(y)]
             }
+            PlotInput::Trajectory { x, y, group } => {
+                let x = match x {
+                    AxisValues::Numeric(values) => DataColumn::Numeric(values),
+                    AxisValues::Category(values) => DataColumn::Category(values),
+                };
+                vec![x, DataColumn::Numeric(y), DataColumn::Category(group)]
+            }
+            PlotInput::LinePath { x, y, group } => vec![
+                DataColumn::Numeric(x),
+                DataColumn::Numeric(y),
+                DataColumn::Category(group),
+            ],
             PlotInput::Interaction {
                 condition,
                 estimate,
+                group,
                 ..
             } => vec![
                 DataColumn::Category(condition),
                 DataColumn::Numeric(estimate),
+                DataColumn::Category(group),
             ],
             PlotInput::Dumbbell {
                 category,
@@ -315,9 +348,11 @@ impl<K: crate::kind::Marker> Plot<K> {
                 DataColumn::Numeric(left),
                 DataColumn::Numeric(right),
             ],
-            PlotInput::Heatmap { x, y } => {
-                vec![DataColumn::Category(x), DataColumn::Category(y)]
-            }
+            PlotInput::Heatmap { x, y, fill } => vec![
+                DataColumn::Category(x),
+                DataColumn::Category(y),
+                DataColumn::Numeric(fill),
+            ],
             PlotInput::Bar { category, input } | PlotInput::HorizontalBar { category, input } => {
                 let mut columns = vec![
                     DataColumn::Category(category),
@@ -332,13 +367,32 @@ impl<K: crate::kind::Marker> Plot<K> {
                 }
                 columns
             }
-            PlotInput::StackedBar { category, value }
-            | PlotInput::StackedHorizontalBar { category, value }
-            | PlotInput::Boxplot { category, value }
-            | PlotInput::Violin { category, value }
-            | PlotInput::Beeswarm { category, value } => {
+            PlotInput::StackedBar {
+                category,
+                value,
+                series,
+            }
+            | PlotInput::StackedHorizontalBar {
+                category,
+                value,
+                series,
+            } => vec![
+                DataColumn::Category(category),
+                DataColumn::Numeric(value),
+                DataColumn::Category(series),
+            ],
+            PlotInput::Boxplot { category, value } | PlotInput::Violin { category, value } => {
                 vec![DataColumn::Category(category), DataColumn::Numeric(value)]
             }
+            PlotInput::Beeswarm {
+                category,
+                value,
+                color,
+            } => vec![
+                DataColumn::Category(category),
+                DataColumn::Numeric(value),
+                DataColumn::Numeric(color),
+            ],
             PlotInput::Raincloud { input } => {
                 input.samples_input().map_or_else(Vec::new, |input| {
                     vec![DataColumn::Category(input.0), DataColumn::Numeric(input.1)]
@@ -352,7 +406,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         columns.extend(self.series.iter().map(DataColumn::Category));
         columns.extend(self.hue.iter().map(DataColumn::Category));
         columns.extend(self.group.iter().map(DataColumn::Category));
-        columns.extend(self.color.iter().map(DataColumn::Numeric));
         if let Some(bounds) = self.drawable_bounds() {
             columns.push(DataColumn::Numeric(bounds.lower()));
             columns.push(DataColumn::Numeric(bounds.upper()));
@@ -730,8 +783,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn resolved_color_label(&self) -> String {
         self.color_label.clone().unwrap_or_else(|| {
-            self.color
-                .as_ref()
+            self.color_values()
                 .map_or_else(String::new, |values| self.resolve_label(values.name()))
         })
     }
@@ -739,7 +791,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn legend_title_key(&self) -> &str {
         self.interaction_styles
             .as_ref()
-            .and(self.group.as_ref())
+            .and(self.group_values())
             .map(crate::CategoryValues::name)
             .or_else(|| self.hue_dimension_key())
             .unwrap_or("series")

@@ -51,8 +51,7 @@ pub enum SignificanceTarget {
     CategorySeries {
         /// Categorical axis level.
         category: String,
-        /// Series level configured through [`crate::Plot::group`] or
-        /// [`crate::Plot::hue`].
+        /// Constructor-owned or configured plot-series level.
         series: String,
     },
 }

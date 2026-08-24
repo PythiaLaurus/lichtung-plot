@@ -239,6 +239,13 @@ impl From<StandardError> for ErrorBar {
 }
 
 /// Two-sided confidence-interval configuration.
+///
+/// Algorithm selection is available only through [`Self::bootstrap`] and
+/// [`Self::student_t`].
+///
+/// ```compile_fail
+/// use lichtung_plot::ConfidenceIntervalAlgorithm;
+/// ```
 #[derive(Debug, Clone)]
 pub struct ConfidenceInterval {
     pub(crate) level: f64,
@@ -282,7 +289,7 @@ impl From<ConfidenceInterval> for ErrorBar {
 
 /// Closed algorithm selection owned by a confidence interval.
 #[derive(Debug, Clone)]
-pub enum ConfidenceIntervalAlgorithm {
+pub(crate) enum ConfidenceIntervalAlgorithm {
     /// Percentile bootstrap of resampled means.
     Bootstrap(Bootstrap),
     /// Exact Student-t interval around the sample mean.

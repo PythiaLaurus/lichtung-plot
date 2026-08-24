@@ -198,7 +198,11 @@ Acceptance:
 
 ## Final API Phase A1: Constructor-Owned Inputs
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused `categorical`, `composition`, `distributions`, `estimates`,
+`heatmap`, `interactions`, `lines`, and `rendering` tests, compile-fail doctests,
+and `just verify` passed on 2026-08-25.
 
 - Add exact closed input variants for trajectory, line-path, interaction,
   stacked bars, heatmap, and beeswarm where needed.
