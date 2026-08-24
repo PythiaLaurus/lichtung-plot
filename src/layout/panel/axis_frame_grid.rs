@@ -63,6 +63,64 @@ impl AxisTick {
 }
 
 impl Axis {
+    pub(crate) fn validate_explicit_tick_collisions(
+        &self,
+        projection: &Projection,
+        side: AxisSide,
+        palette: &ThemePalette,
+        axis: &str,
+    ) -> Result<(), Error> {
+        if !palette.show_tick_labels {
+            return Ok(());
+        }
+        let maximum_width = self.tick_label_maximum_width(projection, side);
+        let role = format!("{axis} explicit tick label");
+        let mut previous = None;
+        for (index, tick) in self
+            .ticks
+            .iter()
+            .enumerate()
+            .filter(|(_, tick)| !tick.label.is_empty())
+        {
+            let block =
+                TextBlock::layout(&tick.label, palette.tick_font_size, maximum_width, &role)?;
+            let center = match side {
+                AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
+                AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
+            };
+            let (start, end) = match side {
+                AxisSide::Bottom => {
+                    let center = center.round();
+                    (center - block.width() / 2.0, center + block.width() / 2.0)
+                }
+                AxisSide::Left => {
+                    let line_offset = (block.height() - block.line_height()) / 2.0;
+                    (
+                        (center - line_offset).round() - block.line_height() / 2.0,
+                        (center + line_offset).round() + block.line_height() / 2.0,
+                    )
+                }
+            };
+            if let Some((previous_index, previous_end)) = previous {
+                if start < previous_end {
+                    return Err(Error::Render(format!(
+                        "{axis} explicit tick labels at indices {previous_index} and {index} overlap after projection; increase chart size, shorten the labels, or provide non-overlapping exact ticks"
+                    )));
+                }
+            }
+            previous = Some((index, end));
+        }
+        Ok(())
+    }
+
+    fn tick_label_maximum_width(&self, projection: &Projection, side: AxisSide) -> f64 {
+        let (x0, x1, _, _) = projection.pixel_box();
+        match side {
+            AxisSide::Bottom => (x1 - x0) / self.ticks.len().max(1) as f64 * 0.9,
+            AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
+        }
+    }
+
     /// Draw this axis's spine, ticks, tick labels, and axis label.
     ///
     /// `side` selects which side the ticks are drawn on:
@@ -103,10 +161,7 @@ impl Axis {
             anchor: TextAnchor::Middle,
             rotation: 0.0,
         };
-        let tick_width = match side {
-            AxisSide::Bottom => (x1 - x0) / self.ticks.len().max(1) as f64 * 0.9,
-            AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
-        };
+        let tick_width = self.tick_label_maximum_width(projection, side);
 
         // Spine (only the two visible edges for open-frame
         // styles; the Frame renderer decides whether the full

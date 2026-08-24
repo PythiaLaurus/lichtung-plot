@@ -68,7 +68,7 @@ fn point_layer(frame: &DataFrame, x: &str, y: &str, radius: u32, opacity: f64) -
 }
 
 #[test]
-fn explicit_numeric_ticks_render_verbatim_text_at_caller_positions_on_both_axes() {
+fn explicit_numeric_ticks_replace_generated_labels_at_caller_positions_on_both_axes() {
     let frame = line_data();
     let output = svg(line_plot(&frame)
         .x_limits(0.0, 2.0)
@@ -81,13 +81,69 @@ fn explicit_numeric_ticks_render_verbatim_text_at_caller_positions_on_both_axes(
             AxisTick::new(1.0, "low y"),
             AxisTick::new(3.0, "high y"),
         ]));
-    assert!(
-        attribute(text_line(&output, "early x"), "x")
-            < attribute(text_line(&output, "late x"), "x")
+    let clip = output
+        .lines()
+        .find(|line| line.starts_with("<clipPath "))
+        .unwrap();
+    let panel_x = attribute(clip, "x");
+    let panel_y = attribute(clip, "y");
+    let panel_width = attribute(clip, "width");
+    let panel_height = attribute(clip, "height");
+    assert_eq!(
+        attribute(text_line(&output, "early x"), "x").to_bits(),
+        (panel_x + panel_width * 0.25).round().to_bits()
     );
-    assert!(
-        attribute(text_line(&output, "low y"), "y") > attribute(text_line(&output, "high y"), "y")
+    assert_eq!(
+        attribute(text_line(&output, "late x"), "x").to_bits(),
+        (panel_x + panel_width * 0.75).round().to_bits()
     );
+    assert_eq!(
+        attribute(text_line(&output, "low y"), "y").to_bits(),
+        (panel_y + panel_height * 0.75).round().to_bits()
+    );
+    assert_eq!(
+        attribute(text_line(&output, "high y"), "y").to_bits(),
+        (panel_y + panel_height * 0.25).round().to_bits()
+    );
+    let mut tick_labels = output
+        .lines()
+        .filter(|line| line.starts_with("<text ") && line.contains("font-size=\"16\""))
+        .map(|line| line.split_once('>').unwrap().1.split_once('<').unwrap().0)
+        .collect::<Vec<_>>();
+    tick_labels.sort_unstable();
+    assert_eq!(tick_labels, ["early x", "high y", "late x", "low y"]);
+}
+
+#[test]
+fn explicit_x_ticks_reject_projected_neighboring_label_collisions() {
+    let frame = line_data();
+    let error = line_plot(&frame)
+        .x_limits(0.0, 2.0)
+        .x_ticks(vec![
+            AxisTick::new(1.0, "First exact label"),
+            AxisTick::new(1.01, "Second exact label"),
+        ])
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("x-axis explicit tick labels at indices 0 and 1 overlap"));
+}
+
+#[test]
+fn explicit_y_ticks_reject_projected_neighboring_label_collisions() {
+    let frame = line_data();
+    let error = line_plot(&frame)
+        .y_limits(0.0, 4.0)
+        .y_ticks(vec![
+            AxisTick::new(2.0, "Lower exact\nlabel"),
+            AxisTick::new(2.25, "Upper exact\nlabel"),
+        ])
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("y-axis explicit tick labels at indices 0 and 1 overlap"));
 }
 
 #[test]

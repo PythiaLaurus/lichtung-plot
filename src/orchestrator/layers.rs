@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use crate::layout::AxisTick;
+use crate::layout::{AxisSide, AxisTick};
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{GuideSpec, Plot};
@@ -91,10 +91,22 @@ pub(crate) fn apply(
     if let Some(ticks) = chart.explicit_x_ticks() {
         validate_ticks(ticks, projection.x_range(), "x-axis")?;
         result.layout.x_axis.ticks = ticks.to_vec();
+        result.layout.x_axis.validate_explicit_tick_collisions(
+            projection,
+            AxisSide::Bottom,
+            &chart.palette(),
+            "x-axis",
+        )?;
     }
     if let Some(ticks) = chart.explicit_y_ticks() {
         validate_ticks(ticks, projection.y_range(), "y-axis")?;
         result.layout.y_axis.ticks = ticks.to_vec();
+        result.layout.y_axis.validate_explicit_tick_collisions(
+            projection,
+            AxisSide::Left,
+            &chart.palette(),
+            "y-axis",
+        )?;
     }
     if chart.guides().is_empty() {
         return Ok(());

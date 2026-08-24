@@ -93,6 +93,25 @@ fn numeric_path_preserves_source_order_and_repeated_x_values() {
 }
 
 #[test]
+fn neutral_path_with_hidden_markers_suppresses_hue_legend() {
+    let frame = numeric_trajectory_data();
+    let output = svg(
+        Plot::line_path(
+            data::numeric(&frame, "condition"),
+            data::numeric(&frame, "value"),
+            data::category(&frame, "subject"),
+        )
+        .hue(data::category(&frame, "status"))
+        .markers(false),
+        "neutral-path-hidden-markers",
+    );
+
+    assert_eq!(connector_tags(&output).len(), 2);
+    assert_eq!(output.matches("<circle ").count(), 0);
+    assert!(!output.contains("id=\"legend\""));
+}
+
+#[test]
 fn changing_hue_colors_points_but_not_connector_or_group_legend() {
     let frame = df!(
         "subject" => ["subject-one"; 3], "condition" => [1.0_f64, 2.0, 3.0],

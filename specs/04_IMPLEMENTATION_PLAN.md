@@ -179,7 +179,10 @@ Acceptance:
 
 ## Correctness Phase C6: Remaining Rendering Semantics
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused `lines`, `layout`, `distributions`, and `composition`
+tests plus `just verify` passed on 2026-08-25.
 
 - Suppress hue legends for neutral line paths whose markers are hidden.
 - Validate exact numeric tick collisions from projected neighboring positions.

@@ -14,6 +14,41 @@ fn identity_bar(data_frame: &DataFrame) -> Plot<lichtung_plot::kind::Bar> {
     )
 }
 
+fn clip_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
+    svg.lines()
+        .filter(|line| line.starts_with("<clipPath "))
+        .map(|line| {
+            (
+                attribute(line, "x").parse().unwrap(),
+                attribute(line, "y").parse().unwrap(),
+                attribute(line, "width").parse().unwrap(),
+                attribute(line, "height").parse().unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn significance_bracket_bounds(svg: &str) -> (f64, f64, f64, f64) {
+    let path = svg
+        .lines()
+        .find(|line| line.starts_with("<path class=\"significance-bracket\""))
+        .expect("significance bracket path");
+    let coordinates = attribute(path, "d")
+        .split_whitespace()
+        .filter_map(|token| token.parse::<f64>().ok())
+        .collect::<Vec<_>>();
+    let mut points = coordinates.chunks_exact(2);
+    let first = points.next().expect("significance bracket coordinates");
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (first[0], first[0], first[1], first[1]);
+    for point in points {
+        min_x = min_x.min(point[0]);
+        max_x = max_x.max(point[0]);
+        min_y = min_y.min(point[1]);
+        max_y = max_y.max(point[1]);
+    }
+    (min_x, min_y, max_x - min_x, max_y - min_y)
+}
+
 #[test]
 fn faceting_uses_unique_clips_and_panel_owned_annotations() {
     let frame = estimate_data();
@@ -72,6 +107,26 @@ fn grid_facet_cell_owns_exactly_one_significance_panel() {
     let svg = render_svg(chart, "grid-facet-cell").unwrap();
 
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
+    let panels = clip_rects(&svg);
+    assert_eq!(panels.len(), 4);
+    let top_y = panels
+        .iter()
+        .map(|panel| panel.1)
+        .min_by(f64::total_cmp)
+        .unwrap();
+    let top_right = panels
+        .iter()
+        .filter(|panel| (panel.1 - top_y).abs() < 0.001)
+        .max_by(|left, right| left.0.total_cmp(&right.0))
+        .copied()
+        .unwrap();
+    let bracket = significance_bracket_bounds(&svg);
+    assert!(
+        bracket.0 >= top_right.0
+            && bracket.0 + bracket.2 <= top_right.0 + top_right.2
+            && bracket.1 >= top_right.1
+            && bracket.1 + bracket.3 <= top_right.1 + top_right.3
+    );
 }
 
 #[test]

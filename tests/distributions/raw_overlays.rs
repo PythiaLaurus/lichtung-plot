@@ -18,6 +18,15 @@ fn plot(samples: &[f64], kind: PlotKind, overlay: RawOverlay) -> Plot {
     }
 }
 
+fn plot_with_default_overlay(samples: &[f64], kind: PlotKind) -> Plot {
+    let (category, values) = values(samples);
+    match kind {
+        PlotKind::Boxplot => Plot::boxplot(category, values).erase(),
+        PlotKind::Violin => Plot::violin(category, values).erase(),
+        _ => panic!("unsupported raw-overlay fixture kind {kind:?}"),
+    }
+}
+
 fn render<K: lichtung_plot::kind::Marker>(
     plot: Plot<K>,
     name: &str,
@@ -46,7 +55,7 @@ fn circle_tags(svg: &str) -> Vec<&str> {
 fn explicit_hidden_is_byte_identical_to_the_default_for_boxplot_and_violin() {
     for kind in [PlotKind::Boxplot, PlotKind::Violin] {
         let default = render(
-            plot(&[1.0, 2.0, 3.0, 4.0], kind, RawOverlay::Hidden),
+            plot_with_default_overlay(&[1.0, 2.0, 3.0, 4.0], kind),
             "overlay-default",
         )
         .unwrap();
