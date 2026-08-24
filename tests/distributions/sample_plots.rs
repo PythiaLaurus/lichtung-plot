@@ -226,7 +226,8 @@ fn density_hue_is_deterministic_with_independent_curves_and_stable_legend() {
 
     let svg = std::fs::read_to_string(first).unwrap();
     assert_eq!(svg, std::fs::read_to_string(second).unwrap());
-    assert_eq!(svg.matches("fill-opacity=\"0.22\"").count(), 2);
+    let marks = remove_legend_layers(&svg);
+    assert_eq!(marks.matches("fill-opacity=\"0.22\"").count(), 2);
     assert!(svg.find(">B</text>").unwrap() < svg.find(">A</text>").unwrap());
     assert!(svg.contains(">Value</text>") && svg.contains(">Density</text>"));
     std::fs::remove_dir_all(dir).unwrap();

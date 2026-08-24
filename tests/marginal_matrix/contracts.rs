@@ -94,8 +94,18 @@ fn marginal_and_matrix_render_each_observed_crossed_pair() {
         "matrix-crossed-pairs",
     );
 
-    assert_eq!(marginal_svg.matches("fill-opacity=\"0.45\"").count(), 6);
-    assert_eq!(matrix_svg.matches("fill-opacity=\"0.40\"").count(), 9);
+    assert_eq!(
+        remove_legend_layers(&marginal_svg)
+            .matches("fill-opacity=\"0.45\"")
+            .count(),
+        6
+    );
+    assert_eq!(
+        remove_legend_layers(&matrix_svg)
+            .matches("fill-opacity=\"0.40\"")
+            .count(),
+        9
+    );
 }
 
 #[test]

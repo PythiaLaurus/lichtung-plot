@@ -58,8 +58,8 @@ impl Plot {
         data::validate_significance_facet_anchors(self, &panels)?;
 
         let mut null_backend = NullBackend;
-        let preflight = legend::preflight_panels(&base, kind, &panels, &mut null_backend)?;
-        let base = legend::coordinate_hue_levels(self, base, &preflight)?;
+        let (base, preflight) =
+            legend::preflight_coordinated_panels(self, base, kind, &panels, &mut null_backend)?;
         let fix_x = matches!(
             self.facet_scales_spec(),
             FacetScales::Fixed | FacetScales::FreeY
@@ -71,7 +71,7 @@ impl Plot {
         let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
         let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
         let shared = base.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
-        let (reserved_outer, mut outside_legend) =
+        let (reserved_outer, mut outside_legend, legend_entries) =
             legend::reserve_shared_legend(self, &shared, &preflight, outer)?;
         outer = planning::reserve_rewrapped_shared_axis_titles(
             horizontal_axis_label.as_deref(),
@@ -98,8 +98,15 @@ impl Plot {
             &mut null_backend,
         )?;
         let shared = shared.with_measured_axis_text();
-        let (shared, plans) =
-            planning::plan_panels(shared, kind, &panels, outside_legend, fix_x, fix_y)?;
+        let (shared, plans) = planning::plan_panels(
+            shared,
+            kind,
+            &panels,
+            outside_legend,
+            &legend_entries,
+            fix_x,
+            fix_y,
+        )?;
         rendering::render_scene(
             self,
             &shared,

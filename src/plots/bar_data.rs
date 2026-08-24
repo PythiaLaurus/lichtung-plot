@@ -5,12 +5,11 @@
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::render::backend::PointStyle;
+use crate::render::backend::{FillStyle, PointStyle};
 use crate::spec::{
     BarInput, BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
-use crate::theme::ThemePalette;
 use crate::{CategoryOrder, Plot, ValueSort};
 
 /// Bar arrangement mode.
@@ -644,15 +643,21 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
 }
 
 /// Legend entries for hue series.
-pub(crate) fn legend_entries(prepared: &PreparedBars, palette: &ThemePalette) -> Vec<LegendEntry> {
+pub(crate) fn legend_entries(prepared: &PreparedBars, chart: &Plot) -> Vec<LegendEntry> {
+    let palette = chart.palette();
     prepared
         .hues
         .iter()
         .enumerate()
         .map(|(index, label)| {
-            LegendEntry::point(
-                label.clone(),
-                PointStyle::new(palette.colors[index % palette.colors.len()], 3),
+            LegendEntry::fill(
+                chart.legend_identity(label.clone()),
+                FillStyle {
+                    color: palette.colors[index % palette.colors.len()],
+                    stroke: palette.foreground,
+                    stroke_width: 1.0,
+                    opacity: 1.0,
+                },
             )
         })
         .collect()

@@ -98,15 +98,20 @@ impl Plot {
         panel: crate::layout::PanelBox,
     ) -> Result<Vec<String>, Error> {
         let result = self.preflight_panel(kind, panel)?;
-        if result.legend_keys.is_empty() {
-            Ok(result
-                .legend_entries
-                .into_iter()
-                .map(|entry| entry.label)
-                .collect())
-        } else {
-            Ok(result.legend_keys)
-        }
+        let Some(field) = self.hue_dimension_key() else {
+            return Ok(Vec::new());
+        };
+        Ok(result
+            .legend_entries
+            .iter()
+            .fold(Vec::new(), |mut levels, entry| {
+                if let Some(value) = entry.identity().hue_value_for(field) {
+                    if !levels.iter().any(|level| level == value) {
+                        levels.push(value.to_owned());
+                    }
+                }
+                levels
+            }))
     }
 
     pub(crate) fn configured_source_rows(&self) -> Result<Option<&[usize]>, Error> {

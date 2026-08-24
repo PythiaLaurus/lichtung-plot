@@ -199,9 +199,20 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
     .categorical_colors(colors)
     .facet(FacetSpec::column(data::category(&data, "panel")))
     .size(960, 320));
+    let mut clipped = false;
     let connectors = output
         .lines()
-        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .filter(|line| {
+            if line.starts_with("<g clip-path=") {
+                clipped = true;
+                return false;
+            }
+            if clipped && *line == "</g>" {
+                clipped = false;
+                return false;
+            }
+            clipped && line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\"")
+        })
         .collect::<Vec<_>>();
 
     assert_eq!(connectors.len(), 4);

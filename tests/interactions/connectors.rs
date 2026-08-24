@@ -50,7 +50,7 @@ fn explicit_visible_interaction_connectors_are_byte_identical_to_default() {
 }
 
 #[test]
-fn hidden_interaction_connectors_omit_only_between_category_lines() {
+fn hidden_interaction_connectors_update_marks_and_exact_legend() {
     let frame = interaction_data();
     let visible = svg(chart(&frame), "connectors-visible");
     let hidden = svg(
@@ -63,7 +63,10 @@ fn hidden_interaction_connectors_omit_only_between_category_lines() {
     assert_eq!(hidden_marks.matches("<polyline ").count(), 4);
     assert_eq!(visible_marks.matches("<circle ").count(), 4);
     assert_eq!(hidden_marks.matches("<circle ").count(), 4);
-    assert_eq!(legend(&visible), legend(&hidden));
+    assert_eq!(legend(&visible).matches("<polyline ").count(), 2);
+    assert_eq!(legend(&hidden).matches("<polyline ").count(), 0);
+    assert_eq!(legend(&visible).matches("<circle ").count(), 2);
+    assert_eq!(legend(&hidden).matches("<circle ").count(), 2);
     assert!(hidden.contains(">Before</text>") && hidden.contains(">After</text>"));
     assert!(hidden.contains(">Control</text>") && hidden.contains(">Active</text>"));
     assert_eq!(without_connector_polylines(&visible), hidden);
@@ -162,6 +165,12 @@ fn without_connector_polylines(svg: &str) -> String {
             .collect::<Vec<_>>();
         points.windows(2).any(|pair| pair[0] != pair[1])
     }) {
+        output = output.replacen(&format!("{line}\n"), "", 1);
+    }
+    for line in legend(svg)
+        .lines()
+        .filter(|line| line.starts_with("<polyline "))
+    {
         output = output.replacen(&format!("{line}\n"), "", 1);
     }
     output

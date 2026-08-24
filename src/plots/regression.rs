@@ -133,12 +133,15 @@ pub(crate) fn render(
         backend.draw_line(&fit_line, &line_style)
     })?;
     let legend_entries = if matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
+        let fit_identity = chart.legend_identity(band.legend_label());
+        let fit_entry = if band == RegressionBand::PointwiseMean95 {
+            LegendEntry::line_fill(fit_identity, line_style, band_fill)
+        } else {
+            LegendEntry::line(fit_identity, line_style)
+        };
         vec![
-            LegendEntry::point("Observations".to_string(), point_style),
-            LegendEntry::point(
-                band.legend_label().to_string(),
-                chart.point_style(line_style.color, 3),
-            ),
+            LegendEntry::point(chart.legend_identity("Observations"), point_style),
+            fit_entry,
         ]
     } else {
         Vec::new()

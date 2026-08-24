@@ -25,32 +25,361 @@ use crate::render::backend::{
 };
 use crate::Error;
 
-/// A legend entry.
-#[derive(Debug, Clone)]
-pub struct LegendEntry {
-    /// The label for the entry.
-    pub label: String,
-    /// The style of the entry's marker.
-    pub style: PointStyle,
-    /// Optional line drawn through the marker to form a composite glyph.
-    pub line_style: Option<LineStyle>,
+/// Raw semantic identity for one renderer-owned legend entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LegendIdentity {
+    Single {
+        field: String,
+        value: String,
+    },
+    Pair {
+        group_field: String,
+        group_value: String,
+        hue_field: String,
+        hue_value: String,
+    },
+    Literal {
+        title: String,
+        value: String,
+    },
 }
 
-impl LegendEntry {
-    pub(crate) fn point(label: String, style: PointStyle) -> Self {
-        Self {
-            label,
-            style,
-            line_style: None,
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LegendTitleIdentity {
+    Single(String),
+    Pair(String, String),
+    Literal(String),
+}
+
+impl LegendIdentity {
+    pub(crate) fn single(field: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::Single {
+            field: field.into(),
+            value: value.into(),
         }
     }
 
-    pub(crate) fn line(label: String, color: (u8, u8, u8), width: f32) -> Self {
-        Self {
-            label,
-            style: PointStyle::plain(color, 0).with_opacity(0.0),
-            line_style: Some(LineStyle::solid(color, width)),
+    pub(crate) fn pair(
+        group_field: impl Into<String>,
+        group_value: impl Into<String>,
+        hue_field: impl Into<String>,
+        hue_value: impl Into<String>,
+    ) -> Self {
+        Self::Pair {
+            group_field: group_field.into(),
+            group_value: group_value.into(),
+            hue_field: hue_field.into(),
+            hue_value: hue_value.into(),
         }
+    }
+
+    pub(crate) fn literal(title: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::Literal {
+            title: title.into(),
+            value: value.into(),
+        }
+    }
+
+    fn title_identity(&self) -> LegendTitleIdentity {
+        match self {
+            Self::Single { field, .. } => LegendTitleIdentity::Single(field.clone()),
+            Self::Pair {
+                group_field,
+                hue_field,
+                ..
+            } => LegendTitleIdentity::Pair(group_field.clone(), hue_field.clone()),
+            Self::Literal { title, .. } => LegendTitleIdentity::Literal(title.clone()),
+        }
+    }
+
+    fn resolve(&self, chart: &crate::Plot) -> (String, String) {
+        match self {
+            Self::Single { field, value } => {
+                (chart.resolve_label(field), chart.resolve_label(value))
+            }
+            Self::Pair {
+                group_field,
+                group_value,
+                hue_field,
+                hue_value,
+            } => (
+                format!(
+                    "{} × {}",
+                    chart.resolve_label(group_field),
+                    chart.resolve_label(hue_field)
+                ),
+                format!(
+                    "{}, {}",
+                    chart.resolve_label(group_value),
+                    chart.resolve_label(hue_value)
+                ),
+            ),
+            Self::Literal { title, value } => (title.clone(), value.clone()),
+        }
+    }
+
+    pub(crate) fn hue_value_for(&self, field: &str) -> Option<&str> {
+        match self {
+            Self::Single {
+                field: entry_field,
+                value,
+            } if entry_field == field => Some(value),
+            Self::Pair {
+                hue_field,
+                hue_value,
+                ..
+            } if hue_field == field => Some(hue_value),
+            _ => None,
+        }
+    }
+}
+
+/// Exact visible components of one legend glyph.
+#[derive(Debug, Clone, Default)]
+struct LegendGlyph {
+    point: Option<PointStyle>,
+    line: Option<LineStyle>,
+    fill: Option<FillStyle>,
+}
+
+impl LegendGlyph {
+    fn exact_eq(&self, other: &Self) -> bool {
+        optional_point_style_eq(self.point.as_ref(), other.point.as_ref())
+            && optional_line_style_eq(self.line.as_ref(), other.line.as_ref())
+            && optional_fill_style_eq(self.fill.as_ref(), other.fill.as_ref())
+    }
+}
+
+/// One private renderer-owned legend identity and its exact visible glyph.
+#[derive(Debug, Clone)]
+pub(crate) struct LegendEntry {
+    identity: LegendIdentity,
+    title: String,
+    label: String,
+    glyph: LegendGlyph,
+}
+
+impl LegendEntry {
+    fn new(identity: LegendIdentity, glyph: LegendGlyph) -> Self {
+        Self {
+            identity,
+            title: String::new(),
+            label: String::new(),
+            glyph,
+        }
+    }
+
+    pub(crate) fn point(identity: LegendIdentity, point: PointStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                point: Some(point),
+                ..LegendGlyph::default()
+            },
+        )
+    }
+
+    pub(crate) fn line(identity: LegendIdentity, line: LineStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                line: Some(line),
+                ..LegendGlyph::default()
+            },
+        )
+    }
+
+    pub(crate) fn fill(identity: LegendIdentity, fill: FillStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                fill: Some(fill),
+                ..LegendGlyph::default()
+            },
+        )
+    }
+
+    pub(crate) fn point_line(identity: LegendIdentity, point: PointStyle, line: LineStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                point: Some(point),
+                line: Some(line),
+                fill: None,
+            },
+        )
+    }
+
+    pub(crate) fn point_fill(identity: LegendIdentity, point: PointStyle, fill: FillStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                point: Some(point),
+                line: None,
+                fill: Some(fill),
+            },
+        )
+    }
+
+    pub(crate) fn line_fill(identity: LegendIdentity, line: LineStyle, fill: FillStyle) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                point: None,
+                line: Some(line),
+                fill: Some(fill),
+            },
+        )
+    }
+
+    pub(crate) fn point_line_fill(
+        identity: LegendIdentity,
+        point: PointStyle,
+        line: LineStyle,
+        fill: FillStyle,
+    ) -> Self {
+        Self::new(
+            identity,
+            LegendGlyph {
+                point: Some(point),
+                line: Some(line),
+                fill: Some(fill),
+            },
+        )
+    }
+
+    pub(crate) fn resolve(&mut self, chart: &crate::Plot) {
+        (self.title, self.label) = self.identity.resolve(chart);
+    }
+
+    pub(crate) fn identity(&self) -> &LegendIdentity {
+        &self.identity
+    }
+
+    fn exact_eq(&self, other: &Self) -> bool {
+        self.identity == other.identity
+            && self.title == other.title
+            && self.label == other.label
+            && self.glyph.exact_eq(&other.glyph)
+    }
+
+    fn glyph_extent(&self) -> f64 {
+        self.glyph
+            .point
+            .as_ref()
+            .map_or(0.0, |point| f64::from(point.radius))
+    }
+}
+
+pub(crate) fn resolve_entries(
+    chart: &crate::Plot,
+    entries: &mut Vec<LegendEntry>,
+) -> Result<(), Error> {
+    for entry in entries.iter_mut() {
+        entry.resolve(chart);
+    }
+    *entries = merge_exact_entries(std::mem::take(entries), "plot legend")?;
+    Ok(())
+}
+
+pub(crate) fn merge_exact_entries(
+    entries: impl IntoIterator<Item = LegendEntry>,
+    context: &str,
+) -> Result<Vec<LegendEntry>, Error> {
+    let mut merged: Vec<LegendEntry> = Vec::new();
+    for entry in entries {
+        if let Some(first) = merged.first() {
+            if first.identity.title_identity() != entry.identity.title_identity()
+                || first.title != entry.title
+            {
+                return Err(Error::Render(format!(
+                    "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
+                )));
+            }
+        }
+        if merged
+            .iter()
+            .any(|existing| existing.identity != entry.identity && existing.label == entry.label)
+        {
+            return Err(Error::Render(format!(
+                "{context} has distinct raw identities resolving to display label {:?}",
+                entry.label
+            )));
+        }
+        if let Some(existing) = merged
+            .iter()
+            .find(|existing| existing.identity == entry.identity)
+        {
+            if !existing.exact_eq(&entry) {
+                return Err(Error::Render(format!(
+                    "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
+                )));
+            }
+        } else {
+            merged.push(entry);
+        }
+    }
+    Ok(merged)
+}
+
+pub(crate) fn resolved_title(entries: &[LegendEntry]) -> Result<String, Error> {
+    let Some(first) = entries.first() else {
+        return Ok(String::new());
+    };
+    if entries.iter().any(|entry| {
+        entry.identity.title_identity() != first.identity.title_identity()
+            || entry.title != first.title
+    }) {
+        return Err(Error::Render(
+            "legend entries require one compatible semantic title".into(),
+        ));
+    }
+    Ok(first.title.clone())
+}
+
+fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            left.color == right.color
+                && left.radius == right.radius
+                && left.shape == right.shape
+                && left.opacity.to_bits() == right.opacity.to_bits()
+                && match (left.outline, right.outline) {
+                    (Some(left), Some(right)) => {
+                        left.color == right.color
+                            && left.width_ratio.to_bits() == right.width_ratio.to_bits()
+                    }
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn optional_line_style_eq(left: Option<&LineStyle>, right: Option<&LineStyle>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            left.color == right.color
+                && left.width.to_bits() == right.width.to_bits()
+                && left.dash == right.dash
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            left.color == right.color
+                && left.stroke == right.stroke
+                && left.stroke_width.to_bits() == right.stroke_width.to_bits()
+                && left.opacity.to_bits() == right.opacity.to_bits()
+        }
+        (None, None) => true,
+        _ => false,
     }
 }
 
@@ -92,7 +421,7 @@ const CORNER_RADIUS: f64 = 2.0;
 
 /// Computed metrics for legend layout, derived from canvas size.
 #[derive(Debug, Clone, Copy)]
-pub struct LegendMetrics {
+pub(crate) struct LegendMetrics {
     /// Effective font size (px).
     pub font_size: f64,
     /// Border padding (px).
@@ -127,34 +456,16 @@ impl LegendMetrics {
             handle_text,
         }
     }
-
-    /// Compute metrics with a fixed font size (for overrides).
-    pub fn from_font_size(font_size: f64) -> Self {
-        let fs = font_size.clamp(MIN_FONT, MAX_FONT);
-        let pad = BORDER_PAD_FACTOR * fs;
-        let entry_h = fs + LABEL_SPACING_FACTOR * fs;
-        let title_h = TITLE_HEIGHT_FACTOR * fs;
-        let handle_w = HANDLE_LENGTH_FACTOR * fs;
-        let handle_text = HANDLE_TEXT_PAD_FACTOR * fs;
-        Self {
-            font_size: fs,
-            pad,
-            entry_h,
-            title_h,
-            handle_w,
-            handle_text,
-        }
-    }
 }
 
 /// A plot legend.
-pub struct Legend {
+pub(crate) struct Legend {
     /// The title of the legend.
-    pub title: String,
+    pub(crate) title: String,
     /// The entries in the legend.
-    pub entries: Vec<LegendEntry>,
+    pub(crate) entries: Vec<LegendEntry>,
     /// Layout metrics (derived from canvas size or overridden).
-    pub metrics: LegendMetrics,
+    pub(crate) metrics: LegendMetrics,
     title_maximum_width: f64,
     entry_maximum_width: f64,
     available_width: f64,
@@ -163,7 +474,7 @@ pub struct Legend {
 
 /// A resolved legend rectangle in math-style pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LegendBox {
+pub(crate) struct LegendBox {
     /// Left edge.
     pub left: f64,
     /// Right edge.
@@ -192,13 +503,6 @@ impl LegendBox {
             anchor_x: self.anchor_x + x,
             anchor_y: self.anchor_y + y,
         }
-    }
-
-    fn contains_with_margin(self, point: Point2D, margin: f64) -> bool {
-        point.x >= self.left - margin
-            && point.x <= self.right + margin
-            && point.y >= self.bottom - margin
-            && point.y <= self.top + margin
     }
 }
 
@@ -252,34 +556,9 @@ impl Legend {
         self.box_size_for_columns(self.column_count()).1
     }
 
-    /// Pick an inside-axes legend location with the fewest data-point overlaps.
-    #[must_use]
-    pub fn best_inside_box(
-        &self,
-        pixel_box: (f64, f64, f64, f64),
-        avoid_points: &[Point2D],
-    ) -> LegendBox {
-        let candidates = self.inside_candidates(pixel_box);
-        let margin = self.metrics.font_size.max(6.0);
-        candidates
-            .into_iter()
-            .min_by_key(|candidate| {
-                avoid_points
-                    .iter()
-                    .filter(|point| candidate.contains_with_margin(**point, margin))
-                    .count()
-            })
-            .expect("legend candidates are non-empty")
-    }
-
-    /// Pick the preferred top-right inside-axes legend box.
-    #[must_use]
-    pub fn top_right_box(&self, pixel_box: (f64, f64, f64, f64)) -> LegendBox {
-        self.inside_candidates(pixel_box)[0]
-    }
-
     /// Pick the preferred right-inside-axes legend box.
     #[must_use]
+    #[cfg(test)]
     pub fn right_box(&self, pixel_box: (f64, f64, f64, f64)) -> LegendBox {
         let (x0, x1, y0, y1) = pixel_box;
         let plot_short = (x1 - x0).min(y1 - y0);
@@ -352,25 +631,6 @@ impl Legend {
         }
     }
 
-    /// Estimate the pixel height for a legend with `n_entries` items
-    /// at the given canvas size. Static helper for callers that need
-    /// to reserve space before the Legend struct is constructed.
-    pub fn estimate_height(n_entries: usize, canvas_w: f64, canvas_h: f64) -> f64 {
-        let m = LegendMetrics::from_canvas(canvas_w, canvas_h);
-        let title_font_size = (m.font_size * 1.1).round();
-        let entry_font_size = m.font_size.round();
-        let edge_pad = m.pad + GLYPH_EDGE_PAD_FACTOR * entry_font_size;
-        let content_h = if n_entries == 0 {
-            GLYPH_HALF_HEIGHT_FACTOR * 2.0 * title_font_size
-        } else {
-            GLYPH_HALF_HEIGHT_FACTOR * title_font_size
-                + m.title_h
-                + (n_entries.saturating_sub(1) as f64) * m.entry_h
-                + GLYPH_HALF_HEIGHT_FACTOR * entry_font_size
-        };
-        content_h + edge_pad * 2.0
-    }
-
     /// Draw the legend with the **top-left corner** at `(x, y)` in math coords.
     ///
     /// The legend extends *downward* (decreasing y in math coords) from this
@@ -434,9 +694,21 @@ impl Legend {
                 + column_widths[..column].iter().sum::<f64>()
                 + column as f64 * self.column_spacing();
             let row_y = y + row_centers[row];
-            // Marker, optionally composed over a line sample.
+            // Renderer-owned fill, line, and point components share one handle.
             let marker_x = column_x + m.handle_w * 0.5;
-            if let Some(line_style) = &entry.line_style {
+            if let Some(fill_style) = &entry.glyph.fill {
+                let half_height = self.entry_font_size() * 0.32;
+                backend.draw_polygon(
+                    &[
+                        Point2D::new(column_x, row_y - half_height),
+                        Point2D::new(column_x + m.handle_w, row_y - half_height),
+                        Point2D::new(column_x + m.handle_w, row_y + half_height),
+                        Point2D::new(column_x, row_y + half_height),
+                    ],
+                    fill_style,
+                )?;
+            }
+            if let Some(line_style) = &entry.glyph.line {
                 backend.draw_line(
                     &[
                         Point2D::new(column_x, row_y),
@@ -445,8 +717,8 @@ impl Legend {
                     line_style,
                 )?;
             }
-            if entry.style.radius > 0 {
-                backend.draw_scatter(&[Point2D::new(marker_x, row_y)], &entry.style)?;
+            if let Some(point_style) = &entry.glyph.point {
+                backend.draw_scatter(&[Point2D::new(marker_x, row_y)], point_style)?;
             }
             // Label text
             let text_x = column_x + m.handle_w + m.handle_text;
@@ -489,7 +761,7 @@ impl Legend {
             .iter()
             .enumerate()
             .filter(|(index, _)| index / columns == rows.saturating_sub(1))
-            .map(|(_, entry)| f64::from(entry.style.radius))
+            .map(|(_, entry)| entry.glyph_extent())
             .fold(0.0_f64, f64::max);
         let text_extent = entry_blocks
             .iter()
@@ -544,9 +816,7 @@ impl Legend {
             .iter()
             .enumerate()
             .filter(|(index, _)| index / columns == row)
-            .map(|(index, block)| {
-                (block.height() / 2.0).max(f64::from(self.entries[index].style.radius))
-            })
+            .map(|(index, block)| (block.height() / 2.0).max(self.entries[index].glyph_extent()))
             .fold(self.entry_half_height(), f64::max)
     }
 
@@ -610,21 +880,20 @@ fn legend_text_block(text: &str, font_size: u32, maximum_width: f64, role: &str)
 mod tests {
     use super::*;
 
+    fn entry(label: impl Into<String>) -> LegendEntry {
+        let mut entry = LegendEntry::point(
+            LegendIdentity::literal("group", "entry"),
+            PointStyle::new((0, 0, 0), 3),
+        );
+        entry.title = "group".into();
+        entry.label = label.into();
+        entry
+    }
+
     fn legend() -> Legend {
         Legend::new(
             "group".to_string(),
-            vec![
-                LegendEntry {
-                    label: "first".to_string(),
-                    style: PointStyle::new((0, 0, 0), 3),
-                    line_style: None,
-                },
-                LegendEntry {
-                    label: "second".to_string(),
-                    style: PointStyle::new((0, 0, 0), 3),
-                    line_style: None,
-                },
-            ],
+            vec![entry("first"), entry("second")],
             640.0,
             480.0,
         )
@@ -658,11 +927,7 @@ mod tests {
     #[test]
     fn eight_short_entries_use_multiple_balanced_columns() {
         let entries = (1..=8)
-            .map(|index| LegendEntry {
-                label: format!("item {index}"),
-                style: PointStyle::new((0, 0, 0), 3),
-                line_style: None,
-            })
+            .map(|index| entry(format!("item {index}")))
             .collect();
         let legend = Legend::new("group".into(), entries, 640.0, 480.0);
 
@@ -670,15 +935,11 @@ mod tests {
     }
 
     #[test]
-    fn public_text_mutation_is_remeasured_without_stale_cached_blocks() {
+    fn text_mutation_is_remeasured_without_stale_cached_blocks() {
         let mut legend = legend();
         let original_width = legend.compute_box_width();
         legend.title = "a substantially wider replacement legend title".into();
-        legend.entries.push(LegendEntry {
-            label: "third entry".into(),
-            style: PointStyle::new((0, 0, 0), 3),
-            line_style: None,
-        });
+        legend.entries.push(entry("third entry"));
 
         assert!(legend.compute_box_width() > original_width);
         assert!(legend.compute_box_height().is_finite());

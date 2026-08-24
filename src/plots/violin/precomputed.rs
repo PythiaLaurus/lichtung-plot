@@ -57,12 +57,17 @@ pub(super) fn render(
         .iter()
         .enumerate()
         .map(|(index, hue)| {
-            Ok(LegendEntry::point(
-                hue.clone(),
-                chart.point_style(
-                    chart.categorical_color("raincloud", hue, chart.hue_color_index(hue, index))?,
-                    3,
-                ),
+            let color =
+                chart.categorical_color("raincloud", hue, chart.hue_color_index(hue, index))?;
+            Ok(LegendEntry::point_fill(
+                chart.legend_identity(hue.clone()),
+                crate::plots::distribution_sample::overlay_style(color),
+                FillStyle {
+                    color,
+                    stroke: chart.palette().foreground,
+                    stroke_width: 1.0,
+                    opacity: 0.70,
+                },
             ))
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -77,7 +82,7 @@ pub(super) fn render(
         Ok(())
     })?;
 
-    Ok(PlotRenderResult::new(layout, legend_entries).with_legend_keys(hue_levels))
+    Ok(PlotRenderResult::new(layout, legend_entries))
 }
 
 fn draw_cloud_and_summary(

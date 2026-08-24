@@ -342,6 +342,49 @@ fn crossed_facets_order_valid_hues_by_original_source_rows() {
 }
 
 #[test]
+fn sparse_inside_facet_legend_merges_exact_observed_pairs() {
+    let frame = df!(
+        "facet" => ["left", "left", "right", "right"],
+        "group" => ["g1", "g1", "g2", "g2"],
+        "hue" => ["h1", "h1", "h2", "h2"],
+        "x" => [0.0_f64, 1.0, 0.0, 1.0],
+        "y" => [1.0_f64, 2.0, 3.0, 4.0],
+    )
+    .unwrap();
+    let svg = render_svg(
+        Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
+            .group(data::category(&frame, "group"))
+            .hue(data::category(&frame, "hue"))
+            .facet(FacetSpec::column(data::category(&frame, "facet")))
+            .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight))
+            .size(920, 380),
+        "sparse-inside-pair-legend",
+    )
+    .unwrap();
+
+    assert_eq!(svg.matches(">Group × Hue</text>").count(), 1);
+    assert_eq!(svg.matches(">G 1, H 1</text>").count(), 1);
+    assert_eq!(svg.matches(">G 2, H 2</text>").count(), 1);
+    let legend = svg
+        .split("<g id=\"")
+        .skip(1)
+        .find(|layer| {
+            layer
+                .split_once('\"')
+                .is_some_and(|(id, _)| id.contains("legend"))
+        })
+        .unwrap()
+        .split_once('>')
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+    assert_eq!(legend.matches("<polyline ").count(), 2);
+    assert_eq!(legend.matches("<circle ").count(), 2);
+}
+
+#[test]
 fn faceted_line_allows_repeated_hue_x_keys_and_keeps_one_global_legend() {
     let frame = df!(
         "facet" => ["left", "left", "left", "left", "right", "right", "right", "right"],
@@ -417,7 +460,13 @@ fn old_reserved_channel_names_are_ordinary_native_input_names() {
     .size(760, 360);
     let svg = render_svg(current_internal_name, "current-internal-facet-name").unwrap();
     assert_eq!(svg.matches("<clipPath id=").count(), 2);
-    assert_eq!(svg.matches("<polygon points=").count(), 4);
+    let bar_count = svg
+        .split("<g clip-path=")
+        .skip(1)
+        .filter_map(|group| group.split_once("</g>"))
+        .map(|(marks, _)| marks.matches("<polygon points=").count())
+        .sum::<usize>();
+    assert_eq!(bar_count, 4);
     assert!(svg.contains(">Series = Left</text>") && svg.contains(">Series = Right</text>"));
 }
 

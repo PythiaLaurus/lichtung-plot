@@ -63,7 +63,7 @@ pub(crate) fn render(
     let palette = chart.palette();
 
     // --- Extract data (grouped or ungrouped) ---
-    let (groups, hue_levels) = build_groups(chart, context.data)?;
+    let (groups, _hue_levels) = build_groups(chart, context.data)?;
 
     // Collect all x/y for range computation.
     let all_x: Vec<f64> = groups.iter().flat_map(|g| g.x.iter().copied()).collect();
@@ -300,17 +300,11 @@ pub(crate) fn render(
             backend.draw_polygon(&right_poly, &fill_right)
         })?;
 
-        // Legend entries are owned only by hue, never graphical group.
-        if hue_levels.len() > 1
-            && group.identity.hue.as_ref().is_some_and(|hue| {
-                !legend_entries
-                    .iter()
-                    .any(|entry: &LegendEntry| entry.label == *hue)
-            })
-        {
-            legend_entries.push(LegendEntry::point(
-                group.identity.hue.clone().unwrap_or_default(),
+        if group.identity.hue.is_some() {
+            legend_entries.push(LegendEntry::point_fill(
+                chart.collective_legend_identity(&group.identity)?,
                 point_style,
+                fill_top,
             ));
         }
     }

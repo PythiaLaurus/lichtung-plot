@@ -97,11 +97,11 @@ pub(crate) fn render(
 
     let legend = vec![
         LegendEntry::point(
-            endpoints.left_label().to_owned(),
+            chart.legend_identity(endpoints.left_label()),
             chart.point_style(endpoints.left_color(), 4),
         ),
         LegendEntry::point(
-            endpoints.right_label().to_owned(),
+            chart.legend_identity(endpoints.right_label()),
             chart.point_style(endpoints.right_color(), 4),
         ),
     ];

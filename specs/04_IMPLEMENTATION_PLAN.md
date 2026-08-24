@@ -126,7 +126,11 @@ Acceptance:
 
 ## Correctness Phase C4: Exact Legend Semantics
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused `categorical`, `composition`, `distributions`,
+`interactions`, `layout`, `lines`, and `marginal-matrix` tests plus `just verify`
+passed on 2026-08-25.
 
 Replace mandatory-point legend storage with a private closed glyph
 representation that can express point, line, fill, and family-specific

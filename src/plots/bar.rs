@@ -32,7 +32,7 @@ pub(crate) fn render(
         _ => BarMode::Single,
     };
     let prepared = bar_data::prepare(chart, context.data, mode)?;
-    let legend_entries = bar_data::legend_entries(&prepared, &palette);
+    let legend_entries = bar_data::legend_entries(&prepared, chart);
     let mut base_y_range =
         crate::layout::anchored_auto_range(prepared.value_range, chart.y_axis_spec(), 0.0);
     let mut rendered_maxima = vec![0.0_f64; prepared.categories.len()];

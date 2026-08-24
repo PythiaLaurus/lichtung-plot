@@ -352,6 +352,29 @@ pub(super) fn remove_named_layer(svg: &str, layer: &str) -> String {
     cleaned
 }
 
+pub(super) fn remove_legend_layers(svg: &str) -> String {
+    let mut cleaned = svg.to_owned();
+    while let Some((start, content_start)) =
+        cleaned
+            .match_indices("<g id=\"")
+            .find_map(|(start, prefix)| {
+                let id_start = start + prefix.len();
+                let id_end = cleaned[id_start..].find('"')? + id_start;
+                let content_start = cleaned[id_end..].find('>')? + id_end + 1;
+                cleaned[id_start..id_end]
+                    .contains("legend")
+                    .then_some((start, content_start))
+            })
+    {
+        let Some(relative_end) = cleaned[content_start..].find("</g>") else {
+            break;
+        };
+        let end = content_start + relative_end + "</g>".len();
+        cleaned.replace_range(start..end, "");
+    }
+    cleaned
+}
+
 pub(super) fn parse_graphic_bounds(svg: &str) -> Vec<SvgRect> {
     let mut bounds = parse_circle_bounds(svg);
     bounds.extend(parse_polyline_bounds(svg));
@@ -391,6 +414,7 @@ pub(super) fn parse_polyline_bounds(svg: &str) -> Vec<SvgRect> {
 }
 
 pub(super) fn parse_polygon_bounds(svg: &str) -> Vec<SvgRect> {
+    let svg = remove_legend_layers(svg);
     svg.split("<polygon points=\"")
         .skip(1)
         .filter_map(|segment| {

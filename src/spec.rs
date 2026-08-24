@@ -700,7 +700,6 @@ pub(crate) struct PlotRenderResult {
     pub(crate) decoration_mode: DecorationMode,
     pub(crate) x_tick_keys: Option<Vec<String>>,
     pub(crate) y_tick_keys: Option<Vec<String>>,
-    pub(crate) legend_keys: Vec<String>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -727,7 +726,6 @@ impl PlotRenderResult {
             decoration_mode: DecorationMode::Standard,
             x_tick_keys: None,
             y_tick_keys: None,
-            legend_keys: Vec::new(),
         }
     }
 
@@ -739,11 +737,6 @@ impl PlotRenderResult {
 
     pub(crate) fn with_significance_brackets(mut self, brackets: Vec<SignificanceBracket>) -> Self {
         self.significance_brackets = brackets;
-        self
-    }
-
-    pub(crate) fn with_legend_keys(mut self, keys: Vec<String>) -> Self {
-        self.legend_keys = keys;
         self
     }
 

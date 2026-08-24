@@ -64,6 +64,53 @@ fn shared_legend_is_global_complete_and_semantically_validated() {
 }
 
 #[test]
+fn shared_canvas_legend_merges_typed_collective_pairs() {
+    let first = df!(
+        "x" => [0.0_f64, 1.0],
+        "y" => [1.0_f64, 2.0],
+        "group" => ["g1", "g1"],
+        "hue" => ["h1", "h1"],
+    )
+    .unwrap();
+    let second = df!(
+        "x" => [0.0_f64, 1.0],
+        "y" => [3.0_f64, 4.0],
+        "group" => ["g2", "g2"],
+        "hue" => ["h2", "h2"],
+    )
+    .unwrap();
+    let line = |frame: &DataFrame| {
+        Plot::line(data::numeric(frame, "x"), data::numeric(frame, "y"))
+            .group(data::category(frame, "group"))
+            .hue(data::category(frame, "hue"))
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, line(&first))
+            .unwrap()
+            .panel(0, 1, line(&second))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "shared-pair-legend",
+    )
+    .unwrap();
+
+    assert_eq!(svg.matches(">Group × Hue</text>").count(), 1);
+    assert_eq!(svg.matches(">G 1, H 1</text>").count(), 1);
+    assert_eq!(svg.matches(">G 2, H 2</text>").count(), 1);
+    let legend = svg
+        .split_once("<g id=\"figure-shared-legend\">")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+    assert_eq!(legend.matches("<polyline ").count(), 2);
+    assert_eq!(legend.matches("<circle ").count(), 2);
+}
+
+#[test]
 fn shared_legend_gap_reduces_canvas_legend_separation() {
     let frame = df!(
         "x" => [1.0_f64, 2.0], "y" => [1.0_f64, 2.0], "trace" => ["control", "control"]

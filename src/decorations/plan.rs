@@ -40,7 +40,7 @@ pub(crate) fn plan_outside_legend(
     cell: PanelBox,
 ) -> Result<(PanelBox, ResolvedLegend), Error> {
     let legend = Legend::new(
-        chart.resolved_legend_title(),
+        crate::decorations::legend::resolved_title(entries)?,
         entries.to_vec(),
         f64::from(chart.width()),
         f64::from(chart.height()),
@@ -108,7 +108,7 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
 ) -> Result<PanelPlan, Error> {
     let chart = chart.clone().erase();
     let source_rows = chart.configured_source_rows()?;
-    plan_panel_with_data(&chart, kind, cell, role, chart.data(), source_rows)
+    plan_panel_with_data(&chart, kind, cell, role, chart.data(), source_rows, None)
 }
 
 #[expect(
@@ -123,6 +123,7 @@ pub(crate) fn plan_panel_with_data(
     role: LegendRole,
     data: crate::data::PlotData<'_>,
     source_rows: Option<&[usize]>,
+    legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
 ) -> Result<PanelPlan, Error> {
     let legend_default = kind.legend_default(chart.user_y_limits().is_some());
     let mut planning_chart = match role {
@@ -130,7 +131,7 @@ pub(crate) fn plan_panel_with_data(
         LegendRole::Suppressed => chart.clone().with_suppressed_legend(),
     };
     let mut discovery = GeometryBackend::default();
-    let discovered = render(
+    let mut discovered = render(
         &planning_chart,
         kind,
         cell,
@@ -138,17 +139,22 @@ pub(crate) fn plan_panel_with_data(
         source_rows,
         &mut discovery,
     )?;
+    if let Some(entries) = legend_entries {
+        discovered.legend_entries = entries.to_vec();
+    }
     let visible = role == LegendRole::Panel
         && planning_chart.legend_policy_spec() != LegendPolicy::Hidden
         && !discovered.legend_entries.is_empty();
-    let legend = visible.then(|| {
-        Legend::new(
-            planning_chart.resolved_legend_title(),
+    let legend = if visible {
+        Some(Legend::new(
+            crate::decorations::legend::resolved_title(&discovered.legend_entries)?,
             discovered.legend_entries.clone(),
             f64::from(planning_chart.width()),
             f64::from(planning_chart.height()),
-        )
-    });
+        ))
+    } else {
+        None
+    };
     let panel = legend.as_ref().map_or(Ok(cell), |legend| {
         reserve_outside_panel(cell, legend, planning_chart.legend_position_spec())
     })?;

@@ -6,7 +6,7 @@ use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
-use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, PointStyle};
+use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
 use crate::Plot;
 
@@ -170,42 +170,45 @@ pub(crate) fn render(
         }
         Ok(())
     })?;
-    let legends = if let Some(styles) = trace_styles {
-        trace_levels
-            .iter()
-            .zip(styles)
-            .map(|(trace_level, style)| {
-                let hue = identities
-                    .iter()
-                    .find(|identity| identity.group.as_ref() == Some(trace_level))
-                    .and_then(|identity| identity.hue.as_deref());
-                let color_index = hue
-                    .and_then(|hue| hue_levels.iter().position(|level| level == hue))
-                    .unwrap_or(0);
-                let color = chart.categorical_color(
-                    "interaction",
-                    hue.unwrap_or(trace_level),
-                    color_index,
-                )?;
-                Ok(LegendEntry {
-                    label: trace_level.clone(),
-                    style: PointStyle::new(color, 3).with_shape(style.point_shape),
-                    line_style: Some(style.line_pattern.line_style(color, 1.8)),
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?
-    } else {
-        hue_levels
-            .iter()
-            .enumerate()
-            .map(|(index, label)| {
-                Ok(LegendEntry::point(
-                    label.clone(),
-                    PointStyle::new(chart.categorical_color("interaction", label, index)?, 3),
-                ))
-            })
-            .collect::<Result<Vec<_>, Error>>()?
-    };
+    let legends = identities
+        .iter()
+        .filter(|identity| channels.rows.contains(identity))
+        .filter(|identity| identity.hue.is_some() || trace_styles.is_some())
+        .map(|identity| {
+            let trace_level = identity.group.as_ref().ok_or_else(|| {
+                Error::Render("interaction legend identity has no graphical group".into())
+            })?;
+            let trace_index = trace_levels
+                .iter()
+                .position(|level| level == trace_level)
+                .ok_or_else(|| {
+                    Error::Render("interaction legend group is absent from resolved order".into())
+                })?;
+            let hue = identity.hue.as_deref();
+            let color_index = hue
+                .and_then(|hue| hue_levels.iter().position(|level| level == hue))
+                .unwrap_or(0);
+            let color =
+                chart.categorical_color("interaction", hue.unwrap_or(trace_level), color_index)?;
+            let style = trace_styles
+                .as_ref()
+                .map_or(TraceStyle::default(), |styles| styles[trace_index]);
+            let legend_identity = chart.collective_legend_identity(identity)?;
+            let point = chart.point_style(color, 4).with_shape(style.point_shape);
+            let line = style.line_pattern.line_style(color, 1.8);
+            match (
+                chart.markers_visible(),
+                chart.interaction_connectors_visible(),
+            ) {
+                (true, true) => Ok(LegendEntry::point_line(legend_identity, point, line)),
+                (true, false) => Ok(LegendEntry::point(legend_identity, point)),
+                (false, true) => Ok(LegendEntry::line(legend_identity, line)),
+                (false, false) => Err(Error::Render(
+                    "interaction legend has no visible glyph component".into(),
+                )),
+            }
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
     Ok(PlotRenderResult::new(layout, legends))
 }
 

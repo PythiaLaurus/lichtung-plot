@@ -16,17 +16,6 @@ use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, PngOptions, SvgText, Theme};
 
-type LegendEntrySignature = (
-    String,
-    String,
-    (u8, u8, u8),
-    u32,
-    crate::PointShape,
-    Option<((u8, u8, u8), u64)>,
-    u64,
-    Option<((u8, u8, u8), u32, String)>,
-);
-
 struct FigurePanelPreflight {
     index: usize,
     kind: PlotKind,
@@ -1075,76 +1064,24 @@ impl Canvas {
         charts: &[Option<Plot>],
         panel: PanelBox,
     ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
-        let mut expected_title: Option<(String, String)> = None;
-        let mut entries: Vec<(LegendEntrySignature, LegendEntry)> = Vec::new();
+        let mut entries = Vec::new();
         for chart in charts.iter().flatten() {
             let kind = chart
                 .plot_kind()
                 .ok_or_else(|| Error::Data("every figure panel must select a plot kind".into()))?;
             let result = chart.preflight_panel(kind, panel)?;
-            if result.legend_entries.is_empty() {
-                continue;
-            }
-            let raw_title = chart.legend_title_key().to_owned();
-            let title = chart.resolved_legend_title();
-            let title_signature = (raw_title, title.clone());
-            if expected_title
-                .as_ref()
-                .is_some_and(|expected| expected != &title_signature)
-            {
-                return Err(Error::Render(
-                    "shared figure legend requires compatible semantic titles, labels, and styles in every legend-bearing panel"
-                        .into(),
-                ));
-            }
-            expected_title = Some(title_signature);
-            for (index, entry) in result.legend_entries.into_iter().enumerate() {
-                let signature = (
-                    result
-                        .legend_keys
-                        .get(index)
-                        .cloned()
-                        .unwrap_or_else(|| entry.label.clone()),
-                    entry.label.clone(),
-                    entry.style.color,
-                    entry.style.radius,
-                    entry.style.shape,
-                    entry
-                        .style
-                        .outline
-                        .map(|outline| (outline.color, outline.width_ratio.to_bits())),
-                    entry.style.opacity.to_bits(),
-                    entry
-                        .line_style
-                        .as_ref()
-                        .map(|style| (style.color, style.width.to_bits(), style.dash.clone())),
-                );
-                if entries
-                    .iter()
-                    .any(|(existing, _)| existing.0 != signature.0 && existing.1 == signature.1)
-                {
-                    return Err(Error::Render(format!(
-                        "shared figure legend has distinct raw identities resolving to display label {:?}",
-                        signature.1
-                    )));
-                }
-                if let Some((existing, _)) = entries
-                    .iter()
-                    .find(|(existing, _)| existing.0 == signature.0)
-                {
-                    if existing != &signature {
-                        return Err(Error::Render(
-                            "shared figure legend requires compatible semantic titles, labels, and styles in every legend-bearing panel"
-                                .into(),
-                        ));
-                    }
-                } else {
-                    entries.push((signature, entry));
-                }
-            }
+            entries.extend(result.legend_entries);
         }
-        Ok(expected_title
-            .map(|(_, title)| (title, entries.into_iter().map(|(_, entry)| entry).collect())))
+        let entries =
+            crate::decorations::legend::merge_exact_entries(entries, "shared figure legend")?;
+        if entries.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some((
+                crate::decorations::legend::resolved_title(&entries)?,
+                entries,
+            )))
+        }
     }
 }
 

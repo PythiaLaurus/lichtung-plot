@@ -91,7 +91,7 @@ pub(crate) fn render(
                     .collect();
                 backend.draw_scatter(&pts, &style)?;
 
-                legend_entries.push(LegendEntry::point(label, style));
+                legend_entries.push(LegendEntry::point(chart.legend_identity(label), style));
             }
         } else {
             let color = palette.colors.first().copied().unwrap_or((0, 0, 0));

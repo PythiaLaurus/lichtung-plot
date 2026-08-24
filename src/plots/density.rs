@@ -95,22 +95,25 @@ pub(crate) fn render(
         Ok(())
     })?;
 
-    let mut legend_hues = prepared
+    let legend_entries = prepared
         .curves
         .iter()
-        .filter_map(|curve| Some((curve.hue_index?, curve.identity.hue.clone()?)))
-        .collect::<Vec<_>>();
-    legend_hues.sort_by_key(|(index, _)| *index);
-    legend_hues.dedup_by(|left, right| left.1 == right.1);
-    let legend_entries = legend_hues
-        .into_iter()
-        .map(|(index, label)| {
-            LegendEntry::point(
-                label,
-                chart.point_style(palette.colors[index % palette.colors.len()], 3),
-            )
+        .filter(|curve| curve.identity.hue.is_some())
+        .map(|curve| {
+            let color_index = curve.hue_index.unwrap_or(0);
+            let color = palette.colors[color_index % palette.colors.len()];
+            Ok(LegendEntry::line_fill(
+                chart.collective_legend_identity(&curve.identity)?,
+                LineStyle::solid(color, 1.6),
+                FillStyle {
+                    color,
+                    stroke: color,
+                    stroke_width: 0.0,
+                    opacity: 0.22,
+                },
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
     Ok(PlotRenderResult::new(layout, legend_entries))
 }
 

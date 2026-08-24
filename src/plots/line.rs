@@ -39,6 +39,7 @@ struct TrajectoryData {
 
 #[derive(Debug)]
 struct TrajectoryGroup {
+    identity: Option<crate::data::CollectivePair>,
     points: Vec<TrajectoryPoint>,
     hue_index: Option<usize>,
 }
@@ -129,26 +130,33 @@ fn render_series(
     draw_series(chart, &layout, &series, &palette, backend)?;
     draw_point_layers(&layout, &point_layers, backend)?;
 
-    let mut legend_hues = series
+    let mut legends = series
         .iter()
-        .filter_map(|series| Some((series.hue_index?, series.identity.hue.clone()?)))
-        .collect::<Vec<_>>();
-    legend_hues.sort_by_key(|(index, _)| *index);
-    legend_hues.dedup_by(|left, right| left.1 == right.1);
-    let mut legends = legend_hues
-        .into_iter()
-        .map(|(index, label)| {
-            LegendEntry::point(
-                label,
-                PointStyle::new(palette.colors[index % palette.colors.len()], 3),
-            )
+        .filter(|series| series.identity.hue.is_some())
+        .map(|series| {
+            let color = palette.colors[series.hue_index.unwrap_or(0) % palette.colors.len()];
+            let identity = chart.collective_legend_identity(&series.identity)?;
+            let point = chart.point_style(color, 3);
+            let line = LineStyle::solid(color, 1.8);
+            let fill = FillStyle {
+                color,
+                stroke: color,
+                stroke_width: 0.0,
+                opacity: 0.18,
+            };
+            let has_fill = series.points.iter().all(|point| point.2.is_some());
+            Ok(match (chart.markers_visible(), has_fill) {
+                (true, true) => LegendEntry::point_line_fill(identity, point, line, fill),
+                (true, false) => LegendEntry::point_line(identity, point, line),
+                (false, true) => LegendEntry::line_fill(identity, line, fill),
+                (false, false) => LegendEntry::line(identity, line),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, Error>>()?;
     legends.extend(point_layers.iter().filter_map(|layer| {
-        layer
-            .legend_label
-            .as_ref()
-            .map(|label| LegendEntry::point(label.clone(), layer.style.clone()))
+        layer.legend_label.as_ref().map(|label| {
+            LegendEntry::point(chart.legend_identity(label.clone()), layer.style.clone())
+        })
     }));
     Ok(PlotRenderResult::new(layout, legends))
 }
@@ -354,30 +362,50 @@ fn render_grouped(
         }
         Ok(())
     })?;
-    let legends = trajectory_legends(chart, &trajectory.hue_levels, &palette, hue_paths)?;
+    let legends = trajectory_legends(chart, &trajectory, &palette, hue_paths)?;
     Ok(PlotRenderResult::new(layout, legends).with_axis_domains(x_domain, AxisDomain::Continuous))
 }
 
 fn trajectory_legends(
     chart: &Plot,
-    hue_levels: &[String],
+    trajectory: &TrajectoryData,
     palette: &ThemePalette,
     hue_paths: bool,
 ) -> Result<Vec<LegendEntry>, Error> {
-    hue_levels
+    if hue_paths {
+        return trajectory
+            .groups
+            .iter()
+            .filter_map(|group| group.identity.as_ref().map(|identity| (group, identity)))
+            .map(|(group, identity)| {
+                let color = hue_path_color(chart, &trajectory.hue_levels, group.hue_index)?;
+                let identity = chart.collective_legend_identity(identity)?;
+                let line = LineStyle::solid(color, 1.4);
+                if chart.markers_visible() {
+                    Ok(LegendEntry::point_line(
+                        identity,
+                        chart.point_style(color, 4),
+                        line,
+                    ))
+                } else {
+                    Ok(LegendEntry::line(identity, line))
+                }
+            })
+            .collect();
+    }
+    if chart.plot_kind() == Some(crate::PlotKind::LinePath) && !chart.markers_visible() {
+        return Ok(Vec::new());
+    }
+    trajectory
+        .hue_levels
         .iter()
         .enumerate()
         .map(|(index, label)| {
-            let color = if hue_paths {
-                chart.categorical_color("line path", label, index)?
-            } else {
-                palette.colors[index % palette.colors.len()]
-            };
-            if hue_paths {
-                Ok(LegendEntry::line(label.clone(), color, 1.4))
-            } else {
-                Ok(LegendEntry::point(label.clone(), PointStyle::new(color, 3)))
-            }
+            let color = palette.colors[index % palette.colors.len()];
+            Ok(LegendEntry::point(
+                chart.legend_identity(label.clone()),
+                chart.point_style(color, 4),
+            ))
         })
         .collect()
 }
@@ -717,6 +745,7 @@ fn prepare_trajectory<'a>(
                 })
                 .collect();
             output.push(TrajectoryGroup {
+                identity: Some(identity.clone()),
                 points,
                 hue_index: Some(hue_index),
             });
@@ -754,6 +783,7 @@ fn prepare_trajectory<'a>(
             points.sort_by(|left, right| left.x.total_cmp(&right.x));
         }
         output.push(TrajectoryGroup {
+            identity: None,
             points,
             hue_index: None,
         });

@@ -11,7 +11,23 @@ use crate::spec::{
     AxisDomain, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
 };
 
-pub(super) fn preflight_panels(
+pub(super) fn preflight_coordinated_panels(
+    source: &Plot,
+    chart: Plot,
+    kind: PlotKind,
+    panels: &[FacetPanel],
+    backend: &mut dyn Backend,
+) -> Result<(Plot, Vec<PlotRenderResult>), Error> {
+    let preflight = preflight_panels(&chart, kind, panels, backend)?;
+    if source.hue_dimension_key().is_none() {
+        return Ok((chart, preflight));
+    }
+    let chart = coordinate_hue_levels(source, chart, &preflight)?;
+    let preflight = preflight_panels(&chart, kind, panels, backend)?;
+    Ok((chart, preflight))
+}
+
+fn preflight_panels(
     chart: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
@@ -35,19 +51,23 @@ pub(super) fn preflight_panels(
     Ok(preflight)
 }
 
-pub(super) fn coordinate_hue_levels(
+fn coordinate_hue_levels(
     source: &Plot,
     mut chart: Plot,
     preflight: &[PlotRenderResult],
 ) -> Result<Plot, Error> {
-    if let Some(hue_column) = source.hue_col() {
+    if let Some(hue_field) = source.hue_dimension_key() {
         let rendered_levels = stable_levels(
             preflight
                 .iter()
-                .flat_map(|result| result.legend_keys.iter())
-                .cloned()
+                .flat_map(|result| result.legend_entries.iter())
+                .filter_map(|entry| entry.identity().hue_value_for(hue_field))
+                .map(str::to_owned)
                 .collect(),
         );
+        let hue_column = source
+            .hue_col()
+            .ok_or_else(|| Error::Render("facet hue dimension has no data column".into()))?;
         let levels = stable_levels(crate::data::strict_strings(
             source.data(),
             hue_column,
@@ -68,7 +88,14 @@ pub(super) fn reserve_shared_legend(
     shared: &Plot,
     preflight: &[PlotRenderResult],
     mut outer: PanelBox,
-) -> Result<(PanelBox, Option<ResolvedLegend>), Error> {
+) -> Result<
+    (
+        PanelBox,
+        Option<ResolvedLegend>,
+        Vec<crate::decorations::legend::LegendEntry>,
+    ),
+    Error,
+> {
     let mut outside_legend = None;
     let legend_position = source.legend_position_spec();
     let facet_legend_position = if legend_position == LegendPosition::Auto {
@@ -78,50 +105,46 @@ pub(super) fn reserve_shared_legend(
     } else {
         None
     };
-    if source.legend_policy_spec() != LegendPolicy::Hidden {
-        if let Some(facet_legend_position) = facet_legend_position {
-            let global_entries = shared
-                .global_hue_levels()
-                .map(|levels| {
-                    let palette = shared.palette();
-                    let display = shared.resolve_label_domain(
-                        "shared facet legend entries",
-                        levels.iter().map(String::as_str),
-                    )?;
-                    Ok::<_, Error>(
-                        levels
-                            .iter()
-                            .zip(display)
-                            .enumerate()
-                            .map(|(index, (_, label))| {
-                                crate::decorations::legend::LegendEntry::point(
-                                    label,
-                                    shared.point_style(
-                                        palette.colors[index % palette.colors.len()],
-                                        3,
-                                    ),
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .transpose()?;
-            let entries = global_entries.as_deref().or_else(|| {
-                preflight
+    let mut entries = if source.legend_policy_spec() == LegendPolicy::Hidden {
+        Vec::new()
+    } else {
+        crate::decorations::legend::merge_exact_entries(
+            preflight
+                .iter()
+                .flat_map(|result| result.legend_entries.iter().cloned()),
+            "shared facet legend",
+        )?
+    };
+    if !entries.is_empty() {
+        let identity_order = if let Some(pairs) = shared.global_collective_pairs() {
+            pairs
+                .iter()
+                .filter(|pair| pair.group.is_some() || pair.hue.is_some())
+                .map(|pair| shared.collective_legend_identity(pair))
+                .collect::<Result<Vec<_>, Error>>()?
+        } else {
+            shared.global_hue_levels().map_or_else(Vec::new, |levels| {
+                levels
                     .iter()
-                    .find(|result| !result.legend_entries.is_empty())
-                    .map(|result| result.legend_entries.as_slice())
-            });
-            if let Some(entries) = entries {
-                let legend_chart = shared.clone().with_legend_position(facet_legend_position);
-                let (reserved, legend) =
-                    crate::decorations::plan::plan_outside_legend(&legend_chart, entries, outer)?;
-                outer = reserved;
-                outside_legend = Some(legend);
-            }
+                    .map(|level| shared.legend_identity(level.clone()))
+                    .collect()
+            })
+        };
+        entries.sort_by_key(|entry| {
+            identity_order
+                .iter()
+                .position(|identity| identity == entry.identity())
+                .unwrap_or(usize::MAX)
+        });
+        if let Some(facet_legend_position) = facet_legend_position {
+            let legend_chart = shared.clone().with_legend_position(facet_legend_position);
+            let (reserved, legend) =
+                crate::decorations::plan::plan_outside_legend(&legend_chart, &entries, outer)?;
+            outer = reserved;
+            outside_legend = Some(legend);
         }
     }
-    Ok((outer, outside_legend))
+    Ok((outer, outside_legend, entries))
 }
 
 pub(super) fn resolve_shared_facet_axis(

@@ -117,42 +117,6 @@ impl Plot {
             PlotKind::Beeswarm => crate::plots::beeswarm::render(self, context, backend),
             PlotKind::Waterfall => crate::plots::waterfall::render(self, context, backend),
         }?;
-        if let Some(levels) = self.global_hue_levels().filter(|_| {
-            self.hue_dimension_key().is_some()
-                && self.interaction_styles_spec().is_none()
-                && !result.legend_entries.is_empty()
-        }) {
-            let rendered = std::mem::take(&mut result.legend_entries);
-            let rendered_keys = if result.legend_keys.is_empty() {
-                rendered
-                    .iter()
-                    .map(|entry| entry.label.clone())
-                    .collect::<Vec<_>>()
-            } else {
-                std::mem::take(&mut result.legend_keys)
-            };
-            if rendered_keys.len() != rendered.len() {
-                return Err(Error::Render(
-                    "renderer returned legend keys inconsistent with legend entries".into(),
-                ));
-            }
-            result.legend_entries = levels
-                .iter()
-                .enumerate()
-                .map(|(index, label)| {
-                    if let Some(position) = rendered_keys.iter().position(|key| key == label) {
-                        Ok(rendered[position].clone())
-                    } else {
-                        let color = self.categorical_color(kind.key_segment(), label, index)?;
-                        Ok(crate::decorations::legend::LegendEntry::point(
-                            label.clone(),
-                            self.point_style(color, 3),
-                        ))
-                    }
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-            result.legend_keys = levels.to_vec();
-        }
         let domains = match kind {
             PlotKind::Interaction
             | PlotKind::Bar
@@ -217,28 +181,8 @@ fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Resul
         }
         result.y_tick_keys = Some(raw);
     }
-    if (chart.hue_dimension_key().is_some() || chart.interaction_styles_spec().is_some())
-        && !result.legend_entries.is_empty()
-    {
-        let raw = if result.legend_keys.is_empty() {
-            result
-                .legend_entries
-                .iter()
-                .map(|entry| entry.label.clone())
-                .collect::<Vec<_>>()
-        } else if result.legend_keys.len() == result.legend_entries.len() {
-            result.legend_keys.clone()
-        } else {
-            return Err(Error::Render(
-                "renderer returned legend keys inconsistent with legend entries".into(),
-            ));
-        };
-        let display =
-            chart.resolve_label_domain("legend entries", raw.iter().map(String::as_str))?;
-        for (entry, label) in result.legend_entries.iter_mut().zip(display) {
-            entry.label = label;
-        }
-        result.legend_keys = raw;
+    if !result.legend_entries.is_empty() {
+        crate::decorations::legend::resolve_entries(chart, &mut result.legend_entries)?;
     }
     validate_axis_text(chart, &result.layout)?;
     Ok(())

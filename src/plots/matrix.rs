@@ -64,8 +64,8 @@ pub(crate) fn render(
     let display_cols = chart.resolve_label_domain("matrix variables", cols.iter().copied())?;
 
     // --- Build graphical groups ---
-    let (groups, hue_levels) = build_groups(chart, &cols, df)?;
-    let legend = matrix_legend(chart, &hue_levels)?;
+    let (groups, _hue_levels) = build_groups(chart, &cols, df)?;
+    let legend = matrix_legend(chart, &groups)?;
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
@@ -382,32 +382,31 @@ pub(crate) fn panel_box(chart: &Plot) -> Result<crate::layout::PanelBox, Error> 
     Ok(matrix_figure_layout(chart)?.panel_box)
 }
 
-fn matrix_legend(chart: &Plot, hue_levels: &[String]) -> Result<Option<Legend>, Error> {
-    if hue_levels.len() <= 1 || chart.legend_policy_spec() == crate::LegendPolicy::Hidden {
+fn matrix_legend(chart: &Plot, groups: &[HueGroup]) -> Result<Option<Legend>, Error> {
+    if !groups.iter().any(|group| group.identity.hue.is_some())
+        || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
+    {
         return Ok(None);
     }
-    let hue_title = chart.resolved_legend_title();
-    let display_levels = chart.resolve_label_domain(
-        "matrix legend entries",
-        hue_levels.iter().map(String::as_str),
-    )?;
-    let entries: Vec<LegendEntry> = hue_levels
+    let mut entries = groups
         .iter()
-        .zip(display_levels)
-        .enumerate()
-        .map(|(index, (hue, display))| {
-            LegendEntry::point(
-                display,
-                chart.point_style(
-                    chart.palette().colors
-                        [chart.hue_color_index(hue, index) % chart.palette().colors.len()],
-                    3,
-                ),
-            )
+        .filter(|group| group.identity.hue.is_some())
+        .map(|group| {
+            Ok(LegendEntry::point_fill(
+                chart.collective_legend_identity(&group.identity)?,
+                chart.point_style(group.color, 2),
+                FillStyle {
+                    color: group.color,
+                    stroke: group.color,
+                    stroke_width: 1.0,
+                    opacity: 0.40,
+                },
+            ))
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
+    crate::decorations::legend::resolve_entries(chart, &mut entries)?;
     Ok(Some(Legend::new(
-        hue_title,
+        crate::decorations::legend::resolved_title(&entries)?,
         entries,
         f64::from(chart.width()),
         f64::from(chart.height()),

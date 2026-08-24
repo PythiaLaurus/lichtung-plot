@@ -1,9 +1,9 @@
 use lichtung_plot::{
-    BarInput, Bounds, DumbbellEndpoints, FacetSpec, LinePathStyle, Plot, PlotKind, Significance,
-    SignificanceMark, SignificanceTarget,
+    BarInput, Bounds, DumbbellEndpoints, FacetSpec, Labels, LinePathStyle, Plot, PlotKind,
+    Significance, SignificanceMark, SignificanceTarget,
 };
 
-use super::{data, df, parse_polygon_bounds, unique_dir, DataFrame};
+use super::{data, df, parse_polygon_bounds, remove_legend_layers, unique_dir, DataFrame};
 
 fn shared_hue_data() -> DataFrame {
     df!(
@@ -299,8 +299,8 @@ fn explicit_group_controls_paths_while_hue_controls_color_and_legend() {
         "line-group-hue",
     )
     .unwrap();
-    assert!(hued.contains(">H 1</text>") && hued.contains(">H 2</text>"));
-    assert!(!hued.contains(">G 1</text>") && !hued.contains(">G 2</text>"));
+    assert!(hued.contains(">Group × Hue</text>"));
+    assert!(hued.contains(">G 1, H 1</text>") && hued.contains(">G 2, H 2</text>"));
 }
 
 #[test]
@@ -319,7 +319,8 @@ fn explicit_group_and_hue_render_only_observed_pair_paths() {
         "line-observed-pairs",
     )
     .unwrap();
-    let paths = svg
+    let marks = remove_legend_layers(&svg);
+    let paths = marks
         .lines()
         .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
         .collect::<Vec<_>>();
@@ -362,13 +363,16 @@ fn hue_only_line_and_density_create_one_mark_per_hue() {
     )
     .unwrap();
 
+    let line_marks = remove_legend_layers(&line);
+    let density_marks = remove_legend_layers(&density);
     assert_eq!(
-        line.lines()
+        line_marks
+            .lines()
             .filter(|tag| tag.starts_with("<polyline ") && tag.contains("stroke-width=\"1.8\""))
             .count(),
         2
     );
-    assert_eq!(density.matches("fill-opacity=\"0.22\"").count(), 2);
+    assert_eq!(density_marks.matches("fill-opacity=\"0.22\"").count(), 2);
 }
 
 #[test]
@@ -387,7 +391,73 @@ fn density_renders_each_observed_crossed_pair() {
     )
     .unwrap();
 
-    assert_eq!(svg.matches("fill-opacity=\"0.22\"").count(), 3);
+    let marks = remove_legend_layers(&svg);
+    assert_eq!(marks.matches("fill-opacity=\"0.22\"").count(), 3);
+}
+
+#[test]
+fn distinct_equal_pair_values_keep_independently_resolved_legend_text() {
+    let plot = Plot::line(
+        lichtung_plot::NumericValues::new("x", [0.0, 1.0]),
+        lichtung_plot::NumericValues::new("y", [1.0, 2.0]),
+    )
+    .group(lichtung_plot::CategoryValues::new("graphical_group", ["same", "same"]).unwrap())
+    .hue(lichtung_plot::CategoryValues::new("hue_field", ["same", "same"]).unwrap())
+    .labels(
+        Labels::humanized()
+            .alias("graphical_group", "Cohort")
+            .alias("hue_field", "Shade")
+            .alias("same", "Shared"),
+    );
+    let svg = render(plot, "distinct-equal-pair-legend").unwrap();
+
+    assert!(svg.contains(">Cohort × Shade</text>"));
+    assert!(svg.contains(">Shared, Shared</text>"));
+}
+
+#[test]
+fn equal_same_field_channels_collapse_legend_text() {
+    let identity =
+        || lichtung_plot::CategoryValues::new("identity", ["g1", "g1", "g2", "g2"]).unwrap();
+    let svg = render(
+        Plot::line(
+            lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+            lichtung_plot::NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
+        )
+        .group(identity())
+        .hue(identity()),
+        "same-field-collapsed-legend",
+    )
+    .unwrap();
+
+    assert!(svg.contains(">Identity</text>"));
+    assert!(svg.contains(">G 1</text>") && svg.contains(">G 2</text>"));
+    assert!(!svg.contains("Identity × Identity") && !svg.contains("G 1, G 1"));
+}
+
+#[test]
+fn density_legend_preserves_curve_and_translucent_fill_without_point() {
+    let data = df!(
+        "hue" => ["h1", "h1", "h2", "h2"],
+        "value" => [1.0_f64, 2.0, 3.0, 4.0],
+    )
+    .unwrap();
+    let svg = render(
+        Plot::density(data::numeric(&data, "value")).hue(data::category(&data, "hue")),
+        "density-exact-legend",
+    )
+    .unwrap();
+    let legend = svg
+        .split_once("<g id=\"legend\">")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+
+    assert_eq!(legend.matches("stroke-width=\"1.6\"").count(), 2);
+    assert_eq!(legend.matches("fill-opacity=\"0.22\"").count(), 2);
+    assert!(!legend.contains("<circle "));
 }
 
 #[test]
@@ -467,7 +537,8 @@ fn faceted_group_hue_pairs_keep_global_hue_colors() {
     )
     .unwrap();
     let colors = lichtung_plot::Theme::Publication.palette().colors;
-    let paths = svg
+    let marks = remove_legend_layers(&svg);
+    let paths = marks
         .lines()
         .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
         .collect::<Vec<_>>();
@@ -544,7 +615,8 @@ fn faceted_explicit_groups_keep_global_dodge_slots_when_a_panel_omits_a_group() 
     assert_eq!(bars.len(), 3);
     assert!(bars[1].x - bars[0].x < bars[2].x - bars[1].x);
     let expected = lichtung_plot::Theme::Publication.palette().colors;
-    let polygons = svg
+    let marks = remove_legend_layers(&svg);
+    let polygons = marks
         .lines()
         .filter(|line| line.starts_with("<polygon points="))
         .collect::<Vec<_>>();

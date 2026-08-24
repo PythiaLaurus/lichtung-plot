@@ -119,9 +119,16 @@ pub(crate) fn render(
         .iter()
         .enumerate()
         .map(|(idx, label)| {
-            LegendEntry::point(
-                label.clone(),
-                chart.point_style(palette.colors[idx % palette.colors.len()], 3),
+            let color = palette.colors[idx % palette.colors.len()];
+            LegendEntry::line_fill(
+                chart.legend_identity(label.clone()),
+                LineStyle::solid(palette.foreground, palette.axis_width),
+                FillStyle {
+                    color,
+                    stroke: palette.foreground,
+                    stroke_width: 1.0,
+                    opacity: 1.0,
+                },
             )
         })
         .collect();

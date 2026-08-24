@@ -147,10 +147,23 @@ fn render_samples(
         .iter()
         .enumerate()
         .map(|(idx, label)| {
-            Ok(LegendEntry::point(
-                label.clone(),
-                chart.point_style(chart.categorical_color(family, label, idx)?, 3),
-            ))
+            let color = chart.categorical_color(family, label, idx)?;
+            let identity = chart.legend_identity(label.clone());
+            let fill = FillStyle {
+                color,
+                stroke: palette.foreground,
+                stroke_width: 1.0,
+                opacity: 0.70,
+            };
+            Ok(if distribution_layout == DistributionLayout::Raincloud {
+                LegendEntry::point_fill(
+                    identity,
+                    crate::plots::distribution_sample::overlay_style(color),
+                    fill,
+                )
+            } else {
+                LegendEntry::fill(identity, fill)
+            })
         })
         .collect::<Result<Vec<_>, Error>>()?;
     let significance = if group_levels.is_empty() {

@@ -35,7 +35,7 @@ pub(crate) fn render(
         "y-axis categories",
         prepared.categories.iter().map(String::as_str),
     )?;
-    let legend_entries = bar_data::legend_entries(&prepared, &palette);
+    let legend_entries = bar_data::legend_entries(&prepared, chart);
     let mut base_x_range =
         crate::layout::anchored_auto_range(prepared.value_range, chart.x_axis_spec(), 0.0);
     let y_count = prepared.categories.len() as f64;

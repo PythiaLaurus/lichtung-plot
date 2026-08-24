@@ -214,6 +214,7 @@ pub(super) fn plan_panels(
     kind: PlotKind,
     panels: &[FacetPanel],
     outside_legend: Option<ResolvedLegend>,
+    legend_entries: &[crate::decorations::legend::LegendEntry],
     fix_x: bool,
     fix_y: bool,
 ) -> Result<(Plot, Vec<PanelPlan>), Error> {
@@ -238,6 +239,7 @@ pub(super) fn plan_panels(
                 role,
                 crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                 None,
+                (role == LegendRole::Panel).then_some(legend_entries),
             )?;
             if plan.result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
