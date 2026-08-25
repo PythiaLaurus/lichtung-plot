@@ -1,425 +1,440 @@
 # Implementation Plan
 
-**Status**: COMPLETE
+**Status**: IN PROGRESS
 
 ## Purpose
 
-This document records the current API-boundary remediation sequence. The
-completed implementation history remains available in Git through commit
-`355155a`; it is not a second current plan.
+This document records the active theme-system design and implementation
+sequence. The completed API-boundary and output-contract remediation remains
+available in Git history through commit `0dcff20`; it is not a second current
+plan.
 
-`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative. This
-ledger closes implementation gaps against those contracts and does not
-authorize compatibility aliases, deprecated replacements, alternate data
-representations, or dormant public extension points.
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
+implemented renderer. Custom themes and palettes remain non-current under
+`05_DEFERRED_FEATURES.md` until Phase T1 defines their exact contract and updates
+the canonical specifications. Later implementation phases do not begin merely
+because they are listed here.
 
 Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
 phase when it starts, completes, changes scope, or discovers a blocker. Complete
-and commit each phase as one logical change before starting the next phase.
+and commit each admitted phase as one logical change before starting the next
+phase. Split a broad phase into smaller approved phases before implementation
+rather than combining unrelated migrations in one commit.
 
-## Contract Rules
+## Confirmed Direction
 
-- Keep one current API and migrate every repository caller atomically.
-- Delete replaced methods, variants, modules, test shims, and report text. Do
-  not retain aliases, compatibility wrappers, or private copies without a
-  current renderer consumer.
-- Public modules are deliberate extension points. A root re-export does not
-  require its defining module to be public.
-- Only an exact plot-family marker may cross the explicit erasure boundary.
-  `kind::Any` is the result of erasure, not an input to erasure or Canvas
-  insertion.
-- Tests construct renderer-native values. They do not recreate a generic
-  dataframe or string-indexed column conversion layer inside this repository.
-- Run focused checks while iterating. Before completing each phase, inspect any
-  snapshot changes and run `just verify`.
+The following decisions are accepted starting points for the architecture
+discussion:
 
-## Remediation Inventory
+- Publication is the replaceable library default for a standalone plot. It must
+  not be forced or repeated as hidden renderer or Canvas state.
+- Canvas supplies the root theme for composed output. A plot without an explicit
+  theme inherits that Canvas theme; an explicitly themed plot may replace it.
+- The first public customization milestone targets coherent full foundations,
+  not a color-only API and not an exhaustive property surface.
+- Theme values that affect text measurement, layout, legend size, or collision
+  planning must resolve before preflight and remain identical during final
+  rendering.
 
-| Issue | Required outcome | Phase | Status |
-| --- | --- | --- | --- |
-| 1 | Internalize `decorations` and `TitleBlock` | R1 | COMPLETE |
-| 2 | Delete overlay and regression report-provenance APIs | R1 | COMPLETE |
-| 3 | Delete public kind and theme inventories and report naming | R1 | COMPLETE |
-| 4 | Restrict erasure and Canvas insertion to exact families | R2 | COMPLETE |
-| 5 | Remove duplicate default PNG compression identity | R3 | COMPLETE |
-| 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
-| 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | COMPLETE |
-| 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
-| 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | COMPLETE |
-| 10 | Replace dataframe-shaped test shims with native values | R7 | COMPLETE |
-| 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | COMPLETE |
-| 12 | Make outlined SVG, preserve-text SVG, and PNG unconditional | R8 | COMPLETE |
+The exact public types, merge semantics, component boundaries, validation, and
+scope of local overrides remain Phase T1 decisions.
 
-Issues 8, 9, and 11 were resolved in the canonical contracts before their
-implementation phases were admitted here.
+## Reference Philosophy
 
-## Phase R1: Public Surface Cleanup
+The provisional architecture combines three relevant models:
 
-**Status**: COMPLETE
+- ggplot2 supplies the plotting-specific separation between non-data theme
+  appearance, data-to-aesthetic scales, and exact layer aesthetics.
+- Flutter supplies immutable complete theme data, organized component themes,
+  and explicit parent-scope inheritance.
+- Vega-Lite supplies typed component configuration and deterministic precedence
+  from broad defaults to exact mark settings.
 
-Verification: focused library, lifecycle, theme, layout, raw-overlay,
-composition, and doctest coverage plus `just verify` passed on 2026-08-25.
+The design should not copy Flutter's widget-context lookup, reactive rebuilding,
+animation, or dynamic theme extensions. It should not copy Matplotlib's mutable
+process-global runtime configuration or CSS's selector-driven open cascade.
 
-Remove accidental module exposure and application/report-oriented
-introspection while preserving renderer-owned behavior.
+## Provisional Contract Rules
+
+Phase T1 must confirm, revise, or reject these rules explicitly:
+
+- A theme owns visual defaults. It does not own scientific data, statistical
+  behavior, semantic labels, or output routing.
+- Data palettes and scales map values to aesthetics. Exact element styles
+  configure one caller-owned guide, layer, annotation, or mark.
+- Visibility and placement policies remain distinct from appearance when they
+  determine whether caller-provided content exists.
+- Theme resolution is explicit and immutable. There is no mutable process-global
+  theme, thread-local theme, environment-selected theme, or late backend lookup.
+- The backend continues to receive complete concrete point, line, fill, text,
+  gradient, and bracket styles rather than a public theme object.
+- One resolved internal theme is shared by preflight, measurement, collision
+  planning, legend construction, and final rendering.
+- Public customization remains typed and validated. Do not add arbitrary CSS,
+  backend dash strings, string-keyed property maps, dynamic style plugins,
+  unvalidated mutable palettes, or silent fallback chains.
+- Keep one current API and representation. Replaced theme APIs and private
+  representations are migrated atomically without aliases or deprecations.
+
+## Phase Map
+
+| Phase | Objective | Status |
+| --- | --- | --- |
+| T1 | Canonical theme architecture contract | IN PROGRESS |
+| T2 | Complete visual-property ownership inventory | PENDING |
+| T3 | One private resolved-theme pipeline | PENDING |
+| T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
+| T5a | Surfaces, typography, titles, axes, and grid | PENDING |
+| T5b | Legends, facets, and Canvas composition chrome | PENDING |
+| T5c | Mark defaults, annotations, and local styles | PENDING |
+| T5d | Categorical and continuous data scales | PENDING |
+| T6 | Public immutable theme and scale API | PENDING |
+| T7 | Contract evidence, documentation, and final audit | PENDING |
+
+## Phase T1: Canonical Theme Architecture
+
+**Status**: IN PROGRESS
+
+Define the model before exposing or moving implementation state.
 
 Scope:
 
-- Make `decorations` crate-private. Make `title_block` and `TitleBlock`
-  crate-private and retain them only as renderer implementation details.
-- Make `theme` crate-private while retaining the root-level
-  `lichtung_plot::Theme` export.
-- Delete `RawOverlay::provenance()` and its fixed report strings. Retain
-  `is_visible()` because rendering consumes it.
-- Delete `RegressionBand::provenance()` and its fixed report strings. Retain the
-  crate-private legend wording because the renderer consumes it.
-- Delete `PlotKind::ALL`, `PlotKind::variant_name()`, `PlotKind::label()`, and
-  `PlotKind::key_segment()`.
-- Replace the validator's sole `PlotKind::key_segment()` use with diagnostic
-  wording local to that validation concern. Do not introduce a general kind
-  naming or report helper.
-- Delete `Theme::ALL` and `Theme::variant_name()`. Rewrite internal theme tests
-  to exercise the explicitly named built-in themes without restoring a
-  runtime inventory API.
-- Remove tests and documentation whose only purpose was to guarantee the
-  deleted report, inventory, or public-module surface.
+- Add a dedicated canonical theme-system specification and update
+  `01_ARCHITECTURE.md`, `02_RENDERING_CONTRACT.md`, and
+  `05_DEFERRED_FEATURES.md` to agree with it.
+- Define the exact meanings and boundaries of theme, preset, palette, scale,
+  semantic color, component style, element style, visibility policy, renderer
+  invariant, and resolved theme.
+- Define standalone Plot ownership, Canvas inheritance, explicit Plot
+  replacement, facets, text panels, shared headers, and shared-legend behavior.
+- Define the complete precedence model across library defaults, Canvas theme,
+  Plot theme, plot-specific scale or component configuration, and exact element
+  styles.
+- Decide whether public `Theme` is a complete immutable value, how callers derive
+  a modified theme from a built-in preset, and whether any sparse override type
+  has a justified consumer.
+- Define which visibility decisions are appearance and which remain separate
+  behavior or content policies.
+- Define structural validation, palette capacity, missing mappings, fallback
+  prohibition, color and alpha representation, contrast ownership, font policy,
+  and deterministic SVG/PNG requirements.
+- Define a role-based component taxonomy that avoids one independent theme block
+  per plot family unless the component is genuinely distinct.
+- Define the public-foundations milestone and explicitly defer properties that
+  are not yet coherent enough to expose.
 
 Acceptance:
 
-- `lichtung_plot::Theme` remains usable, while `lichtung_plot::theme` and
-  `lichtung_plot::decorations` are not public paths.
-- No callable provenance method or fixed report-provenance text remains on
-  `RawOverlay` or `RegressionBand`.
-- No general inventory, variant-name, report-label, or generated-key API
-  remains on `PlotKind` or `Theme`.
-- All internal title, subtitle, caption, legend, and regression-band rendering
-  behavior remains intact.
-- Compile-fail API-boundary coverage and focused library, lifecycle, and theme
-  tests pass.
+- Canonical specifications describe one unambiguous ownership and precedence
+  model for standalone plots, Canvas, facets, and shared legends.
+- Theme, data scale, exact style, policy, and renderer invariant are distinct
+  concepts with no overlapping owner for the same property.
+- The contract states when validation occurs and guarantees that preflight and
+  final rendering use identical resolved values.
+- Every remaining design choice is either decided or named as deferred without
+  adding placeholder API.
+- No production code changes in this phase.
+
+## Phase T2: Visual-Property Ownership Inventory
+
+**Status**: PENDING
+
+Account for every current visual value before reorganizing implementation.
+
+Scope:
+
+- Inventory every `ThemePalette` field, hardcoded renderer color, font, size,
+  width, opacity, dash, radius, spacing, visibility switch, and contrast rule.
+- Inventory current public local controls including `CategoricalColors`,
+  `GuideStyle`, `PointLayer`, `BarPointLayer`, `InteractionStyle`,
+  `SignificanceMarkStyle`, `DumbbellEndpoints`, `HeatmapScale`, legend policies,
+  point-outline policy, and sign coloring.
+- Record each property's current source, consumers, semantic role, proposed
+  owner, inheritance scope, validation, whether it affects layout, and intended
+  public override surface.
+- Classify data-aesthetic mappings separately from non-data chrome and exact
+  element styling.
+- Identify duplicated or inconsistent values across plot families, facets,
+  legends, annotations, Canvas chrome, and output backends.
+- Decide whether each dormant or incorrectly wired field is removed, connected,
+  or replaced. Known examples include background, general line width, frame-side
+  visibility, and axis-label visibility.
+- Identify every intentional visual correction that requires separate snapshot
+  evidence rather than hiding it inside structural refactoring.
+
+Acceptance:
+
+- Every visual constant and existing style API has exactly one proposed owner.
+- Every layout-affecting style property is marked and traced into measurement.
+- No hardcoded renderer value remains unclassified.
+- Known wiring defects have explicit remediation phases and expected visual
+  impact.
+- The inventory agrees with the Phase T1 taxonomy and refines the later phase
+  scopes before code migration begins.
+
+## Phase T3: Private Resolved-Theme Pipeline
+
+**Status**: PENDING
+
+Create one internal path for built-in appearance without changing the public API
+or intended rendered output.
+
+Scope:
+
+- Replace the current ad hoc `ThemePalette` flow with one complete private
+  resolved-theme representation aligned with the approved component taxonomy.
+- Make every built-in preset produce a complete validated resolved theme.
+- Resolve the active theme once per rendering lifecycle and pass the same value
+  through layout, preflight, geometry discovery, legend planning, and final
+  rendering.
+- Remove repeated owned palette construction and renderer calls back into
+  `Plot::palette()`.
+- Keep backend traits theme-agnostic and continue passing concrete styles at draw
+  boundaries.
+- Preserve current intended built-in visuals and snapshots. Handle known visual
+  defects only in separately identified changes with explicit evidence.
+
+Acceptance:
+
+- One resolved theme instance governs both preflight and final rendering.
+- No renderer independently reconstructs a built-in palette or hidden default.
+- Backends remain independent of public theme types.
+- Focused lifecycle, layout, theme, and visual-regression tests pass without
+  unintended snapshot changes.
 - `just verify` passes.
 
-Commit: `refactor(api)!: remove accidental introspection surface`
+## Phase T4: Canvas Theme Inheritance
 
-## Phase R2: Exact-Family Erasure
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: exact and erased builder, composition, lifecycle, terminal-output,
-and compile-fail doctest coverage plus `just verify` passed on 2026-08-25.
-
-Make the architecture's exact-family boundary mechanically enforceable.
+Make composition ownership explicit and consistent.
 
 Scope:
 
-- Add one sealed exact-family marker bound implemented by every concrete plot
-  family and not implemented by `kind::Any`.
-- Keep `kind::Marker` as the bound admitted by `Plot<K>` itself.
-- Restrict `Plot::erase()` to exact family markers.
-- Restrict `Canvas::panel()` to exact family markers and continue erasing only
-  at Canvas's private heterogeneous-storage boundary.
-- Do not add a second erasure method, an erased-panel insertion method, a
-  runtime escape hatch, or an implementation for `kind::Any`.
+- Give Canvas one replaceable root theme whose default is the same library
+  Publication theme used by standalone plots.
+- Represent the absence of an explicit Plot theme so a composed plot can inherit
+  the Canvas theme without guessing whether Publication was caller-selected.
+- Make an explicit Plot theme replace the inherited Canvas theme for that plot.
+- Apply the resolved Canvas theme consistently to canvas title blocks, text
+  panels, shared headers, row titles, spacing, and other Canvas-owned chrome.
+- Make header and text measurement use the same resolved values as rendering.
+- Define and enforce exact shared-legend compatibility when panels intentionally
+  use different themes.
+- Preserve plot erasure and ownership boundaries without global or thread-local
+  theme state.
 
 Acceptance:
 
-- Every concrete constructor result can call `erase()` and can be passed to
-  `Canvas::panel()`.
-- `Plot<kind::Any>` can do neither, including a second call to `erase()`.
-- Erasure still moves all owned input and configuration without changing plot
-  identity or render output.
-- An erased plot retains its common `kind()`, `width()`, `height()`,
-  `preflight()`, and terminal-output operations; compile-pass coverage exercises
-  those operations after erasure.
-- Compile-fail doctests cover both rejected erased-input operations.
-- Focused builder and composition tests pass.
+- Standalone and composed defaults are visually identical when no explicit theme
+  is supplied.
+- Canvas-owned chrome never falls back to hidden `Theme::Publication` calls.
+- Unthemed plots inherit; explicitly themed plots replace; neither behavior is
+  sticky outside its owner.
+- Measurement and rendering agree for headers, titles, text panels, facets, and
+  shared legends.
+- Focused standalone, Canvas, facet, and shared-legend tests pass.
 - `just verify` passes.
 
-Commit: `feat(api)!: enforce exact-family erasure`
+## Phase T5a: Surfaces, Typography, Titles, Axes, And Grid
 
-## Phase R3: Terminal PNG Publication
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: focused output and atomic publication tests, PNG compression
-mapping, migrated heatmap coverage, clippy, doctests, documentation, and
-`just verify` passed on 2026-08-25.
-
-Move PNG configuration from inert plot state to explicit publication calls and
-remove duplicate public identities.
+Move foundational non-data appearance into the resolved theme.
 
 Scope:
 
-- Delete `PngCompression::Default`.
-- Make `PngCompression::Balanced` the enum default and make
-  `PngOptions::default()` resolve to 300 DPI with balanced compression.
-- Migrate every repository caller, test, example, and document from `Default`
-  to `Balanced`; do not retain an alias or decoder.
-- Remove `.png_options(...)` from `Plot` and `Canvas` and remove stored
-  `PngOptions` from `Plot`, `Canvas`, `Output`, erasure, and private accessors.
-- Make `Plot`, `Canvas`, and `Output` expose the same PNG operations:
-  `png(path)` for 300-DPI publication, `png_preview(path)` for source-sized
-  preview output, and `png_with_options(path, options)` for exact caller-owned
-  configuration.
-- Keep PNG options call-local and non-sticky across chained `Output` calls.
-- Delete `svg_and_png` from `Plot`, `Canvas`, and `Output`. Callers that need
-  both formats use independent same-scene chaining such as
-  `plot.svg(svg_path)?.png(png_path)`.
-- Remove pair-publication code and tests that have no remaining consumer while
-  retaining atomic publication for each individual output call.
-- Keep PNG option types and their root exports aligned with PNG terminal
-  operations. Phase R8 makes that complete publication surface unconditional.
+- Centralize canvas and panel surfaces, foreground and muted text roles,
+  typography roles, title/subtitle/caption styles, axis lines, ticks, labels,
+  frame sides, and grid appearance.
+- Remove backend-owned background color and title-block hardcoded grays.
+- Separate title or label content presence from theme appearance.
+- Wire or remove dormant frame, label, background, and line properties according
+  to the approved inventory.
+- Ensure every font and spacing value used for measurement is the value used for
+  drawing.
 
 Acceptance:
 
-- Exactly one public balanced PNG compression identity exists, and it is the
-  default.
-- All compression presets retain their existing encoder mappings apart from
-  removal of the duplicate variant.
-- Plain PNG output uses `Dpi(300.0)`, writes matching physical-resolution
-  metadata, and scales canonical CSS pixels from 96 DPI.
-- Preview PNG output preserves canonical SVG pixel dimensions, uses balanced
-  compression, and writes no physical-resolution metadata.
-- One `Output` can publish preview, publication, and custom PNGs from the same
-  scene without one call's options affecting another.
-- No plot, canvas, or output retains stored PNG configuration.
-- No combined SVG-and-PNG public operation or transactional pair-publication
-  implementation remains.
-- Focused output tests pass for the crate's supported build configuration.
+- These components contain no unclassified visual constants.
+- Theme changes cannot silently remove caller-provided semantic text.
+- Layout and paint use identical typography and spacing.
+- Built-in preset changes, if any, have reviewed snapshot evidence.
+- Focused layout, axes, typography, output, and visual-regression tests pass.
 - `just verify` passes.
 
-Commit: `feat(api)!: move png options to publication`
+## Phase T5b: Legends, Facets, And Canvas Composition Chrome
 
-## Phase R4: Canonical Histogram KDE Points
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: focused checks and clippy, histogram, geometry, distribution, and
-facet tests, doctests, and `just verify` passed on 2026-08-25.
-
-Use one named public point representation for caller-computed histogram KDE
-geometry.
+Give composed and explanatory chrome coherent theme ownership.
 
 Scope:
 
-- Change `HistogramKde::Precomputed` from `Vec<(f64, f64)>` to
-  `Vec<HistogramKdePoint>`.
-- Migrate validation, rendering, tests, examples, and documentation to named
-  `x` and `y` fields. Do not retain tuple conversion as a second project-owned
-  representation.
-- Preserve the distinction between a precomputed KDE layer over sample-owned
-  histogram input and complete self-contained `HistogramGeometry`.
-- Do not change source-row or facet ownership. Complete precomputed histogram
-  geometry continues to reject sample-only channels before backend begin.
+- Centralize legend container, title, label, key, outline, opacity, padding, and
+  spacing styles while keeping visibility and placement in legend policy.
+- Apply role-based typography and surfaces to facet strips, panel headers, shared
+  headers, row titles, text panels, and shared legends.
+- Preserve exact legend glyph reproduction from resolved mark styles.
+- Keep collision planning, outside reservation, and shared-legend compatibility
+  synchronized with the resolved theme.
+- Remove implicit Publication styling and duplicated fixed whites and grays from
+  composition code.
 
 Acceptance:
 
-- All precomputed histogram KDE paths use the same public point type as
-  `HistogramGeometry::kde`.
-- Invalid KDE ordering, non-finite coordinates, negative density, and safety
-  limits retain focused coverage through the named point representation.
-- Sample-derived and complete-geometry histogram modes retain their existing
-  validation and rendering behavior.
-- Focused histogram, geometry, distribution, and facet tests pass.
+- Legend and composition measurement consume the exact final styles.
+- Shared and per-plot legends use one component contract while retaining exact
+  mark glyphs.
+- Mixed explicit Plot themes have deterministic documented behavior.
+- Focused legend, facet, Canvas, collision, and visual-regression tests pass.
 - `just verify` passes.
 
-Commit: `refactor(api)!: unify histogram kde points`
+## Phase T5c: Mark Defaults, Annotations, And Local Styles
 
-## Phase R5: Ergonomic Point Layers
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: focused checks and clippy, focused line, layout/legend,
-composition, rendering, lifecycle, clipping, and data-contract tests, doctests,
-documentation, and `just verify` passed on 2026-08-25.
-
-Make supplemental ordinary-line points concise by default while preserving
-selective identity, annotation, and visual control.
+Unify common mark roles without erasing typed local control.
 
 Scope:
 
-- Replace the five-argument fallible constructor with infallible
-  `PointLayer::new(x, y) -> Self`.
-- Default radius to 4 and opacity to 0.8. Without hue, reserve one primary-line
-  palette slot; with hue, reserve one slot per level in the resolved hue domain,
-  including Canvas-coordinated levels absent from the local plot. Resolve each
-  automatic layer from the next slot plus its zero-based append index. Every
-  layer consumes its append position even when it has an explicit color.
-- Add consuming `color(...) -> Self`, `radius(...) -> Result<Self>`, and
-  `opacity(...) -> Result<Self>` builders. Validate positive radius and finite
-  opacity in `(0, 1]` immediately without retaining the old constructor.
-- Retain optional per-point labels and optional whole-layer legend identity.
-  Correct documentation to distinguish those two text roles and to describe
-  arbitrary supplemental coordinates rather than dataframe columns or only raw
-  observations.
-- Continue accepting multiple appended layers. Permit repeated explicit colors;
-  color uniqueness is not semantic identity.
-- Preserve strict nonempty aligned finite x/y validation, optional label
-  alignment, clipping, draw order over primary line geometry, automatic-range
-  participation, generic-facet rejection, and exact legend conflict checks.
+- Define common point, line, fill, interval, ribbon, uncertainty, reference,
+  outline, and missing-mark defaults by semantic role rather than plot family.
+- Classify family-specific constants as shared theme defaults, justified
+  specialized component defaults, exact caller styles, or renderer invariants.
+- Centralize panel text, significance, value annotation, missing-value, raw
+  overlay, and supplemental-layer appearance.
+- Integrate existing typed local APIs into the approved precedence model rather
+  than adding parallel replacements.
+- Preserve exact legend glyph agreement with the final resolved mark styles.
 
 Acceptance:
 
-- `PointLayer::new(x, y)` renders with deterministic publication defaults and
-  requires no caller styling.
-- Multiple automatic layers use stable palette order; manual style overrides
-  affect points, point labels where applicable, and legend glyphs consistently.
-- Point labels annotate individual rows and a legend label creates at most one
-  whole-layer legend entry.
-- Duplicate explicit colors are accepted, while conflicting duplicate legend
-  identities still reject through exact legend validation.
-- Focused line, layout, legend, composition, and compile-fail tests pass.
+- Ordinary renderers no longer duplicate unclassified widths, radii, opacities,
+  outlines, fills, and neutral colors.
+- Exact local styles override only their documented properties and scope.
+- Renderer invariants are explicit and cannot be changed indirectly through a
+  theme field.
+- Focused renderer-family, layer, annotation, legend, and snapshot tests pass.
 - `just verify` passes.
 
-Commit: `feat(api)!: add automatic point layer styling`
+## Phase T5d: Categorical And Continuous Data Scales
 
-## Phase R6: Narrow Numeric Label Format
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: Rustdoc, canonical contract, deferred-feature, and exact existing
-formatting coverage plus `just verify` passed on 2026-08-25.
-
-Make the existing fixed-decimal scope explicit without expanding the public
-formatter.
+Separate data-to-color mapping from non-data theme appearance.
 
 Scope:
 
-- Retain the `NumericLabelFormat` name, precision builder, optional literal
-  suffix, and current heatmap-cell and point-only coefficient-label consumers.
-- Document that suffixes do not scale values and that the type does not own axis
-  ticks, colorbars, waterfall totals, point labels, or legends.
-- Record broader notation and cross-surface formatting in
-  `05_DEFERRED_FEATURES.md` for reconsideration after deferred legend work.
-- Do not add a prefix, notation enum, callback, format string, dormant variant,
-  or unused storage.
+- Define typed qualitative, sequential, and diverging palette or scale values,
+  including neutral and missing-value behavior where applicable.
+- Make built-in themes supply default data scales without conflating those
+  scales with foreground, surface, grid, and annotation colors.
+- Define exact keyed categorical mappings, ordered palette mappings, continuous
+  interpolation, domain ownership, capacity validation, and missing mappings.
+- Replace hardcoded heatmap and beeswarm gradients with resolved scale values.
+- Generalize exact categorical color control to every plot family that consumes
+  the same semantic mapping, or document why a family has a distinct owner.
+- Coordinate facets and Canvas global hue order without silently changing exact
+  caller mappings.
 
 Acceptance:
 
-- Rustdoc and canonical specs state the exact two consumers and literal-suffix
-  behavior.
-- Existing fixed-decimal rendering and validation tests remain exact.
-- No broader formatting API or placeholder is present.
+- Theme appearance and data scales are distinct types and resolution steps.
+- Custom mappings never silently cycle, substitute, or fall back contrary to the
+  Phase T1 contract.
+- Legends, marks, gradients, colorbars, facets, and Canvas share the same
+  resolved mappings.
+- Focused categorical, continuous-scale, heatmap, beeswarm, facet, Canvas, and
+  legend tests pass.
 - `just verify` passes.
 
-Commit: `docs(api): clarify numeric label formatting`
+## Phase T6: Public Immutable Theme And Scale API
 
-## Phase R7: Native Test Values
+**Status**: PENDING
 
-**Status**: COMPLETE
-
-Verification: native-value unit and integration tests, full-tree retired-shim
-searches, unchanged snapshots, exact-family validation fixtures, final static
-audits, and `just verify` passed on 2026-08-25.
-
-Remove test-only dataframe emulation so tests exercise the standalone
-renderer boundary directly.
+Expose the complete foundations only after every admitted consumer uses the
+private resolved model.
 
 Scope:
 
-- Delete the unit-test `Fixture`, `FixtureColumn`, `DataFrame`, `Series`,
-  `FixtureField`, `IntoFixtureColumn`, and `test_data!` surface.
-- Delete the integration-test equivalents and the `df!` macro from
-  `tests/support/data.rs`.
-- Construct `NumericValues`, `CategoryValues`, `BooleanValues`, `SourceRows`,
-  and `AxisValues` directly at test call sites.
-- Where repeated setup is substantial, use narrowly named family-specific
-  structs or helpers whose fields are native values. Do not add generic named
-  columns, dynamic type dispatch, conversion by column-name string, dataframe
-  aliases, or a replacement table macro.
-- Preserve intentional nullable values, source-row identities, category order,
-  and mismatched-length cases explicitly rather than normalizing them in a
-  fixture layer.
-- Remove now-empty test support modules and imports.
-
-Migration order:
-
-1. Migrate crate unit tests by renderer family and delete `src/test_support.rs`.
-2. Migrate integration suites by renderer family and delete
-   `tests/support/data.rs` when its final consumer is gone.
-3. Search the full repository for every retired shim name and macro before
-   completing the phase.
+- Replace the closed public theme selector with the approved immutable complete
+  `Theme` API and built-in constructors or presets.
+- Expose only validated component theme, color, typography, and scale types
+  required by the full-foundations milestone.
+- Add or migrate explicit `Canvas::theme(...)` and `Plot::theme(...)` ownership
+  without global state or compatibility aliases.
+- Provide a typed way to derive a modified complete theme from a built-in base.
+- Migrate current local style and categorical color callers to the one approved
+  precedence model; delete replaced public and private representations.
+- Keep backend styles private and avoid exposing renderer implementation details.
+- Update examples and user documentation with standalone, Canvas inheritance,
+  Plot replacement, palette, and exact local-style examples.
 
 Acceptance:
 
-- No test-owned generic dataframe, series, fixture-column, dynamic column
-  lookup, `df!`, or `test_data!` abstraction remains.
-- Tests continue to distinguish numeric, categorical, boolean, axis, and
-  source-row semantics through production native types.
-- Existing invalid-input tests still construct the invalid state they claim to
-  exercise rather than failing earlier in test setup.
-- Preserve every existing behavioral case, assertion, deterministic snapshot,
-  and exact-byte or hash check. Delete only coverage whose sole subject is a
-  retired fixture abstraction.
-- Focused suites pass as each family migrates.
-- `just verify` passes with no unintended snapshot changes.
-
-Commits: `test(api): replace dataframe shims with native values` and
-`test(api): remove generic validation fixtures`
-
-## Phase R8: Unconditional Publication Formats
-
-**Status**: COMPLETE
-
-Verification: focused output and visual-regression suites, doctests, full-tree
-retired-surface searches, unchanged snapshots, and `just verify` passed on
-2026-08-25.
-
-Make the complete publication surface unconditional and make self-contained
-outlined SVG the normal publication operation.
-
-Scope:
-
-- Delete the crate-owned `png` and `text-as-path` Cargo features and all
-  corresponding conditional compilation. Keep `png` and `resvg` as
-  unconditional first-party dependencies.
-- Delete `SvgText`, `.svg_text(...)`, stored SVG text mode, and private accessors
-  for that state without retaining aliases or compatibility paths.
-- Make `svg(path)` on `Plot`, `Canvas`, and `Output` convert canonical text to
-  vector paths using installed generation-host fonts.
-- Add call-local `svg_preserve_text(path)` methods on the same three public
-  owners for canonical SVG with `<text>` elements intact.
-- Keep PNG methods and option types unconditional and keep all SVG and PNG
-  publication operations independently chainable on one rendered scene.
-- Migrate canonical SVG assertions and snapshots to `svg_preserve_text` while
-  retaining focused coverage that ordinary `svg` contains paths and no text.
-- Update the canonical contracts, user documentation, examples, test matrix,
-  and retired-surface searches for the single supported build configuration.
-
-Acceptance:
-
-- `Cargo.toml` defines no crate-owned feature table, and source and tests contain
-  no conditional compilation for removed output features.
-- `SvgText`, `.svg_text(...)`, and stored SVG text mode are absent from the
-  public and private implementation surface.
-- Plain `svg` publishes outlined text; `svg_preserve_text` publishes selectable
-  canonical text; both are call-local on `Plot`, `Canvas`, and `Output`.
-- PNG types and terminal methods are always compiled and preserve publication,
-  preview, custom-option, safety-limit, and atomic-write behavior.
-- Existing deterministic snapshots remain unchanged because canonical SVG
-  regression paths explicitly request preserve-text publication.
-- Focused output tests and full retired-surface searches pass.
+- Callers can construct one complete custom theme covering the admitted full
+  foundations without editing private renderer state.
+- Built-in Publication, Nature, Science, and CHI behavior remains available
+  through the single current API.
+- The API has no ambiguous global default setter, generic property map, detached
+  mutable palette, or alternate compatibility identity.
+- Public constructors validate every structural invariant before rendering.
+- Compile-pass and compile-fail evidence enforces the intended visibility and
+  ownership boundaries.
 - `just verify` passes.
 
-Commit: `feat(output)!: make publication formats unconditional`
+## Phase T7: Contract Evidence And Final Audit
 
-## Final Completion
+**Status**: PENDING
 
-**Status**: COMPLETE
+Close the phase with exact behavioral evidence and no residual old model.
 
-Verification: independent phase audits found no remaining contract gaps,
-repository searches found no retired implementation surface or output feature
-gates, snapshots remained unchanged, and `just verify` passed from the completed
-worktree on 2026-08-25.
+Scope:
 
-The currently authorized remediation is complete only when:
+- Add precedence tests for library default, Canvas inheritance, explicit Plot
+  replacement, plot scale configuration, and exact element styles.
+- Prove one resolved theme is used by preflight and final rendering.
+- Cover shared legends, facets, text panels, mixed explicit Plot themes, palette
+  capacity, missing mappings, fonts, contrast behavior, SVG, and PNG.
+- Retain reviewed deterministic snapshots for every built-in preset and selected
+  custom themes.
+- Search for retired theme APIs, repeated hidden Publication defaults, dormant
+  theme fields, unclassified hardcoded style values, and duplicate scale logic.
+- Reconcile all specifications, README, guides, examples, and rustdoc with the
+  implemented single current contract.
 
-- Phases R1 through R8 are `COMPLETE` with commit and verification evidence.
-- Repository searches find no retired API names, report strings, compatibility
-  aliases, tuple KDE representation, or dataframe-shaped test shims.
-- Public-path compile-fail tests enforce private modules and exact-family
-  erasure.
-- `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` describe the implemented
-  current contract without documenting deferred choices as current behavior.
+Acceptance:
+
+- Phases T1 through T7 and all admitted T5 subphases are complete with commit and
+  verification evidence.
+- Every visual property has one implemented owner matching the approved
+  inventory.
+- No mutable global theme, hidden Canvas default, late theme lookup, compatibility
+  alias, or unclassified renderer style constant remains.
+- Snapshot changes are intentional, reviewed, and committed with their owning
+  behavior change.
 - `just verify` passes from the completed worktree.
 
-Completion of these phases closes the currently identified API review findings.
+## Open Decisions For T1
+
+The architecture discussion must settle these before T2 begins:
+
+- Exact public decomposition and names for the complete theme and component
+  theme values.
+- Whether explicit Plot themes are always complete replacements or whether a
+  sparse Plot override has a concrete necessary use case.
+- Opaque color representation, alpha ownership, and accepted construction forms.
+- Qualitative palette capacity and whether automatic palettes may repeat.
+- Exact keyed categorical mapping behavior for unused and missing labels.
+- Continuous interpolation, neutral midpoint, missing color, and colorbar roles.
+- Contrast responsibility: structural rejection, caller responsibility, or
+  documented helper behavior.
+- Font-family validation and generation-host requirements for outlined SVG and
+  PNG.
+- Which decoration visibility choices belong to theme appearance and which
+  remain explicit policies.
+- Which common mark properties are theme defaults and which stay fixed renderer
+  invariants.
+- Exact shared-legend behavior when a Canvas contains intentionally different
+  explicit Plot themes.
