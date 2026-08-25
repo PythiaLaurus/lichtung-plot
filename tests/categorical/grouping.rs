@@ -278,7 +278,7 @@ fn render<K: lichtung_plot::kind::Marker>(
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
-        .svg(&output)
+        .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();
     result

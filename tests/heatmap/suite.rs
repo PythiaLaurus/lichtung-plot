@@ -57,7 +57,7 @@ fn render(
     let output = directory.join("plot.svg");
     let plot = configure(chart(data));
     let result = plot
-        .svg(&output)
+        .svg_preserve_text(&output)
         .map(|_| std::fs::read_to_string(&output).unwrap())
         .map_err(|error| error.to_string());
     std::fs::remove_dir_all(directory).unwrap();
@@ -290,7 +290,7 @@ fn composed_heatmap_separates_x_tick_labels_from_axis_title() {
     ));
     std::fs::create_dir_all(&directory).unwrap();
     let output = directory.join("canvas.svg");
-    canvas.svg(&output).unwrap();
+    canvas.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
 
@@ -735,7 +735,6 @@ fn heatmap_svg_is_byte_deterministic() {
     assert_eq!(first, second);
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
     let data = standard_data();
@@ -748,7 +747,7 @@ fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
     let svg_path = directory.join("plot.svg");
     let png_path = directory.join("plot.png");
     chart(&data)
-        .svg(&svg_path)
+        .svg_preserve_text(&svg_path)
         .unwrap()
         .png_preview(&png_path)
         .unwrap();

@@ -43,7 +43,7 @@ fn render<K: lichtung_plot::kind::Marker>(
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
-        .svg(&output)
+        .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();
     result
@@ -288,7 +288,7 @@ fn composed_canvas_preserves_overlay_points_and_one_canvas_lifecycle() {
         .unwrap();
     let directory = unique_dir("composed-overlay");
     let output = directory.join("plot.svg");
-    canvas.svg(&output).unwrap();
+    canvas.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     assert_eq!(overlay_circles(&svg).len(), 8);
     assert_eq!(svg.matches("<svg ").count(), 1);

@@ -28,7 +28,9 @@ fn violin_smoke() {
     let chart = Plot::violin(species, value)
         .theme(Theme::Publication)
         .size(640, 480);
-    chart.svg(&out).expect("violin render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("violin render must succeed");
     let svg_bytes = std::fs::read(&out).expect("svg must exist");
     assert!(!svg_bytes.is_empty(), "violin svg must be non-empty");
 }
@@ -53,7 +55,9 @@ fn mass_spectrum_high_intensity_renders_upward() {
         )
         .size(320, 240)
         .title("Mass spectrum");
-    chart.svg(&out).expect("mass spectrum render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("mass spectrum render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     // Find the data polyline (3 points) — skip grid polylines (2 points each).
     let y_values: Vec<f64> = svg
@@ -96,7 +100,7 @@ fn beeswarm_is_deterministic_and_renders_continuous_colorbar() {
         Plot::beeswarm(feature.clone(), effect.clone(), value.clone())
             .zero_line()
             .size(420, 300)
-            .svg(path)
+            .svg_preserve_text(path)
             .unwrap();
     }
     let first_svg = std::fs::read_to_string(first).unwrap();
@@ -128,7 +132,7 @@ fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
         let plot = plot
             .bins(HistogramBins::Count(3))
             .stat(HistogramStat::Probability);
-        plot.svg(path).unwrap();
+        plot.svg_preserve_text(path).unwrap();
     }
 
     let first_svg = std::fs::read_to_string(first).unwrap();
@@ -144,7 +148,7 @@ fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
     let dir = unique_dir("histogram-implicit-label-layout");
     let output = dir.join("histogram.svg");
     Plot::histogram(HistogramInput::samples(value))
-        .svg(&output)
+        .svg_preserve_text(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     let text = parse_text_elements(&svg);
@@ -165,7 +169,7 @@ fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
     let output = dir.join("histogram.svg");
     let plot = Plot::histogram(HistogramInput::samples(value)).x_limits(2.0, 8.0);
     let plot = plot.bins(HistogramBins::Count(5));
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert_eq!(svg.matches("<polygon points=").count(), 5);
@@ -201,7 +205,7 @@ fn density_hue_is_deterministic_with_independent_curves_and_stable_legend() {
         Plot::density(value.clone())
             .group(group.clone())
             .hue(group.clone())
-            .svg(path)
+            .svg_preserve_text(path)
             .unwrap();
     }
 
@@ -227,7 +231,7 @@ fn density_best_legend_avoids_top_right_curve_peak() {
     Plot::density(value)
         .group(group.clone())
         .hue(group)
-        .svg(&output)
+        .svg_preserve_text(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     let (legend, _) = parse_legend_rect_and_start(&svg);
@@ -261,7 +265,7 @@ fn density_explicit_limits_clip_full_sample_kde() {
     let output = dir.join("density.svg");
     let chart = Plot::density(value).x_limits(1.0, 2.0).y_limits(0.0, 0.5);
 
-    chart.svg(&output).unwrap();
+    chart.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     let panel = parse_first_clip_rect(&svg);
     let marks = svg
@@ -291,7 +295,7 @@ fn density_clips_large_finite_support_before_projection() {
     let chart = Plot::density(NumericValues::new("value", values))
         .x_limits(values[1], values[2])
         .y_limits(0.0, 2.4e-294);
-    chart.svg(&output).unwrap();
+    chart.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     let panel = parse_first_clip_rect(&svg);
     let marks = svg
@@ -318,7 +322,7 @@ fn density_renders_broad_opposite_sign_support_with_tiny_auto_y_range() {
     let dir = unique_dir("density-broad-opposite-sign-support");
     let output = dir.join("density.svg");
     Plot::density(NumericValues::new("value", [-extreme, extreme]))
-        .svg(&output)
+        .svg_preserve_text(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
@@ -351,11 +355,11 @@ fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
     let second = dir.join("second.svg");
     let hidden = dir.join("hidden.svg");
     for path in [&first, &second] {
-        Plot::qq(value.clone()).svg(path).unwrap();
+        Plot::qq(value.clone()).svg_preserve_text(path).unwrap();
     }
     let hidden_plot = Plot::qq(value);
     let hidden_plot = hidden_plot.reference_line(QqLine::Hidden);
-    hidden_plot.svg(&hidden).unwrap();
+    hidden_plot.svg_preserve_text(&hidden).unwrap();
 
     let svg = std::fs::read_to_string(first).unwrap();
     assert_eq!(svg, std::fs::read_to_string(second).unwrap());
@@ -391,7 +395,7 @@ fn qq_explicit_limits_clip_points_and_reference_line() {
     let output = dir.join("qq.svg");
     let chart = Plot::qq(value).x_limits(-0.5, 0.5).y_limits(2.0, 4.0);
 
-    chart.svg(&output).unwrap();
+    chart.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert!(svg.contains("<g clip-path=\"url(#clip-0)\">"));
@@ -404,7 +408,7 @@ fn qq_renders_constant_large_finite_sample_with_representable_auto_range() {
     let dir = unique_dir("qq-large-constant");
     let output = dir.join("qq.svg");
     Plot::qq(NumericValues::new("value", [1e300, 1e300, 1e300]))
-        .svg(&output)
+        .svg_preserve_text(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
@@ -424,7 +428,7 @@ fn qq_renders_zero_subnormal_and_f64_max_constants() {
         let dir = unique_dir(&format!("qq-constant-{name}"));
         let output = dir.join("qq.svg");
         Plot::qq(NumericValues::new("value", [value, value, value]))
-            .svg(&output)
+            .svg_preserve_text(&output)
             .unwrap();
         let svg = std::fs::read_to_string(output).unwrap();
 
@@ -441,7 +445,7 @@ fn qq_renders_with_adjacent_finite_explicit_limits() {
     let output = dir.join("qq.svg");
     let plot = Plot::qq(NumericValues::new("value", [0.0, upper])).y_limits(0.0, upper);
     let plot = plot.reference_line(QqLine::Hidden);
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert_eq!(svg.matches("<circle ").count(), 2);
@@ -475,7 +479,7 @@ fn qq_explicit_limits_skip_opposite_sign_extreme_outliers_before_projection() {
         .x_limits(-2.0, 2.0)
         .y_limits(-1.0, 1.0);
     let plot = plot.reference_line(QqLine::Hidden);
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert_eq!(svg.matches("<circle ").count(), 1);
@@ -489,7 +493,7 @@ fn qq_hidden_line_renders_opposite_extremes_with_exact_auto_range() {
     let output = dir.join("qq.svg");
     let plot = Plot::qq(NumericValues::new("value", [-f64::MAX, f64::MAX]));
     let plot = plot.reference_line(QqLine::Hidden);
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert_eq!(svg.matches("<circle ").count(), 2);

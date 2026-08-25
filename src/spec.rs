@@ -9,7 +9,6 @@ mod bar;
 mod categorical;
 mod estimate;
 mod facet;
-#[cfg(feature = "png")]
 mod output;
 
 pub use bar::{
@@ -23,9 +22,7 @@ pub use estimate::{
     LinePattern, PointShape, QqLine, RegressionBand, SignificanceMarkStyle, TextWeight,
 };
 pub use facet::{FacetScales, FacetSpec};
-#[cfg(feature = "png")]
 pub(crate) use output::SVG_CSS_DPI;
-#[cfg(feature = "png")]
 pub use output::{PngCompression, PngOptions, PngSizing};
 
 /// Spacing preset for multiple series within one bar category.

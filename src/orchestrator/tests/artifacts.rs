@@ -65,7 +65,6 @@ fn publication_rename_failure_removes_staging_files_and_preserves_destination() 
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     use crate::spec::{PngCompression, PngOptions, PngSizing};
@@ -90,7 +89,6 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn chained_outputs_publish_each_file_independently() {
     let dir = test_directory("successful-chained-publication");

@@ -136,7 +136,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
         .panel(0, 0, rendered_panel)
         .unwrap();
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    rendered_canvas.svg(&output).unwrap();
+    rendered_canvas.svg_preserve_text(&output).unwrap();
     let rendered_canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
     std::fs::remove_dir_all(directory).unwrap();
 
@@ -406,7 +406,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
     let dir = test_directory("out-of-range-svg");
     let output = dir.join("canvas.svg");
-    chart.clone().svg(&output).unwrap();
+    chart.clone().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[0].x)));
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[2].x)));

@@ -116,7 +116,10 @@ fn histogram_density_and_qq_share_svg_png_paths() {
     ] {
         let svg = directory.join(format!("{name}.svg"));
         let png = directory.join(format!("{name}.png"));
-        plot.svg(&svg).unwrap().png_preview(&png).unwrap();
+        plot.svg_preserve_text(&svg)
+            .unwrap()
+            .png_preview(&png)
+            .unwrap();
         assert!(std::fs::read_to_string(svg).unwrap().contains("<svg"));
         assert_eq!(png_dimensions(&std::fs::read(png).unwrap()), (640, 480));
     }

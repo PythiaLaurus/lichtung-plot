@@ -42,7 +42,7 @@ fn chart(data: &DumbbellData) -> Plot<lichtung_plot::kind::Dumbbell> {
 fn svg(chart: &Plot<lichtung_plot::kind::Dumbbell>) -> String {
     let directory = unique_dir("dumbbell-svg");
     let output = directory.join("plot.svg");
-    chart.clone().svg(&output).unwrap();
+    chart.clone().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

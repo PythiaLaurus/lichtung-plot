@@ -49,7 +49,11 @@ fn output_reuses_one_plot_render_for_exact_svg_bytes() {
     let directory = temp_dir("plot-output-reuse");
     let first = directory.join("first.svg");
     let second = directory.join("second.svg");
-    plot(&data).svg(&first).unwrap().svg(&second).unwrap();
+    plot(&data)
+        .svg_preserve_text(&first)
+        .unwrap()
+        .svg_preserve_text(&second)
+        .unwrap();
     let first_bytes = std::fs::read(&first).unwrap();
     assert_eq!(first_bytes, std::fs::read(&second).unwrap());
     assert!(String::from_utf8(first_bytes)
@@ -64,7 +68,11 @@ fn output_reuses_one_canvas_render_for_exact_svg_bytes() {
     let directory = temp_dir("canvas-output-reuse");
     let first = directory.join("first.svg");
     let second = directory.join("second.svg");
-    canvas(&data).svg(&first).unwrap().svg(&second).unwrap();
+    canvas(&data)
+        .svg_preserve_text(&first)
+        .unwrap()
+        .svg_preserve_text(&second)
+        .unwrap();
     let first_bytes = std::fs::read(&first).unwrap();
     assert_eq!(first_bytes, std::fs::read(&second).unwrap());
     assert!(String::from_utf8(first_bytes)
@@ -73,15 +81,14 @@ fn output_reuses_one_canvas_render_for_exact_svg_bytes() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(feature = "text-as-path")]
 #[test]
-fn selectable_and_path_text_outputs_use_the_configured_representation() {
+fn plot_exposes_outlined_and_selectable_svg_publication() {
     let data = scatter_data();
-    let directory = temp_dir("text-representation");
+    let directory = temp_dir("plot-text-representation");
     let selectable = directory.join("selectable.svg");
     let paths = directory.join("paths.svg");
-    plot(&data).svg(&selectable).unwrap();
-    plot(&data).svg_text(SvgText::Paths).svg(&paths).unwrap();
+    plot(&data).svg(&paths).unwrap();
+    plot(&data).svg_preserve_text(&selectable).unwrap();
     let selectable = std::fs::read_to_string(selectable).unwrap();
     let paths = std::fs::read_to_string(paths).unwrap();
     assert!(selectable.contains("<text"));
@@ -89,7 +96,48 @@ fn selectable_and_path_text_outputs_use_the_configured_representation() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(feature = "png")]
+#[test]
+fn canvas_exposes_outlined_and_selectable_svg_publication() {
+    let data = scatter_data();
+    let directory = temp_dir("canvas-text-representation");
+    let selectable = directory.join("selectable.svg");
+    let paths = directory.join("paths.svg");
+    canvas(&data).svg(&paths).unwrap();
+    canvas(&data).svg_preserve_text(&selectable).unwrap();
+    let selectable = std::fs::read_to_string(selectable).unwrap();
+    let paths = std::fs::read_to_string(paths).unwrap();
+    assert!(selectable.contains("<text"));
+    assert!(!paths.contains("<text") && paths.contains("<path"));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn output_svg_operations_are_call_local_and_reuse_one_scene() {
+    let data = scatter_data();
+    let directory = temp_dir("output-text-representation");
+    let first_paths = directory.join("first-paths.svg");
+    let selectable = directory.join("selectable.svg");
+    let second_paths = directory.join("second-paths.svg");
+    let second_selectable = directory.join("second-selectable.svg");
+    plot(&data)
+        .svg(&first_paths)
+        .unwrap()
+        .svg_preserve_text(&selectable)
+        .unwrap()
+        .svg(&second_paths)
+        .unwrap()
+        .svg_preserve_text(&second_selectable)
+        .unwrap();
+
+    let first_paths = std::fs::read(first_paths).unwrap();
+    let selectable = std::fs::read(selectable).unwrap();
+    assert_eq!(first_paths, std::fs::read(second_paths).unwrap());
+    assert_eq!(selectable, std::fs::read(second_selectable).unwrap());
+    assert!(!String::from_utf8(first_paths).unwrap().contains("<text"));
+    assert!(String::from_utf8(selectable).unwrap().contains("<text"));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 #[test]
 fn plain_png_is_deterministic_300_dpi_publication_output() {
     let data = scatter_data();
@@ -104,7 +152,6 @@ fn plain_png_is_deterministic_300_dpi_publication_output() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn canvas_exposes_publication_preview_and_custom_png_entry_points() {
     let data = scatter_data();
@@ -136,7 +183,6 @@ fn canvas_exposes_publication_preview_and_custom_png_entry_points() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn png_options_reject_non_finite_zero_and_excessive_work_without_artifacts() {
     let data = scatter_data();
@@ -164,7 +210,6 @@ fn png_options_reject_non_finite_zero_and_excessive_work_without_artifacts() {
     }
 }
 
-#[cfg(feature = "png")]
 #[test]
 fn output_png_options_are_call_local_across_preview_custom_and_publication() {
     let data = scatter_data();
@@ -198,7 +243,6 @@ fn output_png_options_are_call_local_across_preview_custom_and_publication() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
-#[cfg(feature = "png")]
 fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
     assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
     (
@@ -207,7 +251,6 @@ fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
     )
 }
 
-#[cfg(feature = "png")]
 fn png_density(bytes: &[u8]) -> Option<(u32, u32, u8)> {
     let mut offset = 8;
     while offset + 12 <= bytes.len() {

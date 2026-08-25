@@ -37,7 +37,7 @@ fn render<K: lichtung_plot::kind::Marker>(
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
     let result = plot
-        .svg(&output)
+        .svg_preserve_text(&output)
         .and_then(|_| std::fs::read_to_string(&output).map_err(lichtung_plot::Error::Io));
     std::fs::remove_dir_all(directory).unwrap();
     result
@@ -357,7 +357,7 @@ fn embedded_raincloud_hues_coordinate_with_sample_series_in_shared_canvas_legend
         .legend_policy(CanvasLegendPolicy::Shared);
     let directory = unique_dir("raincloud-shared-legend");
     let output = directory.join("plot.svg");
-    canvas.svg(&output).unwrap();
+    canvas.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     assert_eq!(svg.matches("id=\"canvas-shared-legend\"").count(), 1);
     assert!(svg.contains(">Study arm</text>"));

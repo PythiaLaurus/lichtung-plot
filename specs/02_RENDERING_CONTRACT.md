@@ -188,20 +188,27 @@ does not select scientific tests or infer caller intent.
 
 ## Scene Lifecycle
 
-`Plot::svg`, `Plot::png`, `Plot::png_preview`, and
+`Plot::svg`, `Plot::svg_preserve_text`, `Plot::png`, `Plot::png_preview`, and
 `Plot::png_with_options`, together with their Canvas equivalents, perform one
 complete preflight and render one private immutable scene. The terminal call
 consumes the plot or canvas, publishes its requested file immediately, and
-returns an opaque `Output`. Consuming Output publication calls reuse that exact
-scene.
+returns an opaque `Output`. The equivalent consuming `Output` publication calls
+reuse that exact scene.
+
+On `Plot`, `Canvas`, and `Output`, both `svg` and `svg_preserve_text` are
+consuming, call-local, non-sticky terminal methods. Plain `svg` is the normal
+publication operation and converts all text to vector paths.
+`svg_preserve_text` publishes the canonical SVG with `<text>` elements intact. A
+chained call such as `plot.svg(a)?.svg_preserve_text(b)?` therefore publishes
+both forms from one scene.
 
 PNG options are call-local and non-sticky. Plain `png` publishes at 300 DPI with
 balanced compression. `png_preview` publishes at the canonical SVG source pixel
 dimensions with balanced compression and no physical-resolution metadata.
 `png_with_options` uses the exact caller-provided sizing and compression. A
 chained call such as `plot.png_preview(a)?.png(b)?` therefore publishes two
-independent rasterizations from one scene. There is no combined SVG-and-PNG
-terminal operation; callers chain `svg` and a PNG operation when they want both.
+independent rasterizations from one scene. There is no combined multi-format
+terminal operation; callers chain the required SVG and PNG operations.
 
 Every Canvas plot runs the same canonical plot-level validation as its
 standalone form before Canvas-only composition validation. Moving a plot into a
@@ -214,37 +221,40 @@ remain outside mark clipping where required.
 
 ## Output Formats
 
-SVG is always compiled. Callers select searchable text or `SvgText::Paths`
-before the first terminal output. The `text-as-path` feature enables conversion
-of every text element in the canonical scene to vector glyph paths through `resvg`. The
-derived SVG is self-contained but its text is no longer selectable, searchable,
-or available to assistive text extraction. The `png` feature includes this
-capability and enables rasterization of the canonical SVG through `resvg` and
-`tiny-skia`. PNG sizing validates positive, finite DPI or scale, positive
-dimensions, and bounded pixel work before allocation.
+Publication SVG, preserve-text SVG, and PNG are unconditional capabilities.
+Plain `svg` converts every text element in the canonical scene to vector glyph
+paths through `resvg` and verifies that no `<text>` elements remain. The derived
+SVG requires no recipient-side fonts, but its text is no longer selectable,
+searchable, editable, or available to assistive text extraction.
+`svg_preserve_text` publishes the canonical SVG with accessible, selectable,
+searchable, and editable `<text>` elements intact. PNG rasterizes the canonical
+SVG through `resvg` and `tiny-skia`. PNG sizing validates positive, finite DPI
+or scale, positive dimensions, and bounded pixel work before allocation.
 
-`png` is enabled by default; callers may disable default features for an
-SVG-only build. Lichtung's canonical SVG backend emits no raster image elements,
-so the `resvg` JPEG, GIF, and WebP decoders are excluded. The dedicated PNG
-encoder remains responsible for compression and physical-resolution metadata.
-PNG option types and PNG terminal methods are absent when the `png` feature is
-disabled.
+Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
+JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
+responsible for compression and physical-resolution metadata.
 
 There is no plot-level PDF output. Applications that need PDF must own that
 conversion or report workflow outside this crate.
 
 ## Font Policy
 
-SVG emits this ordered CSS system-font stack and embeds no font bytes:
+The canonical SVG emits this ordered CSS system-font stack and embeds no font
+bytes:
 
 ```text
 Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
 
-PNG scans platform font directories and selects the first installed preferred
-family. Rendering performs no download, provisioning, or cache lookup. The
-optional text-as-path conversion resolves this same stack from installed fonts
-and fails if no font is available or any text remains. SVG structure and
+Publication SVG outlining and PNG generation scan platform font directories and
+select the first installed preferred family. Rendering performs no download,
+provisioning, or cache lookup. Those operations resolve canonical text from the
+installed generation fonts and fail if no font is available; publication SVG
+also fails if any text remains after conversion. Its outlined text requires no
+font on the recipient's system, but exact glyph paths depend on the generation
+font environment. Preserve-text SVG remains accessible and editable, while its
+displayed text depends on fonts available to the viewer. SVG structure and
 geometry remain deterministic for identical inputs and options; exact glyph
 paths, glyph appearance, and PNG bytes require the same installed-font
 environment.
@@ -301,6 +311,6 @@ underlying filesystem supports ordinary same-directory rename semantics.
 ## Regression Evidence
 
 Renderer behavior is covered by unit and integration tests, deterministic SVG
-snapshots, exact byte/hash assertions where appropriate, PNG tests under the
-optional feature, and focused rendering invariants. A snapshot change is
-evidence to inspect, not an automatic approval of visual quality.
+snapshots, exact byte/hash assertions where appropriate, PNG tests, and focused
+rendering invariants. A snapshot change is evidence to inspect, not an automatic
+approval of visual quality.

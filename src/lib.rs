@@ -19,55 +19,6 @@
 //! use lichtung_plot::layout::Layout;
 //! ```
 
-#![cfg_attr(
-    not(feature = "png"),
-    doc = r#"
-## SVG-only builds
-
-PNG option types and terminal methods are absent without the `png` feature:
-
-```compile_fail
-use lichtung_plot::PngOptions;
-```
-
-```compile_fail
-use lichtung_plot::{NumericValues, Plot};
-let plot = Plot::scatter(
-    NumericValues::new("x", [1.0]),
-    NumericValues::new("y", [2.0]),
-);
-let _ = plot.png_options(());
-```
-
-```compile_fail
-use lichtung_plot::{NumericValues, Plot};
-let plot = Plot::scatter(
-    NumericValues::new("x", [1.0]),
-    NumericValues::new("y", [2.0]),
-);
-let _ = plot.png("plot.png");
-```
-
-```compile_fail
-use lichtung_plot::{Canvas, NumericValues, Plot};
-let plot = Plot::scatter(
-    NumericValues::new("x", [1.0]),
-    NumericValues::new("y", [2.0]),
-);
-let canvas = Canvas::grid(1, 1).unwrap().panel(0, 0, plot).unwrap();
-let _ = canvas.png("canvas.png");
-```
-
-```compile_fail
-use lichtung_plot::{NumericValues, Plot};
-let output = Plot::scatter(
-    NumericValues::new("x", [1.0]),
-    NumericValues::new("y", [2.0]),
-).svg("plot.svg").unwrap();
-let _ = output.png("plot.png");
-```
-"#
-)]
 #![deny(missing_docs)]
 
 mod builder;
@@ -107,7 +58,7 @@ pub use input::{AxisValues, HistogramInput, RaincloudInput};
 pub use labels::Labels;
 pub use layers::{BarPointLayer, GuideSpec, GuideStyle, PointLayer};
 pub use layout::AxisTick;
-pub use output::{Output, SvgText};
+pub use output::Output;
 pub use significance::{
     Attached, FacetCell, Pairwise, Significance, SignificanceMark, SignificanceTarget,
 };
@@ -121,7 +72,6 @@ pub use spec::{
     PlotKind, PointShape, QqLine, RawOverlay, RegressionBand, SignificanceMarkStyle,
     StandardDeviation, StandardError, TextWeight, ValueSort, WaterfallLabels,
 };
-#[cfg(feature = "png")]
 pub use spec::{PngCompression, PngOptions, PngSizing};
 pub use theme::Theme;
 pub use values::{BooleanValues, CategoryValues, NumericValues, SourceRows};

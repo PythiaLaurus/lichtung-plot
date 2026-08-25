@@ -12,13 +12,6 @@ use crate::Labels;
 use crate::{BooleanValues, Bounds, CategoryValues, EstimateStatus, Significance, SourceRows};
 
 impl<K: crate::kind::Marker> Plot<K> {
-    /// Configure selectable text or outlined text for SVG output.
-    #[must_use]
-    pub const fn svg_text(mut self, text: crate::SvgText) -> Self {
-        self.svg_text = text;
-        self
-    }
-
     /// Set original source-row identities aligned one-to-one with the chart data.
     #[must_use]
     pub fn source_rows(mut self, source_rows: SourceRows) -> Self

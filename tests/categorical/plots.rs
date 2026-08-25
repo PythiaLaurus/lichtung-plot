@@ -17,7 +17,9 @@ fn violin_auto_range_includes_kde_support_beyond_raw_counts() {
     let chart = Plot::violin(genotype, count)
         .labels(Labels::raw())
         .size(420, 300);
-    chart.svg(&out).expect("violin render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("violin render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let numeric_ticks: Vec<f64> = parse_text_elements(&svg)
         .into_iter()
@@ -47,7 +49,7 @@ fn bar_with_series_renders_grouped_bars_and_series_legend() {
     let chart = Plot::bar(group, BarInput::estimates(value)).series(series);
     chart
         .size(420, 300)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bar_count = parse_polygon_bounds(&svg).len();
@@ -93,7 +95,7 @@ fn horizontal_bar_with_series_renders_grouped_bars_and_series_legend() {
     let chart = Plot::horizontal_bar(group, BarInput::estimates(value)).series(series);
     chart
         .size(420, 300)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("horizontal bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bar_count = parse_polygon_bounds(&svg).len();
@@ -117,7 +119,9 @@ fn stacked_bar_sums_duplicate_category_series_rows() {
     let dir = unique_dir("stacked-bar-duplicate-sum");
     let out = dir.join("stacked_bar.svg");
     let chart = Plot::stacked_bar(group, value, series).size(360, 260);
-    chart.svg(&out).expect("stacked bar render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("stacked bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bars = parse_polygon_bounds(&svg);
 
@@ -143,7 +147,7 @@ fn categorical_plots_preserve_observed_order() {
     let out = dir.join("bar.svg");
     Plot::bar(species, BarInput::estimates(value))
         .size(320, 240)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
@@ -164,12 +168,12 @@ fn bar_order_is_plot_owned_and_value_sort_runs_after_mean_aggregation() {
     Plot::bar(categories.clone(), BarInput::samples(values.clone()))
         .category_order(CategoryOrder::explicit(["c", "a", "b"]))
         .size(320, 240)
-        .svg(&explicit_path)
+        .svg_preserve_text(&explicit_path)
         .unwrap();
     Plot::bar(categories, BarInput::samples(values))
         .category_order(ValueSort::Descending)
         .size(320, 240)
-        .svg(&sorted_path)
+        .svg_preserve_text(&sorted_path)
         .unwrap();
 
     let explicit = std::fs::read_to_string(explicit_path).unwrap();
@@ -204,7 +208,9 @@ fn positive_bars_preserve_zero_baseline() {
     let dir = unique_dir("bar-zero-baseline");
     let out = dir.join("bar.svg");
     let chart = Plot::bar(group, BarInput::estimates(value)).size(320, 240);
-    chart.svg(&out).expect("bar render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let panel = parse_first_clip_rect(&svg);
     let bar_bounds = parse_polygon_bounds(&svg);
@@ -229,7 +235,7 @@ fn boxplot_renders_fliers_by_default() {
     let out = dir.join("boxplot.svg");
     Plot::boxplot(group, value)
         .size(360, 260)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("boxplot render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let circles = parse_circles(&svg);
@@ -247,7 +253,7 @@ fn publication_frame_uses_axis_color_on_all_sides() {
     let out = dir.join("scatter.svg");
     Plot::scatter(x, y)
         .size(320, 240)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("scatter render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
@@ -268,7 +274,7 @@ fn violin_draws_inner_whisker_mark() {
     let out = dir.join("violin.svg");
     Plot::violin(group, value)
         .size(360, 260)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("violin render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
@@ -291,7 +297,7 @@ fn violin_body_does_not_touch_frame_edges() {
     let out = dir.join("violin.svg");
     Plot::violin(group, value)
         .size(360, 260)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("violin render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 

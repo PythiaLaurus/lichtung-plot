@@ -1,7 +1,6 @@
 //! Call-local PNG publication options.
 
 /// CSS pixel density used by SVG renderers.
-#[cfg(feature = "png")]
 pub(crate) const SVG_CSS_DPI: f32 = 96.0;
 
 /// PNG export options for rasterizing the canonical SVG scene.

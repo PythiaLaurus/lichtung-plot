@@ -10,19 +10,14 @@ readme = "README.md"
 publish = false
 autotests = false
 
-[features]
-default = ["png"]
-text-as-path = ["dep:resvg"]
-png = ["text-as-path", "dep:png"]
-
 [dependencies]
 statrs = "0.18"
 thiserror = "2"
 unicode-segmentation = "1.13"
 # Lichtung SVGs contain no raster images, so resvg's JPEG, GIF, and WebP
 # decoders are deliberately disabled.
-png = { version = "0.18", optional = true }
-resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"], optional = true }
+png = "0.18"
+resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 
 [dev-dependencies]
 insta = "1.48"

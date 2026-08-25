@@ -12,7 +12,7 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     ));
     std::fs::create_dir_all(&directory).unwrap();
     let output = directory.join("plot.svg");
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg
@@ -160,7 +160,7 @@ fn composed_canvas_label_policy_is_inherited_by_every_panel() {
     std::fs::create_dir_all(&directory).unwrap();
     let output = directory.join("canvas.svg");
 
-    canvas.svg(&output).unwrap();
+    canvas.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
 

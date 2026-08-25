@@ -84,7 +84,6 @@ pub(super) fn tempdir() -> std::path::PathBuf {
     dir
 }
 
-#[cfg(feature = "png")]
 pub(super) fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
     assert!(bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]));
     let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
@@ -92,7 +91,6 @@ pub(super) fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
     (width, height)
 }
 
-#[cfg(feature = "png")]
 pub(super) fn png_phys(bytes: &[u8]) -> Option<(u32, u32, u8)> {
     let mut index = 8;
     while index + 12 <= bytes.len() {
@@ -138,7 +136,7 @@ pub(super) struct SvgRect {
 }
 
 #[derive(Debug)]
-pub(super) struct SvgText {
+pub(super) struct SvgTextElement {
     pub(super) x: f64,
     pub(super) y: f64,
     pub(super) font_size: f64,
@@ -227,13 +225,13 @@ pub(super) fn parse_svg_attr(tag: &str, attr: &str) -> f64 {
     value.parse().expect("svg attr is numeric")
 }
 
-pub(super) fn parse_text_elements(svg: &str) -> Vec<SvgText> {
+pub(super) fn parse_text_elements(svg: &str) -> Vec<SvgTextElement> {
     svg.split("<text ")
         .skip(1)
         .filter_map(|segment| {
             let (attrs, rest) = segment.split_once('>')?;
             let (content, _) = rest.split_once("</text>")?;
-            Some(SvgText {
+            Some(SvgTextElement {
                 x: parse_svg_attr(attrs, "x"),
                 y: parse_svg_attr(attrs, "y"),
                 font_size: parse_svg_attr(attrs, "font-size"),
@@ -243,18 +241,18 @@ pub(super) fn parse_text_elements(svg: &str) -> Vec<SvgText> {
         .collect()
 }
 
-pub(super) fn numeric_text_values<'a>(text: impl Iterator<Item = &'a SvgText>) -> Vec<f64> {
+pub(super) fn numeric_text_values<'a>(text: impl Iterator<Item = &'a SvgTextElement>) -> Vec<f64> {
     text.filter_map(|entry| entry.content.parse::<f64>().ok())
         .collect()
 }
 
-pub(super) fn text_element<'a>(text: &'a [SvgText], content: &str) -> &'a SvgText {
+pub(super) fn text_element<'a>(text: &'a [SvgTextElement], content: &str) -> &'a SvgTextElement {
     text.iter()
         .find(|entry| entry.content == content)
         .unwrap_or_else(|| panic!("text element {content:?} should exist"))
 }
 
-pub(super) fn text_y(text: &[SvgText], content: &str) -> f64 {
+pub(super) fn text_y(text: &[SvgTextElement], content: &str) -> f64 {
     text_element(text, content).y
 }
 
@@ -268,7 +266,9 @@ pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
         .series(series)
         .spacing(spacing)
         .size(360, 260);
-    chart.svg(&out).expect("bar render must succeed");
+    chart
+        .svg_preserve_text(&out)
+        .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let mut bars = parse_polygon_bounds(&svg);
     bars.sort_by(|a, b| a.x.total_cmp(&b.x));

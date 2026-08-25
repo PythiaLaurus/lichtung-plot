@@ -95,7 +95,7 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
         let chart = chart.title(format!("{name} title"));
         let dir = test_directory(name);
         let output = dir.join("canvas.svg");
-        chart.svg(&output).unwrap();
+        chart.svg_preserve_text(&output).unwrap();
         let svg = std::fs::read_to_string(&output).unwrap();
         assert_eq!(
             svg.matches("<clipPath id=").count(),
@@ -163,7 +163,7 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     let dir = test_directory("mass-label-explicit-limits");
     let output = dir.join("canvas.svg");
 
-    chart.svg(&output).unwrap();
+    chart.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
 
     assert!(!svg.contains(">-0.1</text>"));
@@ -183,7 +183,7 @@ fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
     let dir = test_directory("waterfall-label-explicit-limits");
     let output = dir.join("canvas.svg");
 
-    chart.svg(&output).unwrap();
+    chart.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
 
     assert!(!svg.contains(">base 10.000</text>"));

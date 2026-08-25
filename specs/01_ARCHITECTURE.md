@@ -42,10 +42,14 @@ caller-owned data or analysis result
 owned native value construction
         |
         v
-Plot / Canvas -> preflight -> private canonical scene -> SVG or optional PNG
-                                                   |
-                                                   v
-                                             opaque Output
+Plot / Canvas -> preflight -> private canonical scene
+                                      |
+                                      +-> publication SVG
+                                      +-> preserve-text SVG
+                                      +-> PNG
+                                      |
+                                      v
+                                opaque Output
 ```
 
 The renderer never calls back into an application and never computes a
@@ -83,14 +87,15 @@ display values.
   storage boundary.
 - `Error` owns the renderer's I/O, data, and rendering failure domains.
 - `Output` privately owns one rendered scene and can publish additional formats
-  without rerunning layout. PNG publication options belong to each terminal
-  call; plots, canvases, and outputs do not retain sticky PNG configuration.
+  without rerunning layout. The SVG publication form and PNG publication options
+  are local to each terminal call; plots, canvases, and outputs do not retain
+  sticky output configuration.
 - Backends, rendered scenes, resolved palettes, projections, axes, frames,
   grids, and renderer-facing layout values are private implementation details.
   `AxisTick` remains one root-level caller input for exact labeled numeric tick
   positions; it is not a public layout extension point.
-- Built-in SVG, optional text outlining, and optional PNG output remain
-  first-party implementations.
+- Built-in publication SVG with text outlining, preserve-text SVG, and PNG
+  output are unconditional first-party implementations.
 
 ## Validation Boundary
 

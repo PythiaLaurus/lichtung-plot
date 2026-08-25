@@ -11,7 +11,7 @@ fn scatter_smoke_snapshot() {
     let out = dir.join("scatter.svg");
     Plot::scatter(x, y)
         .size(320, 240)
-        .svg(&out)
+        .svg_preserve_text(&out)
         .expect("render must succeed");
     let bytes = std::fs::read(&out).expect("file must exist");
     insta::assert_snapshot!(normalize_embedded_font(&String::from_utf8_lossy(&bytes)));
@@ -29,7 +29,7 @@ fn matrix_clip_structure_snapshot() {
         .hue(group)
         .title("Matrix structural title");
 
-    chart.size(360, 280).svg(&out).unwrap();
+    chart.size(360, 280).svg_preserve_text(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
 
     insta::assert_snapshot!(specialized_svg_structure(
@@ -47,7 +47,7 @@ fn beeswarm_clip_structure_snapshot() {
     let out = dir.join("beeswarm-structure.svg");
     let chart = Plot::beeswarm(category, value, color).title("Beeswarm structural title");
 
-    chart.size(360, 280).svg(&out).unwrap();
+    chart.size(360, 280).svg_preserve_text(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
 
     insta::assert_snapshot!(specialized_svg_structure(
@@ -67,7 +67,7 @@ fn horizontal_bar_clip_structure_snapshot() {
         .title("Horizontal structural title")
         .size(360, 280);
 
-    chart.svg(&out).unwrap();
+    chart.svg_preserve_text(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
 
     insta::assert_snapshot!(specialized_svg_structure(
@@ -89,7 +89,7 @@ fn marginal_clip_structure_snapshot() {
         .title("Marginal structural title")
         .size(360, 280);
 
-    chart.svg(&out).unwrap();
+    chart.svg_preserve_text(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
 
     insta::assert_snapshot!(specialized_svg_structure(

@@ -48,6 +48,7 @@ and commit each phase as one logical change before starting the next phase.
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | COMPLETE |
 | 10 | Replace dataframe-shaped test shims with native values | R7 | COMPLETE |
 | 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | COMPLETE |
+| 12 | Make outlined SVG, preserve-text SVG, and PNG unconditional | R8 | COMPLETE |
 
 Issues 8, 9, and 11 were resolved in the canonical contracts before their
 implementation phases were admitted here.
@@ -139,9 +140,9 @@ Commit: `feat(api)!: enforce exact-family erasure`
 
 **Status**: COMPLETE
 
-Verification: default and SVG-only checks, clippy, focused output and atomic
-publication tests, PNG compression mapping, migrated heatmap coverage, doctests,
-documentation, and `just verify` passed on 2026-08-25.
+Verification: focused output and atomic publication tests, PNG compression
+mapping, migrated heatmap coverage, clippy, doctests, documentation, and
+`just verify` passed on 2026-08-25.
 
 Move PNG configuration from inert plot state to explicit publication calls and
 remove duplicate public identities.
@@ -165,8 +166,8 @@ Scope:
   `plot.svg(svg_path)?.png(png_path)`.
 - Remove pair-publication code and tests that have no remaining consumer while
   retaining atomic publication for each individual output call.
-- Feature-gate PNG option types and their root exports together with PNG
-  terminal operations.
+- Keep PNG option types and their root exports aligned with PNG terminal
+  operations. Phase R8 makes that complete publication surface unconditional.
 
 Acceptance:
 
@@ -180,12 +181,10 @@ Acceptance:
   compression, and writes no physical-resolution metadata.
 - One `Output` can publish preview, publication, and custom PNGs from the same
   scene without one call's options affecting another.
-- SVG-only builds expose no PNG option type, builder, terminal method, or stored
-  PNG configuration.
+- No plot, canvas, or output retains stored PNG configuration.
 - No combined SVG-and-PNG public operation or transactional pair-publication
   implementation remains.
-- Focused output tests pass in both the no-default-features and default-feature
-  configurations.
+- Focused output tests pass for the crate's supported build configuration.
 - `just verify` passes.
 
 Commit: `feat(api)!: move png options to publication`
@@ -194,9 +193,8 @@ Commit: `feat(api)!: move png options to publication`
 
 **Status**: COMPLETE
 
-Verification: SVG-only and default checks and clippy, focused histogram,
-geometry, distribution, and facet tests, doctests, and `just verify` passed on
-2026-08-25.
+Verification: focused checks and clippy, histogram, geometry, distribution, and
+facet tests, doctests, and `just verify` passed on 2026-08-25.
 
 Use one named public point representation for caller-computed histogram KDE
 geometry.
@@ -230,10 +228,9 @@ Commit: `refactor(api)!: unify histogram kde points`
 
 **Status**: COMPLETE
 
-Verification: SVG-only and default checks and clippy, focused line,
-layout/legend, composition, rendering, lifecycle, clipping, and data-contract
-tests, doctests in both feature modes, documentation, and `just verify` passed on
-2026-08-25.
+Verification: focused checks and clippy, focused line, layout/legend,
+composition, rendering, lifecycle, clipping, and data-contract tests, doctests,
+documentation, and `just verify` passed on 2026-08-25.
 
 Make supplemental ordinary-line points concise by default while preserving
 selective identity, annotation, and visual control.
@@ -310,9 +307,9 @@ Commit: `docs(api): clarify numeric label formatting`
 
 **Status**: COMPLETE
 
-Verification: native-value unit and integration tests in SVG-only and PNG modes,
-full-tree retired-shim searches, unchanged snapshots, exact-family validation
-fixtures, final static audits, and `just verify` passed on 2026-08-25.
+Verification: native-value unit and integration tests, full-tree retired-shim
+searches, unchanged snapshots, exact-family validation fixtures, final static
+audits, and `just verify` passed on 2026-08-25.
 
 Remove test-only dataframe emulation so tests exercise the standalone
 renderer boundary directly.
@@ -359,17 +356,64 @@ Acceptance:
 Commits: `test(api): replace dataframe shims with native values` and
 `test(api): remove generic validation fixtures`
 
+## Phase R8: Unconditional Publication Formats
+
+**Status**: COMPLETE
+
+Verification: focused output and visual-regression suites, doctests, full-tree
+retired-surface searches, unchanged snapshots, and `just verify` passed on
+2026-08-25.
+
+Make the complete publication surface unconditional and make self-contained
+outlined SVG the normal publication operation.
+
+Scope:
+
+- Delete the crate-owned `png` and `text-as-path` Cargo features and all
+  corresponding conditional compilation. Keep `png` and `resvg` as
+  unconditional first-party dependencies.
+- Delete `SvgText`, `.svg_text(...)`, stored SVG text mode, and private accessors
+  for that state without retaining aliases or compatibility paths.
+- Make `svg(path)` on `Plot`, `Canvas`, and `Output` convert canonical text to
+  vector paths using installed generation-host fonts.
+- Add call-local `svg_preserve_text(path)` methods on the same three public
+  owners for canonical SVG with `<text>` elements intact.
+- Keep PNG methods and option types unconditional and keep all SVG and PNG
+  publication operations independently chainable on one rendered scene.
+- Migrate canonical SVG assertions and snapshots to `svg_preserve_text` while
+  retaining focused coverage that ordinary `svg` contains paths and no text.
+- Update the canonical contracts, user documentation, examples, test matrix,
+  and retired-surface searches for the single supported build configuration.
+
+Acceptance:
+
+- `Cargo.toml` defines no crate-owned feature table, and source and tests contain
+  no conditional compilation for removed output features.
+- `SvgText`, `.svg_text(...)`, and stored SVG text mode are absent from the
+  public and private implementation surface.
+- Plain `svg` publishes outlined text; `svg_preserve_text` publishes selectable
+  canonical text; both are call-local on `Plot`, `Canvas`, and `Output`.
+- PNG types and terminal methods are always compiled and preserve publication,
+  preview, custom-option, safety-limit, and atomic-write behavior.
+- Existing deterministic snapshots remain unchanged because canonical SVG
+  regression paths explicitly request preserve-text publication.
+- Focused output tests and full retired-surface searches pass.
+- `just verify` passes.
+
+Commit: `feat(output)!: make publication formats unconditional`
+
 ## Final Completion
 
 **Status**: COMPLETE
 
 Verification: independent phase audits found no remaining contract gaps,
-repository searches found no retired implementation surface, and `just verify`
-passed from the completed worktree on 2026-08-25.
+repository searches found no retired implementation surface or output feature
+gates, snapshots remained unchanged, and `just verify` passed from the completed
+worktree on 2026-08-25.
 
 The currently authorized remediation is complete only when:
 
-- Phases R1 through R7 are `COMPLETE` with commit and verification evidence.
+- Phases R1 through R8 are `COMPLETE` with commit and verification evidence.
 - Repository searches find no retired API names, report strings, compatibility
   aliases, tuple KDE representation, or dataframe-shaped test shims.
 - Public-path compile-fail tests enforce private modules and exact-family

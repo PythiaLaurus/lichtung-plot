@@ -17,13 +17,13 @@ fn vertical_and_horizontal_significance_use_category_series_targets() {
     Plot::bar(category.clone(), BarInput::estimates(value.clone()))
         .series(hue.clone())
         .significance([comparison.clone()])
-        .svg(&vertical_path)
+        .svg_preserve_text(&vertical_path)
         .unwrap();
 
     Plot::horizontal_bar(category, BarInput::estimates(value))
         .series(hue)
         .significance([comparison])
-        .svg(&horizontal_path)
+        .svg_preserve_text(&horizontal_path)
         .unwrap();
 
     assert_eq!(

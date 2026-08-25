@@ -11,7 +11,6 @@ use super::backend::{
     Point2D, PointStyle, SignificanceBracket, TextAnchor, TextStyle,
 };
 use crate::layout::PanelBox;
-#[cfg(feature = "png")]
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use crate::theme::rgb_to_hex;
 use crate::PointShape;
@@ -98,7 +97,6 @@ enum GroupState {
 }
 
 /// Convert canonical SVG scene text to vector paths using installed fonts.
-#[cfg(feature = "text-as-path")]
 pub(crate) fn convert_svg_text_to_paths(
     svg_data: &[u8],
     width_css_px: u32,
@@ -125,7 +123,6 @@ pub(crate) fn convert_svg_text_to_paths(
 }
 
 /// Rasterize canonical SVG scene bytes to PNG bytes with explicit export options.
-#[cfg(feature = "png")]
 pub(crate) fn rasterize_svg_bytes_to_png(
     svg_data: &[u8],
     width_css_px: u32,
@@ -155,7 +152,6 @@ pub(crate) fn rasterize_svg_bytes_to_png(
     encode_png(pixmap, png_options)
 }
 
-#[cfg(feature = "png")]
 fn validate_png_options(options: &PngOptions) -> Result<(), Error> {
     match options.sizing {
         PngSizing::Source => Ok(()),
@@ -166,7 +162,6 @@ fn validate_png_options(options: &PngOptions) -> Result<(), Error> {
     }
 }
 
-#[cfg(feature = "png")]
 fn ensure_positive_finite(value: f64, label: &str) -> Result<(), Error> {
     if value.is_finite() && value > 0.0 {
         Ok(())
@@ -177,7 +172,6 @@ fn ensure_positive_finite(value: f64, label: &str) -> Result<(), Error> {
     }
 }
 
-#[cfg(feature = "png")]
 fn ensure_positive_dimension(value: u32, label: &str) -> Result<(), Error> {
     if value > 0 {
         Ok(())
@@ -186,7 +180,6 @@ fn ensure_positive_dimension(value: u32, label: &str) -> Result<(), Error> {
     }
 }
 
-#[cfg(feature = "png")]
 fn png_target_size(
     source_size: resvg::tiny_skia::IntSize,
     sizing: PngSizing,
@@ -207,7 +200,6 @@ fn png_target_size(
     Ok(size)
 }
 
-#[cfg(feature = "png")]
 fn validate_png_target_for_source(
     source_width: u32,
     source_height: u32,
@@ -237,7 +229,6 @@ fn validate_png_target_for_source(
     crate::scene::validate_png_target_dimensions(target_width, target_height)
 }
 
-#[cfg(feature = "png")]
 fn png_transform(
     source_size: resvg::tiny_skia::IntSize,
     target_size: resvg::tiny_skia::IntSize,
@@ -250,7 +241,6 @@ fn png_transform(
     )
 }
 
-#[cfg(feature = "png")]
 fn encode_png(pixmap: resvg::tiny_skia::Pixmap, options: &PngOptions) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
     {
@@ -279,7 +269,6 @@ fn encode_png(pixmap: resvg::tiny_skia::Pixmap, options: &PngOptions) -> Result<
     Ok(bytes)
 }
 
-#[cfg(feature = "png")]
 fn map_png_compression(compression: PngCompression) -> png::Compression {
     match compression {
         PngCompression::None => png::Compression::NoCompression,
@@ -289,7 +278,6 @@ fn map_png_compression(compression: PngCompression) -> png::Compression {
     }
 }
 
-#[cfg(feature = "png")]
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -772,7 +760,16 @@ impl Backend for SvgBackend {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "png")]
+    #[test]
+    fn text_outlining_preserves_glyph_geometry() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40"><text x="8" y="28" font-family="sans-serif" font-size="20">Visible</text></svg>"#;
+        let outlined = convert_svg_text_to_paths(svg, 120, 40).unwrap();
+        let outlined = String::from_utf8(outlined).unwrap();
+
+        assert!(!outlined.contains("<text"));
+        assert!(outlined.contains("<path"));
+    }
+
     #[test]
     fn png_compression_presets_keep_their_encoder_mappings() {
         assert_eq!(

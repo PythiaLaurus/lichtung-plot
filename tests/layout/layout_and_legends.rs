@@ -3,7 +3,7 @@ use super::*;
 fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

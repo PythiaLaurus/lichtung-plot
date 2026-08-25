@@ -7,7 +7,7 @@ pub const DEFAULT_FONT_FAMILY: &str = "Noto Sans";
 pub const DEFAULT_FONT_FAMILY_STACK: &str =
     "Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif";
 
-/// Ordered concrete families considered when configuring PNG text rendering.
+/// Ordered concrete families considered for outlined SVG and PNG text rendering.
 pub const SYSTEM_FONT_FAMILIES: &[&str] = &[
     "Noto Sans",
     "Noto Sans CJK SC",
@@ -16,7 +16,6 @@ pub const SYSTEM_FONT_FAMILIES: &[&str] = &[
     "Arial",
 ];
 
-#[cfg(feature = "text-as-path")]
 pub(crate) fn configure_system_fonts(
     database: &mut resvg::usvg::fontdb::Database,
 ) -> crate::Result<()> {
@@ -25,7 +24,7 @@ pub(crate) fn configure_system_fonts(
     database.load_system_fonts();
     if database.is_empty() {
         return Err(crate::Error::Render(
-            "no system fonts were found for PNG text rendering".into(),
+            "no system fonts were found for publication rendering".into(),
         ));
     }
 

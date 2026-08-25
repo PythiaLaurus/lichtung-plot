@@ -46,7 +46,7 @@ fn identity_interval_plot(data: &IntervalData, horizontal: bool) -> Plot {
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("plot.svg");
-    plot.svg(&output).unwrap();
+    plot.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg
@@ -318,7 +318,7 @@ fn all_text_canvas_renders_one_svg_document() {
 fn svg_canvas(canvas: Canvas, name: &str) -> String {
     let directory = unique_dir(name);
     let output = directory.join("canvas.svg");
-    canvas.svg(&output).unwrap();
+    canvas.svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     svg

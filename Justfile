@@ -8,37 +8,25 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
-# Check the minimal SVG-only build.
+# Check every target.
 check:
-    cargo check --locked --offline --all-targets --no-default-features
-
-# Check the default SVG and PNG build.
-check-png:
     cargo check --locked --offline --all-targets
 
-# Lint the minimal SVG-only build.
+# Lint every target.
 lint:
-    cargo clippy --locked --offline --all-targets --no-default-features -- -D warnings
-
-# Lint the default SVG and PNG build.
-lint-png:
     cargo clippy --locked --offline --all-targets -- -D warnings
 
-# Run the minimal SVG-only test suite.
+# Run the complete test suite.
 test:
-    cargo test --locked --offline --all-targets --no-default-features
-
-# Run the default SVG and PNG test suite.
-test-png:
     cargo test --locked --offline --all-targets
 
 # Build API documentation with warnings denied.
 docs:
-    RUSTDOCFLAGS="-D warnings" cargo doc --locked --offline --all-features --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --offline --no-deps
 
 # Verify the distributable package from Cargo's unpacked staging directory.
 package:
     cargo package --locked --offline --allow-dirty
 
 # Run the complete read-only repository verification.
-verify: fmt-check check check-png lint lint-png test test-png docs package
+verify: fmt-check check lint test docs package

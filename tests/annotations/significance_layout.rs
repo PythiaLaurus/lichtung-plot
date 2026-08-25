@@ -46,10 +46,10 @@ fn rendered_brackets_stay_inside_axes_clear_data_and_share_only_disjoint_levels(
     let annotated = identity_bar_chart(&data)
         .size(500, 360)
         .significance(comparisons);
-    annotated.svg(&annotated_path).unwrap();
+    annotated.svg_preserve_text(&annotated_path).unwrap();
 
     let plain = identity_bar_chart(&data).size(500, 360);
-    plain.svg(&plain_path).unwrap();
+    plain.svg_preserve_text(&plain_path).unwrap();
 
     let annotated_svg = std::fs::read_to_string(annotated_path).unwrap();
     let plain_svg = std::fs::read_to_string(plain_path).unwrap();
@@ -92,7 +92,7 @@ fn stacked_bar_renders_non_significant_pairwise_bracket() {
         .significance([comparison("a", "b", 0.05)])
         .size(420, 300);
 
-    chart.svg(&path).unwrap();
+    chart.svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
 
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
@@ -110,7 +110,7 @@ fn boxplot_bracket_clears_high_outlier_geometry() {
         .significance([comparison("a", "b", 0.01)])
         .size(420, 300);
 
-    chart.svg(&path).unwrap();
+    chart.svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
     let bracket_y = bracket_line_y_values(&svg)[0];
     let outlier_top = circle_top(&svg);
@@ -131,7 +131,7 @@ fn violin_bracket_clears_rendered_kde_support() {
         .significance([comparison("a", "b", 0.01)])
         .size(420, 300);
 
-    chart.svg(&path).unwrap();
+    chart.svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
     let bracket_y = bracket_line_y_values(&svg)[0];
     let support_top = polygon_top(&svg);
@@ -204,7 +204,7 @@ fn auto_bar_legend_keeps_top_right_beside_tall_uncompared_category() {
         .significance([comparison("a", "b", 0.01)])
         .size(460, 320);
 
-    chart.svg(&path).unwrap();
+    chart.svg_preserve_text(&path).unwrap();
     let svg = std::fs::read_to_string(path).unwrap();
     let (legend_x, _, _, _) = legend_rect(&svg);
 
@@ -447,7 +447,7 @@ fn explicit_y_limits_succeed_when_sufficient_and_error_when_insufficient() {
         .y_limits(0.0, 10.0)
         .significance([comparison.clone()])
         .size(420, 300);
-    sufficient.svg(&sufficient_path).unwrap();
+    sufficient.svg_preserve_text(&sufficient_path).unwrap();
     let sufficient_svg = std::fs::read_to_string(sufficient_path).unwrap();
     assert!(sufficient_svg.contains("class=\"significance-bracket\""));
     assert!(sufficient_svg.contains(">10</text>"));
@@ -552,7 +552,7 @@ fn render_grouped_bar_with_legend(
     if with_comparison {
         chart = chart.significance([comparison("a", "b", 0.01)]);
     }
-    chart.svg(&path).unwrap();
+    chart.svg_preserve_text(&path).unwrap();
     std::fs::read_to_string(path).unwrap()
 }
 
@@ -567,7 +567,7 @@ fn render_grouped_horizontal_bar_with_legend(policy: Option<LegendPolicy>, name:
     chart
         .significance([comparison("a", "b", 0.01)])
         .size(460, 320)
-        .svg(&path)
+        .svg_preserve_text(&path)
         .unwrap();
     std::fs::read_to_string(path).unwrap()
 }

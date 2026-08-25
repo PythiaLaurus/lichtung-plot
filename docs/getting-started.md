@@ -1,8 +1,9 @@
 # Getting Started
 
-`lichtung-plot` renders owned immutable display values. SVG support is always
-available; enable `png` only when raster output is needed. Callers convert
-external data containers into the renderer's native values at their boundary.
+`lichtung-plot` renders owned immutable display values. Publication SVG,
+preserve-text SVG, and PNG output are unconditional crate capabilities. Callers
+convert external data containers into the renderer's native values at their
+boundary.
 
 ```toml
 [dependencies]
@@ -28,8 +29,26 @@ Plot::scatter(
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
+`.svg(path)` is the normal publication method and converts all text to vector
+paths. When an accessible, selectable, searchable, and editable SVG is also
+needed, chain the call-local `.svg_preserve_text(path)` method on the returned
+`Output`; both files reuse one rendered scene:
+
+```rust
+use lichtung_plot::{NumericValues, Plot};
+
+Plot::scatter(
+    NumericValues::new("x", [1.0, 2.0, 3.0]),
+    NumericValues::new("y", [1.5, 2.5, 2.0]),
+)
+    .svg("response.svg")?
+    .svg_preserve_text("response-editable.svg")?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
 No runtime initialization or asset provisioning is required. The destination
-parent must already exist.
+parent must already exist. Outlined SVG and PNG generation use installed system
+fonts.
 
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from

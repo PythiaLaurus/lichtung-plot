@@ -1,26 +1,40 @@
 # Output Contracts
 
-## SVG
+## Publication SVG
 
-SVG is always available and is rendered from one private canonical scene. Output contains a stable
-system-font fallback declaration, vector geometry, deterministic clip and
-gradient identifiers, and no embedded font data. A consuming `Output::svg` call
-can publish the same scene again without rerunning layout.
+`.svg(path)` is the normal publication method. It converts every text element in
+the private canonical scene to vector glyph paths using installed system fonts
+and verifies that no `<text>` elements remain. The result requires no fonts on
+the recipient's system, but it is not selectable, searchable, or available to
+assistive text extraction, and its exact paths depend on the generation font
+environment.
 
-## Outlined SVG
+## Preserve-Text SVG
 
-The `text-as-path` feature enables `.svg_text(SvgText::Paths)` before terminal
-output. It converts the canonical scene's text to vector glyph paths using
-installed system fonts and verifies that no `<text>` elements remain. This
-output is not selectable or searchable and can differ across font environments.
+`.svg_preserve_text(path)` publishes the canonical SVG with its `<text>`
+elements and ordered system-font fallback declaration intact. It embeds no font
+data and remains accessible, selectable, searchable, and editable; its displayed
+text depends on fonts available to the viewer.
+
+Both methods are call-local consuming terminal operations on `Plot`, `Canvas`,
+and `Output`. No SVG text mode is retained, so one rendered scene can publish
+both forms without rerunning layout:
+
+```rust
+use lichtung_plot::{NumericValues, Plot};
+
+fn publish_svg() -> Result<(), lichtung_plot::Error> {
+    Plot::scatter(
+        NumericValues::new("x", [1.0]),
+        NumericValues::new("y", [2.0]),
+    )
+    .svg("publication.svg")?
+    .svg_preserve_text("editable.svg")?;
+    Ok(())
+}
+```
 
 ## PNG
-
-PNG requires the `png` feature, which includes text outlining:
-
-```toml
-lichtung-plot = { path = "../lichtung-plot", features = ["png"] }
-```
 
 PNG is rasterized from the canonical SVG scene. `.png(path)` publishes at 300
 DPI with balanced compression, scaling canonical CSS pixels from 96 DPI and
@@ -54,13 +68,19 @@ fn publish() -> Result<(), lichtung_plot::Error> {
 }
 ```
 
-Callers that need SVG and PNG output chain independent same-scene publication,
-for example `.svg("plot.svg")?.png_preview("plot.png")`.
+Callers chain any needed formats as independent same-scene publications, for
+example:
 
-PNG text requires at least one installed system font. The preferred order is
-Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, then Arial. If none
-is present, any discovered system family is used; an empty font database is a
-render error.
+```rust,ignore
+.svg("plot.svg")?
+.svg_preserve_text("plot-editable.svg")?
+.png_preview("plot.png")
+```
+
+Outlined SVG and PNG generation require at least one installed system font. The
+preferred order is Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans,
+then Arial. If none is present, any discovered system family is used; an empty
+font database is a render error.
 
 ## Determinism
 

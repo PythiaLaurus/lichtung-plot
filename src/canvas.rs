@@ -14,7 +14,7 @@ use crate::render::backend::{with_layer, Backend};
 use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
-use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, SvgText, Theme};
+use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 
 struct CanvasPanelPreflight {
     index: usize,
@@ -166,7 +166,6 @@ pub struct Canvas {
     row_headers: Vec<CanvasHeader>,
     row_titles: Vec<CanvasHeader>,
     x_range_groups: Vec<Vec<usize>>,
-    svg_text: SvgText,
 }
 
 impl Canvas {
@@ -198,7 +197,6 @@ impl Canvas {
             row_headers: Vec::new(),
             row_titles: Vec::new(),
             x_range_groups: Vec::new(),
-            svg_text: SvgText::default(),
         })
     }
 
@@ -389,13 +387,6 @@ impl Canvas {
         self
     }
 
-    /// Configure selectable text or outlined text for SVG output.
-    #[must_use]
-    pub const fn svg_text(mut self, text: SvgText) -> Self {
-        self.svg_text = text;
-        self
-    }
-
     fn render_preflighted(
         &self,
         preflight: CanvasPreflight,
@@ -438,34 +429,37 @@ impl Canvas {
         ))
     }
 
-    /// Render once, publish SVG immediately, and return an opaque reusable output.
+    /// Render once, publish an outlined SVG, and return a reusable output.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let output = Output::new(self.render_scene()?, self.svg_text);
+        let output = Output::new(self.render_scene()?);
         output.svg(path)
     }
 
+    /// Render once, publish SVG with selectable text, and return a reusable output.
+    pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+        let output = Output::new(self.render_scene()?);
+        output.svg_preserve_text(path)
+    }
+
     /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
-    #[cfg(feature = "png")]
     pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let output = Output::new(self.render_scene()?, self.svg_text);
+        let output = Output::new(self.render_scene()?);
         output.png(path)
     }
 
     /// Render once, publish a balanced source-sized PNG without density metadata.
-    #[cfg(feature = "png")]
     pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let output = Output::new(self.render_scene()?, self.svg_text);
+        let output = Output::new(self.render_scene()?);
         output.png_preview(path)
     }
 
     /// Render once and publish a PNG using the exact caller-provided options.
-    #[cfg(feature = "png")]
     pub fn png_with_options(
         self,
         path: impl AsRef<Path>,
         options: crate::PngOptions,
     ) -> Result<Output, Error> {
-        let output = Output::new(self.render_scene()?, self.svg_text);
+        let output = Output::new(self.render_scene()?);
         output.png_with_options(path, options)
     }
 

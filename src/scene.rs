@@ -2,19 +2,11 @@
 
 use std::fmt;
 
-#[cfg(feature = "text-as-path")]
-use crate::Error;
+use crate::{Error, PngOptions};
 
-#[cfg(feature = "png")]
-use crate::PngOptions;
-
-#[cfg(feature = "png")]
 const MAX_EXPORT_DIMENSION: u32 = 32_768;
-#[cfg(feature = "png")]
 const MAX_EXPORT_PIXELS: u64 = 100_000_000;
-#[cfg(feature = "png")]
 const MAX_EXPORT_PIXELS_F64: f64 = 100_000_000.0;
-#[cfg(feature = "png")]
 const MAX_CONVERSION_SCENE_BYTES: usize = 64 * 1024 * 1024;
 
 /// One internal fully rendered SVG scene shared by terminal outputs.
@@ -61,7 +53,6 @@ impl RenderedScene {
     /// Returns an error when no system font is available, the canonical SVG
     /// cannot be parsed, its dimensions change, or any text remains after
     /// conversion.
-    #[cfg(feature = "text-as-path")]
     pub(crate) fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
         crate::render::svg_backend::convert_svg_text_to_paths(
             &self.svg,
@@ -76,7 +67,6 @@ impl RenderedScene {
     ///
     /// Returns an error for invalid or excessive sizing, unavailable rendering
     /// fonts, SVG parsing failures, allocation failure, or PNG encoding failure.
-    #[cfg(feature = "png")]
     pub(crate) fn png_bytes(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
         self.validate_conversion_input("PNG")?;
         crate::render::svg_backend::rasterize_svg_bytes_to_png(
@@ -87,7 +77,6 @@ impl RenderedScene {
         )
     }
 
-    #[cfg(feature = "png")]
     fn validate_conversion_input(&self, format: &str) -> Result<(), Error> {
         if self.width_css_px == 0 || self.height_css_px == 0 {
             return Err(Error::Render(format!(
@@ -115,7 +104,6 @@ impl RenderedScene {
     }
 }
 
-#[cfg(feature = "png")]
 pub(crate) fn validate_png_target_dimensions(width: f64, height: f64) -> Result<(), Error> {
     if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
         return Err(Error::Render(format!(

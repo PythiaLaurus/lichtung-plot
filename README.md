@@ -1,8 +1,8 @@
 # lichtung-plot
 
 `lichtung-plot` is a strongly typed scientific renderer for owned immutable
-display values. It publishes SVG directly and can reuse the same opaque rendered
-output for outlined SVG or PNG publication.
+display values. It publishes outlined SVG and PNG artifacts and can also publish
+canonical SVG with preserved text from the same opaque rendered scene.
 
 This first standalone-boundary release intentionally has no dependency on the
 Lichtung analysis, pipeline, asset, or reporting crates. Callers supply
@@ -24,31 +24,25 @@ Plot::scatter(
 
 ## Fonts
 
-SVG output references this ordered system-font stack and does not download or
-embed fonts:
+Outlined SVG and PNG generation resolve installed system fonts from this
+ordered stack and never download or embed font files:
 
 ```text
 Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
 
-PNG rendering scans system font directories and selects the first installed
-family from that order. Exact text appearance therefore depends on the host's
-installed fonts, while chart data, geometry, layout, and SVG structure remain
-deterministic for the same inputs and environment.
+The normal `.svg(path)` publication method converts all text to vector glyph
+paths. Recipients therefore do not need the generation fonts, but the exact
+paths depend on the fonts installed in the generation environment and the text
+is no longer selectable or searchable. `.svg_preserve_text(path)` instead
+publishes the canonical SVG with accessible, selectable, searchable, and
+editable `<text>` elements; its displayed text depends on fonts available to the
+viewer.
 
-Configure `.svg_text(SvgText::Paths)` before `.svg(path)` when the SVG must carry
-glyph outlines instead of selectable `<text>` elements. This uses the same local
-font policy and embeds no font files.
+## Output Formats
 
-## Features
-
-| Feature | Default | Capability |
-| --- | --- | --- |
-| `text-as-path` | Yes, through `png` | Convert canonical SVG text to self-contained vector paths |
-| `png` | Yes | Enable text outlining and rasterize the canonical SVG scene to PNG |
-
-SVG output is always available. Use `default-features = false` for an SVG-only
-build. PDF output is deliberately outside this crate.
+Publication SVG with outlined text, preserve-text SVG, and PNG are unconditional
+crate capabilities. PDF output is deliberately outside this crate.
 
 ## Development
 
@@ -59,5 +53,4 @@ read-only verification before committing:
 just verify
 ```
 
-Focused recipes include `just test`, `just test-png`, `just lint`, and
-`just lint-png`.
+Focused recipes include `just test` and `just lint`.
