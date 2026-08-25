@@ -83,7 +83,8 @@ display values.
   storage boundary.
 - `Error` owns the renderer's I/O, data, and rendering failure domains.
 - `Output` privately owns one rendered scene and can publish additional formats
-  without rerunning layout.
+  without rerunning layout. PNG publication options belong to each terminal
+  call; plots, canvases, and outputs do not retain sticky PNG configuration.
 - Backends, rendered scenes, resolved palettes, projections, axes, frames,
   grids, and renderer-facing layout values are private implementation details.
   `AxisTick` remains one root-level caller input for exact labeled numeric tick
@@ -115,6 +116,11 @@ private until the deferred custom-palette contract is designed. The public
 layout module is likewise removed; `AxisTick` is exported only from the crate
 root. Public geometry uses Canvas terminology and concise geometry nouns rather
 than renderer-internal `Figure*` or redundant `*Input` names.
+
+`PointLayer` is an optional ordinary-line overlay with renderer-owned visual
+defaults and selective caller overrides. `NumericLabelFormat` remains a narrow
+fixed-decimal value-label format rather than a general axis, colorbar, or
+scientific-notation extension point.
 
 ## Excluded Responsibilities
 

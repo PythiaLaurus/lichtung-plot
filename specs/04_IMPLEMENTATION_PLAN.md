@@ -44,10 +44,13 @@ and commit each phase as one logical change before starting the next phase.
 | 5 | Remove duplicate default PNG compression identity | R3 | PENDING |
 | 6 | Expose `Theme` only from the crate root | R1 | PENDING |
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | PENDING |
-| 10 | Replace dataframe-shaped test shims with native values | R5 | PENDING |
+| 8 | Move PNG configuration to explicit terminal operations | R3 | PENDING |
+| 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | PENDING |
+| 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
+| 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | PENDING |
 
-Issues 8, 9, and 11 require explicit contract decisions and are not authorized
-implementation work in this plan.
+Issues 8, 9, and 11 were resolved in the canonical contracts before their
+implementation phases were admitted here.
 
 ## Phase R1: Public Surface Cleanup
 
@@ -126,23 +129,34 @@ Acceptance:
 
 Commit: `feat(api)!: enforce exact-family erasure`
 
-## Phase R3: Canonical PNG Compression
+## Phase R3: Terminal PNG Publication
 
 **Status**: PENDING
 
-Remove duplicate public identities that encode the same current behavior
-without deciding the separate SVG-only API question.
+Move PNG configuration from inert plot state to explicit publication calls and
+remove duplicate public identities.
 
 Scope:
 
 - Delete `PngCompression::Default`.
 - Make `PngCompression::Balanced` the enum default and make
-  `PngOptions::default()` resolve to `Balanced`.
+  `PngOptions::default()` resolve to 300 DPI with balanced compression.
 - Migrate every repository caller, test, example, and document from `Default`
   to `Balanced`; do not retain an alias or decoder.
-- Preserve the current exposure of PNG option types in SVG-only builds. Whether
-  that exposure should change remains deferred issue 8 and is not part of this
-  phase.
+- Remove `.png_options(...)` from `Plot` and `Canvas` and remove stored
+  `PngOptions` from `Plot`, `Canvas`, `Output`, erasure, and private accessors.
+- Make `Plot`, `Canvas`, and `Output` expose the same PNG operations:
+  `png(path)` for 300-DPI publication, `png_preview(path)` for source-sized
+  preview output, and `png_with_options(path, options)` for exact caller-owned
+  configuration.
+- Keep PNG options call-local and non-sticky across chained `Output` calls.
+- Delete `svg_and_png` from `Plot`, `Canvas`, and `Output`. Callers that need
+  both formats use independent same-scene chaining such as
+  `plot.svg(svg_path)?.png(png_path)`.
+- Remove pair-publication code and tests that have no remaining consumer while
+  retaining atomic publication for each individual output call.
+- Feature-gate PNG option types and their root exports together with PNG
+  terminal operations.
 
 Acceptance:
 
@@ -150,13 +164,21 @@ Acceptance:
   default.
 - All compression presets retain their existing encoder mappings apart from
   removal of the duplicate variant.
-- The public availability of PNG option types is unchanged in minimal
-  SVG-only and default PNG builds.
+- Plain PNG output uses `Dpi(300.0)`, writes matching physical-resolution
+  metadata, and scales canonical CSS pixels from 96 DPI.
+- Preview PNG output preserves canonical SVG pixel dimensions, uses balanced
+  compression, and writes no physical-resolution metadata.
+- One `Output` can publish preview, publication, and custom PNGs from the same
+  scene without one call's options affecting another.
+- SVG-only builds expose no PNG option type, builder, terminal method, or stored
+  PNG configuration.
+- No combined SVG-and-PNG public operation or transactional pair-publication
+  implementation remains.
 - Focused output tests pass in both the no-default-features and default-feature
   configurations.
 - `just verify` passes.
 
-Commit: `refactor(api)!: remove duplicate png compression`
+Commit: `feat(api)!: move png options to publication`
 
 ## Phase R4: Canonical Histogram KDE Points
 
@@ -190,7 +212,79 @@ Acceptance:
 
 Commit: `refactor(api)!: unify histogram kde points`
 
-## Phase R5: Native Test Values
+## Phase R5: Ergonomic Point Layers
+
+**Status**: PENDING
+
+Make supplemental ordinary-line points concise by default while preserving
+selective identity, annotation, and visual control.
+
+Scope:
+
+- Replace the five-argument fallible constructor with infallible
+  `PointLayer::new(x, y) -> Self`.
+- Default radius to 4 and opacity to 0.8. Without hue, reserve one primary-line
+  palette slot; with hue, reserve one slot per level in the resolved hue domain,
+  including Canvas-coordinated levels absent from the local plot. Resolve each
+  automatic layer from the next slot plus its zero-based append index. Every
+  layer consumes its append position even when it has an explicit color.
+- Add consuming `color(...) -> Self`, `radius(...) -> Result<Self>`, and
+  `opacity(...) -> Result<Self>` builders. Validate positive radius and finite
+  opacity in `(0, 1]` immediately without retaining the old constructor.
+- Retain optional per-point labels and optional whole-layer legend identity.
+  Correct documentation to distinguish those two text roles and to describe
+  arbitrary supplemental coordinates rather than dataframe columns or only raw
+  observations.
+- Continue accepting multiple appended layers. Permit repeated explicit colors;
+  color uniqueness is not semantic identity.
+- Preserve strict nonempty aligned finite x/y validation, optional label
+  alignment, clipping, draw order over primary line geometry, automatic-range
+  participation, generic-facet rejection, and exact legend conflict checks.
+
+Acceptance:
+
+- `PointLayer::new(x, y)` renders with deterministic publication defaults and
+  requires no caller styling.
+- Multiple automatic layers use stable palette order; manual style overrides
+  affect points, point labels where applicable, and legend glyphs consistently.
+- Point labels annotate individual rows and a legend label creates at most one
+  whole-layer legend entry.
+- Duplicate explicit colors are accepted, while conflicting duplicate legend
+  identities still reject through exact legend validation.
+- Focused line, layout, legend, composition, and compile-fail tests pass.
+- `just verify` passes.
+
+Commit: `feat(api)!: add automatic point layer styling`
+
+## Phase R6: Narrow Numeric Label Format
+
+**Status**: PENDING
+
+Make the existing fixed-decimal scope explicit without expanding the public
+formatter.
+
+Scope:
+
+- Retain the `NumericLabelFormat` name, precision builder, optional literal
+  suffix, and current heatmap-cell and point-only coefficient-label consumers.
+- Document that suffixes do not scale values and that the type does not own axis
+  ticks, colorbars, waterfall totals, point labels, or legends.
+- Record broader notation and cross-surface formatting in
+  `05_DEFERRED_FEATURES.md` for reconsideration after deferred legend work.
+- Do not add a prefix, notation enum, callback, format string, dormant variant,
+  or unused storage.
+
+Acceptance:
+
+- Rustdoc and canonical specs state the exact two consumers and literal-suffix
+  behavior.
+- Existing fixed-decimal rendering and validation tests remain exact.
+- No broader formatting API or placeholder is present.
+- `just verify` passes.
+
+Commit: `docs(api): clarify numeric label formatting`
+
+## Phase R7: Native Test Values
 
 **Status**: PENDING
 
@@ -238,40 +332,13 @@ Acceptance:
 
 Commit: `refactor(tests)!: use native renderer values`
 
-## Deferred Decisions
-
-The following findings remain outside implementation scope until their current
-contract is selected. Do not add placeholders for any option.
-
-### Issue 8: PNG Options In SVG-Only Builds
-
-Decide whether PNG-specific configuration is feature-gated, remains inert and
-documented in SVG-only builds, or moves to a terminal PNG configuration
-boundary. The decision must account for API consistency across feature sets and
-must not create fallback output behavior.
-
-### Issue 9: Supplemental Point-Layer Semantics
-
-Decide whether `PointLayer` retains optional point labels and legend identity or
-becomes fixed supplemental geometry without legend participation. Current
-documentation that says the layer never creates a legend conflicts with
-`legend_label()` and renderer behavior; implementation and documentation must
-adopt one exact contract.
-
-### Issue 11: Numeric Label Formatting
-
-Decide whether `NumericLabelFormat` remains precision plus suffix, gains a
-prefix, or adopts another closed deterministic formatting model. Arbitrary
-callbacks are not assumed because they complicate ownership, cloning, and
-deterministic rendering.
-
 ## Final Completion
 
 **Status**: PENDING
 
 The currently authorized remediation is complete only when:
 
-- Phases R1 through R5 are `COMPLETE` with commit and verification evidence.
+- Phases R1 through R7 are `COMPLETE` with commit and verification evidence.
 - Repository searches find no retired API names, report strings, compatibility
   aliases, tuple KDE representation, or dataframe-shaped test shims.
 - Public-path compile-fail tests enforce private modules and exact-family
@@ -280,6 +347,4 @@ The currently authorized remediation is complete only when:
   current contract without documenting deferred choices as current behavior.
 - `just verify` passes from the completed worktree.
 
-Completion of these phases does not close the overall API review. Issues 8, 9,
-and 11 remain decision blockers; in particular, the issue 9 documentation and
-renderer behavior conflict must be resolved before final review closure.
+Completion of these phases closes the currently identified API review findings.

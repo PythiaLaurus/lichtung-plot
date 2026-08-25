@@ -32,6 +32,21 @@ PNG all consume one resolved box model.
 
 The current API exposes no legend-box flag or style placeholder.
 
+## Broader Numeric Formatting
+
+The current `NumericLabelFormat` owns fixed-decimal precision and one optional
+literal suffix only for heatmap cell values and point-only coefficient estimate
+labels. It does not select scientific, engineering, compact, percentage, or
+locale-aware notation and does not apply to axes, colorbars, waterfall totals,
+point labels, or legends.
+
+Broader numeric formatting will be reconsidered after the deferred legend
+composition and styling contracts, as part of a later cohesive review of newly
+admitted formatting needs across those numeric surfaces. That review must define
+scaling, rounding, negative zero, extreme finite values, width measurement,
+collision handling, and deterministic SVG/PNG agreement. No notation enum,
+format string, callback, prefix, or cross-surface formatter is reserved now.
+
 ## Custom Palettes
 
 The current API accepts built-in `Theme` values and keeps resolved palette data

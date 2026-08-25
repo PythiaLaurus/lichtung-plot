@@ -52,12 +52,27 @@ geometry. Precomputed geometry is self-contained and rejects sample-only
 channels such as facets and source-row identities during preflight.
 
 `Plot::line` is an ordinary sorted numeric line series and is the only line
-family that accepts bands or supplemental point layers. `Plot::trajectory`
-requires an explicit graphical group, sorts points within each group, and always
-draws an observation marker. `Plot::line_path` requires numeric x values and an
-explicit group, preserves source-row order and repeated x values, and alone
-accepts `LinePathStyle`. Marker visibility is configurable for ordinary lines
-and line paths, but not trajectories.
+family that accepts bands or supplemental point layers. Each `PointLayer` owns
+an independent nonempty aligned numeric x/y dataset; it may represent raw
+observations or any other caller-selected supplemental coordinates and need not
+align with the primary line input. Multiple layers append in call order and
+render over primary ribbons, lines, and markers. Generic faceting rejects them.
+The renderer assigns a deterministic theme-coordinated color and defaults to
+radius 4 and opacity 0.8; callers may selectively override those values. The
+primary line occupies one palette slot without hue, or one slot per level in its
+resolved hue domain with hue. A Canvas shared legend therefore reserves every
+Canvas-coordinated hue level, including a level absent from that local plot. An
+automatic point-layer color uses the palette slot after those primary slots plus
+that layer's zero-based append index. Every layer consumes its append position
+even when it has an explicit color. Palette cycling and repeated explicit colors
+are allowed. Optional point labels annotate individual points, while one optional
+legend label identifies the complete layer.
+
+`Plot::trajectory` requires an explicit graphical group, sorts points within
+each group, and always draws an observation marker. `Plot::line_path` requires
+numeric x values and an explicit group, preserves source-row order and repeated
+x values, and alone accepts `LinePathStyle`. Marker visibility is configurable
+for ordinary lines and line paths, but not trajectories.
 
 Dumbbell construction atomically consumes both numeric endpoints and their
 explicit labels and colors. Waterfall construction consumes a finite base;
@@ -131,6 +146,18 @@ inside the resolved range. Preflight projects the requested positions, measures
 their labels, and rejects collisions rather than omitting, moving, or rotating
 caller-owned ticks.
 
+## Numeric Value Labels
+
+`NumericLabelFormat` is fixed-decimal formatting with validated precision and
+an optional literal suffix. It applies only to opt-in heatmap cell values and
+point-only coefficient estimate labels. A suffix does not scale or otherwise
+transform the numeric value.
+
+It does not configure automatic or exact axis ticks, heatmap or beeswarm
+colorbars, waterfall totals, point-layer labels, or legends. General scientific,
+engineering, compact, percentage, and cross-surface formatting remain deferred;
+the current API reserves no notation enum, callback, or format-string surface.
+
 ## Legends
 
 Plot legend state is one `LegendPolicy`: automatic plot-family behavior,
@@ -161,10 +188,20 @@ does not select scientific tests or infer caller intent.
 
 ## Scene Lifecycle
 
-`Plot::svg`, `Plot::png`, `Canvas::svg`, and `Canvas::png` perform one complete
-preflight and render one private immutable scene. The terminal call consumes the
-plot or canvas, publishes its requested file immediately, and returns an opaque
-`Output`. Consuming `Output::svg` and `Output::png` calls reuse that exact scene.
+`Plot::svg`, `Plot::png`, `Plot::png_preview`, and
+`Plot::png_with_options`, together with their Canvas equivalents, perform one
+complete preflight and render one private immutable scene. The terminal call
+consumes the plot or canvas, publishes its requested file immediately, and
+returns an opaque `Output`. Consuming Output publication calls reuse that exact
+scene.
+
+PNG options are call-local and non-sticky. Plain `png` publishes at 300 DPI with
+balanced compression. `png_preview` publishes at the canonical SVG source pixel
+dimensions with balanced compression and no physical-resolution metadata.
+`png_with_options` uses the exact caller-provided sizing and compression. A
+chained call such as `plot.png_preview(a)?.png(b)?` therefore publishes two
+independent rasterizations from one scene. There is no combined SVG-and-PNG
+terminal operation; callers chain `svg` and a PNG operation when they want both.
 
 Every Canvas plot runs the same canonical plot-level validation as its
 standalone form before Canvas-only composition validation. Moving a plot into a
@@ -190,6 +227,8 @@ dimensions, and bounded pixel work before allocation.
 SVG-only build. Lichtung's canonical SVG backend emits no raster image elements,
 so the `resvg` JPEG, GIF, and WebP decoders are excluded. The dedicated PNG
 encoder remains responsible for compression and physical-resolution metadata.
+PNG option types and PNG terminal methods are absent when the `png` feature is
+disabled.
 
 There is no plot-level PDF output. Applications that need PDF must own that
 conversion or report workflow outside this crate.
@@ -254,11 +293,10 @@ No fallback renderer or alternate output path is attempted after an error.
 ## Artifact Publication
 
 Each file output is staged at a unique sibling path and renamed only after
-rendering or conversion succeeds. Independent consuming output calls publish
-independently. Combined SVG/PNG output validates distinct destination identity
-and publishes both files transactionally. Failures preserve existing output
-where the underlying filesystem supports ordinary same-directory rename
-semantics.
+rendering or conversion succeeds. Consuming output calls publish independently;
+if a later chained publication fails, an earlier successful publication remains
+in place. Failures preserve the destination of the failing call where the
+underlying filesystem supports ordinary same-directory rename semantics.
 
 ## Regression Evidence
 
