@@ -219,7 +219,12 @@ pub enum HeatmapLabelFit {
     Wrap,
 }
 
-/// Fixed decimal formatting shared by optional numeric value labels.
+/// Fixed-decimal formatting for opt-in heatmap cell values and point-only
+/// coefficient estimate labels.
+///
+/// An optional suffix is appended literally and does not scale or otherwise
+/// transform the value. This format does not control axis ticks, colorbars,
+/// waterfall totals, point-layer labels, or legends.
 ///
 /// ```compile_fail
 /// use lichtung_plot::NumericLabelFormat;
@@ -249,6 +254,8 @@ impl NumericLabelFormat {
     }
 
     /// Set non-empty verbatim text rendered immediately after the number.
+    ///
+    /// The suffix does not scale or otherwise transform the numeric value.
     pub fn suffix(mut self, suffix: impl Into<String>) -> Result<Self, crate::Error> {
         let suffix = suffix.into();
         if suffix.is_empty() || suffix.chars().any(char::is_control) {

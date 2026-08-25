@@ -47,7 +47,7 @@ and commit each phase as one logical change before starting the next phase.
 | 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | COMPLETE |
 | 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
-| 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | PENDING |
+| 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | COMPLETE |
 
 Issues 8, 9, and 11 were resolved in the canonical contracts before their
 implementation phases were admitted here.
@@ -277,7 +277,10 @@ Commit: `feat(api)!: add automatic point layer styling`
 
 ## Phase R6: Narrow Numeric Label Format
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: Rustdoc, canonical contract, deferred-feature, and exact existing
+formatting coverage plus `just verify` passed on 2026-08-25.
 
 Make the existing fixed-decimal scope explicit without expanding the public
 formatter.
