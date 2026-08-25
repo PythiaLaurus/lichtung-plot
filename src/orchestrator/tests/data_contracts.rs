@@ -1,16 +1,14 @@
 use super::{
-    configured_bar_chart, Backend, DataFrame, Error, FillStyle, LegendPolicy, LegendPosition,
-    LineStyle, NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend, Series,
+    configured_bar_chart, Backend, BarValues, Error, FillStyle, LegendPolicy, LegendPosition,
+    LineStyle, NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend,
 };
+use crate::{CategoryValues, NumericValues};
 
 #[test]
 fn line_rejects_null_x_before_begin() {
-    let mz = Series::new("mz".into(), [Some(1.0_f64), None, Some(3.0)]);
-    let intensity = Series::new("intensity".into(), [2.0_f64, 4.0, 6.0]);
-    let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
     let chart = Plot::line(
-        crate::test_support::numeric(&data, "mz"),
-        crate::test_support::numeric(&data, "intensity"),
+        NumericValues::nullable("mz", [Some(1.0), None, Some(3.0)]),
+        NumericValues::new("intensity", [2.0, 4.0, 6.0]),
     );
 
     let mut backend = RecordingBackend::default();
@@ -24,21 +22,13 @@ fn line_rejects_null_x_before_begin() {
 
 #[test]
 fn explicit_inside_legend_with_fixed_limits_rejects_overlap_before_begin() {
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("x".into(), [8.0_f64, 10.0, 8.0, 10.0]).into(),
-            Series::new("y".into(), [5.0_f64; 4]).into(),
-            Series::new("hue".into(), ["a", "a", "b", "b"]).into(),
-        ],
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let chart = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [8.0, 10.0, 8.0, 10.0]),
+        NumericValues::new("y", [5.0; 4]),
     )
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"))
+    .group(hue.clone())
+    .hue(hue)
     .x_limits(0.0, 10.0)
     .y_limits(0.0, 10.0)
     .legend(LegendPolicy::Visible(LegendPosition::InsideRight));
@@ -55,27 +45,20 @@ fn explicit_inside_legend_with_fixed_limits_rejects_overlap_before_begin() {
 
 #[test]
 fn oversized_explicit_inside_legend_rejects_before_begin() {
-    let data = DataFrame::new(
-        2,
-        vec![
-            Series::new("x".into(), [1.0_f64, 2.0]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0]).into(),
-            Series::new(
-                "hue".into(),
-                [
-                    "an exceptionally long first legend label",
-                    "an exceptionally long second legend label",
-                ],
-            )
-            .into(),
-        ],
-    )
-    .unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("y", [1.0, 2.0]),
     )
-    .hue(crate::test_support::category(&data, "hue"))
+    .hue(
+        CategoryValues::new(
+            "hue",
+            [
+                "an exceptionally long first legend label",
+                "an exceptionally long second legend label",
+            ],
+        )
+        .unwrap(),
+    )
     .x_label("")
     .y_label("")
     .legend(LegendPolicy::Visible(LegendPosition::InsideTopLeft))
@@ -93,12 +76,9 @@ fn oversized_explicit_inside_legend_rejects_before_begin() {
 
 #[test]
 fn line_rejects_null_y_before_begin() {
-    let mz = Series::new("mz".into(), [1.0_f64, 2.0, 3.0]);
-    let intensity = Series::new("intensity".into(), [Some(2.0_f64), None, Some(6.0)]);
-    let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
     let chart = Plot::line(
-        crate::test_support::numeric(&data, "mz"),
-        crate::test_support::numeric(&data, "intensity"),
+        NumericValues::new("mz", [1.0, 2.0, 3.0]),
+        NumericValues::nullable("intensity", [Some(2.0), None, Some(6.0)]),
     );
 
     let error = chart
@@ -113,26 +93,19 @@ fn line_rejects_null_y_before_begin() {
 #[test]
 fn line_rejects_non_finite_scientific_values_before_begin() {
     for (column, value) in [("mz", f64::NAN), ("intensity", f64::INFINITY)] {
-        let mz = Series::new(
-            "mz".into(),
-            if column == "mz" {
-                [1.0_f64, value, 3.0]
-            } else {
-                [1.0_f64, 2.0, 3.0]
-            },
-        );
-        let intensity = Series::new(
-            "intensity".into(),
-            if column == "intensity" {
-                [2.0_f64, value, 6.0]
-            } else {
-                [2.0_f64, 4.0, 6.0]
-            },
-        );
-        let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
+        let mz = if column == "mz" {
+            [1.0, value, 3.0]
+        } else {
+            [1.0, 2.0, 3.0]
+        };
+        let intensity = if column == "intensity" {
+            [2.0, value, 6.0]
+        } else {
+            [2.0, 4.0, 6.0]
+        };
         let chart = Plot::line(
-            crate::test_support::numeric(&data, "mz"),
-            crate::test_support::numeric(&data, "intensity"),
+            NumericValues::new("mz", mz),
+            NumericValues::new("intensity", intensity),
         );
 
         let error = chart
@@ -147,12 +120,9 @@ fn line_rejects_non_finite_scientific_values_before_begin() {
 
 #[test]
 fn violin_rejects_null_x_exactly() {
-    let group = Series::new("group".into(), [Some("a"), None, Some("a")]);
-    let value = Series::new("value".into(), [1.0_f64, 2.0, 3.0]);
-    let data = DataFrame::new(group.len(), vec![group.into(), value.into()]).unwrap();
     let chart = Plot::violin(
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "value"),
+        CategoryValues::nullable("group", [Some("a"), None, Some("a")]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 3.0]),
     );
 
     let mut backend = RecordingBackend::default();
@@ -169,12 +139,9 @@ fn violin_rejects_null_x_exactly() {
 
 #[test]
 fn violin_rejects_null_y_exactly() {
-    let group = Series::new("group".into(), ["a", "a", "a"]);
-    let value = Series::new("value".into(), [Some(1.0_f64), None, Some(3.0)]);
-    let data = DataFrame::new(group.len(), vec![group.into(), value.into()]).unwrap();
     let chart = Plot::violin(
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "value"),
+        CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
+        NumericValues::nullable("value", [Some(1.0), None, Some(3.0)]),
     );
 
     let error = chart
@@ -189,16 +156,11 @@ fn violin_rejects_null_y_exactly() {
 
 #[test]
 fn violin_rejects_null_positioned_series_exactly() {
-    let group = Series::new("group".into(), ["a", "a", "a"]);
-    let series = Series::new("series".into(), [Some("x"), None, Some("y")]);
-    let value = Series::new("value".into(), [1.0_f64, 2.0, 3.0]);
-    let data =
-        DataFrame::new(group.len(), vec![group.into(), series.into(), value.into()]).unwrap();
     let chart = Plot::violin(
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "value"),
+        CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 3.0]),
     )
-    .series(crate::test_support::category(&data, "series"));
+    .series(CategoryValues::nullable("series", [Some("x"), None, Some("y")]).unwrap());
 
     let error = chart
         .render_kind(PlotKind::Violin, &mut RecordingBackend::default())
@@ -213,12 +175,9 @@ fn violin_rejects_null_positioned_series_exactly() {
 #[test]
 fn violin_rejects_non_finite_y_exactly() {
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        let group = Series::new("group".into(), ["a", "a", "a"]);
-        let measurement = Series::new("value".into(), [1.0_f64, value, 3.0]);
-        let data = DataFrame::new(group.len(), vec![group.into(), measurement.into()]).unwrap();
         let chart = Plot::violin(
-            crate::test_support::category(&data, "group"),
-            crate::test_support::numeric(&data, "value"),
+            CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
+            NumericValues::new("value", [1.0, value, 3.0]),
         );
 
         let error = chart
@@ -236,9 +195,6 @@ fn violin_rejects_non_finite_y_exactly() {
 
 #[test]
 fn line_rejects_non_finite_supplemental_point_before_begin() {
-    let mz = Series::new("mz".into(), [1.0_f64, 2.0, 3.0]);
-    let intensity = Series::new("intensity".into(), [2.0_f64, 4.0, 6.0]);
-    let data = DataFrame::new(mz.len(), vec![mz.into(), intensity.into()]).unwrap();
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak m/z", [2.0]),
         crate::NumericValues::new("peak intensity", [f64::INFINITY]),
@@ -247,8 +203,8 @@ fn line_rejects_non_finite_supplemental_point_before_begin() {
     .opacity(0.9)
     .unwrap();
     let chart = Plot::line(
-        crate::test_support::numeric(&data, "mz"),
-        crate::test_support::numeric(&data, "intensity"),
+        NumericValues::new("mz", [1.0, 2.0, 3.0]),
+        NumericValues::new("intensity", [2.0, 4.0, 6.0]),
     )
     .point_layer(layer);
     let mut backend = RecordingBackend::default();
@@ -261,21 +217,13 @@ fn line_rejects_non_finite_supplemental_point_before_begin() {
 
 #[test]
 fn boxplot_rejects_null_category_before_positioned_series_with_source_rows() {
-    let category = Series::new("category".into(), [Some("a"), None]);
-    let series = Series::new("series".into(), [Some("x"), None]);
-    let value = Series::new("value".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(
-        category.len(),
-        vec![category.into(), series.into(), value.into()],
-    )
-    .unwrap();
+    let category = CategoryValues::nullable("category", [Some("a"), None]).unwrap();
+    let series = CategoryValues::nullable("series", [Some("x"), None]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0]);
     for with_series in [false, true] {
-        let mut chart = Plot::boxplot(
-            crate::test_support::category(&data, "category"),
-            crate::test_support::numeric(&data, "value"),
-        );
+        let mut chart = Plot::boxplot(category.clone(), value.clone());
         if with_series {
-            chart = chart.series(crate::test_support::category(&data, "series"));
+            chart = chart.series(series.clone());
         }
         let mut backend = RecordingBackend::default();
 
@@ -293,19 +241,11 @@ fn boxplot_rejects_null_category_before_positioned_series_with_source_rows() {
 
 #[test]
 fn boxplot_rejects_null_positioned_series_after_valid_categories() {
-    let category = Series::new("category".into(), ["a", "a"]);
-    let series = Series::new("series".into(), [Some("x"), None]);
-    let value = Series::new("value".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(
-        category.len(),
-        vec![category.into(), series.into(), value.into()],
-    )
-    .unwrap();
     let chart = Plot::boxplot(
-        crate::test_support::category(&data, "category"),
-        crate::test_support::numeric(&data, "value"),
+        CategoryValues::new("category", ["a", "a"]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0]),
     )
-    .series(crate::test_support::category(&data, "series"));
+    .series(CategoryValues::nullable("series", [Some("x"), None]).unwrap());
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -322,12 +262,9 @@ fn boxplot_rejects_null_positioned_series_after_valid_categories() {
 #[test]
 fn boxplot_rejects_nan_and_infinity_with_source_rows_before_begin() {
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-        let group = Series::new("group".into(), ["a", "a"]);
-        let measurement = Series::new("value".into(), [1.0_f64, value]);
-        let data = DataFrame::new(group.len(), vec![group.into(), measurement.into()]).unwrap();
         let chart = Plot::boxplot(
-            crate::test_support::category(&data, "group"),
-            crate::test_support::numeric(&data, "value"),
+            CategoryValues::new("group", ["a", "a"]).unwrap(),
+            NumericValues::new("value", [1.0, value]),
         );
         let mut backend = RecordingBackend::default();
 
@@ -347,15 +284,11 @@ fn boxplot_rejects_nan_and_infinity_with_source_rows_before_begin() {
 
 #[test]
 fn scatter_rejects_null_hue_even_when_numeric_row_would_be_dropped() {
-    let x = Series::new("x".into(), [Some(1.0_f64), None]);
-    let y = Series::new("y".into(), [Some(2.0_f64), None]);
-    let hue = Series::new("hue".into(), [Some("a"), None]);
-    let data = DataFrame::new(x.len(), vec![x.into(), y.into(), hue.into()]).unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::nullable("x", [Some(1.0), None]),
+        NumericValues::nullable("y", [Some(2.0), None]),
     )
-    .hue(crate::test_support::category(&data, "hue"));
+    .hue(CategoryValues::nullable("hue", [Some("a"), None]).unwrap());
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -377,12 +310,9 @@ fn matrix_rejects_every_missing_or_non_finite_numeric_value_before_begin() {
         Some(f64::INFINITY),
         Some(f64::NEG_INFINITY),
     ] {
-        let x = Series::new("x".into(), [Some(1.0_f64), value]);
-        let y = Series::new("y".into(), [2.0_f64, 3.0]);
-        let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
         let chart = Plot::matrix(vec![
-            crate::test_support::numeric(&data, "x"),
-            crate::test_support::numeric(&data, "y"),
+            NumericValues::nullable("x", [Some(1.0), value]),
+            NumericValues::new("y", [2.0, 3.0]),
         ]);
         let mut backend = RecordingBackend::default();
 
@@ -397,12 +327,9 @@ fn matrix_rejects_every_missing_or_non_finite_numeric_value_before_begin() {
 
 #[test]
 fn matrix_rejects_constant_ungrouped_column_before_backend_begin() {
-    let x = Series::new("constant".into(), [2.0_f64, 2.0, 2.0]);
-    let y = Series::new("varying".into(), [1.0_f64, 2.0, 3.0]);
-    let data = DataFrame::new(3, vec![x.into(), y.into()]).unwrap();
     let chart = Plot::matrix(vec![
-        crate::test_support::numeric(&data, "constant"),
-        crate::test_support::numeric(&data, "varying"),
+        NumericValues::new("constant", [2.0, 2.0, 2.0]),
+        NumericValues::new("varying", [1.0, 2.0, 3.0]),
     ]);
     let mut backend = RecordingBackend::default();
 
@@ -419,16 +346,13 @@ fn matrix_rejects_constant_ungrouped_column_before_backend_begin() {
 
 #[test]
 fn matrix_rejects_degenerate_hue_group_with_column_and_group_context_before_begin() {
-    let x = Series::new("x".into(), [1.0_f64, 2.0, 3.0]);
-    let y = Series::new("y".into(), [2.0_f64, 3.0, 4.0]);
-    let hue = Series::new("cohort".into(), ["singleton", "valid", "valid"]);
-    let data = DataFrame::new(3, vec![x.into(), y.into(), hue.into()]).unwrap();
+    let hue = CategoryValues::new("cohort", ["singleton", "valid", "valid"]).unwrap();
     let chart = Plot::matrix(vec![
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [1.0, 2.0, 3.0]),
+        NumericValues::new("y", [2.0, 3.0, 4.0]),
     ])
-    .group(crate::test_support::category(&data, "cohort"))
-    .hue(crate::test_support::category(&data, "cohort"));
+    .group(hue.clone())
+    .hue(hue);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -445,12 +369,9 @@ fn matrix_rejects_degenerate_hue_group_with_column_and_group_context_before_begi
 #[test]
 fn matrix_rejects_unrepresentable_extreme_kde_support_before_begin() {
     let lower = f64::MAX.next_down();
-    let x = Series::new("extreme".into(), [lower, f64::MAX]);
-    let y = Series::new("ordinary".into(), [1.0_f64, 2.0]);
-    let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
     let chart = Plot::matrix(vec![
-        crate::test_support::numeric(&data, "extreme"),
-        crate::test_support::numeric(&data, "ordinary"),
+        NumericValues::new("extreme", [lower, f64::MAX]),
+        NumericValues::new("ordinary", [1.0, 2.0]),
     ]);
     let mut backend = RecordingBackend::default();
 
@@ -466,9 +387,11 @@ fn matrix_rejects_unrepresentable_extreme_kde_support_before_begin() {
 
 #[test]
 fn bar_mean_of_repeated_maximum_values_remains_renderable() {
-    let group = Series::new("group".into(), ["a", "a"]);
-    let value = Series::new("value".into(), [f64::MAX, f64::MAX]);
-    let data = DataFrame::new(2, vec![group.into(), value.into()]).unwrap();
+    let data = BarValues {
+        category: CategoryValues::new("group", ["a", "a"]).unwrap(),
+        value: NumericValues::new("value", [f64::MAX, f64::MAX]),
+        series: None,
+    };
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
         let chart = configured_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
@@ -481,16 +404,14 @@ fn bar_mean_of_repeated_maximum_values_remains_renderable() {
 
 #[test]
 fn student_t_bars_reject_unrepresentable_extreme_confidence_geometry_before_begin() {
-    let group = Series::new("group".into(), ["a", "a"]);
-    let value = Series::new("value".into(), [-f64::MAX, f64::MAX]);
-    let data = DataFrame::new(2, vec![group.into(), value.into()]).unwrap();
+    let category = CategoryValues::new("group", ["a", "a"]).unwrap();
+    let value = NumericValues::new("value", [-f64::MAX, f64::MAX]);
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let category = crate::test_support::category(&data, "group");
-        let input = crate::BarInput::samples(crate::test_support::numeric(&data, "value"))
+        let input = crate::BarInput::samples(value.clone())
             .error_bar(crate::ErrorBar::confidence_interval().student_t());
         let chart = match kind {
-            PlotKind::Bar => Plot::bar(category, input).erase(),
-            PlotKind::HorizontalBar => Plot::horizontal_bar(category, input).erase(),
+            PlotKind::Bar => Plot::bar(category.clone(), input).erase(),
+            PlotKind::HorizontalBar => Plot::horizontal_bar(category.clone(), input).erase(),
             _ => unreachable!(),
         };
         let mut backend = RecordingBackend::default();
@@ -504,10 +425,11 @@ fn student_t_bars_reject_unrepresentable_extreme_confidence_geometry_before_begi
 
 #[test]
 fn stacked_bars_reject_unrepresentable_offsets_before_begin() {
-    let group = Series::new("group".into(), ["a", "a"]);
-    let hue = Series::new("hue".into(), ["first", "second"]);
-    let value = Series::new("value".into(), [f64::MAX, f64::MAX]);
-    let data = DataFrame::new(2, vec![group.into(), hue.into(), value.into()]).unwrap();
+    let data = BarValues {
+        category: CategoryValues::new("group", ["a", "a"]).unwrap(),
+        value: NumericValues::new("value", [f64::MAX, f64::MAX]),
+        series: Some(CategoryValues::new("hue", ["first", "second"]).unwrap()),
+    };
     for kind in [PlotKind::StackedBar, PlotKind::StackedHorizontalBar] {
         let chart = configured_bar_chart(&data, kind);
         let mut backend = RecordingBackend::default();
@@ -566,10 +488,11 @@ fn every_bar_family_rejects_missing_and_non_finite_values_before_begin() {
         Some(f64::INFINITY),
         Some(f64::NEG_INFINITY),
     ] {
-        let group = Series::new("group".into(), ["a", "b"]);
-        let hue = Series::new("hue".into(), ["h1", "h2"]);
-        let measurement = Series::new("value".into(), [Some(1.0_f64), value]);
-        let data = DataFrame::new(2, vec![group.into(), hue.into(), measurement.into()]).unwrap();
+        let data = BarValues {
+            category: CategoryValues::new("group", ["a", "b"]).unwrap(),
+            value: NumericValues::nullable("value", [Some(1.0), value]),
+            series: Some(CategoryValues::new("hue", ["h1", "h2"]).unwrap()),
+        };
         for kind in [
             PlotKind::Bar,
             PlotKind::HorizontalBar,
@@ -590,17 +513,9 @@ fn every_bar_family_rejects_missing_and_non_finite_values_before_begin() {
 #[test]
 fn ungrouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
     let lower = f64::MAX.next_down();
-    let data = DataFrame::new(
-        2,
-        vec![
-            Series::new("x".into(), [lower, f64::MAX]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0]).into(),
-        ],
-    )
-    .unwrap();
     let chart = Plot::marginal(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [lower, f64::MAX]),
+        NumericValues::new("y", [1.0, 2.0]),
     );
     let mut backend = RecordingBackend::default();
 
@@ -620,21 +535,13 @@ fn ungrouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() 
 #[test]
 fn grouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
     let lower = f64::MAX.next_down();
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("x".into(), [lower, f64::MAX, 1.0, 2.0]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0, 3.0, 4.0]).into(),
-            Series::new("hue".into(), ["extreme", "extreme", "ordinary", "ordinary"]).into(),
-        ],
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["extreme", "extreme", "ordinary", "ordinary"]).unwrap();
     let chart = Plot::marginal(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [lower, f64::MAX, 1.0, 2.0]),
+        NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
     )
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"));
+    .group(hue.clone())
+    .hue(hue);
     let mut backend = RecordingBackend::default();
 
     let error = chart
@@ -649,38 +556,19 @@ fn grouped_marginal_rejects_unrepresentable_finite_extreme_kde_before_begin() {
 }
 
 #[test]
-fn numeric_categories_remain_supported_by_beeswarm_and_waterfall() {
-    let category = Series::new("category".into(), [1_i64, 2]);
-    let x = Series::new("x".into(), [1.0_f64, 2.0]);
-    let color = Series::new("color".into(), [0.2_f64, 0.8]);
-    let delta = Series::new("delta".into(), [2.0_f64, -1.0]);
-    let base = Series::new("base".into(), [10.0_f64, 10.0]);
-    let data = DataFrame::new(
-        category.len(),
-        vec![
-            category.into(),
-            x.into(),
-            color.into(),
-            delta.into(),
-            base.into(),
-        ],
-    )
-    .unwrap();
+fn numeric_category_labels_remain_supported_by_beeswarm_and_waterfall() {
+    let category = CategoryValues::new("category", ["1", "2"]).unwrap();
 
     let beeswarm = Plot::beeswarm(
-        crate::test_support::category(&data, "category"),
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "color"),
+        category.clone(),
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("color", [0.2, 0.8]),
     );
     beeswarm
         .render_kind(PlotKind::Beeswarm, &mut RecordingBackend::default())
         .unwrap();
 
-    let waterfall = Plot::waterfall(
-        crate::test_support::category(&data, "category"),
-        crate::test_support::numeric(&data, "delta"),
-        crate::test_support::constant_numeric(&data, "base"),
-    );
+    let waterfall = Plot::waterfall(category, NumericValues::new("delta", [2.0, -1.0]), 10.0);
     waterfall
         .render_kind(PlotKind::Waterfall, &mut RecordingBackend::default())
         .unwrap();

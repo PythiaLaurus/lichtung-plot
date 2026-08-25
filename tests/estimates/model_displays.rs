@@ -1,19 +1,16 @@
 use super::*;
 
-fn estimate_line(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
-    Plot::line(data::numeric(frame, "x"), data::numeric(frame, "estimate"))
-        .group(data::category(frame, "trace"))
-        .hue(data::category(frame, "trace"))
+fn estimate_line(data: &EstimateData) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(data.x.clone(), data.estimate.clone())
+        .group(data.trace.clone())
+        .hue(data.trace.clone())
 }
 
 #[test]
 fn line_is_distinct_deterministic_clipped_and_draws_ribbon_before_markers() {
     let build = || {
-        let frame = estimate_data();
-        estimate_line(&frame).band(Bounds::new(
-            data::numeric(&frame, "lower"),
-            data::numeric(&frame, "upper"),
-        ))
+        let data = estimate_data();
+        estimate_line(&data).band(Bounds::new(data.lower, data.upper))
     };
     let first = render_svg(build(), "estimate-line-first").unwrap();
     let second = render_svg(build(), "estimate-line-second").unwrap();
@@ -49,38 +46,28 @@ fn line_rejects_duplicate_x_within_hue_series_including_signed_zero() {
 
 #[test]
 fn interaction_and_forest_constructors_accept_complete_atomic_bounds() {
-    let frame = estimate_data();
-    let bounds = || {
-        Bounds::new(
-            data::numeric(&frame, "lower"),
-            data::numeric(&frame, "upper"),
-        )
-    };
+    let data = estimate_data();
+    let bounds = || Bounds::new(data.lower.clone(), data.upper.clone());
     Plot::interaction(
-        data::category(&frame, "factor"),
-        data::numeric(&frame, "estimate"),
-        data::category(&frame, "trace"),
+        data.factor.clone(),
+        data.estimate.clone(),
+        data.trace.clone(),
         bounds(),
     )
     .preflight()
     .unwrap();
-    Plot::forest(
-        data::category(&frame, "term"),
-        data::numeric(&frame, "estimate"),
-        bounds(),
-        0.0,
-    )
-    .preflight()
-    .unwrap();
+    Plot::forest(data.term.clone(), data.estimate.clone(), bounds(), 0.0)
+        .preflight()
+        .unwrap();
 }
 
 #[test]
 fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
-    let frame = estimate_data();
+    let data = estimate_data();
     let base = || {
         Plot::coefficient(
-            data::category(&frame, "term"),
-            CoefficientInput::estimates(data::numeric(&frame, "estimate")),
+            data.term.clone(),
+            CoefficientInput::estimates(data.estimate.clone()),
         )
     };
     let default = render_svg(base(), "coefficient-default-labels").unwrap();
@@ -96,13 +83,10 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
         labeled.matches("<circle ").count()
     );
     assert!(Plot::coefficient(
-        data::category(&frame, "term"),
+        data.term.clone(),
         CoefficientInput::estimates_with_intervals(
-            data::numeric(&frame, "estimate"),
-            Bounds::new(
-                data::numeric(&frame, "lower"),
-                data::numeric(&frame, "upper"),
-            ),
+            data.estimate.clone(),
+            Bounds::new(data.lower.clone(), data.upper.clone()),
         ),
     )
     .estimate_labels(NumericLabelFormat::default())
@@ -114,23 +98,15 @@ fn coefficient_fixed_value_labels_are_point_only_and_default_is_inert() {
 
 #[test]
 fn coefficient_bounds_render_exact_caller_significance_marks() {
-    let frame = df!(
-        "term" => ["none", "one", "two", "three", "four", "p-value"],
-        "estimate" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
-        "lower" => [0.5_f64, 1.5, 2.5, 3.5, 4.5, 5.5],
-        "upper" => [1.5_f64, 2.5, 3.5, 4.5, 5.5, 6.5]
-    )
-    .unwrap();
+    let term =
+        CategoryValues::new("term", ["none", "one", "two", "three", "four", "p-value"]).unwrap();
+    let estimate = NumericValues::new("estimate", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let lower = NumericValues::new("lower", [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]);
+    let upper = NumericValues::new("upper", [1.5, 2.5, 3.5, 4.5, 5.5, 6.5]);
     let svg = render_svg(
         Plot::coefficient(
-            data::category(&frame, "term"),
-            CoefficientInput::estimates_with_intervals(
-                data::numeric(&frame, "estimate"),
-                Bounds::new(
-                    data::numeric(&frame, "lower"),
-                    data::numeric(&frame, "upper"),
-                ),
-            ),
+            term,
+            CoefficientInput::estimates_with_intervals(estimate, Bounds::new(lower, upper)),
         )
         .significance([
             Significance::at("none", SignificanceMark::NotSignificant),

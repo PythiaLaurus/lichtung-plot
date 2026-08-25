@@ -1,8 +1,4 @@
-use lichtung_plot::{LegendPolicy, LegendPosition, Plot};
-
-#[path = "../support/data.rs"]
-mod data;
-use data::{df, DataFrame};
+use lichtung_plot::{CategoryValues, LegendPolicy, LegendPosition, NumericValues, Plot};
 
 #[path = "../support/visual.rs"]
 mod support;

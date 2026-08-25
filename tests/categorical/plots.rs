@@ -2,15 +2,19 @@ use super::*;
 
 #[test]
 fn violin_auto_range_includes_kde_support_beyond_raw_counts() {
-    let df = df!(
-        "genotype" => ["aa", "aa", "aa", "Aa", "Aa", "Aa", "AA", "AA", "AA"],
-        "count" => [25.0_f64, 30.0, 80.0, 50.0, 50.0, 5.0, 25.0, 20.0, 15.0]
+    let genotype = CategoryValues::new(
+        "genotype",
+        ["aa", "aa", "aa", "Aa", "Aa", "Aa", "AA", "AA", "AA"],
     )
     .unwrap();
+    let count = NumericValues::new(
+        "count",
+        [25.0, 30.0, 80.0, 50.0, 50.0, 5.0, 25.0, 20.0, 15.0],
+    );
 
     let dir = unique_dir("violin-kde-support-range");
     let out = dir.join("violin.svg");
-    let chart = Plot::violin(data::category(&df, "genotype"), data::numeric(&df, "count"))
+    let chart = Plot::violin(genotype, count)
         .labels(Labels::raw())
         .size(420, 300);
     chart.svg(&out).expect("violin render must succeed");
@@ -33,20 +37,14 @@ fn violin_auto_range_includes_kde_support_beyond_raw_counts() {
 
 #[test]
 fn bar_with_series_renders_grouped_bars_and_series_legend() {
-    let df = df!(
-        "group" => ["A", "A", "B", "B"],
-        "series" => ["control", "treatment", "control", "treatment"],
-        "value" => [1.0_f64, 3.0, 2.0, 5.0]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["A", "A", "B", "B"]).unwrap();
+    let series =
+        CategoryValues::new("series", ["control", "treatment", "control", "treatment"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 3.0, 2.0, 5.0]);
 
     let dir = unique_dir("bar-series-grouped");
     let out = dir.join("bar.svg");
-    let chart = Plot::bar(
-        data::category(&df, "group"),
-        BarInput::estimates(data::numeric(&df, "value")),
-    )
-    .series(data::category(&df, "series"));
+    let chart = Plot::bar(group, BarInput::estimates(value)).series(series);
     chart
         .size(420, 300)
         .svg(&out)
@@ -85,20 +83,14 @@ fn grouped_bar_compact_spacing_places_internal_items_side_by_side() {
 
 #[test]
 fn horizontal_bar_with_series_renders_grouped_bars_and_series_legend() {
-    let df = df!(
-        "group" => ["A", "A", "B", "B"],
-        "series" => ["control", "treatment", "control", "treatment"],
-        "value" => [1.0_f64, 3.0, 2.0, 5.0]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["A", "A", "B", "B"]).unwrap();
+    let series =
+        CategoryValues::new("series", ["control", "treatment", "control", "treatment"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 3.0, 2.0, 5.0]);
 
     let dir = unique_dir("horizontal-bar-series-grouped");
     let out = dir.join("horizontal_bar.svg");
-    let chart = Plot::horizontal_bar(
-        data::category(&df, "group"),
-        BarInput::estimates(data::numeric(&df, "value")),
-    )
-    .series(data::category(&df, "series"));
+    let chart = Plot::horizontal_bar(group, BarInput::estimates(value)).series(series);
     chart
         .size(420, 300)
         .svg(&out)
@@ -118,21 +110,13 @@ fn horizontal_bar_with_series_renders_grouped_bars_and_series_legend() {
 
 #[test]
 fn stacked_bar_sums_duplicate_category_series_rows() {
-    let df = df!(
-        "group" => ["A", "A", "A"],
-        "series" => ["first", "first", "second"],
-        "value" => [2.0_f64, 3.0, 4.0]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["A", "A", "A"]).unwrap();
+    let series = CategoryValues::new("series", ["first", "first", "second"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 3.0, 4.0]);
 
     let dir = unique_dir("stacked-bar-duplicate-sum");
     let out = dir.join("stacked_bar.svg");
-    let chart = Plot::stacked_bar(
-        data::category(&df, "group"),
-        data::numeric(&df, "value"),
-        data::category(&df, "series"),
-    )
-    .size(360, 260);
+    let chart = Plot::stacked_bar(group, value, series).size(360, 260);
     chart.svg(&out).expect("stacked bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let bars = parse_polygon_bounds(&svg);
@@ -152,21 +136,15 @@ fn stacked_bar_sums_duplicate_category_series_rows() {
 
 #[test]
 fn categorical_plots_preserve_observed_order() {
-    let df = df!(
-        "species" => ["b", "a", "c"],
-        "value" => [2.0_f64, 1.0, 4.0]
-    )
-    .unwrap();
+    let species = CategoryValues::new("species", ["b", "a", "c"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 1.0, 4.0]);
 
     let dir = unique_dir("bar-observed-order");
     let out = dir.join("bar.svg");
-    Plot::bar(
-        data::category(&df, "species"),
-        BarInput::estimates(data::numeric(&df, "value")),
-    )
-    .size(320, 240)
-    .svg(&out)
-    .expect("bar render must succeed");
+    Plot::bar(species, BarInput::estimates(value))
+        .size(320, 240)
+        .svg(&out)
+        .expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
     let b_pos = svg.find(">B</text>").expect("b tick label");
@@ -177,13 +155,8 @@ fn categorical_plots_preserve_observed_order() {
 
 #[test]
 fn bar_order_is_plot_owned_and_value_sort_runs_after_mean_aggregation() {
-    let df = df!(
-        "species" => ["b", "b", "a", "a", "c", "c"],
-        "value" => [10.0_f64, 0.0, 1.0, 1.0, 8.0, 8.0]
-    )
-    .unwrap();
-    let categories = data::category(&df, "species");
-    let values = data::numeric(&df, "value");
+    let categories = CategoryValues::new("species", ["b", "b", "a", "a", "c", "c"]).unwrap();
+    let values = NumericValues::new("value", [10.0, 0.0, 1.0, 1.0, 8.0, 8.0]);
     let dir = unique_dir("bar-plot-owned-order");
     let explicit_path = dir.join("explicit.svg");
     let sorted_path = dir.join("sorted.svg");
@@ -209,41 +182,28 @@ fn bar_order_is_plot_owned_and_value_sort_runs_after_mean_aggregation() {
 
 #[test]
 fn grouped_bar_rejects_ambiguous_value_order() {
-    let df = df!(
-        "category" => ["a", "a", "b", "b"],
-        "group" => ["one", "two", "one", "two"],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0]
-    )
-    .unwrap();
+    let category = CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap();
+    let group = CategoryValues::new("group", ["one", "two", "one", "two"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]);
 
-    let error = Plot::bar(
-        data::category(&df, "category"),
-        BarInput::estimates(data::numeric(&df, "value")),
-    )
-    .series(data::category(&df, "group"))
-    .category_order(ValueSort::Descending)
-    .preflight()
-    .unwrap_err()
-    .to_string();
+    let error = Plot::bar(category, BarInput::estimates(value))
+        .series(group)
+        .category_order(ValueSort::Descending)
+        .preflight()
+        .unwrap_err()
+        .to_string();
 
     assert!(error.contains("requires one ungrouped bar per category"));
 }
 
 #[test]
 fn positive_bars_preserve_zero_baseline() {
-    let df = df!(
-        "group" => ["a", "b", "c"],
-        "value" => [1.0_f64, 2.0, 3.0]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["a", "b", "c"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0]);
 
     let dir = unique_dir("bar-zero-baseline");
     let out = dir.join("bar.svg");
-    let chart = Plot::bar(
-        data::category(&df, "group"),
-        BarInput::estimates(data::numeric(&df, "value")),
-    )
-    .size(320, 240);
+    let chart = Plot::bar(group, BarInput::estimates(value)).size(320, 240);
     chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let panel = parse_first_clip_rect(&svg);
@@ -261,15 +221,13 @@ fn positive_bars_preserve_zero_baseline() {
 
 #[test]
 fn boxplot_renders_fliers_by_default() {
-    let df = df!(
-        "group" => ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"],
-        "value" => [1.0_f64, 1.0, 1.0, 1.0, 10.0, 2.0, 2.1, 2.2, 2.3, 2.4]
-    )
-    .unwrap();
+    let group =
+        CategoryValues::new("group", ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 1.0, 1.0, 1.0, 10.0, 2.0, 2.1, 2.2, 2.3, 2.4]);
 
     let dir = unique_dir("boxplot-fliers");
     let out = dir.join("boxplot.svg");
-    Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value"))
+    Plot::boxplot(group, value)
         .size(360, 260)
         .svg(&out)
         .expect("boxplot render must succeed");
@@ -284,10 +242,10 @@ fn boxplot_renders_fliers_by_default() {
 
 #[test]
 fn publication_frame_uses_axis_color_on_all_sides() {
-    let df = fixture_df();
+    let (x, y) = fixture_values();
     let dir = unique_dir("frame-axis-color");
     let out = dir.join("scatter.svg");
-    Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
+    Plot::scatter(x, y)
         .size(320, 240)
         .svg(&out)
         .expect("scatter render must succeed");
@@ -302,15 +260,13 @@ fn publication_frame_uses_axis_color_on_all_sides() {
 
 #[test]
 fn violin_draws_inner_whisker_mark() {
-    let df = df!(
-        "group" => ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"],
-        "value" => [1.0_f64, 1.2, 1.5, 1.8, 2.0, 3.0, 3.2, 3.5, 3.8, 4.0]
-    )
-    .unwrap();
+    let group =
+        CategoryValues::new("group", ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 3.2, 3.5, 3.8, 4.0]);
 
     let dir = unique_dir("violin-inner-whisker");
     let out = dir.join("violin.svg");
-    Plot::violin(data::category(&df, "group"), data::numeric(&df, "value"))
+    Plot::violin(group, value)
         .size(360, 260)
         .svg(&out)
         .expect("violin render must succeed");
@@ -327,15 +283,13 @@ fn violin_draws_inner_whisker_mark() {
 
 #[test]
 fn violin_body_does_not_touch_frame_edges() {
-    let df = df!(
-        "group" => ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"],
-        "value" => [1.0_f64, 1.2, 1.5, 1.8, 2.0, 3.0, 3.2, 3.5, 3.8, 4.0]
-    )
-    .unwrap();
+    let group =
+        CategoryValues::new("group", ["a", "a", "a", "a", "a", "b", "b", "b", "b", "b"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 3.2, 3.5, 3.8, 4.0]);
 
     let dir = unique_dir("violin-body-frame-padding");
     let out = dir.join("violin.svg");
-    Plot::violin(data::category(&df, "group"), data::numeric(&df, "value"))
+    Plot::violin(group, value)
         .size(360, 260)
         .svg(&out)
         .expect("violin render must succeed");

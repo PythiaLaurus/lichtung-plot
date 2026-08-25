@@ -3,22 +3,31 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{Canvas, Plot};
+use lichtung_plot::{Canvas, CategoryValues, NumericValues, Plot};
 
-use crate::{df, DataFrame};
+#[derive(Clone)]
+pub(super) struct EstimateData {
+    pub(super) x: NumericValues,
+    pub(super) estimate: NumericValues,
+    pub(super) lower: NumericValues,
+    pub(super) upper: NumericValues,
+    pub(super) trace: CategoryValues,
+    pub(super) factor: CategoryValues,
+    pub(super) term: CategoryValues,
+    pub(super) facet: CategoryValues,
+}
 
-pub(super) fn estimate_data() -> DataFrame {
-    df!(
-        "x" => [2.0_f64, 1.0, 2.0, 1.0],
-        "estimate" => [3.0_f64, 2.0, 4.0, 2.5],
-        "lower" => [2.5_f64, 1.5, 3.5, 2.0],
-        "upper" => [3.5_f64, 2.5, 4.5, 3.0],
-        "trace" => ["control", "control", "active", "active"],
-        "factor" => ["after", "before", "after", "before"],
-        "term" => ["intercept", "time", "group", "interaction"],
-        "facet" => ["one", "one", "two", "two"]
-    )
-    .unwrap()
+pub(super) fn estimate_data() -> EstimateData {
+    EstimateData {
+        x: NumericValues::new("x", [2.0, 1.0, 2.0, 1.0]),
+        estimate: NumericValues::new("estimate", [3.0, 2.0, 4.0, 2.5]),
+        lower: NumericValues::new("lower", [2.5, 1.5, 3.5, 2.0]),
+        upper: NumericValues::new("upper", [3.5, 2.5, 4.5, 3.0]),
+        trace: CategoryValues::new("trace", ["control", "control", "active", "active"]).unwrap(),
+        factor: CategoryValues::new("factor", ["after", "before", "after", "before"]).unwrap(),
+        term: CategoryValues::new("term", ["intercept", "time", "group", "interaction"]).unwrap(),
+        facet: CategoryValues::new("facet", ["one", "one", "two", "two"]).unwrap(),
+    }
 }
 
 pub(super) fn render_svg<K: lichtung_plot::kind::Marker>(

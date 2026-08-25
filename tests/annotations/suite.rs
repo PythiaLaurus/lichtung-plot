@@ -1,8 +1,7 @@
-use lichtung_plot::{BarInput, Plot, Significance, SignificanceMark, SignificanceTarget};
-
-#[path = "../support/data.rs"]
-mod data;
-use data::{df, DataFrame};
+use lichtung_plot::{
+    BarInput, CategoryValues, NumericValues, Plot, Significance, SignificanceMark,
+    SignificanceTarget,
+};
 
 #[path = "../support/composition.rs"]
 mod support;

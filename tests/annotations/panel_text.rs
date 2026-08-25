@@ -1,20 +1,27 @@
 use lichtung_plot::{
-    FacetSpec, LegendPolicy, LegendPosition, PanelCorner, PanelTextAnnotation, Plot, Theme,
+    CategoryValues, FacetSpec, LegendPolicy, LegendPosition, NumericValues, PanelCorner,
+    PanelTextAnnotation, Plot, Theme,
 };
 
-use super::{data, df, render_svg, DataFrame};
+use super::render_svg;
 
-fn scatter_data() -> DataFrame {
-    df!(
-        "x" => [1.0_f64, 2.0, 3.0],
-        "y" => [2.0_f64, 1.0, 3.0],
-        "group" => ["a", "b", "a"],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct ScatterData {
+    x: NumericValues,
+    y: NumericValues,
+    group: CategoryValues,
 }
 
-fn scatter(data: &DataFrame) -> Plot<lichtung_plot::kind::Scatter> {
-    Plot::scatter(data::numeric(data, "x"), data::numeric(data, "y")).size(420, 300)
+fn scatter_data() -> ScatterData {
+    ScatterData {
+        x: NumericValues::new("x", [1.0, 2.0, 3.0]),
+        y: NumericValues::new("y", [2.0, 1.0, 3.0]),
+        group: CategoryValues::new("group", ["a", "b", "a"]).unwrap(),
+    }
+}
+
+fn scatter(data: &ScatterData) -> Plot<lichtung_plot::kind::Scatter> {
+    Plot::scatter(data.x.clone(), data.y.clone()).size(420, 300)
 }
 
 fn svg<K: lichtung_plot::kind::Marker>(chart: &Plot<K>) -> String {
@@ -91,7 +98,7 @@ fn panel_text_rejects_facets() {
     let annotation = || PanelTextAnnotation::new(PanelCorner::TopLeft, "Note").unwrap();
     let faceted = scatter(&data)
         .panel_text_annotation(annotation())
-        .facet(FacetSpec::row(data::category(&data, "group")));
+        .facet(FacetSpec::row(data.group.clone()));
     assert!(faceted
         .preflight()
         .unwrap_err()
@@ -103,7 +110,7 @@ fn panel_text_rejects_facets() {
 fn panel_text_rejects_colliding_inside_legend() {
     let data = scatter_data();
     let chart = scatter(&data)
-        .hue(data::category(&data, "group"))
+        .hue(data.group.clone())
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::TopRight, "Caller note").unwrap(),
         )
@@ -120,7 +127,7 @@ fn panel_text_rejects_colliding_inside_legend() {
 fn automatic_legend_falls_back_around_panel_text() {
     let data = scatter_data();
     let chart = scatter(&data)
-        .hue(data::category(&data, "group"))
+        .hue(data.group.clone())
         .panel_text_annotation(
             PanelTextAnnotation::new(PanelCorner::TopRight, "Caller note").unwrap(),
         );

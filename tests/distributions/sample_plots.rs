@@ -2,7 +2,7 @@ use super::*;
 
 /// Violin plot renders to a non-empty SVG without
 /// panicking. We use a 3-species × 15-observation
-/// synthetic fixture (smaller than the iris
+/// synthetic sample (smaller than the iris
 /// template's, but enough to exercise the KDE).
 #[test]
 fn violin_smoke() {
@@ -20,15 +20,12 @@ fn violin_smoke() {
             _ => 5.0 + f64::from(i) * 0.1,
         })
         .collect();
-    let df = df!(
-        "species" => species,
-        "value" => value
-    )
-    .unwrap();
+    let species = CategoryValues::new("species", species).unwrap();
+    let value = NumericValues::new("value", value);
 
     let dir = unique_dir("violin-smoke");
     let out = dir.join("violin.svg");
-    let chart = Plot::violin(data::category(&df, "species"), data::numeric(&df, "value"))
+    let chart = Plot::violin(species, value)
         .theme(Theme::Publication)
         .size(640, 480);
     chart.svg(&out).expect("violin render must succeed");
@@ -38,15 +35,12 @@ fn violin_smoke() {
 
 #[test]
 fn mass_spectrum_high_intensity_renders_upward() {
-    let df = df!(
-        "mz" => [100.0_f64, 200.0, 300.0],
-        "intensity" => [1.0_f64, 10.0, 1.0]
-    )
-    .unwrap();
+    let mz = NumericValues::new("mz", [100.0, 200.0, 300.0]);
+    let intensity = NumericValues::new("intensity", [1.0, 10.0, 1.0]);
 
     let dir = unique_dir("mass-spectrum-orientation");
     let out = dir.join("mass_spectrum.svg");
-    let chart = Plot::line(data::numeric(&df, "mz"), data::numeric(&df, "intensity"))
+    let chart = Plot::line(mz, intensity)
         .markers(false)
         .point_layer(
             PointLayer::new(
@@ -92,25 +86,18 @@ fn mass_spectrum_high_intensity_renders_upward() {
 
 #[test]
 fn beeswarm_is_deterministic_and_renders_continuous_colorbar() {
-    let df = df!(
-        "feature" => ["a", "a", "a", "b", "b"],
-        "effect" => [0.1_f64, 0.1, 0.2, -0.3, 0.4],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0]
-    )
-    .unwrap();
+    let feature = CategoryValues::new("feature", ["a", "a", "a", "b", "b"]).unwrap();
+    let effect = NumericValues::new("effect", [0.1, 0.1, 0.2, -0.3, 0.4]);
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0]);
     let dir = unique_dir("beeswarm-deterministic");
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     for path in [&first, &second] {
-        Plot::beeswarm(
-            data::category(&df, "feature"),
-            data::numeric(&df, "effect"),
-            data::numeric(&df, "value"),
-        )
-        .zero_line()
-        .size(420, 300)
-        .svg(path)
-        .unwrap();
+        Plot::beeswarm(feature.clone(), effect.clone(), value.clone())
+            .zero_line()
+            .size(420, 300)
+            .svg(path)
+            .unwrap();
     }
     let first_svg = std::fs::read_to_string(first).unwrap();
     let second_svg = std::fs::read_to_string(second).unwrap();
@@ -130,12 +117,12 @@ fn beeswarm_is_deterministic_and_renders_continuous_colorbar() {
 
 #[test]
 fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
-    let df = df!("value" => [0.0_f64, 0.5, 1.0, 1.5, 2.0, 2.5]).unwrap();
+    let value = NumericValues::new("value", [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]);
     let dir = unique_dir("histogram-deterministic");
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     for path in [&first, &second] {
-        let plot = Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
+        let plot = Plot::histogram(HistogramInput::samples(value.clone()))
             .title("Deterministic histogram")
             .size(420, 300);
         let plot = plot
@@ -153,10 +140,10 @@ fn histogram_svg_is_deterministic_and_labels_selected_statistic() {
 
 #[test]
 fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
-    let df = df!("value" => [1.0_f64, 2.0, 3.0]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0]);
     let dir = unique_dir("histogram-implicit-label-layout");
     let output = dir.join("histogram.svg");
-    Plot::histogram(HistogramInput::samples(data::numeric(&df, "value")))
+    Plot::histogram(HistogramInput::samples(value))
         .svg(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -173,11 +160,10 @@ fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
 
 #[test]
 fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
-    let df = df!("value" => [0.0_f64, 2.0, 4.0, 6.0, 8.0, 10.0]).unwrap();
+    let value = NumericValues::new("value", [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]);
     let dir = unique_dir("histogram-explicit-limits");
     let output = dir.join("histogram.svg");
-    let plot =
-        Plot::histogram(HistogramInput::samples(data::numeric(&df, "value"))).x_limits(2.0, 8.0);
+    let plot = Plot::histogram(HistogramInput::samples(value)).x_limits(2.0, 8.0);
     let plot = plot.bins(HistogramBins::Count(5));
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -189,17 +175,16 @@ fn histogram_explicit_limits_project_marks_beyond_clipped_panel() {
 }
 
 #[test]
-fn histogram_rejects_null_nonfinite_and_empty_columns() {
+fn histogram_rejects_null_nonfinite_and_empty_values() {
     let cases = [
-        Series::new("value".into(), [Some(1.0_f64), None]),
-        Series::new("value".into(), [1.0_f64, f64::INFINITY]),
-        Series::new("value".into(), Vec::<f64>::new()),
+        NumericValues::nullable("value", [Some(1.0), None]),
+        NumericValues::new("value", [1.0, f64::INFINITY]),
+        NumericValues::new("value", []),
     ];
     for (index, values) in cases.into_iter().enumerate() {
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
         let dir = unique_dir(&format!("histogram-invalid-{index}"));
         let output = dir.join("histogram.svg");
-        let chart = Plot::histogram(HistogramInput::samples(data::numeric(&data, "value")));
+        let chart = Plot::histogram(HistogramInput::samples(values));
         assert!(chart.svg(&output).is_err(), "invalid case {index}");
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -207,18 +192,15 @@ fn histogram_rejects_null_nonfinite_and_empty_columns() {
 
 #[test]
 fn density_hue_is_deterministic_with_independent_curves_and_stable_legend() {
-    let df = df!(
-        "value" => [1.0_f64, 2.0, 1.5, 4.0, 5.0, 4.5],
-        "group" => ["b", "b", "b", "a", "a", "a"]
-    )
-    .unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 1.5, 4.0, 5.0, 4.5]);
+    let group = CategoryValues::new("group", ["b", "b", "b", "a", "a", "a"]).unwrap();
     let dir = unique_dir("density-hue-deterministic");
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     for path in [&first, &second] {
-        Plot::density(data::numeric(&df, "value"))
-            .group(data::category(&df, "group"))
-            .hue(data::category(&df, "group"))
+        Plot::density(value.clone())
+            .group(group.clone())
+            .hue(group.clone())
             .svg(path)
             .unwrap();
     }
@@ -234,16 +216,17 @@ fn density_hue_is_deterministic_with_independent_curves_and_stable_legend() {
 
 #[test]
 fn density_best_legend_avoids_top_right_curve_peak() {
-    let df = df!(
-        "value" => [0.0_f64, 2.0, 4.0, 9.0, 9.05, 9.1],
-        "group" => ["broad", "broad", "broad", "sharp", "sharp", "sharp"]
+    let value = NumericValues::new("value", [0.0, 2.0, 4.0, 9.0, 9.05, 9.1]);
+    let group = CategoryValues::new(
+        "group",
+        ["broad", "broad", "broad", "sharp", "sharp", "sharp"],
     )
     .unwrap();
     let dir = unique_dir("density-legend-avoidance");
     let output = dir.join("density.svg");
-    Plot::density(data::numeric(&df, "value"))
-        .group(data::category(&df, "group"))
-        .hue(data::category(&df, "group"))
+    Plot::density(value)
+        .group(group.clone())
+        .hue(group)
         .svg(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -273,12 +256,10 @@ fn density_best_legend_avoids_top_right_curve_peak() {
 
 #[test]
 fn density_explicit_limits_clip_full_sample_kde() {
-    let df = df!("value" => [0.0_f64, 1.0, 2.0, 8.0, 9.0, 10.0]).unwrap();
+    let value = NumericValues::new("value", [0.0, 1.0, 2.0, 8.0, 9.0, 10.0]);
     let dir = unique_dir("density-explicit-limits");
     let output = dir.join("density.svg");
-    let chart = Plot::density(data::numeric(&df, "value"))
-        .x_limits(1.0, 2.0)
-        .y_limits(0.0, 0.5);
+    let chart = Plot::density(value).x_limits(1.0, 2.0).y_limits(0.0, 0.5);
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -305,10 +286,9 @@ fn density_explicit_limits_clip_full_sample_kde() {
 fn density_clips_large_finite_support_before_projection() {
     let base = 1e307_f64;
     let values = [base, base + 1e293, base + 2e293, base + 3e293];
-    let df = df!("value" => values).unwrap();
     let dir = unique_dir("density-large-support-explicit-limits");
     let output = dir.join("density.svg");
-    let chart = Plot::density(data::numeric(&df, "value"))
+    let chart = Plot::density(NumericValues::new("value", values))
         .x_limits(values[1], values[2])
         .y_limits(0.0, 2.4e-294);
     chart.svg(&output).unwrap();
@@ -335,10 +315,9 @@ fn density_clips_large_finite_support_before_projection() {
 #[test]
 fn density_renders_broad_opposite_sign_support_with_tiny_auto_y_range() {
     let extreme = f64::MAX * 0.2;
-    let df = df!("value" => [-extreme, extreme]).unwrap();
     let dir = unique_dir("density-broad-opposite-sign-support");
     let output = dir.join("density.svg");
-    Plot::density(data::numeric(&df, "value"))
+    Plot::density(NumericValues::new("value", [-extreme, extreme]))
         .svg(&output)
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -351,33 +330,30 @@ fn density_renders_broad_opposite_sign_support_with_tiny_auto_y_range() {
 #[test]
 fn density_rejects_null_and_nonfinite_values() {
     for (index, values) in [
-        Series::new("value".into(), [Some(1.0_f64), None, Some(2.0)]),
-        Series::new("value".into(), [1.0_f64, f64::INFINITY, 2.0]),
+        NumericValues::nullable("value", [Some(1.0), None, Some(2.0)]),
+        NumericValues::new("value", [1.0, f64::INFINITY, 2.0]),
     ]
     .into_iter()
     .enumerate()
     {
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
         let dir = unique_dir(&format!("density-invalid-{index}"));
         let output = dir.join("density.svg");
-        assert!(Plot::density(data::numeric(&data, "value"))
-            .svg(&output)
-            .is_err());
+        assert!(Plot::density(values).svg(&output).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
 
 #[test]
 fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
-    let df = df!("value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0]);
     let dir = unique_dir("qq-deterministic");
     let first = dir.join("first.svg");
     let second = dir.join("second.svg");
     let hidden = dir.join("hidden.svg");
     for path in [&first, &second] {
-        Plot::qq(data::numeric(&df, "value")).svg(path).unwrap();
+        Plot::qq(value.clone()).svg(path).unwrap();
     }
-    let hidden_plot = Plot::qq(data::numeric(&df, "value"));
+    let hidden_plot = Plot::qq(value);
     let hidden_plot = hidden_plot.reference_line(QqLine::Hidden);
     hidden_plot.svg(&hidden).unwrap();
 
@@ -395,30 +371,25 @@ fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
 #[test]
 fn qq_rejects_null_and_nonfinite_values() {
     for (index, values) in [
-        Series::new("value".into(), [Some(1.0_f64), None]),
-        Series::new("value".into(), [1.0_f64, f64::NAN]),
+        NumericValues::nullable("value", [Some(1.0), None]),
+        NumericValues::new("value", [1.0, f64::NAN]),
     ]
     .into_iter()
     .enumerate()
     {
-        let data = DataFrame::new(values.len(), vec![values.into()]).unwrap();
         let dir = unique_dir(&format!("qq-invalid-{index}"));
         let output = dir.join("qq.svg");
-        assert!(Plot::qq(data::numeric(&data, "value"))
-            .svg(&output)
-            .is_err());
+        assert!(Plot::qq(values).svg(&output).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
 
 #[test]
 fn qq_explicit_limits_clip_points_and_reference_line() {
-    let df = df!("value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0]);
     let dir = unique_dir("qq-explicit-limits");
     let output = dir.join("qq.svg");
-    let chart = Plot::qq(data::numeric(&df, "value"))
-        .x_limits(-0.5, 0.5)
-        .y_limits(2.0, 4.0);
+    let chart = Plot::qq(value).x_limits(-0.5, 0.5).y_limits(2.0, 4.0);
 
     chart.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -430,10 +401,11 @@ fn qq_explicit_limits_clip_points_and_reference_line() {
 
 #[test]
 fn qq_renders_constant_large_finite_sample_with_representable_auto_range() {
-    let df = df!("value" => [1e300_f64, 1e300, 1e300]).unwrap();
     let dir = unique_dir("qq-large-constant");
     let output = dir.join("qq.svg");
-    Plot::qq(data::numeric(&df, "value")).svg(&output).unwrap();
+    Plot::qq(NumericValues::new("value", [1e300, 1e300, 1e300]))
+        .svg(&output)
+        .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
     assert_eq!(svg.matches("<circle ").count(), 3);
@@ -449,10 +421,11 @@ fn qq_renders_zero_subnormal_and_f64_max_constants() {
         ("maximum", f64::MAX),
         ("minimum", -f64::MAX),
     ] {
-        let df = df!("value" => [value, value, value]).unwrap();
         let dir = unique_dir(&format!("qq-constant-{name}"));
         let output = dir.join("qq.svg");
-        Plot::qq(data::numeric(&df, "value")).svg(&output).unwrap();
+        Plot::qq(NumericValues::new("value", [value, value, value]))
+            .svg(&output)
+            .unwrap();
         let svg = std::fs::read_to_string(output).unwrap();
 
         assert_eq!(svg.matches("<circle ").count(), 3, "{name}");
@@ -464,10 +437,9 @@ fn qq_renders_zero_subnormal_and_f64_max_constants() {
 #[test]
 fn qq_renders_with_adjacent_finite_explicit_limits() {
     let upper = f64::from_bits(1);
-    let df = df!("value" => [0.0_f64, upper]).unwrap();
     let dir = unique_dir("qq-adjacent-explicit-limits");
     let output = dir.join("qq.svg");
-    let plot = Plot::qq(data::numeric(&df, "value")).y_limits(0.0, upper);
+    let plot = Plot::qq(NumericValues::new("value", [0.0, upper])).y_limits(0.0, upper);
     let plot = plot.reference_line(QqLine::Hidden);
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
@@ -479,14 +451,16 @@ fn qq_renders_with_adjacent_finite_explicit_limits() {
 
 #[test]
 fn qq_default_quartiles_report_unrepresentable_extreme_geometry() {
-    let df = df!("value" => [-f64::MAX, -f64::MAX, f64::MAX, f64::MAX]).unwrap();
     let dir = unique_dir("qq-opposite-extremes-auto");
     let output = dir.join("qq.svg");
-    let error = Plot::qq(data::numeric(&df, "value"))
-        .svg(&output)
-        .err()
-        .unwrap()
-        .to_string();
+    let error = Plot::qq(NumericValues::new(
+        "value",
+        [-f64::MAX, -f64::MAX, f64::MAX, f64::MAX],
+    ))
+    .svg(&output)
+    .err()
+    .unwrap()
+    .to_string();
 
     assert!(error.contains("quartile reference line geometry is not representable"));
     assert!(error.contains("QqLine::Hidden or QqLine::Identity"));
@@ -495,10 +469,9 @@ fn qq_default_quartiles_report_unrepresentable_extreme_geometry() {
 
 #[test]
 fn qq_explicit_limits_skip_opposite_sign_extreme_outliers_before_projection() {
-    let df = df!("value" => [-f64::MAX, 0.0, f64::MAX]).unwrap();
     let dir = unique_dir("qq-opposite-extremes-explicit");
     let output = dir.join("qq.svg");
-    let plot = Plot::qq(data::numeric(&df, "value"))
+    let plot = Plot::qq(NumericValues::new("value", [-f64::MAX, 0.0, f64::MAX]))
         .x_limits(-2.0, 2.0)
         .y_limits(-1.0, 1.0);
     let plot = plot.reference_line(QqLine::Hidden);
@@ -512,10 +485,9 @@ fn qq_explicit_limits_skip_opposite_sign_extreme_outliers_before_projection() {
 
 #[test]
 fn qq_hidden_line_renders_opposite_extremes_with_exact_auto_range() {
-    let df = df!("value" => [-f64::MAX, f64::MAX]).unwrap();
     let dir = unique_dir("qq-opposite-extremes-auto-hidden");
     let output = dir.join("qq.svg");
-    let plot = Plot::qq(data::numeric(&df, "value"));
+    let plot = Plot::qq(NumericValues::new("value", [-f64::MAX, f64::MAX]));
     let plot = plot.reference_line(QqLine::Hidden);
     plot.svg(&output).unwrap();
     let svg = std::fs::read_to_string(output).unwrap();

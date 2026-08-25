@@ -1,24 +1,17 @@
 use super::{
-    configured_chart, fixture, test_directory, DataFrame, Plot, PlotKind, RecordingBackend, Series,
+    canonical_plot_values, configured_chart, test_directory, Plot, PlotKind, RecordingBackend,
 };
+use crate::{CategoryValues, NumericValues};
 
 #[test]
 fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     let long_group = "category label long enough to expand the panel";
-    let group = Series::new("group".into(), [long_group, long_group]);
-    let x = Series::new("x".into(), [1.0_f64, 2.0]);
-    let y = Series::new("y".into(), [2.0_f64, 3.0]);
-    let color = Series::new("color".into(), [0.1_f64, 1.0]);
-    let data = DataFrame::new(
-        group.len(),
-        vec![group.into(), x.into(), y.into(), color.into()],
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", [long_group, long_group]).unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0]);
+    let y = NumericValues::new("y", [2.0, 3.0]);
+    let color = NumericValues::new("color", [0.1, 1.0]);
 
-    let horizontal = Plot::horizontal_bar(
-        crate::test_support::category(&data, "group"),
-        crate::BarInput::samples(crate::test_support::numeric(&data, "y")),
-    );
+    let horizontal = Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone()));
     let outer_panel = horizontal.canvas_layout().panel_box;
     let mut horizontal_backend = RecordingBackend::default();
     horizontal
@@ -26,12 +19,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .unwrap();
     assert!(horizontal_backend.clips[0].x0 > outer_panel.x0);
 
-    let beeswarm = Plot::beeswarm(
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "color"),
-    )
-    .size(800, 600);
+    let beeswarm = Plot::beeswarm(group, x.clone(), color).size(800, 600);
     let mut beeswarm_backend = RecordingBackend::default();
     beeswarm
         .render_kind(PlotKind::Beeswarm, &mut beeswarm_backend)
@@ -55,21 +43,14 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     assert!((f64::from(low_label.0) - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
     assert!((f64::from(low_label.1) - (bottom - 13.0).max(0.0).trunc()).abs() < f64::EPSILON);
 
-    let marginal = Plot::marginal(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    );
+    let marginal = Plot::marginal(x.clone(), y.clone());
     let mut marginal_backend = RecordingBackend::default();
     marginal
         .render_kind(PlotKind::Marginal, &mut marginal_backend)
         .unwrap();
     assert_eq!(marginal_backend.clips.len(), 3);
 
-    let matrix = Plot::matrix(vec![
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    ])
-    .title("Matrix title");
+    let matrix = Plot::matrix(vec![x, y]).title("Matrix title");
     let mut matrix_backend = RecordingBackend::default();
     matrix
         .render_kind(PlotKind::Matrix, &mut matrix_backend)
@@ -79,7 +60,7 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
 
 #[test]
 fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let cases = [
         (PlotKind::HorizontalBar, "horizontal", 1_usize),
         (PlotKind::Beeswarm, "beeswarm", 1),
@@ -110,7 +91,7 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
 
 #[test]
 fn point_layer_label_uses_math_space_y() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [2.0]),
         crate::NumericValues::new("peak y", [3.0]),
@@ -119,11 +100,7 @@ fn point_layer_label_uses_math_space_y() {
     .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["2.0"]).unwrap());
-    let chart = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    )
-    .point_layer(layer);
+    let chart = Plot::line(data.x.clone(), data.y.clone()).point_layer(layer);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Line, &mut backend).unwrap();
@@ -140,7 +117,7 @@ fn point_layer_label_uses_math_space_y() {
 
 #[test]
 fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [-0.1, 2.0, 3.5]),
         crate::NumericValues::new("peak y", [2.0, 3.0, 4.0]),
@@ -149,13 +126,10 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["-0.1", "2.0", "3.5"]).unwrap());
-    let chart = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    )
-    .point_layer(layer)
-    .x_limits(0.0, 3.0)
-    .y_limits(0.0, 6.0);
+    let chart = Plot::line(data.x.clone(), data.y.clone())
+        .point_layer(layer)
+        .x_limits(0.0, 3.0)
+        .y_limits(0.0, 6.0);
     let dir = test_directory("mass-label-explicit-limits");
     let output = dir.join("canvas.svg");
 
@@ -170,17 +144,9 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
 
 #[test]
 fn explicit_limits_omit_out_of_range_waterfall_annotations_from_svg() {
-    let category = Series::new("category".into(), ["a", "b"]);
-    let delta = Series::new("delta".into(), [2.0_f64, -1.0]);
-    let base = Series::new("base".into(), [10.0_f64, 10.0]);
-    let data = DataFrame::new(
-        category.len(),
-        vec![category.into(), delta.into(), base.into()],
-    )
-    .unwrap();
     let chart = Plot::waterfall(
-        crate::test_support::category(&data, "category"),
-        crate::test_support::numeric(&data, "delta"),
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        NumericValues::new("delta", [2.0, -1.0]),
         10.0,
     )
     .x_limits(10.5, 11.5);

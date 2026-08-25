@@ -1,26 +1,30 @@
 use super::*;
 
-fn frame() -> DataFrame {
-    df!(
-        "x" => [2.0_f64, 0.0, 1.0],
-        "estimate" => [6.0_f64, 2.0, 4.0],
-        "lower" => [5.0_f64, 1.0, 3.0],
-        "upper" => [7.0_f64, 3.0, 5.0]
-    )
-    .unwrap()
+struct EffectBandData {
+    x: NumericValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
 }
 
-fn line(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
-    Plot::line(data::numeric(frame, "x"), data::numeric(frame, "estimate")).band(Bounds::new(
-        data::numeric(frame, "lower"),
-        data::numeric(frame, "upper"),
-    ))
+fn effect_band_data() -> EffectBandData {
+    EffectBandData {
+        x: NumericValues::new("x", [2.0, 0.0, 1.0]),
+        estimate: NumericValues::new("estimate", [6.0, 2.0, 4.0]),
+        lower: NumericValues::new("lower", [5.0, 1.0, 3.0]),
+        upper: NumericValues::new("upper", [7.0, 3.0, 5.0]),
+    }
+}
+
+fn line(data: &EffectBandData) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(data.x.clone(), data.estimate.clone())
+        .band(Bounds::new(data.lower.clone(), data.upper.clone()))
 }
 
 #[test]
 fn generic_line_band_uses_exact_precomputed_geometry() {
-    let frame = frame();
-    let output = render_svg(line(&frame), "line-band").unwrap();
+    let data = effect_band_data();
+    let output = render_svg(line(&data), "line-band").unwrap();
 
     assert_eq!(output.matches("fill-opacity=\"0.18\"").count(), 1);
     assert_eq!(output.matches("stroke-width=\"1.8\"").count(), 1);

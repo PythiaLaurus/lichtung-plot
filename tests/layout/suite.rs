@@ -1,8 +1,7 @@
-use lichtung_plot::{AxisTick, BarInput, Labels, LegendPolicy, LegendPosition, Plot, PointLayer};
-
-#[path = "../support/data.rs"]
-mod data;
-use data::df;
+use lichtung_plot::{
+    AxisTick, BarInput, CategoryValues, Labels, LegendPolicy, LegendPosition, NumericValues, Plot,
+    PointLayer,
+};
 
 #[path = "../support/visual.rs"]
 mod support;

@@ -1,35 +1,42 @@
 use super::*;
 
-fn interaction_data() -> DataFrame {
-    df!(
-        "condition" => ["Before", "After", "Before", "After"],
-        "series" => ["Control", "Control", "Active", "Active"],
-        "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
-        "lower" => [0.8_f64, 1.3, 1.0, 1.8],
-        "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-    )
-    .unwrap()
+struct ConnectorData {
+    condition: CategoryValues,
+    series: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
 }
 
-fn connector_collision_data() -> DataFrame {
-    df!(
-        "condition" => ["one", "two", "three", "four"],
-        "series" => ["A"; 4],
-        "estimate" => [0.0_f64, 0.0, 1.0, 0.6],
-        "lower" => [-0.01_f64, -0.01, 0.99, 0.59],
-        "upper" => [0.01_f64, 0.01, 1.01, 0.61],
-    )
-    .unwrap()
+fn interaction_data() -> ConnectorData {
+    ConnectorData {
+        condition: CategoryValues::new("condition", ["Before", "After", "Before", "After"])
+            .unwrap(),
+        series: CategoryValues::new("series", ["Control", "Control", "Active", "Active"]).unwrap(),
+        estimate: NumericValues::new("estimate", [1.0, 1.5, 1.2, 2.0]),
+        lower: NumericValues::new("lower", [0.8, 1.3, 1.0, 1.8]),
+        upper: NumericValues::new("upper", [1.2, 1.7, 1.4, 2.2]),
+    }
 }
 
-fn chart(frame: &DataFrame) -> Plot<lichtung_plot::kind::Interaction> {
+fn connector_collision_data() -> ConnectorData {
+    ConnectorData {
+        condition: CategoryValues::new("condition", ["one", "two", "three", "four"]).unwrap(),
+        series: CategoryValues::new("series", ["A"; 4]).unwrap(),
+        estimate: NumericValues::new("estimate", [0.0, 0.0, 1.0, 0.6]),
+        lower: NumericValues::new("lower", [-0.01, -0.01, 0.99, 0.59]),
+        upper: NumericValues::new("upper", [0.01, 0.01, 1.01, 0.61]),
+    }
+}
+
+fn chart(data: &ConnectorData) -> Plot<lichtung_plot::kind::Interaction> {
     Plot::interaction(
-        data::category(frame, "condition"),
-        data::numeric(frame, "estimate"),
-        data::category(frame, "series"),
-        Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+        data.condition.clone(),
+        data.estimate.clone(),
+        data.series.clone(),
+        Bounds::new(data.lower.clone(), data.upper.clone()),
     )
-    .hue(data::category(frame, "series"))
+    .hue(data.series.clone())
     .size(480, 320)
 }
 

@@ -1,10 +1,4 @@
-use lichtung_plot::{BarInput, Plot};
-#[allow(
-    clippy::duplicate_mod,
-    reason = "each explicit integration target is an independent crate"
-)]
-#[path = "../support/data.rs"]
-mod data;
+use lichtung_plot::{BarInput, CategoryValues, NumericValues, Plot};
 #[path = "../support/visual.rs"]
 mod support;
 
@@ -25,17 +19,14 @@ fn scatter_smoke_snapshot() {
 
 #[test]
 fn matrix_clip_structure_snapshot() {
-    let data = data::df!(
-        "x" => [1.0_f64, 2.0, 3.0, 4.0],
-        "y" => [4.0_f64, 3.0, 2.0, 1.0],
-        "group" => ["a", "a", "b", "b"]
-    )
-    .unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]);
+    let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
     let dir = tempdir();
     let out = dir.join("matrix-structure.svg");
-    let chart = Plot::matrix(vec![data::numeric(&data, "x"), data::numeric(&data, "y")])
-        .group(data::category(&data, "group"))
-        .hue(data::category(&data, "group"))
+    let chart = Plot::matrix(vec![x, y])
+        .group(group.clone())
+        .hue(group)
         .title("Matrix structural title");
 
     chart.size(360, 280).svg(&out).unwrap();
@@ -49,20 +40,12 @@ fn matrix_clip_structure_snapshot() {
 
 #[test]
 fn beeswarm_clip_structure_snapshot() {
-    let data = data::df!(
-        "category" => ["first", "first", "second", "second"],
-        "value" => [-2.0_f64, -1.0, 1.0, 2.0],
-        "color" => [0.1_f64, 0.3, 0.7, 1.0]
-    )
-    .unwrap();
+    let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
+    let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);
+    let color = NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]);
     let dir = tempdir();
     let out = dir.join("beeswarm-structure.svg");
-    let chart = Plot::beeswarm(
-        data::category(&data, "category"),
-        data::numeric(&data, "value"),
-        data::numeric(&data, "color"),
-    )
-    .title("Beeswarm structural title");
+    let chart = Plot::beeswarm(category, value, color).title("Beeswarm structural title");
 
     chart.size(360, 280).svg(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
@@ -75,19 +58,14 @@ fn beeswarm_clip_structure_snapshot() {
 
 #[test]
 fn horizontal_bar_clip_structure_snapshot() {
-    let data = data::df!(
-        "category" => ["a deliberately long category", "short"],
-        "value" => [2.0_f64, 4.0]
-    )
-    .unwrap();
+    let category =
+        CategoryValues::new("category", ["a deliberately long category", "short"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 4.0]);
     let dir = tempdir();
     let out = dir.join("horizontal-structure.svg");
-    let chart = Plot::horizontal_bar(
-        data::category(&data, "category"),
-        BarInput::estimates(data::numeric(&data, "value")),
-    )
-    .title("Horizontal structural title")
-    .size(360, 280);
+    let chart = Plot::horizontal_bar(category, BarInput::estimates(value))
+        .title("Horizontal structural title")
+        .size(360, 280);
 
     chart.svg(&out).unwrap();
     let svg = std::fs::read_to_string(out).unwrap();
@@ -103,14 +81,11 @@ fn horizontal_bar_clip_structure_snapshot() {
 
 #[test]
 fn marginal_clip_structure_snapshot() {
-    let data = data::df!(
-        "x" => [1.0_f64, 2.0, 3.0, 4.0],
-        "y" => [1.0_f64, 4.0, 2.0, 3.0]
-    )
-    .unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 4.0, 2.0, 3.0]);
     let dir = tempdir();
     let out = dir.join("marginal-structure.svg");
-    let chart = Plot::marginal(data::numeric(&data, "x"), data::numeric(&data, "y"))
+    let chart = Plot::marginal(x, y)
         .title("Marginal structural title")
         .size(360, 280);
 

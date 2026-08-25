@@ -1,8 +1,6 @@
-use lichtung_plot::{BarInput, BarSpacing, CategoryOrder, Labels, Plot, ValueSort};
-
-#[path = "../support/data.rs"]
-mod data;
-use data::{df, DataFrame};
+use lichtung_plot::{
+    BarInput, BarSpacing, CategoryOrder, CategoryValues, Labels, NumericValues, Plot, ValueSort,
+};
 
 #[path = "../support/visual.rs"]
 mod support;

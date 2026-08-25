@@ -1,26 +1,23 @@
 use super::*;
 use crate::layout::deterministic_text_width;
-use crate::test_support::{into_column, Fixture, FixtureColumn};
-use crate::{CategoryOrder, ValueSort};
+use crate::{CategoryOrder, CategoryValues, NumericValues, ValueSort};
 
-fn data(x: FixtureColumn, y: FixtureColumn, fill: FixtureColumn) -> Fixture {
-    Fixture::from_columns(vec![("x", x), ("y", y), ("fill", fill)]).unwrap()
+struct HeatmapValues {
+    x: CategoryValues,
+    y: CategoryValues,
+    fill: NumericValues,
 }
 
-fn valid_data() -> Fixture {
-    data(
-        into_column([" b ", "a", "b"]),
-        into_column(["first", "first", " second  row "]),
-        into_column([1.0_f64, 2.0, 3.0]),
-    )
+fn valid_data() -> HeatmapValues {
+    HeatmapValues {
+        x: CategoryValues::new("x", [" b ", "a", "b"]).unwrap(),
+        y: CategoryValues::new("y", ["first", "first", " second  row "]).unwrap(),
+        fill: NumericValues::new("fill", [1.0, 2.0, 3.0]),
+    }
 }
 
-fn chart(data: &Fixture) -> Plot<crate::kind::Heatmap> {
-    Plot::heatmap(
-        crate::test_support::category(data, "x"),
-        crate::test_support::category(data, "y"),
-        crate::test_support::numeric(data, "fill"),
-    )
+fn chart(data: &HeatmapValues) -> Plot<crate::kind::Heatmap> {
+    Plot::heatmap(data.x.clone(), data.y.clone(), data.fill.clone())
 }
 
 fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Error> {
@@ -45,11 +42,11 @@ fn prepare_normalizes_categories_and_preserves_first_observed_axes() {
 
 #[test]
 fn prepare_applies_independent_explicit_orders_to_shuffled_cells() {
-    let data = data(
-        into_column(["b", "a", "b", "a"]),
-        into_column(["south", "north", "north", "south"]),
-        into_column([4.0_f64, 1.0, 2.0, 3.0]),
-    );
+    let data = HeatmapValues {
+        x: CategoryValues::new("x", ["b", "a", "b", "a"]).unwrap(),
+        y: CategoryValues::new("y", ["south", "north", "north", "south"]).unwrap(),
+        fill: NumericValues::new("fill", [4.0, 1.0, 2.0, 3.0]),
+    };
     let chart = chart(&data)
         .x_category_order(CategoryOrder::explicit([" a ", "b"]))
         .y_category_order(CategoryOrder::explicit([" north ", "south"]));
@@ -82,11 +79,11 @@ fn prepare_rejects_inexact_explicit_axis_orders() {
 
 #[test]
 fn prepare_reorients_triangular_pairs_under_explicit_family_order() {
-    let data = data(
-        into_column(["a", "a", "b"]),
-        into_column(["b", "c", "c"]),
-        into_column([1.0_f64, 2.0, 3.0]),
-    );
+    let data = HeatmapValues {
+        x: CategoryValues::new("x", ["a", "a", "b"]).unwrap(),
+        y: CategoryValues::new("y", ["b", "c", "c"]).unwrap(),
+        fill: NumericValues::new("fill", [1.0, 2.0, 3.0]),
+    };
     let chart = chart(&data)
         .layout(HeatmapLayout::LowerTriangle { diagonal: false })
         .x_category_order(CategoryOrder::explicit(["c", "b", "a"]));
@@ -102,11 +99,11 @@ fn prepare_reorients_triangular_pairs_under_explicit_family_order() {
 
 #[test]
 fn prepare_builds_cartesian_grid_with_absent_and_null_cells() {
-    let data = data(
-        into_column(["a", "b", "a"]),
-        into_column(["one", "one", "two"]),
-        into_column([Some(1.0_f64), None, Some(3.0)]),
-    );
+    let data = HeatmapValues {
+        x: CategoryValues::new("x", ["a", "b", "a"]).unwrap(),
+        y: CategoryValues::new("y", ["one", "one", "two"]).unwrap(),
+        fill: NumericValues::nullable("fill", [Some(1.0), None, Some(3.0)]),
+    };
 
     let prepared = prepare_chart(&chart(&data)).unwrap();
 
@@ -116,11 +113,11 @@ fn prepare_builds_cartesian_grid_with_absent_and_null_cells() {
 
 #[test]
 fn prepare_rejects_duplicate_normalized_pairs() {
-    let data = data(
-        into_column(["a b", " a  b "]),
-        into_column(["one", "one"]),
-        into_column([1.0_f64, 2.0]),
-    );
+    let data = HeatmapValues {
+        x: CategoryValues::new("x", ["a b", " a  b "]).unwrap(),
+        y: CategoryValues::new("y", ["one", "one"]).unwrap(),
+        fill: NumericValues::new("fill", [1.0, 2.0]),
+    };
 
     let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
 
@@ -130,10 +127,14 @@ fn prepare_rejects_duplicate_normalized_pairs() {
 #[test]
 fn prepare_rejects_null_and_empty_category_labels() {
     for x in [
-        into_column([Some("a"), None]),
-        into_column([Some("a"), Some(" \t ")]),
+        CategoryValues::nullable("x", [Some("a"), None]).unwrap(),
+        CategoryValues::nullable("x", [Some("a"), Some(" \t ")]).unwrap(),
     ] {
-        let data = data(x, into_column(["one", "two"]), into_column([1.0_f64, 2.0]));
+        let data = HeatmapValues {
+            x,
+            y: CategoryValues::new("y", ["one", "two"]).unwrap(),
+            fill: NumericValues::new("fill", [1.0, 2.0]),
+        };
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 }
@@ -141,11 +142,15 @@ fn prepare_rejects_null_and_empty_category_labels() {
 #[test]
 fn prepare_rejects_non_finite_and_all_null_fill() {
     for fill in [
-        into_column([Some(1.0_f64), Some(f64::NAN)]),
-        into_column([Some(1.0_f64), Some(f64::INFINITY)]),
-        into_column([None::<f64>, None]),
+        NumericValues::nullable("fill", [Some(1.0), Some(f64::NAN)]),
+        NumericValues::nullable("fill", [Some(1.0), Some(f64::INFINITY)]),
+        NumericValues::nullable("fill", [None, None]),
     ] {
-        let data = data(into_column(["a", "b"]), into_column(["one", "one"]), fill);
+        let data = HeatmapValues {
+            x: CategoryValues::new("x", ["a", "b"]).unwrap(),
+            y: CategoryValues::new("y", ["one", "one"]).unwrap(),
+            fill,
+        };
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 }
@@ -155,11 +160,11 @@ fn prepare_rejects_cartesian_grid_above_safety_limit() {
     let levels = (0..=1_000)
         .map(|index| format!("v{index}"))
         .collect::<Vec<_>>();
-    let data = data(
-        into_column(levels.clone()),
-        into_column(levels),
-        into_column(vec![1.0_f64; 1_001]),
-    );
+    let data = HeatmapValues {
+        x: CategoryValues::new("x", levels.clone()).unwrap(),
+        y: CategoryValues::new("y", levels).unwrap(),
+        fill: NumericValues::new("fill", vec![1.0; 1_001]),
+    };
 
     let error = prepare_chart(&chart(&data)).unwrap_err().to_string();
 

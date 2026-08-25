@@ -3,7 +3,7 @@ use super::{
     with_temporary_artifacts, Error,
 };
 #[cfg(feature = "png")]
-use super::{configured_chart, fixture, PlotKind};
+use super::{canonical_plot_values, configured_chart, PlotKind};
 
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
@@ -75,7 +75,7 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     let dir = test_directory("failed-png-publication");
     let output = dir.join("canvas.png");
     std::fs::write(&output, b"existing png artifact").unwrap();
-    let data = fixture();
+    let data = canonical_plot_values();
     let options = PngOptions {
         sizing: PngSizing::Scale(0.0),
         compression: PngCompression::Balanced,
@@ -95,7 +95,7 @@ fn chained_outputs_publish_each_file_independently() {
     let dir = test_directory("successful-chained-publication");
     let svg = dir.join("canvas.svg");
     let png = dir.join("canvas.png");
-    let data = fixture();
+    let data = canonical_plot_values();
 
     configured_chart(&data, PlotKind::Scatter)
         .svg(&svg)

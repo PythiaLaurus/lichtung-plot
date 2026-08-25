@@ -13,10 +13,8 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 fn erased_plot_retains_common_operations_and_exact_output() {
     use lichtung_plot::{Canvas, PlotKind};
 
-    let df = fixture_df();
-    let exact = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
-        .size(321, 234)
-        .title("Erasure parity");
+    let (x, y) = fixture_values();
+    let exact = Plot::scatter(x, y).size(321, 234).title("Erasure parity");
 
     assert_eq!(exact.kind(), PlotKind::Scatter);
     assert_eq!((exact.width(), exact.height()), (321, 234));
@@ -135,11 +133,8 @@ fn contextual_builders_preserve_exact_plot_markers() {
 
 #[test]
 fn categorical_plots_render_stacked_pairwise_brackets() {
-    let df = df!(
-        "group" => ["a", "a", "b", "b", "c", "c"],
-        "value" => [1.0_f64, 1.2, 2.0, 2.2, 3.0, 3.2]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["a", "a", "b", "b", "c", "c"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 1.2, 2.0, 2.2, 3.0, 3.2]);
     let comparisons = vec![
         Significance::between("a", "b", SignificanceMark::PValue(0.04)),
         Significance::between("b", "c", SignificanceMark::PValue(0.005)),
@@ -148,18 +143,15 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
 
     for kind in ["bar", "boxplot", "violin"] {
         let plot = match kind {
-            "bar" => Plot::bar(
-                data::category(&df, "group"),
-                BarInput::samples(data::numeric(&df, "value")),
-            )
-            .significance(comparisons.clone())
-            .size(360, 280)
-            .erase(),
-            "boxplot" => Plot::boxplot(data::category(&df, "group"), data::numeric(&df, "value"))
+            "bar" => Plot::bar(group.clone(), BarInput::samples(value.clone()))
                 .significance(comparisons.clone())
                 .size(360, 280)
                 .erase(),
-            _ => Plot::violin(data::category(&df, "group"), data::numeric(&df, "value"))
+            "boxplot" => Plot::boxplot(group.clone(), value.clone())
+                .significance(comparisons.clone())
+                .size(360, 280)
+                .erase(),
+            _ => Plot::violin(group.clone(), value.clone())
                 .significance(comparisons.clone())
                 .size(360, 280)
                 .erase(),
@@ -175,9 +167,9 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
 
 #[test]
 fn chinese_text_uses_system_font_fallback_stack_without_embedding() {
-    let df = fixture_df();
+    let (x, y) = fixture_values();
     let svg = render(
-        Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
+        Plot::scatter(x, y)
             .title("中文分析")
             .x_label("时间")
             .y_label("测量值"),
@@ -194,9 +186,9 @@ fn chinese_text_uses_system_font_fallback_stack_without_embedding() {
 
 #[test]
 fn scatter_points_use_white_outline_by_default() {
-    let df = fixture_df();
+    let (x, y) = fixture_values();
     let svg = render(
-        Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y")).size(320, 240),
+        Plot::scatter(x, y).size(320, 240),
         "scatter-point-outline-default",
     );
 
@@ -208,11 +200,9 @@ fn scatter_points_use_white_outline_by_default() {
 
 #[test]
 fn scatter_point_outline_can_be_disabled() {
-    let df = fixture_df();
+    let (x, y) = fixture_values();
     let svg = render(
-        Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
-            .hide_point_outline()
-            .size(320, 240),
+        Plot::scatter(x, y).hide_point_outline().size(320, 240),
         "scatter-point-outline-disabled",
     );
 
@@ -224,18 +214,15 @@ fn scatter_point_outline_can_be_disabled() {
 
 #[test]
 fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
-    let df = df!(
-        "x" => [1.0_f64, 2.0, 3.0],
-        "y" => [2.0_f64, 3.0, 4.0]
-    )
-    .unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0]);
+    let y = NumericValues::new("y", [2.0, 3.0, 4.0]);
     for (x_limits, y_limits) in [
         ((1.0, 1.0), (0.0, 1.0)),
         ((2.0, 1.0), (0.0, 1.0)),
         ((f64::NAN, 1.0), (0.0, 1.0)),
         ((0.0, 1.0), (0.0, f64::INFINITY)),
     ] {
-        let plot = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
+        let plot = Plot::scatter(x.clone(), y.clone())
             .x_limits(x_limits.0, x_limits.1)
             .y_limits(y_limits.0, y_limits.1);
 
@@ -247,14 +234,9 @@ fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
 
 #[test]
 fn waterfall_terminal_follows_ordered_cancellation() {
-    let df = df!(
-        "label" => ["a", "b"],
-        "delta" => [-10_000_000_000_000_000.0_f64, 1.0]
-    )
-    .unwrap();
     let plot = Plot::waterfall(
-        data::category(&df, "label"),
-        data::numeric(&df, "delta"),
+        CategoryValues::new("label", ["a", "b"]).unwrap(),
+        NumericValues::new("delta", [-10_000_000_000_000_000.0, 1.0]),
         10_000_000_000_000_000.0,
     );
 
@@ -264,14 +246,9 @@ fn waterfall_terminal_follows_ordered_cancellation() {
 
 #[test]
 fn waterfall_accepts_finite_ordered_geometry_when_detached_delta_sum_overflows() {
-    let df = df!(
-        "label" => ["a", "b", "c"],
-        "delta" => [f64::MAX, f64::MAX, -f64::MAX]
-    )
-    .unwrap();
     let plot = Plot::waterfall(
-        data::category(&df, "label"),
-        data::numeric(&df, "delta"),
+        CategoryValues::new("label", ["a", "b", "c"]).unwrap(),
+        NumericValues::new("delta", [f64::MAX, f64::MAX, -f64::MAX]),
         -f64::MAX,
     )
     .size(4_000, 240);
@@ -281,14 +258,9 @@ fn waterfall_accepts_finite_ordered_geometry_when_detached_delta_sum_overflows()
 
 #[test]
 fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
-    let df = df!(
-        "label" => ["a", "b"],
-        "delta" => [f64::MAX, f64::MAX]
-    )
-    .unwrap();
     let plot = Plot::waterfall(
-        data::category(&df, "label"),
-        data::numeric(&df, "delta"),
+        CategoryValues::new("label", ["a", "b"]).unwrap(),
+        NumericValues::new("delta", [f64::MAX, f64::MAX]),
         0.0,
     );
 
@@ -300,15 +272,10 @@ fn waterfall_rejects_nonfinite_intermediate_endpoint_with_source_row() {
 
 #[test]
 fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
-    let df = df!(
-        "label" => ["neutral", "positive", "negative"],
-        "value" => [0.1_f64, 2.0, -1.0]
-    )
-    .unwrap();
     let svg = render(
         Plot::horizontal_bar(
-            data::category(&df, "label"),
-            BarInput::estimates(data::numeric(&df, "value")),
+            CategoryValues::new("label", ["neutral", "positive", "negative"]).unwrap(),
+            BarInput::estimates(NumericValues::new("value", [0.1, 2.0, -1.0])),
         )
         .category_order(ValueSort::Descending)
         .color_by_sign()
@@ -321,16 +288,13 @@ fn signed_horizontal_bar_supports_precomputed_sort_and_zero_line() {
 
 #[test]
 fn scatter_hue_jointly_drops_null_and_nan_pairs_without_panic() {
-    let df = df!(
-        "x" => [Some(1.0_f64), None, Some(f64::NAN), Some(4.0)],
-        "y" => [Some(2.0_f64), Some(3.0), Some(4.0), Some(5.0)],
-        "group" => ["a", "a", "b", "b"]
-    )
-    .unwrap();
     let svg = render(
-        Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
-            .hue(data::category(&df, "group"))
-            .size(320, 240),
+        Plot::scatter(
+            NumericValues::nullable("x", [Some(1.0), None, Some(f64::NAN), Some(4.0)]),
+            NumericValues::nullable("y", [Some(2.0), Some(3.0), Some(4.0), Some(5.0)]),
+        )
+        .hue(CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap())
+        .size(320, 240),
         "scatter-hue-invalid-pairs",
     );
 

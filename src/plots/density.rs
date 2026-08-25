@@ -400,23 +400,32 @@ fn scaled_difference_ratio(high: f64, low: f64, denominator: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{into_column, Fixture};
+    use crate::{CategoryValues, NumericValues};
 
-    fn frame(values: &[f64], labels: Option<&[&str]>) -> Fixture {
-        let mut columns = vec![("value", into_column(values.to_vec()))];
-        if let Some(labels) = labels {
-            columns.push(("group", into_column(labels.to_vec())));
-        }
-        Fixture::from_columns(columns).unwrap()
+    struct DensityValues {
+        values: NumericValues,
+        group: Option<CategoryValues>,
     }
 
-    fn prepare_frame(data: &Fixture, grouped: bool, hued: bool) -> Result<PreparedDensity, Error> {
-        let mut plot = Plot::density(crate::test_support::numeric(data, "value"));
+    fn density_values(values: &[f64], labels: Option<&[&str]>) -> DensityValues {
+        DensityValues {
+            values: NumericValues::new("value", values.iter().copied()),
+            group: labels
+                .map(|labels| CategoryValues::new("group", labels.iter().copied()).unwrap()),
+        }
+    }
+
+    fn prepare_values(
+        data: &DensityValues,
+        grouped: bool,
+        hued: bool,
+    ) -> Result<PreparedDensity, Error> {
+        let mut plot = Plot::density(data.values.clone());
         if grouped {
-            plot = plot.group(crate::test_support::category(data, "group"));
+            plot = plot.group(data.group.as_ref().unwrap().clone());
         }
         if hued {
-            plot = plot.hue(crate::test_support::category(data, "group"));
+            plot = plot.hue(data.group.as_ref().unwrap().clone());
         }
         let plot = plot.erase();
         prepare_density(
@@ -431,12 +440,12 @@ mod tests {
 
     #[test]
     fn grouped_density_preserves_hue_order_and_shared_axis() {
-        let data = frame(
+        let data = density_values(
             &[0.0, 2.0, 1.0, 3.0, 4.0, 6.0],
             Some(&["b", "a", "b", "a", "b", "a"]),
         );
 
-        let prepared = prepare_frame(&data, true, true).unwrap();
+        let prepared = prepare_values(&data, true, true).unwrap();
 
         assert_eq!(prepared.curves[0].identity.hue.as_deref(), Some("b"));
         assert_eq!(prepared.curves[1].identity.hue.as_deref(), Some("a"));
@@ -454,11 +463,11 @@ mod tests {
 
     #[test]
     fn each_hue_density_integrates_independently() {
-        let data = frame(
+        let data = density_values(
             &[0.0, 1.0, 2.0, 10.0, 11.0, 12.0],
             Some(&["a", "a", "a", "b", "b", "b"]),
         );
-        let prepared = prepare_frame(&data, true, true).unwrap();
+        let prepared = prepare_values(&data, true, true).unwrap();
         let integrals = prepared
             .curves
             .iter()
@@ -472,10 +481,10 @@ mod tests {
     #[test]
     fn density_support_uses_deterministic_three_bandwidth_tails() {
         let samples = [0.0, 1.0, 2.0];
-        let data = frame(&samples, None);
+        let data = density_values(&samples, None);
         let bandwidth = strict_scott_bandwidth(&samples).unwrap();
 
-        let prepared = prepare_frame(&data, false, false).unwrap();
+        let prepared = prepare_values(&data, false, false).unwrap();
 
         assert!((prepared.curves[0].grid[0] - (samples[0] - 3.0 * bandwidth)).abs() < 1e-12);
         assert!(
@@ -488,12 +497,12 @@ mod tests {
 
     #[test]
     fn separated_groups_use_local_bandwidth_resolving_grids_without_bridge() {
-        let data = frame(
+        let data = density_values(
             &[0.0, 0.01, 0.02, 100.0, 110.0, 120.0],
             Some(&["sharp", "sharp", "sharp", "broad", "broad", "broad"]),
         );
 
-        let prepared = prepare_frame(&data, true, true).unwrap();
+        let prepared = prepare_values(&data, true, true).unwrap();
         let sharp = &prepared.curves[0];
         let broad = &prepared.curves[1];
 
@@ -507,9 +516,9 @@ mod tests {
 
     #[test]
     fn density_rejects_small_group_with_label() {
-        let data = frame(&[0.0, 1.0, 2.0], Some(&["small", "ok", "ok"]));
+        let data = density_values(&[0.0, 1.0, 2.0], Some(&["small", "ok", "ok"]));
 
-        let error = prepare_frame(&data, true, true).unwrap_err();
+        let error = prepare_values(&data, true, true).unwrap_err();
 
         assert!(error
             .to_string()
@@ -518,9 +527,9 @@ mod tests {
 
     #[test]
     fn density_rejects_constant_group_with_label() {
-        let data = frame(&[1.0, 1.0, 2.0, 3.0], Some(&["flat", "flat", "ok", "ok"]));
+        let data = density_values(&[1.0, 1.0, 2.0, 3.0], Some(&["flat", "flat", "ok", "ok"]));
 
-        let error = prepare_frame(&data, true, true).unwrap_err();
+        let error = prepare_values(&data, true, true).unwrap_err();
 
         assert!(error
             .to_string()
@@ -530,9 +539,9 @@ mod tests {
     #[test]
     fn density_rejects_large_offset_grid_when_coordinates_cannot_be_distinct() {
         let base = 1e300_f64;
-        let data = frame(&[base, base.next_up(), base.next_up().next_up()], None);
+        let data = density_values(&[base, base.next_up(), base.next_up().next_up()], None);
 
-        let error = prepare_frame(&data, false, false).unwrap_err();
+        let error = prepare_values(&data, false, false).unwrap_err();
 
         assert!(error
             .to_string()
@@ -542,9 +551,9 @@ mod tests {
     #[test]
     fn density_large_offset_grid_is_finite_and_strictly_increasing_when_representable() {
         let base = 1e300_f64;
-        let data = frame(&[base, base + 1e287, base + 2e287], None);
+        let data = density_values(&[base, base + 1e287, base + 2e287], None);
 
-        let prepared = prepare_frame(&data, false, false).unwrap();
+        let prepared = prepare_values(&data, false, false).unwrap();
 
         assert!(prepared.curves[0]
             .grid
@@ -559,9 +568,9 @@ mod tests {
     #[test]
     fn density_builds_broad_opposite_sign_grid_when_direct_support_span_overflows() {
         let extreme = f64::MAX * 0.2;
-        let data = frame(&[-extreme, extreme], None);
+        let data = density_values(&[-extreme, extreme], None);
 
-        let prepared = prepare_frame(&data, false, false).unwrap();
+        let prepared = prepare_values(&data, false, false).unwrap();
         let curve = &prepared.curves[0];
 
         assert!((prepared.x_range.1 - prepared.x_range.0).is_infinite());

@@ -1,55 +1,118 @@
 use lichtung_plot::{
-    BarInput, Bounds, DumbbellEndpoints, FacetSpec, Labels, LinePathStyle, Plot, PlotKind,
-    Significance, SignificanceMark, SignificanceTarget,
+    BarInput, Bounds, CategoryValues, DumbbellEndpoints, FacetSpec, Labels, LinePathStyle,
+    NumericValues, Plot, PlotKind, Significance, SignificanceMark, SignificanceTarget,
 };
 
-use super::{data, df, parse_polygon_bounds, remove_legend_layers, unique_dir, DataFrame};
+use super::{parse_polygon_bounds, remove_legend_layers, unique_dir};
 
 const PUBLICATION_COLORS: [(u8, u8, u8); 2] = [(0, 114, 178), (213, 94, 0)];
 
-fn shared_hue_data() -> DataFrame {
-    df!(
-        "group" => ["g1", "g1", "g1", "g2", "g2", "g2", "g3", "g3", "g3"],
-        "hue" => ["shared", "shared", "shared", "other", "other", "other", "shared", "shared", "shared"],
-        "x" => [0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0],
-        "y" => [1.0_f64, 2.0, 4.0, 2.0, 4.0, 7.0, 3.0, 5.0, 9.0],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct CollectiveData {
+    group: CategoryValues,
+    hue: CategoryValues,
+    category: CategoryValues,
+    x: NumericValues,
+    y: NumericValues,
 }
 
-fn shared_hue_interaction_data() -> DataFrame {
-    df!(
-        "condition" => ["before", "after", "before", "after", "before", "after"],
-        "group" => ["g1", "g1", "g2", "g2", "g3", "g3"],
-        "hue" => ["shared", "shared", "other", "other", "shared", "shared"],
-        "estimate" => [1.0_f64, 2.0, 2.0, 4.0, 3.0, 5.0],
-        "lower" => [0.5_f64, 1.5, 1.5, 3.5, 2.5, 4.5],
-        "upper" => [1.5_f64, 2.5, 2.5, 4.5, 3.5, 5.5],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct InteractionData {
+    condition: CategoryValues,
+    group: CategoryValues,
+    hue: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
 }
 
-fn collective_data() -> DataFrame {
-    df!(
-        "group" => ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2", "g2", "g2", "g2", "g2"],
-        "hue" => ["h1", "h1", "h1", "h1", "h1", "h1", "h2", "h2", "h2", "h2", "h2", "h2"],
-        "category" => ["a", "a", "a", "b", "b", "b", "a", "a", "a", "b", "b", "b"],
-        "x" => [0.0_f64, 1.0, 2.0, 3.0, 4.0, 5.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-        "y" => [1.0_f64, 2.0, 4.0, 2.0, 4.0, 7.0, 3.0, 5.0, 9.0, 4.0, 7.0, 11.0],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct DumbbellGroupingData {
+    category: CategoryValues,
+    group: CategoryValues,
+    left: NumericValues,
+    right: NumericValues,
 }
 
-fn interaction_data() -> DataFrame {
-    df!(
-        "condition" => ["before", "after", "before", "after"],
-        "group" => ["g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h1", "h2", "h2"],
-        "estimate" => [1.0_f64, 2.0, 2.0, 4.0],
-        "lower" => [0.5_f64, 1.5, 1.5, 3.5],
-        "upper" => [1.5_f64, 2.5, 2.5, 4.5],
-    )
-    .unwrap()
+fn shared_hue_data() -> CollectiveData {
+    let groups = ["g1", "g1", "g1", "g2", "g2", "g2", "g3", "g3", "g3"];
+    CollectiveData {
+        group: CategoryValues::new("group", groups).unwrap(),
+        hue: CategoryValues::new(
+            "hue",
+            [
+                "shared", "shared", "shared", "other", "other", "other", "shared", "shared",
+                "shared",
+            ],
+        )
+        .unwrap(),
+        category: CategoryValues::new("category", ["a"; 9]).unwrap(),
+        x: NumericValues::new("x", [0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0]),
+        y: NumericValues::new("y", [1.0, 2.0, 4.0, 2.0, 4.0, 7.0, 3.0, 5.0, 9.0]),
+    }
+}
+
+fn shared_hue_interaction_data() -> InteractionData {
+    InteractionData {
+        condition: CategoryValues::new(
+            "condition",
+            ["before", "after", "before", "after", "before", "after"],
+        )
+        .unwrap(),
+        group: CategoryValues::new("group", ["g1", "g1", "g2", "g2", "g3", "g3"]).unwrap(),
+        hue: CategoryValues::new(
+            "hue",
+            ["shared", "shared", "other", "other", "shared", "shared"],
+        )
+        .unwrap(),
+        estimate: NumericValues::new("estimate", [1.0, 2.0, 2.0, 4.0, 3.0, 5.0]),
+        lower: NumericValues::new("lower", [0.5, 1.5, 1.5, 3.5, 2.5, 4.5]),
+        upper: NumericValues::new("upper", [1.5, 2.5, 2.5, 4.5, 3.5, 5.5]),
+    }
+}
+
+fn collective_data() -> CollectiveData {
+    CollectiveData {
+        group: CategoryValues::new(
+            "group",
+            [
+                "g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2", "g2", "g2", "g2", "g2",
+            ],
+        )
+        .unwrap(),
+        hue: CategoryValues::new(
+            "hue",
+            [
+                "h1", "h1", "h1", "h1", "h1", "h1", "h2", "h2", "h2", "h2", "h2", "h2",
+            ],
+        )
+        .unwrap(),
+        category: CategoryValues::new(
+            "category",
+            ["a", "a", "a", "b", "b", "b", "a", "a", "a", "b", "b", "b"],
+        )
+        .unwrap(),
+        x: NumericValues::new(
+            "x",
+            [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        ),
+        y: NumericValues::new(
+            "y",
+            [1.0, 2.0, 4.0, 2.0, 4.0, 7.0, 3.0, 5.0, 9.0, 4.0, 7.0, 11.0],
+        ),
+    }
+}
+
+fn interaction_data() -> InteractionData {
+    InteractionData {
+        condition: CategoryValues::new("condition", ["before", "after", "before", "after"])
+            .unwrap(),
+        group: CategoryValues::new("group", ["g1", "g1", "g2", "g2"]).unwrap(),
+        hue: CategoryValues::new("hue", ["h1", "h1", "h2", "h2"]).unwrap(),
+        estimate: NumericValues::new("estimate", [1.0, 2.0, 2.0, 4.0]),
+        lower: NumericValues::new("lower", [0.5, 1.5, 1.5, 3.5]),
+        upper: NumericValues::new("upper", [1.5, 2.5, 2.5, 4.5]),
+    }
 }
 
 fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
@@ -112,107 +175,99 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
 
 fn configured_hue<K: lichtung_plot::kind::ExactFamily + lichtung_plot::kind::Hue>(
     plot: Plot<K>,
-    data: &DataFrame,
+    hue: &CategoryValues,
     with_hue: bool,
 ) -> Plot {
     if with_hue {
-        plot.hue(data::category(data, "hue"))
+        plot.hue(hue.clone())
     } else {
         plot
     }
     .erase()
 }
 
-fn configured_separate_semantic_plot(data: &DataFrame, kind: PlotKind, with_hue: bool) -> Plot {
-    let group = || data::category(data, "group");
+fn configured_collective_plot(data: &CollectiveData, kind: PlotKind, with_hue: bool) -> Plot {
+    let group = || data.group.clone();
     match kind {
         PlotKind::Line => configured_hue(
-            Plot::line(data::numeric(data, "x"), data::numeric(data, "y")).group(group()),
-            data,
-            with_hue,
-        ),
-        PlotKind::Interaction => configured_hue(
-            Plot::interaction(
-                data::category(data, "condition"),
-                data::numeric(data, "estimate"),
-                group(),
-                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
-            ),
-            data,
+            Plot::line(data.x.clone(), data.y.clone()).group(group()),
+            &data.hue,
             with_hue,
         ),
         PlotKind::Density => configured_hue(
-            Plot::density(data::numeric(data, "y")).group(group()),
-            data,
+            Plot::density(data.y.clone()).group(group()),
+            &data.hue,
             with_hue,
         ),
         PlotKind::Marginal => configured_hue(
-            Plot::marginal(data::numeric(data, "x"), data::numeric(data, "y")).group(group()),
-            data,
+            Plot::marginal(data.x.clone(), data.y.clone()).group(group()),
+            &data.hue,
             with_hue,
         ),
         PlotKind::Matrix => configured_hue(
-            Plot::matrix(vec![data::numeric(data, "x"), data::numeric(data, "y")]).group(group()),
-            data,
+            Plot::matrix(vec![data.x.clone(), data.y.clone()]).group(group()),
+            &data.hue,
             with_hue,
         ),
-        PlotKind::Dumbbell => Plot::dumbbell(
-            data::category(data, "category"),
-            data::numeric(data, "left"),
-            data::numeric(data, "right"),
-            DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
-        )
-        .group(group())
-        .erase(),
-        _ => panic!("unsupported separate-semantic fixture kind {kind:?}"),
+        _ => panic!("unsupported collective plot kind {kind:?}"),
     }
 }
 
-fn configured_positioned_plot(data: &DataFrame, kind: PlotKind) -> Plot {
-    let series = || data::category(data, "group");
+fn configured_interaction_plot(data: &InteractionData, with_hue: bool) -> Plot {
+    configured_hue(
+        Plot::interaction(
+            data.condition.clone(),
+            data.estimate.clone(),
+            data.group.clone(),
+            Bounds::new(data.lower.clone(), data.upper.clone()),
+        ),
+        &data.hue,
+        with_hue,
+    )
+}
+
+fn configured_dumbbell_plot(data: &DumbbellGroupingData) -> Plot {
+    Plot::dumbbell(
+        data.category.clone(),
+        data.left.clone(),
+        data.right.clone(),
+        DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
+    )
+    .group(data.group.clone())
+    .erase()
+}
+
+fn configured_positioned_plot(data: &CollectiveData, kind: PlotKind) -> Plot {
+    let series = || data.group.clone();
     match kind {
-        PlotKind::Bar => Plot::bar(
-            data::category(data, "category"),
-            BarInput::samples(data::numeric(data, "y")),
-        )
-        .series(series())
-        .erase(),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(
-            data::category(data, "category"),
-            BarInput::samples(data::numeric(data, "y")),
-        )
-        .series(series())
-        .erase(),
-        PlotKind::Boxplot => {
-            Plot::boxplot(data::category(data, "category"), data::numeric(data, "y"))
+        PlotKind::Bar => Plot::bar(data.category.clone(), BarInput::samples(data.y.clone()))
+            .series(series())
+            .erase(),
+        PlotKind::HorizontalBar => {
+            Plot::horizontal_bar(data.category.clone(), BarInput::samples(data.y.clone()))
                 .series(series())
                 .erase()
         }
-        PlotKind::Violin => {
-            Plot::violin(data::category(data, "category"), data::numeric(data, "y"))
-                .series(series())
-                .erase()
-        }
-        _ => panic!("unsupported positioned fixture kind {kind:?}"),
+        PlotKind::Boxplot => Plot::boxplot(data.category.clone(), data.y.clone())
+            .series(series())
+            .erase(),
+        PlotKind::Violin => Plot::violin(data.category.clone(), data.y.clone())
+            .series(series())
+            .erase(),
+        _ => panic!("unsupported positioned plot kind {kind:?}"),
     }
 }
 
-fn constructor_owned_stacked_plot(data: &DataFrame, kind: PlotKind) -> Plot {
-    let series = || data::category(data, "group");
+fn constructor_owned_stacked_plot(data: &CollectiveData, kind: PlotKind) -> Plot {
+    let series = || data.group.clone();
     match kind {
-        PlotKind::StackedBar => Plot::stacked_bar(
-            data::category(data, "category"),
-            data::numeric(data, "y"),
-            series(),
-        )
-        .erase(),
-        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
-            data::category(data, "category"),
-            data::numeric(data, "y"),
-            series(),
-        )
-        .erase(),
-        _ => panic!("unsupported stacked fixture kind {kind:?}"),
+        PlotKind::StackedBar => {
+            Plot::stacked_bar(data.category.clone(), data.y.clone(), series()).erase()
+        }
+        PlotKind::StackedHorizontalBar => {
+            Plot::stacked_horizontal_bar(data.category.clone(), data.y.clone(), series()).erase()
+        }
+        _ => panic!("unsupported stacked plot kind {kind:?}"),
     }
 }
 
@@ -237,13 +292,12 @@ fn rgb(color: (u8, u8, u8)) -> String {
 fn separate_group_hue_families_render_group_only_without_group_legends() {
     let data = collective_data();
     let interaction = interaction_data();
-    let dumbbell = df!(
-        "category" => ["a", "a", "b", "b"],
-        "group" => ["g1", "g2", "g1", "g2"],
-        "left" => [1.0_f64, 1.5, 2.0, 2.5],
-        "right" => [2.0_f64, 2.5, 3.0, 3.5],
-    )
-    .unwrap();
+    let dumbbell = DumbbellGroupingData {
+        category: CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
+        group: CategoryValues::new("group", ["g1", "g2", "g1", "g2"]).unwrap(),
+        left: NumericValues::new("left", [1.0, 1.5, 2.0, 2.5]),
+        right: NumericValues::new("right", [2.0, 2.5, 3.0, 3.5]),
+    };
     for kind in [
         PlotKind::Line,
         PlotKind::Interaction,
@@ -252,18 +306,13 @@ fn separate_group_hue_families_render_group_only_without_group_legends() {
         PlotKind::Matrix,
         PlotKind::Dumbbell,
     ] {
-        let source = if kind == PlotKind::Interaction {
-            &interaction
-        } else if kind == PlotKind::Dumbbell {
-            &dumbbell
-        } else {
-            &data
+        let plot = match kind {
+            PlotKind::Interaction => configured_interaction_plot(&interaction, false),
+            PlotKind::Dumbbell => configured_dumbbell_plot(&dumbbell),
+            _ => configured_collective_plot(&data, kind, false),
         };
-        let svg = render(
-            configured_separate_semantic_plot(source, kind, false),
-            "group-only-family",
-        )
-        .unwrap_or_else(|error| panic!("{kind:?} should support group: {error}"));
+        let svg = render(plot, "group-only-family")
+            .unwrap_or_else(|error| panic!("{kind:?} should support group: {error}"));
         assert!(!svg.contains(">G 1</text>") && !svg.contains(">G 2</text>"));
     }
 }
@@ -298,33 +347,23 @@ fn positioned_and_stacked_families_render_series_legends() {
 #[test]
 fn explicit_group_controls_paths_while_hue_controls_color_and_legend() {
     let data = collective_data();
-    let group_only = Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-        .group(data::category(&data, "group"));
+    let group_only = Plot::line(data.x.clone(), data.y.clone()).group(data.group.clone());
     let plain = render(group_only.clone(), "line-group-only").unwrap();
     assert!(!plain.contains(">H 1</text>") && !plain.contains(">H 2</text>"));
 
-    let hued = render(
-        group_only.hue(data::category(&data, "hue")),
-        "line-group-hue",
-    )
-    .unwrap();
+    let hued = render(group_only.hue(data.hue.clone()), "line-group-hue").unwrap();
     assert!(hued.contains(">Group × Hue</text>"));
     assert!(hued.contains(">G 1, H 1</text>") && hued.contains(">G 2, H 2</text>"));
 }
 
 #[test]
 fn explicit_group_and_hue_render_only_observed_pair_paths() {
-    let data = df!(
-        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
-        "x" => [0.0_f64, 1.0, 0.0, 1.0, 0.0, 1.0],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["g1", "g1", "g1", "g1", "g2", "g2"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h2", "h2"]).unwrap();
+    let x = NumericValues::new("x", [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]);
+    let y = NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let svg = render(
-        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-            .group(data::category(&data, "group"))
-            .hue(data::category(&data, "hue")),
+        Plot::line(x, y).group(group).hue(hue),
         "line-observed-pairs",
     )
     .unwrap();
@@ -354,23 +393,11 @@ fn explicit_group_and_hue_render_only_observed_pair_paths() {
 
 #[test]
 fn hue_only_line_and_density_create_one_mark_per_hue() {
-    let data = df!(
-        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2"],
-        "x" => [0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0],
-        "y" => [1.0_f64, 2.0, 4.0, 3.0, 5.0, 8.0],
-    )
-    .unwrap();
-    let line = render(
-        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-            .hue(data::category(&data, "hue")),
-        "line-hue-only",
-    )
-    .unwrap();
-    let density = render(
-        Plot::density(data::numeric(&data, "y")).hue(data::category(&data, "hue")),
-        "density-hue-only",
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h1", "h2", "h2", "h2"]).unwrap();
+    let x = NumericValues::new("x", [0.0, 1.0, 2.0, 0.0, 1.0, 2.0]);
+    let y = NumericValues::new("y", [1.0, 2.0, 4.0, 3.0, 5.0, 8.0]);
+    let line = render(Plot::line(x, y.clone()).hue(hue.clone()), "line-hue-only").unwrap();
+    let density = render(Plot::density(y).hue(hue), "density-hue-only").unwrap();
 
     let line_marks = remove_legend_layers(&line);
     let density_marks = remove_legend_layers(&density);
@@ -386,16 +413,11 @@ fn hue_only_line_and_density_create_one_mark_per_hue() {
 
 #[test]
 fn density_renders_each_observed_crossed_pair() {
-    let data = df!(
-        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["g1", "g1", "g1", "g1", "g2", "g2"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h2", "h2"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let svg = render(
-        Plot::density(data::numeric(&data, "value"))
-            .group(data::category(&data, "group"))
-            .hue(data::category(&data, "hue")),
+        Plot::density(value).group(group).hue(hue),
         "density-crossed-pairs",
     )
     .unwrap();
@@ -446,16 +468,9 @@ fn equal_same_field_channels_collapse_legend_text() {
 
 #[test]
 fn density_legend_preserves_curve_and_translucent_fill_without_point() {
-    let data = df!(
-        "hue" => ["h1", "h1", "h2", "h2"],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0],
-    )
-    .unwrap();
-    let svg = render(
-        Plot::density(data::numeric(&data, "value")).hue(data::category(&data, "hue")),
-        "density-exact-legend",
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h2", "h2"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]);
+    let svg = render(Plot::density(value).hue(hue), "density-exact-legend").unwrap();
     let legend = svg
         .split_once("<g id=\"legend\">")
         .unwrap()
@@ -471,15 +486,12 @@ fn density_legend_preserves_curve_and_translucent_fill_without_point() {
 
 #[test]
 fn density_pair_error_identifies_group_and_hue() {
-    let data = df!(
-        "group" => ["small", "valid", "valid"],
-        "hue" => ["red", "blue", "blue"],
-        "value" => [1.0_f64, 2.0, 3.0],
-    )
-    .unwrap();
-    let error = Plot::density(data::numeric(&data, "value"))
-        .group(data::category(&data, "group"))
-        .hue(data::category(&data, "hue"))
+    let group = CategoryValues::new("group", ["small", "valid", "valid"]).unwrap();
+    let hue = CategoryValues::new("hue", ["red", "blue", "blue"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0]);
+    let error = Plot::density(value)
+        .group(group)
+        .hue(hue)
         .preflight()
         .unwrap_err()
         .to_string();
@@ -517,8 +529,8 @@ fn significance_endpoints_select_configured_series() {
         SignificanceMark::PValue(0.01),
     );
     let svg = render(
-        Plot::boxplot(data::category(&data, "category"), data::numeric(&data, "y"))
-            .series(data::category(&data, "group"))
+        Plot::boxplot(data.category.clone(), data.y.clone())
+            .series(data.group.clone())
             .significance([comparison]),
         "boxplot-series-significance",
     )
@@ -528,19 +540,20 @@ fn significance_endpoints_select_configured_series() {
 
 #[test]
 fn faceted_group_hue_pairs_keep_global_hue_colors() {
-    let data = df!(
-        "facet" => ["first", "first", "first", "first", "second", "second"],
-        "group" => ["g1", "g1", "g1", "g1", "g1", "g1"],
-        "hue" => ["h2", "h2", "h1", "h1", "h1", "h1"],
-        "x" => [0.0_f64, 1.0, 0.0, 1.0, 0.0, 1.0],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0, 5.0, 6.0],
+    let facet = CategoryValues::new(
+        "facet",
+        ["first", "first", "first", "first", "second", "second"],
     )
     .unwrap();
+    let group = CategoryValues::new("group", ["g1"; 6]).unwrap();
+    let hue = CategoryValues::new("hue", ["h2", "h2", "h1", "h1", "h1", "h1"]).unwrap();
+    let x = NumericValues::new("x", [0.0, 1.0, 0.0, 1.0, 0.0, 1.0]);
+    let y = NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
     let svg = render(
-        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-            .group(data::category(&data, "group"))
-            .hue(data::category(&data, "hue"))
-            .facet(FacetSpec::column(data::category(&data, "facet"))),
+        Plot::line(x, y)
+            .group(group)
+            .hue(hue)
+            .facet(FacetSpec::column(facet)),
         "faceted-line-observed-pairs",
     )
     .unwrap();
@@ -574,11 +587,11 @@ fn shared_hue_uses_one_chart_wide_color_across_collective_families() {
     let interaction = shared_hue_interaction_data();
     let expected = PUBLICATION_COLORS;
     let plots = vec![
-        configured_separate_semantic_plot(&data, PlotKind::Line, true),
-        configured_separate_semantic_plot(&data, PlotKind::Density, true),
-        configured_separate_semantic_plot(&data, PlotKind::Marginal, true),
-        configured_separate_semantic_plot(&data, PlotKind::Matrix, true),
-        configured_separate_semantic_plot(&interaction, PlotKind::Interaction, true),
+        configured_collective_plot(&data, PlotKind::Line, true),
+        configured_collective_plot(&data, PlotKind::Density, true),
+        configured_collective_plot(&data, PlotKind::Marginal, true),
+        configured_collective_plot(&data, PlotKind::Matrix, true),
+        configured_interaction_plot(&interaction, true),
     ];
     for (index, plot) in plots.into_iter().enumerate() {
         let svg = render(plot, &format!("shared-hue-{index}")).unwrap();
@@ -592,7 +605,7 @@ fn group_only_density_uses_default_color_for_every_curve_and_fill() {
     let data = collective_data();
     let expected = rgb(PUBLICATION_COLORS[0]);
     let svg = render(
-        configured_separate_semantic_plot(&data, PlotKind::Density, false),
+        configured_collective_plot(&data, PlotKind::Density, false),
         "group-only-density",
     )
     .unwrap();
@@ -601,20 +614,14 @@ fn group_only_density_uses_default_color_for_every_curve_and_fill() {
 
 #[test]
 fn faceted_series_keep_global_dodge_slots_when_a_panel_omits_a_series() {
-    let data = df!(
-        "facet" => ["both", "both", "only-g2"],
-        "category" => ["a", "a", "a"],
-        "series" => ["g1", "g2", "g2"],
-        "value" => [1.0_f64, 2.0, 3.0],
-    )
-    .unwrap();
+    let facet = CategoryValues::new("facet", ["both", "both", "only-g2"]).unwrap();
+    let category = CategoryValues::new("category", ["a", "a", "a"]).unwrap();
+    let series = CategoryValues::new("series", ["g1", "g2", "g2"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0, 3.0]);
     let svg = render(
-        Plot::bar(
-            data::category(&data, "category"),
-            BarInput::estimates(data::numeric(&data, "value")),
-        )
-        .series(data::category(&data, "series"))
-        .facet(FacetSpec::column(data::category(&data, "facet"))),
+        Plot::bar(category, BarInput::estimates(value))
+            .series(series)
+            .facet(FacetSpec::column(facet)),
         "faceted-dodge",
     )
     .unwrap();
@@ -648,18 +655,13 @@ fn faceted_series_keep_global_dodge_slots_when_a_panel_omits_a_series() {
 
 #[test]
 fn faceted_collectives_keep_global_first_observed_hue_color_order() {
-    let data = df!(
-        "facet" => ["b", "b", "a", "a"],
-        "hue" => ["h2", "h2", "h1", "h1"],
-        "x" => [0.0_f64, 1.0, 0.0, 1.0],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0],
-    )
-    .unwrap();
+    let facet = CategoryValues::new("facet", ["b", "b", "a", "a"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h2", "h2", "h1", "h1"]).unwrap();
+    let x = NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]);
+    let y = NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]);
     let expected = PUBLICATION_COLORS;
     let svg = render(
-        Plot::line(data::numeric(&data, "x"), data::numeric(&data, "y"))
-            .hue(data::category(&data, "hue"))
-            .facet(FacetSpec::column(data::category(&data, "facet"))),
+        Plot::line(x, y).hue(hue).facet(FacetSpec::column(facet)),
         "faceted-hue-order",
     )
     .unwrap();
@@ -677,11 +679,8 @@ fn horizontal_significance_uses_configured_series() {
         SignificanceMark::PValue(0.01),
     );
     let base = || {
-        Plot::horizontal_bar(
-            data::category(&data, "category"),
-            BarInput::samples(data::numeric(&data, "y")),
-        )
-        .series(data::category(&data, "hue"))
+        Plot::horizontal_bar(data.category.clone(), BarInput::samples(data.y.clone()))
+            .series(data.hue.clone())
     };
     let svg = render(
         base().significance([valid]),

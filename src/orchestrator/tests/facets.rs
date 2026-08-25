@@ -1,38 +1,43 @@
 use super::{
-    configured_chart, fixture, valid_grouped_bar_fixture, DataFrame, Plot, PlotKind,
-    RecordingBackend, Series,
+    canonical_plot_values, configured_chart, valid_grouped_bar_values, Plot, PlotKind,
+    RecordingBackend,
 };
+use crate::{CategoryValues, NumericValues};
 
-fn bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
-    let category = crate::test_support::category(data, "group");
-    let value = crate::test_support::numeric(data, "y");
+fn bar_chart(category: &CategoryValues, value: &NumericValues, kind: PlotKind) -> Plot {
     match kind {
-        PlotKind::Bar => Plot::bar(category, crate::BarInput::samples(value)).erase(),
+        PlotKind::Bar => {
+            Plot::bar(category.clone(), crate::BarInput::samples(value.clone())).erase()
+        }
         PlotKind::HorizontalBar => {
-            Plot::horizontal_bar(category, crate::BarInput::samples(value)).erase()
+            Plot::horizontal_bar(category.clone(), crate::BarInput::samples(value.clone())).erase()
         }
         _ => panic!("unsupported bar kind {kind:?}"),
     }
 }
 
-fn estimate_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
-    let category = crate::test_support::category(data, "group");
-    let value = crate::BarInput::estimates(crate::test_support::numeric(data, "y"));
+fn estimate_bar_chart(category: &CategoryValues, value: &NumericValues, kind: PlotKind) -> Plot {
+    let value = crate::BarInput::estimates(value.clone());
     match kind {
-        PlotKind::Bar => Plot::bar(category, value).erase(),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value).erase(),
+        PlotKind::Bar => Plot::bar(category.clone(), value).erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(category.clone(), value).erase(),
         _ => panic!("unsupported bar kind {kind:?}"),
     }
 }
 
-fn positioned_series_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
-    let category = crate::test_support::category(data, "group");
-    let value = || crate::BarInput::samples(crate::test_support::numeric(data, "y"));
-    let series = || crate::test_support::category(data, "hue");
+fn positioned_series_bar_chart(
+    category: &CategoryValues,
+    value: &NumericValues,
+    series: &CategoryValues,
+    kind: PlotKind,
+) -> Plot {
+    let value = || crate::BarInput::samples(value.clone());
     match kind {
-        PlotKind::Bar => Plot::bar(category, value()).series(series()).erase(),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(category, value())
-            .series(series())
+        PlotKind::Bar => Plot::bar(category.clone(), value())
+            .series(series.clone())
+            .erase(),
+        PlotKind::HorizontalBar => Plot::horizontal_bar(category.clone(), value())
+            .series(series.clone())
             .erase(),
         _ => panic!("unsupported bar kind {kind:?}"),
     }
@@ -40,27 +45,21 @@ fn positioned_series_bar_chart(data: &DataFrame, kind: PlotKind) -> Plot {
 
 #[test]
 fn composed_per_panel_outside_legends_remain_in_their_cells() {
-    let data = fixture();
-    let left = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    )
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"))
-    .legend(crate::LegendPolicy::Visible(
-        crate::LegendPosition::OutsideRight,
-    ))
-    .size(900, 360);
-    let right = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    )
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"))
-    .legend(crate::LegendPolicy::Visible(
-        crate::LegendPosition::OutsideRight,
-    ))
-    .size(900, 360);
+    let data = canonical_plot_values();
+    let left = Plot::line(data.x.clone(), data.y.clone())
+        .group(data.hue.clone())
+        .hue(data.hue.clone())
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ))
+        .size(900, 360);
+    let right = Plot::line(data.x.clone(), data.y.clone())
+        .group(data.hue.clone())
+        .hue(data.hue.clone())
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ))
+        .size(900, 360);
     let canvas = crate::Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, left)
@@ -79,24 +78,13 @@ fn composed_per_panel_outside_legends_remain_in_their_cells() {
 
 #[test]
 fn facets_reserve_one_complete_outside_legend_band() {
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("facet".into(), ["left", "left", "right", "right"]).into(),
-            Series::new("hue".into(), ["h1", "h1", "h2", "h2"]).into(),
-            Series::new("x".into(), [1.0_f64, 2.0, 1.0, 2.0]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0, 4.0, 5.0]).into(),
-        ],
-    )
-    .unwrap();
+    let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),
+        NumericValues::new("y", [1.0, 2.0, 4.0, 5.0]),
     )
-    .hue(crate::test_support::category(&data, "hue"))
-    .facet(crate::FacetSpec::column(crate::test_support::category(
-        &data, "facet",
-    )))
+    .hue(CategoryValues::new("hue", ["h1", "h1", "h2", "h2"]).unwrap())
+    .facet(crate::FacetSpec::column(facet))
     .legend(crate::LegendPolicy::Visible(
         crate::LegendPosition::OutsideRight,
     ))
@@ -127,49 +115,34 @@ fn facets_reserve_one_complete_outside_legend_band() {
 
 #[test]
 fn dense_fixed_facets_share_planner_headroom() {
-    let data = DataFrame::new(
-        12,
-        vec![
-            Series::new(
-                "facet".into(),
-                [
-                    "left", "left", "left", "left", "left", "left", "left", "left", "right",
-                    "right", "right", "right",
-                ],
-            )
-            .into(),
-            Series::new(
-                "hue".into(),
-                [
-                    "h1", "h1", "h1", "h1", "h2", "h2", "h2", "h2", "h1", "h1", "h2", "h2",
-                ],
-            )
-            .into(),
-            Series::new(
-                "x".into(),
-                [
-                    0.0_f64, 10.0, 0.0, 10.0, 0.5, 9.5, 0.5, 9.5, 1.0, 2.0, 3.0, 4.0,
-                ],
-            )
-            .into(),
-            Series::new(
-                "y".into(),
-                [
-                    0.0_f64, 0.0, 10.0, 9.0, 0.5, 0.5, 9.5, 10.0, 9.0, 2.0, 1.0, 3.0,
-                ],
-            )
-            .into(),
+    let facet = CategoryValues::new(
+        "facet",
+        [
+            "left", "left", "left", "left", "left", "left", "left", "left", "right", "right",
+            "right", "right",
         ],
     )
     .unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new(
+            "x",
+            [0.0, 10.0, 0.0, 10.0, 0.5, 9.5, 0.5, 9.5, 1.0, 2.0, 3.0, 4.0],
+        ),
+        NumericValues::new(
+            "y",
+            [0.0, 0.0, 10.0, 9.0, 0.5, 0.5, 9.5, 10.0, 9.0, 2.0, 1.0, 3.0],
+        ),
     )
-    .hue(crate::test_support::category(&data, "hue"))
-    .facet(crate::FacetSpec::column(crate::test_support::category(
-        &data, "facet",
-    )))
+    .hue(
+        CategoryValues::new(
+            "hue",
+            [
+                "h1", "h1", "h1", "h1", "h2", "h2", "h2", "h2", "h1", "h1", "h2", "h2",
+            ],
+        )
+        .unwrap(),
+    )
+    .facet(crate::FacetSpec::column(facet))
     .size(760, 420);
     let mut backend = RecordingBackend::default();
 
@@ -184,7 +157,7 @@ fn dense_fixed_facets_share_planner_headroom() {
 
 #[test]
 fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation() {
-    let data = fixture();
+    let data = canonical_plot_values();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
         let chart = configured_chart(&data, kind);
         let mut backend = RecordingBackend::default();
@@ -195,9 +168,9 @@ fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation()
 
 #[test]
 fn singleton_positioned_series_bar_cells_render_without_error_bars() {
-    let data = fixture();
+    let data = canonical_plot_values();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = positioned_series_bar_chart(&data, kind);
+        let chart = positioned_series_bar_chart(&data.group, &data.y, &data.hue, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
@@ -206,27 +179,19 @@ fn singleton_positioned_series_bar_cells_render_without_error_bars() {
 
 #[test]
 fn empty_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
-    let fixtures = [
-        DataFrame::new(
-            0,
-            vec![
-                Series::new("group".into(), Vec::<String>::new()).into(),
-                Series::new("y".into(), Vec::<f64>::new()).into(),
-            ],
-        )
-        .unwrap(),
-        DataFrame::new(
-            2,
-            vec![
-                Series::new("group".into(), ["a", "a"]).into(),
-                Series::new("y".into(), [1.0_f64, f64::NAN]).into(),
-            ],
-        )
-        .unwrap(),
+    let cases = [
+        (
+            CategoryValues::new("group", Vec::<String>::new()).unwrap(),
+            NumericValues::new("y", []),
+        ),
+        (
+            CategoryValues::new("group", ["a", "a"]).unwrap(),
+            NumericValues::new("y", [1.0, f64::NAN]),
+        ),
     ];
-    for data in &fixtures {
+    for (category, value) in &cases {
         for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-            let chart = bar_chart(data, kind);
+            let chart = bar_chart(category, value, kind);
             let mut backend = RecordingBackend::default();
             assert!(chart.render_kind(kind, &mut backend).is_err());
             assert_eq!(backend.begins, 0, "{kind:?}");
@@ -236,9 +201,14 @@ fn empty_and_nonfinite_ungrouped_cells_fail_before_backend_begin() {
 
 #[test]
 fn valid_positioned_series_bars_keep_provenance_off_canvas() {
-    let data = valid_grouped_bar_fixture();
+    let data = valid_grouped_bar_values();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = positioned_series_bar_chart(&data, kind);
+        let chart = positioned_series_bar_chart(
+            &data.category,
+            &data.value,
+            data.series.as_ref().unwrap(),
+            kind,
+        );
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         let rendered_text = backend
@@ -253,25 +223,17 @@ fn valid_positioned_series_bars_keep_provenance_off_canvas() {
 
 #[test]
 fn singleton_generated_bar_samples_are_isolated_across_facets() {
-    let data = DataFrame::new(
-        2,
-        vec![
-            Series::new("group".into(), ["a", "a"]).into(),
-            Series::new("facet".into(), ["left", "right"]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0]).into(),
-        ],
-    )
-    .unwrap();
+    let category = CategoryValues::new("group", ["a", "a"]).unwrap();
+    let value = NumericValues::new("y", [1.0, 2.0]);
+    let facet = CategoryValues::new("facet", ["left", "right"]).unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let category = crate::test_support::category(&data, "group");
-        let value = || crate::BarInput::samples(crate::test_support::numeric(&data, "y"));
-        let facet = || crate::test_support::category(&data, "facet");
+        let value = || crate::BarInput::samples(value.clone());
         let chart = match kind {
-            PlotKind::Bar => Plot::bar(category, value())
-                .facet(crate::FacetSpec::column(facet()))
+            PlotKind::Bar => Plot::bar(category.clone(), value())
+                .facet(crate::FacetSpec::column(facet.clone()))
                 .erase(),
-            PlotKind::HorizontalBar => Plot::horizontal_bar(category, value())
-                .facet(crate::FacetSpec::column(facet()))
+            PlotKind::HorizontalBar => Plot::horizontal_bar(category.clone(), value())
+                .facet(crate::FacetSpec::column(facet.clone()))
                 .erase(),
             _ => unreachable!(),
         };
@@ -283,24 +245,11 @@ fn singleton_generated_bar_samples_are_isolated_across_facets() {
 
 #[test]
 fn estimate_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
-    let valid = DataFrame::new(
-        2,
-        vec![
-            Series::new("group".into(), ["a", "b"]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0]).into(),
-        ],
-    )
-    .unwrap();
-    let duplicate = DataFrame::new(
-        2,
-        vec![
-            Series::new("group".into(), ["a", "a"]).into(),
-            Series::new("y".into(), [1.0_f64, 2.0]).into(),
-        ],
-    )
-    .unwrap();
+    let valid = CategoryValues::new("group", ["a", "b"]).unwrap();
+    let duplicate = CategoryValues::new("group", ["a", "a"]).unwrap();
+    let value = NumericValues::new("y", [1.0, 2.0]);
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = estimate_bar_chart(&valid, kind);
+        let chart = estimate_bar_chart(&valid, &value, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert!(backend
@@ -308,7 +257,7 @@ fn estimate_bars_accept_one_finite_row_and_reject_duplicates_before_begin() {
             .iter()
             .all(|(_, _, text)| !text.contains("mean")));
 
-        let chart = estimate_bar_chart(&duplicate, kind);
+        let chart = estimate_bar_chart(&duplicate, &value, kind);
         let mut backend = RecordingBackend::default();
         let error = chart.render_kind(kind, &mut backend).unwrap_err();
         assert!(error.to_string().contains("exactly one is required"));

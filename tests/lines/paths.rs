@@ -1,34 +1,58 @@
 use super::*;
 
-fn numeric_trajectory_data() -> DataFrame {
-    df!(
-        "subject" => ["s1", "s2", "s1", "s2"],
-        "condition" => [2.0_f64, 2.0, 1.0, 1.0],
-        "value" => [20.0_f64, 40.0, 10.0, 30.0],
-        "status" => ["case", "control", "control", "case"]
-    )
-    .unwrap()
+struct TrajectoryData {
+    condition: AxisValues,
+    value: NumericValues,
+    subject: CategoryValues,
+    status: Option<CategoryValues>,
+    facet: Option<CategoryValues>,
 }
 
-fn categorical_trajectory_data() -> DataFrame {
-    df!(
-        "subject" => ["s1", "s1"],
-        "condition" => ["before", "after"],
-        "value" => [100.0_f64, 200.0]
-    )
-    .unwrap()
+fn trajectory_data(
+    condition: AxisValues,
+    value: NumericValues,
+    subject: CategoryValues,
+) -> TrajectoryData {
+    TrajectoryData {
+        condition,
+        value,
+        subject,
+        status: None,
+        facet: None,
+    }
 }
 
-fn trajectory(frame: &DataFrame) -> Plot<lichtung_plot::kind::Trajectory> {
+fn numeric_trajectory_data() -> TrajectoryData {
+    let mut data = trajectory_data(
+        NumericValues::new("condition", [2.0, 2.0, 1.0, 1.0]).into(),
+        NumericValues::new("value", [20.0, 40.0, 10.0, 30.0]),
+        CategoryValues::new("subject", ["s1", "s2", "s1", "s2"]).unwrap(),
+    );
+    data.status =
+        Some(CategoryValues::new("status", ["case", "control", "control", "case"]).unwrap());
+    data
+}
+
+fn categorical_trajectory_data() -> TrajectoryData {
+    trajectory_data(
+        CategoryValues::new("condition", ["before", "after"])
+            .unwrap()
+            .into(),
+        NumericValues::new("value", [100.0, 200.0]),
+        CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
+    )
+}
+
+fn trajectory(data: &TrajectoryData) -> Plot<lichtung_plot::kind::Trajectory> {
     Plot::trajectory(
-        data::axis(frame, "condition"),
-        data::numeric(frame, "value"),
-        data::category(frame, "subject"),
+        data.condition.clone(),
+        data.value.clone(),
+        data.subject.clone(),
     )
 }
 
-fn trajectory_with_hue(frame: &DataFrame) -> Plot<lichtung_plot::kind::Trajectory> {
-    trajectory(frame).hue(data::category(frame, "status"))
+fn trajectory_with_hue(data: &TrajectoryData) -> Plot<lichtung_plot::kind::Trajectory> {
+    trajectory(data).hue(data.status.clone().unwrap())
 }
 
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
@@ -72,16 +96,11 @@ fn numeric_trajectory_sorts_within_groups_and_never_connects_groups() {
 
 #[test]
 fn numeric_path_preserves_source_order_and_repeated_x_values() {
-    let frame = df!(
-        "curve" => ["roc"; 4], "rate" => [0.0_f64, 0.0, 1.0, 0.5],
-        "sensitivity" => [0.0_f64, 0.4, 1.0, 0.8]
-    )
-    .unwrap();
     let output = svg(
         Plot::line_path(
-            data::numeric(&frame, "rate"),
-            data::numeric(&frame, "sensitivity"),
-            data::category(&frame, "curve"),
+            NumericValues::new("rate", [0.0, 0.0, 1.0, 0.5]),
+            NumericValues::new("sensitivity", [0.0, 0.4, 1.0, 0.8]),
+            CategoryValues::new("curve", ["roc"; 4]).unwrap(),
         ),
         "numeric-path",
     );
@@ -94,14 +113,14 @@ fn numeric_path_preserves_source_order_and_repeated_x_values() {
 
 #[test]
 fn neutral_path_with_hidden_markers_suppresses_hue_legend() {
-    let frame = numeric_trajectory_data();
+    let data = numeric_trajectory_data();
     let output = svg(
         Plot::line_path(
-            data::numeric(&frame, "condition"),
-            data::numeric(&frame, "value"),
-            data::category(&frame, "subject"),
+            NumericValues::new("condition", [2.0, 2.0, 1.0, 1.0]),
+            data.value.clone(),
+            data.subject.clone(),
         )
-        .hue(data::category(&frame, "status"))
+        .hue(data.status.clone().unwrap())
         .markers(false),
         "neutral-path-hidden-markers",
     );
@@ -113,12 +132,13 @@ fn neutral_path_with_hidden_markers_suppresses_hue_legend() {
 
 #[test]
 fn changing_hue_colors_points_but_not_connector_or_group_legend() {
-    let frame = df!(
-        "subject" => ["subject-one"; 3], "condition" => [1.0_f64, 2.0, 3.0],
-        "value" => [2.0_f64, 5.0, 3.0], "status" => ["control", "case", "control"]
-    )
-    .unwrap();
-    let output = svg(trajectory_with_hue(&frame), "changing-trajectory-hue");
+    let mut data = trajectory_data(
+        NumericValues::new("condition", [1.0, 2.0, 3.0]).into(),
+        NumericValues::new("value", [2.0, 5.0, 3.0]),
+        CategoryValues::new("subject", ["subject-one"; 3]).unwrap(),
+    );
+    data.status = Some(CategoryValues::new("status", ["control", "case", "control"]).unwrap());
+    let output = svg(trajectory_with_hue(&data), "changing-trajectory-hue");
     let connector = connector_tags(&output)[0];
     assert!(connector.contains("stroke=\"#000000\""));
     let marks = output
@@ -137,12 +157,14 @@ fn changing_hue_colors_points_but_not_connector_or_group_legend() {
 
 #[test]
 fn categorical_trajectory_uses_global_first_observed_condition_order() {
-    let frame = df!(
-        "subject" => ["s1"; 3], "condition" => ["after", "before", "during"],
-        "value" => [30.0_f64, 10.0, 20.0]
-    )
-    .unwrap();
-    let output = svg(trajectory(&frame), "categorical-order");
+    let data = trajectory_data(
+        CategoryValues::new("condition", ["after", "before", "during"])
+            .unwrap()
+            .into(),
+        NumericValues::new("value", [30.0, 10.0, 20.0]),
+        CategoryValues::new("subject", ["s1"; 3]).unwrap(),
+    );
+    let output = svg(trajectory(&data), "categorical-order");
     let connector = points(connector_tags(&output)[0]);
     assert!(connector[0].0 < connector[1].0 && connector[1].0 < connector[2].0);
     assert!(output.find(">After</text>").unwrap() < output.find(">Before</text>").unwrap());
@@ -151,13 +173,22 @@ fn categorical_trajectory_uses_global_first_observed_condition_order() {
 
 #[test]
 fn categorical_conditions_collapse_whitespace_before_ordering_and_ticks() {
-    let frame = df!(
-        "subject" => ["s1", "s1", "s2", "s2"],
-        "condition" => ["  before\tvisit ", "after visit", "before visit", " after   visit "],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0]
-    )
-    .unwrap();
-    let output = svg(trajectory(&frame), "normalized-condition-ticks");
+    let data = trajectory_data(
+        CategoryValues::new(
+            "condition",
+            [
+                "  before\tvisit ",
+                "after visit",
+                "before visit",
+                " after   visit ",
+            ],
+        )
+        .unwrap()
+        .into(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s2", "s2"]).unwrap(),
+    );
+    let output = svg(trajectory(&data), "normalized-condition-ticks");
     assert_eq!(output.matches(">Before visit</text>").count(), 1);
     assert_eq!(output.matches(">After visit</text>").count(), 1);
     assert!(
@@ -193,26 +224,49 @@ fn categorical_condition_duplicates_and_empty_values_fail_after_normalization() 
 
 #[test]
 fn numeric_looking_string_conditions_remain_categorical_and_first_observed() {
-    let frame = df!(
-        "subject" => ["s1", "s1"], "condition" => ["10", "2"],
-        "value" => [100.0_f64, 200.0]
-    )
-    .unwrap();
-    let output = svg(trajectory(&frame), "numeric-looking-categories");
+    let data = trajectory_data(
+        CategoryValues::new("condition", ["10", "2"])
+            .unwrap()
+            .into(),
+        NumericValues::new("value", [100.0, 200.0]),
+        CategoryValues::new("subject", ["s1", "s1"]).unwrap(),
+    );
+    let output = svg(trajectory(&data), "numeric-looking-categories");
     assert!(output.find(">10</text>").unwrap() < output.find(">2</text>").unwrap());
 }
 
 #[test]
 fn faceted_categorical_trajectories_keep_global_order_and_source_rows() {
-    let frame = df!(
-        "facet" => ["left", "left", "left", "left", "right", "right", "right", "right"],
-        "subject" => ["s1", "s1", "s2", "s2", "s1", "s1", "s2", "s2"],
-        "condition" => [" after ", "before", "after", " before ", " during ", "before", "during", "\tbefore "],
-        "value" => [4.0_f64, 1.0, 5.0, 2.0, 6.0, 3.0, 7.0, 4.0]
-    )
-    .unwrap();
+    let mut data = trajectory_data(
+        CategoryValues::new(
+            "condition",
+            [
+                " after ",
+                "before",
+                "after",
+                " before ",
+                " during ",
+                "before",
+                "during",
+                "\tbefore ",
+            ],
+        )
+        .unwrap()
+        .into(),
+        NumericValues::new("value", [4.0, 1.0, 5.0, 2.0, 6.0, 3.0, 7.0, 4.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s2", "s2", "s1", "s1", "s2", "s2"]).unwrap(),
+    );
+    data.facet = Some(
+        CategoryValues::new(
+            "facet",
+            [
+                "left", "left", "left", "left", "right", "right", "right", "right",
+            ],
+        )
+        .unwrap(),
+    );
     let output = svg(
-        trajectory(&frame).facet(FacetSpec::column(data::category(&frame, "facet"))),
+        trajectory(&data).facet(FacetSpec::column(data.facet.clone().unwrap())),
         "faceted-categorical-trajectories",
     );
     assert_eq!(connector_tags(&output).len(), 4);
@@ -223,16 +277,38 @@ fn faceted_categorical_trajectories_keep_global_order_and_source_rows() {
 
 #[test]
 fn faceted_hues_use_global_first_observed_colors_and_one_complete_legend() {
-    let frame = df!(
-        "facet" => ["left", "left", "left", "left", "right", "right", "right", "right"],
-        "subject" => ["s1", "s1", "s2", "s2", "s1", "s1", "s2", "s2"],
-        "condition" => ["before", "after", "before", "after", "before", "after", "before", "after"],
-        "value" => [1.0_f64, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0],
-        "status" => ["late", "late", "late", "late", "early", "early", "early", "early"]
-    )
-    .unwrap();
+    let mut data = trajectory_data(
+        CategoryValues::new(
+            "condition",
+            [
+                "before", "after", "before", "after", "before", "after", "before", "after",
+            ],
+        )
+        .unwrap()
+        .into(),
+        NumericValues::new("value", [1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 5.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s2", "s2", "s1", "s1", "s2", "s2"]).unwrap(),
+    );
+    data.status = Some(
+        CategoryValues::new(
+            "status",
+            [
+                "late", "late", "late", "late", "early", "early", "early", "early",
+            ],
+        )
+        .unwrap(),
+    );
+    data.facet = Some(
+        CategoryValues::new(
+            "facet",
+            [
+                "left", "left", "left", "left", "right", "right", "right", "right",
+            ],
+        )
+        .unwrap(),
+    );
     let output = svg(
-        trajectory_with_hue(&frame).facet(FacetSpec::column(data::category(&frame, "facet"))),
+        trajectory_with_hue(&data).facet(FacetSpec::column(data.facet.clone().unwrap())),
         "faceted-trajectory-hues",
     );
     assert_eq!(output.matches(">Late</text>").count(), 1);
@@ -244,30 +320,37 @@ fn faceted_hues_use_global_first_observed_colors_and_one_complete_legend() {
 
 #[test]
 fn facet_local_singletons_and_duplicates_report_before_render() {
-    let singleton = df!(
-        "facet" => ["left", "left", "right", "right", "right"],
-        "subject" => ["s1", "s1", "s1", "s2", "s2"],
-        "condition" => ["before", "after", "before", "before", "after"],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0, 5.0]
-    )
-    .unwrap();
+    let mut singleton = trajectory_data(
+        CategoryValues::new(
+            "condition",
+            ["before", "after", "before", "before", "after"],
+        )
+        .unwrap()
+        .into(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s1", "s2", "s2"]).unwrap(),
+    );
+    singleton.facet =
+        Some(CategoryValues::new("facet", ["left", "left", "right", "right", "right"]).unwrap());
     let error = trajectory(&singleton)
-        .facet(FacetSpec::column(data::category(&singleton, "facet")))
+        .facet(FacetSpec::column(singleton.facet.clone().unwrap()))
         .preflight()
         .unwrap_err();
     assert!(error
         .to_string()
         .contains("group \"s1\" requires at least two retained conditions"));
 
-    let duplicate = df!(
-        "facet" => ["left", "left", "right", "right"],
-        "subject" => ["s1", "s1", "s2", "s2"],
-        "condition" => ["a", "b", "a", "a"],
-        "value" => [1.0_f64, 2.0, 3.0, 4.0]
-    )
-    .unwrap();
+    let mut duplicate = trajectory_data(
+        CategoryValues::new("condition", ["a", "b", "a", "a"])
+            .unwrap()
+            .into(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s2", "s2"]).unwrap(),
+    );
+    duplicate.facet =
+        Some(CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap());
     let error = trajectory(&duplicate)
-        .facet(FacetSpec::column(data::category(&duplicate, "facet")))
+        .facet(FacetSpec::column(duplicate.facet.clone().unwrap()))
         .preflight()
         .unwrap_err();
     assert!(error.to_string().contains("source row 3"));
@@ -379,12 +462,12 @@ fn trajectory_rejects_null_group_and_nonfinite_conditions_with_source_rows() {
 
 #[test]
 fn trajectory_requires_two_conditions_per_group() {
-    let frame = df!(
-        "subject" => ["s1", "s1", "s2"], "condition" => [1.0_f64, 2.0, 1.0],
-        "value" => [1.0_f64, 2.0, 3.0]
-    )
-    .unwrap();
-    assert!(trajectory(&frame)
+    let data = trajectory_data(
+        NumericValues::new("condition", [1.0, 2.0, 1.0]).into(),
+        NumericValues::new("value", [1.0, 2.0, 3.0]),
+        CategoryValues::new("subject", ["s1", "s1", "s2"]).unwrap(),
+    );
+    assert!(trajectory(&data)
         .preflight()
         .unwrap_err()
         .to_string()
@@ -393,14 +476,16 @@ fn trajectory_requires_two_conditions_per_group() {
 
 #[test]
 fn trajectory_svg_is_deterministic_and_exposes_neutral_connector_and_hue_points() {
-    let frame = df!(
-        "subject" => ["subject-one", "subject-one"],
-        "condition" => ["before", "after"], "value" => [1.0_f64, 3.0],
-        "status" => ["control", "case"]
-    )
-    .unwrap();
-    let first = svg(trajectory_with_hue(&frame), "trajectory-first");
-    let second = svg(trajectory_with_hue(&frame), "trajectory-second");
+    let mut data = trajectory_data(
+        CategoryValues::new("condition", ["before", "after"])
+            .unwrap()
+            .into(),
+        NumericValues::new("value", [1.0, 3.0]),
+        CategoryValues::new("subject", ["subject-one", "subject-one"]).unwrap(),
+    );
+    data.status = Some(CategoryValues::new("status", ["control", "case"]).unwrap());
+    let first = svg(trajectory_with_hue(&data), "trajectory-first");
+    let second = svg(trajectory_with_hue(&data), "trajectory-second");
     assert_eq!(first, second);
     assert!(first.contains("stroke=\"#000000\" stroke-width=\"1.4\""));
     assert!(first.contains("fill=\"#0072B2\"") && first.contains("fill=\"#D55E00\""));

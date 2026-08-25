@@ -1,9 +1,35 @@
 use super::*;
 
-fn estimate_line(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
-    Plot::line(data::numeric(frame, "x"), data::numeric(frame, "estimate"))
-        .group(data::category(frame, "trace"))
-        .hue(data::category(frame, "trace"))
+fn estimate_line(data: &EstimateData) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(data.x.clone(), data.estimate.clone())
+        .group(data.trace.clone())
+        .hue(data.trace.clone())
+}
+
+fn hued_line(
+    x: &NumericValues,
+    y: &NumericValues,
+    hue: &CategoryValues,
+) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(x.clone(), y.clone()).hue(hue.clone())
+}
+
+fn grouped_hued_line(
+    x: &NumericValues,
+    y: &NumericValues,
+    group: &CategoryValues,
+    hue: &CategoryValues,
+) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(x.clone(), y.clone())
+        .group(group.clone())
+        .hue(hue.clone())
+}
+
+fn horizontal_bar(
+    category: &CategoryValues,
+    value: &NumericValues,
+) -> Plot<lichtung_plot::kind::HorizontalBar> {
+    Plot::horizontal_bar(category.clone(), BarInput::estimates(value.clone()))
 }
 
 fn clip_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
@@ -22,25 +48,19 @@ fn clip_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
 
 #[test]
 fn shared_legend_is_global_complete_and_semantically_validated() {
-    let first = df!(
-        "x" => [1.0_f64, 2.0], "y" => [1.0_f64, 2.0], "trace" => ["control", "control"]
-    )
-    .unwrap();
-    let second = df!(
-        "x" => [1.0_f64, 2.0], "y" => [2.0_f64, 3.0],
-        "trace" => ["active", "active"], "other" => ["active", "active"]
-    )
-    .unwrap();
-    let line = |frame: &DataFrame, hue| {
-        Plot::line(data::numeric(frame, "x"), data::numeric(frame, "y"))
-            .hue(data::category(frame, hue))
-    };
+    let first_x = NumericValues::new("x", [1.0, 2.0]);
+    let first_y = NumericValues::new("y", [1.0, 2.0]);
+    let first_trace = CategoryValues::new("trace", ["control", "control"]).unwrap();
+    let second_x = NumericValues::new("x", [1.0, 2.0]);
+    let second_y = NumericValues::new("y", [2.0, 3.0]);
+    let second_trace = CategoryValues::new("trace", ["active", "active"]).unwrap();
+    let second_other = CategoryValues::new("other", ["active", "active"]).unwrap();
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, line(&first, "trace"))
+            .panel(0, 0, hued_line(&first_x, &first_y, &first_trace))
             .unwrap()
-            .panel(0, 1, line(&second, "trace"))
+            .panel(0, 1, hued_line(&second_x, &second_y, &second_trace))
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared),
         "shared-global-legend",
@@ -53,9 +73,9 @@ fn shared_legend_is_global_complete_and_semantically_validated() {
 
     let error = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, line(&first, "trace"))
+        .panel(0, 0, hued_line(&first_x, &first_y, &first_trace))
         .unwrap()
-        .panel(0, 1, line(&second, "other"))
+        .panel(0, 1, hued_line(&second_x, &second_y, &second_other))
         .unwrap()
         .legend_policy(CanvasLegendPolicy::Shared)
         .preflight()
@@ -65,31 +85,28 @@ fn shared_legend_is_global_complete_and_semantically_validated() {
 
 #[test]
 fn shared_canvas_legend_merges_typed_collective_pairs() {
-    let first = df!(
-        "x" => [0.0_f64, 1.0],
-        "y" => [1.0_f64, 2.0],
-        "group" => ["g1", "g1"],
-        "hue" => ["h1", "h1"],
-    )
-    .unwrap();
-    let second = df!(
-        "x" => [0.0_f64, 1.0],
-        "y" => [3.0_f64, 4.0],
-        "group" => ["g2", "g2"],
-        "hue" => ["h2", "h2"],
-    )
-    .unwrap();
-    let line = |frame: &DataFrame| {
-        Plot::line(data::numeric(frame, "x"), data::numeric(frame, "y"))
-            .group(data::category(frame, "group"))
-            .hue(data::category(frame, "hue"))
-    };
+    let first_x = NumericValues::new("x", [0.0, 1.0]);
+    let first_y = NumericValues::new("y", [1.0, 2.0]);
+    let first_group = CategoryValues::new("group", ["g1", "g1"]).unwrap();
+    let first_hue = CategoryValues::new("hue", ["h1", "h1"]).unwrap();
+    let second_x = NumericValues::new("x", [0.0, 1.0]);
+    let second_y = NumericValues::new("y", [3.0, 4.0]);
+    let second_group = CategoryValues::new("group", ["g2", "g2"]).unwrap();
+    let second_hue = CategoryValues::new("hue", ["h2", "h2"]).unwrap();
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, line(&first))
+            .panel(
+                0,
+                0,
+                grouped_hued_line(&first_x, &first_y, &first_group, &first_hue),
+            )
             .unwrap()
-            .panel(0, 1, line(&second))
+            .panel(
+                0,
+                1,
+                grouped_hued_line(&second_x, &second_y, &second_group, &second_hue),
+            )
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared),
         "shared-pair-legend",
@@ -112,19 +129,13 @@ fn shared_canvas_legend_merges_typed_collective_pairs() {
 
 #[test]
 fn shared_legend_gap_reduces_canvas_legend_separation() {
-    let frame = df!(
-        "x" => [1.0_f64, 2.0], "y" => [1.0_f64, 2.0], "trace" => ["control", "control"]
-    )
-    .unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0]);
+    let y = NumericValues::new("y", [1.0, 2.0]);
+    let trace = CategoryValues::new("trace", ["control", "control"]).unwrap();
     let render = |gap: Option<f64>| {
         let canvas = Canvas::grid(1, 1)
             .unwrap()
-            .panel(
-                0,
-                0,
-                Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
-                    .hue(data::category(&frame, "trace")),
-            )
+            .panel(0, 0, hued_line(&x, &y, &trace))
             .unwrap()
             .legend_policy(CanvasLegendPolicy::Shared);
         let canvas = match gap {
@@ -159,24 +170,18 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
 
 #[test]
 fn per_plot_legends_keep_locally_observed_hue_levels() {
-    let first = df!(
-        "x" => [1.0_f64, 2.0], "y" => [1.0_f64, 2.0], "trace" => ["control", "control"]
-    )
-    .unwrap();
-    let second = df!(
-        "x" => [1.0_f64, 2.0], "y" => [2.0_f64, 3.0], "trace" => ["active", "active"]
-    )
-    .unwrap();
-    let line = |frame: &DataFrame| {
-        Plot::line(data::numeric(frame, "x"), data::numeric(frame, "y"))
-            .hue(data::category(frame, "trace"))
-    };
+    let first_x = NumericValues::new("x", [1.0, 2.0]);
+    let first_y = NumericValues::new("y", [1.0, 2.0]);
+    let first_trace = CategoryValues::new("trace", ["control", "control"]).unwrap();
+    let second_x = NumericValues::new("x", [1.0, 2.0]);
+    let second_y = NumericValues::new("y", [2.0, 3.0]);
+    let second_trace = CategoryValues::new("trace", ["active", "active"]).unwrap();
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, line(&first))
+            .panel(0, 0, hued_line(&first_x, &first_y, &first_trace))
             .unwrap()
-            .panel(0, 1, line(&second))
+            .panel(0, 1, hued_line(&second_x, &second_y, &second_trace))
             .unwrap()
             .legend_policy(CanvasLegendPolicy::PerPlot),
         "per-plot-local-legends",
@@ -189,25 +194,19 @@ fn per_plot_legends_keep_locally_observed_hue_levels() {
 
 #[test]
 fn composed_offset_panel_reserves_long_y_tick_labels_locally() {
-    let line_frame = estimate_data();
-    let bar_frame = df!(
-        "category" => ["a very long category label in the second panel", "short"],
-        "value" => [2.0_f64, 4.0]
+    let line_data = estimate_data();
+    let category = CategoryValues::new(
+        "category",
+        ["a very long category label in the second panel", "short"],
     )
     .unwrap();
+    let value = NumericValues::new("value", [2.0, 4.0]);
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, estimate_line(&line_frame))
+            .panel(0, 0, estimate_line(&line_data))
             .unwrap()
-            .panel(
-                0,
-                1,
-                Plot::horizontal_bar(
-                    data::category(&bar_frame, "category"),
-                    BarInput::estimates(data::numeric(&bar_frame, "value")),
-                ),
-            )
+            .panel(0, 1, horizontal_bar(&category, &value))
             .unwrap(),
         "composed-local-gutter",
     )
@@ -219,25 +218,15 @@ fn composed_offset_panel_reserves_long_y_tick_labels_locally() {
 
 #[test]
 fn composed_right_panel_keeps_y_axis_title_out_of_the_left_panel() {
-    let line_frame = estimate_data();
-    let bar_frame = df!(
-        "category" => ["3D-SART Understanding", "short"], "value" => [2.0_f64, 4.0]
-    )
-    .unwrap();
+    let line_data = estimate_data();
+    let category = CategoryValues::new("category", ["3D-SART Understanding", "short"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 4.0]);
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, estimate_line(&line_frame))
+            .panel(0, 0, estimate_line(&line_data))
             .unwrap()
-            .panel(
-                0,
-                1,
-                Plot::horizontal_bar(
-                    data::category(&bar_frame, "category"),
-                    BarInput::estimates(data::numeric(&bar_frame, "value")),
-                )
-                .y_label("Outcome"),
-            )
+            .panel(0, 1, horizontal_bar(&category, &value).y_label("Outcome"))
             .unwrap(),
         "composed-right-title",
     )
@@ -252,18 +241,15 @@ fn composed_right_panel_keeps_y_axis_title_out_of_the_left_panel() {
 
 #[test]
 fn multiline_y_axis_title_keeps_every_line_inside_the_canvas() {
-    let frame = df!("category" => ["first", "second"], "value" => [2.0_f64, 4.0]).unwrap();
+    let category = CategoryValues::new("category", ["first", "second"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 4.0]);
     let svg = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
             .panel(
                 0,
                 0,
-                Plot::horizontal_bar(
-                    data::category(&frame, "category"),
-                    BarInput::estimates(data::numeric(&frame, "value")),
-                )
-                .y_label("Linguistic\nproperty\ncontribution"),
+                horizontal_bar(&category, &value).y_label("Linguistic\nproperty\ncontribution"),
             )
             .unwrap(),
         "multiline-y-title",
@@ -281,18 +267,12 @@ fn multiline_y_axis_title_keeps_every_line_inside_the_canvas() {
 #[test]
 fn composed_panel_reserves_categorical_y_axis_text_once() {
     let category = "category label measured exactly once";
-    let frame = df!("category" => [category, "short"], "value" => [2.0_f64, 4.0]).unwrap();
+    let categories = CategoryValues::new("category", [category, "short"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 4.0]);
     let svg = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
-            .panel(
-                0,
-                0,
-                Plot::horizontal_bar(
-                    data::category(&frame, "category"),
-                    BarInput::estimates(data::numeric(&frame, "value")),
-                ),
-            )
+            .panel(0, 0, horizontal_bar(&categories, &value))
             .unwrap(),
         "category-gutter-once",
     )
@@ -302,20 +282,15 @@ fn composed_panel_reserves_categorical_y_axis_text_once() {
 
 #[test]
 fn composed_horizontal_bars_support_shared_headers_labels_and_range_groups() {
-    let left = df!("outcome" => ["alpha", "beta"], "value" => [1.0_f64, -0.5]).unwrap();
-    let right = df!("outcome" => ["alpha", "beta"], "value" => [8.0_f64, -6.0]).unwrap();
-    let bars = |frame: &DataFrame| {
-        Plot::horizontal_bar(
-            data::category(frame, "outcome"),
-            BarInput::estimates(data::numeric(frame, "value")),
-        )
-    };
+    let outcome = CategoryValues::new("outcome", ["alpha", "beta"]).unwrap();
+    let left = NumericValues::new("value", [1.0, -0.5]);
+    let right = NumericValues::new("value", [8.0, -6.0]);
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, bars(&left))
+            .panel(0, 0, horizontal_bar(&outcome, &left))
             .unwrap()
-            .panel(0, 1, bars(&right))
+            .panel(0, 1, horizontal_bar(&outcome, &right))
             .unwrap()
             .column_header(0, 1, "Correlation")
             .unwrap()
@@ -346,8 +321,9 @@ fn composed_horizontal_bars_support_shared_headers_labels_and_range_groups() {
 
 #[test]
 fn composed_row_title_spans_all_columns_and_rejects_panel_titles() {
-    let frame = df!("x" => [1.0_f64, 2.0], "y" => [2.0_f64, 3.0]).unwrap();
-    let line = || Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"));
+    let x = NumericValues::new("x", [1.0, 2.0]);
+    let y = NumericValues::new("y", [2.0, 3.0]);
+    let line = || Plot::line(x.clone(), y.clone());
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
@@ -377,19 +353,14 @@ fn composed_row_title_spans_all_columns_and_rejects_panel_titles() {
 
 #[test]
 fn shared_category_labels_reject_different_row_domains_preflight() {
-    let left = df!("outcome" => ["alpha", "beta"], "value" => [1.0_f64, 2.0]).unwrap();
-    let right = df!("outcome" => ["alpha", "gamma"], "value" => [1.0_f64, 2.0]).unwrap();
-    let bar = |frame: &DataFrame| {
-        Plot::horizontal_bar(
-            data::category(frame, "outcome"),
-            BarInput::estimates(data::numeric(frame, "value")),
-        )
-    };
+    let left = CategoryValues::new("outcome", ["alpha", "beta"]).unwrap();
+    let right = CategoryValues::new("outcome", ["alpha", "gamma"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0]);
     let error = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, bar(&left))
+        .panel(0, 0, horizontal_bar(&left, &value))
         .unwrap()
-        .panel(0, 1, bar(&right))
+        .panel(0, 1, horizontal_bar(&right, &value))
         .unwrap()
         .category_labels(CanvasCategoryLabels::FirstColumnPerRow)
         .preflight()
@@ -399,21 +370,19 @@ fn shared_category_labels_reject_different_row_domains_preflight() {
 
 #[test]
 fn shared_category_labels_compare_rendered_explicit_orders() {
-    let left = df!("outcome" => ["alpha", "beta"], "value" => [1.0_f64, 2.0]).unwrap();
-    let reversed = df!("outcome" => ["beta", "alpha"], "value" => [2.0_f64, 1.0]).unwrap();
-    let bar = |frame: &DataFrame, order| {
-        Plot::horizontal_bar(
-            data::category(frame, "outcome"),
-            BarInput::estimates(data::numeric(frame, "value")),
-        )
-        .category_order(CategoryOrder::explicit(order))
+    let left = CategoryValues::new("outcome", ["alpha", "beta"]).unwrap();
+    let left_value = NumericValues::new("value", [1.0, 2.0]);
+    let reversed = CategoryValues::new("outcome", ["beta", "alpha"]).unwrap();
+    let reversed_value = NumericValues::new("value", [2.0, 1.0]);
+    let bar = |category: &CategoryValues, value: &NumericValues, order| {
+        horizontal_bar(category, value).category_order(CategoryOrder::explicit(order))
     };
 
     Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, bar(&left, ["alpha", "beta"]))
+        .panel(0, 0, bar(&left, &left_value, ["alpha", "beta"]))
         .unwrap()
-        .panel(0, 1, bar(&reversed, ["alpha", "beta"]))
+        .panel(0, 1, bar(&reversed, &reversed_value, ["alpha", "beta"]))
         .unwrap()
         .category_labels(CanvasCategoryLabels::FirstColumnPerRow)
         .preflight()
@@ -421,9 +390,9 @@ fn shared_category_labels_compare_rendered_explicit_orders() {
 
     let error = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, bar(&left, ["alpha", "beta"]))
+        .panel(0, 0, bar(&left, &left_value, ["alpha", "beta"]))
         .unwrap()
-        .panel(0, 1, bar(&left, ["beta", "alpha"]))
+        .panel(0, 1, bar(&left, &left_value, ["beta", "alpha"]))
         .unwrap()
         .category_labels(CanvasCategoryLabels::FirstColumnPerRow)
         .preflight()
@@ -434,21 +403,18 @@ fn shared_category_labels_compare_rendered_explicit_orders() {
 #[test]
 fn composed_svg_is_byte_deterministic() {
     let build = || {
-        let frame = estimate_data();
+        let data = estimate_data();
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, estimate_line(&frame))
+            .panel(0, 0, estimate_line(&data))
             .unwrap()
             .panel(
                 0,
                 1,
                 Plot::forest(
-                    data::category(&frame, "term"),
-                    data::numeric(&frame, "estimate"),
-                    Bounds::new(
-                        data::numeric(&frame, "lower"),
-                        data::numeric(&frame, "upper"),
-                    ),
+                    data.term,
+                    data.estimate,
+                    Bounds::new(data.lower, data.upper),
                     0.0,
                 ),
             )
@@ -463,14 +429,15 @@ fn composed_svg_is_byte_deterministic() {
 
 #[test]
 fn composed_panel_titles_and_subtitles_keep_distinct_measured_positions() {
-    let frame = df!("x" => [1.0_f64, 2.0], "y" => [2.0_f64, 3.0]).unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0]);
+    let y = NumericValues::new("y", [2.0, 3.0]);
     let svg = render_canvas(
         Canvas::grid(1, 1)
             .unwrap()
             .panel(
                 0,
                 0,
-                Plot::line(data::numeric(&frame, "x"), data::numeric(&frame, "y"))
+                Plot::line(x, y)
                     .title("(a) Panel")
                     .subtitle("Panel subtitle"),
             )
@@ -497,24 +464,18 @@ fn composed_panel_titles_and_subtitles_keep_distinct_measured_positions() {
 
 #[test]
 fn shared_canvas_scatter_legend_rejects_null_hue_rows_preflight() {
-    let left = df!(
-        "x" => [1.0_f64, 2.0], "y" => [1.0_f64, 2.0], "trace" => [Some("control"), None]
-    )
-    .unwrap();
-    let right = df!(
-        "x" => [1.0_f64, 2.0, 3.0], "y" => [2.0_f64, 3.0, 4.0],
-        "trace" => [Some("active"), Some("active"), None]
-    )
-    .unwrap();
-    let scatter = |frame: &DataFrame| {
-        Plot::scatter(data::numeric(frame, "x"), data::numeric(frame, "y"))
-            .hue(data::category(frame, "trace"))
-    };
+    let left_x = NumericValues::new("x", [1.0, 2.0]);
+    let left_y = NumericValues::new("y", [1.0, 2.0]);
+    let left_trace = CategoryValues::nullable("trace", [Some("control"), None]).unwrap();
+    let right_x = NumericValues::new("x", [1.0, 2.0, 3.0]);
+    let right_y = NumericValues::new("y", [2.0, 3.0, 4.0]);
+    let right_trace =
+        CategoryValues::nullable("trace", [Some("active"), Some("active"), None]).unwrap();
     let error = Canvas::grid(1, 2)
         .unwrap()
-        .panel(0, 0, scatter(&left))
+        .panel(0, 0, Plot::scatter(left_x, left_y).hue(left_trace))
         .unwrap()
-        .panel(0, 1, scatter(&right))
+        .panel(0, 1, Plot::scatter(right_x, right_y).hue(right_trace))
         .unwrap()
         .legend_policy(CanvasLegendPolicy::Shared)
         .preflight()
@@ -526,20 +487,13 @@ fn shared_canvas_scatter_legend_rejects_null_hue_rows_preflight() {
 
 #[test]
 fn all_canvas_grids_precede_any_marks() {
-    let frame = estimate_data();
+    let data = estimate_data();
     let svg = render_canvas(
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, estimate_line(&frame))
+            .panel(0, 0, estimate_line(&data))
             .unwrap()
-            .panel(
-                0,
-                1,
-                Plot::scatter(
-                    data::numeric(&frame, "x"),
-                    data::numeric(&frame, "estimate"),
-                ),
-            )
+            .panel(0, 1, Plot::scatter(data.x, data.estimate))
             .unwrap(),
         "grid-before-marks",
     )
@@ -550,22 +504,19 @@ fn all_canvas_grids_precede_any_marks() {
 #[test]
 fn heterogeneous_canvas_is_deterministic_and_clipped_once_per_plot() {
     let build = || {
-        let frame = estimate_data();
+        let data = estimate_data();
         Canvas::grid(1, 2)
             .unwrap()
-            .panel(0, 0, estimate_line(&frame))
+            .panel(0, 0, estimate_line(&data))
             .unwrap()
             .panel(
                 0,
                 1,
                 Plot::coefficient(
-                    data::category(&frame, "term"),
+                    data.term,
                     CoefficientInput::estimates_with_intervals(
-                        data::numeric(&frame, "estimate"),
-                        Bounds::new(
-                            data::numeric(&frame, "lower"),
-                            data::numeric(&frame, "upper"),
-                        ),
+                        data.estimate,
+                        Bounds::new(data.lower, data.upper),
                     ),
                 ),
             )
@@ -584,10 +535,10 @@ fn heterogeneous_canvas_is_deterministic_and_clipped_once_per_plot() {
 #[test]
 fn invalid_canvas_layouts_and_panel_data_fail_before_artifact_creation() {
     assert!(Canvas::grid(0, 1).is_err());
-    let frame = estimate_data();
+    let data = estimate_data();
     assert!(Canvas::grid(1, 1)
         .unwrap()
-        .panel(0, 0, estimate_line(&frame))
+        .panel(0, 0, estimate_line(&data))
         .unwrap()
         .size(100, 100)
         .preflight()
@@ -699,12 +650,8 @@ fn canvas_renders_valid_supplemental_numeric_geometry() {
 
 #[test]
 fn invalid_panel_band_and_facet_cell_fail_canvas_preflight() {
-    let frame = estimate_data();
-    let bar = Plot::bar(
-        data::category(&frame, "factor"),
-        BarInput::samples(data::numeric(&frame, "estimate")),
-    )
-    .significance([
+    let data = estimate_data();
+    let bar = Plot::bar(data.factor, BarInput::samples(data.estimate)).significance([
         Significance::between("before", "after", SignificanceMark::PValue(0.01))
             .facet(FacetCell::single("one")),
     ]);

@@ -46,7 +46,7 @@ and commit each phase as one logical change before starting the next phase.
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | COMPLETE |
 | 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | COMPLETE |
-| 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
+| 10 | Replace dataframe-shaped test shims with native values | R7 | COMPLETE |
 | 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | COMPLETE |
 
 Issues 8, 9, and 11 were resolved in the canonical contracts before their
@@ -308,7 +308,11 @@ Commit: `docs(api): clarify numeric label formatting`
 
 ## Phase R7: Native Test Values
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: native-value unit and integration tests in SVG-only and PNG modes,
+full-tree retired-shim searches, unchanged snapshots, and `just verify` passed on
+2026-08-25.
 
 Remove test-only dataframe emulation so tests exercise the standalone
 renderer boundary directly.

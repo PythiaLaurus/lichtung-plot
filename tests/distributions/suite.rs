@@ -1,10 +1,7 @@
 use lichtung_plot::{
-    HistogramBins, HistogramInput, HistogramStat, Plot, PointLayer, QqLine, Theme,
+    CategoryValues, HistogramBins, HistogramInput, HistogramStat, NumericValues, Plot, PointLayer,
+    QqLine, Theme,
 };
-
-#[path = "../support/data.rs"]
-mod data;
-use data::{df, DataFrame, Series};
 
 #[path = "../support/visual.rs"]
 mod support;

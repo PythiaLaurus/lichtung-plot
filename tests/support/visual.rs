@@ -3,7 +3,7 @@
     reason = "helpers are shared by independently compiled integration test targets"
 )]
 
-use lichtung_plot::{BarInput, BarSpacing, NumericValues, Plot};
+use lichtung_plot::{BarInput, BarSpacing, CategoryValues, NumericValues, Plot};
 
 pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
     let xs: Vec<f64> = (0..30).map(|i| f64::from(i) * 0.5).collect();
@@ -11,17 +11,6 @@ pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
         .map(|i| (f64::from(i) * 0.3).sin() * 5.0 + 10.0)
         .collect();
     (NumericValues::new("x", xs), NumericValues::new("y", ys))
-}
-
-pub(super) fn fixture_df() -> crate::data::DataFrame {
-    let (x, y) = fixture_values();
-    let xs = (0..x.len())
-        .map(|index| f64::from(u32::try_from(index).unwrap()) * 0.5)
-        .collect::<Vec<_>>();
-    let ys = (0..y.len())
-        .map(|index| (f64::from(u32::try_from(index).unwrap()) * 0.3).sin() * 5.0 + 10.0)
-        .collect::<Vec<_>>();
-    crate::data::test_data!("x" => xs, "y" => ys).unwrap()
 }
 
 pub(super) fn normalize_embedded_font(svg: &str) -> String {
@@ -270,21 +259,15 @@ pub(super) fn text_y(text: &[SvgText], content: &str) -> f64 {
 }
 
 pub(super) fn grouped_bar_internal_gap(spacing: BarSpacing) -> f64 {
-    let data = crate::data::test_data!(
-        "group" => ["A", "A"],
-        "series" => ["control", "treatment"],
-        "value" => [1.0_f64, 2.0]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["A", "A"]).unwrap();
+    let series = CategoryValues::new("series", ["control", "treatment"]).unwrap();
+    let value = NumericValues::new("value", [1.0, 2.0]);
     let dir = unique_dir("grouped-bar-spacing");
     let out = dir.join("bar.svg");
-    let chart = Plot::bar(
-        crate::data::category(&data, "group"),
-        BarInput::estimates(crate::data::numeric(&data, "value")),
-    )
-    .series(crate::data::category(&data, "series"))
-    .spacing(spacing)
-    .size(360, 260);
+    let chart = Plot::bar(group, BarInput::estimates(value))
+        .series(series)
+        .spacing(spacing)
+        .size(360, 260);
     chart.svg(&out).expect("bar render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
     let mut bars = parse_polygon_bounds(&svg);

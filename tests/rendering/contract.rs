@@ -1,33 +1,42 @@
-use lichtung_plot::{BarInput, BarPointLayer, Bounds, Canvas, FacetSpec, Plot, TextPanel};
+use lichtung_plot::{
+    BarInput, BarPointLayer, Bounds, Canvas, CategoryValues, FacetSpec, NumericValues, Plot,
+    TextPanel,
+};
 
-use super::{data, df, unique_dir, DataFrame, Significance, SignificanceMark};
+use super::{unique_dir, Significance, SignificanceMark};
 
-fn identity_interval_data() -> DataFrame {
-    df!(
-        "category" => ["a", "b"],
-        "value" => [2.0_f64, 5.0],
-        "lower" => [1.0_f64, 3.5],
-        "upper" => [4.0_f64, 8.0],
-    )
-    .unwrap()
+struct IntervalData {
+    category: CategoryValues,
+    value: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
 }
 
-fn identity_interval_plot(data: &DataFrame, horizontal: bool) -> Plot {
+fn identity_interval_data() -> IntervalData {
+    IntervalData {
+        category: CategoryValues::new("category", ["a", "b"]).unwrap(),
+        value: NumericValues::new("value", [2.0, 5.0]),
+        lower: NumericValues::new("lower", [1.0, 3.5]),
+        upper: NumericValues::new("upper", [4.0, 8.0]),
+    }
+}
+
+fn identity_interval_plot(data: &IntervalData, horizontal: bool) -> Plot {
     if horizontal {
         Plot::horizontal_bar(
-            data::category(data, "category"),
+            data.category.clone(),
             BarInput::estimates_with_error_bars(
-                data::numeric(data, "value"),
-                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
+                data.value.clone(),
+                Bounds::new(data.lower.clone(), data.upper.clone()),
             ),
         )
         .erase()
     } else {
         Plot::bar(
-            data::category(data, "category"),
+            data.category.clone(),
             BarInput::estimates_with_error_bars(
-                data::numeric(data, "value"),
-                Bounds::new(data::numeric(data, "lower"), data::numeric(data, "upper")),
+                data.value.clone(),
+                Bounds::new(data.lower.clone(), data.upper.clone()),
             ),
         )
         .erase()
@@ -57,8 +66,8 @@ fn precomputed_bar_bounds_render_asymmetric_endpoints() {
 
     let plain = svg(
         Plot::bar(
-            data::category(&data, "category"),
-            BarInput::estimates(data::numeric(&data, "value")),
+            data.category.clone(),
+            BarInput::estimates(data.value.clone()),
         ),
         "plain-identity-bar",
     );
@@ -68,13 +77,12 @@ fn precomputed_bar_bounds_render_asymmetric_endpoints() {
 
 #[test]
 fn identity_bar_rejects_invalid_endpoint_order_during_preflight() {
-    let data = df!(
-        "category" => ["a"],
-        "value" => [2.0_f64],
-        "lower" => [3.0_f64],
-        "upper" => [4.0_f64],
-    )
-    .unwrap();
+    let data = IntervalData {
+        category: CategoryValues::new("category", ["a"]).unwrap(),
+        value: NumericValues::new("value", [2.0]),
+        lower: NumericValues::new("lower", [3.0]),
+        upper: NumericValues::new("upper", [4.0]),
+    };
     let error = identity_interval_plot(&data, false)
         .preflight()
         .unwrap_err();
@@ -84,23 +92,17 @@ fn identity_bar_rejects_invalid_endpoint_order_during_preflight() {
 
 #[test]
 fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() {
-    let bars = df!(
-        "category" => ["a", "a", "b", "b"],
-        "group" => ["left", "right", "left", "right"],
-        "value" => [2.0_f64, 3.0, 4.0, 5.0],
-    )
-    .unwrap();
-    let points = df!(
-        "point_category" => ["a", "a", "b"],
-        "point_group" => ["left", "right", "left"],
-        "point_value" => [1.0_f64, 7.0, 6.0],
-    )
-    .unwrap();
+    let category = CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap();
+    let group = CategoryValues::new("group", ["left", "right", "left", "right"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 3.0, 4.0, 5.0]);
+    let point_category = CategoryValues::new("point_category", ["a", "a", "b"]).unwrap();
+    let point_group = CategoryValues::new("point_group", ["left", "right", "left"]).unwrap();
+    let point_value = NumericValues::new("point_value", [1.0, 7.0, 6.0]);
     let layer = || {
         BarPointLayer::new(
-            data::category(&points, "point_category"),
-            Some(data::category(&points, "point_group")),
-            data::numeric(&points, "point_value"),
+            point_category.clone(),
+            Some(point_group.clone()),
+            point_value.clone(),
             (123, 45, 200),
             5,
             0.4,
@@ -110,22 +112,16 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
     let render = |horizontal| {
         if horizontal {
             svg(
-                Plot::horizontal_bar(
-                    data::category(&bars, "category"),
-                    BarInput::estimates(data::numeric(&bars, "value")),
-                )
-                .series(data::category(&bars, "group"))
-                .point_layer(layer()),
+                Plot::horizontal_bar(category.clone(), BarInput::estimates(value.clone()))
+                    .series(group.clone())
+                    .point_layer(layer()),
                 "horizontal-bar-point-layer",
             )
         } else {
             svg(
-                Plot::bar(
-                    data::category(&bars, "category"),
-                    BarInput::estimates(data::numeric(&bars, "value")),
-                )
-                .series(data::category(&bars, "group"))
-                .point_layer(layer()),
+                Plot::bar(category.clone(), BarInput::estimates(value.clone()))
+                    .series(group.clone())
+                    .point_layer(layer()),
                 "vertical-bar-point-layer",
             )
         }
@@ -147,20 +143,18 @@ fn bar_point_layers_retain_rows_at_exact_grouped_centers_in_both_orientations() 
 
 #[test]
 fn unknown_bar_point_category_rejects_during_preflight() {
-    let bars = df!("category" => ["a"], "value" => [2.0_f64]).unwrap();
-    let points = df!("category" => ["missing"], "value" => [3.0_f64]).unwrap();
     let layer = BarPointLayer::new(
-        data::category(&points, "category"),
+        CategoryValues::new("category", ["missing"]).unwrap(),
         None,
-        data::numeric(&points, "value"),
+        NumericValues::new("value", [3.0]),
         (1, 2, 3),
         3,
         0.5,
     )
     .unwrap();
     let plot = Plot::bar(
-        data::category(&bars, "category"),
-        BarInput::estimates(data::numeric(&bars, "value")),
+        CategoryValues::new("category", ["a"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [2.0])),
     )
     .point_layer(layer);
 
@@ -171,66 +165,42 @@ fn unknown_bar_point_category_rejects_during_preflight() {
 
 #[test]
 fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
-    let bars = df!(
-        "category" => ["a", "b"],
-        "group" => ["left", "left"],
-        "value" => [2.0_f64, 3.0],
-        "facet" => ["one", "two"],
-    )
-    .unwrap();
-    let nonfinite_points = df!("category" => ["a"], "value" => [f64::NAN]).unwrap();
-    let grouped_points = df!(
-        "category" => ["a"],
-        "group" => ["left"],
-        "value" => [2.5_f64],
-    )
-    .unwrap();
+    let category = CategoryValues::new("category", ["a", "b"]).unwrap();
+    let group = CategoryValues::new("group", ["left", "left"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 3.0]);
+    let facet = CategoryValues::new("facet", ["one", "two"]).unwrap();
+    let point_category = CategoryValues::new("category", ["a"]).unwrap();
+    let point_group = CategoryValues::new("group", ["left"]).unwrap();
+    let point_value = NumericValues::new("value", [2.5]);
     let nonfinite = BarPointLayer::new(
-        data::category(&nonfinite_points, "category"),
+        point_category.clone(),
         None,
-        data::numeric(&nonfinite_points, "value"),
+        NumericValues::new("value", [f64::NAN]),
         (1, 2, 3),
         3,
         0.5,
     )
     .unwrap();
     let grouped = BarPointLayer::new(
-        data::category(&grouped_points, "category"),
-        Some(data::category(&grouped_points, "group")),
-        data::numeric(&grouped_points, "value"),
+        point_category.clone(),
+        Some(point_group),
+        point_value.clone(),
         (1, 2, 3),
         3,
         0.5,
     )
     .unwrap();
-    let nonfinite_plot = Plot::bar(
-        data::category(&bars, "category"),
-        BarInput::estimates(data::numeric(&bars, "value")),
-    )
-    .point_layer(nonfinite);
-    let mismatch_plot = Plot::bar(
-        data::category(&bars, "category"),
-        BarInput::estimates(data::numeric(&bars, "value")),
-    )
-    .series(data::category(&bars, "group"))
-    .point_layer(
-        BarPointLayer::new(
-            data::category(&grouped_points, "category"),
-            None,
-            data::numeric(&grouped_points, "value"),
-            (1, 2, 3),
-            3,
-            0.5,
-        )
-        .unwrap(),
-    );
-    let faceted_plot = Plot::bar(
-        data::category(&bars, "category"),
-        BarInput::estimates(data::numeric(&bars, "value")),
-    )
-    .series(data::category(&bars, "group"))
-    .point_layer(grouped)
-    .facet(FacetSpec::wrap(data::category(&bars, "facet"), 2).unwrap());
+    let nonfinite_plot =
+        Plot::bar(category.clone(), BarInput::estimates(value.clone())).point_layer(nonfinite);
+    let mismatch_plot = Plot::bar(category.clone(), BarInput::estimates(value.clone()))
+        .series(group.clone())
+        .point_layer(
+            BarPointLayer::new(point_category, None, point_value, (1, 2, 3), 3, 0.5).unwrap(),
+        );
+    let faceted_plot = Plot::bar(category, BarInput::estimates(value))
+        .series(group)
+        .point_layer(grouped)
+        .facet(FacetSpec::wrap(facet, 2).unwrap());
 
     let cases = [
         (nonfinite_plot, "finite"),
@@ -245,10 +215,9 @@ fn bar_point_layers_reject_nonfinite_mismatch_and_facets() {
 
 #[test]
 fn explicit_and_p_value_marks_render_the_same_four_stars() {
-    let data = df!("category" => ["a", "b"], "value" => [2.0_f64, 4.0]).unwrap();
     let plot = Plot::bar(
-        data::category(&data, "category"),
-        BarInput::estimates(data::numeric(&data, "value")),
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [2.0, 4.0])),
     );
     let render = |mark, name| {
         svg(
@@ -284,10 +253,9 @@ fn canvas_supports_all_text_and_mixed_cells_without_text_legends() {
             .unwrap(),
         "all-text-canvas",
     );
-    let data = df!("category" => ["a"], "value" => [2.0_f64]).unwrap();
     let plot = Plot::bar(
-        data::category(&data, "category"),
-        BarInput::estimates(data::numeric(&data, "value")),
+        CategoryValues::new("category", ["a"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [2.0])),
     );
     let mixed = svg_canvas(
         Canvas::grid(1, 2)

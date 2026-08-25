@@ -1,29 +1,46 @@
 use super::*;
 
-fn fixture() -> DataFrame {
-    df!(
-        "category" => ["first", "second", "third"],
-        "estimate" => [1.0_f64, -2.0, 4.0],
-        "lower" => [-1.0_f64, -2.5, 2.0],
-        "upper" => [5.0_f64, 0.0, 5.0]
+struct PointIntervalData {
+    category: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+}
+
+fn point_interval_data(
+    category: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+) -> PointIntervalData {
+    PointIntervalData {
+        category,
+        estimate,
+        lower,
+        upper,
+    }
+}
+
+fn standard_data() -> PointIntervalData {
+    point_interval_data(
+        CategoryValues::new("category", ["first", "second", "third"]).unwrap(),
+        NumericValues::new("estimate", [1.0, -2.0, 4.0]),
+        NumericValues::new("lower", [-1.0, -2.5, 2.0]),
+        NumericValues::new("upper", [5.0, 0.0, 5.0]),
     )
-    .unwrap()
 }
 
 fn render(
-    data_frame: &DataFrame,
+    data: &PointIntervalData,
     configure: impl FnOnce(
         Plot<lichtung_plot::kind::PointInterval>,
     ) -> Plot<lichtung_plot::kind::PointInterval>,
 ) -> String {
     render_svg(
         configure(Plot::point_interval(
-            data::category(data_frame, "category"),
-            data::numeric(data_frame, "estimate"),
-            Bounds::new(
-                data::numeric(data_frame, "lower"),
-                data::numeric(data_frame, "upper"),
-            ),
+            data.category.clone(),
+            data.estimate.clone(),
+            Bounds::new(data.lower.clone(), data.upper.clone()),
         ))
         .size(520, 280),
         "point-interval",
@@ -39,11 +56,11 @@ fn enable_zero_line(
 
 #[test]
 fn point_interval_constructor_accepts_complete_typed_bounds() {
-    let data = fixture();
+    let data = standard_data();
     Plot::point_interval(
-        data::category(&data, "category"),
-        data::numeric(&data, "estimate"),
-        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
+        data.category,
+        data.estimate,
+        Bounds::new(data.lower, data.upper),
     )
     .preflight()
     .unwrap();
@@ -51,17 +68,18 @@ fn point_interval_constructor_accepts_complete_typed_bounds() {
 
 #[test]
 fn repeated_svg_rendering_is_byte_identical() {
-    let data = fixture();
+    let data = standard_data();
     assert_eq!(render(&data, |plot| plot), render(&data, |plot| plot));
 }
 
 #[test]
 fn point_interval_renders_asymmetric_intervals_with_fixed_pixel_caps() {
-    let data = df!(
-        "category" => ["first"], "estimate" => [1.0_f64],
-        "lower" => [-1.0_f64], "upper" => [5.0_f64]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["first"]).unwrap(),
+        NumericValues::new("estimate", [1.0]),
+        NumericValues::new("lower", [-1.0]),
+        NumericValues::new("upper", [5.0]),
+    );
     let svg = render(&data, |chart| chart);
     let marks = clipped_marks(&svg);
     let lines = polylines(marks);
@@ -76,7 +94,7 @@ fn point_interval_renders_asymmetric_intervals_with_fixed_pixel_caps() {
 
 #[test]
 fn point_interval_keeps_first_row_at_top_and_sorts_by_estimate() {
-    let data = fixture();
+    let data = standard_data();
     let observed = render(&data, |chart| chart);
     let ascending = render(&data, |chart| chart.category_order(ValueSort::Ascending));
 
@@ -86,7 +104,7 @@ fn point_interval_keeps_first_row_at_top_and_sorts_by_estimate() {
 
 #[test]
 fn point_interval_auto_range_contains_every_interval_endpoint() {
-    let data = fixture();
+    let data = standard_data();
     let svg = render(&data, |chart| chart);
     let panel = clip_rect(&svg);
     let interval_lines = polylines(clipped_marks(&svg));
@@ -99,13 +117,12 @@ fn point_interval_auto_range_contains_every_interval_endpoint() {
 
 #[test]
 fn point_interval_explicit_x_limits_remain_exact_and_clip_marks_in_data_space() {
-    let data = df!(
-        "category" => ["outside"],
-        "estimate" => [0.0_f64],
-        "lower" => [-10.0_f64],
-        "upper" => [10.0_f64]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["outside"]).unwrap(),
+        NumericValues::new("estimate", [0.0]),
+        NumericValues::new("lower", [-10.0]),
+        NumericValues::new("upper", [10.0]),
+    );
     let svg = render(&data, |chart| chart.x_limits(-1.0, 1.0));
     let panel = clip_rect(&svg);
     let interval = polylines(clipped_marks(&svg))[0];
@@ -117,13 +134,12 @@ fn point_interval_explicit_x_limits_remain_exact_and_clip_marks_in_data_space() 
 
 #[test]
 fn point_interval_clips_extreme_finite_bounds_without_projecting_infinity() {
-    let data = df!(
-        "category" => ["extreme"],
-        "estimate" => [0.0_f64],
-        "lower" => [-f64::MAX],
-        "upper" => [f64::MAX]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["extreme"]).unwrap(),
+        NumericValues::new("estimate", [0.0]),
+        NumericValues::new("lower", [-f64::MAX]),
+        NumericValues::new("upper", [f64::MAX]),
+    );
     let svg = render(&data, |chart| chart.x_limits(-1.0, 1.0));
     let panel = clip_rect(&svg);
     let interval = polylines(clipped_marks(&svg))[0];
@@ -135,13 +151,12 @@ fn point_interval_clips_extreme_finite_bounds_without_projecting_infinity() {
 
 #[test]
 fn point_interval_auto_range_handles_opposite_extreme_finite_bounds() {
-    let data = df!(
-        "category" => ["extreme"],
-        "estimate" => [0.0_f64],
-        "lower" => [-f64::MAX],
-        "upper" => [f64::MAX]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["extreme"]).unwrap(),
+        NumericValues::new("estimate", [0.0]),
+        NumericValues::new("lower", [-f64::MAX]),
+        NumericValues::new("upper", [f64::MAX]),
+    );
     let svg = render(&data, |chart| chart);
 
     assert_eq!(circles(clipped_marks(&svg)).len(), 1);
@@ -150,20 +165,22 @@ fn point_interval_auto_range_handles_opposite_extreme_finite_bounds() {
 
 #[test]
 fn point_interval_reserves_left_space_for_long_category_labels() {
-    let short = df!(
-        "category" => ["short"],
-        "estimate" => [1.0_f64],
-        "lower" => [0.0_f64],
-        "upper" => [2.0_f64]
-    )
-    .unwrap();
-    let long = df!(
-        "category" => ["a deliberately long point interval category label"],
-        "estimate" => [1.0_f64],
-        "lower" => [0.0_f64],
-        "upper" => [2.0_f64]
-    )
-    .unwrap();
+    let short = point_interval_data(
+        CategoryValues::new("category", ["short"]).unwrap(),
+        NumericValues::new("estimate", [1.0]),
+        NumericValues::new("lower", [0.0]),
+        NumericValues::new("upper", [2.0]),
+    );
+    let long = point_interval_data(
+        CategoryValues::new(
+            "category",
+            ["a deliberately long point interval category label"],
+        )
+        .unwrap(),
+        NumericValues::new("estimate", [1.0]),
+        NumericValues::new("lower", [0.0]),
+        NumericValues::new("upper", [2.0]),
+    );
     let short_panel = clip_rect(&render(&short, |chart| chart));
     let long_svg = render(&long, |chart| chart);
     let long_panel = clip_rect(&long_svg);
@@ -174,13 +191,12 @@ fn point_interval_reserves_left_space_for_long_category_labels() {
 
 #[test]
 fn point_interval_draws_optional_zero_line_behind_marks() {
-    let data = df!(
-        "category" => ["row"],
-        "estimate" => [1.0_f64],
-        "lower" => [-2.0_f64],
-        "upper" => [2.0_f64]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["row"]).unwrap(),
+        NumericValues::new("estimate", [1.0]),
+        NumericValues::new("lower", [-2.0]),
+        NumericValues::new("upper", [2.0]),
+    );
     let without_zero = render(&data, |chart| chart);
     let with_zero = render(&data, enable_zero_line);
     let zero_lines = polylines(clipped_marks(&with_zero));
@@ -192,13 +208,12 @@ fn point_interval_draws_optional_zero_line_behind_marks() {
 
 #[test]
 fn point_interval_renders_one_constant_row_without_invalid_geometry() {
-    let data = df!(
-        "category" => ["only"],
-        "estimate" => [5.0_f64],
-        "lower" => [5.0_f64],
-        "upper" => [5.0_f64]
-    )
-    .unwrap();
+    let data = point_interval_data(
+        CategoryValues::new("category", ["only"]).unwrap(),
+        NumericValues::new("estimate", [5.0]),
+        NumericValues::new("lower", [5.0]),
+        NumericValues::new("upper", [5.0]),
+    );
     let svg = render(&data, |chart| chart);
 
     assert_eq!(circles(clipped_marks(&svg)).len(), 1);

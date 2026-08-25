@@ -1,14 +1,15 @@
 use std::sync::atomic::Ordering;
 
 use super::{
-    configured_chart, fixture, test_directory, BackendFailure, DataFrame, Plot, PlotKind,
-    RecordingBackend, Series, Significance, SignificanceMark, ValueSort, RENDER_PANEL_CALLS,
+    canonical_plot_values, configured_chart, test_directory, BackendFailure, Plot, PlotKind,
+    RecordingBackend, Significance, SignificanceMark, ValueSort, RENDER_PANEL_CALLS,
     TEMP_FILE_COUNTER,
 };
+use crate::{CategoryValues, NumericValues};
 
 #[test]
 fn impossible_wrapped_caption_fails_before_backend_begin() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter)
         .caption("diagnostic provenance and model adjustment details ".repeat(20))
         .size(160, 120);
@@ -63,7 +64,7 @@ fn invalid_canvas_alignment_fails_before_backend_begin() {
 
 #[test]
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter);
     let expected_panel = chart.canvas_layout().panel_box;
     let mut backend = RecordingBackend::default();
@@ -85,7 +86,7 @@ fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
 
 #[test]
 fn orchestration_runs_measurement_planning_and_render_passes() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter);
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
     chart
@@ -93,29 +94,16 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
         .unwrap();
     let chart_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let facet = Series::new("facet".into(), ["left", "left", "right", "right"]);
-    let mut faceted_data = data.clone();
-    faceted_data.with_column(facet.into()).unwrap();
-    let faceted = Plot::scatter(
-        crate::test_support::numeric(&faceted_data, "x"),
-        crate::test_support::numeric(&faceted_data, "y"),
-    )
-    .facet(crate::FacetSpec::column(crate::test_support::category(
-        &faceted_data,
-        "facet",
-    )));
+    let faceted = Plot::scatter(data.x.clone(), data.y.clone()).facet(crate::FacetSpec::column(
+        CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
+    ));
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
     faceted
         .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
         .unwrap();
     let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let scatter = || {
-        Plot::scatter(
-            crate::test_support::numeric(&data, "x"),
-            crate::test_support::numeric(&data, "y"),
-        )
-    };
+    let scatter = || Plot::scatter(data.x.clone(), data.y.clone());
     let panel = scatter();
     let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
@@ -162,7 +150,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
 
 #[test]
 fn every_canonical_plot_kind_renders_through_one_lifecycle() {
-    let data = fixture();
+    let data = canonical_plot_values();
     for kind in [
         PlotKind::Scatter,
         PlotKind::Histogram,
@@ -202,11 +190,11 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
 
 #[test]
 fn heatmap_validation_failure_happens_before_canvas_begin() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = Plot::heatmap(
-        crate::test_support::category(&data, "interval_group"),
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "color"),
+        data.interval_group.clone(),
+        data.group.clone(),
+        data.color.clone(),
     )
     .x_category_order(ValueSort::Ascending);
     let mut backend = RecordingBackend::default();
@@ -222,7 +210,7 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
 
 #[test]
 fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter);
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::Begin],
@@ -235,7 +223,7 @@ fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
 
 #[test]
 fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let invalid_ranges = [
         (f64::NAN, 1.0),
         (0.0, f64::NAN),
@@ -248,10 +236,7 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
     ];
     for limits in invalid_ranges {
         for x_axis in [true, false] {
-            let mut chart = Plot::scatter(
-                crate::test_support::numeric(&data, "x"),
-                crate::test_support::numeric(&data, "y"),
-            );
+            let mut chart = Plot::scatter(data.x.clone(), data.y.clone());
             chart = if x_axis {
                 chart.x_limits(limits.0, limits.1)
             } else {
@@ -268,12 +253,9 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
 #[test]
 fn orchestration_renders_valid_adjacent_subnormal_limits() {
     let upper = f64::from_bits(1);
-    let x = Series::new("x".into(), [0.0, upper]);
-    let y = Series::new("y".into(), [0.0, upper]);
-    let data = DataFrame::new(2, vec![x.into(), y.into()]).unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [0.0, upper]),
+        NumericValues::new("y", [0.0, upper]),
     )
     .x_limits(0.0, upper)
     .y_limits(0.0, upper);
@@ -290,16 +272,13 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
-    let data = fixture();
-    let chart = Plot::boxplot(
-        crate::test_support::category(&data, "group"),
-        crate::test_support::numeric(&data, "y"),
-    )
-    .significance([Significance::between(
-        "a",
-        "b",
-        SignificanceMark::PValue(0.01),
-    )]);
+    let data = canonical_plot_values();
+    let chart =
+        Plot::boxplot(data.group.clone(), data.y.clone()).significance([Significance::between(
+            "a",
+            "b",
+            SignificanceMark::PValue(0.01),
+        )]);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
@@ -309,12 +288,9 @@ fn significance_annotations_are_drawn_after_marks_clip_closes() {
 
 #[test]
 fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
-    let x = Series::new("x".into(), [-1.0_f64, 0.5, 2.0]);
-    let y = Series::new("y".into(), [0.5_f64, 0.5, 0.5]);
-    let data = DataFrame::new(x.len(), vec![x.into(), y.into()]).unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [-1.0, 0.5, 2.0]),
+        NumericValues::new("y", [0.5, 0.5, 0.5]),
     )
     .x_limits(0.0, 1.0)
     .y_limits(0.0, 1.0);
@@ -339,7 +315,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
 #[test]
 fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter);
     let mut backend = RecordingBackend {
         failures: vec![
@@ -363,7 +339,7 @@ fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
 
 #[test]
 fn decoration_layer_closes_after_inner_draw_error() {
-    let data = fixture();
+    let data = canonical_plot_values();
     let chart = configured_chart(&data, PlotKind::Scatter);
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::Line, BackendFailure::LayerEnd],
@@ -383,13 +359,10 @@ fn decoration_layer_closes_after_inner_draw_error() {
 
 #[test]
 fn matrix_legend_layer_closes_after_inner_draw_error() {
-    let data = fixture();
-    let chart = Plot::matrix(vec![
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-    ])
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"));
+    let data = canonical_plot_values();
+    let chart = Plot::matrix(vec![data.x.clone(), data.y.clone()])
+        .group(data.hue.clone())
+        .hue(data.hue.clone());
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::PolygonInLayer, BackendFailure::LayerEnd],
         ..RecordingBackend::default()

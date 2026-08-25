@@ -1,50 +1,47 @@
 use super::{svg_bytes, PanelBox, Plot, PlotKind, RecordingBackend};
 use crate::render::backend::{TextAnchor, TextStyle};
-use crate::test_support::{DataFrame, Series};
-use crate::{CategoricalColors, LinePathStyle, NumericLabelFormat, WaterfallLabels};
+use crate::{
+    CategoricalColors, CategoryValues, LinePathStyle, NumericLabelFormat, NumericValues,
+    WaterfallLabels,
+};
 
-fn path_data() -> DataFrame {
-    DataFrame::new(
-        6,
-        vec![
-            Series::new("path".into(), ["a", "b", "a", "b", "a", "b"]).into(),
-            Series::new(
-                "hue".into(),
-                ["first", "second", "first", "second", "first", "second"],
-            )
-            .into(),
-            Series::new("x".into(), [2.0_f64, 0.0, 1.0, 1.0, 1.0, 2.0]).into(),
-            Series::new("y".into(), [0.0_f64, 0.0, 1.0, 0.5, 2.0, 1.0]).into(),
-        ],
-    )
-    .unwrap()
+struct PathValues {
+    path: CategoryValues,
+    hue: CategoryValues,
+    x: NumericValues,
+    y: NumericValues,
 }
 
-fn trajectory_data() -> DataFrame {
-    DataFrame::new(
-        6,
-        vec![
-            Series::new("path".into(), ["a", "b", "a", "b", "a", "b"]).into(),
-            Series::new(
-                "hue".into(),
-                ["first", "second", "first", "second", "first", "second"],
-            )
-            .into(),
-            Series::new("x".into(), [2.0_f64, 0.0, 1.0, 1.0, 0.0, 2.0]).into(),
-            Series::new("y".into(), [0.0_f64, 0.0, 1.0, 0.5, 2.0, 1.0]).into(),
-        ],
-    )
-    .unwrap()
+fn path_data() -> PathValues {
+    PathValues {
+        path: CategoryValues::new("path", ["a", "b", "a", "b", "a", "b"]).unwrap(),
+        hue: CategoryValues::new(
+            "hue",
+            ["first", "second", "first", "second", "first", "second"],
+        )
+        .unwrap(),
+        x: NumericValues::new("x", [2.0, 0.0, 1.0, 1.0, 1.0, 2.0]),
+        y: NumericValues::new("y", [0.0, 0.0, 1.0, 0.5, 2.0, 1.0]),
+    }
 }
 
-fn path_chart(data: &DataFrame, style: LinePathStyle) -> Plot<crate::kind::LinePath> {
-    Plot::line_path(
-        crate::test_support::numeric(data, "x"),
-        crate::test_support::numeric(data, "y"),
-        crate::test_support::category(data, "path"),
-    )
-    .hue(crate::test_support::category(data, "hue"))
-    .style(style)
+fn trajectory_data() -> PathValues {
+    PathValues {
+        path: CategoryValues::new("path", ["a", "b", "a", "b", "a", "b"]).unwrap(),
+        hue: CategoryValues::new(
+            "hue",
+            ["first", "second", "first", "second", "first", "second"],
+        )
+        .unwrap(),
+        x: NumericValues::new("x", [2.0, 0.0, 1.0, 1.0, 0.0, 2.0]),
+        y: NumericValues::new("y", [0.0, 0.0, 1.0, 0.5, 2.0, 1.0]),
+    }
+}
+
+fn path_chart(data: &PathValues, style: LinePathStyle) -> Plot<crate::kind::LinePath> {
+    Plot::line_path(data.x.clone(), data.y.clone(), data.path.clone())
+        .hue(data.hue.clone())
+        .style(style)
 }
 
 #[test]
@@ -130,16 +127,12 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
 
 #[test]
 fn hue_path_style_splits_one_group_into_observed_hue_paths() {
-    let data = DataFrame::new(
-        4,
-        vec![
-            Series::new("path".into(), ["a", "a", "a", "a"]).into(),
-            Series::new("hue".into(), ["first", "second", "first", "second"]).into(),
-            Series::new("x".into(), [0.0_f64, 1.0, 2.0, 3.0]).into(),
-            Series::new("y".into(), [0.0_f64, 1.0, 2.0, 3.0]).into(),
-        ],
-    )
-    .unwrap();
+    let data = PathValues {
+        path: CategoryValues::new("path", ["a", "a", "a", "a"]).unwrap(),
+        hue: CategoryValues::new("hue", ["first", "second", "first", "second"]).unwrap(),
+        x: NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+        y: NumericValues::new("y", [0.0, 1.0, 2.0, 3.0]),
+    };
     let chart = path_chart(&data, LinePathStyle::Hue);
     let mut backend = RecordingBackend::default();
 
@@ -195,12 +188,7 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
 #[test]
 fn trajectory_always_renders_observation_markers() {
     let data = trajectory_data();
-    let chart = Plot::trajectory(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
-        crate::test_support::category(&data, "path"),
-    )
-    .hue(crate::test_support::category(&data, "hue"));
+    let chart = Plot::trajectory(data.x, data.y, data.path).hue(data.hue);
     let mut backend = RecordingBackend::default();
 
     chart
@@ -247,7 +235,13 @@ fn neutral_path_default_is_byte_inert_and_hue_path_bytes_are_deterministic() {
     assert_ne!(default, first_hue);
 }
 
-fn beeswarm_data(colors: &[f64]) -> DataFrame {
+struct BeeswarmValues {
+    category: CategoryValues,
+    x: NumericValues,
+    color: NumericValues,
+}
+
+fn beeswarm_data(colors: &[f64]) -> BeeswarmValues {
     let categories = vec!["feature"; colors.len()];
     let mut next_x = 0.0;
     let xs = colors
@@ -258,23 +252,18 @@ fn beeswarm_data(colors: &[f64]) -> DataFrame {
             x
         })
         .collect::<Vec<_>>();
-    DataFrame::new(
-        colors.len(),
-        vec![
-            Series::new("category".into(), categories).into(),
-            Series::new("x".into(), xs).into(),
-            Series::new("color".into(), colors).into(),
-        ],
-    )
-    .unwrap()
+    BeeswarmValues {
+        category: CategoryValues::new("category", categories).unwrap(),
+        x: NumericValues::new("x", xs),
+        color: NumericValues::new("color", colors.iter().copied()),
+    }
 }
 
-fn beeswarm_chart(data: &DataFrame, limits: Option<(f64, f64)>) -> Plot<crate::kind::Beeswarm> {
-    let mut chart = Plot::beeswarm(
-        crate::test_support::category(data, "category"),
-        crate::test_support::numeric(data, "x"),
-        crate::test_support::numeric(data, "color"),
-    );
+fn beeswarm_chart(
+    data: &BeeswarmValues,
+    limits: Option<(f64, f64)>,
+) -> Plot<crate::kind::Beeswarm> {
+    let mut chart = Plot::beeswarm(data.category.clone(), data.x.clone(), data.color.clone());
     if let Some((minimum, maximum)) = limits {
         chart = chart.color_limits(minimum, maximum);
     }
@@ -363,27 +352,25 @@ fn beeswarm_auto_domain_matches_the_same_explicit_domain_byte_for_byte() {
     assert_eq!(automatic, explicit);
 }
 
-fn waterfall_data() -> DataFrame {
-    DataFrame::new(
-        2,
-        vec![
-            Series::new("step".into(), ["first", "second"]).into(),
-            Series::new("delta".into(), [2.0_f64, -1.0]).into(),
-            Series::new("base".into(), [10.0_f64, 10.0]).into(),
-        ],
-    )
-    .unwrap()
+struct WaterfallValues {
+    step: CategoryValues,
+    delta: NumericValues,
+    base: f64,
+}
+
+fn waterfall_data() -> WaterfallValues {
+    WaterfallValues {
+        step: CategoryValues::new("step", ["first", "second"]).unwrap(),
+        delta: NumericValues::new("delta", [2.0, -1.0]),
+        base: 10.0,
+    }
 }
 
 fn waterfall_chart(
-    data: &DataFrame,
+    data: &WaterfallValues,
     labels: Option<WaterfallLabels>,
 ) -> Plot<crate::kind::Waterfall> {
-    let mut chart = Plot::waterfall(
-        crate::test_support::category(data, "step"),
-        crate::test_support::numeric(data, "delta"),
-        crate::test_support::constant_numeric(data, "base"),
-    );
+    let mut chart = Plot::waterfall(data.step.clone(), data.delta.clone(), data.base);
     if let Some(labels) = labels {
         chart = chart.total_labels(labels);
     }
@@ -423,15 +410,11 @@ fn waterfall_labels_are_nonempty_verbatim_and_replace_only_configured_text() {
 
 #[test]
 fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
-    let data = DataFrame::new(
-        2,
-        vec![
-            Series::new("step".into(), ["first", "second"]).into(),
-            Series::new("delta".into(), [0.01_f64, -0.009]).into(),
-            Series::new("base".into(), [10.0_f64, 10.0]).into(),
-        ],
-    )
-    .unwrap();
+    let data = WaterfallValues {
+        step: CategoryValues::new("step", ["first", "second"]).unwrap(),
+        delta: NumericValues::new("delta", [0.01, -0.009]),
+        base: 10.0,
+    };
     let labels = WaterfallLabels::new("Expected model output", "Final model prediction").unwrap();
     let chart = waterfall_chart(&data, Some(labels)).size(520, 280);
     let outer_panel = chart.canvas_layout().panel_box;
@@ -469,19 +452,10 @@ fn affected_detail_text_uses_publication_detail_typography() {
         .render_kind(PlotKind::Beeswarm, &mut beeswarm_backend)
         .unwrap();
 
-    let heatmap_data = DataFrame::new(
-        2,
-        vec![
-            Series::new("column".into(), ["left", "right"]).into(),
-            Series::new("row".into(), ["top", "bottom"]).into(),
-            Series::new("value".into(), [0.0_f64, 1.0]).into(),
-        ],
-    )
-    .unwrap();
     let heatmap = Plot::heatmap(
-        crate::test_support::category(&heatmap_data, "column"),
-        crate::test_support::category(&heatmap_data, "row"),
-        crate::test_support::numeric(&heatmap_data, "value"),
+        CategoryValues::new("column", ["left", "right"]).unwrap(),
+        CategoryValues::new("row", ["top", "bottom"]).unwrap(),
+        NumericValues::new("value", [0.0, 1.0]),
     )
     .color_label("Heatmap detail");
     let mut heatmap_backend = RecordingBackend::default();
@@ -489,20 +463,9 @@ fn affected_detail_text_uses_publication_detail_typography() {
         .render_kind(PlotKind::Heatmap, &mut heatmap_backend)
         .unwrap();
 
-    let estimate_data = DataFrame::new(
-        1,
-        vec![
-            Series::new("term".into(), ["intercept"]).into(),
-            Series::new("estimate".into(), [1.25_f64]).into(),
-        ],
-    )
-    .unwrap();
     let coefficient = Plot::coefficient(
-        crate::test_support::category(&estimate_data, "term"),
-        crate::CoefficientInput::estimates(crate::test_support::numeric(
-            &estimate_data,
-            "estimate",
-        )),
+        CategoryValues::new("term", ["intercept"]).unwrap(),
+        crate::CoefficientInput::estimates(NumericValues::new("estimate", [1.25])),
     )
     .estimate_labels(NumericLabelFormat::default().suffix(" detail").unwrap());
     let mut coefficient_backend = RecordingBackend::default();
@@ -556,13 +519,9 @@ fn line_path_style_requires_path_mode_and_hue_before_backend_begin() {
     let data = path_data();
     let cases = vec![
         path_chart(&data, LinePathStyle::Hue).erase(),
-        Plot::line_path(
-            crate::test_support::numeric(&data, "x"),
-            crate::test_support::numeric(&data, "y"),
-            crate::test_support::category(&data, "path"),
-        )
-        .style(LinePathStyle::Hue)
-        .erase(),
+        Plot::line_path(data.x.clone(), data.y.clone(), data.path.clone())
+            .style(LinePathStyle::Hue)
+            .erase(),
     ];
     for (index, chart) in cases.into_iter().enumerate() {
         let mut backend = RecordingBackend::default();

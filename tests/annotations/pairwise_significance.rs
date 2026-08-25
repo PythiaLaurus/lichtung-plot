@@ -2,12 +2,9 @@ use super::*;
 
 #[test]
 fn vertical_and_horizontal_significance_use_category_series_targets() {
-    let data = df!(
-        "category" => ["a", "a", "b", "b"],
-        "hue" => ["left", "right", "left", "right"],
-        "value" => [2.0_f64, 3.0, 4.0, 5.0]
-    )
-    .unwrap();
+    let category = CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap();
+    let hue = CategoryValues::new("hue", ["left", "right", "left", "right"]).unwrap();
+    let value = NumericValues::new("value", [2.0, 3.0, 4.0, 5.0]);
     let comparison = Significance::between(
         SignificanceTarget::category_series("a", "left"),
         SignificanceTarget::category_series("a", "right"),
@@ -17,23 +14,17 @@ fn vertical_and_horizontal_significance_use_category_series_targets() {
     let vertical_path = dir.join("vertical.svg");
     let horizontal_path = dir.join("horizontal.svg");
 
-    Plot::bar(
-        data::category(&data, "category"),
-        BarInput::estimates(data::numeric(&data, "value")),
-    )
-    .series(data::category(&data, "hue"))
-    .significance([comparison.clone()])
-    .svg(&vertical_path)
-    .unwrap();
+    Plot::bar(category.clone(), BarInput::estimates(value.clone()))
+        .series(hue.clone())
+        .significance([comparison.clone()])
+        .svg(&vertical_path)
+        .unwrap();
 
-    Plot::horizontal_bar(
-        data::category(&data, "category"),
-        BarInput::estimates(data::numeric(&data, "value")),
-    )
-    .series(data::category(&data, "hue"))
-    .significance([comparison])
-    .svg(&horizontal_path)
-    .unwrap();
+    Plot::horizontal_bar(category, BarInput::estimates(value))
+        .series(hue)
+        .significance([comparison])
+        .svg(&horizontal_path)
+        .unwrap();
 
     assert_eq!(
         std::fs::read_to_string(vertical_path)

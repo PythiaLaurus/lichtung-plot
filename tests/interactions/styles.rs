@@ -1,34 +1,68 @@
 use super::*;
 
-fn interaction_data() -> DataFrame {
-    df!(
-        "condition" => ["Before", "After", "Before", "After"],
-        "series" => ["Control", "Control", "Semantic Agent", "Semantic Agent"],
-        "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
-        "lower" => [0.8_f64, 1.3, 1.0, 1.8],
-        "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-    )
-    .unwrap()
+struct StyledInteractionData {
+    condition: CategoryValues,
+    group: CategoryValues,
+    hue: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    panel: Option<CategoryValues>,
+    styles: Vec<InteractionStyle>,
 }
 
-fn chart(frame: &DataFrame, styled: bool) -> Plot<lichtung_plot::kind::Interaction> {
+fn interaction_data() -> StyledInteractionData {
+    let series = CategoryValues::new(
+        "series",
+        ["Control", "Control", "Semantic Agent", "Semantic Agent"],
+    )
+    .unwrap();
+    StyledInteractionData {
+        condition: CategoryValues::new("condition", ["Before", "After", "Before", "After"])
+            .unwrap(),
+        group: series.clone(),
+        hue: series,
+        estimate: NumericValues::new("estimate", [1.0, 1.5, 1.2, 2.0]),
+        lower: NumericValues::new("lower", [0.8, 1.3, 1.0, 1.8]),
+        upper: NumericValues::new("upper", [1.2, 1.7, 1.4, 2.2]),
+        panel: None,
+        styles: vec![
+            InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+            InteractionStyle::new("Semantic Agent").shape(PointShape::TriangleUp),
+        ],
+    }
+}
+
+fn single_series_data(
+    series: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    style: InteractionStyle,
+) -> StyledInteractionData {
+    StyledInteractionData {
+        condition: CategoryValues::new("condition", ["Before", "After"]).unwrap(),
+        group: series.clone(),
+        hue: series,
+        estimate,
+        lower,
+        upper,
+        panel: None,
+        styles: vec![style],
+    }
+}
+
+fn chart(data: &StyledInteractionData, styled: bool) -> Plot<lichtung_plot::kind::Interaction> {
     let plot = Plot::interaction(
-        data::category(frame, "condition"),
-        data::numeric(frame, "estimate"),
-        data::category(frame, "series"),
-        Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+        data.condition.clone(),
+        data.estimate.clone(),
+        data.group.clone(),
+        Bounds::new(data.lower.clone(), data.upper.clone()),
     )
     .labels(Labels::raw())
-    .hue(data::category(frame, "series"));
+    .hue(data.hue.clone());
     if styled {
-        let configurations = data::category_levels(frame, "series")
-            .into_iter()
-            .map(|group| match group.as_str() {
-                "Control" => InteractionStyle::new(group).pattern(LinePattern::Dashed),
-                "Semantic Agent" => InteractionStyle::new(group).shape(PointShape::TriangleUp),
-                _ => InteractionStyle::new(group),
-            });
-        plot.styles(configurations)
+        plot.styles(data.styles.clone())
     } else {
         plot
     }
@@ -151,18 +185,11 @@ fn styled_interaction_output_is_deterministic() {
 
 #[test]
 fn interaction_styles_apply_by_group_across_facets() {
-    let data = df!(
-        "panel" => ["Left", "Left", "Right", "Right"],
-        "condition" => ["Before", "After", "Before", "After"],
-        "series" => ["Control", "Control", "Semantic Agent", "Semantic Agent"],
-        "estimate" => [1.0_f64, 1.5, 1.2, 2.0],
-        "lower" => [0.8_f64, 1.3, 1.0, 1.8],
-        "upper" => [1.2_f64, 1.7, 1.4, 2.2],
-    )
-    .unwrap();
+    let mut data = interaction_data();
+    data.panel = Some(CategoryValues::new("panel", ["Left", "Left", "Right", "Right"]).unwrap());
 
     let output = svg(chart(&data, true)
-        .facet(FacetSpec::column(data::category(&data, "panel")))
+        .facet(FacetSpec::column(data.panel.clone().unwrap()))
         .size(960, 320));
 
     assert!(output.contains(">panel = Left</text>") && output.contains(">panel = Right</text>"));
@@ -171,35 +198,42 @@ fn interaction_styles_apply_by_group_across_facets() {
 
 #[test]
 fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
-    let data = df!(
-        "panel" => ["Left", "Left", "Left", "Left", "Right", "Right", "Right", "Right"],
-        "condition" => ["Before", "After", "Before", "After", "Before", "After", "Before", "After"],
-        "group" => ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2"],
-        "hue" => ["h2", "h2", "h1", "h1", "h1", "h1", "h2", "h2"],
-        "estimate" => [1.0_f64, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
-        "lower" => [0.8_f64, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3],
-        "upper" => [1.2_f64, 1.7, 2.2, 2.7, 3.2, 3.7, 4.2, 4.7],
+    let panel = CategoryValues::new(
+        "panel",
+        [
+            "Left", "Left", "Left", "Left", "Right", "Right", "Right", "Right",
+        ],
     )
     .unwrap();
+    let condition = CategoryValues::new(
+        "condition",
+        [
+            "Before", "After", "Before", "After", "Before", "After", "Before", "After",
+        ],
+    )
+    .unwrap();
+    let group =
+        CategoryValues::new("group", ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h2", "h2", "h1", "h1", "h1", "h1", "h2", "h2"]).unwrap();
+    let estimate = NumericValues::new("estimate", [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]);
+    let lower = NumericValues::new("lower", [0.8, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3]);
+    let upper = NumericValues::new("upper", [1.2, 1.7, 2.2, 2.7, 3.2, 3.7, 4.2, 4.7]);
     let colors = CategoricalColors::new([
         ("h1".to_owned(), (51, 51, 51)),
         ("h2".to_owned(), (0, 114, 178)),
     ])
     .unwrap();
-    let output = svg(Plot::interaction(
-        data::category(&data, "condition"),
-        data::numeric(&data, "estimate"),
-        data::category(&data, "group"),
-        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
-    )
-    .hue(data::category(&data, "hue"))
-    .styles([
-        InteractionStyle::new("g1").pattern(LinePattern::Dashed),
-        InteractionStyle::new("g2").shape(PointShape::TriangleUp),
-    ])
-    .categorical_colors(colors)
-    .facet(FacetSpec::column(data::category(&data, "panel")))
-    .size(960, 320));
+    let output = svg(
+        Plot::interaction(condition, estimate, group, Bounds::new(lower, upper))
+            .hue(hue)
+            .styles([
+                InteractionStyle::new("g1").pattern(LinePattern::Dashed),
+                InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+            ])
+            .categorical_colors(colors)
+            .facet(FacetSpec::column(panel))
+            .size(960, 320),
+    );
     let mut clipped = false;
     let connectors = output
         .lines()
@@ -267,32 +301,30 @@ fn categorical_colors_apply_exact_trace_rgb_to_marks_and_legend() {
 
 #[test]
 fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
-    let data = df!(
-        "condition" => ["Before", "After", "Before", "After", "Before", "After"],
-        "group" => ["g1", "g1", "g1", "g1", "g2", "g2"],
-        "hue" => ["h1", "h1", "h2", "h2", "h2", "h2"],
-        "estimate" => [1.0_f64, 1.5, 2.0, 2.5, 3.0, 3.5],
-        "lower" => [0.8_f64, 1.3, 1.8, 2.3, 2.8, 3.3],
-        "upper" => [1.2_f64, 1.7, 2.2, 2.7, 3.2, 3.7],
+    let condition = CategoryValues::new(
+        "condition",
+        ["Before", "After", "Before", "After", "Before", "After"],
     )
     .unwrap();
+    let group = CategoryValues::new("group", ["g1", "g1", "g1", "g1", "g2", "g2"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h2", "h2"]).unwrap();
+    let estimate = NumericValues::new("estimate", [1.0, 1.5, 2.0, 2.5, 3.0, 3.5]);
+    let lower = NumericValues::new("lower", [0.8, 1.3, 1.8, 2.3, 2.8, 3.3]);
+    let upper = NumericValues::new("upper", [1.2, 1.7, 2.2, 2.7, 3.2, 3.7]);
     let colors = CategoricalColors::new([
         ("h1".to_owned(), (51, 51, 51)),
         ("h2".to_owned(), (0, 114, 178)),
     ])
     .unwrap();
-    let output = svg(Plot::interaction(
-        data::category(&data, "condition"),
-        data::numeric(&data, "estimate"),
-        data::category(&data, "group"),
-        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
-    )
-    .hue(data::category(&data, "hue"))
-    .styles([
-        InteractionStyle::new("g1").pattern(LinePattern::Dashed),
-        InteractionStyle::new("g2").shape(PointShape::TriangleUp),
-    ])
-    .categorical_colors(colors));
+    let output = svg(
+        Plot::interaction(condition, estimate, group, Bounds::new(lower, upper))
+            .hue(hue)
+            .styles([
+                InteractionStyle::new("g1").pattern(LinePattern::Dashed),
+                InteractionStyle::new("g2").shape(PointShape::TriangleUp),
+            ])
+            .categorical_colors(colors),
+    );
     let marks = output
         .split_once("<g clip-path=")
         .unwrap()
@@ -331,47 +363,37 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
 
 #[test]
 fn interaction_duplicate_identity_includes_condition_group_and_hue() {
-    let data = df!(
-        "condition" => ["Before", "Before", "Before"],
-        "group" => ["g1", "g1", "g1"],
-        "hue" => ["h1", "h2", "h1"],
-        "estimate" => [1.0_f64, 2.0, 3.0],
-        "lower" => [0.8_f64, 1.8, 2.8],
-        "upper" => [1.2_f64, 2.2, 3.2],
-    )
-    .unwrap();
-    let error = Plot::interaction(
-        data::category(&data, "condition"),
-        data::numeric(&data, "estimate"),
-        data::category(&data, "group"),
-        Bounds::new(data::numeric(&data, "lower"), data::numeric(&data, "upper")),
-    )
-    .hue(data::category(&data, "hue"))
-    .preflight()
-    .unwrap_err()
-    .to_string();
+    let condition = CategoryValues::new("condition", ["Before", "Before", "Before"]).unwrap();
+    let group = CategoryValues::new("group", ["g1", "g1", "g1"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h2", "h1"]).unwrap();
+    let estimate = NumericValues::new("estimate", [1.0, 2.0, 3.0]);
+    let lower = NumericValues::new("lower", [0.8, 1.8, 2.8]);
+    let upper = NumericValues::new("upper", [1.2, 2.2, 3.2]);
+    let error = Plot::interaction(condition, estimate, group, Bounds::new(lower, upper))
+        .hue(hue)
+        .preflight()
+        .unwrap_err()
+        .to_string();
 
     assert!(error.contains("duplicate (condition, group, hue)") && error.contains("source row 2"));
 }
 
 #[test]
 fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
-    let control = df!(
-        "condition" => ["Before", "After"],
-        "series" => ["Control", "Control"],
-        "estimate" => [1.0_f64, 1.5],
-        "lower" => [0.8_f64, 1.3],
-        "upper" => [1.2_f64, 1.7],
-    )
-    .unwrap();
-    let semantic = df!(
-        "condition" => ["Before", "After"],
-        "series" => ["Semantic Agent", "Semantic Agent"],
-        "estimate" => [1.2_f64, 2.0],
-        "lower" => [1.0_f64, 1.8],
-        "upper" => [1.4_f64, 2.2],
-    )
-    .unwrap();
+    let control = single_series_data(
+        CategoryValues::new("series", ["Control", "Control"]).unwrap(),
+        NumericValues::new("estimate", [1.0, 1.5]),
+        NumericValues::new("lower", [0.8, 1.3]),
+        NumericValues::new("upper", [1.2, 1.7]),
+        InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+    );
+    let semantic = single_series_data(
+        CategoryValues::new("series", ["Semantic Agent", "Semantic Agent"]).unwrap(),
+        NumericValues::new("estimate", [1.2, 2.0]),
+        NumericValues::new("lower", [1.0, 1.8]),
+        NumericValues::new("upper", [1.4, 2.2]),
+        InteractionStyle::new("Semantic Agent").shape(PointShape::TriangleUp),
+    );
     let colors = CategoricalColors::new([
         ("Control".to_owned(), (51, 51, 51)),
         ("Semantic Agent".to_owned(), (0, 114, 178)),
@@ -419,14 +441,13 @@ fn shared_canvas_legend_preserves_caller_colors_and_composite_trace_glyphs() {
 
 #[test]
 fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
-    let data = df!(
-        "condition" => ["Before", "After"],
-        "series" => ["Control", "Control"],
-        "estimate" => [1.0_f64, 1.5],
-        "lower" => [0.8_f64, 1.3],
-        "upper" => [1.2_f64, 1.7],
-    )
-    .unwrap();
+    let data = single_series_data(
+        CategoryValues::new("series", ["Control", "Control"]).unwrap(),
+        NumericValues::new("estimate", [1.0, 1.5]),
+        NumericValues::new("lower", [0.8, 1.3]),
+        NumericValues::new("upper", [1.2, 1.7]),
+        InteractionStyle::new("Control").pattern(LinePattern::Dashed),
+    );
     let gray = CategoricalColors::new([("Control".to_owned(), (51, 51, 51))]).unwrap();
     let blue = CategoricalColors::new([("Control".to_owned(), (0, 114, 178))]).unwrap();
     let canvas = Canvas::grid(1, 2)
@@ -444,17 +465,11 @@ fn shared_canvas_legend_rejects_conflicting_caller_color_mapping() {
 
 #[test]
 fn shared_canvas_legend_rejects_conflicting_point_outline_mapping() {
-    let data = df!(
-        "x" => [1.0_f64, 2.0],
-        "y" => [2.0_f64, 3.0],
-        "series" => ["Control", "Control"],
-    )
-    .unwrap();
-    let outlined = Plot::scatter(data::numeric(&data, "x"), data::numeric(&data, "y"))
-        .hue(data::category(&data, "series"));
-    let plain = Plot::scatter(data::numeric(&data, "x"), data::numeric(&data, "y"))
-        .hue(data::category(&data, "series"))
-        .hide_point_outline();
+    let x = NumericValues::new("x", [1.0, 2.0]);
+    let y = NumericValues::new("y", [2.0, 3.0]);
+    let series = CategoryValues::new("series", ["Control", "Control"]).unwrap();
+    let outlined = Plot::scatter(x.clone(), y.clone()).hue(series.clone());
+    let plain = Plot::scatter(x, y).hue(series).hide_point_outline();
     let canvas = Canvas::grid(1, 2)
         .unwrap()
         .panel(0, 0, outlined)

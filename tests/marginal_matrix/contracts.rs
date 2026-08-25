@@ -9,30 +9,40 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
     svg
 }
 
-fn marginal(frame: &DataFrame) -> Plot<lichtung_plot::kind::Marginal> {
-    Plot::marginal(data::numeric(frame, "x"), data::numeric(frame, "y"))
+struct MarginalData {
+    x: NumericValues,
+    y: NumericValues,
+    group: Option<CategoryValues>,
+    hue: Option<CategoryValues>,
 }
 
-fn matrix(frame: &DataFrame) -> Plot<lichtung_plot::kind::Matrix> {
-    Plot::matrix(vec![
-        data::numeric(frame, "a"),
-        data::numeric(frame, "b"),
-        data::numeric(frame, "c"),
-    ])
+struct MatrixData {
+    values: [NumericValues; 3],
+    group: Option<CategoryValues>,
+    hue: Option<CategoryValues>,
+}
+
+fn marginal(data: &MarginalData) -> Plot<lichtung_plot::kind::Marginal> {
+    Plot::marginal(data.x.clone(), data.y.clone())
+}
+
+fn matrix(data: &MatrixData) -> Plot<lichtung_plot::kind::Matrix> {
+    Plot::matrix(data.values.to_vec())
 }
 
 #[test]
 fn marginal_hue_smoke() {
-    let frame = df!(
-        "x" => [1.0_f64, 1.2, 1.4, 3.0, 3.2, 3.4],
-        "y" => [2.0_f64, 2.1, 2.3, 4.0, 4.2, 4.3],
-        "group" => ["a", "a", "a", "b", "b", "b"]
-    )
-    .unwrap();
+    let group = CategoryValues::new("group", ["a", "a", "a", "b", "b", "b"]).unwrap();
+    let data = MarginalData {
+        x: NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+        y: NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+        group: Some(group.clone()),
+        hue: Some(group),
+    };
     let svg = render(
-        marginal(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        marginal(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .size(520, 400),
         "marginal-hue-smoke",
     );
@@ -41,24 +51,31 @@ fn marginal_hue_smoke() {
 
 #[test]
 fn hue_only_marginal_and_matrix_split_multiple_hues() {
-    let frame = df!(
-        "x" => [1.0_f64, 1.2, 1.4, 3.0, 3.2, 3.4],
-        "y" => [2.0_f64, 2.1, 2.3, 4.0, 4.2, 4.3],
-        "a" => [0.5_f64, 0.7, 0.9, 1.5, 1.7, 1.9],
-        "b" => [1.5_f64, 1.7, 1.9, 2.5, 2.7, 2.9],
-        "c" => [2.5_f64, 2.7, 2.9, 3.5, 3.7, 3.9],
-        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2"]
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h1", "h1", "h2", "h2", "h2"]).unwrap();
+    let marginal_data = MarginalData {
+        x: NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+        y: NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+        group: None,
+        hue: Some(hue.clone()),
+    };
+    let matrix_data = MatrixData {
+        values: [
+            NumericValues::new("a", [0.5, 0.7, 0.9, 1.5, 1.7, 1.9]),
+            NumericValues::new("b", [1.5, 1.7, 1.9, 2.5, 2.7, 2.9]),
+            NumericValues::new("c", [2.5, 2.7, 2.9, 3.5, 3.7, 3.9]),
+        ],
+        group: None,
+        hue: Some(hue),
+    };
     let marginal_svg = render(
-        marginal(&frame)
-            .hue(data::category(&frame, "hue"))
+        marginal(&marginal_data)
+            .hue(marginal_data.hue.clone().unwrap())
             .size(520, 400),
         "marginal-hue-only",
     );
     let matrix_svg = render(
-        matrix(&frame)
-            .hue(data::category(&frame, "hue"))
+        matrix(&matrix_data)
+            .hue(matrix_data.hue.clone().unwrap())
             .size(620, 520),
         "matrix-hue-only",
     );
@@ -69,27 +86,42 @@ fn hue_only_marginal_and_matrix_split_multiple_hues() {
 
 #[test]
 fn marginal_and_matrix_render_each_observed_crossed_pair() {
-    let frame = df!(
-        "x" => [1.0_f64, 1.2, 1.4, 2.0, 2.2, 2.4, 3.0, 3.2, 3.4],
-        "y" => [2.0_f64, 2.2, 2.4, 3.0, 3.2, 3.4, 4.0, 4.2, 4.4],
-        "a" => [0.5_f64, 0.7, 0.9, 1.5, 1.7, 1.9, 2.5, 2.7, 2.9],
-        "b" => [1.5_f64, 1.7, 1.9, 2.5, 2.7, 2.9, 3.5, 3.7, 3.9],
-        "c" => [2.5_f64, 2.7, 2.9, 3.5, 3.7, 3.9, 4.5, 4.7, 4.9],
-        "group" => ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2", "g2"],
-        "hue" => ["h1", "h1", "h1", "h2", "h2", "h2", "h2", "h2", "h2"]
+    let group = CategoryValues::new(
+        "group",
+        ["g1", "g1", "g1", "g1", "g1", "g1", "g2", "g2", "g2"],
     )
     .unwrap();
+    let hue = CategoryValues::new(
+        "hue",
+        ["h1", "h1", "h1", "h2", "h2", "h2", "h2", "h2", "h2"],
+    )
+    .unwrap();
+    let marginal_data = MarginalData {
+        x: NumericValues::new("x", [1.0, 1.2, 1.4, 2.0, 2.2, 2.4, 3.0, 3.2, 3.4]),
+        y: NumericValues::new("y", [2.0, 2.2, 2.4, 3.0, 3.2, 3.4, 4.0, 4.2, 4.4]),
+        group: Some(group.clone()),
+        hue: Some(hue.clone()),
+    };
+    let matrix_data = MatrixData {
+        values: [
+            NumericValues::new("a", [0.5, 0.7, 0.9, 1.5, 1.7, 1.9, 2.5, 2.7, 2.9]),
+            NumericValues::new("b", [1.5, 1.7, 1.9, 2.5, 2.7, 2.9, 3.5, 3.7, 3.9]),
+            NumericValues::new("c", [2.5, 2.7, 2.9, 3.5, 3.7, 3.9, 4.5, 4.7, 4.9]),
+        ],
+        group: Some(group),
+        hue: Some(hue),
+    };
     let marginal_svg = render(
-        marginal(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "hue"))
+        marginal(&marginal_data)
+            .group(marginal_data.group.clone().unwrap())
+            .hue(marginal_data.hue.clone().unwrap())
             .size(520, 400),
         "marginal-crossed-pairs",
     );
     let matrix_svg = render(
-        matrix(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "hue"))
+        matrix(&matrix_data)
+            .group(matrix_data.group.clone().unwrap())
+            .hue(matrix_data.hue.clone().unwrap())
             .size(620, 520),
         "matrix-crossed-pairs",
     );
@@ -110,39 +142,25 @@ fn marginal_and_matrix_render_each_observed_crossed_pair() {
 
 #[test]
 fn marginal_collectives_ignore_rows_dropped_from_numeric_geometry() {
-    let frame = DataFrame::from_columns(vec![
-        (
-            "x",
-            data::FixtureColumn::Numeric(vec![Some(1.0), Some(2.0), Some(3.0), None]),
+    let data = MarginalData {
+        x: NumericValues::nullable("x", [Some(1.0), Some(2.0), Some(3.0), None]),
+        y: NumericValues::new("y", [2.0, 3.0, 5.0, 8.0]),
+        group: Some(
+            CategoryValues::nullable("group", [Some("kept"), Some("kept"), Some("kept"), None])
+                .unwrap(),
         ),
-        (
-            "y",
-            data::FixtureColumn::Numeric(vec![Some(2.0), Some(3.0), Some(5.0), Some(8.0)]),
+        hue: Some(
+            CategoryValues::nullable(
+                "hue",
+                [Some("visible"), Some("visible"), Some("visible"), None],
+            )
+            .unwrap(),
         ),
-        (
-            "group",
-            data::FixtureColumn::Category(vec![
-                Some("kept".to_owned()),
-                Some("kept".to_owned()),
-                Some("kept".to_owned()),
-                None,
-            ]),
-        ),
-        (
-            "hue",
-            data::FixtureColumn::Category(vec![
-                Some("visible".to_owned()),
-                Some("visible".to_owned()),
-                Some("visible".to_owned()),
-                None,
-            ]),
-        ),
-    ])
-    .unwrap();
+    };
     let svg = render(
-        marginal(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "hue"))
+        marginal(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .size(520, 400),
         "marginal-retained-collectives",
     );
@@ -170,44 +188,15 @@ fn marginal_same_name_validation_ignores_dropped_rows() {
 
 #[test]
 fn marginal_reports_insufficient_retained_pair_with_group_and_hue() {
-    let frame = DataFrame::from_columns(vec![
-        (
-            "x",
-            data::FixtureColumn::Numeric(vec![Some(1.0), Some(2.0), Some(3.0), Some(4.0), None]),
-        ),
-        (
-            "y",
-            data::FixtureColumn::Numeric(vec![
-                Some(2.0),
-                Some(3.0),
-                Some(5.0),
-                Some(6.0),
-                Some(7.0),
-            ]),
-        ),
-        (
-            "group",
-            data::FixtureColumn::Category(
-                ["g1", "g1", "g1", "g2", "g2"]
-                    .into_iter()
-                    .map(|value| Some(value.to_owned()))
-                    .collect(),
-            ),
-        ),
-        (
-            "hue",
-            data::FixtureColumn::Category(
-                ["h1", "h1", "h1", "h2", "h2"]
-                    .into_iter()
-                    .map(|value| Some(value.to_owned()))
-                    .collect(),
-            ),
-        ),
-    ])
-    .unwrap();
-    let error = marginal(&frame)
-        .group(data::category(&frame, "group"))
-        .hue(data::category(&frame, "hue"))
+    let data = MarginalData {
+        x: NumericValues::nullable("x", [Some(1.0), Some(2.0), Some(3.0), Some(4.0), None]),
+        y: NumericValues::new("y", [2.0, 3.0, 5.0, 6.0, 7.0]),
+        group: Some(CategoryValues::new("group", ["g1", "g1", "g1", "g2", "g2"]).unwrap()),
+        hue: Some(CategoryValues::new("hue", ["h1", "h1", "h1", "h2", "h2"]).unwrap()),
+    };
+    let error = marginal(&data)
+        .group(data.group.clone().unwrap())
+        .hue(data.hue.clone().unwrap())
         .preflight()
         .unwrap_err()
         .to_string();
@@ -218,17 +207,18 @@ fn marginal_reports_insufficient_retained_pair_with_group_and_hue() {
 
 #[test]
 fn matrix_pair_error_identifies_group_and_hue() {
-    let frame = df!(
-        "a" => [1.0_f64, 2.0, 3.0],
-        "b" => [2.0_f64, 3.0, 4.0],
-        "c" => [3.0_f64, 4.0, 5.0],
-        "group" => ["small", "valid", "valid"],
-        "hue" => ["red", "blue", "blue"]
-    )
-    .unwrap();
-    let error = matrix(&frame)
-        .group(data::category(&frame, "group"))
-        .hue(data::category(&frame, "hue"))
+    let data = MatrixData {
+        values: [
+            NumericValues::new("a", [1.0, 2.0, 3.0]),
+            NumericValues::new("b", [2.0, 3.0, 4.0]),
+            NumericValues::new("c", [3.0, 4.0, 5.0]),
+        ],
+        group: Some(CategoryValues::new("group", ["small", "valid", "valid"]).unwrap()),
+        hue: Some(CategoryValues::new("hue", ["red", "blue", "blue"]).unwrap()),
+    };
+    let error = matrix(&data)
+        .group(data.group.clone().unwrap())
+        .hue(data.hue.clone().unwrap())
         .preflight()
         .unwrap_err()
         .to_string();
@@ -239,9 +229,14 @@ fn matrix_pair_error_identifies_group_and_hue() {
 }
 
 #[test]
-fn marginal_auto_range_pads_central_points_from_frame() {
-    let frame = df!("x" => [0.0_f64, 10.0], "y" => [0.0_f64, 10.0]).unwrap();
-    let plot = marginal(&frame).size(360, 260);
+fn marginal_auto_range_pads_central_points_from_values() {
+    let data = MarginalData {
+        x: NumericValues::new("x", [0.0, 10.0]),
+        y: NumericValues::new("y", [0.0, 10.0]),
+        group: None,
+        hue: None,
+    };
+    let plot = marginal(&data).size(360, 260);
     let svg = render(plot, "marginal-auto-range-padding");
     let central = parse_first_clip_rect(&svg);
     let (min_x, max_x, min_y, max_y) = circle_bounds(&parse_circles(&svg));
@@ -251,15 +246,17 @@ fn marginal_auto_range_pads_central_points_from_frame() {
 
 #[test]
 fn marginal_auto_range_includes_kde_support_beyond_raw_data() {
-    let frame = df!(
-        "x" => [0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0],
-        "y" => [25.0_f64, 50.0, 25.0, 30.0, 50.0, 20.0, 80.0, 5.0, 15.0],
-        "group" => ["a", "a", "a", "b", "b", "b", "c", "c", "c"]
-    )
-    .unwrap();
-    let plot = marginal(&frame)
-        .group(data::category(&frame, "group"))
-        .hue(data::category(&frame, "group"))
+    let group =
+        CategoryValues::new("group", ["a", "a", "a", "b", "b", "b", "c", "c", "c"]).unwrap();
+    let data = MarginalData {
+        x: NumericValues::new("x", [0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0]),
+        y: NumericValues::new("y", [25.0, 50.0, 25.0, 30.0, 50.0, 20.0, 80.0, 5.0, 15.0]),
+        group: Some(group.clone()),
+        hue: Some(group),
+    };
+    let plot = marginal(&data)
+        .group(data.group.clone().unwrap())
+        .hue(data.hue.clone().unwrap())
         .size(420, 300);
     let svg = render(plot, "marginal-kde-support");
     let central = parse_first_clip_rect(&svg);
@@ -310,16 +307,18 @@ fn marginal_kde_range_does_not_create_excessive_blank_space() {
 
 #[test]
 fn marginal_explicit_limits_override_kde_support_range() {
-    let frame = df!(
-        "x" => [0.0_f64, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0],
-        "y" => [25.0_f64, 50.0, 25.0, 30.0, 50.0, 20.0, 80.0, 5.0, 15.0],
-        "group" => ["a", "a", "a", "b", "b", "b", "c", "c", "c"]
-    )
-    .unwrap();
+    let group =
+        CategoryValues::new("group", ["a", "a", "a", "b", "b", "b", "c", "c", "c"]).unwrap();
+    let data = MarginalData {
+        x: NumericValues::new("x", [0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0]),
+        y: NumericValues::new("y", [25.0, 50.0, 25.0, 30.0, 50.0, 20.0, 80.0, 5.0, 15.0]),
+        group: Some(group.clone()),
+        hue: Some(group),
+    };
     let svg = render(
-        marginal(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        marginal(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .x_limits(0.0, 2.0)
             .y_limits(0.0, 100.0)
             .legend(LegendPolicy::Hidden)
@@ -335,15 +334,22 @@ fn marginal_explicit_limits_override_kde_support_range() {
 
 #[test]
 fn marginal_hue_legend_headroom_is_bounded_and_avoids_cluster() {
-    let frame = df!(
-        "x" => [8.0_f64, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0, 3.4],
-        "y" => [8.0_f64, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5, 1.8],
-        "group" => ["high", "high", "high", "high", "high", "low", "low", "mid", "mid"]
+    let group = CategoryValues::new(
+        "group",
+        [
+            "high", "high", "high", "high", "high", "low", "low", "mid", "mid",
+        ],
     )
     .unwrap();
-    let plot = marginal(&frame)
-        .group(data::category(&frame, "group"))
-        .hue(data::category(&frame, "group"))
+    let data = MarginalData {
+        x: NumericValues::new("x", [8.0, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0, 3.4]),
+        y: NumericValues::new("y", [8.0, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5, 1.8]),
+        group: Some(group.clone()),
+        hue: Some(group),
+    };
+    let plot = marginal(&data)
+        .group(data.group.clone().unwrap())
+        .hue(data.hue.clone().unwrap())
         .size(420, 320);
     let svg = render(plot, "marginal-legend");
     let central = parse_first_clip_rect(&svg);
@@ -356,57 +362,22 @@ fn marginal_hue_legend_headroom_is_bounded_and_avoids_cluster() {
     assert_inside_legend_clear(&svg, central, "marginal");
 }
 
-fn matrix_frame(groups: &[&str]) -> DataFrame {
-    DataFrame::from_columns(vec![
-        (
-            "a",
-            data::FixtureColumn::Numeric(vec![
-                Some(1.0),
-                Some(1.2),
-                Some(1.4),
-                Some(3.0),
-                Some(3.2),
-                Some(3.4),
-            ]),
-        ),
-        (
-            "b",
-            data::FixtureColumn::Numeric(vec![
-                Some(2.0),
-                Some(2.1),
-                Some(2.3),
-                Some(4.0),
-                Some(4.2),
-                Some(4.3),
-            ]),
-        ),
-        (
-            "c",
-            data::FixtureColumn::Numeric(vec![
-                Some(0.5),
-                Some(0.7),
-                Some(0.9),
-                Some(1.5),
-                Some(1.7),
-                Some(1.9),
-            ]),
-        ),
-        (
-            "group",
-            data::FixtureColumn::Category(
-                groups
-                    .iter()
-                    .map(|value| Some((*value).to_owned()))
-                    .collect(),
-            ),
-        ),
-    ])
-    .unwrap()
+fn matrix_data(groups: &[&str]) -> MatrixData {
+    let group = CategoryValues::new("group", groups.iter().copied()).unwrap();
+    MatrixData {
+        values: [
+            NumericValues::new("a", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+            NumericValues::new("b", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+            NumericValues::new("c", [0.5, 0.7, 0.9, 1.5, 1.7, 1.9]),
+        ],
+        group: Some(group.clone()),
+        hue: Some(group),
+    }
 }
 
 #[test]
 fn matrix_hue_title_smoke_and_long_legend_stays_inside_canvas() {
-    let frame = matrix_frame(&[
+    let data = matrix_data(&[
         "long high income",
         "long high income",
         "long high income",
@@ -415,9 +386,9 @@ fn matrix_hue_title_smoke_and_long_legend_stays_inside_canvas() {
         "long low income",
     ]);
     let svg = render(
-        matrix(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        matrix(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .title("Pairplot Title")
             .size(520, 420),
         "matrix-title-long-legend",
@@ -429,17 +400,26 @@ fn matrix_hue_title_smoke_and_long_legend_stays_inside_canvas() {
 
 #[test]
 fn matrix_legend_does_not_cover_points_and_stays_close_to_graphics() {
-    let frame = df!(
-        "a" => [1.0_f64, 1.2, 1.4, 8.0, 8.2, 8.4, 4.0, 4.2],
-        "b" => [1.0_f64, 1.1, 1.3, 8.0, 8.1, 8.3, 4.0, 4.1],
-        "c" => [0.5_f64, 0.7, 0.9, 9.0, 9.2, 9.4, 4.5, 4.7],
-        "group" => ["alpha", "alpha", "alpha", "beta", "beta", "beta", "gamma", "gamma"]
+    let group = CategoryValues::new(
+        "group",
+        [
+            "alpha", "alpha", "alpha", "beta", "beta", "beta", "gamma", "gamma",
+        ],
     )
     .unwrap();
+    let data = MatrixData {
+        values: [
+            NumericValues::new("a", [1.0, 1.2, 1.4, 8.0, 8.2, 8.4, 4.0, 4.2]),
+            NumericValues::new("b", [1.0, 1.1, 1.3, 8.0, 8.1, 8.3, 4.0, 4.1]),
+            NumericValues::new("c", [0.5, 0.7, 0.9, 9.0, 9.2, 9.4, 4.5, 4.7]),
+        ],
+        group: Some(group.clone()),
+        hue: Some(group),
+    };
     let svg = render(
-        matrix(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        matrix(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .size(420, 320),
         "matrix-legend-clear",
     );
@@ -449,11 +429,11 @@ fn matrix_legend_does_not_cover_points_and_stays_close_to_graphics() {
 
 #[test]
 fn matrix_hidden_legend_policy_suppresses_self_managed_legend() {
-    let frame = matrix_frame(&["alpha", "alpha", "alpha", "beta", "beta", "beta"]);
+    let data = matrix_data(&["alpha", "alpha", "alpha", "beta", "beta", "beta"]);
     let svg = render(
-        matrix(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        matrix(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .legend(LegendPolicy::Hidden)
             .size(420, 320),
         "matrix-hidden-legend",
@@ -464,14 +444,17 @@ fn matrix_hidden_legend_policy_suppresses_self_managed_legend() {
 
 #[test]
 fn matrix_title_and_caption_do_not_overlap_content() {
-    let frame = df!(
-        "a" => [1.0_f64, 2.0, 3.0, 4.0, 5.0],
-        "b" => [1.5_f64, 2.5, 3.5, 4.5, 5.5],
-        "c" => [5.0_f64, 4.0, 3.0, 2.0, 1.0]
-    )
-    .unwrap();
+    let data = MatrixData {
+        values: [
+            NumericValues::new("a", [1.0, 2.0, 3.0, 4.0, 5.0]),
+            NumericValues::new("b", [1.5, 2.5, 3.5, 4.5, 5.5]),
+            NumericValues::new("c", [5.0, 4.0, 3.0, 2.0, 1.0]),
+        ],
+        group: None,
+        hue: None,
+    };
     let svg = render(
-        matrix(&frame)
+        matrix(&data)
             .title("Matrix title")
             .caption("Matrix caption")
             .size(420, 320),
@@ -496,11 +479,11 @@ fn matrix_title_and_caption_do_not_overlap_content() {
 
 #[test]
 fn matrix_outside_right_legend_can_be_center_aligned() {
-    let frame = matrix_frame(&["alpha", "alpha", "alpha", "beta", "beta", "beta"]);
+    let data = matrix_data(&["alpha", "alpha", "alpha", "beta", "beta", "beta"]);
     let svg = render(
-        matrix(&frame)
-            .group(data::category(&frame, "group"))
-            .hue(data::category(&frame, "group"))
+        matrix(&data)
+            .group(data.group.clone().unwrap())
+            .hue(data.hue.clone().unwrap())
             .legend(LegendPolicy::Visible(LegendPosition::OutsideRight))
             .size(520, 420),
         "matrix-centered-legend",

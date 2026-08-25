@@ -1,59 +1,76 @@
 use super::*;
-use crate::test_support::Fixture;
+use crate::{CategoryValues, NumericValues};
 
-fn line_data(labels: [&str; 4]) -> Fixture {
-    crate::test_support::test_data!(
-        "x" => [0.0_f64, 1.0, 0.0, 1.0],
-        "y" => [8.0_f64, 10.0, 1.0, 2.0],
-        "low" => [7.0_f64, 9.0, 0.5, 1.5],
-        "high" => [9.0_f64, 11.0, 1.5, 2.5],
-        "hue" => labels,
-    )
-    .unwrap()
+struct LineValues {
+    x: NumericValues,
+    y: NumericValues,
+    low: NumericValues,
+    high: NumericValues,
+    hue: CategoryValues,
 }
 
-fn line_chart(data: &Fixture) -> Plot<crate::kind::Line> {
-    Plot::line(
-        crate::test_support::numeric(data, "x"),
-        crate::test_support::numeric(data, "y"),
-    )
-    .group(crate::test_support::category(data, "hue"))
-    .hue(crate::test_support::category(data, "hue"))
-    .band(crate::Bounds::new(
-        crate::test_support::numeric(data, "low"),
-        crate::test_support::numeric(data, "high"),
-    ))
+fn line_data(labels: [&str; 4]) -> LineValues {
+    LineValues {
+        x: NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+        y: NumericValues::new("y", [8.0, 10.0, 1.0, 2.0]),
+        low: NumericValues::new("low", [7.0, 9.0, 0.5, 1.5]),
+        high: NumericValues::new("high", [9.0, 11.0, 1.5, 2.5]),
+        hue: CategoryValues::new("hue", labels).unwrap(),
+    }
 }
 
-fn dense_bar_chart(data: &Fixture, horizontal: bool) -> Plot {
-    let category = crate::test_support::category(data, "category");
-    let input = crate::BarInput::estimates(crate::test_support::numeric(data, "value"));
+fn line_chart(data: &LineValues) -> Plot<crate::kind::Line> {
+    Plot::line(data.x.clone(), data.y.clone())
+        .group(data.hue.clone())
+        .hue(data.hue.clone())
+        .band(crate::Bounds::new(data.low.clone(), data.high.clone()))
+}
+
+struct DenseBarValues {
+    category: CategoryValues,
+    value: NumericValues,
+    hue: CategoryValues,
+}
+
+fn dense_bar_chart(data: &DenseBarValues, horizontal: bool) -> Plot {
+    let input = crate::BarInput::estimates(data.value.clone());
     if horizontal {
-        Plot::horizontal_bar(category, input)
-            .series(crate::test_support::category(data, "hue"))
+        Plot::horizontal_bar(data.category.clone(), input)
+            .series(data.hue.clone())
             .erase()
     } else {
-        Plot::bar(category, input)
-            .series(crate::test_support::category(data, "hue"))
+        Plot::bar(data.category.clone(), input)
+            .series(data.hue.clone())
             .erase()
     }
 }
 
-fn dense_horizontal_data() -> Fixture {
+fn dense_horizontal_data() -> DenseBarValues {
     signed_dense_bar_data(1.0)
 }
 
-fn signed_dense_bar_data(sign: f64) -> Fixture {
-    crate::test_support::test_data!(
-        "category" => ["a", "a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f"],
-        "value" => [
-            10.0_f64, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0,
-        ].map(|value| value * sign),
-        "hue" => [
-            "one", "two", "one", "two", "one", "two", "one", "two", "one", "two", "one", "two",
-        ],
-    )
-    .unwrap()
+fn signed_dense_bar_data(sign: f64) -> DenseBarValues {
+    DenseBarValues {
+        category: CategoryValues::new(
+            "category",
+            ["a", "a", "b", "b", "c", "c", "d", "d", "e", "e", "f", "f"],
+        )
+        .unwrap(),
+        value: NumericValues::new(
+            "value",
+            [
+                10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0, 10.0, 9.0,
+            ]
+            .map(|value| value * sign),
+        ),
+        hue: CategoryValues::new(
+            "hue",
+            [
+                "one", "two", "one", "two", "one", "two", "one", "two", "one", "two", "one", "two",
+            ],
+        )
+        .unwrap(),
+    }
 }
 
 #[test]
@@ -152,14 +169,9 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
 
 #[test]
 fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
-    let data = crate::test_support::test_data!(
-        "x" => [0.0_f64, 1.0, 2.0],
-        "y" => [1.0_f64, 2.0, 3.0],
-    )
-    .unwrap();
     let chart = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [0.0, 1.0, 2.0]),
+        NumericValues::new("y", [1.0, 2.0, 3.0]),
     )
     .x_limits(0.0, 2.0)
     .x_ticks(vec![
@@ -214,17 +226,11 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
 
 #[test]
 fn scatter_with_automatic_y_limits_keeps_top_right_default() {
-    let data = crate::test_support::test_data!(
-        "x" => [0.0_f64, 0.5, 9.5, 10.0],
-        "y" => [0.0_f64, 0.5, 9.5, 10.0],
-        "hue" => ["a", "a", "b", "b"],
-    )
-    .unwrap();
     let visible = Plot::scatter(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [0.0, 0.5, 9.5, 10.0]),
+        NumericValues::new("y", [0.0, 0.5, 9.5, 10.0]),
     )
-    .hue(crate::test_support::category(&data, "hue"));
+    .hue(CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap());
     let hidden = visible.clone().legend(LegendPolicy::Hidden);
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
@@ -246,18 +252,13 @@ fn scatter_with_automatic_y_limits_keeps_top_right_default() {
 
 #[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
-    let data = crate::test_support::test_data!(
-        "x" => [8.0_f64, 10.0, 8.0, 10.0],
-        "y" => [5.0_f64; 4],
-        "hue" => ["a", "a", "b", "b"],
-    )
-    .unwrap();
+    let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let chart = Plot::line(
-        crate::test_support::numeric(&data, "x"),
-        crate::test_support::numeric(&data, "y"),
+        NumericValues::new("x", [8.0, 10.0, 8.0, 10.0]),
+        NumericValues::new("y", [5.0; 4]),
     )
-    .group(crate::test_support::category(&data, "hue"))
-    .hue(crate::test_support::category(&data, "hue"))
+    .group(hue.clone())
+    .hue(hue)
     .legend(LegendPolicy::Visible(LegendPosition::InsideRight));
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
@@ -302,7 +303,7 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
                     initial.layout.projection.panel_box(),
                 ) > 0.0
             }),
-        "fixture must collide at every initial corner"
+        "test data must collide at every initial corner"
     );
 
     let plan = plan_panel(&chart, PlotKind::HorizontalBar, cell, LegendRole::Panel).unwrap();

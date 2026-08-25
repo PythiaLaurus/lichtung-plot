@@ -9,9 +9,9 @@ use crate::render::backend::{
     BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, SignificanceBracket,
     TextStyle,
 };
-use crate::test_support::{DataFrame, Fixture, Series};
 use crate::{
-    HeatmapLayout, LegendPolicy, LegendPosition, Significance, SignificanceMark, ValueSort,
+    AxisValues, CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues,
+    Significance, SignificanceMark, ValueSort,
 };
 
 #[path = "tests/artifacts.rs"]
@@ -201,210 +201,259 @@ impl Backend for RecordingBackend {
     }
 }
 
-fn fixture() -> Fixture {
-    crate::test_support::test_data!(
-        "group" => ["a", "a", "b", "b"],
-        "interval_group" => ["a", "b", "c", "d"],
-        "hue" => ["h1", "h2", "h1", "h2"],
-        "x" => [1.0_f64, 2.0, 3.0, 4.0],
-        "y" => [1.0_f64, 3.0, 2.0, 5.0],
-        "color" => [0.1_f64, 0.3, 0.7, 1.0],
-        "lower" => [0.5_f64, 1.0, 2.0, 3.0],
-        "upper" => [1.5_f64, 3.0, 4.0, 5.0],
-        "delta" => [1.0_f64, -1.0, 2.0, 0.0],
-        "base" => [10.0_f64; 4],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct CanonicalPlotValues {
+    group: CategoryValues,
+    interval_group: CategoryValues,
+    hue: CategoryValues,
+    x: NumericValues,
+    y: NumericValues,
+    color: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    delta: NumericValues,
+    base: f64,
 }
 
-fn valid_grouped_bar_fixture() -> Fixture {
-    crate::test_support::test_data!(
-        "group" => ["a", "a", "a", "a", "b", "b", "b", "b"],
-        "hue" => ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"],
-        "y" => [1.0_f64, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0],
-    )
-    .unwrap()
+fn canonical_plot_values() -> CanonicalPlotValues {
+    CanonicalPlotValues {
+        group: CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
+        interval_group: CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap(),
+        hue: CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap(),
+        x: NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        y: NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+        color: NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
+        lower: NumericValues::new("lower", [0.5, 1.0, 2.0, 3.0]),
+        upper: NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0]),
+        delta: NumericValues::new("delta", [1.0, -1.0, 2.0, 0.0]),
+        base: 10.0,
+    }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one exhaustive test factory keeps every PlotKind arm visible"
-)]
-fn configured_chart(data: &Fixture, kind: PlotKind) -> Plot {
-    use crate::test_support::{axis, category, constant_numeric, numeric};
+#[derive(Clone)]
+struct BarValues {
+    category: CategoryValues,
+    value: NumericValues,
+    series: Option<CategoryValues>,
+}
 
+fn valid_grouped_bar_values() -> BarValues {
+    BarValues {
+        category: CategoryValues::new("group", ["a", "a", "a", "a", "b", "b", "b", "b"]).unwrap(),
+        series: Some(
+            CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"]).unwrap(),
+        ),
+        value: NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
+    }
+}
+
+fn configured_chart(data: &CanonicalPlotValues, kind: PlotKind) -> Plot {
     match kind {
-        PlotKind::Scatter => Plot::scatter(numeric(data, "x"), numeric(data, "y")).erase(),
+        PlotKind::Scatter => Plot::scatter(data.x.clone(), data.y.clone()).erase(),
         PlotKind::Histogram => {
-            Plot::histogram(crate::HistogramInput::samples(numeric(data, "x"))).erase()
+            Plot::histogram(crate::HistogramInput::samples(data.x.clone())).erase()
         }
-        PlotKind::Density => Plot::density(numeric(data, "x")).erase(),
-        PlotKind::Qq => Plot::qq(numeric(data, "x")).erase(),
+        PlotKind::Density => Plot::density(data.x.clone()).erase(),
+        PlotKind::Qq => Plot::qq(data.x.clone()).erase(),
         PlotKind::PointInterval => Plot::point_interval(
-            category(data, "interval_group"),
-            numeric(data, "x"),
-            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+            data.interval_group.clone(),
+            data.x.clone(),
+            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
         )
         .erase(),
-        PlotKind::Line => Plot::line(numeric(data, "x"), numeric(data, "y")).erase(),
-        PlotKind::Trajectory => {
-            Plot::trajectory(axis(data, "x"), numeric(data, "y"), category(data, "group")).erase()
+        PlotKind::Line => Plot::line(data.x.clone(), data.y.clone()).erase(),
+        PlotKind::Trajectory => Plot::trajectory(
+            AxisValues::Numeric(data.x.clone()),
+            data.y.clone(),
+            data.group.clone(),
+        )
+        .erase(),
+        PlotKind::LinePath => {
+            Plot::line_path(data.x.clone(), data.y.clone(), data.group.clone()).erase()
         }
-        PlotKind::LinePath => Plot::line_path(
-            numeric(data, "x"),
-            numeric(data, "y"),
-            category(data, "group"),
-        )
-        .erase(),
         PlotKind::Interaction => Plot::interaction(
-            category(data, "group"),
-            numeric(data, "y"),
-            category(data, "hue"),
-            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+            data.group.clone(),
+            data.y.clone(),
+            data.hue.clone(),
+            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
         )
-        .hue(category(data, "hue"))
+        .hue(data.hue.clone())
         .erase(),
         PlotKind::Coefficient => Plot::coefficient(
-            category(data, "interval_group"),
+            data.interval_group.clone(),
             crate::CoefficientInput::estimates_with_intervals(
-                numeric(data, "x"),
-                crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+                data.x.clone(),
+                crate::Bounds::new(data.lower.clone(), data.upper.clone()),
             ),
         )
         .erase(),
         PlotKind::Forest => Plot::forest(
-            category(data, "interval_group"),
-            numeric(data, "x"),
-            crate::Bounds::new(numeric(data, "lower"), numeric(data, "upper")),
+            data.interval_group.clone(),
+            data.x.clone(),
+            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
             0.0,
         )
         .erase(),
         PlotKind::Dumbbell => Plot::dumbbell(
-            category(data, "group"),
-            numeric(data, "x"),
-            numeric(data, "y"),
+            data.group.clone(),
+            data.x.clone(),
+            data.y.clone(),
             crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
         )
-        .group(category(data, "interval_group"))
+        .group(data.interval_group.clone())
         .erase(),
         PlotKind::Heatmap => Plot::heatmap(
-            category(data, "interval_group"),
-            category(data, "group"),
-            numeric(data, "color"),
+            data.interval_group.clone(),
+            data.group.clone(),
+            data.color.clone(),
         )
         .erase(),
-        PlotKind::Bar => Plot::bar(
-            category(data, "group"),
-            crate::BarInput::samples(numeric(data, "y")),
-        )
-        .erase(),
-        PlotKind::HorizontalBar => Plot::horizontal_bar(
-            category(data, "group"),
-            crate::BarInput::samples(numeric(data, "y")),
-        )
-        .erase(),
-        PlotKind::StackedBar => Plot::stacked_bar(
-            category(data, "group"),
-            numeric(data, "y"),
-            category(data, "hue"),
-        )
-        .erase(),
-        PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
-            category(data, "group"),
-            numeric(data, "y"),
-            category(data, "hue"),
-        )
-        .erase(),
-        PlotKind::Boxplot => Plot::boxplot(category(data, "group"), numeric(data, "y")).erase(),
-        PlotKind::Violin => Plot::violin(category(data, "group"), numeric(data, "y")).erase(),
+        PlotKind::Bar => {
+            Plot::bar(data.group.clone(), crate::BarInput::samples(data.y.clone())).erase()
+        }
+        PlotKind::HorizontalBar => {
+            Plot::horizontal_bar(data.group.clone(), crate::BarInput::samples(data.y.clone()))
+                .erase()
+        }
+        PlotKind::StackedBar => {
+            Plot::stacked_bar(data.group.clone(), data.y.clone(), data.hue.clone()).erase()
+        }
+        PlotKind::StackedHorizontalBar => {
+            Plot::stacked_horizontal_bar(data.group.clone(), data.y.clone(), data.hue.clone())
+                .erase()
+        }
+        PlotKind::Boxplot => Plot::boxplot(data.group.clone(), data.y.clone()).erase(),
+        PlotKind::Violin => Plot::violin(data.group.clone(), data.y.clone()).erase(),
         PlotKind::Raincloud => Plot::raincloud(crate::RaincloudInput::samples(
-            category(data, "group"),
-            numeric(data, "y"),
+            data.group.clone(),
+            data.y.clone(),
         ))
         .erase(),
-        PlotKind::Regression => Plot::regression(numeric(data, "x"), numeric(data, "y")).erase(),
-        PlotKind::Marginal => Plot::marginal(numeric(data, "x"), numeric(data, "y")).erase(),
-        PlotKind::Matrix => Plot::matrix(vec![numeric(data, "x"), numeric(data, "y")]).erase(),
-        PlotKind::Beeswarm => Plot::beeswarm(
-            category(data, "group"),
-            numeric(data, "x"),
-            numeric(data, "color"),
-        )
-        .erase(),
-        PlotKind::Waterfall => Plot::waterfall(
-            category(data, "group"),
-            numeric(data, "delta"),
-            constant_numeric(data, "base"),
-        )
-        .erase(),
+        PlotKind::Regression => Plot::regression(data.x.clone(), data.y.clone()).erase(),
+        PlotKind::Marginal => Plot::marginal(data.x.clone(), data.y.clone()).erase(),
+        PlotKind::Matrix => Plot::matrix(vec![data.x.clone(), data.y.clone()]).erase(),
+        PlotKind::Beeswarm => {
+            Plot::beeswarm(data.group.clone(), data.x.clone(), data.color.clone()).erase()
+        }
+        PlotKind::Waterfall => {
+            Plot::waterfall(data.group.clone(), data.delta.clone(), data.base).erase()
+        }
     }
 }
 
-fn configured_bar_chart(data: &Fixture, kind: PlotKind) -> Plot {
-    use crate::test_support::{category, numeric};
-
+fn configured_bar_chart(data: &BarValues, kind: PlotKind) -> Plot {
     match kind {
         PlotKind::Bar => Plot::bar(
-            category(data, "group"),
-            crate::BarInput::samples(numeric(data, "value")),
+            data.category.clone(),
+            crate::BarInput::samples(data.value.clone()),
         )
         .erase(),
         PlotKind::HorizontalBar => Plot::horizontal_bar(
-            category(data, "group"),
-            crate::BarInput::samples(numeric(data, "value")),
+            data.category.clone(),
+            crate::BarInput::samples(data.value.clone()),
         )
         .erase(),
         PlotKind::StackedBar => Plot::stacked_bar(
-            category(data, "group"),
-            numeric(data, "value"),
-            category(data, "hue"),
+            data.category.clone(),
+            data.value.clone(),
+            data.series.as_ref().unwrap().clone(),
         )
         .erase(),
         PlotKind::StackedHorizontalBar => Plot::stacked_horizontal_bar(
-            category(data, "group"),
-            numeric(data, "value"),
-            category(data, "hue"),
+            data.category.clone(),
+            data.value.clone(),
+            data.series.as_ref().unwrap().clone(),
         )
         .erase(),
-        _ => panic!("unsupported bar fixture kind {kind:?}"),
+        _ => panic!("unsupported bar kind {kind:?}"),
     }
 }
 
-fn numeric_fault_fixture(column: &str, fault: Option<f64>) -> Fixture {
-    let mut data = fixture();
-    let mut values = match column {
-        "x" => vec![1.0_f64, 2.0, 3.0, 4.0],
-        "y" => vec![1.0_f64, 3.0, 2.0, 5.0],
-        "color" => vec![0.1_f64, 0.3, 0.7, 1.0],
-        "lower" => vec![0.5_f64, 1.0, 2.0, 3.0],
-        "upper" => vec![1.5_f64, 3.0, 4.0, 5.0],
-        "delta" => vec![1.0_f64, -1.0, 2.0, 0.0],
-        "base" => vec![10.0_f64; 4],
-        _ => panic!("unsupported numeric fixture column {column}"),
+#[derive(Clone, Copy)]
+enum NumericField {
+    X,
+    Y,
+    Color,
+    Lower,
+    Upper,
+    Delta,
+}
+
+impl NumericField {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::X => "x",
+            Self::Y => "y",
+            Self::Color => "color",
+            Self::Lower => "lower",
+            Self::Upper => "upper",
+            Self::Delta => "delta",
+        }
     }
-    .into_iter()
-    .map(Some)
-    .collect::<Vec<_>>();
+
+    const fn valid_values(self) -> [f64; 4] {
+        match self {
+            Self::X => [1.0, 2.0, 3.0, 4.0],
+            Self::Y => [1.0, 3.0, 2.0, 5.0],
+            Self::Color => [0.1, 0.3, 0.7, 1.0],
+            Self::Lower => [0.5, 1.0, 2.0, 3.0],
+            Self::Upper => [1.5, 3.0, 4.0, 5.0],
+            Self::Delta => [1.0, -1.0, 2.0, 0.0],
+        }
+    }
+}
+
+fn numeric_fault_values(field: NumericField, fault: Option<f64>) -> CanonicalPlotValues {
+    let mut data = canonical_plot_values();
+    let mut values = field.valid_values().map(Some);
     values[1] = fault;
-    data.with_column(Series::new(column.into(), values).into())
-        .unwrap();
+    let values = NumericValues::nullable(field.name(), values);
+    match field {
+        NumericField::X => data.x = values,
+        NumericField::Y => data.y = values,
+        NumericField::Color => data.color = values,
+        NumericField::Lower => data.lower = values,
+        NumericField::Upper => data.upper = values,
+        NumericField::Delta => data.delta = values,
+    }
     data
 }
 
-fn categorical_fault_fixture(column: &str) -> Fixture {
-    let mut data = fixture();
-    let mut values = match column {
-        "group" => vec!["a", "a", "b", "b"],
-        "interval_group" => vec!["a", "b", "c", "d"],
-        "hue" => vec!["h1", "h2", "h1", "h2"],
-        _ => panic!("unsupported categorical fixture column {column}"),
+#[derive(Clone, Copy)]
+enum CategoryField {
+    Group,
+    IntervalGroup,
+    Hue,
+}
+
+impl CategoryField {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Group => "group",
+            Self::IntervalGroup => "interval_group",
+            Self::Hue => "hue",
+        }
     }
-    .into_iter()
-    .map(Some)
-    .collect::<Vec<_>>();
+
+    const fn valid_values(self) -> [&'static str; 4] {
+        match self {
+            Self::Group => ["a", "a", "b", "b"],
+            Self::IntervalGroup => ["a", "b", "c", "d"],
+            Self::Hue => ["h1", "h2", "h1", "h2"],
+        }
+    }
+}
+
+fn categorical_fault_values(field: CategoryField) -> CanonicalPlotValues {
+    let mut data = canonical_plot_values();
+    let mut values = field.valid_values().map(Some);
     values[1] = None;
-    data.with_column(Series::new(column.into(), values).into())
-        .unwrap();
+    let values = CategoryValues::nullable(field.name(), values).unwrap();
+    match field {
+        CategoryField::Group => data.group = values,
+        CategoryField::IntervalGroup => data.interval_group = values,
+        CategoryField::Hue => data.hue = values,
+    }
     data
 }
 

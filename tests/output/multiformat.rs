@@ -2,20 +2,29 @@ use std::path::PathBuf;
 
 use super::*;
 
-fn fixture() -> DataFrame {
-    df!("x" => [1.0_f64, 2.0, 3.0], "y" => [3.0_f64, 1.0, 2.0]).unwrap()
+#[derive(Clone)]
+struct ScatterData {
+    x: NumericValues,
+    y: NumericValues,
 }
 
-fn plot(frame: &DataFrame) -> Plot<lichtung_plot::kind::Scatter> {
-    Plot::scatter(data::numeric(frame, "x"), data::numeric(frame, "y"))
+fn scatter_data() -> ScatterData {
+    ScatterData {
+        x: NumericValues::new("x", [1.0, 2.0, 3.0]),
+        y: NumericValues::new("y", [3.0, 1.0, 2.0]),
+    }
+}
+
+fn plot(data: &ScatterData) -> Plot<lichtung_plot::kind::Scatter> {
+    Plot::scatter(data.x.clone(), data.y.clone())
         .title("Selectable scene text")
         .size(320, 240)
 }
 
-fn canvas(frame: &DataFrame) -> Canvas {
+fn canvas(data: &ScatterData) -> Canvas {
     Canvas::grid(1, 1)
         .unwrap()
-        .panel(0, 0, plot(frame))
+        .panel(0, 0, plot(data))
         .unwrap()
         .size(320, 260)
         .title("Selectable canvas text")
@@ -36,11 +45,11 @@ fn temp_dir(name: &str) -> PathBuf {
 
 #[test]
 fn output_reuses_one_plot_render_for_exact_svg_bytes() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("plot-output-reuse");
     let first = directory.join("first.svg");
     let second = directory.join("second.svg");
-    plot(&frame).svg(&first).unwrap().svg(&second).unwrap();
+    plot(&data).svg(&first).unwrap().svg(&second).unwrap();
     let first_bytes = std::fs::read(&first).unwrap();
     assert_eq!(first_bytes, std::fs::read(&second).unwrap());
     assert!(String::from_utf8(first_bytes)
@@ -51,11 +60,11 @@ fn output_reuses_one_plot_render_for_exact_svg_bytes() {
 
 #[test]
 fn output_reuses_one_canvas_render_for_exact_svg_bytes() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("canvas-output-reuse");
     let first = directory.join("first.svg");
     let second = directory.join("second.svg");
-    canvas(&frame).svg(&first).unwrap().svg(&second).unwrap();
+    canvas(&data).svg(&first).unwrap().svg(&second).unwrap();
     let first_bytes = std::fs::read(&first).unwrap();
     assert_eq!(first_bytes, std::fs::read(&second).unwrap());
     assert!(String::from_utf8(first_bytes)
@@ -67,12 +76,12 @@ fn output_reuses_one_canvas_render_for_exact_svg_bytes() {
 #[cfg(feature = "text-as-path")]
 #[test]
 fn selectable_and_path_text_outputs_use_the_configured_representation() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("text-representation");
     let selectable = directory.join("selectable.svg");
     let paths = directory.join("paths.svg");
-    plot(&frame).svg(&selectable).unwrap();
-    plot(&frame).svg_text(SvgText::Paths).svg(&paths).unwrap();
+    plot(&data).svg(&selectable).unwrap();
+    plot(&data).svg_text(SvgText::Paths).svg(&paths).unwrap();
     let selectable = std::fs::read_to_string(selectable).unwrap();
     let paths = std::fs::read_to_string(paths).unwrap();
     assert!(selectable.contains("<text"));
@@ -83,11 +92,11 @@ fn selectable_and_path_text_outputs_use_the_configured_representation() {
 #[cfg(feature = "png")]
 #[test]
 fn plain_png_is_deterministic_300_dpi_publication_output() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("png-output-reuse");
     let first = directory.join("first.png");
     let second = directory.join("second.png");
-    plot(&frame).png(&first).unwrap().png(&second).unwrap();
+    plot(&data).png(&first).unwrap().png(&second).unwrap();
     let bytes = std::fs::read(first).unwrap();
     assert_eq!(bytes, std::fs::read(second).unwrap());
     assert_eq!(png_dimensions(&bytes), (1000, 750));
@@ -98,14 +107,14 @@ fn plain_png_is_deterministic_300_dpi_publication_output() {
 #[cfg(feature = "png")]
 #[test]
 fn canvas_exposes_publication_preview_and_custom_png_entry_points() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("canvas-dpi");
     let publication = directory.join("publication.png");
     let preview = directory.join("preview.png");
     let custom = directory.join("custom.png");
-    canvas(&frame).png(&publication).unwrap();
-    canvas(&frame).png_preview(&preview).unwrap();
-    canvas(&frame)
+    canvas(&data).png(&publication).unwrap();
+    canvas(&data).png_preview(&preview).unwrap();
+    canvas(&data)
         .png_with_options(
             &custom,
             PngOptions {
@@ -130,7 +139,7 @@ fn canvas_exposes_publication_preview_and_custom_png_entry_points() {
 #[cfg(feature = "png")]
 #[test]
 fn png_options_reject_non_finite_zero_and_excessive_work_without_artifacts() {
-    let frame = fixture();
+    let data = scatter_data();
     for (index, sizing) in [
         PngSizing::Dpi(f32::NAN),
         PngSizing::Dpi(0.0),
@@ -141,7 +150,7 @@ fn png_options_reject_non_finite_zero_and_excessive_work_without_artifacts() {
     {
         let directory = temp_dir("invalid-png-options");
         let path = directory.join(format!("invalid-{index}.png"));
-        assert!(plot(&frame)
+        assert!(plot(&data)
             .png_with_options(
                 &path,
                 PngOptions {
@@ -158,12 +167,12 @@ fn png_options_reject_non_finite_zero_and_excessive_work_without_artifacts() {
 #[cfg(feature = "png")]
 #[test]
 fn output_png_options_are_call_local_across_preview_custom_and_publication() {
-    let frame = fixture();
+    let data = scatter_data();
     let directory = temp_dir("call-local-png-options");
     let preview = directory.join("preview.png");
     let custom = directory.join("custom.png");
     let publication = directory.join("publication.png");
-    plot(&frame)
+    plot(&data)
         .png_preview(&preview)
         .unwrap()
         .png_with_options(

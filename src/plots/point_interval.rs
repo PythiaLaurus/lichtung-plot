@@ -328,40 +328,29 @@ fn point_interval_display_range(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{into_column, Fixture, FixtureColumn};
+    use crate::{CategoryValues, NumericValues};
 
-    fn data(
-        labels: FixtureColumn,
-        estimates: FixtureColumn,
-        lowers: FixtureColumn,
-        uppers: FixtureColumn,
-    ) -> Fixture {
-        Fixture::from_columns(vec![
-            ("category", labels),
-            ("estimate", estimates),
-            ("lower", lowers),
-            ("upper", uppers),
-        ])
-        .unwrap()
+    struct PointIntervalValues {
+        category: CategoryValues,
+        estimate: NumericValues,
+        lower: NumericValues,
+        upper: NumericValues,
     }
 
-    fn valid_data() -> Fixture {
-        data(
-            into_column(["first", "second"]),
-            into_column([2.0_f64, 1.0]),
-            into_column([1.5_f64, 0.0]),
-            into_column([4.0_f64, 1.5]),
-        )
+    fn valid_data() -> PointIntervalValues {
+        PointIntervalValues {
+            category: CategoryValues::new("category", ["first", "second"]).unwrap(),
+            estimate: NumericValues::new("estimate", [2.0, 1.0]),
+            lower: NumericValues::new("lower", [1.5, 0.0]),
+            upper: NumericValues::new("upper", [4.0, 1.5]),
+        }
     }
 
-    fn chart(data: &Fixture) -> Plot<crate::kind::PointInterval> {
+    fn chart(data: &PointIntervalValues) -> Plot<crate::kind::PointInterval> {
         Plot::point_interval(
-            crate::test_support::category(data, "category"),
-            crate::test_support::numeric(data, "estimate"),
-            crate::Bounds::new(
-                crate::test_support::numeric(data, "lower"),
-                crate::test_support::numeric(data, "upper"),
-            ),
+            data.category.clone(),
+            data.estimate.clone(),
+            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
         )
     }
 
@@ -419,24 +408,24 @@ mod tests {
 
     #[test]
     fn prepare_rejects_empty_data() {
-        let data = data(
-            into_column(Vec::<String>::new()),
-            into_column(Vec::<f64>::new()),
-            into_column(Vec::<f64>::new()),
-            into_column(Vec::<f64>::new()),
-        );
+        let data = PointIntervalValues {
+            category: CategoryValues::new("category", Vec::<String>::new()).unwrap(),
+            estimate: NumericValues::new("estimate", []),
+            lower: NumericValues::new("lower", []),
+            upper: NumericValues::new("upper", []),
+        };
 
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 
     #[test]
     fn prepare_rejects_empty_category_labels() {
-        let data = data(
-            into_column(["first", " "]),
-            into_column([1.0_f64, 2.0]),
-            into_column([0.0_f64, 1.0]),
-            into_column([2.0_f64, 3.0]),
-        );
+        let data = PointIntervalValues {
+            category: CategoryValues::new("category", ["first", " "]).unwrap(),
+            estimate: NumericValues::new("estimate", [1.0, 2.0]),
+            lower: NumericValues::new("lower", [0.0, 1.0]),
+            upper: NumericValues::new("upper", [2.0, 3.0]),
+        };
 
         assert!(prepare_chart(&chart(&data))
             .unwrap_err()
@@ -446,12 +435,12 @@ mod tests {
 
     #[test]
     fn prepare_rejects_duplicate_rendered_labels() {
-        let data = data(
-            into_column(["same label", " same  label "]),
-            into_column([1.0_f64, 2.0]),
-            into_column([0.0_f64, 1.0]),
-            into_column([2.0_f64, 3.0]),
-        );
+        let data = PointIntervalValues {
+            category: CategoryValues::new("category", ["same label", " same  label "]).unwrap(),
+            estimate: NumericValues::new("estimate", [1.0, 2.0]),
+            lower: NumericValues::new("lower", [0.0, 1.0]),
+            upper: NumericValues::new("upper", [2.0, 3.0]),
+        };
 
         assert!(prepare_chart(&chart(&data))
             .unwrap_err()
@@ -461,40 +450,40 @@ mod tests {
 
     #[test]
     fn prepare_rejects_null_categories() {
-        let data = data(
-            into_column([Some("first"), None]),
-            into_column([1.0_f64, 2.0]),
-            into_column([0.0_f64, 1.0]),
-            into_column([2.0_f64, 3.0]),
-        );
+        let data = PointIntervalValues {
+            category: CategoryValues::nullable("category", [Some("first"), None]).unwrap(),
+            estimate: NumericValues::new("estimate", [1.0, 2.0]),
+            lower: NumericValues::new("lower", [0.0, 1.0]),
+            upper: NumericValues::new("upper", [2.0, 3.0]),
+        };
 
         assert!(prepare_chart(&chart(&data)).is_err());
     }
 
     #[test]
     fn prepare_rejects_null_and_non_finite_numbers() {
-        for estimates in [
-            into_column([Some(1.0_f64), None]),
-            into_column([1.0_f64, f64::INFINITY]),
+        for estimate in [
+            NumericValues::nullable("estimate", [Some(1.0), None]),
+            NumericValues::new("estimate", [1.0, f64::INFINITY]),
         ] {
-            let data = data(
-                into_column(["first", "second"]),
-                estimates,
-                into_column([0.0_f64, 1.0]),
-                into_column([2.0_f64, 3.0]),
-            );
+            let data = PointIntervalValues {
+                category: CategoryValues::new("category", ["first", "second"]).unwrap(),
+                estimate,
+                lower: NumericValues::new("lower", [0.0, 1.0]),
+                upper: NumericValues::new("upper", [2.0, 3.0]),
+            };
             assert!(prepare_chart(&chart(&data)).is_err());
         }
     }
 
     #[test]
     fn prepare_rejects_bounds_that_do_not_contain_estimate() {
-        let data = data(
-            into_column(["first"]),
-            into_column([2.0_f64]),
-            into_column([0.0_f64]),
-            into_column([1.0_f64]),
-        );
+        let data = PointIntervalValues {
+            category: CategoryValues::new("category", ["first"]).unwrap(),
+            estimate: NumericValues::new("estimate", [2.0]),
+            lower: NumericValues::new("lower", [0.0]),
+            upper: NumericValues::new("upper", [1.0]),
+        };
 
         assert!(prepare_chart(&chart(&data))
             .unwrap_err()

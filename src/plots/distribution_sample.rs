@@ -117,7 +117,7 @@ impl DistributionGroup {
 
 #[expect(
     clippy::cast_precision_loss,
-    reason = "validated category counts are bounded by DataFrame and rendering limits"
+    reason = "validated category counts are bounded by native input and rendering limits"
 )]
 pub(crate) fn center(group: &DistributionGroup, group_count: usize) -> f64 {
     if group_count == 0 {

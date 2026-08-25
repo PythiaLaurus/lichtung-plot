@@ -1,33 +1,38 @@
 use super::*;
 
-fn line_data() -> DataFrame {
-    df!(
-        "grid_x" => [0.0_f64, 1.0, 2.0],
-        "estimate" => [1.0_f64, 2.0, 3.0],
-        "lower" => [0.5_f64, 1.5, 2.5],
-        "upper" => [1.5_f64, 2.5, 3.5],
-        "panel" => ["a", "a", "a"]
-    )
-    .unwrap()
+struct LineData {
+    grid_x: NumericValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    panel: CategoryValues,
 }
 
-fn observations() -> DataFrame {
-    df!(
-        "observed_x" => [0.0_f64, 0.5, 1.0, 1.5, 2.0],
-        "observed_y" => [0.8_f64, 1.7, 2.0, 2.8, 3.2]
-    )
-    .unwrap()
+struct PointValues {
+    x: NumericValues,
+    y: NumericValues,
 }
 
-fn line_plot(frame: &DataFrame) -> Plot<lichtung_plot::kind::Line> {
-    Plot::line(
-        data::numeric(frame, "grid_x"),
-        data::numeric(frame, "estimate"),
-    )
-    .band(Bounds::new(
-        data::numeric(frame, "lower"),
-        data::numeric(frame, "upper"),
-    ))
+fn line_data() -> LineData {
+    LineData {
+        grid_x: NumericValues::new("grid_x", [0.0, 1.0, 2.0]),
+        estimate: NumericValues::new("estimate", [1.0, 2.0, 3.0]),
+        lower: NumericValues::new("lower", [0.5, 1.5, 2.5]),
+        upper: NumericValues::new("upper", [1.5, 2.5, 3.5]),
+        panel: CategoryValues::new("panel", ["a", "a", "a"]).unwrap(),
+    }
+}
+
+fn observations() -> PointValues {
+    PointValues {
+        x: NumericValues::new("observed_x", [0.0, 0.5, 1.0, 1.5, 2.0]),
+        y: NumericValues::new("observed_y", [0.8, 1.7, 2.0, 2.8, 3.2]),
+    }
+}
+
+fn line_plot(data: &LineData) -> Plot<lichtung_plot::kind::Line> {
+    Plot::line(data.grid_x.clone(), data.estimate.clone())
+        .band(Bounds::new(data.lower.clone(), data.upper.clone()))
 }
 
 fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
@@ -56,8 +61,8 @@ fn style(color: (u8, u8, u8), pattern: LinePattern) -> GuideStyle {
     GuideStyle::new(color, 1.25, pattern).unwrap()
 }
 
-fn point_layer(frame: &DataFrame, x: &str, y: &str, radius: u32, opacity: f64) -> PointLayer {
-    PointLayer::new(data::numeric(frame, x), data::numeric(frame, y))
+fn point_layer(values: &PointValues, radius: u32, opacity: f64) -> PointLayer {
+    PointLayer::new(values.x.clone(), values.y.clone())
         .color((123, 45, 200))
         .radius(radius)
         .unwrap()
@@ -359,11 +364,14 @@ fn horizontal_vertical_and_diagonal_guides_render_closed_styles() {
 fn separate_point_layers_preserve_row_count_radius_and_opacity() {
     let frame = line_data();
     let first = observations();
-    let second = df!("second_x" => [0.25_f64, 1.75], "second_y" => [1.2_f64, 3.0]).unwrap();
+    let second = PointValues {
+        x: NumericValues::new("second_x", [0.25, 1.75]),
+        y: NumericValues::new("second_y", [1.2, 3.0]),
+    };
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(point_layer(&first, "observed_x", "observed_y", 5, 0.35))
-        .point_layer(point_layer(&second, "second_x", "second_y", 5, 0.35)));
+        .point_layer(point_layer(&first, 5, 0.35))
+        .point_layer(point_layer(&second, 5, 0.35)));
     let count = output
         .lines()
         .filter(|line| {
@@ -379,10 +387,13 @@ fn separate_point_layers_preserve_row_count_radius_and_opacity() {
 #[test]
 fn point_layer_and_line_ribbon_share_one_projection() {
     let frame = line_data();
-    let raw = df!("raw_x" => [1.0_f64], "raw_y" => [2.0_f64]).unwrap();
+    let raw = PointValues {
+        x: NumericValues::new("raw_x", [1.0]),
+        y: NumericValues::new("raw_y", [2.0]),
+    };
     let output = svg(line_plot(&frame)
         .markers(false)
-        .point_layer(point_layer(&raw, "raw_x", "raw_y", 4, 0.4)));
+        .point_layer(point_layer(&raw, 4, 0.4)));
     let point = output
         .lines()
         .find(|line| line.starts_with("<circle ") && line.contains("#7B2DC8"))
@@ -448,16 +459,16 @@ fn point_layers_reject_incomplete_or_non_finite_rows() {
 fn supplemental_geometry_rejects_facets_and_incompatible_guides() {
     let frame = line_data();
     let observed = observations();
-    let layer = point_layer(&observed, "observed_x", "observed_y", 3, 0.5);
+    let layer = point_layer(&observed, 3, 0.5);
     let faceted = line_plot(&frame)
-        .facet(FacetSpec::column(data::category(&frame, "panel")))
+        .facet(FacetSpec::column(frame.panel.clone()))
         .point_layer(layer)
         .preflight()
         .unwrap_err()
         .to_string();
     let segment = Plot::bar(
-        data::category(&frame, "panel"),
-        lichtung_plot::BarInput::samples(data::numeric(&frame, "estimate")),
+        frame.panel.clone(),
+        lichtung_plot::BarInput::samples(frame.estimate.clone()),
     )
     .guide(GuideSpec::segment(
         0.0,
@@ -484,7 +495,7 @@ fn configured_numeric_layers_emit_deterministic_bytes() {
                 1.0,
                 style((200, 17, 34), LinePattern::Dashed),
             ))
-            .point_layer(point_layer(&observed, "observed_x", "observed_y", 3, 0.35))
+            .point_layer(point_layer(&observed, 3, 0.35))
     };
     assert_eq!(svg(build()), svg(build()));
 }

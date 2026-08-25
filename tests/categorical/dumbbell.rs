@@ -1,6 +1,14 @@
-use lichtung_plot::{DumbbellEndpoints, Plot};
+use lichtung_plot::{CategoryValues, DumbbellEndpoints, NumericValues, Plot};
 
-use super::{data, df, unique_dir, DataFrame};
+use super::unique_dir;
+
+#[derive(Clone)]
+struct DumbbellData {
+    category: CategoryValues,
+    left: NumericValues,
+    right: NumericValues,
+    group: Option<CategoryValues>,
+}
 
 fn endpoints() -> DumbbellEndpoints {
     DumbbellEndpoints::new(
@@ -12,24 +20,23 @@ fn endpoints() -> DumbbellEndpoints {
     .unwrap()
 }
 
-fn replicated_data() -> DataFrame {
-    df!(
-        "category" => ["second", "first", "second", "first"],
-        "fold" => ["fold-2", "fold-1", "fold-1", "fold-2"],
-        "left" => [1.0_f64, 2.0, 1.5, 2.5],
-        "right" => [2.0_f64, 1.0, 2.5, 1.5]
-    )
-    .unwrap()
+fn replicated_data() -> DumbbellData {
+    DumbbellData {
+        category: CategoryValues::new("category", ["second", "first", "second", "first"]).unwrap(),
+        left: NumericValues::new("left", [1.0, 2.0, 1.5, 2.5]),
+        right: NumericValues::new("right", [2.0, 1.0, 2.5, 1.5]),
+        group: Some(CategoryValues::new("fold", ["fold-2", "fold-1", "fold-1", "fold-2"]).unwrap()),
+    }
 }
 
-fn chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
+fn chart(data: &DumbbellData) -> Plot<lichtung_plot::kind::Dumbbell> {
     Plot::dumbbell(
-        data::category(data, "category"),
-        data::numeric(data, "left"),
-        data::numeric(data, "right"),
+        data.category.clone(),
+        data.left.clone(),
+        data.right.clone(),
         endpoints(),
     )
-    .group(data::category(data, "fold"))
+    .group(data.group.clone().unwrap())
 }
 
 fn svg(chart: &Plot<lichtung_plot::kind::Dumbbell>) -> String {
@@ -88,13 +95,12 @@ fn dumbbell_replicates_have_distinct_offsets_without_aggregation() {
 
 #[test]
 fn dumbbell_rejects_duplicate_category_group_keys() {
-    let data = df!(
-        "category" => ["same", " same "],
-        "fold" => ["fold-1", "fold-1"],
-        "left" => [1.0_f64, 2.0],
-        "right" => [2.0_f64, 3.0]
-    )
-    .unwrap();
+    let data = DumbbellData {
+        category: CategoryValues::new("category", ["same", " same "]).unwrap(),
+        left: NumericValues::new("left", [1.0, 2.0]),
+        right: NumericValues::new("right", [2.0, 3.0]),
+        group: Some(CategoryValues::new("fold", ["fold-1", "fold-1"]).unwrap()),
+    };
 
     let error = chart(&data).preflight().unwrap_err().to_string();
 
@@ -103,12 +109,12 @@ fn dumbbell_rejects_duplicate_category_group_keys() {
 
 #[test]
 fn dumbbell_without_group_rejects_duplicate_categories() {
-    let data = df!(
-        "category" => ["same", "same"],
-        "left" => [1.0_f64, 2.0],
-        "right" => [2.0_f64, 3.0]
-    )
-    .unwrap();
+    let data = DumbbellData {
+        category: CategoryValues::new("category", ["same", "same"]).unwrap(),
+        left: NumericValues::new("left", [1.0, 2.0]),
+        right: NumericValues::new("right", [2.0, 3.0]),
+        group: None,
+    };
     let chart = point_only_chart(&data);
 
     assert!(chart
@@ -120,18 +126,18 @@ fn dumbbell_without_group_rejects_duplicate_categories() {
 
 #[test]
 fn dumbbell_rejects_null_and_nonfinite_inputs() {
-    let null_data = df!(
-        "category" => ["a", "b"],
-        "left" => [Some(1.0_f64), None],
-        "right" => [2.0_f64, 3.0]
-    )
-    .unwrap();
-    let infinite_data = df!(
-        "category" => ["a", "b"],
-        "left" => [1.0_f64, 2.0],
-        "right" => [2.0_f64, f64::INFINITY]
-    )
-    .unwrap();
+    let null_data = DumbbellData {
+        category: CategoryValues::new("category", ["a", "b"]).unwrap(),
+        left: NumericValues::nullable("left", [Some(1.0), None]),
+        right: NumericValues::new("right", [2.0, 3.0]),
+        group: None,
+    };
+    let infinite_data = DumbbellData {
+        category: CategoryValues::new("category", ["a", "b"]).unwrap(),
+        left: NumericValues::new("left", [1.0, 2.0]),
+        right: NumericValues::new("right", [2.0, f64::INFINITY]),
+        group: None,
+    };
     let errors = [
         point_only_chart(&null_data)
             .preflight()
@@ -186,11 +192,11 @@ fn dumbbell_endpoint_type_rejects_empty_or_duplicate_labels() {
         .all(|error| error.contains("dumbbell endpoint labels")));
 }
 
-fn point_only_chart(data: &DataFrame) -> Plot<lichtung_plot::kind::Dumbbell> {
+fn point_only_chart(data: &DumbbellData) -> Plot<lichtung_plot::kind::Dumbbell> {
     Plot::dumbbell(
-        data::category(data, "category"),
-        data::numeric(data, "left"),
-        data::numeric(data, "right"),
+        data.category.clone(),
+        data.left.clone(),
+        data.right.clone(),
         endpoints(),
     )
 }

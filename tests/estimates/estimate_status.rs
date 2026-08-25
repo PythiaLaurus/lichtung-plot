@@ -1,119 +1,155 @@
 use super::*;
 use lichtung_plot::EstimateStatus;
 
-fn mixed_data() -> DataFrame {
-    df!(
-        "term" => ["first", "unavailable", "third"],
-        "estimate" => [Some(10.0_f64), None, Some(20.0)],
-        "lower" => [Some(9.0_f64), None, Some(18.0)],
-        "upper" => [Some(12.0_f64), None, Some(23.0)],
-    )
-    .unwrap()
+#[derive(Clone)]
+struct StatusData {
+    term: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    status: Vec<EstimateStatus>,
+    panel: Option<CategoryValues>,
 }
 
-fn all_estimated_data() -> DataFrame {
-    df!(
-        "term" => ["first", "second"],
-        "estimate" => [1.0_f64, 2.0],
-        "lower" => [0.5_f64, 1.5],
-        "upper" => [1.5_f64, 2.5],
-    )
-    .unwrap()
+fn status_data(
+    term: CategoryValues,
+    estimate: NumericValues,
+    lower: NumericValues,
+    upper: NumericValues,
+    status: Vec<EstimateStatus>,
+) -> StatusData {
+    StatusData {
+        term,
+        estimate,
+        lower,
+        upper,
+        status,
+        panel: None,
+    }
 }
 
-fn all_unavailable_facet_data() -> DataFrame {
-    df!(
-        "panel" => ["left", "left", "right", "right"],
-        "term" => ["first", "second", "first", "second"],
-        "estimate" => [None::<f64>; 4],
-        "lower" => [None::<f64>; 4],
-        "upper" => [None::<f64>; 4],
+fn mixed_data() -> StatusData {
+    status_data(
+        CategoryValues::new("term", ["first", "unavailable", "third"]).unwrap(),
+        NumericValues::nullable("estimate", [Some(10.0), None, Some(20.0)]),
+        NumericValues::nullable("lower", [Some(9.0), None, Some(18.0)]),
+        NumericValues::nullable("upper", [Some(12.0), None, Some(23.0)]),
+        vec![
+            EstimateStatus::Estimated,
+            EstimateStatus::NotEstimable,
+            EstimateStatus::Estimated,
+        ],
     )
-    .unwrap()
 }
 
-fn estimated_sibling_facet_data() -> DataFrame {
-    df!(
-        "panel" => ["estimated", "estimated", "unavailable", "unavailable"],
-        "term" => ["first", "second", "first", "second"],
-        "estimate" => [Some(10.0_f64), Some(20.0), None, None],
-        "lower" => [Some(9.0_f64), Some(18.0), None, None],
-        "upper" => [Some(12.0_f64), Some(23.0), None, None],
+fn all_estimated_data() -> StatusData {
+    status_data(
+        CategoryValues::new("term", ["first", "second"]).unwrap(),
+        NumericValues::new("estimate", [1.0, 2.0]),
+        NumericValues::new("lower", [0.5, 1.5]),
+        NumericValues::new("upper", [1.5, 2.5]),
+        vec![EstimateStatus::Estimated; 2],
     )
-    .unwrap()
+}
+
+fn all_unavailable_facet_data() -> StatusData {
+    let mut data = status_data(
+        CategoryValues::new("term", ["first", "second", "first", "second"]).unwrap(),
+        NumericValues::nullable("estimate", [None; 4]),
+        NumericValues::nullable("lower", [None; 4]),
+        NumericValues::nullable("upper", [None; 4]),
+        vec![EstimateStatus::NotEstimable; 4],
+    );
+    data.panel = Some(CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap());
+    data
+}
+
+fn estimated_sibling_facet_data() -> StatusData {
+    let mut data = status_data(
+        CategoryValues::new("term", ["first", "second", "first", "second"]).unwrap(),
+        NumericValues::nullable("estimate", [Some(10.0), Some(20.0), None, None]),
+        NumericValues::nullable("lower", [Some(9.0), Some(18.0), None, None]),
+        NumericValues::nullable("upper", [Some(12.0), Some(23.0), None, None]),
+        vec![
+            EstimateStatus::Estimated,
+            EstimateStatus::Estimated,
+            EstimateStatus::NotEstimable,
+            EstimateStatus::NotEstimable,
+        ],
+    );
+    data.panel = Some(
+        CategoryValues::new(
+            "panel",
+            ["estimated", "estimated", "unavailable", "unavailable"],
+        )
+        .unwrap(),
+    );
+    data
 }
 
 fn with_status<K: lichtung_plot::kind::Marker + lichtung_plot::kind::EstimateStatus>(
     plot: Plot<K>,
-    frame: &DataFrame,
+    data: &StatusData,
     status: bool,
 ) -> Plot<K> {
     if status {
-        plot.estimate_status(data::nullable_numeric(frame, "estimate").into_iter().map(
-            |estimate| {
-                if estimate.is_some() {
-                    EstimateStatus::Estimated
-                } else {
-                    EstimateStatus::NotEstimable
-                }
-            },
-        ))
+        plot.estimate_status(data.status.clone())
     } else {
         plot
     }
 }
 
-fn point_interval(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::PointInterval> {
+fn point_interval(data: &StatusData, status: bool) -> Plot<lichtung_plot::kind::PointInterval> {
     with_status(
         Plot::point_interval(
-            data::category(frame, "term"),
-            data::numeric(frame, "estimate"),
-            Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+            data.term.clone(),
+            data.estimate.clone(),
+            Bounds::new(data.lower.clone(), data.upper.clone()),
         ),
-        frame,
+        data,
         status,
     )
     .size(480, 300)
 }
 
-fn coefficient(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::Coefficient> {
+fn coefficient(data: &StatusData, status: bool) -> Plot<lichtung_plot::kind::Coefficient> {
     with_status(
         Plot::coefficient(
-            data::category(frame, "term"),
+            data.term.clone(),
             CoefficientInput::estimates_with_intervals(
-                data::numeric(frame, "estimate"),
-                Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+                data.estimate.clone(),
+                Bounds::new(data.lower.clone(), data.upper.clone()),
             ),
         ),
-        frame,
+        data,
         status,
     )
     .size(480, 300)
 }
 
-fn forest(frame: &DataFrame, status: bool) -> Plot<lichtung_plot::kind::Forest> {
+fn forest(data: &StatusData, status: bool) -> Plot<lichtung_plot::kind::Forest> {
     with_status(
         Plot::forest(
-            data::category(frame, "term"),
-            data::numeric(frame, "estimate"),
-            Bounds::new(data::numeric(frame, "lower"), data::numeric(frame, "upper")),
+            data.term.clone(),
+            data.estimate.clone(),
+            Bounds::new(data.lower.clone(), data.upper.clone()),
             1.0,
         ),
-        frame,
+        data,
         status,
     )
     .size(480, 300)
 }
 
 fn faceted_estimate_plots(
-    frame: &DataFrame,
+    data: &StatusData,
     scales: FacetScales,
     limits: Option<(f64, f64)>,
 ) -> [(&'static str, Plot); 3] {
-    let facet = || FacetSpec::column(data::category(frame, "panel")).scales(scales);
-    let point = point_interval(frame, true).facet(facet()).size(960, 300);
-    let coefficient = coefficient(frame, true).facet(facet()).size(960, 300);
-    let forest = forest(frame, true).facet(facet()).size(960, 300);
+    let facet = || FacetSpec::column(data.panel.clone().unwrap()).scales(scales);
+    let point = point_interval(data, true).facet(facet()).size(960, 300);
+    let coefficient = coefficient(data, true).facet(facet()).size(960, 300);
+    let forest = forest(data, true).facet(facet()).size(960, 300);
     let point = match limits {
         Some((lower, upper)) => point.x_limits(lower, upper),
         None => point,
@@ -210,12 +246,14 @@ fn estimate_status_enforces_complete_null_tuples() {
         ),
     ];
     for (estimate, lower, upper, status) in invalid {
-        let frame = df!(
-            "term" => ["first", "second"], "estimate" => estimate,
-            "lower" => lower, "upper" => upper,
-        )
-        .unwrap();
-        assert!(point_interval(&frame, false)
+        let data = status_data(
+            CategoryValues::new("term", ["first", "second"]).unwrap(),
+            NumericValues::nullable("estimate", estimate),
+            NumericValues::nullable("lower", lower),
+            NumericValues::nullable("upper", upper),
+            Vec::new(),
+        );
+        assert!(point_interval(&data, false)
             .estimate_status(status)
             .preflight()
             .unwrap_err()
@@ -226,15 +264,17 @@ fn estimate_status_enforces_complete_null_tuples() {
 
 #[test]
 fn all_unavailable_rows_require_and_accept_explicit_ranges() {
-    let frame = df!(
-        "term" => ["first", "second"],
-        "estimate" => [None::<f64>; 2], "lower" => [None::<f64>; 2], "upper" => [None::<f64>; 2],
-    )
-    .unwrap();
+    let data = status_data(
+        CategoryValues::new("term", ["first", "second"]).unwrap(),
+        NumericValues::nullable("estimate", [None; 2]),
+        NumericValues::nullable("lower", [None; 2]),
+        NumericValues::nullable("upper", [None; 2]),
+        vec![EstimateStatus::NotEstimable; 2],
+    );
     for plot in [
-        point_interval(&frame, true).erase(),
-        coefficient(&frame, true).erase(),
-        forest(&frame, true).erase(),
+        point_interval(&data, true).erase(),
+        coefficient(&data, true).erase(),
+        forest(&data, true).erase(),
     ] {
         assert!(plot
             .preflight()
@@ -244,15 +284,15 @@ fn all_unavailable_rows_require_and_accept_explicit_ranges() {
     }
     for (plot, name) in [
         (
-            point_interval(&frame, true).x_limits(0.5, 2.5).erase(),
+            point_interval(&data, true).x_limits(0.5, 2.5).erase(),
             "all-unavailable-point",
         ),
         (
-            coefficient(&frame, true).x_limits(-1.0, 1.0).erase(),
+            coefficient(&data, true).x_limits(-1.0, 1.0).erase(),
             "all-unavailable-coefficient",
         ),
         (
-            forest(&frame, true).x_limits(0.5, 2.5).erase(),
+            forest(&data, true).x_limits(0.5, 2.5).erase(),
             "all-unavailable-forest",
         ),
     ] {
@@ -277,12 +317,14 @@ fn estimate_status_auto_range_uses_only_estimated_rows() {
 
 #[test]
 fn estimate_status_rejects_nonfinite_values() {
-    let frame = df!(
-        "term" => ["first"], "estimate" => [Some(f64::NAN)],
-        "lower" => [Some(0.0_f64)], "upper" => [Some(1.0_f64)],
-    )
-    .unwrap();
-    assert!(point_interval(&frame, false)
+    let data = status_data(
+        CategoryValues::new("term", ["first"]).unwrap(),
+        NumericValues::nullable("estimate", [Some(f64::NAN)]),
+        NumericValues::nullable("lower", [Some(0.0)]),
+        NumericValues::nullable("upper", [Some(1.0)]),
+        Vec::new(),
+    );
+    assert!(point_interval(&data, false)
         .estimate_status([EstimateStatus::NotEstimable])
         .preflight()
         .unwrap_err()
@@ -392,7 +434,7 @@ fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
         assert_eq!(output.matches(">Not estimable</text>").count(), 4);
     }
     let narrow = point_interval(&frame, true)
-        .facet(FacetSpec::column(data::category(&frame, "panel")))
+        .facet(FacetSpec::column(frame.panel.clone().unwrap()))
         .x_limits(-2.0, 2.0);
     let error = narrow.preflight().unwrap_err().to_string();
     assert!(
@@ -404,13 +446,15 @@ fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
 
 #[test]
 fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values() {
-    let frame = df!(
-        "term" => ["first"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>],
-    )
-    .unwrap();
+    let data = status_data(
+        CategoryValues::new("term", ["first"]).unwrap(),
+        NumericValues::nullable("estimate", [None]),
+        NumericValues::nullable("lower", [None]),
+        NumericValues::nullable("upper", [None]),
+        vec![EstimateStatus::NotEstimable],
+    );
     let output = svg(
-        forest(&frame, true)
+        forest(&data, true)
             .scale(AxisScale::Log10)
             .x_limits(0.1, 10.0),
         "all-unavailable-log-forest",
@@ -421,23 +465,25 @@ fn all_unavailable_log_forest_uses_explicit_raw_range_without_fabricated_values(
 
 #[test]
 fn unavailable_text_avoids_estimate_guides() {
-    let frame = df!(
-        "term" => ["unavailable"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>],
-    )
-    .unwrap();
+    let data = status_data(
+        CategoryValues::new("term", ["unavailable"]).unwrap(),
+        NumericValues::nullable("estimate", [None]),
+        NumericValues::nullable("lower", [None]),
+        NumericValues::nullable("upper", [None]),
+        vec![EstimateStatus::NotEstimable],
+    );
     let coefficient = svg(
-        coefficient(&frame, true).x_limits(-1.0, 1.0),
+        coefficient(&data, true).x_limits(-1.0, 1.0),
         "unavailable-coefficient-guide",
     );
     let forest = svg(
-        forest(&frame, true)
+        forest(&data, true)
             .scale(AxisScale::Log10)
             .x_limits(0.1, 10.0),
         "unavailable-forest-guide",
     );
     let point = svg(
-        point_interval(&frame, true).zero_line().x_limits(-1.0, 1.0),
+        point_interval(&data, true).zero_line().x_limits(-1.0, 1.0),
         "unavailable-point-guide",
     );
     let separation = 45.0;
@@ -455,12 +501,14 @@ fn unavailable_text_avoids_estimate_guides() {
 
 #[test]
 fn unavailable_text_without_a_fitting_guide_side_fails_preflight() {
-    let frame = df!(
-        "term" => ["x"], "estimate" => [None::<f64>], "lower" => [None::<f64>],
-        "upper" => [None::<f64>],
-    )
-    .unwrap();
-    let error = point_interval(&frame, true)
+    let data = status_data(
+        CategoryValues::new("term", ["x"]).unwrap(),
+        NumericValues::nullable("estimate", [None]),
+        NumericValues::nullable("lower", [None]),
+        NumericValues::nullable("upper", [None]),
+        vec![EstimateStatus::NotEstimable],
+    );
+    let error = point_interval(&data, true)
         .zero_line()
         .x_limits(-1.0, 1.0)
         .size(224, 240)

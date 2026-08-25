@@ -92,8 +92,6 @@ mod significance;
 mod spec;
 /// Display-only statistics (KDE, CI, OLS for fit lines).
 pub mod stats;
-#[cfg(test)]
-mod test_support;
 mod theme;
 mod values;
 
