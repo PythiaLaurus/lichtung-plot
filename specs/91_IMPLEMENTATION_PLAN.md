@@ -83,7 +83,11 @@ Phase T1 confirmed these rules for the approved target:
 | --- | --- | --- |
 | T1 | Approved theme architecture contract | COMPLETE |
 | T2 | Complete visual-property ownership inventory | IN PROGRESS |
-| T2a | Ledger protocol and renderer foundations | PENDING |
+| T2a | Ledger protocol and renderer foundations | IN PROGRESS |
+| T2a1 | Current theme and font foundations | PENDING |
+| T2a2 | Private style carriers and backend protocol | PENDING |
+| T2a3 | Serialization, geometry recording, and scene conversion | PENDING |
+| T2a4 | Lifecycle, output, and artifact foundations | PENDING |
 | T2b | Public controls and policies | PENDING |
 | T2c | Layout, typography, axes, and grid | PENDING |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
@@ -247,10 +251,12 @@ coefficients, and geometry derived solely from caller data are excluded unless a
 fixed rendering rule constrains their visible representation; that fixed rule is
 then recorded as a renderer invariant.
 
-Rows are source-based rather than estimate-based. Initial audits found roughly
-70-85 foundation records, 58-68 public-control records, 105-120 layout and chrome
-records, and about 106 mark and annotation records. These ranges overlap and are
-planning aids only; they must not be summed or used as a completion threshold.
+Rows are source-based rather than estimate-based. The pre-audit planning ranges
+were 70-85 foundation records, 58-68 public-control records, 105-120 layout and
+chrome records, and about 106 mark and annotation records. These ranges overlap,
+must not be summed, and are not completion thresholds. The completed initial
+foundation audit supersedes its range with the 185-record T2a split below; later
+workstreams update their scopes the same way when source evidence differs.
 
 Every subphase records its complete source manifest in the ledger. A production
 declaration, literal, default, or behavior branch is owned by exactly one
@@ -270,15 +276,19 @@ explained exclusion.
 
 ### Subphase T2a: Ledger Protocol And Renderer Foundations
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Create the ledger and inventory foundational private carriers and lifecycle
-sources in `theme.rs`, `theme/`, `font.rs`, `render.rs`, `render/`, `scene.rs`,
-`orchestrator.rs`, `orchestrator/lifecycle.rs`, `orchestrator/backend.rs`,
-`orchestrator/output.rs`, `orchestrator/artifacts.rs`, and `output.rs`. T2a owns
-only the foundational carrier, preset construction, draw-boundary, serialization,
-and lifecycle entries in mixed files; later subphases own facet, legend, mark,
-and scale entries by exact symbol or expression context.
+sources. The initial read-only audit found 185 records: 57 theme and font
+records, 52 private style-carrier and backend-protocol records, 36 serialization,
+geometry-recording, and scene records, and 40 lifecycle and output records. These
+counts replace the earlier overlapping estimate for this workstream and require
+four bounded commits before T2a can complete.
+
+T2a owns only foundational carrier, preset construction, draw-boundary,
+serialization, geometry-recording, scene, and lifecycle entries in mixed files.
+Later subphases own facet, legend, mark, and scale values by exact symbol or
+expression context.
 
 T2a must identify every `ThemePalette` responsibility, every concrete backend
 style field and default, RGB-versus-alpha representation, root-surface behavior,
@@ -287,10 +297,67 @@ where appearance can diverge between validation, preflight, measurement, scene
 creation, and drawing. Test-only modules under these paths are evidence rather
 than ledger sources.
 
-T2a is complete when the ledger schema is instantiated, every production source
-in its manifest is accounted for, current carrier fields have target owners, and
-hidden Publication or backend fallback paths are explicitly linked to T3, T4,
-T5a, or T5d remediation.
+T2a is complete when T2a1 through T2a4 are complete, the ledger schema is
+instantiated, every production source in their disjoint manifests is accounted
+for, current carrier fields have target owners, and hidden Publication or backend
+fallback paths are explicitly linked to T3, T4, T5a, or T5d remediation.
+
+#### Subphase T2a1: Current Theme And Font Foundations
+
+**Status**: PENDING
+
+Create `04_VISUAL_PROPERTY_OWNERSHIP.md` with the required schema, source
+manifest, rejected-match table, and every current property record from
+`theme.rs`, `theme/palette.rs`, and `font.rs`. Cover preset routing, every
+`ThemePalette` responsibility, dormant fields, split semantic roles, RGB
+serialization, global font constants, and host-font discovery and fallback.
+
+T2a1 is complete when all 57 initially identified records are either present or
+explicitly corrected by a reviewed source-manifest reconciliation, and every
+theme or font match has one record or rejection reason.
+
+#### Subphase T2a2: Private Style Carriers And Backend Protocol
+
+**Status**: PENDING
+
+Inventory the foundational declarations, defaults, mutators, validation, and
+protocol fallbacks in `render/backend.rs`. Cover point, line, fill, gradient,
+text, bracket, layer, clip, and draw-scope carriers without taking ownership of
+the plot, layout, legend, annotation, or scale values passed through them.
+
+T2a2 is complete when all 52 initially identified records are either present or
+explicitly corrected, each combined carrier has split target responsibilities,
+and every backend-protocol fallback has a migration disposition and evidence.
+
+#### Subphase T2a3: Serialization, Geometry Recording, And Scene Conversion
+
+**Status**: PENDING
+
+Inventory `render.rs`, `render/svg_backend.rs`, `render/geometry.rs`, and
+`scene.rs`. Cover SVG and PNG paint, text, surface, precision, clipping, layer,
+gradient, and alpha behavior; geometry recording and collision bounds; immutable
+scene reuse and conversion limits. Values merely supplied by semantic owners are
+consumer references, not duplicate source records.
+
+T2a3 is complete when all 36 initially identified records are either present or
+explicitly corrected, root-surface and incomplete-alpha behavior are assigned,
+and measurement-to-draw discrepancies have explicit migration evidence.
+
+#### Subphase T2a4: Lifecycle, Output, And Artifact Foundations
+
+**Status**: PENDING
+
+Inventory `orchestrator.rs`, `orchestrator/lifecycle.rs`,
+`orchestrator/backend.rs`, `orchestrator/output.rs`,
+`orchestrator/artifacts.rs`, and `output.rs`. Cover appearance reconstruction,
+preflight-to-render reuse, deferred and null backend parity, output dimensions,
+canonical scene routing, format-local font timing, PNG sizing, and exact artifact
+publication. Exclude facet, legend, mark, and scale values owned elsewhere.
+
+T2a4 is complete when all 40 initially identified records are either present or
+explicitly corrected, every `Plot::palette()` reconstruction and appearance
+divergence point is traced, and output policies are separated from renderer
+invariants.
 
 ### Subphase T2b: Public Controls And Policies
 
