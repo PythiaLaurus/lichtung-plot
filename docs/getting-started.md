@@ -130,6 +130,31 @@ Use `HistogramInput::geometry` or `RaincloudInput::geometry` instead when the
 caller owns complete display geometry. Geometry and samples cannot be combined
 on one plot.
 
+A caller-computed KDE can instead remain a layer over sample-owned histogram
+bins and rugs. Its coordinates use the same named point type as complete
+histogram geometry:
+
+```rust
+use lichtung_plot::{
+    HistogramComposite, HistogramInput, HistogramKde, HistogramKdePoint, HistogramStat,
+    NumericValues, Plot,
+};
+
+let histogram = Plot::histogram(HistogramInput::samples(NumericValues::new(
+    "response",
+    [0.0, 0.5, 1.5, 2.0],
+)))
+.stat(HistogramStat::Density)
+.composite(HistogramComposite::KdeAndRug(HistogramKde::Precomputed(
+    vec![
+        HistogramKdePoint { x: 0.0, y: 0.1 },
+        HistogramKdePoint { x: 1.0, y: 0.3 },
+        HistogramKdePoint { x: 2.0, y: 0.1 },
+    ],
+)));
+# let _ = histogram;
+```
+
 ## Paths And Facets
 
 Ordinary lines, grouped trajectories, and source-ordered numeric paths are

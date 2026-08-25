@@ -102,7 +102,7 @@ pub struct HistogramBin {
     pub density: f64,
 }
 
-/// One point on a precomputed histogram KDE polyline.
+/// One named point on a caller-computed histogram KDE polyline.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HistogramKdePoint {
     /// Data-space x coordinate.

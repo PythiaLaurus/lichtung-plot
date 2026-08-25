@@ -43,7 +43,7 @@ and commit each phase as one logical change before starting the next phase.
 | 4 | Restrict erasure and Canvas insertion to exact families | R2 | COMPLETE |
 | 5 | Remove duplicate default PNG compression identity | R3 | COMPLETE |
 | 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
-| 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | PENDING |
+| 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | COMPLETE |
 | 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | PENDING |
 | 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
@@ -192,7 +192,11 @@ Commit: `feat(api)!: move png options to publication`
 
 ## Phase R4: Canonical Histogram KDE Points
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: SVG-only and default checks and clippy, focused histogram,
+geometry, distribution, and facet tests, doctests, and `just verify` passed on
+2026-08-25.
 
 Use one named public point representation for caller-computed histogram KDE
 geometry.

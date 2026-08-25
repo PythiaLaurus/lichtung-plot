@@ -1,9 +1,9 @@
 use lichtung_plot::{
-    Canvas, CanvasLegendPolicy, CategoricalColors, HistogramBin, HistogramBins, HistogramComposite,
-    HistogramDimensions, HistogramGeometry, HistogramInput, HistogramKde, HistogramKdePoint,
-    HistogramRug, HistogramStat, Labels, Plot, RaincloudDensityPoint, RaincloudDimensions,
-    RaincloudGeometry, RaincloudGroup, RaincloudInput, RaincloudPoint, Significance,
-    SignificanceMark, SourceRows,
+    Canvas, CanvasLegendPolicy, CategoricalColors, FacetSpec, HistogramBin, HistogramBins,
+    HistogramComposite, HistogramDimensions, HistogramGeometry, HistogramInput, HistogramKde,
+    HistogramKdePoint, HistogramRug, HistogramStat, Labels, Plot, RaincloudDensityPoint,
+    RaincloudDimensions, RaincloudGeometry, RaincloudGroup, RaincloudInput, RaincloudPoint,
+    Significance, SignificanceMark, SourceRows,
 };
 
 use super::{parse_circle_bounds, parse_polygon_bounds, unique_dir};
@@ -301,7 +301,10 @@ fn supplied_histogram_geometry_matches_sample_labels_and_recorded_marks() {
     let values = [0.0_f64, 0.5, 1.5, 2.0];
     let sample = histogram_plot(
         &values,
-        HistogramKde::Precomputed(vec![(0.0, 0.5), (2.0, 0.5)]),
+        HistogramKde::Precomputed(vec![
+            HistogramKdePoint { x: 0.0, y: 0.5 },
+            HistogramKdePoint { x: 2.0, y: 0.5 },
+        ]),
     );
     let rug_top = 0.5 * 0.035;
     let mut supplied = explicit_histogram();
@@ -409,6 +412,30 @@ fn precomputed_histogram_rejects_kde_over_safety_budget_before_backend_begin() {
         .unwrap_err()
         .to_string()
         .contains("safety limit of 2048"));
+}
+
+#[test]
+fn precomputed_histogram_rejects_faceting_before_backend_begin() {
+    let error = Plot::histogram(HistogramInput::geometry(explicit_histogram()))
+        .facet(FacetSpec::column(
+            lichtung_plot::CategoryValues::new("facet", std::iter::empty::<&str>()).unwrap(),
+        ))
+        .preflight()
+        .unwrap_err();
+
+    assert!(error.to_string().contains("not supported with faceting"));
+}
+
+#[test]
+fn precomputed_histogram_rejects_source_rows_before_backend_begin() {
+    let error = Plot::histogram(HistogramInput::geometry(explicit_histogram()))
+        .source_rows(SourceRows::new([]).unwrap())
+        .preflight()
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("does not accept source-row inputs"));
 }
 
 #[test]
@@ -577,7 +604,10 @@ fn precomputed_kde_and_histogram_bars_share_density_projection() {
     let svg = render(
         histogram_plot(
             &[0.0, 0.5, 1.5, 2.0],
-            HistogramKde::Precomputed(vec![(0.0, 0.5), (2.0, 0.5)]),
+            HistogramKde::Precomputed(vec![
+                HistogramKdePoint { x: 0.0, y: 0.5 },
+                HistogramKdePoint { x: 2.0, y: 0.5 },
+            ]),
         ),
         "histogram-density-projection",
     )
@@ -605,11 +635,47 @@ fn histogram_composite_requires_density_before_backend_begin() {
 fn precomputed_kde_rejects_nonincreasing_points_before_backend_begin() {
     let error = histogram_plot(
         &[0.0, 1.0, 2.0],
-        HistogramKde::Precomputed(vec![(1.0, 0.2), (0.5, 0.3)]),
+        HistogramKde::Precomputed(vec![
+            HistogramKdePoint { x: 1.0, y: 0.2 },
+            HistogramKdePoint { x: 0.5, y: 0.3 },
+        ]),
     )
     .preflight()
     .unwrap_err();
     assert!(error.to_string().contains("strictly increasing"));
+}
+
+#[test]
+fn precomputed_kde_rejects_nonfinite_coordinates_before_backend_begin() {
+    let error = histogram_plot(
+        &[0.0, 1.0, 2.0],
+        HistogramKde::Precomputed(vec![
+            HistogramKdePoint {
+                x: f64::NAN,
+                y: 0.2,
+            },
+            HistogramKdePoint { x: 2.0, y: 0.3 },
+        ]),
+    )
+    .preflight()
+    .unwrap_err();
+
+    assert!(error.to_string().contains("finite x"));
+}
+
+#[test]
+fn precomputed_kde_rejects_negative_density_before_backend_begin() {
+    let error = histogram_plot(
+        &[0.0, 1.0, 2.0],
+        HistogramKde::Precomputed(vec![
+            HistogramKdePoint { x: 0.0, y: -0.1 },
+            HistogramKdePoint { x: 2.0, y: 0.3 },
+        ]),
+    )
+    .preflight()
+    .unwrap_err();
+
+    assert!(error.to_string().contains("nonnegative finite density"));
 }
 
 #[test]

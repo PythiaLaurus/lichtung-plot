@@ -6,7 +6,7 @@
     clippy::cast_sign_loss
 )]
 
-use crate::Error;
+use crate::{Error, HistogramKdePoint};
 
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
@@ -52,10 +52,7 @@ pub(crate) fn render(
     let density_curve = prepare_density_curve(chart.histogram_composite_spec(), &values, x_range)?;
     let mut y_max = prepared.heights.iter().copied().fold(0.0_f64, f64::max);
     if let Some(curve) = &density_curve {
-        y_max = curve
-            .iter()
-            .map(|(_, density)| *density)
-            .fold(y_max, f64::max);
+        y_max = curve.iter().map(|point| point.y).fold(y_max, f64::max);
     }
     let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
     let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
@@ -99,8 +96,8 @@ pub(crate) fn render(
         if let Some(curve) = &density_curve {
             let points = curve
                 .iter()
-                .map(|(x, density)| {
-                    let (x, y) = layout.projection.project(*x, *density);
+                .map(|point| {
+                    let (x, y) = layout.projection.project(point.x, point.y);
                     Point2D::new(x, y)
                 })
                 .collect::<Vec<_>>();
@@ -197,7 +194,7 @@ fn prepare_density_curve(
     composite: &HistogramComposite,
     values: &[f64],
     x_range: (f64, f64),
-) -> Result<Option<Vec<(f64, f64)>>, Error> {
+) -> Result<Option<Vec<HistogramKdePoint>>, Error> {
     let HistogramComposite::KdeAndRug(kde) = composite else {
         return Ok(None);
     };
@@ -214,7 +211,10 @@ fn prepare_density_curve(
             let densities =
                 crate::stats::distribution::gaussian_kde_with_bandwidth(values, &grid, bandwidth)
                     .map_err(|error| Error::Data(format!("histogram KDE: {error}")))?;
-            grid.into_iter().zip(densities).collect()
+            grid.into_iter()
+                .zip(densities)
+                .map(|(x, y)| HistogramKdePoint { x, y })
+                .collect()
         }
         HistogramKde::Precomputed(points) => {
             validate_precomputed_kde(points, x_range)?;
@@ -224,31 +224,36 @@ fn prepare_density_curve(
     Ok(Some(curve))
 }
 
-fn validate_precomputed_kde(points: &[(f64, f64)], x_range: (f64, f64)) -> Result<(), Error> {
+fn validate_precomputed_kde(
+    points: &[HistogramKdePoint],
+    x_range: (f64, f64),
+) -> Result<(), Error> {
     if points.len() < 2 {
         return Err(Error::Data(
             "histogram KDE: a precomputed curve requires at least two points".into(),
         ));
     }
-    for (index, (x, density)) in points.iter().copied().enumerate() {
-        if !x.is_finite() || !density.is_finite() || density < 0.0 {
+    for (index, point) in points.iter().enumerate() {
+        if !point.x.is_finite() || !point.y.is_finite() || point.y < 0.0 {
             return Err(Error::Data(format!(
                 "histogram KDE: precomputed point {index} must contain finite x and nonnegative finite density"
             )));
         }
-        if !(x_range.0..=x_range.1).contains(&x) {
+        if !(x_range.0..=x_range.1).contains(&point.x) {
             return Err(Error::Data(format!(
-                "histogram KDE: precomputed x {x} at point {index} lies outside histogram bin range {}..{}",
+                "histogram KDE: precomputed x {} at point {index} lies outside histogram bin range {}..{}",
+                point.x,
                 x_range.0, x_range.1
             )));
         }
-        if index > 0 && x <= points[index - 1].0 {
+        if index > 0 && point.x <= points[index - 1].x {
             return Err(Error::Data(format!(
-                "histogram KDE: precomputed x values must be strictly increasing; point {index} is {x}"
+                "histogram KDE: precomputed x values must be strictly increasing; point {index} is {}",
+                point.x
             )));
         }
     }
-    if !points.iter().any(|(_, density)| *density > 0.0) {
+    if !points.iter().any(|point| point.y > 0.0) {
         return Err(Error::Data(
             "histogram KDE: a precomputed density curve must contain a positive density".into(),
         ));

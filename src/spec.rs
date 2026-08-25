@@ -3,6 +3,7 @@
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{Layout, PanelBox};
 use crate::render::backend::SignificanceBracket;
+use crate::HistogramKdePoint;
 
 mod bar;
 mod categorical;
@@ -66,13 +67,23 @@ pub enum HistogramStat {
     Density,
 }
 
-/// Density-curve source for an opt-in histogram composite.
+/// Density-curve source for an opt-in composite over sample-owned histogram input.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HistogramKde {
     /// Compute a scale-robust Scott-bandwidth Gaussian KDE from the histogram sample.
     Internal,
-    /// Draw caller-computed `(x, density)` points in their supplied order.
-    Precomputed(Vec<(f64, f64)>),
+    /// Draw caller-computed points with named `x` and `y` coordinates in supplied order.
+    ///
+    /// ```
+    /// use lichtung_plot::{HistogramKde, HistogramKdePoint};
+    ///
+    /// let kde = HistogramKde::Precomputed(vec![
+    ///     HistogramKdePoint { x: 0.0, y: 0.1 },
+    ///     HistogramKdePoint { x: 1.0, y: 0.2 },
+    /// ]);
+    /// # let _ = kde;
+    /// ```
+    Precomputed(Vec<HistogramKdePoint>),
 }
 
 /// Optional layers composed on a histogram density axis.
