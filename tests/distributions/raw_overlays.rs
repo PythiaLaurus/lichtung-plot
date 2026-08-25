@@ -218,23 +218,6 @@ fn facets_keep_original_source_rows_for_jitter() {
 }
 
 #[test]
-fn faceted_raw_overlay_does_not_draw_provenance_inside_panels() {
-    let svg = render(
-        Plot::boxplot(
-            lichtung_plot::CategoryValues::new("category", ["a"; 4]).unwrap(),
-            lichtung_plot::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
-        )
-        .raw_overlay(RawOverlay::Jittered)
-        .facet(FacetSpec::column(
-            lichtung_plot::CategoryValues::new("facet", ["only"; 4]).unwrap(),
-        )),
-        "faceted-provenance",
-    )
-    .unwrap();
-    assert!(!svg.contains("original strict-sample observations"));
-}
-
-#[test]
 fn series_points_follow_dodge_color_and_global_first_observed_order() {
     let plot = Plot::violin(
         lichtung_plot::CategoryValues::new("category", ["a"; 8]).unwrap(),
@@ -351,21 +334,4 @@ fn adequate_composed_canvas_accepts_raw_overlay() {
         .size(640, 480)
         .preflight()
         .unwrap();
-}
-
-#[test]
-fn raw_overlay_report_provenance_is_retained_but_not_drawn() {
-    let svg = render(
-        plot(
-            &[1.0, 2.0, 3.0, 4.0],
-            PlotKind::Violin,
-            RawOverlay::Jittered,
-        ),
-        "overlay-provenance",
-    )
-    .unwrap();
-    assert!(!svg.contains("original strict-sample observations"));
-    let provenance = RawOverlay::Jittered.provenance();
-    assert!(provenance.contains("deterministic source-row displacement"));
-    assert!(provenance.contains("summaries unchanged"));
 }

@@ -163,20 +163,6 @@ impl RawOverlay {
     pub const fn is_visible(self) -> bool {
         !matches!(self, Self::Hidden)
     }
-
-    /// Stable provenance included in reports.
-    #[must_use]
-    pub const fn provenance(self) -> &'static str {
-        match self {
-            Self::Hidden => "",
-            Self::Points => {
-                "raw overlay: original strict-sample observations; centered points; same sample; summaries unchanged; no inference or model adjustment"
-            }
-            Self::Jittered => {
-                "raw overlay: original strict-sample observations; deterministic source-row displacement; same sample; summaries unchanged; no inference or model adjustment"
-            }
-        }
-    }
 }
 
 /// Continuous color-scale policy for heatmap cells.
@@ -546,7 +532,7 @@ impl LegendPolicy {
 }
 
 macro_rules! define_plot_kinds {
-    ($($variant:ident => ($documentation:literal, $label:literal, $key:literal)),+ $(,)?) => {
+    ($($variant:ident => $documentation:literal),+ $(,)?) => {
         /// Which plot type a [`crate::Plot`] will produce.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum PlotKind {
@@ -555,58 +541,35 @@ macro_rules! define_plot_kinds {
                 $variant,
             )+
         }
-
-        impl PlotKind {
-            /// All currently supported plot kinds in stable declaration order.
-            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
-
-            /// Rust variant name used by capability inventories.
-            #[must_use]
-            pub const fn variant_name(self) -> &'static str {
-                match self { $(Self::$variant => stringify!($variant)),+ }
-            }
-
-            /// Human-facing plot-kind label used in reports.
-            #[must_use]
-            pub const fn label(self) -> &'static str {
-                match self { $(Self::$variant => $label),+ }
-            }
-
-            /// Stable kebab-case segment used in generated canvas keys.
-            #[must_use]
-            pub const fn key_segment(self) -> &'static str {
-                match self { $(Self::$variant => $key),+ }
-            }
-        }
     };
 }
 
 define_plot_kinds! {
-    Scatter => ("Scatter plot.", "scatter plot", "scatter-plot"),
-    Histogram => ("Single-series numeric histogram with an optional KDE-and-rug density composite.", "histogram", "histogram"),
-    Density => ("Gaussian kernel density estimate.", "density plot", "density-plot"),
-    Qq => ("Quantile-quantile plot against a standard normal distribution.", "Q-Q plot", "qq-plot"),
-    PointInterval => ("Point estimates with explicit lower and upper interval bounds.", "point-interval plot", "point-interval-plot"),
-    Line => ("Grouped ordered numeric series with optional precomputed ribbons.", "line plot", "line-plot"),
-    Trajectory => ("Explicit-group repeated trajectories with neutral connectors.", "trajectory plot", "trajectory-plot"),
-    LinePath => ("Explicit-group numeric paths in source-row order.", "line-path plot", "line-path-plot"),
-    Interaction => ("Precomputed interaction profiles with explicit bounds and optional closed trace styles.", "interaction plot", "interaction-plot"),
-    Coefficient => ("Named model coefficients with optional drawable bounds.", "coefficient plot", "coefficient-plot"),
-    Forest => ("Complete interval estimates with an explicit scientific null.", "forest plot", "forest-plot"),
-    Dumbbell => ("Horizontal paired endpoint estimates with optional replicate identity.", "dumbbell plot", "dumbbell-plot"),
-    Heatmap => ("Categorical grid with a continuous numeric fill.", "heatmap", "heatmap"),
-    Bar => ("Bar plot with CI error bars.", "bar plot", "bar-plot"),
-    HorizontalBar => ("Horizontal bar plot.", "horizontal bar plot", "horizontal-bar-plot"),
-    StackedBar => ("Stacked vertical bar plot using one categorical series.", "stacked bar plot", "stacked-bar-plot"),
-    StackedHorizontalBar => ("Stacked horizontal bar plot using one categorical series.", "stacked horizontal bar plot", "stacked-horizontal-bar-plot"),
-    Boxplot => ("Box-and-whisker plot.", "boxplot", "boxplot"),
-    Violin => ("Mirrored KDE violins with centered inner summaries.", "violin plot", "violin-plot"),
-    Raincloud => ("One-sided KDE clouds with separated summaries and complete observation strips.", "raincloud plot", "raincloud-plot"),
-    Regression => ("Regression plot (scatter + fit line).", "regression plot", "regression-plot"),
-    Marginal => ("Marginal plot (marginal histograms + central scatter).", "marginal plot", "marginal-plot"),
-    Matrix => ("Scatter matrix (small multiples).", "scatter matrix", "scatter-matrix"),
-    Beeswarm => ("Categorical rows of collision-separated points with continuous x and color values.", "beeswarm plot", "beeswarm-plot"),
-    Waterfall => ("Cumulative signed deltas between a base and terminal value.", "waterfall plot", "waterfall-plot"),
+    Scatter => "Scatter plot.",
+    Histogram => "Single-series numeric histogram with an optional KDE-and-rug density composite.",
+    Density => "Gaussian kernel density estimate.",
+    Qq => "Quantile-quantile plot against a standard normal distribution.",
+    PointInterval => "Point estimates with explicit lower and upper interval bounds.",
+    Line => "Grouped ordered numeric series with optional precomputed ribbons.",
+    Trajectory => "Explicit-group repeated trajectories with neutral connectors.",
+    LinePath => "Explicit-group numeric paths in source-row order.",
+    Interaction => "Precomputed interaction profiles with explicit bounds and optional closed trace styles.",
+    Coefficient => "Named model coefficients with optional drawable bounds.",
+    Forest => "Complete interval estimates with an explicit scientific null.",
+    Dumbbell => "Horizontal paired endpoint estimates with optional replicate identity.",
+    Heatmap => "Categorical grid with a continuous numeric fill.",
+    Bar => "Bar plot with CI error bars.",
+    HorizontalBar => "Horizontal bar plot.",
+    StackedBar => "Stacked vertical bar plot using one categorical series.",
+    StackedHorizontalBar => "Stacked horizontal bar plot using one categorical series.",
+    Boxplot => "Box-and-whisker plot.",
+    Violin => "Mirrored KDE violins with centered inner summaries.",
+    Raincloud => "One-sided KDE clouds with separated summaries and complete observation strips.",
+    Regression => "Regression plot (scatter + fit line).",
+    Marginal => "Marginal plot (marginal histograms + central scatter).",
+    Matrix => "Scatter matrix (small multiples).",
+    Beeswarm => "Categorical rows of collision-separated points with continuous x and color values.",
+    Waterfall => "Cumulative signed deltas between a base and terminal value.",
 }
 
 impl PlotKind {

@@ -283,7 +283,6 @@ impl Plot {
         reason = "one exhaustive pre-backend validator covers every typed chart channel"
     )]
     pub(crate) fn validate_channel_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        let family = kind.key_segment();
         if !self.panel_text_annotations().is_empty() {
             if kind == PlotKind::Matrix {
                 return Err(Error::Data(
@@ -294,7 +293,7 @@ impl Plot {
             for annotation in self.panel_text_annotations() {
                 if !corners.insert(annotation.corner()) {
                     return Err(Error::Data(format!(
-                        "{family}: duplicate panel text annotation corner {:?}",
+                        "plot kind {kind:?}: duplicate panel text annotation corner {:?}",
                         annotation.corner()
                     )));
                 }
@@ -303,7 +302,7 @@ impl Plot {
         if self.histogram_composite_geometry_input().is_some() {
             if kind != PlotKind::Histogram {
                 return Err(Error::Data(format!(
-                    "{family}: precomputed histogram composite geometry is supported only by Histogram"
+                    "plot kind {kind:?}: precomputed histogram composite geometry is supported only by Histogram"
                 )));
             }
             if self.has_facets() {
@@ -346,7 +345,7 @@ impl Plot {
         if self.raincloud_geometry_input().is_some() {
             if kind != PlotKind::Raincloud {
                 return Err(Error::Data(format!(
-                    "{family}: precomputed raincloud geometry is supported only by Raincloud"
+                    "plot kind {kind:?}: precomputed raincloud geometry is supported only by Raincloud"
                 )));
             }
             if self.has_facets() {
@@ -379,7 +378,7 @@ impl Plot {
         if self.histogram_composite_spec().is_enabled() {
             if kind != PlotKind::Histogram {
                 return Err(Error::Data(format!(
-                    "{family}: HistogramComposite is supported only by Histogram"
+                    "plot kind {kind:?}: HistogramComposite is supported only by Histogram"
                 )));
             }
             if self.histogram_stat_spec() != HistogramStat::Density {
@@ -393,7 +392,7 @@ impl Plot {
             && !matches!(kind, PlotKind::Boxplot | PlotKind::Violin)
         {
             return Err(Error::Data(format!(
-                "{family}: visible RawOverlay is supported only by Boxplot and Violin"
+                "plot kind {kind:?}: visible RawOverlay is supported only by Boxplot and Violin"
             )));
         }
         if matches!(kind, PlotKind::Trajectory | PlotKind::LinePath) {
@@ -416,7 +415,7 @@ impl Plot {
         if self.line_path_style_spec() != LinePathStyle::Neutral {
             if kind != PlotKind::LinePath {
                 return Err(Error::Data(format!(
-                    "{family}: LinePathStyle::Hue is supported only by LinePath"
+                    "plot kind {kind:?}: LinePathStyle::Hue is supported only by LinePath"
                 )));
             }
             if self.hue_col().is_none() {
@@ -450,7 +449,7 @@ impl Plot {
                 )));
             }
             return Err(Error::Data(format!(
-                "{family}: hue column {column:?} is not supported"
+                "plot kind {kind:?}: hue column {column:?} is not supported"
             )));
         }
         let supports_group = matches!(
@@ -473,7 +472,7 @@ impl Plot {
         );
         if let Some(column) = self.group_col().filter(|_| !supports_group) {
             return Err(Error::Data(format!(
-                "{family}: graphical group column {column:?} is not supported"
+                "plot kind {kind:?}: graphical group column {column:?} is not supported"
             )));
         }
         if matches!(
@@ -486,13 +485,13 @@ impl Plot {
         ) && self.group_col().is_none()
         {
             return Err(Error::Data(format!(
-                "{family}: an explicit graphical group column is required"
+                "plot kind {kind:?}: an explicit graphical group column is required"
             )));
         }
         if self.interaction_styles_spec().is_some() {
             if kind != PlotKind::Interaction {
                 return Err(Error::Data(format!(
-                    "{family}: interaction styles are supported only by Interaction"
+                    "plot kind {kind:?}: interaction styles are supported only by Interaction"
                 )));
             }
             if !self.markers_visible() {
@@ -504,7 +503,7 @@ impl Plot {
         if let Some(connectors) = self.interaction_connectors_spec() {
             if kind != PlotKind::Interaction {
                 return Err(Error::Data(format!(
-                    "{family}: connectors is supported only by Interaction"
+                    "plot kind {kind:?}: connectors is supported only by Interaction"
                 )));
             }
             if !connectors && self.interaction_styles_spec().is_some() {
@@ -527,42 +526,42 @@ impl Plot {
                 .is_some_and(|column| Some(column) == self.x_col())
         {
             return Err(Error::Data(format!(
-                "{family}: hue must use a different column from the x category; a redundant hue channel is not silently ignored"
+                "plot kind {kind:?}: hue must use a different column from the x category; a redundant hue channel is not silently ignored"
             )));
         }
 
         let supports_color = matches!(kind, PlotKind::Heatmap | PlotKind::Beeswarm);
         if let Some(column) = self.color_col().filter(|_| !supports_color) {
             return Err(Error::Data(format!(
-                "{family}: continuous color column {column:?} is not supported"
+                "plot kind {kind:?}: continuous color column {column:?} is not supported"
             )));
         }
         if self.color_label_text().is_some() && !supports_color {
             return Err(Error::Data(format!(
-                "{family}: a continuous color label is not supported"
+                "plot kind {kind:?}: a continuous color label is not supported"
             )));
         }
         if let Some((minimum, maximum)) = self.beeswarm_color_limits_spec() {
             if kind != PlotKind::Beeswarm {
                 return Err(Error::Data(format!(
-                    "{family}: beeswarm color limits are supported only by Beeswarm"
+                    "plot kind {kind:?}: beeswarm color limits are supported only by Beeswarm"
                 )));
             }
             validate_beeswarm_color_limits(minimum, maximum)?;
         }
         if self.heatmap_highlight_col().is_some() && kind != PlotKind::Heatmap {
             return Err(Error::Data(format!(
-                "{family}: a heatmap highlight column is not supported"
+                "plot kind {kind:?}: a heatmap highlight column is not supported"
             )));
         }
         if self.estimate_labels_spec().is_some() && kind != PlotKind::Coefficient {
             return Err(Error::Data(format!(
-                "{family}: numeric estimate labels are supported only by Coefficient"
+                "plot kind {kind:?}: numeric estimate labels are supported only by Coefficient"
             )));
         }
         if self.coefficient_reference_line_value().is_some() && kind != PlotKind::Coefficient {
             return Err(Error::Data(format!(
-                "{family}: reference_line is supported only by Coefficient; Forest receives its reference in Plot::forest"
+                "plot kind {kind:?}: reference_line is supported only by Coefficient; Forest receives its reference in Plot::forest"
             )));
         }
         if self.estimate_status_values().is_some()
@@ -572,7 +571,7 @@ impl Plot {
             )
         {
             return Err(Error::Data(format!(
-                "{family}: estimate status is supported only by PointInterval, Coefficient, and Forest"
+                "plot kind {kind:?}: estimate status is supported only by PointInterval, Coefficient, and Forest"
             )));
         }
         let supports_bounds = matches!(
@@ -585,19 +584,19 @@ impl Plot {
         );
         if self.interval_bound_cols().is_some() && !supports_bounds {
             return Err(Error::Data(format!(
-                "{family}: interval bound columns are not supported"
+                "plot kind {kind:?}: interval bound columns are not supported"
             )));
         }
         if self.waterfall_labels_spec().is_some() && kind != PlotKind::Waterfall {
             return Err(Error::Data(format!(
-                "{family}: waterfall annotation labels are supported only by Waterfall"
+                "plot kind {kind:?}: waterfall annotation labels are supported only by Waterfall"
             )));
         }
         if kind == PlotKind::Matrix {
             self.validate_matrix_variables()?;
         } else if !self.matrix_variable_names().is_empty() {
             return Err(Error::Data(format!(
-                "{family}: matrix variables are not supported"
+                "plot kind {kind:?}: matrix variables are not supported"
             )));
         }
         Ok(())

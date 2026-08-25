@@ -168,19 +168,6 @@ pub enum RegressionBand {
 }
 
 impl RegressionBand {
-    /// Fixed plot-owned provenance represented in legends and included in reports.
-    #[must_use]
-    pub const fn provenance(self) -> &'static str {
-        match self {
-            Self::PointwiseMean95 => {
-                "ordinary least-squares fit with classical pointwise mean-response Student-t 95% confidence band"
-            }
-            Self::Hidden => {
-                "descriptive ordinary least-squares fit with confidence band hidden and no interval claim"
-            }
-        }
-    }
-
     pub(crate) const fn legend_label(self) -> &'static str {
         match self {
             Self::PointwiseMean95 => "Pointwise 95% Student-t mean band",

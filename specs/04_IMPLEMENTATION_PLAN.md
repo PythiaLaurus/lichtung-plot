@@ -37,12 +37,12 @@ and commit each phase as one logical change before starting the next phase.
 
 | Issue | Required outcome | Phase | Status |
 | --- | --- | --- | --- |
-| 1 | Internalize `decorations` and `TitleBlock` | R1 | PENDING |
-| 2 | Delete overlay and regression report-provenance APIs | R1 | PENDING |
-| 3 | Delete public kind and theme inventories and report naming | R1 | PENDING |
+| 1 | Internalize `decorations` and `TitleBlock` | R1 | COMPLETE |
+| 2 | Delete overlay and regression report-provenance APIs | R1 | COMPLETE |
+| 3 | Delete public kind and theme inventories and report naming | R1 | COMPLETE |
 | 4 | Restrict erasure and Canvas insertion to exact families | R2 | PENDING |
 | 5 | Remove duplicate default PNG compression identity | R3 | PENDING |
-| 6 | Expose `Theme` only from the crate root | R1 | PENDING |
+| 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | PENDING |
 | 8 | Move PNG configuration to explicit terminal operations | R3 | PENDING |
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | PENDING |
@@ -54,7 +54,10 @@ implementation phases were admitted here.
 
 ## Phase R1: Public Surface Cleanup
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: focused library, lifecycle, theme, layout, raw-overlay,
+composition, and doctest coverage plus `just verify` passed on 2026-08-25.
 
 Remove accidental module exposure and application/report-oriented
 introspection while preserving renderer-owned behavior.

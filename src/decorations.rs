@@ -7,4 +7,4 @@ pub(crate) mod legend;
 pub(crate) mod panel_text;
 pub(crate) mod plan;
 /// Title, subtitle, and caption rendering.
-pub mod title_block;
+pub(crate) mod title_block;

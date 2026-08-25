@@ -1,5 +1,20 @@
 //! A strongly typed scientific plotting and SVG rendering library.
 //!
+//! The built-in theme type is available from the crate root:
+//! ```
+//! let _ = lichtung_plot::Theme::Publication;
+//! ```
+//!
+//! Its implementation module is private:
+//! ```compile_fail
+//! use lichtung_plot::theme::Theme;
+//! ```
+//!
+//! Decoration rendering is also private:
+//! ```compile_fail
+//! use lichtung_plot::decorations::title_block::TitleBlock;
+//! ```
+//!
 //! ```compile_fail
 //! use lichtung_plot::layout::Layout;
 //! ```
@@ -9,8 +24,7 @@
 mod builder;
 mod canvas;
 mod data;
-/// Non-data chart decorations: legends, titles, and captions.
-pub mod decorations;
+mod decorations;
 mod error;
 mod font;
 mod geometry;
@@ -33,8 +47,7 @@ mod spec;
 pub mod stats;
 #[cfg(test)]
 mod test_support;
-/// Publication themes (`Theme::Nature`, `Theme::Science`, ...).
-pub mod theme;
+mod theme;
 mod values;
 
 pub use builder::Plot;

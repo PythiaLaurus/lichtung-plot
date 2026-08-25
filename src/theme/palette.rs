@@ -1,4 +1,4 @@
-//! `lichtung-plot::theme` — publication-grade visual themes.
+//! Publication-grade visual themes.
 //!
 //! Every theme is hardcoded so visual regressions remain reviewable and
 //! re-renders are byte-stable under the same font environment.
@@ -25,15 +25,6 @@ macro_rules! define_themes {
         }
 
         impl Theme {
-            /// All predefined themes in stable declaration order.
-            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
-
-            /// Rust variant name used by capability inventories.
-            #[must_use]
-            pub const fn variant_name(self) -> &'static str {
-                match self { $(Self::$variant => stringify!($variant)),+ }
-            }
-
             pub(crate) fn palette(self) -> ThemePalette {
                 match self { $(Self::$variant => $palette()),+ }
             }
@@ -304,7 +295,12 @@ mod tests {
 
     #[test]
     fn every_theme_returns_distinct_palettes() {
-        for &t in Theme::ALL {
+        for t in [
+            Theme::Publication,
+            Theme::Nature,
+            Theme::Science,
+            Theme::CHI,
+        ] {
             let p = t.palette();
             assert!(!p.colors.is_empty(), "{t:?} must have colors");
             assert!(!p.font_family.is_empty());
@@ -328,7 +324,12 @@ mod tests {
         // Every theme should opt in to the layout grammar by
         // default; users can disable individual elements by
         // toggling the corresponding flag on a custom palette.
-        for &t in Theme::ALL {
+        for t in [
+            Theme::Publication,
+            Theme::Nature,
+            Theme::Science,
+            Theme::CHI,
+        ] {
             let p = t.palette();
             assert!(p.show_frame, "{t:?}: frame must be visible by default");
             assert!(p.show_grid, "{t:?}: grid must be visible by default");
@@ -353,17 +354,25 @@ mod tests {
 
     #[test]
     fn all_themes_use_readable_default_tick_typography() {
-        assert!(Theme::ALL
-            .iter()
-            .copied()
-            .all(|theme| theme.palette().tick_font_size == TICK_FONT_SIZE));
+        assert!([
+            Theme::Publication,
+            Theme::Nature,
+            Theme::Science,
+            Theme::CHI,
+        ]
+        .into_iter()
+        .all(|theme| theme.palette().tick_font_size == TICK_FONT_SIZE));
     }
 
     #[test]
     fn all_themes_keep_non_axis_detail_typography_compact() {
-        assert!(Theme::ALL
-            .iter()
-            .copied()
-            .all(|theme| theme.palette().detail_font_size == 14));
+        assert!([
+            Theme::Publication,
+            Theme::Nature,
+            Theme::Science,
+            Theme::CHI,
+        ]
+        .into_iter()
+        .all(|theme| theme.palette().detail_font_size == 14));
     }
 }

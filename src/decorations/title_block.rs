@@ -1,4 +1,4 @@
-//! `lichtung-plot::decorations::title_block` — title / subtitle / caption rendering.
+//! Title, subtitle, and caption rendering.
 //!
 //! A `TitleBlock` sits outside the data plot area:
 //! - Title is drawn at the top, centered horizontally on the canvas.
@@ -24,21 +24,21 @@ use crate::Error;
 
 /// A canvas-level title / subtitle / caption block.
 #[derive(Debug, Clone, Default)]
-pub struct TitleBlock {
+pub(crate) struct TitleBlock {
     /// Main title text (top of the canvas).
-    pub title: Option<String>,
+    title: Option<String>,
     /// Subtitle text (below the title, smaller).
-    pub subtitle: Option<String>,
+    subtitle: Option<String>,
     /// Caption text (bottom of the canvas).
-    pub caption: Option<String>,
+    caption: Option<String>,
     /// Font family for all three text lines.
-    pub font_family: String,
+    font_family: String,
 }
 
 impl TitleBlock {
     /// Create an empty `TitleBlock` (no text rendered).
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             font_family: crate::DEFAULT_FONT_FAMILY_STACK.to_string(),
             ..Self::default()
@@ -47,28 +47,28 @@ impl TitleBlock {
 
     /// Set the title text.
     #[must_use]
-    pub fn title(mut self, title: impl Into<String>) -> Self {
+    pub(crate) fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
         self
     }
 
     /// Set the subtitle text.
     #[must_use]
-    pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
+    pub(crate) fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
         self.subtitle = Some(subtitle.into());
         self
     }
 
     /// Set the caption text.
     #[must_use]
-    pub fn caption(mut self, caption: impl Into<String>) -> Self {
+    pub(crate) fn caption(mut self, caption: impl Into<String>) -> Self {
         self.caption = Some(caption.into());
         self
     }
 
     /// Set the font family used for title/subtitle/caption.
     #[must_use]
-    pub fn font_family(mut self, family: impl Into<String>) -> Self {
+    pub(crate) fn font_family(mut self, family: impl Into<String>) -> Self {
         self.font_family = family.into();
         self
     }
@@ -77,7 +77,7 @@ impl TitleBlock {
     /// non-empty. The orchestrator uses this to skip drawing
     /// the title block when nothing is set.
     #[must_use]
-    pub fn has_content(&self) -> bool {
+    pub(crate) fn has_content(&self) -> bool {
         self.title.as_ref().is_some_and(|s| !s.is_empty())
             || self.subtitle.as_ref().is_some_and(|s| !s.is_empty())
             || self.caption.as_ref().is_some_and(|s| !s.is_empty())

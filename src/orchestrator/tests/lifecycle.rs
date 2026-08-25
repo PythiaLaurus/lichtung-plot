@@ -157,7 +157,33 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
 #[test]
 fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     let data = fixture();
-    for &kind in PlotKind::ALL {
+    for kind in [
+        PlotKind::Scatter,
+        PlotKind::Histogram,
+        PlotKind::Density,
+        PlotKind::Qq,
+        PlotKind::PointInterval,
+        PlotKind::Line,
+        PlotKind::Trajectory,
+        PlotKind::LinePath,
+        PlotKind::Interaction,
+        PlotKind::Coefficient,
+        PlotKind::Forest,
+        PlotKind::Dumbbell,
+        PlotKind::Heatmap,
+        PlotKind::Bar,
+        PlotKind::HorizontalBar,
+        PlotKind::StackedBar,
+        PlotKind::StackedHorizontalBar,
+        PlotKind::Boxplot,
+        PlotKind::Violin,
+        PlotKind::Raincloud,
+        PlotKind::Regression,
+        PlotKind::Marginal,
+        PlotKind::Matrix,
+        PlotKind::Beeswarm,
+        PlotKind::Waterfall,
+    ] {
         let chart = configured_chart(&data, kind);
         let mut backend = RecordingBackend::default();
 
