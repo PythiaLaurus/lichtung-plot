@@ -1,0 +1,401 @@
+# Theme System
+
+**Status**: Approved implementation target; non-current until Phase T6
+
+## Purpose
+
+This specification defines the approved replacement theme, color, and
+data-color-scale model for `lichtung-plot`. `01_ARCHITECTURE.md` and
+`02_RENDERING_CONTRACT.md` remain authoritative for the implemented public API
+until Phase T6 in `91_IMPLEMENTATION_PLAN.md` performs the atomic migration. The
+target names and behaviors below are not a second current API and must not be
+introduced as aliases or dormant placeholders before their owning phase.
+
+After that migration, this model governs standalone plots, facets, composed
+canvases, shared legends, text panels, SVG, and PNG. It does not authorize
+mutable global configuration, dynamic style plugins, backend-specific
+properties, or a second theme representation.
+
+## Concepts
+
+- A **theme** is one complete immutable set of visual defaults. It owns
+  appearance, not scientific data, statistical behavior, semantic labels, or
+  output routing.
+- A **preset** is a constructor for a complete theme. Publication, Nature,
+  Science, and CHI are presets, not enum identities or runtime modes.
+- A **component theme** is one role-based part of a complete theme, such as axes,
+  legends, marks, or annotations. Components are not independently inherited at
+  render time.
+- A **data-color scale** maps categorical or numeric data values to opaque
+  colors. Scale resolution is distinct from non-data theme appearance.
+- An **exact element style** configures one caller-owned guide, layer,
+  annotation, or mark. It has narrower scope and higher precedence than a theme
+  or data scale.
+- A **policy** controls semantic presence or placement, such as legend
+  visibility, marker visibility, category-label sharing, or content supplied by
+  the caller. A theme does not replace a policy.
+- A **renderer invariant** is fixed behavior such as clipping, draw order,
+  geometry validity, text anchoring, semantic orientation, or backend protocol.
+  It is not themeable.
+- A **resolved theme** is the private complete value consumed by preflight,
+  measurement, collision planning, legend construction, and rendering. It is
+  not a public inspection or extension surface.
+
+## Target Public Model
+
+The public foundations consist of these roles:
+
+| Type | Responsibility |
+| --- | --- |
+| `Theme` | One complete immutable renderable theme |
+| `ThemeBuilder` | Construction-only editor initialized from one complete theme |
+| `SurfaceTheme` | Canvas and panel paints |
+| `TypographyTheme` | Every admitted role-based text style |
+| `TextTheme` | One complete text role: font stack, color, size, weight, and line height |
+| `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, gaps, and spacing |
+| `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and spacing |
+| `CanvasLegendPolicy` | Per-plot, hidden, or one shared Canvas legend behavior |
+| `CompositionTheme` | Facet strips, Canvas headers, row titles, and text-panel chrome |
+| `MarkTheme` | Common point, line, fill, interval, ribbon, reference, outline, missing-mark, and supplemental-accent defaults |
+| `AnnotationTheme` | Panel-text, significance, value-label, and highlight geometry plus contrast-backdrop policy |
+| `ColorScales` | Default qualitative, sequential, and diverging data-color scales |
+| `FontStack` | Ordered validated generation-host font-family preferences |
+| `FontFamily` | One validated named family or closed generic family |
+| `OpaqueColor` | RGB-only data-scale color |
+| `Color` | Complete RGBA paint color |
+| `QualitativePalette` | Ordered categorical colors with explicit capacity behavior |
+| `AccentPalette` | Ordered non-data colors for primary and supplemental mark roles |
+| `CategoricalColorMap` | Exact raw categorical identity-to-color mapping |
+| `SequentialGradient` | Ordered low-to-high numeric color mapping |
+| `DivergingGradient` | Ordered low-to-neutral-to-high numeric color mapping |
+| `CategoricalColorScale` | Plot-local ordered palette or exact keyed mapping |
+| `ContinuousColorScale` | Plot-local sequential or diverging domain and optional gradient replacement |
+
+The component types have private fields, typed accessors, and validated
+construction. They do not expose string-keyed property maps or backend style
+objects. The visual-property inventory in Phase T2 assigns each admitted field
+to exactly one of these components before the public API is implemented.
+
+`Theme::publication()`, `Theme::nature()`, `Theme::science()`, and
+`Theme::chi()` each return a complete validated value. There is no public preset
+enum. `Theme::customize()` returns a `ThemeBuilder` initialized with the complete
+source theme. The builder may replace components or use typed convenience
+setters, but `build()` returns one complete validated `Theme`. A builder is never
+stored by `Plot`, `Canvas`, or the renderer and is not a sparse runtime override.
+
+Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
+`HeatmapScale`, RGB tuple inputs, and multiplicative opacity naming atomically
+with the target types that own those responsibilities. It migrates every
+repository caller and deletes the replaced representations; target names are not
+compatibility wrappers around the current API.
+
+## Component Boundaries
+
+The component taxonomy is role-based rather than plot-family-based:
+
+- `SurfaceTheme` owns the root canvas and plot-panel paints.
+- `TypographyTheme` owns title, subtitle, caption, axis-title, tick-label,
+  legend-title, legend-label, facet/header, body, detail, annotation, and
+  automatic light/dark contrast text roles. Each role is complete. A ThemeBuilder
+  bulk font operation may update all roles, and an individual role may use a
+  different stack.
+- `AxisTheme` owns nonsemantic axis chrome. Frame sides, grid lines, and tick
+  marks may be absent. It does not decide whether caller-provided titles, exact
+  ticks, tick labels, or axis labels exist.
+- `LegendTheme` owns appearance and measured geometry of discrete legends and
+  continuous color guides. Existing legend policies continue to own visibility
+  and placement.
+- `CompositionTheme` owns Canvas and facet chrome. It does not own panel data,
+  grid occupancy, shared-range policy, or text-panel content.
+- `MarkTheme` owns common visual defaults by semantic mark role, including one
+  supplemental accent palette for unkeyed primary and appended mark roles. A
+  specialized component is justified only when a mark has genuinely distinct
+  semantics, not merely because one renderer currently contains a hardcoded
+  constant.
+- `AnnotationTheme` owns non-text geometry and spacing for caller-provided and
+  renderer-generated annotations, together with the opaque planning backdrop
+  used for automatic contrast on transparent output. Annotation text paint and
+  metrics remain `TypographyTheme` roles. `AnnotationTheme` does not decide
+  whether caller-provided annotation content is present.
+- `ColorScales` owns default data-color mappings. Foreground, surfaces, grid,
+  text, neutral references, and missing marks are not qualitative palette slots.
+
+Anchor, rotation, orientation, clipping, z-order, statistical geometry,
+collision rules, and minimum representable geometry remain renderer invariants.
+Bar spacing, legend policy, marker and connector visibility, category-label
+sharing, title and label content, and annotation presence remain explicit
+Plot/Canvas configuration or input.
+
+## Ownership And Inheritance
+
+`Plot` stores an optional complete explicit theme. Absence has two meanings
+selected only by the render owner:
+
+- A standalone Plot without an explicit theme resolves to
+  `Theme::publication()`.
+- A Plot inside a Canvas without an explicit theme inherits the Canvas root
+  theme.
+
+`Canvas` stores one complete root theme and defaults to `Theme::publication()`.
+An explicit Plot theme completely replaces the inherited theme for that plot;
+components are not merged. Facets inherit their owning Plot's one resolved
+theme and introduce no additional theme scope.
+
+Canvas-owned title blocks, shared headers, row titles, text panels, surfaces,
+and shared-legend chrome always use the Canvas root theme. Plot titles, plot
+subtitles, axes, marks, annotations, and panel chrome use the resolved Plot
+theme. A composed Plot's panel surface comes from its Plot theme; it never
+repaints the Canvas root surface.
+
+Theme state is immutable and owner-local. There is no process-global,
+thread-local, environment-selected, backend-selected, or asynchronously scoped
+theme.
+
+## Resolution And Precedence
+
+For a property admitted at multiple scopes, precedence from highest to lowest is:
+
+1. Exact element style on one guide, layer, annotation, or mark.
+2. Plot-local categorical or continuous data-color scale configuration.
+3. Complete explicit Plot theme.
+4. Complete inherited Canvas theme.
+5. Complete Publication library default.
+
+Absence at one scope selects the next applicable owner; it does not copy or
+mutate that owner. A Plot scale replaces only the relevant scale and leaves all
+other theme components unchanged. A complete explicit Plot theme does not merge
+with its Canvas theme.
+
+The renderer resolves theme and scale inputs before canonical plot validation,
+layout measurement, or backend begin. One private resolved theme and the
+resolved scales derived from it are reused unchanged through preflight,
+measurement, collision planning, legend construction, scene creation, and final
+rendering. Renderers and backends do not reconstruct presets or look up theme
+state late.
+
+## Color And Alpha
+
+`OpaqueColor` stores three `u8` channels and is `Copy` and `Eq`.
+`OpaqueColor::rgb(r, g, b)` is infallible and
+`OpaqueColor::hex("#RRGGBB")` accepts exactly six hexadecimal digits encoding
+three channels after the leading `#`.
+
+`Color` stores red, green, blue, and alpha as four `u8` channels and is `Copy`
+and `Eq`. `Color::rgb(r, g, b)` sets alpha to 255;
+`Color::rgba(r, g, b, a)` sets all channels;
+`Color::hex("#RRGGBB")` and `Color::hex("#RRGGBBAA")` accept the two exact
+forms; and a consuming alpha setter replaces the alpha channel. Conversion from
+`OpaqueColor` to `Color` sets alpha to 255.
+
+Data-color palettes, exact categorical maps, and continuous gradients consume
+`OpaqueColor`, not `Color`. They map data to chromatic identity and do not
+silently introduce a data-alpha aesthetic. Mark and typography roles combine a
+resolved opaque data color with their one alpha value to produce a final private
+RGBA paint. Exact element paints may supply `Color` directly.
+
+Every final fill, stroke, text paint, bracket paint, outline, and rendered
+gradient stop has exactly one RGBA color. Theme mark alpha combines only with an
+opaque scale color. An exact element `Color` replaces that complete RGBA paint;
+therefore `Color::rgb` intentionally makes an exact element opaque. If the same
+exact style also exposes a separate alpha setter, that alpha replaces the
+`Color` alpha after all color resolution, regardless of builder call order.
+Alpha values are never multiplied. Fill and stroke are independent paints. SVG
+emits the one alpha through the property appropriate to the paint and does not
+combine RGBA alpha with element-wide opacity.
+
+Canvas and panel surfaces accept RGBA `Color`. The SVG backend does not insert a
+hardcoded white root. Transparent SVG and PNG output preserves the resolved
+surface alpha, and composed panel colors composite over the Canvas surface in
+document order.
+
+## Qualitative Scales
+
+A qualitative palette assigns colors to unordered categorical identities by
+resolved domain order. It is not a numeric gradient and does not imply
+magnitude.
+
+Caller-created palettes select capacity behavior explicitly:
+
+- A fixed palette rejects during preflight when the resolved domain requires
+  more colors than supplied.
+- An extendable palette preserves every supplied color as a stable prefix and
+  deterministically generates additional colors. It never cycles.
+
+Every extendable palette requires a nonempty seed prefix. Extension operates in
+OKLab/OKLCH, preserves that exact prefix, derives its lightness and chroma
+character from the supplied seeds, reduces chroma deterministically for sRGB
+gamut fit, and chooses each next candidate by maximum minimum perceptual
+distance from colors already selected. Built-in presets use their curated colors
+as seeds; caller-created extendable palettes use their caller-supplied colors.
+The first-party candidate order, gamut reduction, distance calculation, and
+tie-breaking are one fixed implementation pinned by exact tests and are not
+caller-selectable strategies. The generated prefix is independent of the final
+requested count, so adding a category does not recolor existing categories.
+Very large domains necessarily become less distinguishable; the renderer does
+not claim unlimited color-only perceptual separation.
+
+`CategoricalColorMap` binds exact raw categorical identities to
+`OpaqueColor`. Keys are the normalized semantic strings carried by
+`CategoryValues`, before display aliases or humanization. Keys are nonempty,
+trimmed, control-free, and unique. Every used identity must have a mapping.
+Unused mappings are allowed so one map can cover related plots, sparse facets,
+and Canvas panels. Repeated caller-selected colors are allowed and never
+silently replaced.
+
+Exact maps and Plot-local palettes apply to every plot family that consumes the
+same hue or positioned-series color semantics. A family-specific exception
+requires a distinct semantic owner; implementation history is not sufficient.
+
+Exact categorical maps have no anonymous slots. `AccentPalette` is a separate
+nonempty, always-extendable sequence using the same deterministic extension
+algorithm. Unkeyed primary colors and automatic supplemental `PointLayer` colors
+resolve from the Plot theme's `MarkTheme` accent palette, not from a categorical
+map. That accent sequence is stable and independent of categorical domain size;
+an exact local point-layer color remains its final override.
+
+An unkeyed primary mark consumes accent slot zero. Its first appended
+`PointLayer` consumes slot one. A primary colored by a categorical scale consumes
+no accent slot, so its first appended `PointLayer` consumes slot zero. Later
+layers consume consecutive slots in append order. A layer with an exact color
+still consumes its accent position so adding or removing that override cannot
+recolor later automatic layers.
+
+Categorical domain order is deterministic first-observed order unless an
+explicit current ordering contract says otherwise. Facets resolve one domain
+from the complete parent Plot before panel slicing. A Canvas shared legend
+resolves one row-major domain for each raw semantic color field across every
+plot with visible marks in that field, including a plot whose own legend entries
+are hidden. Per-plot legends retain plot-local domains.
+
+## Continuous Scales
+
+Sequential scales map low-to-high numeric values through one
+`SequentialGradient`. Diverging scales map values below and above one explicit
+semantic center through a `DivergingGradient`; the center maps exactly to its
+neutral color. Automatic diverging domains are symmetric around the center when
+representable. Explicit limits remain exact and must contain the center.
+
+Gradients contain validated ordered opaque color stops. Interpolation uses the
+fixed first-party OKLab model, with deterministic conversion and sRGB gamut
+handling. There is no backend-selected interpolation or callback. Constant
+sequential domains use the gradient midpoint. Constant diverging domains at the
+center use the neutral color.
+
+A Plot-local continuous scale may replace the theme's sequential or diverging
+gradient without replacing non-data appearance. Heatmaps, beeswarms, their
+marks, gradients, and color guides consume the same resolved scale. Missing
+values use the missing-mark role from `MarkTheme`, not a palette endpoint.
+Color-guide text and chrome use `LegendTheme` and `TypographyTheme`; automatic
+cell-label contrast uses the light/dark `TypographyTheme` roles and the
+`AnnotationTheme` planning backdrop.
+
+## Shared Legends
+
+A shared Canvas legend uses Canvas `LegendTheme`, Canvas typography, and Canvas
+surface roles for its container. Its entries retain the exact final glyphs
+resolved by their owning plots, including shape, line pattern, fill, outline,
+and RGBA paint.
+
+Mixed explicit Plot themes are allowed. Entries with distinct semantic
+identities coexist. Entries with the same typed semantic identity merge only
+when their resolved labels and complete glyphs are equal. Conflicting glyphs,
+including colors or alpha, reject during Canvas preflight rather than allowing
+one theme or panel to win. The shared legend never reconstructs generic swatches
+from the Canvas palette.
+
+Canvas legend policy owns composition behavior:
+
+- `PerPlot` preserves each Plot legend policy and position.
+- `Hidden` suppresses all Canvas legend entries.
+- `Shared` suppresses per-panel legend placement and owns the one shared
+  position. A Plot with hidden legend policy contributes no entries but still
+  contributes visible mark identities to global color-domain coordination. A
+  Plot with automatic policy contributes its renderer-owned entries. A Plot with
+  an explicit per-plot legend position rejects under `Shared` because that
+  position cannot be honored.
+
+One shared legend requires one exact typed semantic title identity and one
+resolved display title across all contributing entries. Conflicting field
+identities, titles, labels, or glyphs reject. Multiple independently titled
+legend sections remain deferred rather than being silently concatenated.
+
+A labeled `PointLayer` owns a typed layer-entry identity. When its Plot already
+has a categorical legend title, the layer entry uses that title for display but
+does not become a categorical identity or affect its domain. Otherwise it uses
+the standard literal `series` title identity. Shared-legend title compatibility
+then follows the same exact rule as every other entry.
+
+## Visibility And Content
+
+A theme may omit nonsemantic visual chrome such as grid lines, frame sides,
+tick marks, panel outlines, or a legend box. It cannot remove caller-provided or
+semantic content. Titles, subtitles, captions, axis labels, exact ticks, tick
+labels, annotations, and requested legends remain present unless an explicit
+current Plot or Canvas policy owns their absence.
+
+Theme changes therefore cannot make caller-provided text or annotations
+silently disappear. Renderer-owned layout reserves and measures every present
+element using the same resolved style that final rendering uses.
+
+## Fonts
+
+`FontFamily` is either one trimmed, control-free named family or one closed
+generic family: serif, sans-serif, or monospace. `FontStack` owns a nonempty
+ordered list of those values. It is not an opaque caller-authored CSS expression.
+Each `TextTheme` contains a complete stack. ThemeBuilder may replace all
+typography stacks together or one text role independently.
+
+Before text measurement and scene creation, the generation host resolves the
+first installed face in each used stack as the primary face. A generic family is
+resolved through the generation host's font database. If the primary face lacks
+a required glyph, resolution continues through later stack entries for that
+glyph. Measurement and drawing use the same resolved face per glyph. Rendering
+fails if any required glyph has no face in the supplied stack. No font is
+downloaded, provisioned, embedded, or read from a network or project cache.
+
+Preserve-text SVG emits the validated ordered stack; outlined SVG and PNG use
+generation-host fonts. Text wrapping, text-derived layout geometry, outlined
+glyph paths, and PNG bytes require the same installed-font environment. The
+remaining scene structure is deterministic for identical inputs and options.
+
+## Contrast
+
+Built-in presets have regression evidence for their admitted text/background
+and chrome/background contrast pairs. Custom-theme contrast remains caller
+owned; general theme construction does not reject a complete theme solely for
+failing a universal contrast threshold.
+
+For renderer-selected text over variable fills, `TypographyTheme` supplies
+complete light and dark text roles. The renderer composites the fill over the
+resolved panel surface and then the Canvas surface. If that stack remains
+translucent, contrast planning composites it over the opaque backdrop stored in
+`AnnotationTheme`; that backdrop affects selection only and is not painted. The
+light and dark candidate text colors must be opaque. The renderer computes
+relative luminance deterministically and uses the candidate with the greater
+contrast ratio. Transparent root output cannot guarantee contrast against the
+recipient's actual unknown background and remains caller-owned.
+
+## Validation
+
+`ThemeBuilder::build` and component constructors validate all data-independent
+invariants, including nonempty font stacks and palettes, finite positive sizes
+and widths, finite nonnegative spacing, valid line heights, ordered gradient
+stops, opaque automatic contrast candidates, and structurally complete
+components.
+
+Plot or Canvas preflight validates data-dependent invariants after inheritance
+and scale selection, including fixed-palette capacity, exact-map completeness,
+continuous domains and centers, font availability, shared-legend compatibility,
+layout fit, and representable geometry. Validation errors identify the owner,
+required and available capacity where relevant, and missing semantic identities.
+There is no cycling, substitution, generated fallback for fixed palettes, font
+fallback outside the supplied stack, or alternate renderer after an error.
+
+## Public Foundations Limit
+
+The first public customization milestone includes the component and scale roles
+named in this specification. It does not include CSS selectors, string-keyed
+properties, callbacks, dynamic theme extensions, process-global defaults,
+backend dash strings, font loading, data-mapped alpha, arbitrary blend modes,
+animation, or one theme component per plot family. Such features require a new
+canonical contract and are not reserved by placeholder API.

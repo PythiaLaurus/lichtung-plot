@@ -10,10 +10,11 @@ available in Git history through commit `0dcff20`; it is not a second current
 plan.
 
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
-implemented renderer. Custom themes and palettes remain non-current under
-`05_DEFERRED_FEATURES.md` until Phase T1 defines their exact contract and updates
-the canonical specifications. Later implementation phases do not begin merely
-because they are listed here.
+implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement
+architecture, not a second current API. Its custom themes, colors, scales, and
+inheritance behavior remain non-current until Phase T6 performs the atomic public
+migration. Later implementation phases do not begin merely because they are
+listed here.
 
 Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
 phase when it starts, completes, changes scope, or discovers a blocker. Complete
@@ -36,12 +37,12 @@ discussion:
   planning must resolve before preflight and remain identical during final
   rendering.
 
-The exact public types, merge semantics, component boundaries, validation, and
-scope of local overrides remain Phase T1 decisions.
+Phase T1 settled the exact public types, replacement semantics, component
+boundaries, validation, and scope of local overrides in `03_THEME_SYSTEM.md`.
 
 ## Reference Philosophy
 
-The provisional architecture combines three relevant models:
+The approved architecture combines three relevant models:
 
 - ggplot2 supplies the plotting-specific separation between non-data theme
   appearance, data-to-aesthetic scales, and exact layer aesthetics.
@@ -54,9 +55,9 @@ The design should not copy Flutter's widget-context lookup, reactive rebuilding,
 animation, or dynamic theme extensions. It should not copy Matplotlib's mutable
 process-global runtime configuration or CSS's selector-driven open cascade.
 
-## Provisional Contract Rules
+## Target Contract Rules
 
-Phase T1 must confirm, revise, or reject these rules explicitly:
+Phase T1 confirmed these rules for the approved target:
 
 - A theme owns visual defaults. It does not own scientific data, statistical
   behavior, semantic labels, or output routing.
@@ -80,7 +81,7 @@ Phase T1 must confirm, revise, or reject these rules explicitly:
 
 | Phase | Objective | Status |
 | --- | --- | --- |
-| T1 | Canonical theme architecture contract | IN PROGRESS |
+| T1 | Approved theme architecture contract | COMPLETE |
 | T2 | Complete visual-property ownership inventory | PENDING |
 | T3 | One private resolved-theme pipeline | PENDING |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
@@ -91,17 +92,29 @@ Phase T1 must confirm, revise, or reject these rules explicitly:
 | T6 | Public immutable theme and scale API | PENDING |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
-## Phase T1: Canonical Theme Architecture
+## Phase T1: Approved Theme Architecture
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
+
+Decision record: `03_THEME_SYSTEM.md` defines the complete immutable Theme,
+construction-only builder, role-based components, explicit Canvas inheritance,
+complete Plot replacement, typed font stacks, RGBA paints, opaque data-scale
+colors, deterministic extendable palettes, exact categorical maps, OKLab/OKLCH
+color math, transparent surfaces, content-policy boundaries, and exact
+shared-legend compatibility. No production code changed in this phase.
+
+Verification: independent architecture review found no remaining specification
+contradictions, retired spec-path searches were empty, and `just verify` passed
+on 2026-08-26.
 
 Define the model before exposing or moving implementation state.
 
 Scope:
 
-- Add a dedicated canonical theme-system specification and update
-  `01_ARCHITECTURE.md`, `02_RENDERING_CONTRACT.md`, and
-  `05_DEFERRED_FEATURES.md` to agree with it.
+- Add a dedicated approved theme-system target specification, keep
+  `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` unambiguous about the
+  implemented API, and update `99_DEFERRED_FEATURES.md` for newly admitted and
+  still-deferred boundaries.
 - Define the exact meanings and boundaries of theme, preset, palette, scale,
   semantic color, component style, element style, visibility policy, renderer
   invariant, and resolved theme.
@@ -125,8 +138,9 @@ Scope:
 
 Acceptance:
 
-- Canonical specifications describe one unambiguous ownership and precedence
-  model for standalone plots, Canvas, facets, and shared legends.
+- The approved target specification describes one unambiguous ownership and
+  precedence model for standalone plots, Canvas, facets, and shared legends
+  without presenting target types as current public API.
 - Theme, data scale, exact style, policy, and renderer invariant are distinct
   concepts with no overlapping owner for the same property.
 - The contract states when validation occurs and guarantees that preflight and
@@ -368,6 +382,9 @@ Scope:
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
 - Keep backend styles private and avoid exposing renderer implementation details.
+- Atomically update `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` to the
+  implemented theme contract, mark `03_THEME_SYSTEM.md` current, and reconcile
+  `99_DEFERRED_FEATURES.md`; no target/current specification interval remains.
 - Update examples and user documentation with standalone, Canvas inheritance,
   Plot replacement, palette, and exact local-style examples.
 
@@ -382,6 +399,8 @@ Acceptance:
 - Public constructors validate every structural invariant before rendering.
 - Compile-pass and compile-fail evidence enforces the intended visibility and
   ownership boundaries.
+- All canonical specifications describe the implemented replacement API before
+  the phase is complete.
 - `just verify` passes.
 
 ## Phase T7: Contract Evidence And Final Audit
@@ -401,8 +420,8 @@ Scope:
   custom themes.
 - Search for retired theme APIs, repeated hidden Publication defaults, dormant
   theme fields, unclassified hardcoded style values, and duplicate scale logic.
-- Reconcile all specifications, README, guides, examples, and rustdoc with the
-  implemented single current contract.
+- Audit all specifications, README, guides, examples, and rustdoc for residual
+  drift from the already-current implemented contract.
 
 Acceptance:
 
@@ -416,25 +435,29 @@ Acceptance:
   behavior change.
 - `just verify` passes from the completed worktree.
 
-## Open Decisions For T1
+## T1 Decisions
 
-The architecture discussion must settle these before T2 begins:
-
-- Exact public decomposition and names for the complete theme and component
-  theme values.
-- Whether explicit Plot themes are always complete replacements or whether a
-  sparse Plot override has a concrete necessary use case.
-- Opaque color representation, alpha ownership, and accepted construction forms.
-- Qualitative palette capacity and whether automatic palettes may repeat.
-- Exact keyed categorical mapping behavior for unused and missing labels.
-- Continuous interpolation, neutral midpoint, missing color, and colorbar roles.
-- Contrast responsibility: structural rejection, caller responsibility, or
-  documented helper behavior.
-- Font-family validation and generation-host requirements for outlined SVG and
-  PNG.
-- Which decoration visibility choices belong to theme appearance and which
-  remain explicit policies.
-- Which common mark properties are theme defaults and which stay fixed renderer
-  invariants.
-- Exact shared-legend behavior when a Canvas contains intentionally different
-  explicit Plot themes.
+- `Theme` is one complete immutable value. Built-ins are constructors, and a
+  construction-only builder produces custom complete themes.
+- Canvas owns the root theme. Unthemed plots inherit it; explicit Plot themes
+  replace it completely; facets add no scope.
+- Components are surfaces, typography, axes, legend, composition, marks,
+  annotations, and color scales. Plot-family theme blocks are not admitted.
+- `OpaqueColor` owns RGB data-scale color. `Color` owns final RGBA paint with
+  `u8` alpha. Alpha replacement is exact and never multiplicative.
+- Built-in qualitative palettes preserve curated colors and extend them through
+  deterministic perceptual generation. Custom palettes explicitly select fixed
+  or extendable capacity and never cycle silently.
+- `CategoricalColorMap` is a general exact mapping for raw categorical
+  identities. Used keys are required; unused entries and repeated exact colors
+  are allowed.
+- Sequential and diverging interpolation and palette extension use fixed
+  OKLab/OKLCH color math. Missing marks are not palette endpoints.
+- Transparent Canvas and panel surfaces are supported in SVG and PNG.
+- Built-in contrast is regression-tested; automatic variable-fill text selects
+  the better theme candidate; general custom-theme contrast remains caller-owned.
+- Fonts use typed ordered stacks and the first installed generation-host family.
+- Themes may omit nonsemantic chrome but cannot hide caller-provided semantic
+  content. Existing explicit policies own content presence and placement.
+- Shared Canvas legends use Canvas chrome and exact panel glyphs; conflicting
+  glyphs for one semantic identity reject.

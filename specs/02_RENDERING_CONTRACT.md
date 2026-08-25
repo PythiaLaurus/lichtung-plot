@@ -248,16 +248,17 @@ Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
 
 Publication SVG outlining and PNG generation scan platform font directories and
-select the first installed preferred family. Rendering performs no download,
-provisioning, or cache lookup. Those operations resolve canonical text from the
-installed generation fonts and fail if no font is available; publication SVG
-also fails if any text remains after conversion. Its outlined text requires no
-font on the recipient's system, but exact glyph paths depend on the generation
-font environment. Preserve-text SVG remains accessible and editable, while its
-displayed text depends on fonts available to the viewer. SVG structure and
-geometry remain deterministic for identical inputs and options; exact glyph
-paths, glyph appearance, and PNG bytes require the same installed-font
-environment.
+select the first installed preferred family. Generic `serif`, `sans-serif`, and
+`monospace` entries resolve through the platform font database. If the primary
+face lacks a required glyph, resolution continues through later stack entries
+for that glyph and fails if none can render it. Rendering performs no download,
+provisioning, or cache lookup. Publication SVG also fails if any text remains
+after conversion. Its outlined text requires no font on the recipient's system,
+but exact glyph paths depend on the generation font environment. Preserve-text
+SVG remains accessible and editable, while its displayed text depends on fonts
+available to the viewer. SVG structure and geometry remain deterministic for
+identical inputs and options; exact glyph paths, glyph appearance, and PNG bytes
+require the same installed-font environment.
 
 ## Significance Annotations
 

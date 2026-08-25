@@ -117,10 +117,13 @@ The stable plot introspection surface is limited to `kind()`, `width()`,
 exact marker-gated builders, not broad getters that return irrelevant defaults.
 
 `Theme` is the public built-in visual selection. Resolved palette data is
-private until the deferred custom-palette contract is designed. The public
-layout module is likewise removed; `AxisTick` is exported only from the crate
-root. Public geometry uses Canvas terminology and concise geometry nouns rather
-than renderer-internal `Figure*` or redundant `*Input` names.
+private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
+atomic migration tracked in `91_IMPLEMENTATION_PLAN.md`; its target types and
+inheritance behavior are not current public API until Phase T6 completes.
+
+The public layout module remains removed; `AxisTick` is exported only from the
+crate root. Public geometry uses Canvas terminology and concise geometry nouns
+rather than renderer-internal `Figure*` or redundant `*Input` names.
 
 `PointLayer` is an optional ordinary-line overlay with renderer-owned visual
 defaults and selective caller overrides. `NumericLabelFormat` remains a narrow

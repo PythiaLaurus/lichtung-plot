@@ -9,7 +9,7 @@ API. It is not a compatibility promise, implementation authorization, or reason
 to add placeholder enums, flags, builders, storage, or fallback behavior. A
 feature moves into the current contract only after its semantics are designed in
 the canonical architecture and rendering specifications and its implementation
-phase is added to `04_IMPLEMENTATION_PLAN.md`.
+phase is added to `91_IMPLEMENTATION_PLAN.md`.
 
 ## Legend Composition Modes
 
@@ -21,16 +21,6 @@ Before admission, that design must specify ordering, titles, repeated hues,
 same-field collapse, sparse facets, Canvas shared-legend compatibility, label
 mapping, collision planning, and behavior for row-level hue families. No current
 legend mode or style option reserves this extension.
-
-## Legend Outline Box
-
-A future legend-style design may allow callers to show or hide an outline box
-around a legend and configure its supported first-party appearance. It must be
-designed together with broader legend styling so inside clearance, outside
-reservation, collision bounds, themes, facets, Canvas shared legends, SVG, and
-PNG all consume one resolved box model.
-
-The current API exposes no legend-box flag or style placeholder.
 
 ## Broader Numeric Formatting
 
@@ -47,16 +37,17 @@ scaling, rounding, negative zero, extreme finite values, width measurement,
 collision handling, and deterministic SVG/PNG agreement. No notation enum,
 format string, callback, prefix, or cross-surface formatter is reserved now.
 
-## Custom Palettes
+## Data-Mapped Alpha
 
-The current API accepts built-in `Theme` values and keeps resolved palette data
-private. A future custom-palette contract may admit caller-owned colors, fonts,
-and selected visual grammar, but only after defining structural validation,
-minimum color counts, deterministic fallback prohibition, contrast ownership,
-font policy, serialization expectations, and exact facet/Canvas behavior.
+The approved target in `03_THEME_SYSTEM.md` admits RGBA element paints but keeps
+categorical and continuous data-color scales opaque. Mark and typography styles
+own one final alpha value; alpha is never multiplied with a second opacity
+property.
 
-Detached mutable palette inspection is not retained as a substitute for this
-design.
+A future alpha scale would need to define its numeric or categorical domain,
+range, legend representation, interaction with RGBA exact styles, missing
+values, accessibility, facets, Canvas coordination, and precedence. No current
+alpha-scale enum, callback, or placeholder reserves that feature.
 
 ## Caller-Selected Automatic Tick Density
 
