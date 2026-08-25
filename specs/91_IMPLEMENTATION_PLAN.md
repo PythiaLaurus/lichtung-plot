@@ -82,7 +82,15 @@ Phase T1 confirmed these rules for the approved target:
 | Phase | Objective | Status |
 | --- | --- | --- |
 | T1 | Approved theme architecture contract | COMPLETE |
-| T2 | Complete visual-property ownership inventory | PENDING |
+| T2 | Complete visual-property ownership inventory | IN PROGRESS |
+| T2a | Ledger protocol and renderer foundations | PENDING |
+| T2b | Public controls and policies | PENDING |
+| T2c | Layout, typography, axes, and grid | PENDING |
+| T2d | Legends, Canvas composition, and decorations | PENDING |
+| T2e | Ordinary plot marks and local styles | PENDING |
+| T2f | Specialized marks and annotations | PENDING |
+| T2g | Data scales and semantic domains | PENDING |
+| T2h | Cross-source reconciliation and migration map | PENDING |
 | T3 | One private resolved-theme pipeline | PENDING |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Surfaces, typography, titles, axes, and grid | PENDING |
@@ -151,9 +159,317 @@ Acceptance:
 
 ## Phase T2: Visual-Property Ownership Inventory
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Account for every current visual value before reorganizing implementation.
+
+T2 is a documentation and classification phase. It changes no production code,
+public API, snapshot, or intended rendering. Each admitted subphase is one
+reviewable documentation commit. T3 does not begin until T2h closes the complete
+inventory and reconciles the later migration scopes.
+
+### Deliverable
+
+T2a creates `04_VISUAL_PROPERTY_OWNERSHIP.md` as the dedicated migration ledger.
+That document distinguishes current source from approved target ownership and
+does not make the target API current. Keeping the row-level inventory separate
+prevents this implementation plan from becoming an unreadable source listing
+while retaining the ledger under the canonical `specs/` source of truth.
+
+The ledger is append-only during T2 except for corrections and reconciliation.
+T2h may merge records only when one declaration supplies one value to the same
+semantic role and target owner. Equal literals with independent current sources
+remain separate records and cross-reference one duplicate cluster.
+
+Each property key is a unique descriptive semantic path with a source-context
+suffix when multiple current sources serve the same role. Keys do not encode a
+schema or protocol version. Each completed record contains every field below;
+`unknown`, `other`, and unresolved `TBD` values are prohibited at subphase
+completion.
+
+Target fields recorded by T2a through T2g are concrete proposals, not unresolved
+placeholders. T2h verifies or corrects them and marks their relationships final.
+Earlier records may therefore propose one shared target owner while retaining
+separate current-source records until T2h proves that the semantics agree.
+
+| Field | Required content |
+| --- | --- |
+| Property | Unique descriptive key for one current declaration, fallback, literal, or behavior branch |
+| Current source and value | Exact file plus symbol or expression context, current type, default, and unit or color representation |
+| Current consumers | Every production measurement, planning, legend, scene, or backend path that reads or duplicates the value |
+| Current behavior | Current resolution scope, validation or lack of validation, failure behavior, and fallback behavior |
+| Current layout path | Current `none`, `measure`, `reserve`, `collision`, or `geometry` effects, traced through final drawing when applicable |
+| Semantic role | What the value means visually, independent of its current file or plot-family placement |
+| Target classification and owner | Exactly one closed class plus one approved component or scale, retained current style or policy field, unnamed replacement style or policy role, or descriptive private invariant responsibility |
+| Target resolution | Canvas root, resolved Plot, facet inherited from Plot, plot-local scale, exact element, explicit policy owner, or final private draw boundary |
+| Target validation | Construction, Plot preflight, Canvas preflight, geometry, or backend-protocol validation, including bounds and failure behavior |
+| Public surface | T6 component field, retained local control, replaced local control, or private-only behavior |
+| Relationships | Duplicate cluster, split parent or child, current-to-target counterpart, and measurement-to-draw counterpart keys, or explicit `none` |
+| Audit evidence | Owning source-manifest entry and search-match disposition; exclusions name the data, test, or non-visual reason |
+| Disposition | `retain`, `move`, `connect`, `replace`, `deduplicate`, or `remove`, with the owning migration phase |
+| Visual evidence | No output change expected, intentional correction, or intentional redesign, plus the focused assertion or snapshot family required |
+
+The closed classification set is:
+
+| Class | Meaning |
+| --- | --- |
+| Theme component | Non-data appearance owned by `SurfaceTheme`, `TypographyTheme`, `AxisTheme`, `LegendTheme`, `CompositionTheme`, `MarkTheme`, or `AnnotationTheme` |
+| Theme data scale | Default qualitative, sequential, or diverging mapping owned by `ColorScales` |
+| Plot-local data scale | One Plot's replacement categorical or continuous data mapping |
+| Exact element style | Final caller-owned appearance for one guide, layer, annotation, or mark |
+| Explicit policy | Semantic presence, placement, sharing, or other non-appearance configuration |
+| Renderer invariant | Fixed private clipping, ordering, anchoring, geometry, contrast-selection, or backend behavior |
+
+One property cannot occupy multiple classes. When one current field combines
+multiple meanings, the ledger creates one record per meaning, links them as a
+split, and assigns the current field itself a `replace` disposition. A target
+theme component may supply an appearance default consumed by an exact style, and
+a target theme data scale may supply the default replaced by a Plot-local data
+scale. Those defaults and final overrides remain independent records with one
+owner each.
+
+Target-owner names use only the component and scale types approved in
+`03_THEME_SYSTEM.md`, a retained current public style or policy type plus field,
+an unnamed semantic role classified as an exact element style or explicit
+policy, or a descriptive private semantic responsibility. T2 does not invent
+names for future public exact-style or policy replacements. When replacement is
+required but T1 did not approve a public type name, the ledger records that
+unnamed semantic role and leaves naming to its admitted implementation phase.
+
+### Coverage Rules
+
+The inventory covers production `src/` declarations, literals, defaults,
+fallbacks, public setters, validation branches, measurement inputs, generated
+legend styles, scene styles, and backend serialization that can change visible
+output or occupied space. Tests, examples, and snapshots are evidence consumers,
+not independent property sources. Scientific data values, statistical
+coefficients, and geometry derived solely from caller data are excluded unless a
+fixed rendering rule constrains their visible representation; that fixed rule is
+then recorded as a renderer invariant.
+
+Rows are source-based rather than estimate-based. Initial audits found roughly
+70-85 foundation records, 58-68 public-control records, 105-120 layout and chrome
+records, and about 106 mark and annotation records. These ranges overlap and are
+planning aids only; they must not be summed or used as a completion threshold.
+
+Every subphase records its complete source manifest in the ledger. A production
+declaration, literal, default, or behavior branch is owned by exactly one
+subphase, even when its file contains mixed responsibilities. Mixed files use
+symbol or expression-context manifest entries instead of assigning the whole
+file. Another subphase may trace that source as a consumer but may not create a
+second source record for it.
+
+For each manifest, review searches cover color constructors and tuples, font
+values, sizes, widths, opacity and alpha, dashes, radii, padding, gaps, spacing,
+visibility branches, palette indexing, gradients, contrast decisions, and hidden
+preset construction. Every match appears either in one property record or in the
+subphase's rejected-match table with its data, test, or non-visual reason. T2h
+owns all residual production paths not explicitly allocated by T2a through T2g
+and fails completion if a residual match is a visual source rather than an
+explained exclusion.
+
+### Subphase T2a: Ledger Protocol And Renderer Foundations
+
+**Status**: PENDING
+
+Create the ledger and inventory foundational private carriers and lifecycle
+sources in `theme.rs`, `theme/`, `font.rs`, `render.rs`, `render/`, `scene.rs`,
+`orchestrator.rs`, `orchestrator/lifecycle.rs`, `orchestrator/backend.rs`,
+`orchestrator/output.rs`, `orchestrator/artifacts.rs`, and `output.rs`. T2a owns
+only the foundational carrier, preset construction, draw-boundary, serialization,
+and lifecycle entries in mixed files; later subphases own facet, legend, mark,
+and scale entries by exact symbol or expression context.
+
+T2a must identify every `ThemePalette` responsibility, every concrete backend
+style field and default, RGB-versus-alpha representation, root-surface behavior,
+repeated `Plot::palette()` or preset reconstruction, and every lifecycle point
+where appearance can diverge between validation, preflight, measurement, scene
+creation, and drawing. Test-only modules under these paths are evidence rather
+than ledger sources.
+
+T2a is complete when the ledger schema is instantiated, every production source
+in its manifest is accounted for, current carrier fields have target owners, and
+hidden Publication or backend fallback paths are explicitly linked to T3, T4,
+T5a, or T5d remediation.
+
+### Subphase T2b: Public Controls And Policies
+
+**Status**: PENDING
+
+Inventory the public configuration declarations and their builder access paths in
+`spec.rs`, `spec/`, `layers.rs`, `builder.rs`, `builder/`, `canvas.rs`, `kind.rs`,
+`labels.rs`, `geometry.rs`, and public re-exports in `lib.rs`, including every
+family gate, default, validation rule, and conversion into private draw styles.
+T2b owns public declarations, setters, and family gates in these mixed files;
+layout, composition, mark, and scale implementation branches are consumer paths
+owned by their semantic subphases. In `orchestrator/layers.rs`, T2b owns only the
+family-support and presence-policy validation branches; T2c and T2e own the
+tick-layout and guide-style branches respectively.
+
+In `orchestrator/validation.rs`, T2b owns every non-data-color family-support,
+category-order, content-presence, annotation-compatibility, marker, connector,
+and policy-validation branch. T2g owns only categorical or continuous
+data-to-color mapping, domain, capacity, and color-channel validation in that
+file; T2c through T2f trace those branches as consumers where applicable.
+
+At minimum, trace `CategoricalColors`, `GuideStyle`, `PointLayer`,
+`BarPointLayer`, `InteractionStyle`, `SignificanceMarkStyle`,
+`DumbbellEndpoints`, `HeatmapScale`, legend visibility and placement, point
+outlines, sign coloring, connector and marker visibility, bar spacing, category
+label sharing, exact ticks, title and label content, and Canvas composition
+policies. Each field must be separated into appearance, data mapping, exact
+element style, explicit policy, or invariant without using its current public
+container as evidence of ownership.
+
+T2b is complete when every current public visual or content control has one
+target disposition, retained policies are distinguished from replaced style and
+scale types, current family gates are accounted for, and no target T6 field
+exists solely to preserve an accidental current grouping.
+
+### Subphase T2c: Layout, Typography, Axes, And Grid
+
+**Status**: PENDING
+
+Inventory layout and drawing sources for canvas and panel surfaces, typography,
+panel geometry, axes, ticks, grid, frame sides, projection, ranges, and labels in
+`layout.rs`, `layout/text.rs`, `layout/panel.rs`, and `layout/panel/`. Include
+related source entries in `canvas.rs`, `decorations/title_block.rs`, and
+orchestrator planning only when they own one of these roles. T2c also owns
+`MAX_EXPLICIT_TICKS`, tick projection, tick validation, collision calls, and tick
+replacement in `orchestrator/layers.rs`; T2d owns composition and legend
+branches.
+
+Every `measure`, `reserve`, `collision`, or `geometry` row must trace the value
+from its current source through the calculation and its final drawing consumer.
+Paint-only properties must be marked `none` rather than omitted. Hidden
+`Theme::Publication` construction, fixed whites and grays, and duplicated text or
+axis metrics receive independent rows.
+
+T2c is complete when every layout-affecting style has an end-to-end trace,
+surface and typography measurement agree with their current drawing consumers,
+axis content policy is separated from appearance, and each expected corrective
+snapshot is named without changing it.
+
+### Subphase T2d: Legends, Canvas Composition, And Decorations
+
+**Status**: PENDING
+
+Inventory composition and explanatory chrome in `canvas.rs`, `layout/canvas.rs`,
+`decorations.rs`, `decorations/`, `orchestrator/facets.rs`,
+`orchestrator/facets/planning.rs`, `orchestrator/facets/legend.rs`, and
+`orchestrator/facets/rendering.rs`. T2d owns Canvas title and text-panel chrome,
+facets, shared headers, row titles, legend construction, legend glyph generation,
+reservations, collision planning, and composition-specific fallbacks. Axis,
+surface, and typography sources already owned by T2c remain consumer references.
+
+T2d is complete when Canvas-owned and Plot-owned chrome are separated, legend
+policy is separated from legend appearance, every generated legend glyph traces
+to its exact mark-style source, shared and per-plot measurements trace to drawing,
+and each expected corrective snapshot is named without changing it.
+
+### Subphase T2e: Ordinary Plot Marks And Local Styles
+
+**Status**: PENDING
+
+Inventory renderer-owned visual sources in `plots/bar.rs`, `plots/bar_data.rs`,
+`plots/boxplot.rs`, `plots/density.rs`, `plots/distribution_sample.rs`,
+`plots/horizontal_bar.rs`, `plots/line.rs`, `plots/regression.rs`,
+`plots/scatter.rs`, `plots/violin.rs`, and `plots/violin/precomputed.rs`. Cover
+ordinary point, line, fill, interval, ribbon, uncertainty, reference, outline,
+raw-overlay, and supplemental-layer roles. Public exact-style declarations remain
+owned by T2b; T2e owns renderer defaults, conversions, and final use. T2e also
+owns guide projection, exact guide-style conversion, and guide drawing in
+`orchestrator/layers.rs`.
+
+T2e is complete when every listed renderer source is accounted for, shared mark
+roles are proposed without merging independent records, local-style precedence
+is traced to final draw styles and legend glyphs, and specialized or scale
+responsibilities are explicitly linked to T2f or T2g.
+
+### Subphase T2f: Specialized Marks And Annotations
+
+**Status**: PENDING
+
+Inventory renderer-owned visual sources in `plots/beeswarm.rs`,
+`plots/coefficient.rs`, `plots/dumbbell.rs`, `plots/forest.rs`,
+`plots/heatmap.rs`, `plots/histogram.rs`, `plots/interaction.rs`,
+`plots/interval_estimate.rs`, `plots/marginal.rs`, `plots/matrix.rs`,
+`plots/point_interval.rs`, `plots/qq.rs`, `plots/waterfall.rs`, and
+`significance.rs`. Include panel-text, significance, value-label, missing-mark,
+connector, endpoint, color-guide, and specialized geometry roles. Test modules
+under these paths remain evidence rather than property sources.
+
+Specialized geometry remains private only when the value is required for valid
+or intelligible rendering rather than being an appearance default. Scale-domain
+and mapping sources remain owned by T2g even when a listed renderer consumes
+them. In particular, T2g owns each complete heatmap or beeswarm color-mapping
+expression together with its embedded fixed gradient literals; T2f records those
+expressions only as consumers of specialized mark and guide geometry.
+
+T2f is complete when every listed renderer and annotation source is accounted
+for, every private geometry constant has an invariant justification or a target
+appearance owner, and each final annotation or specialized glyph traces to its
+current style and evidence consumer.
+
+### Subphase T2g: Data Scales And Semantic Domains
+
+**Status**: PENDING
+
+Inventory current categorical identity order, domain construction, palette
+selection, continuous-color routing, and facet-wide coordination in the relevant
+symbols of `values.rs`, `data.rs`, `input.rs`, `builder/accessors.rs`,
+`builder/facets.rs`, `orchestrator/facets/data.rs`,
+`orchestrator/validation.rs`, and scale-consumer branches in plot renderers. T2g
+owns declarations and behavior branches that construct, validate, or coordinate
+semantic data-to-color mappings. Renderer-local paint literals remain records in
+T2e or T2f, except that an embedded gradient literal and its inseparable mapping
+expression are one T2g-owned source.
+
+Cover first-observed category identity, display-label separation, exact keyed
+mapping, ordered palette mapping, modulo cycling, accent-slot consumption,
+facet and Canvas domain coordination, heatmap and beeswarm gradients, missing
+values, continuous domains and centers, interpolation, and color-guide agreement.
+
+T2g is complete when every current data-color mapping has one theme-scale,
+Plot-local-scale, exact-map, or invariant owner; all domain-order sources are
+recorded; palette and gradient sources trace to marks and guides; and no
+non-data foreground, surface, grid, annotation, or missing-mark color remains
+misclassified as a data-scale slot.
+
+### Subphase T2h: Cross-Source Reconciliation And Migration Map
+
+**Status**: PENDING
+
+Re-run repository-wide coverage searches, including `input.rs`, `data.rs`,
+`values.rs`, `stats.rs`, `stats/`, `error.rs`, and every other residual production
+path. Reconcile duplicate clusters and cross-workstream consumers, and close
+every split or provisional cross-reference. Review public defaults against
+private fallbacks, measurement against drawing, mark styles against legend
+glyphs, data mappings against color guides, and SVG paint serialization against
+scene alpha.
+
+Equal constants in different plot families remain separate source records until
+T2h proves one shared semantic role. T2h records that proof in relationship
+fields before marking a shared target owner final; earlier subphases assign a
+concrete proposed owner and relationship but do not merge the source records.
+
+T2h must decide the disposition and migration phase for known defects: dormant
+background and general line-width fields, frame-side and axis-label visibility,
+backend-owned white surfaces, hardcoded title and legend grays, hidden
+Publication construction, repeated palette reconstruction, fixed heatmap and
+beeswarm gradients, implicit categorical cycling, and incomplete opacity
+carriers. A general field is split or removed when its consumers have different
+semantic owners; it is not connected merely because it already exists.
+
+T2h updates the T3 through T7 scopes and acceptance gates when the completed
+ledger reveals a different owner or required migration order. It also records a
+focused evidence map for every intentional visual correction so structural
+refactors cannot absorb snapshot changes without review.
+
+T2h is complete only when every T2a-through-T2g source manifest is disjoint,
+their union plus explained residual exclusions covers production `src/`, every
+relationship is closed, and every property has one final target owner and
+migration phase.
 
 Scope:
 
@@ -185,6 +501,15 @@ Acceptance:
   impact.
 - The inventory agrees with the Phase T1 taxonomy and refines the later phase
   scopes before code migration begins.
+- `04_VISUAL_PROPERTY_OWNERSHIP.md` contains no unresolved records, duplicate
+  property keys, unassigned source matches, or unapproved future public names.
+  Theme component and scale owners use the Phase T1 taxonomy; retained current
+  styles and policies name their current type and field; unnamed replacement
+  styles and policies name only their approved semantic role; private invariants
+  name a descriptive semantic responsibility.
+- No production code, public API, snapshots, or intended rendering changed in
+  T2.
+- `just verify` passes after every admitted T2 subphase.
 
 ## Phase T3: Private Resolved-Theme Pipeline
 
