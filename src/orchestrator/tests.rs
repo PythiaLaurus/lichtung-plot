@@ -10,8 +10,8 @@ use crate::render::backend::{
     TextStyle,
 };
 use crate::{
-    AxisValues, CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues,
-    Significance, SignificanceMark, ValueSort,
+    CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues, Significance,
+    SignificanceMark, ValueSort,
 };
 
 #[path = "tests/artifacts.rs"]
@@ -202,35 +202,6 @@ impl Backend for RecordingBackend {
 }
 
 #[derive(Clone)]
-struct CanonicalPlotValues {
-    group: CategoryValues,
-    interval_group: CategoryValues,
-    hue: CategoryValues,
-    x: NumericValues,
-    y: NumericValues,
-    color: NumericValues,
-    lower: NumericValues,
-    upper: NumericValues,
-    delta: NumericValues,
-    base: f64,
-}
-
-fn canonical_plot_values() -> CanonicalPlotValues {
-    CanonicalPlotValues {
-        group: CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
-        interval_group: CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap(),
-        hue: CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap(),
-        x: NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
-        y: NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
-        color: NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
-        lower: NumericValues::new("lower", [0.5, 1.0, 2.0, 3.0]),
-        upper: NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0]),
-        delta: NumericValues::new("delta", [1.0, -1.0, 2.0, 0.0]),
-        base: 10.0,
-    }
-}
-
-#[derive(Clone)]
 struct BarValues {
     category: CategoryValues,
     value: NumericValues,
@@ -244,100 +215,6 @@ fn valid_grouped_bar_values() -> BarValues {
             CategoryValues::new("hue", ["h1", "h1", "h2", "h2", "h1", "h1", "h2", "h2"]).unwrap(),
         ),
         value: NumericValues::new("y", [1.0, 2.0, 3.0, 4.0, 2.0, 3.0, 4.0, 5.0]),
-    }
-}
-
-fn configured_chart(data: &CanonicalPlotValues, kind: PlotKind) -> Plot {
-    match kind {
-        PlotKind::Scatter => Plot::scatter(data.x.clone(), data.y.clone()).erase(),
-        PlotKind::Histogram => {
-            Plot::histogram(crate::HistogramInput::samples(data.x.clone())).erase()
-        }
-        PlotKind::Density => Plot::density(data.x.clone()).erase(),
-        PlotKind::Qq => Plot::qq(data.x.clone()).erase(),
-        PlotKind::PointInterval => Plot::point_interval(
-            data.interval_group.clone(),
-            data.x.clone(),
-            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
-        )
-        .erase(),
-        PlotKind::Line => Plot::line(data.x.clone(), data.y.clone()).erase(),
-        PlotKind::Trajectory => Plot::trajectory(
-            AxisValues::Numeric(data.x.clone()),
-            data.y.clone(),
-            data.group.clone(),
-        )
-        .erase(),
-        PlotKind::LinePath => {
-            Plot::line_path(data.x.clone(), data.y.clone(), data.group.clone()).erase()
-        }
-        PlotKind::Interaction => Plot::interaction(
-            data.group.clone(),
-            data.y.clone(),
-            data.hue.clone(),
-            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
-        )
-        .hue(data.hue.clone())
-        .erase(),
-        PlotKind::Coefficient => Plot::coefficient(
-            data.interval_group.clone(),
-            crate::CoefficientInput::estimates_with_intervals(
-                data.x.clone(),
-                crate::Bounds::new(data.lower.clone(), data.upper.clone()),
-            ),
-        )
-        .erase(),
-        PlotKind::Forest => Plot::forest(
-            data.interval_group.clone(),
-            data.x.clone(),
-            crate::Bounds::new(data.lower.clone(), data.upper.clone()),
-            0.0,
-        )
-        .erase(),
-        PlotKind::Dumbbell => Plot::dumbbell(
-            data.group.clone(),
-            data.x.clone(),
-            data.y.clone(),
-            crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40)).unwrap(),
-        )
-        .group(data.interval_group.clone())
-        .erase(),
-        PlotKind::Heatmap => Plot::heatmap(
-            data.interval_group.clone(),
-            data.group.clone(),
-            data.color.clone(),
-        )
-        .erase(),
-        PlotKind::Bar => {
-            Plot::bar(data.group.clone(), crate::BarInput::samples(data.y.clone())).erase()
-        }
-        PlotKind::HorizontalBar => {
-            Plot::horizontal_bar(data.group.clone(), crate::BarInput::samples(data.y.clone()))
-                .erase()
-        }
-        PlotKind::StackedBar => {
-            Plot::stacked_bar(data.group.clone(), data.y.clone(), data.hue.clone()).erase()
-        }
-        PlotKind::StackedHorizontalBar => {
-            Plot::stacked_horizontal_bar(data.group.clone(), data.y.clone(), data.hue.clone())
-                .erase()
-        }
-        PlotKind::Boxplot => Plot::boxplot(data.group.clone(), data.y.clone()).erase(),
-        PlotKind::Violin => Plot::violin(data.group.clone(), data.y.clone()).erase(),
-        PlotKind::Raincloud => Plot::raincloud(crate::RaincloudInput::samples(
-            data.group.clone(),
-            data.y.clone(),
-        ))
-        .erase(),
-        PlotKind::Regression => Plot::regression(data.x.clone(), data.y.clone()).erase(),
-        PlotKind::Marginal => Plot::marginal(data.x.clone(), data.y.clone()).erase(),
-        PlotKind::Matrix => Plot::matrix(vec![data.x.clone(), data.y.clone()]).erase(),
-        PlotKind::Beeswarm => {
-            Plot::beeswarm(data.group.clone(), data.x.clone(), data.color.clone()).erase()
-        }
-        PlotKind::Waterfall => {
-            Plot::waterfall(data.group.clone(), data.delta.clone(), data.base).erase()
-        }
     }
 }
 
@@ -367,94 +244,6 @@ fn configured_bar_chart(data: &BarValues, kind: PlotKind) -> Plot {
         .erase(),
         _ => panic!("unsupported bar kind {kind:?}"),
     }
-}
-
-#[derive(Clone, Copy)]
-enum NumericField {
-    X,
-    Y,
-    Color,
-    Lower,
-    Upper,
-    Delta,
-}
-
-impl NumericField {
-    const fn name(self) -> &'static str {
-        match self {
-            Self::X => "x",
-            Self::Y => "y",
-            Self::Color => "color",
-            Self::Lower => "lower",
-            Self::Upper => "upper",
-            Self::Delta => "delta",
-        }
-    }
-
-    const fn valid_values(self) -> [f64; 4] {
-        match self {
-            Self::X => [1.0, 2.0, 3.0, 4.0],
-            Self::Y => [1.0, 3.0, 2.0, 5.0],
-            Self::Color => [0.1, 0.3, 0.7, 1.0],
-            Self::Lower => [0.5, 1.0, 2.0, 3.0],
-            Self::Upper => [1.5, 3.0, 4.0, 5.0],
-            Self::Delta => [1.0, -1.0, 2.0, 0.0],
-        }
-    }
-}
-
-fn numeric_fault_values(field: NumericField, fault: Option<f64>) -> CanonicalPlotValues {
-    let mut data = canonical_plot_values();
-    let mut values = field.valid_values().map(Some);
-    values[1] = fault;
-    let values = NumericValues::nullable(field.name(), values);
-    match field {
-        NumericField::X => data.x = values,
-        NumericField::Y => data.y = values,
-        NumericField::Color => data.color = values,
-        NumericField::Lower => data.lower = values,
-        NumericField::Upper => data.upper = values,
-        NumericField::Delta => data.delta = values,
-    }
-    data
-}
-
-#[derive(Clone, Copy)]
-enum CategoryField {
-    Group,
-    IntervalGroup,
-    Hue,
-}
-
-impl CategoryField {
-    const fn name(self) -> &'static str {
-        match self {
-            Self::Group => "group",
-            Self::IntervalGroup => "interval_group",
-            Self::Hue => "hue",
-        }
-    }
-
-    const fn valid_values(self) -> [&'static str; 4] {
-        match self {
-            Self::Group => ["a", "a", "b", "b"],
-            Self::IntervalGroup => ["a", "b", "c", "d"],
-            Self::Hue => ["h1", "h2", "h1", "h2"],
-        }
-    }
-}
-
-fn categorical_fault_values(field: CategoryField) -> CanonicalPlotValues {
-    let mut data = canonical_plot_values();
-    let mut values = field.valid_values().map(Some);
-    values[1] = None;
-    let values = CategoryValues::nullable(field.name(), values).unwrap();
-    match field {
-        CategoryField::Group => data.group = values,
-        CategoryField::IntervalGroup => data.interval_group = values,
-        CategoryField::Hue => data.hue = values,
-    }
-    data
 }
 
 fn assert_rejected_before_begin<K: crate::kind::Marker>(chart: &Plot<K>, kind: PlotKind) -> String {

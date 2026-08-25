@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Status**: Active remediation ledger
+**Status**: COMPLETE
 
 ## Purpose
 
@@ -311,8 +311,8 @@ Commit: `docs(api): clarify numeric label formatting`
 **Status**: COMPLETE
 
 Verification: native-value unit and integration tests in SVG-only and PNG modes,
-full-tree retired-shim searches, unchanged snapshots, and `just verify` passed on
-2026-08-25.
+full-tree retired-shim searches, unchanged snapshots, exact-family validation
+fixtures, final static audits, and `just verify` passed on 2026-08-25.
 
 Remove test-only dataframe emulation so tests exercise the standalone
 renderer boundary directly.
@@ -356,11 +356,16 @@ Acceptance:
 - Focused suites pass as each family migrates.
 - `just verify` passes with no unintended snapshot changes.
 
-Commit: `refactor(tests)!: use native renderer values`
+Commits: `test(api): replace dataframe shims with native values` and
+`test(api): remove generic validation fixtures`
 
 ## Final Completion
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: independent phase audits found no remaining contract gaps,
+repository searches found no retired implementation surface, and `just verify`
+passed from the completed worktree on 2026-08-25.
 
 The currently authorized remediation is complete only when:
 

@@ -1,18 +1,19 @@
 use std::sync::atomic::Ordering;
 
 use super::{
-    canonical_plot_values, configured_chart, test_directory, BackendFailure, Plot, PlotKind,
-    RecordingBackend, Significance, SignificanceMark, ValueSort, RENDER_PANEL_CALLS,
-    TEMP_FILE_COUNTER,
+    test_directory, BackendFailure, Plot, PlotKind, RecordingBackend, Significance,
+    SignificanceMark, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
 };
-use crate::{CategoryValues, NumericValues};
+use crate::{AxisValues, CategoryValues, NumericValues};
 
 #[test]
 fn impossible_wrapped_caption_fails_before_backend_begin() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter)
-        .caption("diagnostic provenance and model adjustment details ".repeat(20))
-        .size(160, 120);
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .caption("diagnostic provenance and model adjustment details ".repeat(20))
+    .size(160, 120);
     let mut backend = RecordingBackend::default();
 
     let error = chart.render_with_backend(&mut backend).unwrap_err();
@@ -64,8 +65,10 @@ fn invalid_canvas_alignment_fails_before_backend_begin() {
 
 #[test]
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter);
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
     let expected_panel = chart.canvas_layout().panel_box;
     let mut backend = RecordingBackend::default();
 
@@ -86,15 +89,16 @@ fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
 
 #[test]
 fn orchestration_runs_measurement_planning_and_render_passes() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter);
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let chart = Plot::scatter(x.clone(), y.clone());
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
     chart
         .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
         .unwrap();
     let chart_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let faceted = Plot::scatter(data.x.clone(), data.y.clone()).facet(crate::FacetSpec::column(
+    let faceted = Plot::scatter(x.clone(), y.clone()).facet(crate::FacetSpec::column(
         CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
     ));
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
@@ -103,7 +107,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
         .unwrap();
     let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let scatter = || Plot::scatter(data.x.clone(), data.y.clone());
+    let scatter = || Plot::scatter(x.clone(), y.clone());
     let panel = scatter();
     let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
@@ -149,36 +153,129 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "explicit native constructors keep lifecycle coverage free of a generic fixture"
+)]
 fn every_canonical_plot_kind_renders_through_one_lifecycle() {
-    let data = canonical_plot_values();
-    for kind in [
-        PlotKind::Scatter,
-        PlotKind::Histogram,
-        PlotKind::Density,
-        PlotKind::Qq,
-        PlotKind::PointInterval,
-        PlotKind::Line,
-        PlotKind::Trajectory,
-        PlotKind::LinePath,
-        PlotKind::Interaction,
-        PlotKind::Coefficient,
-        PlotKind::Forest,
-        PlotKind::Dumbbell,
-        PlotKind::Heatmap,
-        PlotKind::Bar,
-        PlotKind::HorizontalBar,
-        PlotKind::StackedBar,
-        PlotKind::StackedHorizontalBar,
-        PlotKind::Boxplot,
-        PlotKind::Violin,
-        PlotKind::Raincloud,
-        PlotKind::Regression,
-        PlotKind::Marginal,
-        PlotKind::Matrix,
-        PlotKind::Beeswarm,
-        PlotKind::Waterfall,
-    ] {
-        let chart = configured_chart(&data, kind);
+    let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
+    let interval_group = CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap();
+    let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let color = NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]);
+    let lower = NumericValues::new("lower", [0.5, 1.0, 2.0, 3.0]);
+    let upper = NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0]);
+    let delta = NumericValues::new("delta", [1.0, -1.0, 2.0, 0.0]);
+    let bounds = || crate::Bounds::new(lower.clone(), upper.clone());
+    let charts = vec![
+        (
+            PlotKind::Scatter,
+            Plot::scatter(x.clone(), y.clone()).erase(),
+        ),
+        (
+            PlotKind::Histogram,
+            Plot::histogram(crate::HistogramInput::samples(x.clone())).erase(),
+        ),
+        (PlotKind::Density, Plot::density(x.clone()).erase()),
+        (PlotKind::Qq, Plot::qq(x.clone()).erase()),
+        (
+            PlotKind::PointInterval,
+            Plot::point_interval(interval_group.clone(), x.clone(), bounds()).erase(),
+        ),
+        (PlotKind::Line, Plot::line(x.clone(), y.clone()).erase()),
+        (
+            PlotKind::Trajectory,
+            Plot::trajectory(AxisValues::Numeric(x.clone()), y.clone(), group.clone()).erase(),
+        ),
+        (
+            PlotKind::LinePath,
+            Plot::line_path(x.clone(), y.clone(), group.clone()).erase(),
+        ),
+        (
+            PlotKind::Interaction,
+            Plot::interaction(group.clone(), y.clone(), hue.clone(), bounds())
+                .hue(hue.clone())
+                .erase(),
+        ),
+        (
+            PlotKind::Coefficient,
+            Plot::coefficient(
+                interval_group.clone(),
+                crate::CoefficientInput::estimates_with_intervals(x.clone(), bounds()),
+            )
+            .erase(),
+        ),
+        (
+            PlotKind::Forest,
+            Plot::forest(interval_group.clone(), x.clone(), bounds(), 0.0).erase(),
+        ),
+        (
+            PlotKind::Dumbbell,
+            Plot::dumbbell(
+                group.clone(),
+                x.clone(),
+                y.clone(),
+                crate::DumbbellEndpoints::new("Left", (20, 80, 140), "Right", (180, 60, 40))
+                    .unwrap(),
+            )
+            .group(interval_group.clone())
+            .erase(),
+        ),
+        (
+            PlotKind::Heatmap,
+            Plot::heatmap(interval_group.clone(), group.clone(), color.clone()).erase(),
+        ),
+        (
+            PlotKind::Bar,
+            Plot::bar(group.clone(), crate::BarInput::samples(y.clone())).erase(),
+        ),
+        (
+            PlotKind::HorizontalBar,
+            Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone())).erase(),
+        ),
+        (
+            PlotKind::StackedBar,
+            Plot::stacked_bar(group.clone(), y.clone(), hue.clone()).erase(),
+        ),
+        (
+            PlotKind::StackedHorizontalBar,
+            Plot::stacked_horizontal_bar(group.clone(), y.clone(), hue.clone()).erase(),
+        ),
+        (
+            PlotKind::Boxplot,
+            Plot::boxplot(group.clone(), y.clone()).erase(),
+        ),
+        (
+            PlotKind::Violin,
+            Plot::violin(group.clone(), y.clone()).erase(),
+        ),
+        (
+            PlotKind::Raincloud,
+            Plot::raincloud(crate::RaincloudInput::samples(group.clone(), y.clone())).erase(),
+        ),
+        (
+            PlotKind::Regression,
+            Plot::regression(x.clone(), y.clone()).erase(),
+        ),
+        (
+            PlotKind::Marginal,
+            Plot::marginal(x.clone(), y.clone()).erase(),
+        ),
+        (
+            PlotKind::Matrix,
+            Plot::matrix(vec![x.clone(), y.clone()]).erase(),
+        ),
+        (
+            PlotKind::Beeswarm,
+            Plot::beeswarm(group.clone(), x.clone(), color).erase(),
+        ),
+        (
+            PlotKind::Waterfall,
+            Plot::waterfall(group, delta, 10.0).erase(),
+        ),
+    ];
+    for (kind, chart) in charts {
         let mut backend = RecordingBackend::default();
 
         chart
@@ -190,11 +287,10 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
 
 #[test]
 fn heatmap_validation_failure_happens_before_canvas_begin() {
-    let data = canonical_plot_values();
     let chart = Plot::heatmap(
-        data.interval_group.clone(),
-        data.group.clone(),
-        data.color.clone(),
+        CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap(),
+        CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
+        NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
     )
     .x_category_order(ValueSort::Ascending);
     let mut backend = RecordingBackend::default();
@@ -210,8 +306,10 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
 
 #[test]
 fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter);
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::Begin],
         ..RecordingBackend::default()
@@ -223,7 +321,8 @@ fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
 
 #[test]
 fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
-    let data = canonical_plot_values();
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
     let invalid_ranges = [
         (f64::NAN, 1.0),
         (0.0, f64::NAN),
@@ -236,7 +335,7 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
     ];
     for limits in invalid_ranges {
         for x_axis in [true, false] {
-            let mut chart = Plot::scatter(data.x.clone(), data.y.clone());
+            let mut chart = Plot::scatter(x.clone(), y.clone());
             chart = if x_axis {
                 chart.x_limits(limits.0, limits.1)
             } else {
@@ -272,13 +371,15 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
-    let data = canonical_plot_values();
-    let chart =
-        Plot::boxplot(data.group.clone(), data.y.clone()).significance([Significance::between(
-            "a",
-            "b",
-            SignificanceMark::PValue(0.01),
-        )]);
+    let chart = Plot::boxplot(
+        CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .significance([Significance::between(
+        "a",
+        "b",
+        SignificanceMark::PValue(0.01),
+    )]);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
@@ -315,8 +416,10 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
 #[test]
 fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter);
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
     let mut backend = RecordingBackend {
         failures: vec![
             BackendFailure::Scatter,
@@ -339,8 +442,10 @@ fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
 
 #[test]
 fn decoration_layer_closes_after_inner_draw_error() {
-    let data = canonical_plot_values();
-    let chart = configured_chart(&data, PlotKind::Scatter);
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::Line, BackendFailure::LayerEnd],
         ..RecordingBackend::default()
@@ -359,10 +464,13 @@ fn decoration_layer_closes_after_inner_draw_error() {
 
 #[test]
 fn matrix_legend_layer_closes_after_inner_draw_error() {
-    let data = canonical_plot_values();
-    let chart = Plot::matrix(vec![data.x.clone(), data.y.clone()])
-        .group(data.hue.clone())
-        .hue(data.hue.clone());
+    let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
+    let chart = Plot::matrix(vec![
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    ])
+    .group(hue.clone())
+    .hue(hue);
     let mut backend = RecordingBackend {
         failures: vec![BackendFailure::PolygonInLayer, BackendFailure::LayerEnd],
         ..RecordingBackend::default()

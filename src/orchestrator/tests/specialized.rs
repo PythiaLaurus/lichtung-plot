@@ -1,6 +1,4 @@
-use super::{
-    canonical_plot_values, configured_chart, test_directory, Plot, PlotKind, RecordingBackend,
-};
+use super::{test_directory, Plot, PlotKind, RecordingBackend};
 use crate::{CategoryValues, NumericValues};
 
 #[test]
@@ -60,14 +58,41 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
 
 #[test]
 fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
-    let data = canonical_plot_values();
     let cases = [
-        (PlotKind::HorizontalBar, "horizontal", 1_usize),
-        (PlotKind::Beeswarm, "beeswarm", 1),
-        (PlotKind::Matrix, "matrix", 4),
+        (
+            PlotKind::HorizontalBar,
+            "horizontal",
+            1_usize,
+            Plot::horizontal_bar(
+                CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
+                crate::BarInput::samples(NumericValues::new("y", [1.0, 3.0, 2.0, 5.0])),
+            )
+            .erase(),
+        ),
+        (
+            PlotKind::Beeswarm,
+            "beeswarm",
+            1,
+            Plot::beeswarm(
+                CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
+                NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+                NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
+            )
+            .erase(),
+        ),
+        (
+            PlotKind::Matrix,
+            "matrix",
+            4,
+            Plot::matrix(vec![
+                NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+                NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+            ])
+            .erase(),
+        ),
     ];
-    for (kind, name, expected_clips) in cases {
-        let chart = configured_chart(&data, kind).title(format!("{name} title"));
+    for (kind, name, expected_clips, chart) in cases {
+        let chart = chart.title(format!("{name} title"));
         let dir = test_directory(name);
         let output = dir.join("canvas.svg");
         chart.svg(&output).unwrap();
@@ -91,7 +116,6 @@ fn specialized_svg_clips_only_marks_and_keeps_titles_and_colorbars_outside() {
 
 #[test]
 fn point_layer_label_uses_math_space_y() {
-    let data = canonical_plot_values();
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [2.0]),
         crate::NumericValues::new("peak y", [3.0]),
@@ -100,7 +124,11 @@ fn point_layer_label_uses_math_space_y() {
     .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["2.0"]).unwrap());
-    let chart = Plot::line(data.x.clone(), data.y.clone()).point_layer(layer);
+    let chart = Plot::line(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .point_layer(layer);
     let mut backend = RecordingBackend::default();
 
     chart.render_kind(PlotKind::Line, &mut backend).unwrap();
@@ -117,7 +145,6 @@ fn point_layer_label_uses_math_space_y() {
 
 #[test]
 fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
-    let data = canonical_plot_values();
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [-0.1, 2.0, 3.5]),
         crate::NumericValues::new("peak y", [2.0, 3.0, 4.0]),
@@ -126,10 +153,13 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["-0.1", "2.0", "3.5"]).unwrap());
-    let chart = Plot::line(data.x.clone(), data.y.clone())
-        .point_layer(layer)
-        .x_limits(0.0, 3.0)
-        .y_limits(0.0, 6.0);
+    let chart = Plot::line(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .point_layer(layer)
+    .x_limits(0.0, 3.0)
+    .y_limits(0.0, 6.0);
     let dir = test_directory("mass-label-explicit-limits");
     let output = dir.join("canvas.svg");
 

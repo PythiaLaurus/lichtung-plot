@@ -2,8 +2,6 @@ use super::{
     assert_no_staging_files, publish_staged, reserve_unique_sibling_temp_path, test_directory,
     with_temporary_artifacts, Error,
 };
-#[cfg(feature = "png")]
-use super::{canonical_plot_values, configured_chart, PlotKind};
 
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
@@ -75,15 +73,18 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     let dir = test_directory("failed-png-publication");
     let output = dir.join("canvas.png");
     std::fs::write(&output, b"existing png artifact").unwrap();
-    let data = canonical_plot_values();
     let options = PngOptions {
         sizing: PngSizing::Scale(0.0),
         compression: PngCompression::Balanced,
     };
 
-    assert!(configured_chart(&data, PlotKind::Scatter)
-        .png_with_options(&output, options)
-        .is_err());
+    assert!(crate::Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        crate::NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .erase()
+    .png_with_options(&output, options)
+    .is_err());
     assert_eq!(std::fs::read(&output).unwrap(), b"existing png artifact");
     assert_no_staging_files(&dir);
     std::fs::remove_dir_all(dir).unwrap();
@@ -95,13 +96,15 @@ fn chained_outputs_publish_each_file_independently() {
     let dir = test_directory("successful-chained-publication");
     let svg = dir.join("canvas.svg");
     let png = dir.join("canvas.png");
-    let data = canonical_plot_values();
-
-    configured_chart(&data, PlotKind::Scatter)
-        .svg(&svg)
-        .unwrap()
-        .png_preview(&png)
-        .unwrap();
+    crate::Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        crate::NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .erase()
+    .svg(&svg)
+    .unwrap()
+    .png_preview(&png)
+    .unwrap();
 
     assert!(std::fs::read_to_string(&svg).unwrap().starts_with("<svg"));
     assert!(std::fs::read(&png)

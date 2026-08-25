@@ -1,7 +1,4 @@
-use super::{
-    canonical_plot_values, configured_chart, valid_grouped_bar_values, Plot, PlotKind,
-    RecordingBackend,
-};
+use super::{valid_grouped_bar_values, Plot, PlotKind, RecordingBackend};
 use crate::{CategoryValues, NumericValues};
 
 fn bar_chart(category: &CategoryValues, value: &NumericValues, kind: PlotKind) -> Plot {
@@ -45,17 +42,19 @@ fn positioned_series_bar_chart(
 
 #[test]
 fn composed_per_panel_outside_legends_remain_in_their_cells() {
-    let data = canonical_plot_values();
-    let left = Plot::line(data.x.clone(), data.y.clone())
-        .group(data.hue.clone())
-        .hue(data.hue.clone())
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
+    let left = Plot::line(x.clone(), y.clone())
+        .group(hue.clone())
+        .hue(hue.clone())
         .legend(crate::LegendPolicy::Visible(
             crate::LegendPosition::OutsideRight,
         ))
         .size(900, 360);
-    let right = Plot::line(data.x.clone(), data.y.clone())
-        .group(data.hue.clone())
-        .hue(data.hue.clone())
+    let right = Plot::line(x, y)
+        .group(hue.clone())
+        .hue(hue)
         .legend(crate::LegendPolicy::Visible(
             crate::LegendPosition::OutsideRight,
         ))
@@ -157,9 +156,10 @@ fn dense_fixed_facets_share_planner_headroom() {
 
 #[test]
 fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation() {
-    let data = canonical_plot_values();
+    let category = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
+    let value = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = configured_chart(&data, kind);
+        let chart = bar_chart(&category, &value, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert_eq!((backend.begins, backend.ends), (1, 1));
@@ -168,9 +168,11 @@ fn valid_ungrouped_generated_bar_intervals_render_before_and_after_orientation()
 
 #[test]
 fn singleton_positioned_series_bar_cells_render_without_error_bars() {
-    let data = canonical_plot_values();
+    let category = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
+    let value = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let series = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = positioned_series_bar_chart(&data.group, &data.y, &data.hue, kind);
+        let chart = positioned_series_bar_chart(&category, &value, &series, kind);
         let mut backend = RecordingBackend::default();
         chart.render_kind(kind, &mut backend).unwrap();
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
