@@ -110,7 +110,13 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
         .unwrap();
     let facet_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let panel = configured_chart(&data, PlotKind::Scatter);
+    let scatter = || {
+        Plot::scatter(
+            crate::test_support::numeric(&data, "x"),
+            crate::test_support::numeric(&data, "y"),
+        )
+    };
+    let panel = scatter();
     let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, panel)
@@ -121,7 +127,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
         .unwrap();
     let canvas_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
-    let preflight_panel = configured_chart(&data, PlotKind::Scatter);
+    let preflight_panel = scatter();
     let preflight_canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, preflight_panel)
@@ -132,7 +138,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
 
     let directory = test_directory("canvas-single-preflight");
     let output = directory.join("canvas.svg");
-    let rendered_panel = configured_chart(&data, PlotKind::Scatter);
+    let rendered_panel = scatter();
     let rendered_canvas = crate::Canvas::grid(1, 1)
         .unwrap()
         .panel(0, 0, rendered_panel)

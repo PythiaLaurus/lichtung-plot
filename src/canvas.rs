@@ -204,8 +204,19 @@ impl Canvas {
         })
     }
 
-    /// Place one chart in an unoccupied zero-based grid cell.
-    pub fn panel<K: crate::kind::Marker>(
+    /// Place one exact-family chart in an unoccupied zero-based grid cell.
+    ///
+    /// An already erased plot cannot be inserted:
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot::{Canvas, NumericValues, Plot};
+    /// let erased: Plot = Plot::scatter(
+    ///     NumericValues::new("x", [1.0]),
+    ///     NumericValues::new("y", [2.0]),
+    /// ).erase();
+    /// let _ = Canvas::grid(1, 1).unwrap().panel(0, 0, erased);
+    /// ```
+    pub fn panel<K: crate::kind::ExactFamily>(
         mut self,
         row: usize,
         column: usize,

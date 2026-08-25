@@ -39,12 +39,12 @@ impl<K: crate::kind::Marker> Plot<K> {
     ///
     /// Returns every error that would be detected before or during rendering.
     pub fn preflight(&self) -> Result<(), Error> {
-        self.clone().erase().preflight_erased()
+        crate::kind::into_erased(self.clone()).preflight_erased()
     }
 
     #[cfg(test)]
     pub(crate) fn render_with_backend(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        self.clone().erase().render_with_backend_erased(backend)
+        crate::kind::into_erased(self.clone()).render_with_backend_erased(backend)
     }
 
     #[cfg(test)]
@@ -53,7 +53,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         kind: PlotKind,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        self.clone().erase().render_kind_erased(kind, backend)
+        crate::kind::into_erased(self.clone()).render_kind_erased(kind, backend)
     }
 }
 

@@ -23,7 +23,7 @@ impl Plot {
 impl<K: crate::kind::Marker> Plot<K> {
     /// Render once, publish SVG immediately, and return an opaque reusable output.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = self.erase();
+        let plot = crate::kind::into_erased(self);
         let (png_options, svg_text) = plot.output_options();
         let output = Output::new(plot.render_scene()?, png_options, svg_text);
         output.svg(path)
@@ -32,7 +32,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Render once, publish PNG immediately, and return an opaque reusable output.
     #[cfg(feature = "png")]
     pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
-        let plot = self.erase();
+        let plot = crate::kind::into_erased(self);
         let (png_options, svg_text) = plot.output_options();
         let output = Output::new(plot.render_scene()?, png_options, svg_text);
         output.png(path)
@@ -45,7 +45,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         svg_path: impl AsRef<Path>,
         png_path: impl AsRef<Path>,
     ) -> Result<Output, Error> {
-        let plot = self.erase();
+        let plot = crate::kind::into_erased(self);
         let (png_options, svg_text) = plot.output_options();
         let output = Output::new(plot.render_scene()?, png_options, svg_text);
         output.svg_and_png(svg_path, png_path)

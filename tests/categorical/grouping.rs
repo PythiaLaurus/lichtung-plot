@@ -110,7 +110,7 @@ fn same_name_collective_plots(hues: [&str; 6]) -> Vec<(PlotKind, Plot)> {
     ]
 }
 
-fn configured_hue<K: lichtung_plot::kind::Marker + lichtung_plot::kind::Hue>(
+fn configured_hue<K: lichtung_plot::kind::ExactFamily + lichtung_plot::kind::Hue>(
     plot: Plot<K>,
     data: &DataFrame,
     with_hue: bool,

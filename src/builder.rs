@@ -907,10 +907,21 @@ impl Plot<crate::kind::Any> {
     }
 }
 
-impl<K: crate::kind::Marker> Plot<K> {
+impl<K: crate::kind::ExactFamily> Plot<K> {
     /// Consume this plot and erase its compile-time family marker.
     ///
     /// Every owned input and configuration field is moved unchanged.
+    ///
+    /// An erased plot cannot be erased a second time:
+    ///
+    /// ```compile_fail
+    /// use lichtung_plot::{NumericValues, Plot};
+    /// let erased: Plot = Plot::scatter(
+    ///     NumericValues::new("x", [1.0]),
+    ///     NumericValues::new("y", [2.0]),
+    /// ).erase();
+    /// let _ = erased.erase();
+    /// ```
     #[must_use]
     #[expect(
         clippy::too_many_lines,
@@ -1092,7 +1103,7 @@ mod tests {
 
     fn assert_marker<K: crate::kind::Marker>(_: Plot<K>) {}
 
-    fn assert_constructor<K: crate::kind::Marker>(plot: Plot<K>, expected_kind: PlotKind) {
+    fn assert_constructor<K: crate::kind::ExactFamily>(plot: Plot<K>, expected_kind: PlotKind) {
         assert_eq!(plot.kind(), expected_kind);
         assert_eq!(plot.erase().kind(), expected_kind);
     }

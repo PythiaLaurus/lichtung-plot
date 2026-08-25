@@ -16,7 +16,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> CanvasLayout {
-        self.clone().erase().canvas_layout_erased()
+        crate::kind::into_erased(self.clone()).canvas_layout_erased()
     }
 }
 

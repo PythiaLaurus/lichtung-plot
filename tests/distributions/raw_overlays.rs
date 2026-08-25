@@ -9,11 +9,20 @@ fn values(values: &[f64]) -> (lichtung_plot::CategoryValues, lichtung_plot::Nume
     )
 }
 
-fn plot(samples: &[f64], kind: PlotKind, overlay: RawOverlay) -> Plot {
+fn boxplot(samples: &[f64], overlay: RawOverlay) -> Plot<lichtung_plot::kind::Boxplot> {
     let (category, values) = values(samples);
+    Plot::boxplot(category, values).raw_overlay(overlay)
+}
+
+fn violin(samples: &[f64], overlay: RawOverlay) -> Plot<lichtung_plot::kind::Violin> {
+    let (category, values) = values(samples);
+    Plot::violin(category, values).raw_overlay(overlay)
+}
+
+fn plot(samples: &[f64], kind: PlotKind, overlay: RawOverlay) -> Plot {
     match kind {
-        PlotKind::Boxplot => Plot::boxplot(category, values).raw_overlay(overlay).erase(),
-        PlotKind::Violin => Plot::violin(category, values).raw_overlay(overlay).erase(),
+        PlotKind::Boxplot => boxplot(samples, overlay).erase(),
+        PlotKind::Violin => violin(samples, overlay).erase(),
         _ => panic!("unsupported raw-overlay fixture kind {kind:?}"),
     }
 }
@@ -273,17 +282,9 @@ fn overlay_is_clipped_by_explicit_limits_and_drawn_between_summaries_and_axes() 
 fn composed_canvas_preserves_overlay_points_and_one_canvas_lifecycle() {
     let canvas = Canvas::grid(1, 2)
         .unwrap()
-        .panel(
-            0,
-            0,
-            plot(&[1.0, 2.0, 3.0, 4.0], PlotKind::Boxplot, RawOverlay::Points),
-        )
+        .panel(0, 0, boxplot(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Points))
         .unwrap()
-        .panel(
-            0,
-            1,
-            plot(&[1.0, 2.0, 3.0, 4.0], PlotKind::Violin, RawOverlay::Points),
-        )
+        .panel(0, 1, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Points))
         .unwrap();
     let directory = unique_dir("composed-overlay");
     let output = directory.join("plot.svg");
@@ -298,15 +299,7 @@ fn composed_canvas_preserves_overlay_points_and_one_canvas_lifecycle() {
 fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
     let canvas = Canvas::grid(1, 1)
         .unwrap()
-        .panel(
-            0,
-            0,
-            plot(
-                &[1.0, 2.0, 3.0, 4.0],
-                PlotKind::Violin,
-                RawOverlay::Jittered,
-            ),
-        )
+        .panel(0, 0, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Jittered))
         .unwrap()
         .size(180, 160);
     let directory = unique_dir("narrow-overlay-canvas");
@@ -321,15 +314,7 @@ fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
 fn adequate_composed_canvas_accepts_raw_overlay() {
     Canvas::grid(1, 1)
         .unwrap()
-        .panel(
-            0,
-            0,
-            plot(
-                &[1.0, 2.0, 3.0, 4.0],
-                PlotKind::Violin,
-                RawOverlay::Jittered,
-            ),
-        )
+        .panel(0, 0, violin(&[1.0, 2.0, 3.0, 4.0], RawOverlay::Jittered))
         .unwrap()
         .size(640, 480)
         .preflight()

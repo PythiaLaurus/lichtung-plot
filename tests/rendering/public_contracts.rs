@@ -10,27 +10,33 @@ fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 }
 
 #[test]
-fn stable_plot_introspection_survives_erasure_and_canvas_storage() {
+fn erased_plot_retains_common_operations_and_exact_output() {
     use lichtung_plot::{Canvas, PlotKind};
 
     let df = fixture_df();
-    let exact = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y")).size(321, 234);
+    let exact = Plot::scatter(data::numeric(&df, "x"), data::numeric(&df, "y"))
+        .size(321, 234)
+        .title("Erasure parity");
 
     assert_eq!(exact.kind(), PlotKind::Scatter);
     assert_eq!((exact.width(), exact.height()), (321, 234));
     exact.preflight().unwrap();
+
+    Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, exact.clone())
+        .unwrap()
+        .preflight()
+        .unwrap();
+
+    let exact_svg = render(exact.clone(), "exact-before-erasure");
 
     let erased: Plot = exact.erase();
     assert_eq!(erased.kind(), PlotKind::Scatter);
     assert_eq!((erased.width(), erased.height()), (321, 234));
     erased.preflight().unwrap();
 
-    Canvas::grid(1, 1)
-        .unwrap()
-        .panel(0, 0, erased)
-        .unwrap()
-        .preflight()
-        .unwrap();
+    assert_eq!(render(erased, "erased-terminal-output"), exact_svg);
 }
 
 #[test]

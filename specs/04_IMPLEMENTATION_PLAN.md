@@ -40,7 +40,7 @@ and commit each phase as one logical change before starting the next phase.
 | 1 | Internalize `decorations` and `TitleBlock` | R1 | COMPLETE |
 | 2 | Delete overlay and regression report-provenance APIs | R1 | COMPLETE |
 | 3 | Delete public kind and theme inventories and report naming | R1 | COMPLETE |
-| 4 | Restrict erasure and Canvas insertion to exact families | R2 | PENDING |
+| 4 | Restrict erasure and Canvas insertion to exact families | R2 | COMPLETE |
 | 5 | Remove duplicate default PNG compression identity | R3 | PENDING |
 | 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | PENDING |
@@ -101,7 +101,10 @@ Commit: `refactor(api)!: remove accidental introspection surface`
 
 ## Phase R2: Exact-Family Erasure
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: exact and erased builder, composition, lifecycle, terminal-output,
+and compile-fail doctest coverage plus `just verify` passed on 2026-08-25.
 
 Make the architecture's exact-family boundary mechanically enforceable.
 

@@ -4,13 +4,38 @@
 //! [`crate::kind::Any`] is the explicit erased marker used by heterogeneous storage.
 
 mod sealed {
-    pub trait Sealed {}
+    pub trait Sealed: Clone {
+        fn into_erased(plot: crate::Plot<Self>) -> crate::Plot<super::Any>
+        where
+            Self: super::Marker;
+    }
 }
 
 /// A marker admitted as the family parameter of [`crate::Plot`].
 ///
 /// This trait is sealed; callers can use its bound but cannot add plot families.
 pub trait Marker: sealed::Sealed + Clone {}
+
+/// An exact plot-family marker that can cross the explicit erasure boundary.
+///
+/// This trait is sealed. It is implemented by every concrete plot-family marker
+/// and is deliberately not implemented by [`Any`].
+pub trait ExactFamily: Marker {}
+
+/// The erased plot-family marker used by heterogeneous storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Any;
+
+impl sealed::Sealed for Any {
+    fn into_erased(plot: crate::Plot<Self>) -> crate::Plot<Self> {
+        plot
+    }
+}
+impl Marker for Any {}
+
+pub(crate) fn into_erased<K: Marker>(plot: crate::Plot<K>) -> crate::Plot<Any> {
+    <K as sealed::Sealed>::into_erased(plot)
+}
 
 macro_rules! markers {
     ($($name:ident => $documentation:literal),+ $(,)?) => {
@@ -19,14 +44,18 @@ macro_rules! markers {
             #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
             pub struct $name;
 
-            impl sealed::Sealed for $name {}
+            impl sealed::Sealed for $name {
+                fn into_erased(plot: crate::Plot<Self>) -> crate::Plot<Any> {
+                    plot.erase()
+                }
+            }
             impl Marker for $name {}
+            impl ExactFamily for $name {}
         )+
     };
 }
 
 markers! {
-    Any => "The erased plot-family marker used by heterogeneous storage.",
     Scatter => "Scatter-plot family marker.",
     Histogram => "Histogram family marker for sample-derived or caller-computed geometry.",
     Density => "Density-plot family marker.",
