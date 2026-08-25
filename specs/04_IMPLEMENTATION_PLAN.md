@@ -41,10 +41,10 @@ and commit each phase as one logical change before starting the next phase.
 | 2 | Delete overlay and regression report-provenance APIs | R1 | COMPLETE |
 | 3 | Delete public kind and theme inventories and report naming | R1 | COMPLETE |
 | 4 | Restrict erasure and Canvas insertion to exact families | R2 | COMPLETE |
-| 5 | Remove duplicate default PNG compression identity | R3 | PENDING |
+| 5 | Remove duplicate default PNG compression identity | R3 | COMPLETE |
 | 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | PENDING |
-| 8 | Move PNG configuration to explicit terminal operations | R3 | PENDING |
+| 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
 | 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | PENDING |
 | 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
 | 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | PENDING |
@@ -137,7 +137,11 @@ Commit: `feat(api)!: enforce exact-family erasure`
 
 ## Phase R3: Terminal PNG Publication
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: default and SVG-only checks, clippy, focused output and atomic
+publication tests, PNG compression mapping, migrated heatmap coverage, doctests,
+documentation, and `just verify` passed on 2026-08-25.
 
 Move PNG configuration from inert plot state to explicit publication calls and
 remove duplicate public identities.

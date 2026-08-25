@@ -24,30 +24,35 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Render once, publish SVG immediately, and return an opaque reusable output.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
-        let (png_options, svg_text) = plot.output_options();
-        let output = Output::new(plot.render_scene()?, png_options, svg_text);
+        let output = Output::new(plot.render_scene()?, plot.output_svg_text());
         output.svg(path)
     }
 
-    /// Render once, publish PNG immediately, and return an opaque reusable output.
+    /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
     #[cfg(feature = "png")]
     pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
-        let (png_options, svg_text) = plot.output_options();
-        let output = Output::new(plot.render_scene()?, png_options, svg_text);
+        let output = Output::new(plot.render_scene()?, plot.output_svg_text());
         output.png(path)
     }
 
-    /// Render once and transactionally publish SVG and PNG outputs.
+    /// Render once, publish a balanced source-sized PNG without density metadata.
     #[cfg(feature = "png")]
-    pub fn svg_and_png(
+    pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Output, Error> {
+        let plot = crate::kind::into_erased(self);
+        let output = Output::new(plot.render_scene()?, plot.output_svg_text());
+        output.png_preview(path)
+    }
+
+    /// Render once and publish a PNG using the exact caller-provided options.
+    #[cfg(feature = "png")]
+    pub fn png_with_options(
         self,
-        svg_path: impl AsRef<Path>,
-        png_path: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        options: crate::PngOptions,
     ) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
-        let (png_options, svg_text) = plot.output_options();
-        let output = Output::new(plot.render_scene()?, png_options, svg_text);
-        output.svg_and_png(svg_path, png_path)
+        let output = Output::new(plot.render_scene()?, plot.output_svg_text());
+        output.png_with_options(path, options)
     }
 }

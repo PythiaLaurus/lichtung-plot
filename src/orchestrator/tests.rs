@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
-#[cfg(windows)]
-use super::artifacts::finish_committed_publication;
 use super::artifacts::TEMP_FILE_COUNTER;
 use super::backend::NullBackend;
 use super::*;

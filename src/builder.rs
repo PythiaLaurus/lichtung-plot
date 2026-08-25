@@ -509,7 +509,6 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     point_layers: Vec<PointLayer>,
     bar_point_layers: Vec<BarPointLayer>,
     panel_text_annotations: Vec<PanelTextAnnotation>,
-    png_options: crate::PngOptions,
     svg_text: crate::SvgText,
     /// Plot family selected by the semantic constructor and used for
     /// validation and rendering dispatch.
@@ -597,7 +596,6 @@ impl Plot<crate::kind::Any> {
             point_layers: Vec::new(),
             bar_point_layers: Vec::new(),
             panel_text_annotations: Vec::new(),
-            png_options: crate::PngOptions::default(),
             svg_text: crate::SvgText::default(),
             kind,
             marker: PhantomData,
@@ -999,7 +997,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             point_layers,
             bar_point_layers,
             panel_text_annotations,
-            png_options,
             svg_text,
             kind,
             marker: _,
@@ -1075,7 +1072,6 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             point_layers,
             bar_point_layers,
             panel_text_annotations,
-            png_options,
             svg_text,
             kind,
             marker: PhantomData,

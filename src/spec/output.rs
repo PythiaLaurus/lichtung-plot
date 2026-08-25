@@ -1,4 +1,4 @@
-//! Output-format options shared by plot renderers and exporters.
+//! Call-local PNG publication options.
 
 /// CSS pixel density used by SVG renderers.
 #[cfg(feature = "png")]
@@ -16,8 +16,8 @@ pub struct PngOptions {
 impl Default for PngOptions {
     fn default() -> Self {
         Self {
-            sizing: PngSizing::Source,
-            compression: PngCompression::Default,
+            sizing: PngSizing::Dpi(300.0),
+            compression: PngCompression::Balanced,
         }
     }
 }
@@ -41,14 +41,12 @@ pub enum PngSizing {
 /// High-level PNG compression presets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PngCompression {
-    /// Use the encoder's default balanced compression.
-    #[default]
-    Default,
     /// Do not compress. Fastest, largest files.
     None,
     /// Prefer encoding speed over file size.
     Fast,
     /// Balance encoding speed and file size.
+    #[default]
     Balanced,
     /// Spend more time for smaller files.
     High,

@@ -985,7 +985,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    pub(crate) const fn output_options(&self) -> (crate::PngOptions, crate::SvgText) {
-        (self.png_options, self.svg_text)
+    pub(crate) const fn output_svg_text(&self) -> crate::SvgText {
+        self.svg_text
     }
 }

@@ -4,7 +4,9 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use crate::scene::RenderedScene;
-use crate::{Error, PngOptions};
+use crate::Error;
+#[cfg(feature = "png")]
+use crate::{PngCompression, PngOptions, PngSizing};
 
 /// SVG text representation selected before the first terminal output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -22,25 +24,12 @@ pub enum SvgText {
 /// returns the same handle so another format can reuse the exact scene.
 pub struct Output {
     scene: RenderedScene,
-    #[cfg(feature = "png")]
-    png_options: PngOptions,
     svg_text: SvgText,
 }
 
 impl Output {
-    pub(crate) const fn new(
-        scene: RenderedScene,
-        png_options: PngOptions,
-        svg_text: SvgText,
-    ) -> Self {
-        #[cfg(not(feature = "png"))]
-        let _ = png_options;
-        Self {
-            scene,
-            #[cfg(feature = "png")]
-            png_options,
-            svg_text,
-        }
+    pub(crate) const fn new(scene: RenderedScene, svg_text: SvgText) -> Self {
+        Self { scene, svg_text }
     }
 
     /// Publish SVG output atomically to one path.
@@ -53,46 +42,33 @@ impl Output {
         Ok(self)
     }
 
-    /// Publish PNG output atomically to one path.
+    /// Publish a 300-DPI balanced-compression PNG atomically to one path.
     #[cfg(feature = "png")]
     pub fn png(self, path: impl AsRef<Path>) -> Result<Self, Error> {
-        let bytes = self.scene.png_bytes(&self.png_options)?;
-        write_atomic(path.as_ref(), "png", &bytes)?;
-        Ok(self)
+        self.png_with_options(path, PngOptions::default())
     }
 
-    /// Transactionally publish SVG and PNG outputs from the same scene.
+    /// Publish a source-sized balanced-compression PNG without density metadata.
     #[cfg(feature = "png")]
-    pub fn svg_and_png(
-        self,
-        svg_path: impl AsRef<Path>,
-        png_path: impl AsRef<Path>,
-    ) -> Result<Self, Error> {
-        let svg_path = svg_path.as_ref();
-        let png_path = png_path.as_ref();
-        if crate::orchestrator::paths_resolve_to_same_destination(svg_path, png_path)? {
-            return Err(Error::Data(
-                "SVG and PNG output paths must be distinct".into(),
-            ));
-        }
-        let svg = match self.svg_text {
-            SvgText::Selectable => Cow::Borrowed(self.scene.svg_bytes()),
-            SvgText::Paths => Cow::Owned(outlined_svg(&self.scene)?),
-        };
-        let png = self.scene.png_bytes(&self.png_options)?;
-        let (staged_svg, staged_png) =
-            crate::orchestrator::reserve_staging_pair(svg_path, "svg", png_path, "png")?;
-        crate::orchestrator::with_temporary_artifacts(
-            vec![staged_svg.clone(), staged_png.clone()],
-            || {
-                std::fs::write(&staged_svg, &svg).map_err(Error::Io)?;
-                std::fs::write(&staged_png, &png).map_err(Error::Io)?;
-                crate::orchestrator::publish_staged_pair([
-                    (&staged_svg, svg_path),
-                    (&staged_png, png_path),
-                ])
+    pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+        self.png_with_options(
+            path,
+            PngOptions {
+                sizing: PngSizing::Source,
+                compression: PngCompression::Balanced,
             },
-        )?;
+        )
+    }
+
+    /// Publish a PNG atomically using the exact caller-provided options.
+    #[cfg(feature = "png")]
+    pub fn png_with_options(
+        self,
+        path: impl AsRef<Path>,
+        options: PngOptions,
+    ) -> Result<Self, Error> {
+        let bytes = self.scene.png_bytes(&options)?;
+        write_atomic(path.as_ref(), "png", &bytes)?;
         Ok(self)
     }
 }

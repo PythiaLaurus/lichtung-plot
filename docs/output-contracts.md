@@ -22,9 +22,40 @@ PNG requires the `png` feature, which includes text outlining:
 lichtung-plot = { path = "../lichtung-plot", features = ["png"] }
 ```
 
-PNG is rasterized from the canonical SVG scene. `PngSizing` supports source
-dimensions, DPI, scale, width, and height. DPI output treats SVG dimensions as
-CSS pixels at 96 DPI and writes matching physical-density metadata.
+PNG is rasterized from the canonical SVG scene. `.png(path)` publishes at 300
+DPI with balanced compression, scaling canonical CSS pixels from 96 DPI and
+writing matching physical-density metadata. `.png_preview(path)` preserves the
+canonical SVG pixel dimensions, uses balanced compression, and writes no
+physical-density metadata. `.png_with_options(path, options)` applies the exact
+caller's `PngSizing` and `PngCompression` values.
+
+PNG options are call-local. `Plot`, `Canvas`, and the returned `Output` retain no
+PNG configuration, so one scene can independently publish preview, publication,
+and custom PNGs:
+
+```rust
+use lichtung_plot::{NumericValues, Plot, PngCompression, PngOptions, PngSizing};
+
+fn publish() -> Result<(), lichtung_plot::Error> {
+    Plot::scatter(
+        NumericValues::new("x", [1.0]),
+        NumericValues::new("y", [2.0]),
+    )
+    .png_preview("preview.png")?
+    .png_with_options(
+        "custom.png",
+        PngOptions {
+            sizing: PngSizing::Width(1600),
+            compression: PngCompression::High,
+        },
+    )?
+    .png("publication.png")?;
+    Ok(())
+}
+```
+
+Callers that need SVG and PNG output chain independent same-scene publication,
+for example `.svg("plot.svg")?.png_preview("plot.png")`.
 
 PNG text requires at least one installed system font. The preferred order is
 Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, then Arial. If none

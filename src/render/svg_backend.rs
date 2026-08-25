@@ -282,9 +282,9 @@ fn encode_png(pixmap: resvg::tiny_skia::Pixmap, options: &PngOptions) -> Result<
 #[cfg(feature = "png")]
 fn map_png_compression(compression: PngCompression) -> png::Compression {
     match compression {
-        PngCompression::Default | PngCompression::Balanced => png::Compression::Balanced,
         PngCompression::None => png::Compression::NoCompression,
         PngCompression::Fast => png::Compression::Fast,
+        PngCompression::Balanced => png::Compression::Balanced,
         PngCompression::High => png::Compression::High,
     }
 }
@@ -771,6 +771,27 @@ impl Backend for SvgBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn png_compression_presets_keep_their_encoder_mappings() {
+        assert_eq!(
+            std::mem::discriminant(&map_png_compression(PngCompression::None)),
+            std::mem::discriminant(&png::Compression::NoCompression)
+        );
+        assert_eq!(
+            std::mem::discriminant(&map_png_compression(PngCompression::Fast)),
+            std::mem::discriminant(&png::Compression::Fast)
+        );
+        assert_eq!(
+            std::mem::discriminant(&map_png_compression(PngCompression::Balanced)),
+            std::mem::discriminant(&png::Compression::Balanced)
+        );
+        assert_eq!(
+            std::mem::discriminant(&map_png_compression(PngCompression::High)),
+            std::mem::discriminant(&png::Compression::High)
+        );
+    }
 
     #[test]
     fn clip_scopes_emit_deterministic_ids_and_balanced_groups() {

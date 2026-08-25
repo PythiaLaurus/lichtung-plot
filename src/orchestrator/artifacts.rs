@@ -5,18 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::Error;
 
-#[cfg(feature = "png")]
-use crate::output_path::destination_identity;
-
 pub(super) static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-#[cfg(feature = "png")]
-pub(crate) fn paths_resolve_to_same_destination(
-    first: &Path,
-    second: &Path,
-) -> Result<bool, Error> {
-    Ok(destination_identity(first)? == destination_identity(second)?)
-}
 
 pub(crate) fn reserve_unique_sibling_temp_path(
     path: &Path,
@@ -33,24 +22,6 @@ pub(crate) fn reserve_unique_sibling_temp_path(
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),
         }
-    }
-}
-
-#[cfg(feature = "png")]
-pub(crate) fn reserve_staging_pair(
-    first_target: &Path,
-    first_extension: &str,
-    second_target: &Path,
-    second_extension: &str,
-) -> Result<(PathBuf, PathBuf), Error> {
-    let first = reserve_unique_sibling_temp_path(first_target, first_extension)?;
-    match reserve_unique_sibling_temp_path(second_target, second_extension) {
-        Ok(second) => Ok((first, second)),
-        Err(error) => crate::render::backend::finish_scope(
-            Err(error),
-            remove_if_present(&first).map_err(Error::Io),
-            "partial staging reservation",
-        ),
     }
 }
 
@@ -78,108 +49,35 @@ pub(crate) fn publish_staged(staged: &Path, final_path: &Path) -> Result<(), Err
     }
     #[cfg(windows)]
     {
-        publish_staged_pair([(staged, final_path)])
+        publish_staged_windows(staged, final_path)
     }
 }
 
-#[cfg(any(feature = "png", windows))]
-pub(crate) fn publish_staged_pair<const N: usize>(paths: [(&Path, &Path); N]) -> Result<(), Error> {
-    for (_, final_path) in paths {
-        if final_path.exists() && !std::fs::metadata(final_path)?.is_file() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("render destination {} is not a file", final_path.display()),
-            )
-            .into());
-        }
+#[cfg(windows)]
+fn publish_staged_windows(staged: &Path, final_path: &Path) -> Result<(), Error> {
+    if !final_path.exists() {
+        std::fs::rename(staged, final_path)?;
+        return Ok(());
     }
-    let mut backups = Vec::with_capacity(N);
-    for (_, final_path) in paths {
-        if final_path.exists() {
-            let backup = unique_sibling_temp_path(final_path, "backup")?;
-            if let Err(error) = std::fs::rename(final_path, &backup) {
-                let restored = restore_backups(&backups);
-                return crate::render::backend::finish_scope(
-                    Err(error.into()),
-                    restored,
-                    "artifact publication rollback",
-                );
-            }
-            backups.push((backup, final_path.to_path_buf()));
-        }
+    if !std::fs::metadata(final_path)?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("render destination {} is not a file", final_path.display()),
+        )
+        .into());
     }
 
-    let mut published = Vec::with_capacity(N);
-    for (staged, final_path) in paths {
-        if let Err(error) = std::fs::rename(staged, final_path) {
-            let cleanup = rollback_publication(&published, &backups);
-            return crate::render::backend::finish_scope(
-                Err(error.into()),
-                cleanup,
-                "artifact publication rollback",
-            );
-        }
-        published.push(final_path.to_path_buf());
+    let backup = unique_sibling_temp_path(final_path, "backup")?;
+    std::fs::rename(final_path, &backup)?;
+    if let Err(error) = std::fs::rename(staged, final_path) {
+        return crate::render::backend::finish_scope(
+            Err(error.into()),
+            std::fs::rename(&backup, final_path).map_err(Error::Io),
+            "artifact publication rollback",
+        );
     }
-
-    finish_committed_publication(&backups, remove_if_present);
+    let _ = remove_if_present(&backup);
     Ok(())
-}
-
-#[cfg(any(feature = "png", windows))]
-pub(super) fn finish_committed_publication(
-    backups: &[(PathBuf, PathBuf)],
-    mut remove: impl FnMut(&Path) -> std::io::Result<()>,
-) {
-    for (backup, _) in backups {
-        let _ = remove(backup);
-    }
-}
-
-#[cfg(any(feature = "png", windows))]
-fn rollback_publication(
-    published: &[PathBuf],
-    backups: &[(PathBuf, PathBuf)],
-) -> Result<(), Error> {
-    rollback_publication_with(published, backups, remove_if_present, |from, to| {
-        std::fs::rename(from, to)
-    })
-}
-
-#[cfg(any(feature = "png", windows))]
-fn rollback_publication_with(
-    published: &[PathBuf],
-    backups: &[(PathBuf, PathBuf)],
-    mut remove: impl FnMut(&Path) -> std::io::Result<()>,
-    mut restore: impl FnMut(&Path, &Path) -> std::io::Result<()>,
-) -> Result<(), Error> {
-    let mut failures = Vec::new();
-    for path in published {
-        if let Err(error) = remove(path) {
-            failures.push(error.to_string());
-        }
-    }
-    for (backup, final_path) in backups.iter().rev() {
-        if let Err(error) = restore(backup, final_path) {
-            failures.push(format!(
-                "restore {} to {}: {error}",
-                backup.display(),
-                final_path.display()
-            ));
-        }
-    }
-    cleanup_result(&failures, "artifact publication rollback")
-}
-
-#[cfg(any(feature = "png", windows))]
-fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
-    let mut failures = Vec::new();
-    for (backup, final_path) in backups.iter().rev() {
-        if let Err(error) = std::fs::rename(backup, final_path) {
-            failures.push(error.to_string());
-        }
-    }
-    cleanup_result(&failures, "restore previous artifacts")
 }
 
 pub(crate) fn with_temporary_artifacts<T>(
@@ -234,68 +132,5 @@ fn cleanup_result(failures: &[String], action: &str) -> Result<(), Error> {
             "failed to {action}: {}",
             failures.join("; ")
         )))
-    }
-}
-
-#[cfg(all(test, feature = "png"))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rollback_removes_partial_publication_and_restores_previous_artifacts() {
-        let directory = std::env::temp_dir().join(format!(
-            "lichtung-pair-rollback-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&directory).unwrap();
-        let svg = directory.join("plot.svg");
-        let png = directory.join("plot.png");
-        let svg_backup = directory.join("plot.svg.backup");
-        let png_backup = directory.join("plot.png.backup");
-        std::fs::write(&svg, b"new svg").unwrap();
-        std::fs::write(&svg_backup, b"old svg").unwrap();
-        std::fs::write(&png_backup, b"old png").unwrap();
-
-        rollback_publication(
-            std::slice::from_ref(&svg),
-            &[(svg_backup, svg.clone()), (png_backup, png.clone())],
-        )
-        .unwrap();
-
-        assert_eq!(std::fs::read(&svg).unwrap(), b"old svg");
-        assert_eq!(std::fs::read(&png).unwrap(), b"old png");
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn rollback_reports_both_published_cleanup_and_backup_restore_failures() {
-        let published = vec![PathBuf::from("new.svg")];
-        let backups = vec![(PathBuf::from("old.backup"), PathBuf::from("old.svg"))];
-
-        let error = rollback_publication_with(
-            &published,
-            &backups,
-            |_| {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "cannot remove partial publication",
-                ))
-            },
-            |_, _| {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "cannot restore backup",
-                ))
-            },
-        )
-        .unwrap_err()
-        .to_string();
-
-        assert!(error.contains("cannot remove partial publication"));
-        assert!(error.contains("restore old.backup to old.svg: cannot restore backup"));
     }
 }

@@ -12,13 +12,6 @@ use crate::Labels;
 use crate::{BooleanValues, Bounds, CategoryValues, EstimateStatus, Significance, SourceRows};
 
 impl<K: crate::kind::Marker> Plot<K> {
-    /// Configure PNG sizing and compression before the first terminal output.
-    #[must_use]
-    pub const fn png_options(mut self, options: crate::PngOptions) -> Self {
-        self.png_options = options;
-        self
-    }
-
     /// Configure selectable text or outlined text for SVG output.
     #[must_use]
     pub const fn svg_text(mut self, text: crate::SvgText) -> Self {

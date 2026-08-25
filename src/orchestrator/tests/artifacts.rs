@@ -1,6 +1,3 @@
-#[cfg(windows)]
-use std::path::PathBuf;
-
 use super::{
     assert_no_staging_files, publish_staged, reserve_unique_sibling_temp_path, test_directory,
     with_temporary_artifacts, Error,
@@ -81,12 +78,11 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     let data = fixture();
     let options = PngOptions {
         sizing: PngSizing::Scale(0.0),
-        compression: PngCompression::Default,
+        compression: PngCompression::Balanced,
     };
 
     assert!(configured_chart(&data, PlotKind::Scatter)
-        .png_options(options)
-        .png(&output)
+        .png_with_options(&output, options)
         .is_err());
     assert_eq!(std::fs::read(&output).unwrap(), b"existing png artifact");
     assert_no_staging_files(&dir);
@@ -104,7 +100,7 @@ fn chained_outputs_publish_each_file_independently() {
     configured_chart(&data, PlotKind::Scatter)
         .svg(&svg)
         .unwrap()
-        .png(&png)
+        .png_preview(&png)
         .unwrap();
 
     assert!(std::fs::read_to_string(&svg).unwrap().starts_with("<svg"));
@@ -113,23 +109,4 @@ fn chained_outputs_publish_each_file_independently() {
         .starts_with(&[0x89, b'P', b'N', b'G']));
     assert_no_staging_files(&dir);
     std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[cfg(windows)]
-#[test]
-fn backup_cleanup_failure_does_not_reverse_publication_commit() {
-    use super::finish_committed_publication;
-
-    let backups = vec![(PathBuf::from("backup"), PathBuf::from("final"))];
-    let mut attempts = 0;
-
-    finish_committed_publication(&backups, |_| {
-        attempts += 1;
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "simulated backup cleanup failure",
-        ))
-    });
-
-    assert_eq!(attempts, 1);
 }

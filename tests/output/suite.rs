@@ -2,7 +2,7 @@
 use lichtung_plot::SvgText;
 use lichtung_plot::{Canvas, Plot};
 #[cfg(feature = "png")]
-use lichtung_plot::{HistogramBins, HistogramStat, PngOptions, PngSizing};
+use lichtung_plot::{HistogramBins, HistogramStat, PngCompression, PngOptions, PngSizing};
 #[path = "../support/data.rs"]
 mod data;
 use data::{df, DataFrame};

@@ -717,7 +717,11 @@ fn heatmap_png_is_rasterized_from_the_native_gradient_svg() {
     std::fs::create_dir_all(&directory).unwrap();
     let svg_path = directory.join("plot.svg");
     let png_path = directory.join("plot.png");
-    chart(&data).svg_and_png(&svg_path, &png_path).unwrap();
+    chart(&data)
+        .svg(&svg_path)
+        .unwrap()
+        .png_preview(&png_path)
+        .unwrap();
 
     let svg = std::fs::read_to_string(svg_path).unwrap();
     let png = std::fs::read(png_path).unwrap();
