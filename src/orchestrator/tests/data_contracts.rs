@@ -242,10 +242,9 @@ fn line_rejects_non_finite_supplemental_point_before_begin() {
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak m/z", [2.0]),
         crate::NumericValues::new("peak intensity", [f64::INFINITY]),
-        (180, 45, 40),
-        4,
-        0.9,
     )
+    .color((180, 45, 40))
+    .opacity(0.9)
     .unwrap();
     let chart = Plot::line(
         crate::test_support::numeric(&data, "mz"),

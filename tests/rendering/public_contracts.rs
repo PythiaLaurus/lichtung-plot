@@ -104,7 +104,12 @@ fn contextual_builders_preserve_exact_plot_markers() {
     let _: Plot<kind::Qq> = Plot::qq(numeric("value")).reference_line(QqLine::Identity);
     let _: Plot<kind::Line> = Plot::line(numeric("x"), numeric("y"))
         .point_layer(
-            PointLayer::new(numeric("point x"), numeric("point y"), (1, 2, 3), 2, 0.5).unwrap(),
+            PointLayer::new(numeric("point x"), numeric("point y"))
+                .color((1, 2, 3))
+                .radius(2)
+                .unwrap()
+                .opacity(0.5)
+                .unwrap(),
         )
         .band(bounds());
     let _: Plot<kind::Regression> =

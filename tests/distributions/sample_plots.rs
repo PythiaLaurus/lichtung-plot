@@ -52,10 +52,9 @@ fn mass_spectrum_high_intensity_renders_upward() {
             PointLayer::new(
                 lichtung_plot::NumericValues::new("peak m/z", [200.0]),
                 lichtung_plot::NumericValues::new("peak intensity", [10.0]),
-                (222, 45, 38),
-                4,
-                0.9,
             )
+            .color((222, 45, 38))
+            .opacity(0.9)
             .unwrap(),
         )
         .size(320, 240)

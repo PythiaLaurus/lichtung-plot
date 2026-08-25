@@ -45,7 +45,7 @@ and commit each phase as one logical change before starting the next phase.
 | 6 | Expose `Theme` only from the crate root | R1 | COMPLETE |
 | 7 | Use `HistogramKdePoint` for every precomputed histogram KDE | R4 | COMPLETE |
 | 8 | Move PNG configuration to explicit terminal operations | R3 | COMPLETE |
-| 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | PENDING |
+| 9 | Give `PointLayer` automatic style defaults and exact label semantics | R5 | COMPLETE |
 | 10 | Replace dataframe-shaped test shims with native values | R7 | PENDING |
 | 11 | Keep `NumericLabelFormat` narrow and defer general notation | R6 | PENDING |
 
@@ -228,7 +228,12 @@ Commit: `refactor(api)!: unify histogram kde points`
 
 ## Phase R5: Ergonomic Point Layers
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Verification: SVG-only and default checks and clippy, focused line,
+layout/legend, composition, rendering, lifecycle, clipping, and data-contract
+tests, doctests in both feature modes, documentation, and `just verify` passed on
+2026-08-25.
 
 Make supplemental ordinary-line points concise by default while preserving
 selective identity, annotation, and visual control.

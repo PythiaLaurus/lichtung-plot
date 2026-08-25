@@ -250,10 +250,7 @@ use crate::{
 /// let layer = PointLayer::new(
 ///     NumericValues::new("x", [1.5]),
 ///     NumericValues::new("y", [2.5]),
-///     (0, 0, 0),
-///     3,
-///     0.8,
-/// ).unwrap();
+/// );
 /// let _ = plot.point_layer(layer);
 /// ```
 ///

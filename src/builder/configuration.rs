@@ -489,7 +489,11 @@ impl Plot<crate::kind::Qq> {
 }
 
 impl Plot<crate::kind::Line> {
-    /// Append a strict supplemental point layer.
+    /// Append an independently owned supplemental point layer.
+    ///
+    /// Layers accept arbitrary coordinates independent from the primary line
+    /// input. Per-point labels annotate coordinates, while a layer legend label
+    /// identifies the complete layer once.
     #[must_use]
     pub fn point_layer(mut self, layer: PointLayer) -> Self {
         self.point_layers.push(layer);

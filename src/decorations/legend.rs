@@ -157,6 +157,7 @@ pub(crate) struct LegendEntry {
     title: String,
     label: String,
     glyph: LegendGlyph,
+    contributes_hue_level: bool,
 }
 
 impl LegendEntry {
@@ -166,6 +167,7 @@ impl LegendEntry {
             title: String::new(),
             label: String::new(),
             glyph,
+            contributes_hue_level: true,
         }
     }
 
@@ -254,6 +256,17 @@ impl LegendEntry {
 
     pub(crate) fn identity(&self) -> &LegendIdentity {
         &self.identity
+    }
+
+    pub(crate) fn without_hue_level(mut self) -> Self {
+        self.contributes_hue_level = false;
+        self
+    }
+
+    pub(crate) fn coordinated_hue_value_for(&self, field: &str) -> Option<&str> {
+        self.contributes_hue_level
+            .then(|| self.identity.hue_value_for(field))
+            .flatten()
     }
 
     fn exact_eq(&self, other: &Self) -> bool {

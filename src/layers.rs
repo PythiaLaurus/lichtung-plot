@@ -104,17 +104,18 @@ impl GuideSpec {
     }
 }
 
-/// A complete strict point layer owned independently from the plot input.
+/// A strict supplemental point layer owned independently from the primary line.
 ///
-/// Every source row contributes exactly one unconnected point. The layer has
-/// one fixed RGB color, radius, and transparent opacity and creates no legend.
+/// The aligned x/y values are arbitrary caller-selected coordinates. Optional
+/// labels annotate individual points, while an optional legend label identifies
+/// the complete layer once.
 #[derive(Debug, Clone)]
 pub struct PointLayer {
     x: NumericValues,
     y: NumericValues,
     labels: Option<CategoryValues>,
     legend_label: Option<String>,
-    color: (u8, u8, u8),
+    color: Option<(u8, u8, u8)>,
     radius: u32,
     opacity: f64,
 }
@@ -200,42 +201,72 @@ impl BarPointLayer {
 }
 
 impl PointLayer {
-    /// Construct an owned point layer with fixed styling.
+    /// Construct an owned point layer with renderer-owned styling.
     ///
-    /// Column existence, numeric dtypes, and every strict finite row are
-    /// validated during chart preflight before output publication.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when `radius` is zero or `opacity` is not finite and
-    /// strictly between zero and one.
-    pub fn new(
-        x: NumericValues,
-        y: NumericValues,
-        color: (u8, u8, u8),
-        radius: u32,
-        opacity: f64,
-    ) -> Result<Self, Error> {
-        validate_point_style("point-layer", radius, opacity)?;
-        Ok(Self {
+    /// The x/y values may describe raw observations or any other supplemental
+    /// coordinates and need not align with the primary line input. They default
+    /// to the next theme-coordinated color, radius 4, and opacity 0.8. Nonempty,
+    /// aligned, finite values are validated during chart preflight.
+    #[must_use]
+    pub fn new(x: NumericValues, y: NumericValues) -> Self {
+        Self {
             x,
             y,
             labels: None,
             legend_label: None,
-            color,
-            radius,
-            opacity,
-        })
+            color: None,
+            radius: 4,
+            opacity: 0.8,
+        }
     }
 
-    /// Attach one caller-owned label to every point.
+    /// Override the automatic theme color with one fixed RGB color.
+    #[must_use]
+    pub fn color(mut self, color: (u8, u8, u8)) -> Self {
+        self.color = Some(color);
+        self
+    }
+
+    /// Override the default point radius.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `radius` is zero.
+    pub fn radius(mut self, radius: u32) -> Result<Self, Error> {
+        validate_point_radius("point-layer", radius)?;
+        self.radius = radius;
+        Ok(self)
+    }
+
+    /// Override the default point opacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error unless `opacity` is finite and in `(0, 1]`.
+    pub fn opacity(mut self, opacity: f64) -> Result<Self, Error> {
+        if !opacity.is_finite() || opacity <= 0.0 || opacity > 1.0 {
+            return Err(Error::Data(format!(
+                "point-layer opacity must be finite, greater than zero, and at most one; got {opacity}"
+            )));
+        }
+        self.opacity = opacity;
+        Ok(self)
+    }
+
+    /// Attach one caller-owned annotation label to every point.
+    ///
+    /// Point labels do not create legend entries. They must align one-to-one
+    /// with the layer's x/y coordinates.
     #[must_use]
     pub fn labels(mut self, labels: CategoryValues) -> Self {
         self.labels = Some(labels);
         self
     }
 
-    /// Give the layer one legend identity.
+    /// Give the complete layer one legend identity.
+    ///
+    /// This creates at most one legend entry and does not label individual
+    /// points.
     #[must_use]
     pub fn legend_label(mut self, label: impl Into<String>) -> Self {
         self.legend_label = Some(label.into());
@@ -258,21 +289,32 @@ impl PointLayer {
         self.legend_label.as_deref()
     }
 
-    pub(crate) fn point_style(&self) -> crate::render::backend::PointStyle {
-        crate::render::backend::PointStyle::plain(self.color, self.radius)
-            .with_opacity(self.opacity)
+    pub(crate) fn point_style(
+        &self,
+        automatic_color: (u8, u8, u8),
+    ) -> crate::render::backend::PointStyle {
+        crate::render::backend::PointStyle::plain(
+            self.color.unwrap_or(automatic_color),
+            self.radius,
+        )
+        .with_opacity(self.opacity)
     }
 }
 
 fn validate_point_style(role: &str, radius: u32, opacity: f64) -> Result<(), Error> {
-    if radius == 0 {
-        return Err(Error::Data(format!(
-            "{role} radius must be greater than zero"
-        )));
-    }
+    validate_point_radius(role, radius)?;
     if !opacity.is_finite() || !(0.0..1.0).contains(&opacity) {
         return Err(Error::Data(format!(
             "{role} opacity must be finite and strictly between zero and one; got {opacity}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_point_radius(role: &str, radius: u32) -> Result<(), Error> {
+    if radius == 0 {
+        return Err(Error::Data(format!(
+            "{role} radius must be greater than zero"
         )));
     }
     Ok(())

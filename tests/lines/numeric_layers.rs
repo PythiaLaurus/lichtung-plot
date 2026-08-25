@@ -57,14 +57,196 @@ fn style(color: (u8, u8, u8), pattern: LinePattern) -> GuideStyle {
 }
 
 fn point_layer(frame: &DataFrame, x: &str, y: &str, radius: u32, opacity: f64) -> PointLayer {
+    PointLayer::new(data::numeric(frame, x), data::numeric(frame, y))
+        .color((123, 45, 200))
+        .radius(radius)
+        .unwrap()
+        .opacity(opacity)
+        .unwrap()
+}
+
+fn supplemental_point(x: f64, y: f64) -> PointLayer {
     PointLayer::new(
-        data::numeric(frame, x),
-        data::numeric(frame, y),
-        (123, 45, 200),
-        radius,
-        opacity,
+        lichtung_plot::NumericValues::new("supplemental x", [x]),
+        lichtung_plot::NumericValues::new("supplemental y", [y]),
     )
-    .unwrap()
+}
+
+#[test]
+fn automatic_point_layers_use_defaults_and_stable_no_hue_palette_order() {
+    let frame = line_data();
+    let output = svg(line_plot(&frame)
+        .markers(false)
+        .point_layer(supplemental_point(0.25, 1.25))
+        .point_layer(supplemental_point(1.75, 2.75)));
+    let points = output
+        .lines()
+        .filter(|line| line.starts_with("<circle "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(points.len(), 2);
+    assert!(points[0].contains("fill=\"#D55E00\"") && points[1].contains("fill=\"#009E73\""));
+    assert!(points
+        .iter()
+        .all(|point| point.contains("r=\"4\"") && point.contains("fill-opacity=\"0.8\"")));
+}
+
+#[test]
+fn point_layer_builders_validate_radius_and_opacity_immediately() {
+    let layer = supplemental_point(1.0, 2.0);
+
+    assert!(layer.clone().radius(1).is_ok());
+    assert!(layer.clone().radius(0).is_err());
+    assert!(layer.clone().opacity(1.0).is_ok());
+    assert!(layer.clone().opacity(0.0).is_err());
+    assert!(layer.clone().opacity(f64::NAN).is_err());
+    assert!(layer.opacity(f64::INFINITY).is_err());
+}
+
+#[test]
+fn automatic_point_layers_follow_resolved_hue_domain() {
+    let plot = Plot::line(
+        lichtung_plot::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+        lichtung_plot::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
+    )
+    .hue(lichtung_plot::CategoryValues::new("cohort", ["a", "a", "b", "b"]).unwrap())
+    .markers(false)
+    .point_layer(supplemental_point(0.25, 1.5))
+    .point_layer(supplemental_point(0.75, 2.5));
+    let output = svg(plot);
+    let points = output
+        .lines()
+        .filter(|line| line.starts_with("<circle "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(points.len(), 2);
+    assert!(points[0].contains("fill=\"#009E73\"") && points[1].contains("fill=\"#CC79A7\""));
+}
+
+#[test]
+fn canvas_absent_hue_levels_still_reserve_primary_palette_slots() {
+    let left = Plot::line(
+        lichtung_plot::NumericValues::new("left x", [0.0, 1.0]),
+        lichtung_plot::NumericValues::new("left y", [1.0, 2.0]),
+    )
+    .hue(lichtung_plot::CategoryValues::new("cohort", ["local", "local"]).unwrap())
+    .markers(false)
+    .point_layer(supplemental_point(0.5, 1.5).legend_label("selection"));
+    let right = Plot::line(
+        lichtung_plot::NumericValues::new("right x", [0.0, 1.0]),
+        lichtung_plot::NumericValues::new("right y", [2.0, 3.0]),
+    )
+    .hue(lichtung_plot::CategoryValues::new("cohort", ["absent", "absent"]).unwrap())
+    .markers(false);
+    let output = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, left)
+            .unwrap()
+            .panel(0, 1, right)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "point-layer-global-hue-slots",
+    )
+    .unwrap();
+    let points = output
+        .lines()
+        .filter(|line| line.starts_with("<circle "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(points.len(), 2);
+    assert!(points
+        .iter()
+        .all(|point| point.contains("fill=\"#009E73\"")));
+}
+
+#[test]
+fn explicit_point_layer_consumes_its_automatic_palette_position() {
+    let frame = line_data();
+    let output = svg(line_plot(&frame)
+        .markers(false)
+        .point_layer(supplemental_point(0.25, 1.25).color((123, 45, 200)))
+        .point_layer(supplemental_point(1.75, 2.75)));
+    let points = output
+        .lines()
+        .filter(|line| line.starts_with("<circle "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(points.len(), 2);
+    assert!(points[0].contains("fill=\"#7B2DC8\"") && points[1].contains("fill=\"#009E73\""));
+}
+
+#[test]
+fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
+    let frame = line_data();
+    let layer = PointLayer::new(
+        lichtung_plot::NumericValues::new("selected x", [0.5, 1.5]),
+        lichtung_plot::NumericValues::new("selected y", [1.5, 2.5]),
+    )
+    .color((123, 45, 200))
+    .labels(lichtung_plot::CategoryValues::new("annotations", ["first", "second"]).unwrap())
+    .legend_label("Selected coordinates");
+    let output = svg(line_plot(&frame).markers(false).point_layer(layer));
+    let legend = output
+        .split_once("<g id=\"legend\">")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+
+    assert_eq!(legend.matches(">Selected coordinates</text>").count(), 1);
+    assert_eq!(legend.matches("<circle ").count(), 1);
+    assert!(!legend.contains(">first</text>") && !legend.contains(">second</text>"));
+    for label in ["first", "second"] {
+        assert!(text_line(&output, label).contains("fill=\"#7B2DC8\""));
+    }
+    assert_eq!(output.matches("<circle ").count(), 3);
+}
+
+#[test]
+fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
+    let frame = line_data();
+    let layer = |x, y| {
+        supplemental_point(x, y)
+            .color((123, 45, 200))
+            .legend_label("Selected")
+    };
+    let output = svg(line_plot(&frame)
+        .markers(false)
+        .point_layer(layer(0.5, 1.5))
+        .point_layer(layer(1.5, 2.5)));
+    let legend = output
+        .split_once("<g id=\"legend\">")
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0;
+
+    assert_eq!(legend.matches(">Selected</text>").count(), 1);
+    assert_eq!(output.matches("fill=\"#7B2DC8\"").count(), 3);
+}
+
+#[test]
+fn conflicting_duplicate_point_layer_legend_identity_is_rejected() {
+    let frame = line_data();
+    let error = line_plot(&frame)
+        .point_layer(
+            supplemental_point(0.5, 1.5)
+                .color((123, 45, 200))
+                .legend_label("Selected"),
+        )
+        .point_layer(
+            supplemental_point(1.5, 2.5)
+                .color((0, 114, 178))
+                .legend_label("Selected"),
+        )
+        .preflight()
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("compatible semantic titles, labels, and styles"));
 }
 
 #[test]
@@ -253,11 +435,7 @@ fn point_layers_reject_incomplete_or_non_finite_rows() {
     let invalid = PointLayer::new(
         lichtung_plot::NumericValues::nullable("raw_x", [Some(0.0), None, Some(2.0)]),
         lichtung_plot::NumericValues::new("raw_y", [1.0, 2.0, f64::NAN]),
-        (0, 0, 0),
-        3,
-        0.5,
-    )
-    .unwrap();
+    );
     let error = line_plot(&frame)
         .point_layer(invalid)
         .preflight()

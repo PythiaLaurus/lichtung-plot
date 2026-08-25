@@ -114,10 +114,9 @@ fn point_layer_label_uses_math_space_y() {
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [2.0]),
         crate::NumericValues::new("peak y", [3.0]),
-        (180, 45, 40),
-        4,
-        0.9,
     )
+    .color((180, 45, 40))
+    .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["2.0"]).unwrap());
     let chart = Plot::line(
@@ -145,10 +144,9 @@ fn explicit_limits_omit_out_of_range_point_layer_labels_from_svg() {
     let layer = crate::PointLayer::new(
         crate::NumericValues::new("peak x", [-0.1, 2.0, 3.5]),
         crate::NumericValues::new("peak y", [2.0, 3.0, 4.0]),
-        (180, 45, 40),
-        4,
-        0.9,
     )
+    .color((180, 45, 40))
+    .opacity(0.9)
     .unwrap()
     .labels(crate::CategoryValues::new("peak label", ["-0.1", "2.0", "3.5"]).unwrap());
     let chart = Plot::line(

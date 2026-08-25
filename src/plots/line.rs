@@ -80,8 +80,8 @@ fn render_series(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let series = prepare(chart, context.data)?;
-    let point_layers = prepare_point_layers(chart)?;
+    let (series, primary_color_slots) = prepare(chart, context.data)?;
+    let point_layers = prepare_point_layers(chart, primary_color_slots)?;
     let x_range = crate::layout::continuous_auto_range(
         crate::data::min_max(
             series
@@ -156,12 +156,17 @@ fn render_series(
     legends.extend(point_layers.iter().filter_map(|layer| {
         layer.legend_label.as_ref().map(|label| {
             LegendEntry::point(chart.legend_identity(label.clone()), layer.style.clone())
+                .without_hue_level()
         })
     }));
     Ok(PlotRenderResult::new(layout, legends))
 }
 
-fn prepare_point_layers(chart: &Plot) -> Result<Vec<PreparedPointLayer>, Error> {
+fn prepare_point_layers(
+    chart: &Plot,
+    primary_color_slots: usize,
+) -> Result<Vec<PreparedPointLayer>, Error> {
+    let palette = chart.palette();
     chart
         .point_layers()
         .iter()
@@ -191,7 +196,9 @@ fn prepare_point_layers(chart: &Plot) -> Result<Vec<PreparedPointLayer>, Error> 
                 points: x.into_iter().zip(y).collect(),
                 labels,
                 legend_label: layer.legend_label_text().map(str::to_owned),
-                style: layer.point_style(),
+                style: layer.point_style(
+                    palette.colors[(primary_color_slots + index) % palette.colors.len()],
+                ),
             })
         })
         .collect()
@@ -478,7 +485,7 @@ fn draw_series(
 fn prepare<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
-) -> Result<Vec<SeriesData>, Error> {
+) -> Result<(Vec<SeriesData>, usize), Error> {
     let data = data.into();
     let x_col = chart
         .x_col()
@@ -562,7 +569,12 @@ fn prepare<'a>(
             points,
         });
     }
-    Ok(output)
+    let primary_color_slots = if chart.hue_col().is_some() {
+        hue_levels.len()
+    } else {
+        1
+    };
+    Ok((output, primary_color_slots))
 }
 
 #[expect(

@@ -105,7 +105,7 @@ impl Plot {
             .legend_entries
             .iter()
             .fold(Vec::new(), |mut levels, entry| {
-                if let Some(value) = entry.identity().hue_value_for(field) {
+                if let Some(value) = entry.coordinated_hue_value_for(field) {
                     if !levels.iter().any(|level| level == value) {
                         levels.push(value.to_owned());
                     }

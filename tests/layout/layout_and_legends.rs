@@ -125,10 +125,9 @@ fn translated_spectrum_legend_does_not_cover_graphics_or_axes() {
     let layer = PointLayer::new(
         lichtung_plot::NumericValues::new("selected mz", [200.0]),
         lichtung_plot::NumericValues::new("selected intensity", [10.0]),
-        (213, 94, 0),
-        4,
-        0.9,
     )
+    .color((213, 94, 0))
+    .opacity(0.9)
     .unwrap()
     .legend_label("Selected peaks");
     let svg = render(
