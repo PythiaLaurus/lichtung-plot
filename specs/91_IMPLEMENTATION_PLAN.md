@@ -89,7 +89,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
 | T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
 | T2b | Public controls and policies | COMPLETE |
-| T2c | Layout, typography, axes, and grid | PENDING |
+| T2c | Layout, typography, axes, and grid | COMPLETE |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
 | T2e | Ordinary plot marks and local styles | PENDING |
 | T2f | Specialized marks and annotations | PENDING |
@@ -163,7 +163,7 @@ Acceptance:
 
 ## Phase T2: Visual-Property Ownership Inventory
 
-**Status**: COMPLETE
+**Status**: IN PROGRESS
 
 Account for every current visual value before reorganizing implementation.
 
@@ -440,7 +440,7 @@ No production code, test, snapshot, or other specification changed.
 
 ### Subphase T2b: Public Controls And Policies
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Decision record: source reconciliation admits exactly 261 canonical
 T2b records attributed as 32 `spec.rs` public policies, 12 bar/error policies, 5
@@ -508,7 +508,27 @@ exists solely to preserve an accidental current grouping.
 
 ### Subphase T2c: Layout, Typography, Axes, And Grid
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: source reconciliation admits exactly 177 canonical T2c records
+attributed as 12 text-layout records, 4 panel representations, 27 standard
+axis/frame/grid responsibilities, 17 panel-geometry responsibilities, 20 range
+and automatic-tick algorithms, 3 projection invariants, 11 exact-tick planning
+branches, 34 Canvas-layout responsibilities, 5 composed-panel typography
+values, 17 shared title-block responsibilities, 4 canonical axis-text preflight
+branches, 1 ordinary panel-selection route, 4 primitive shared-facet-axis
+responsibilities, and 18 ordinary multiline-axis adjustment responsibilities.
+Module wiring contributes no record. These are source-based counts, not a
+completion estimate. Together with the 483 completed T2a and T2b records, the
+ledger inventories 660 records through completed T2c. T2d through T2h remain
+source-driven and pending.
+
+Verification: independent source-coverage, semantic-boundary, ownership,
+schema, count, class, and table-order review corrected omitted line-height,
+stroke-pattern, ordinary-layout, and route-specific responsibilities. Final
+rereviews found no remaining issue. Tracked-diff checks and `just verify` passed
+on 2026-08-26. No production code, test, snapshot, generated output, or other
+specification changed.
 
 Inventory layout and drawing sources for canvas and panel surfaces, typography,
 panel geometry, axes, ticks, grid, frame sides, projection, ranges, and labels in
