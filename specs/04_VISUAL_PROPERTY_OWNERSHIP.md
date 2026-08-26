@@ -1,6 +1,6 @@
 # Visual Property Ownership Ledger
 
-**Status**: Canonical T2 migration ledger; T2a umbrella IN PROGRESS
+**Status**: Canonical T2 migration ledger; T2a umbrella COMPLETE
 
 This ledger records current production sources and approved target ownership. It
 does not make the target APIs in `03_THEME_SYSTEM.md` current, expose them early,
@@ -16,11 +16,11 @@ independent property sources.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| T2a | Ledger protocol and renderer foundations | IN PROGRESS |
+| T2a | Ledger protocol and renderer foundations | COMPLETE |
 | T2a1 | Current theme and font foundations | COMPLETE |
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
 | T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
-| T2a4 | Lifecycle, output, and artifact foundations | PENDING |
+| T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
 | T2b | Public controls and policies | PENDING |
 | T2c | Layout, typography, axes, and grid | PENDING |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
@@ -709,9 +709,9 @@ The compact codes below expand into each record that cites them.
 
 - The completed T2a2 count is exactly **52**. Every descriptive key appears
   once in each keyed current-state, target-state, and migration/evidence table.
-- T2a1 and T2a2 contain exactly **117 completed T2a records**. T2a3 source
-  reconciliation corrects the four-part T2a plan to **202 records**; the first
-  three subphases complete 162 and leave the 40 T2a4 records pending.
+- T2a1 and T2a2 contain exactly **117 completed T2a records**. T2a3 brought the
+  completed count to 162; T2a4 source reconciliation corrects and completes the
+  four-part T2a plan at **222 records**.
 - Source reconciliation required no net split correction to the initial 52.
   The multi-owner `BracketStyle::color` source is already represented by
   `backend.bracket.combined-color-stroke-meaning` and
@@ -969,9 +969,10 @@ The compact codes below expand into each record that cites them.
   were separated, and Scene changed from 3 to 10 (`+7`) after routes, positive
   checks, and four independent limit declarations were separated, for a net
   correction of `+9`.
-- T2a1, T2a2, and T2a3 now complete exactly **162 records**. The corrected
-  four-part T2a total is **202 records**: 65 T2a1, 52 T2a2, 45 T2a3, and 40
-  pending T2a4 records.
+- T2a1, T2a2, and T2a3 complete exactly **162 records**. Their then-current
+  202-record four-part estimate assigned 40 records to T2a4; T2a4 source
+  reconciliation below supersedes that estimate with **222 records**: 65 T2a1,
+  52 T2a2, 45 T2a3, and 60 T2a4.
 - `backend.svg.incomplete-per-paint-alpha-serialization` is the sole private
   paint-property placement and alpha-routing responsibility and remains owned by
   T5a. T2a1 `backend.svg.rgb-hex-serialization` now owns only deterministic
@@ -993,3 +994,320 @@ The compact codes below expand into each record that cites them.
   independent ownership review found no remaining semantic or schema issue.
   Tracked-diff checks and `just verify` passed on 2026-08-26. No production code,
   tests, snapshots, or other specifications changed in T2a3.
+
+## T2a4: Lifecycle, Output, And Artifact Foundations
+
+This completed section owns Plot lifecycle and sequencing, concrete
+Deferred and Null backend behavior, terminal-output policy and timing, artifact
+staging, and PNG options, sizing, transforms, compression, metadata, and encoder
+lifecycle. It includes the exact deferred PNG expression contexts in
+`src/render/svg_backend.rs` and the exact public PNG policy declarations in
+`src/spec/output.rs`. T2a1 through T2a3 remain the sole owners of palette values,
+abstract backend protocol and validation, SVG/PNG paint serialization, immutable
+scene routes, and Scene resource-limit declarations.
+
+### T2a4 Source Manifest
+
+| ID | Production source | Owned context | Audit disposition |
+| --- | --- | --- | --- |
+| A4-M1 | `src/orchestrator.rs:27-39,56-74,76-81,84-112,136-142,189` | Public/internal preflight routes, selected-kind and closed renderer dispatch, panel-pass sequencing, and post-panel palette reconstruction | Records `lifecycle.plot.public-preflight-route` through `lifecycle.plot.post-panel-appearance-reconstruction`; mixed domain, label, legend, and text-fit contexts are deferred below. |
+| A4-M2 | `src/orchestrator/lifecycle.rs:11-24,33,38-70,75-80,92-93` | Configuration-before-backend, one-canvas routing/finalization, outer-decoration palette reconstruction, plan/render/decor sequencing, category-order validation timing, and panel Null preflight | Records `lifecycle.plot.configuration-before-canvas` through `lifecycle.plot.panel-null-preflight-route`; data, category-order semantics, family-support, matrix-layout, and hue contexts are deferred or rejected below. |
+| A4-M3 | `src/orchestrator/backend.rs:11-228` | Concrete Deferred state machine and each concrete Null terminal selection | Records `backend.deferred.lazy-canvas-state-machine` through `backend.null.bracket-validation-parity`; called validators and inherited trait defaults remain prior-owned. |
+| A4-M4 | `src/orchestrator/output.rs:10-61` | Plot scene preflight/render and five consuming Plot terminal selections | Records `output.plot.preflight-before-scene-render` through `output.plot.explicit-png-terminal`. |
+| A4-M5 | `src/output.rs:8-59` | Reusable scene handle, five consuming Output terminals, and conversion-before-staging timing | Records `output.reusable-scene-handle` through `output.png.explicit-publication-terminal`; `write_atomic` is assigned to A4-M6. |
+| A4-M6 | `src/output.rs:62-68`; `src/orchestrator/artifacts.rs:8-135` | Staged write transaction, unique sibling reservation, platform publication, explicit cleanup, Drop retry, and missing-file fallback | Records `artifact.sibling-temp-reservation` through `artifact.missing-file-cleanup-fallback`. |
+| A4-M7 | `src/spec/output.rs:3-52` | PNG sizing/compression fields, defaults, closed modes/presets, and CSS reference density | Records `output.png.options.sizing-carrier` through `output.png.compression.closed-presets`; `SVG_CSS_DPI` completes `backend.png.preparse-target-prediction`. Ordinary derives are rejected below. |
+| A4-M8 | `src/render/svg_backend.rs:125-299`, limited to T2a3's Deferred T2a4 Matches | PNG option validation, format-local font timing, parse/dimension lifecycle, target prediction/sizing/allocation, transform, compression, metadata, and encoder lifecycle | Records `backend.png.option-validation` through `backend.png.encoder-output-lifecycle`; RGBA8 paint contexts and Scene limit implementations remain prior-owned. |
+
+The manifest is exact for T2a4. It admits no `src/canvas.rs` source. Canvas
+composition lifecycle is T2d-owned, while independent Canvas terminal selections
+remain a T2h residual under the existing source allocation.
+
+### T2a4 Consumer And Evidence References
+
+| Code | Exact production consumers or evidence |
+| --- | --- |
+| A4-C-LIFECYCLE | `Plot::preflight` and every Plot terminal call enter `orchestrator.rs`/`orchestrator/lifecycle.rs`; facets call `preflight_panel`; Canvas calls the Deferred adapter as a consumer at `canvas.rs:390-399`. |
+| A4-C-BACKEND | Every backend scope and primitive emitted during final Plot or Canvas rendering passes through `DeferredBackend`; full Plot preflight uses Deferred over `NullBackend`, while panel, facet-planning, and coordinated-panel passes use Null directly. T2a2 consumer references A2-C-POINT through A2-C-SCOPE enumerate the concrete producers. |
+| A4-C-SCENE | `orchestrator/output.rs:11-19` constructs one `RenderedScene`; `Output` stores it and consuming terminal methods reuse it. T2a3 A3-C-SCENE owns the scene bytes and conversion routes. |
+| A4-C-TERMINAL | Plot terminals at `orchestrator/output.rs:23-61` create the initial scene; Output terminals at `output.rs:21-59` select outlined SVG, exact SVG, default PNG, preview PNG, or explicit PNG without rerendering. |
+| A4-C-ARTIFACT | Every Output publication reaches `write_atomic`, sibling reservation, platform publication, explicit cleanup, and Drop fallback. Chained Output calls perform independent transactions. |
+| A4-C-PNG | `Output::png_with_options` calls `RenderedScene::png_bytes`; `rasterize_svg_bytes_to_png` validates sizing, resolves conversion fonts, parses the canonical scene, allocates/transforms, and encodes. |
+| A4-E-LIFECYCLE | `src/orchestrator/tests/lifecycle.rs`, `src/orchestrator/tests.rs`, and `tests/composition/canvases.rs` cover begin/end counts, preflight/render parity, failure precedence, and composed lifecycle consumers. |
+| A4-E-OUTPUT | `tests/output/multiformat.rs`, `tests/output/png.rs`, and `tests/rendering/contract.rs` cover one-scene reuse, terminal selection, dimensions, preserve/outlined SVG, and conversion failures. |
+| A4-E-ARTIFACT | `src/orchestrator/tests/artifacts.rs` covers unique staging, destination preservation, cleanup, chained publication, and failure paths. |
+| A4-E-PNG | `tests/output/png.rs`, `tests/output/multiformat.rs`, and `render/svg_backend.rs:759-890` cover sizing modes, compression mappings, metadata, RGBA output, limits, and deterministic encoding. |
+
+### T2a4 Current State
+
+| Property | Current source and value | Current consumers | Current behavior | Current layout path | Semantic role | Audit evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `lifecycle.plot.public-preflight-route` | A4-M1 `Plot<K>::preflight` clones and erases, then `preflight_erased` renders through a fresh `NullBackend` | A4-C-LIFECYCLE | Runs the complete validating render path without files; errors match that pass, but a later terminal call repeats it | `measure`, `reserve`, collision, `geometry` | Public full-Plot validation route | A4-M1; clone/erase and Null terminal admitted; A4-E-LIFECYCLE |
+| `lifecycle.plot.selected-kind-backend-route` | A4-M1 `render_with_backend_erased` calls `render_kind_erased(self.kind(), backend)` | All actual Plot scene renders | Uses the stored selected kind with no alternate/fallback renderer | All rendering phases | Selected Plot-to-backend lifecycle entry | A4-M1; terminal kind selection admitted |
+| `lifecycle.plot.closed-renderer-dispatch` | A4-M1 exhaustive `PlotKind` match to one plot renderer; grouped bar/horizontal-bar variants share implementations | Every panel render | Exactly one closed renderer arm executes; renderer errors propagate | `geometry`, draw | Closed plot-family render dispatch | A4-M1; each terminal arm admitted; domain assignment excluded |
+| `lifecycle.plot.panel-post-render-order` | A4-M1 family render, then `layers::apply`, resolved labels, axis-text validation, and panel text | Every panel | Fixed call order; a failure stops later steps, while earlier backend calls remain in the deferred pass | `measure`, `geometry`, draw; z-order | Canonical inner panel-pass order | A4-M1; sequence admitted; semantic layer/label values deferred |
+| `lifecycle.plot.post-panel-appearance-reconstruction` | A4-M1 `let palette = chart.palette()` at `orchestrator.rs:189` | Axis tick/title text-fit validation after every `render_panel` pass, including Null preflight and final scene rendering | Rebuilds an owned preset after panel rendering; current closed preset resolution is deterministic, so values equal other reconstructions even though allocation and lookup are independent | `measure` | Post-panel axis-text validation appearance lookup | A4-M1; values prior-owned by T2a1; every pass and reconstruction timing admitted |
+| `lifecycle.plot.configuration-before-canvas` | A4-M2 `validate_configuration(kind)?` before Deferred construction | Every Plot backend render, including Null preflight | Configuration failure occurs before backend begin; no fallback or finalization is attempted | Before all layout/draw | Validation-before-canvas boundary | A4-M2; ordering admitted; validation internals later-owned |
+| `lifecycle.plot.one-canvas-route-and-finalization` | A4-M2 captures `self.width()/height()`, selects facet/open route, then `backend.finish(rendered, "backend canvas")` | Every Plot backend render | One route runs; Deferred decides whether begin/end occur and combines render/end errors | Gates all output | One-canvas routing and finalization | A4-M2; dimensions, route branch, and finish call admitted; A4-E-LIFECYCLE |
+| `lifecycle.plot.outer-decoration-appearance-reconstruction` | A4-M2 `let palette = self.palette()` at `lifecycle.rs:33` | Grid, axes, and Canvas text decoration calls in every unfaceted pass | Rebuilds deterministic appearance before planning in both Null preflight and final rendering; values equal other current preset reconstructions but the owned lookup remains independent | `geometry`, draw | Outer-decoration appearance lookup | A4-M2; values prior-owned; pass timing and reconstruction admitted |
+| `lifecycle.plot.plan-before-draw` | A4-M2 `plan_panel(self, kind, cell, LegendRole::Panel)` completes before the first grid draw | Unfaceted Plot render | Planning can render through validation/geometry consumers before final drawing; no plan object is reused by public preflight | `measure`, `reserve`, collision, `geometry` | Plan-before-final-render sequencing | A4-M2; plan call/timing admitted |
+| `lifecycle.plot.grid-before-panel-order` | A4-M2 Standard branch calls `apply_grid` before `render_panel` | Standard unfaceted plots | Grid is drawn before marks; SelfManaged skips this call | `geometry`, draw; z-order | Grid-before-panel ordering | A4-M2; ordering only; grid policy/value sources later-owned |
+| `lifecycle.plot.planned-chart-handoff` | A4-M2 `plan.chart_for_render(self)` selects a render chart, then context and `render_panel`; outer palette remains from original `self` | Unfaceted Plot render | Planned chart changes can affect panel rendering while outer decoration appearance remains separately reconstructed from the original Plot | `measure`, `geometry`, draw | Plan-to-render Plot/appearance handoff | A4-M2; chart selection and sequencing admitted; data rows excluded |
+| `lifecycle.plot.post-panel-decoration-order` | A4-M2 significance after panel, then Standard axes, legend, and canvas text; SelfManaged performs none | Unfaceted Plot render | Fixed post-mark order; first error stops later decorations | `geometry`, draw; z-order | Marks-before-decoration ordering | A4-M2; sequence admitted; annotation/axis/legend values later-owned |
+| `lifecycle.plot.panel-null-preflight-route` | A4-M2 `preflight_panel` first calls `validate_category_order_configuration(kind)`, then builds one context and calls `render_panel(..., &mut NullBackend)` | Facet and coordination planning | Category-order validation precedes context construction and direct Null rendering; no canvas begin/end occurs, and the returned `PlotRenderResult` feeds later coordination | `measure`, `geometry` | Panel-level validating render route | A4-M2; validation timing and Null terminal admitted; category-order semantics are deferred to T2b/T2g and data transport is rejected |
+| `backend.deferred.lazy-canvas-state-machine` | A4-M3 stores backend, configured width/height, and `begun=false`; every scope/draw lazily starts; explicit begin accepts caller dimensions; explicit `end` ensures start then forwards without clearing `begun`; `finish` conditionally starts/ends | A4-C-BACKEND | First operation starts once; successful empty render is started then ended; pre-start failure returns untouched; begun render normally attempts end and combines errors; explicit begin may use dimensions differing from stored values; explicit end permits later forwarding and can make `finish` call the underlying end again | Gates all backend output | Concrete lazy one-canvas adapter | A4-M3; constructor, every delegate, explicit-end defect, and finish branches admitted; A4-E-LIFECYCLE |
+| `backend.null.canvas-lifecycle-parity` | A4-M3 Null `begin` and `end` unconditionally return `Ok(())` | Full Plot preflight through Deferred; direct panel preflight bypasses these lifecycle methods | Ignores dimensions and canvas balance; ordinary layer defaults are inherited no-ops | `none`; lifecycle only | Validating-null canvas lifecycle | A4-M3; concrete methods and direct-panel bypass admitted; trait defaults prior-owned |
+| `backend.null.clip-validation-parity` | A4-M3 Null `begin_clip` calls `validate_clip_region`; `end_clip` always succeeds | Null render paths using clipping | Validates each opening region but stores no stack and accepts unmatched closure | `geometry` validation only | Validating-null clip behavior | A4-M3; concrete selection admitted; validator prior-owned |
+| `backend.null.scatter-validation-parity` | A4-M3 Null scatter validates points then point style | Null render paths | Empty scatter is accepted; invalid consumed points/style fail in that order; no geometry is stored | `geometry` validation only | Validating-null scatter terminal | A4-M3; terminal selection/order admitted; validators prior-owned |
+| `backend.null.line-degenerate-parity` | A4-M3 independent `<2` early `Ok(())`, else points then line-style validation | Null line calls | Degenerate lines bypass invalid coordinates/style exactly like concrete output backends | `geometry` validation/no-op | Validating-null line arity behavior | A4-M3; branch admitted separately; A4-E-LIFECYCLE |
+| `backend.null.polygon-degenerate-parity` | A4-M3 independent `<3` early `Ok(())`, else points then fill-style validation | Null polygon calls | Degenerate polygons bypass invalid coordinates/style exactly like concrete output backends | `geometry` validation/no-op | Validating-null polygon arity behavior | A4-M3; branch admitted separately |
+| `backend.null.gradient-validation-parity` | A4-M3 forwards complete bounds/vector/stops to `validate_linear_gradient` | Null gradient calls | Complete gradient protocol is checked; no geometry is stored | `geometry` validation only | Validating-null gradient terminal | A4-M3; terminal selection admitted; validator prior-owned |
+| `backend.null.text-validation-parity` | A4-M3 ignores x/y/text and validates only current `TextStyle` | Null text calls | Only finite rotation is checked; font, glyph, size, content, and placement parity remain incomplete | `geometry` validation only | Validating-null text terminal | A4-M3; ignored inputs and validator selection admitted |
+| `backend.null.rounded-rectangle-validation-parity` | A4-M3 validates rounded geometry then fill style | Null rounded-container calls | Accepts current zero extents and oversized radius according to prior validator; style runs only after geometry succeeds | `geometry` validation only | Validating-null rounded-container terminal | A4-M3; order admitted; validators prior-owned |
+| `backend.null.bracket-validation-parity` | A4-M3 forwards bracket/style to `validate_bracket` | Null significance calls | Validates current geometry/style contract and stores no obstacle | `reserve`, `geometry` validation | Validating-null bracket terminal | A4-M3; terminal selection admitted; validator prior-owned |
+| `output.plot.preflight-before-scene-render` | A4-M4 `render_scene` first calls `self.preflight_erased()?` | Initial Plot terminal calls | Executes one complete Null render before constructing the actual SVG backend; successful output therefore plans/renders twice | All preflight layout phases | Plot preflight-to-scene timing | A4-M4; distinct first pass admitted; A4-E-OUTPUT |
+| `output.plot.canonical-scene-render` | A4-M4 constructs `SvgBackend::in_memory(width,height)`, renders again, and builds `RenderedScene` from repeated dimensions plus `into_bytes()` | Initial Plot terminal calls and subsequent Output reuse | Actual scene is a second complete render; scene construction itself accepts supplied dimensions/bytes under T2a3 behavior | All render phases, then `none` storage | Plot canonical-scene construction | A4-M4; actual pass/dimension reads admitted; scene carrier prior-owned |
+| `output.plot.outlined-svg-terminal` | A4-M4 consuming `Plot::svg`: erase, render scene, wrap Output, select `Output::svg` | Public callers | Publishes immediately and returns reusable Output; no sticky format state | `none` after scene | Initial outlined-SVG terminal policy | A4-M4; independent terminal selection admitted |
+| `output.plot.preserve-text-svg-terminal` | A4-M4 consuming `Plot::svg_preserve_text` selects `Output::svg_preserve_text` | Public callers | Same one-scene lifecycle, exact-text SVG selection | `none` after scene | Initial preserve-text SVG terminal policy | A4-M4; independent terminal selection admitted |
+| `output.plot.default-png-terminal` | A4-M4 consuming `Plot::png` selects `Output::png` | Public callers | Same one-scene lifecycle, then default PNG policy | `none` after scene | Initial default-PNG terminal policy | A4-M4; independent terminal selection admitted |
+| `output.plot.preview-png-terminal` | A4-M4 consuming `Plot::png_preview` selects `Output::png_preview` | Public callers | Same one-scene lifecycle, then preview PNG policy | `none` after scene | Initial preview-PNG terminal policy | A4-M4; independent terminal selection admitted |
+| `output.plot.explicit-png-terminal` | A4-M4 consuming `Plot::png_with_options` passes exact `PngOptions` to Output | Public callers | Options are call-local and copied unchanged; no sticky state | `none` after scene | Initial explicit-PNG terminal policy | A4-M4; independent terminal selection admitted |
+| `output.reusable-scene-handle` | A4-M5 `Output { scene: RenderedScene }`; `new` moves exactly one scene | Every chained Output call | Consuming methods return the same handle after success, so subsequent formats reuse the scene without rerendering | `none`; already-rendered layout | One-scene reusable output ownership | A4-M5; distinct ownership wrapper admitted; T2a3 owns inner scene |
+| `output.outlined-svg.conversion-before-staging` | A4-M5 calls `svg_with_text_as_paths()` before `write_atomic` | `Output::svg` | Font/conversion failure occurs before any staging path is reserved | `geometry` conversion after layout | Derive-before-stage outlined-SVG timing | A4-M5; call order admitted; converter prior-owned |
+| `output.outlined-svg.publication-terminal` | A4-M5 consuming `Output::svg` publishes converted bytes with staging extension `"svg"` and returns self | Public/chained callers | One independent outlined publication; prior successful files remain if this call fails | `none` | Reusable outlined-SVG terminal policy | A4-M5; terminal and format selection admitted |
+| `output.preserve-text-svg.publication-terminal` | A4-M5 consuming `Output::svg_preserve_text` publishes borrowed canonical bytes with `"svg"` | Public/chained callers | No parse, font lookup, or conversion before staging | `none` | Reusable preserve-text SVG terminal policy | A4-M5; independent terminal selection admitted |
+| `output.png.default-terminal-options` | A4-M5 `Output::png` delegates with `PngOptions::default()` | Public/chained callers | Selects 300-DPI Balanced on every call; no retained options | `none` | Reusable default-PNG policy selection | A4-M5; default call admitted; declaration is separate A4-M7 source |
+| `output.png.preview-terminal-options` | A4-M5 literal `PngOptions { Source, Balanced }` | Public/chained callers | Source dimensions, Balanced compression, and no DPI metadata; independent of prior calls | `none` | Reusable preview-PNG policy selection | A4-M5; complete literal preset admitted |
+| `output.png.conversion-before-staging` | A4-M5 calls `scene.png_bytes(&options)` before `write_atomic` | `Output::png_with_options` and delegating PNG terminals | Validation, fonts, parse, allocation, and encoding all finish before staging reservation | `none` after raster conversion | Derive-before-stage PNG timing | A4-M5; call order admitted; route prior-owned |
+| `output.png.explicit-publication-terminal` | A4-M5 consuming `Output::png_with_options` publishes derived bytes with `"png"` and returns self | Public/chained callers | Exact call-local options; independent transaction; no fallback rasterizer | `none` | Reusable explicit-PNG terminal policy | A4-M5; independent terminal selection admitted |
+| `artifact.sibling-temp-reservation` | A4-M6 counter starts `0`; sibling name appends `.lichtung-tmp-{pid}-{sequence}.{extension}`; `create_new`; collision retries; missing file name/other I/O fail | Every file publication | Reserves an empty unique sibling atomically; Relaxed sequence plus PID avoids process-local reuse; stale collisions loop | `none` | Unique same-directory staging reservation | A4-M6; declaration, naming, and all loop branches admitted; A4-E-ARTIFACT |
+| `artifact.posix-rename-publication` | A4-M6 non-Windows `std::fs::rename(staged, final_path)` | Non-Windows publications | Ordinary same-directory rename replaces an existing file atomically where the filesystem supports it; errors propagate | `none` | POSIX-like staged destination replacement | A4-M6; cfg branch admitted |
+| `artifact.windows-publication` | A4-M6 Windows: rename directly when absent; reject existing non-file; otherwise generate one unreserved sibling backup candidate with no collision retry, rename destination to it, rename staged to final, rollback on failure, and ignore backup-removal failure | Windows publications | Existing-file replacement is not atomic: the destination is absent between renames; an existing backup candidate makes the first rename fail; failed rollback leaves the destination absent and an untracked backup residual; successful backup cleanup failure is hidden and can also leave an untracked backup | `none` | Windows staged destination replacement | A4-M6; absent/non-file, one-shot backup collision, install/rollback, residual-backup, and ignored-cleanup branches admitted; A4-E-ARTIFACT |
+| `artifact.staged-write-transaction` | A4-M6 `write_atomic` reserves, enters `with_temporary_artifacts`, writes bytes, publishes, then combines work/cleanup results | Every Output terminal | Conversion is already complete; write/publish failure triggers explicit cleanup; primary and cleanup failures are preserved by prior `finish_scope` behavior | `none` | Complete staged file transaction | A4-M6; output/helper contexts grouped by one role |
+| `artifact.explicit-cleanup-failure-retention` | A4-M6 removes every tracked path; successes leave the list, failures append diagnostics and remain for Drop; empty failures succeed, otherwise aggregate | Staged transaction cleanup | Attempts every path; cleanup failure can turn successful work into error or join a primary error | `none` | Deterministic explicit temporary cleanup | A4-M6; retain branch and aggregate branch admitted |
+| `artifact.drop-best-effort-retry` | A4-M6 `Drop` retries every retained path and discards each result | Cleanup-error and unwind fallback | No error can escape Drop; failed files may remain | `none` | Best-effort terminal cleanup fallback | A4-M6; ignored-result branch admitted |
+| `artifact.missing-file-cleanup-fallback` | A4-M6 `remove_if_present`: success or `NotFound` is `Ok`; every other error remains | Explicit and Drop cleanup | Concurrent/already-completed removal is idempotent; permission/type failures are real cleanup failures | `none` | Idempotent temporary-file removal | A4-M6; all result branches admitted |
+| `output.png.options.sizing-carrier` | A4-M7 public `PngOptions::sizing: PngSizing` | Plot/Output explicit PNG terminals and A4-C-PNG | Call-local copied closed mode; no construction validation | `none`; determines target dimensions | PNG target-sizing policy carrier | A4-M7; split field admitted |
+| `output.png.options.compression-carrier` | A4-M7 public `PngOptions::compression: PngCompression` | A4-C-PNG encoder | Call-local copied preset; no sticky storage | `none`; bytes/encode work only | PNG compression policy carrier | A4-M7; split field admitted |
+| `output.png.options.default-preset` | A4-M7 `PngOptions::default = { Dpi(300.0), Balanced }` | `Output::png` | One complete publication preset; 300 is `f32` DPI and writes matching metadata | `none`; target sizing/bytes | Default PNG publication policy | A4-M7; both literals share one preset role |
+| `output.png.sizing.closed-modes` | A4-M7 `Source`, `Dpi(f32)`, `Scale(f32)`, `Width(u32)`, `Height(u32)` | A4-C-PNG | Closed mutually exclusive sizing selection; modes request source identity or aspect-preserving scaling, but final integer aspect is approximate after mode-specific rounding; raw payloads can be invalid | `none`; target dimensions | Closed call-local PNG sizing modes | A4-M7; every variant admitted |
+| `output.png.compression.closed-presets` | A4-M7 `None`, `Fast`, default `Balanced`, `High` | A4-C-PNG | Closed high-level selection; derived `PngCompression::default` is independently Balanced | `none`; encoded bytes/work | Closed PNG compression presets | A4-M7; variants and executable default admitted |
+| `backend.png.option-validation` | A4-M8 `validate_png_options`: Source succeeds; DPI/Scale require finite `>0`; Width/Height require `>0` | A4-C-PNG before fonts/parse | First invalid sizing error stops conversion; compression has no invalid state | `none`; conversion gate | Terminal PNG option validity | A4-M8; match and helper branches admitted |
+| `backend.png.format-local-font-setup-timing` | A4-M8 `configure_system_fonts(options.fontdb_mut())` after target prevalidation and before PNG SVG parse | PNG only; outlined SVG has a separate call | Host discovery/selection occurs after canonical layout and per PNG conversion; preserve SVG bypasses it | Post-layout conversion | PNG-local generation-font timing | A4-M8; call timing admitted; algorithm prior-owned |
+| `backend.png.svg-parse-and-dimension-check` | A4-M8 default usvg options, parse exact scene bytes, compare parsed integer size to supplied CSS width/height | A4-C-PNG | Parse or mismatch is `Error::Render`; no alternate parser or dimension substitution | Post-layout conversion gate | Canonical SVG-to-PNG parser boundary | A4-M8; parse/default/dimension branch admitted |
+| `backend.png.preparse-target-prediction` | A4-M7 `SVG_CSS_DPI=96.0`; A4-M8 computes floating target for all modes and calls Scene target limits before parse and again from `png_target_size` | A4-C-PNG | DPI performs `f32` division by `96.0` before widening the factor to `f64`; Scale widens its `f32`; Width/Height use `f64` aspect arithmetic; this duplicated prediction can differ from later `f32` integer sizing | `none`; preallocation work gate | Preparse PNG target prediction | A4-M7/A4-M8; exact per-mode arithmetic, all arms, and repeated call timing admitted |
+| `backend.png.integer-target-sizing` | A4-M8 `IntSize` Source/`scale_by`/`scale_to_width`/`scale_to_height`, zero-size failure, then integer dimensions sent to Scene limits | A4-C-PNG | Source is identity; DPI/Scale independently multiply each source axis in `f32` and round each product to nearest integer; Width/Height pin the requested axis and compute the other in `f32` with `ceil`; aspect is therefore approximate after integer rounding; `None` rejects zero-sized results and no clamp occurs | `none`; final raster dimensions | Canonical integer PNG target sizing | A4-M8; all mode formulas, round/ceil behavior, zero branch, and repeated limit call admitted; limits prior-owned |
+| `backend.png.target-pixmap-allocation` | A4-M8 `Pixmap::new(size.width(), size.height())` and `None` allocation failure | A4-C-PNG | Allocates only after source/target checks; no lower-resolution fallback | `none`; raster resource allocation | Validated PNG target allocation | A4-M8; dimension/allocation meaning admitted; paint meaning prior-owned |
+| `backend.png.source-target-transform` | A4-M8 independent x/y scale `target/source`, passed to `resvg::render` | A4-C-PNG | Exact integer target fills the pixmap; aspect-preserving modes normally give equal scales, but transform does not enforce equality | `geometry`; raster scaling | Canonical source-to-target raster transform | A4-M8; arithmetic/render transform meaning admitted |
+| `backend.png.compression-mapping` | A4-M8 closed map to `NoCompression`, `Fast`, `Balanced`, `High` | PNG encoder | One direct mapping per preset; no adaptive or fallback compression | `none`; encoded bytes/work | PNG encoder compression adapter | A4-M8; every match arm admitted; A4-E-PNG |
+| `backend.png.dpi-metadata` | A4-M8 DPI mode alone sets equal x/y pixels-per-meter with `png::Unit::Meter`; computes `f64::from(dpi)/0.0254`, checks finite/positive and `u32::MAX`, then rounds to `u32` | DPI PNG encoding | Source/Scale/Width/Height omit metadata; the `u32::MAX` helper branch is defensive but unreachable through production PNG conversion because Scene target-dimension limits reject such DPI first; no clamp | `none`; metadata/bytes | PNG physical-resolution metadata | A4-M8; option branch, Meter unit, conversion, defensive range branch, production ordering, and rounding admitted |
+| `backend.png.encoder-output-lifecycle` | A4-M8 encoder uses pixmap dimensions, writes header, demultiplied image data, finishes, and returns accumulated bytes | A4-C-PNG and output conversion timing | Header/data/finish errors propagate; bytes publish only after complete finish; RGBA8/de-multiplication semantics are prior-owned | `none`; final bytes | Deterministic PNG encoder lifecycle | A4-M8; dimensions/error/output lifecycle admitted; paint contexts excluded |
+
+### T2a4 Target State
+
+| Property | Target classification and owner | Target resolution | Target validation | Public surface | Relationships |
+| --- | --- | --- | --- | --- | --- |
+| `lifecycle.plot.public-preflight-route` | Renderer invariant; private canonical Plot preflight entry | Resolved Plot before any backend canvas | Run the same validator, resolved appearance, planning, and validating draw path as scene creation; no files or alternate route | Retained `Plot::preflight` behavior | Null counterpart `backend.null.canvas-lifecycle-parity`; scene counterpart `output.plot.preflight-before-scene-render` |
+| `lifecycle.plot.selected-kind-backend-route` | Renderer invariant; private selected-kind backend routing | Resolved Plot at one-canvas entry | Stored kind is selected exactly once and must have one closed renderer arm | Private-only | Dispatch `lifecycle.plot.closed-renderer-dispatch`; canvas route `lifecycle.plot.one-canvas-route-and-finalization` |
+| `lifecycle.plot.closed-renderer-dispatch` | Renderer invariant; private closed Plot renderer dispatch | Resolved Plot/panel | Every admitted `PlotKind` has exactly one terminal renderer; no fallback arm | Private-only | Entry `lifecycle.plot.selected-kind-backend-route`; inner order `lifecycle.plot.panel-post-render-order` |
+| `lifecycle.plot.panel-post-render-order` | Renderer invariant; private canonical inner panel-pass sequencing | Resolved Plot/panel after family renderer selection | One resolved appearance and immutable plan govern family render, supplemental layers, labels, text checks, and panel text; first error stops the pass | Private-only | Outer handoff `lifecycle.plot.planned-chart-handoff`; appearance `lifecycle.plot.post-panel-appearance-reconstruction` |
+| `lifecycle.plot.post-panel-appearance-reconstruction` | Renderer invariant; private shared resolved Plot appearance | Before Plot/panel preflight measurement | Resolve once before planning; post-panel text validation in every pass borrows the same immutable value used by measurement and final drawing | Private-only | Split current counterpart `lifecycle.plot.outer-decoration-appearance-reconstruction`; T2a1 preset routing source |
+| `lifecycle.plot.configuration-before-canvas` | Renderer invariant; private validation-before-backend boundary | Resolved Plot before begin | Complete data-independent and data-dependent configuration validation before backend begin; reject without fallback | Private-only | Canvas lifecycle `lifecycle.plot.one-canvas-route-and-finalization` |
+| `lifecycle.plot.one-canvas-route-and-finalization` | Renderer invariant; private balanced one-canvas orchestration | One resolved Plot and canonical canvas dimensions | Exactly one selected route, one successful begin before draws, and one attempted end; preserve render/end failures | Private-only | Abstract lifecycle `backend.protocol.begin-end-lifecycle`; concrete adapter `backend.deferred.lazy-canvas-state-machine` |
+| `lifecycle.plot.outer-decoration-appearance-reconstruction` | Renderer invariant; private shared resolved Plot appearance | Resolved once before plan, preflight, and final draw | Remove the independent outer-decoration reconstruction; planning, Null validation, and final decorations consume the exact shared value | Private-only | Split counterpart `lifecycle.plot.post-panel-appearance-reconstruction`; plan `lifecycle.plot.plan-before-draw` |
+| `lifecycle.plot.plan-before-draw` | Renderer invariant; private immutable Plot render plan | After resolved appearance and before backend begin/draw | Plan once with complete resolved appearance; validate layout, collision, and representability before final drawing | Private-only | Handoff `lifecycle.plot.planned-chart-handoff`; output preflight `output.plot.preflight-before-scene-render` |
+| `lifecycle.plot.grid-before-panel-order` | Renderer invariant; private grid-before-marks ordering | Final Plot draw | Standard grid remains before panel marks; SelfManaged ownership is explicit and validated | Private-only | T2a3 `backend.svg.layer-buffering-and-grid-order`; post-order `lifecycle.plot.post-panel-decoration-order` |
+| `lifecycle.plot.planned-chart-handoff` | Renderer invariant; private plan-to-render Plot/appearance handoff | One resolved Plot and immutable plan | Planned data/range substitutions cannot change resolved appearance; panel and outer decorations consume one owner | Private-only | Plan `lifecycle.plot.plan-before-draw`; inner order `lifecycle.plot.panel-post-render-order` |
+| `lifecycle.plot.post-panel-decoration-order` | Renderer invariant; private marks-before-decoration ordering | Final Plot draw | Closed decoration mode and deterministic significance/axis/legend/text order; one resolved style set | Private-only | Grid sibling `lifecycle.plot.grid-before-panel-order`; T2d/T2f semantic decoration owners |
+| `lifecycle.plot.panel-null-preflight-route` | Renderer invariant; private panel-level validating route | Facet/coordination preflight from resolved Plot | Run the later-owned category-order validator at the canonical pre-panel point, then execute the same panel plan and terminal validation as final render without opening a canvas or mutating appearance | Private-only | Null terminals `backend.null.canvas-lifecycle-parity` through `backend.null.bracket-validation-parity`; category-order semantics remain T2b/T2g-owned |
+| `backend.deferred.lazy-canvas-state-machine` | Renderer invariant; private lazy one-canvas adapter | Canonical Plot/Canvas dimensions at backend boundary | Stored dimensions are authoritative; reject mismatched explicit begin; start at most once, transition to an explicit ended state, reject every post-end operation, call the underlying end exactly once, and preserve primary/finalization errors | Private-only | Abstract lifecycle `backend.protocol.begin-end-lifecycle`; Plot owner `lifecycle.plot.one-canvas-route-and-finalization` |
+| `backend.null.canvas-lifecycle-parity` | Renderer invariant; private validating-null canvas lifecycle | Preflight backend boundary | Enforce fresh begin/end balance and canonical dimensions without producing bytes; no draws outside an open validation canvas | Private-only | Deferred sibling `backend.deferred.lazy-canvas-state-machine`; abstract lifecycle prior-owned |
+| `backend.null.clip-validation-parity` | Renderer invariant; private validating-null clip protocol | Preflight backend boundary | Validate regions and LIFO balance identically to final/geometry backends; reject unmatched close/end | Private-only | Prior owners `backend.protocol.clip-scope-contract` and `backend.validation.clip-region` |
+| `backend.null.scatter-validation-parity` | Renderer invariant; private validating-null scatter parity | Final validating draw boundary | Match final consumed-point, complete RGBA point-style, outline, and extent validation | Private-only | Prior owners `backend.validation.primitive-points` and `backend.validation.point-style`; T6 carrier connection |
+| `backend.null.line-degenerate-parity` | Renderer invariant; private validating-null line parity | Final validating draw boundary | Fewer than two points consumes neither coordinates nor style; every nondegenerate line receives final line validation | Private-only | Prior owner `backend.validation.line-style`; concrete SVG sibling `backend.svg.line-degenerate-noop` |
+| `backend.null.polygon-degenerate-parity` | Renderer invariant; private validating-null polygon parity | Final validating draw boundary | Fewer than three points consumes neither coordinates nor style; every nondegenerate polygon receives complete fill/stroke validation | Private-only | Prior owner `backend.validation.fill-style`; concrete SVG sibling `backend.svg.polygon-degenerate-noop` |
+| `backend.null.gradient-validation-parity` | Renderer invariant; private validating-null gradient parity | Final validating draw boundary | Apply the one complete gradient protocol and complete stop paints with no sorting, repair, or fallback | Private-only | Prior owners `backend.validation.linear-gradient` and `backend.gradient.stop-carrier` |
+| `backend.null.text-validation-parity` | Renderer invariant; private validating-null resolved-text parity | After font/glyph preflight and before final draw | Validate complete paint, stack, glyphs, positive metrics, content interpretation, finite placement, and rotation | Private-only | Prior owners `backend.validation.text-style` and `backend.text.paint-carrier`; timing `backend.png.format-local-font-setup-timing` |
+| `backend.null.rounded-rectangle-validation-parity` | Renderer invariant; private validating-null rounded-container parity | Final validating draw boundary | Match final finite geometry, nonnegative extents, admitted radius, complete fill/stroke, and far-edge checks | Private-only | Prior owners `backend.validation.rounded-rectangle`, `backend.validation.fill-style`, `backend.fill.paint-carrier`, and `backend.fill.stroke-carrier` |
+| `backend.null.bracket-validation-parity` | Renderer invariant; private validating-null bracket parity | After annotation/font preflight | Match final distinct anchors, complete path stroke and label text, gap, and representability validation | Private-only | Prior owners `backend.validation.significance-bracket`, `backend.bracket.typography-carrier`, `backend.bracket.combined-color-stroke-meaning`, and `backend.bracket.combined-color-text-meaning` |
+| `output.plot.preflight-before-scene-render` | Renderer invariant; private single-resolution preflight-to-scene lifecycle | Initial Plot terminal before canonical scene creation | Resolve/validate/plan once, then reuse the exact resolved values and immutable plan for the one final scene render | Private-only | Public preflight `lifecycle.plot.public-preflight-route`; scene render `output.plot.canonical-scene-render` |
+| `output.plot.canonical-scene-render` | Renderer invariant; private one-render canonical-scene construction | After successful initial Plot preflight | One canonical dimension pair, one complete SVG backend pass, successful finalization, and validated scene construction | Private-only | T2a3 `scene.canonical-immutable-storage`; handle `output.reusable-scene-handle` |
+| `output.plot.outlined-svg-terminal` | Explicit policy; retained call-local `Plot::svg` terminal selection | Initial consuming Plot call | Complete one scene, then one outlined publication; no sticky state or alternate format | Retained `Plot::svg` | Output counterpart `output.outlined-svg.publication-terminal` |
+| `output.plot.preserve-text-svg-terminal` | Explicit policy; retained call-local `Plot::svg_preserve_text` selection | Initial consuming Plot call | Complete one scene, then exact preserve-text publication | Retained `Plot::svg_preserve_text` | Output counterpart `output.preserve-text-svg.publication-terminal` |
+| `output.plot.default-png-terminal` | Explicit policy; retained call-local `Plot::png` selection | Initial consuming Plot call | Complete one scene, then apply the one default PNG preset | Retained `Plot::png` | Output counterpart `output.png.default-terminal-options` |
+| `output.plot.preview-png-terminal` | Explicit policy; retained call-local `Plot::png_preview` selection | Initial consuming Plot call | Complete one scene, then Source/Balanced preview policy | Retained `Plot::png_preview` | Output counterpart `output.png.preview-terminal-options` |
+| `output.plot.explicit-png-terminal` | Explicit policy; retained call-local `Plot::png_with_options` selection | Initial consuming Plot call | Complete one scene and apply exact validated call-local options | Retained `Plot::png_with_options` | Output counterpart `output.png.explicit-publication-terminal` |
+| `output.reusable-scene-handle` | Renderer invariant; private one-scene reusable terminal ownership | After initial scene creation and between consuming publications | Store exactly one validated immutable scene; successful methods return ownership unchanged; no rerender or sticky options | Opaque retained `Output` | Inner storage `scene.canonical-immutable-storage`; five Output terminal siblings |
+| `output.outlined-svg.conversion-before-staging` | Renderer invariant; private derive-before-stage outlined-SVG timing | Terminal outlined-SVG request | Complete the one validated conversion before artifact reservation; conversion failure creates no staging file | Private-only | Converter `backend.svg.text-outline-conversion`; publication sibling `output.outlined-svg.publication-terminal` |
+| `output.outlined-svg.publication-terminal` | Explicit policy; retained call-local `Output::svg` selection | Reusable Output terminal | Publish one fully derived outlined SVG independently and return the exact scene handle | Retained `Output::svg` | Timing `output.outlined-svg.conversion-before-staging`; artifact transaction |
+| `output.preserve-text-svg.publication-terminal` | Explicit policy; retained call-local `Output::svg_preserve_text` selection | Reusable Output terminal | Publish exact canonical bytes independently with no font/conversion step | Retained `Output::svg_preserve_text` | T2a3 `scene.preserve-svg-routing`; artifact transaction |
+| `output.png.default-terminal-options` | Explicit policy; retained call-local default-PNG selection | Reusable Output terminal | Select only `output.png.options.default-preset`; no retained/sticky options | Retained `Output::png` | Declaration `output.png.options.default-preset` |
+| `output.png.preview-terminal-options` | Explicit policy; retained call-local preview-PNG selection | Reusable Output terminal | Select Source sizing and Balanced compression with no density metadata | Retained `Output::png_preview` | Modes `output.png.sizing.closed-modes` and `output.png.compression.closed-presets` |
+| `output.png.conversion-before-staging` | Renderer invariant; private derive-before-stage PNG timing | Terminal PNG request | Validate, size, rasterize, and finish bytes before artifact reservation; conversion failure creates no staging file | Private-only | T2a3 `scene.png-routing`; publication sibling `output.png.explicit-publication-terminal` |
+| `output.png.explicit-publication-terminal` | Explicit policy; retained call-local `Output::png_with_options` selection | Reusable Output terminal | Apply exact validated options, publish one fully derived PNG independently, and return the scene handle | Retained `Output::png_with_options` | Timing `output.png.conversion-before-staging`; options carriers |
+| `artifact.sibling-temp-reservation` | Renderer invariant; private unique same-directory staging reservation | Before file write/publication | Require a file name, reserve one nonexisting sibling exclusively, retry collisions, and propagate every other I/O error | Private-only | Transaction `artifact.staged-write-transaction`; cleanup `artifact.missing-file-cleanup-fallback` |
+| `artifact.posix-rename-publication` | Renderer invariant; private atomic same-directory replacement | Final non-Windows publication boundary | One ordinary rename must atomically install staged bytes or leave the old destination unchanged; reject unsupported filesystem behavior | Private-only | Windows sibling `artifact.windows-publication`; staging reservation |
+| `artifact.windows-publication` | Renderer invariant; private atomic same-directory replacement | Final Windows publication boundary | Use a true atomic replace operation: success installs staged bytes in one indivisible step; every failure preserves the old destination; no backup/absence window or rollback chain | Private-only | POSIX sibling `artifact.posix-rename-publication`; cleanup transaction |
+| `artifact.staged-write-transaction` | Renderer invariant; private complete staged-publication transaction | One terminal file call | Reserve sibling, write complete bytes, atomically publish, always attempt explicit staging cleanup, report and aggregate failures, retain failed paths for best-effort Drop retry, and preserve primary plus cleanup errors | Private-only | Reservation and platform-publication records; prior `backend.protocol.scope-cleanup-precedence` |
+| `artifact.explicit-cleanup-failure-retention` | Renderer invariant; private deterministic explicit temporary cleanup | After transaction success/failure | Attempt every path, aggregate failures deterministically, and retain only failed paths for Drop retry | Private-only | Drop `artifact.drop-best-effort-retry`; remover `artifact.missing-file-cleanup-fallback` |
+| `artifact.drop-best-effort-retry` | Renderer invariant; private best-effort terminal cleanup fallback | Object drop after explicit cleanup failure/unwind | Retry retained paths without panic or error escape; no publication state is altered | Private-only | Explicit cleanup `artifact.explicit-cleanup-failure-retention` |
+| `artifact.missing-file-cleanup-fallback` | Renderer invariant; private idempotent temporary-file removal | Explicit and Drop cleanup | Success/NotFound complete removal; all other failures remain observable to explicit cleanup | Private-only | Reservation `artifact.sibling-temp-reservation`; explicit cleanup record |
+| `output.png.options.sizing-carrier` | Explicit policy; retained `PngOptions::sizing` | One PNG terminal call | Closed mode validated before conversion; no sticky storage or silent substitution | Retained `PngOptions::sizing` | Compression sibling `output.png.options.compression-carrier`; modes record |
+| `output.png.options.compression-carrier` | Explicit policy; retained `PngOptions::compression` | One PNG terminal call | Closed preset maps exactly once; no adaptive substitution | Retained `PngOptions::compression` | Sizing sibling; mapping `backend.png.compression-mapping` |
+| `output.png.options.default-preset` | Explicit policy; retained `PngOptions::default` | Plain PNG terminal | Exactly 300 DPI plus Balanced compression; construction yields a complete valid preset | Retained `PngOptions::default` | Terminal `output.png.default-terminal-options`; metadata record |
+| `output.png.sizing.closed-modes` | Explicit policy; retained closed `PngSizing` | One PNG terminal call | Source or one finite-positive DPI/scale/positive dimension; deterministic mode-specific integer target plan with only documented rounding approximation; no fallback | Retained `PngSizing` | Carrier `output.png.options.sizing-carrier`; validation and target-sizing records |
+| `output.png.compression.closed-presets` | Explicit policy; retained closed `PngCompression` | One PNG terminal call | Closed None/Fast/Balanced/High; default remains Balanced; exact encoder mapping | Retained `PngCompression` | Carrier and `backend.png.compression-mapping` |
+| `backend.png.option-validation` | Explicit policy; retained PNG sizing validity responsibility | Before any PNG font/parser/allocation work | Source valid; DPI/Scale finite and strictly positive; Width/Height strictly positive; reject without clamp | Retained behavior of `PngSizing` | Modes `output.png.sizing.closed-modes`; planner `backend.png.preparse-target-prediction` |
+| `backend.png.format-local-font-setup-timing` | Renderer invariant; resolved generation-font timing | Before text measurement and canonical scene creation | Resolve every used stack/glyph once during Plot/Canvas preflight; PNG conversion consumes the same resolved glyph scene and performs no late appearance lookup | Private-only | T2a1 font-resolution records; Null text parity; T2a3 outlined conversion |
+| `backend.png.svg-parse-and-dimension-check` | Renderer invariant; private canonical-scene PNG parser boundary | After validated target plan, before allocation | Parse exact canonical bytes with closed options; parsed dimensions exactly equal stored CSS dimensions; reject without substitution | Private-only | T2a3 `scene.png-routing`; target plan and allocation records |
+| `backend.png.preparse-target-prediction` | Renderer invariant; private one-time validated PNG target plan | Before font/parser/allocation work | Use fixed 96 CSS px/in for DPI, compute one integer target plan with the canonical mode formula, apply Scene limits once, and pass the same plan through parser agreement, allocation, transform, and metadata | Private-only | Actual sizing `backend.png.integer-target-sizing`; T2a3 Scene limit records |
+| `backend.png.integer-target-sizing` | Renderer invariant; private canonical integer PNG target sizing | One validated target plan before allocation | Source is identity; DPI/Scale independently round each `f32` source-axis product to nearest; Width/Height pin the requested axis and ceil the `f32` aspect-derived axis; dimensions stay positive with no second formula, clamp, or divergent revalidation | Private-only | Prediction record; allocation `backend.png.target-pixmap-allocation` |
+| `backend.png.target-pixmap-allocation` | Renderer invariant; private validated PNG target allocation | After exact target plan and parser agreement | Allocate exactly validated dimensions once; allocation failure is terminal with no lower-resolution fallback | Private-only | T2a3 RGBA8 paint serializer; integer target sizing |
+| `backend.png.source-target-transform` | Renderer invariant; private canonical PNG raster transform | Final rasterization from canonical scene to allocated target | Finite positive source/target scales derived from the one plan; transform exactly fills target without crop/substitution | Private-only | Integer target sizing; allocation; T2a3 paint serializer |
+| `backend.png.compression-mapping` | Renderer invariant; private closed PNG compression adapter | Final encoder setup | Each public preset maps exactly to one encoder preset; no adaptive fallback | Private-only | Public `output.png.compression.closed-presets` |
+| `backend.png.dpi-metadata` | Renderer invariant; private exact PNG physical-resolution metadata | Final encoder setup for DPI mode only | Set equal axes with `Unit::Meter` and deterministic nearest-integer pixels-per-meter; production target-plan limits establish representability first, while the helper retains a defensive range rejection; non-DPI modes omit metadata | Private-only | Default preset; target prediction; encoder lifecycle |
+| `backend.png.encoder-output-lifecycle` | Renderer invariant; private deterministic PNG encoder lifecycle | Final private PNG conversion boundary | Exact target dimensions and complete RGBA8 pixels; header, data, and finish must all succeed before bytes escape | Private-only | T2a3 `backend.png.rgba8-paint-serialization`; compression and metadata siblings; output timing |
+
+### T2a4 Migration And Evidence
+
+| Property | Disposition and owning phase | Visual evidence |
+| --- | --- | --- |
+| `lifecycle.plot.public-preflight-route` | `retain`, T3 | No output change; public preflight/no-file and terminal-error parity assertions |
+| `lifecycle.plot.selected-kind-backend-route` | `retain`, T3 | No output change; every exact/erased family reaches its selected renderer once |
+| `lifecycle.plot.closed-renderer-dispatch` | `retain`, T3 | No output change; closed family route and representative family snapshots |
+| `lifecycle.plot.panel-post-render-order` | `retain`, T3 | No output change; layer, label, axis-text, and panel-text ordering assertions |
+| `lifecycle.plot.post-panel-appearance-reconstruction` | `replace`, T3 | No intended built-in change; post-panel validation in Null and final passes shares one resolved appearance identity with planning and draw |
+| `lifecycle.plot.configuration-before-canvas` | `retain`, T3 | No successful-output change; invalid configuration proves zero begin/end calls |
+| `lifecycle.plot.one-canvas-route-and-finalization` | `connect`, T3 | No output change; one begin/end, empty-success, render error, end error, and double-error evidence |
+| `lifecycle.plot.outer-decoration-appearance-reconstruction` | `replace`, T3 | No intended built-in change; pre-plan Null/final passes plus axis/grid/title consumers prove one resolved appearance |
+| `lifecycle.plot.plan-before-draw` | `replace`, T3 | No intended output change; one plan reused by final render and no duplicate planning assertions |
+| `lifecycle.plot.grid-before-panel-order` | `retain`, T3 | No output change; grid-before-marks snapshots and SelfManaged absence evidence |
+| `lifecycle.plot.planned-chart-handoff` | `replace`, T3 | No intended output change; resolved appearance identity survives range/data plan substitution |
+| `lifecycle.plot.post-panel-decoration-order` | `retain`, T3 | No output change; significance/axis/legend/title z-order snapshots |
+| `lifecycle.plot.panel-null-preflight-route` | `connect`, T3 | No output change; facet/coordination preflight and final-panel error parity |
+| `backend.deferred.lazy-canvas-state-machine` | `replace`, T3 | No intended output change; stored-dimension authority, lazy start, empty render, explicit-ended state, post-end rejection, and exactly-once underlying-end tests |
+| `backend.null.canvas-lifecycle-parity` | `connect`, T3 | No successful-output change; canonical/invalid dimensions, fresh begin/end balance, unclosed-scope end rejection, and draw-outside-canvas evidence |
+| `backend.null.clip-validation-parity` | `replace`, T3 | No successful-output change; invalid region, nested LIFO, unmatched close, and unclosed-at-end parity tests |
+| `backend.null.scatter-validation-parity` | `connect`, T6 | No ordinary output change; complete point RGBA/outline validation parity after carrier migration |
+| `backend.null.line-degenerate-parity` | `connect`, T3 | No output change; short-line bypass and nondegenerate invalid-style parity |
+| `backend.null.polygon-degenerate-parity` | `connect`, T6 | No ordinary output change; short-polygon bypass and complete fill/stroke parity |
+| `backend.null.gradient-validation-parity` | `retain`, T3; complete stop paint connects in T6 | No output change through T3; every gradient geometry/order branch matches final failure, and T6 adds complete RGBA stop-paint parity |
+| `backend.null.text-validation-parity` | `replace`, T5a; complete text paint connects in T6 | Intentional earlier font/glyph/style failures in T5a with preflight/final content, placement, rotation, and glyph parity; T6 adds complete text-paint parity |
+| `backend.null.rounded-rectangle-validation-parity` | `replace`, T3; complete fill/stroke connects in T6 | No ordinary output change in T3; zero/invalid extent, oversized-radius, far-edge, and style-order parity assertions, with complete RGBA fill/stroke parity in T6 |
+| `backend.null.bracket-validation-parity` | `retain`, T3; resolved typography and complete label paint connect in T5a; complete path paint connects in T5c | No T3 output change; invalid anchors/path geometry/style and significance snapshots, T5a label glyph/metric/paint parity, and T5c complete path-paint parity |
+| `output.plot.preflight-before-scene-render` | `replace`, T3 | No intended visual change; one resolution/plan plus one final render call-count evidence |
+| `output.plot.canonical-scene-render` | `connect`, T3 | No output change; exact dimensions, completed bytes, and one-scene construction assertions |
+| `output.plot.outlined-svg-terminal` | `retain`, T3 | No output change; immediate outlined publication and returned Output reuse |
+| `output.plot.preserve-text-svg-terminal` | `retain`, T3 | No output change; exact preserve-text publication and returned Output reuse |
+| `output.plot.default-png-terminal` | `retain`, T3 | No output change; 300-DPI/Balanced output and returned Output reuse |
+| `output.plot.preview-png-terminal` | `retain`, T3 | No output change; source dimensions, no density metadata, and returned Output reuse |
+| `output.plot.explicit-png-terminal` | `retain`, T3 | No output change; exact call-local sizing/compression and no sticky state |
+| `output.reusable-scene-handle` | `connect`, T3 | No output change; one render across chained SVG/PNG calls and exact scene-byte reuse |
+| `output.outlined-svg.conversion-before-staging` | `retain`, T3 | No output change; conversion failure leaves no staging artifact or destination mutation |
+| `output.outlined-svg.publication-terminal` | `retain`, T3 | No output change; independent chained outlined publication and destination preservation |
+| `output.preserve-text-svg.publication-terminal` | `retain`, T3 | No output change; exact canonical-byte publication and no font lookup |
+| `output.png.default-terminal-options` | `retain`, T3 | No output change; repeated/chained plain PNG always selects the complete default preset |
+| `output.png.preview-terminal-options` | `retain`, T3 | No output change; repeated/chained preview remains Source/Balanced and metadata-free |
+| `output.png.conversion-before-staging` | `retain`, T3 | No output change; invalid sizing/font/parse/encode failure creates no staging artifact |
+| `output.png.explicit-publication-terminal` | `retain`, T3 | No output change; exact options and independent chained publication evidence |
+| `artifact.sibling-temp-reservation` | `retain`, T3 | No output change; collision retry, sibling placement, no-file-name, and other-I/O tests |
+| `artifact.posix-rename-publication` | `retain`, T3 | No output change; successful replacement and old-destination preservation on rename failure |
+| `artifact.windows-publication` | `replace`, T3 | Intentional contract correction; current-branch evidence covers absent/non-file targets, one-shot backup collision, install failure with successful rollback, failed rollback with absent destination and untracked backup, and ignored backup cleanup; replacement-platform evidence proves no absence window and old-file preservation on every failed atomic replace |
+| `artifact.staged-write-transaction` | `retain`, T3 | No output change; write/publish/cleanup primary-plus-cleanup failure matrix |
+| `artifact.explicit-cleanup-failure-retention` | `retain`, T3 | No output change; all-path attempt, aggregate failure, and retained-path retry evidence |
+| `artifact.drop-best-effort-retry` | `retain`, T3 | No output change; unwind/drop retry without panic and permitted residual-file evidence |
+| `artifact.missing-file-cleanup-fallback` | `retain`, T3 | No output change; present, already-missing, and non-NotFound removal branches |
+| `output.png.options.sizing-carrier` | `retain`, T3 | No output change; compile/runtime evidence for exact call-local mode transport |
+| `output.png.options.compression-carrier` | `retain`, T3 | No output change; exact call-local preset transport and no sticky state |
+| `output.png.options.default-preset` | `retain`, T3 | No output change; exact 300-DPI/Balanced dimensions, metadata, and compression selection |
+| `output.png.sizing.closed-modes` | `retain`, T3 | No output change; Source/DPI/Scale/Width/Height dimensions and documented integer aspect-rounding approximation tests |
+| `output.png.compression.closed-presets` | `retain`, T3 | No output change; all four encoder mappings and both Balanced defaults |
+| `backend.png.option-validation` | `retain`, T3 | No successful-output change; NaN/infinite/nonpositive DPI/scale and zero width/height rejection |
+| `backend.png.format-local-font-setup-timing` | `replace`, T5a | Intentional font-timing correction; missing/non-Latin glyph parity across layout, outlined SVG, and PNG |
+| `backend.png.svg-parse-and-dimension-check` | `retain`, T3 | No output change; malformed scene and exact dimension-mismatch rejection |
+| `backend.png.preparse-target-prediction` | `replace`, T3 | No intended output change; one target plan, one limit call, `f32` DPI-division boundary, and no floating/integer formula divergence evidence |
+| `backend.png.integer-target-sizing` | `connect`, T3 | No output change for admitted cases; Source identity, independent nearest rounding for DPI/Scale, pinned-axis plus ceil for Width/Height, approximate aspect, and no-zero target tests |
+| `backend.png.target-pixmap-allocation` | `retain`, T3 | No successful-output change; validated dimensions and terminal allocation failure without fallback |
+| `backend.png.source-target-transform` | `retain`, T3 | No output change; exact edge/corner scaling at every sizing mode |
+| `backend.png.compression-mapping` | `retain`, T3 | No visual change; exact encoder discriminant and deterministic-byte evidence |
+| `backend.png.dpi-metadata` | `retain`, T3 | No visual change; DPI-only equal-axis `Unit::Meter` pHYs values and rounding, direct helper test of the defensive `u32::MAX` branch, integration proof that production target sizing rejects first, and non-DPI metadata omission tests |
+| `backend.png.encoder-output-lifecycle` | `retain`, T3 | No output change; dimensions/header/data/finish failures and complete deterministic bytes |
+
+### Deferred T2a4 Matches
+
+| Source match | Deferred responsibility |
+| --- | --- |
+| `src/orchestrator.rs:113-135` | T2g semantic x/y domain assignment. |
+| `src/orchestrator.rs:146-176` | T2g categorical raw/display identity resolution and tick-key storage. |
+| `src/orchestrator.rs:177-179` | T2d legend-entry display resolution. |
+| `src/orchestrator.rs:191-235`, excluding the admitted `palette()` reconstruction at line 189 | T2c `0.9`, `0.4`, `max(1.0)`, text widths, and axis-text measurement policy. Palette values remain prior-owned by T2a1. |
+| `src/orchestrator/lifecycle.rs:27-32,81-86` | T2b significance family-support validation. |
+| `src/orchestrator/lifecycle.rs:34-37` | T2c/T2f exact Matrix-versus-ordinary panel geometry contexts; T2a4 owns only subsequent lifecycle timing. |
+| `src/orchestrator/lifecycle.rs:80` | T2a4 owns validation-before-context timing in `lifecycle.plot.panel-null-preflight-route`; validator semantics are split between T2b public policy/family support and T2g categorical ordering/domain ownership. |
+| `src/orchestrator/lifecycle.rs:95-115` | T2g coordinated hue identity collection. |
+| `src/canvas.rs:390-430` | T2d Canvas composition lifecycle and composed-scene construction; these are T2a4 consumer counterparts, not source records. |
+| `src/canvas.rs:432-464` | T2h residual independent Canvas terminal selections. T2a4's written source scope does not admit `canvas.rs`. |
+| `src/spec.rs:25` | Crate-private transport of T2a4-owned `SVG_CSS_DPI`; not a T2b public source. |
+| `src/spec.rs:26` and `src/lib.rs:75` | T2b public module/crate-root PNG type re-exports; the underlying `src/spec/output.rs:3-52` declarations remain exact T2a4 policy sources. |
+
+### Prior-Owned T2a4 Matches
+
+| Source match | Prior owner and reason |
+| --- | --- |
+| Palette fields consumed after `chart.palette()`/`self.palette()` | T2a1 owns every value; T2a4 records only independent reconstruction timing and lifecycle divergence. |
+| `validate_*` calls in `src/orchestrator/backend.rs` | T2a2 owns validator declarations/branches; T2a4 owns each concrete Null terminal selection, ordering, and line/polygon no-op. |
+| Null inherited ordinary-layer and Grid-role defaults | T2a2 `backend.protocol.ordinary-layer-fallbacks` and `backend.protocol.grid-role-delegation`. |
+| `finish_scope` called by Deferred and temporary-artifact cleanup | T2a2 `backend.protocol.scope-cleanup-precedence`; T2a4 owns these concrete lifecycle call sites. |
+| `RenderedScene` dimensions/bytes and `svg_bytes`, `svg_with_text_as_paths`, `png_bytes` route implementations | T2a3 Scene records; T2a4 owns Output's one-scene handle, terminal selections, and conversion-before-staging timing. |
+| `configure_system_fonts` discovery/selection behavior | T2a1; T2a4 owns only PNG-local invocation timing. |
+| Transparent-pixmap and compositing meanings at `src/render/svg_backend.rs:147-151`; `ColorType::Rgba`, `BitDepth::Eight`, and `take_demultiplied` | T2a3 `backend.png.rgba8-paint-serialization`; T2a4 owns target dimensions, allocation, transform, and encoder lifecycle. |
+| Scene target-limit declarations/branches called at `src/render/svg_backend.rs:196-199,229` | T2a3 `scene.export-dimension-limit`, `scene.target-pixel-work-limit`, and `scene.png-target-positive-finite-limit`; T2a4 owns sizing arithmetic and call timing. |
+
+### Rejected T2a4 Matches
+
+| Source match | Disposition and reason |
+| --- | --- |
+| `src/orchestrator.rs:1-21` | Module/import/re-export plumbing without an independent lifecycle source. |
+| `src/orchestrator.rs:22-25,41-53,82-83,239-241` | Test-only counters, backend entry points, and test module; evidence only. |
+| `src/orchestrator/lifecycle.rs:47,49-52,87-91,117-129` data/source-row meanings | Data/context transport and integrity, not visual or output policy. Their surrounding call order is admitted where applicable; the separate category-order validation timing at line 80 is admitted rather than rejected. |
+| `debug_assert_eq!` at `src/orchestrator/lifecycle.rs:71` | Debug-only consistency evidence, not production behavior. |
+| Documentation comments, imports, visibility, and ordinary non-`Default` derives in A4-M1-A4-M8 | Language/documentation plumbing. Executable defaults and `#[default]` compression selection remain admitted. |
+| Error-message wording, interpolated diagnostic values, and artifact scope/action strings | Non-visual diagnostics; every controlling failure branch remains admitted. |
+| Paths, scene bytes, labels, points, styles, bounds, and caller option payloads merely transported through admitted functions | Data or prior/later-owned values, not duplicate T2a4 property sources. |
+
+### T2a4 Reconciliation
+
+- The completed T2a4 count is exactly **60**: 13 Plot lifecycle and sequencing
+  records, 10 Deferred/null backend records, 15 output-routing and
+  publication-timing records, 7 artifact records, and 15 PNG
+  option/sizing/encoding records. Every descriptive key appears once in each
+  keyed table in the same order.
+- The corrected and completed T2a aggregate is exactly **222**: 65 T2a1, 52
+  T2a2, 45 T2a3, and 60 T2a4 records.
+- Independent review findings corrected the T2a4/T2b PNG declaration boundary,
+  both reconstruction contexts, explicit Deferred end state, Null lifecycle and
+  migration phasing, Windows backup failure paths, exact PNG rounding and
+  metadata ordering, and panel category-order validation timing. These
+  corrections changed no keyed-record count or order.
+- The superseded 40-record estimate changed without new production scope.
+  Source adjudication separated independent Plot/Output terminal selections,
+  preflight/plan/render timing, Null terminal policies, conversion-before-stage
+  timing, artifact failure/cleanup paths, and the five exact public PNG policy
+  declarations. It retained one Deferred state-machine record because those
+  contexts share one semantic role, target owner, and T3 phase.
+- PNG sizing/options are expressly T2a4-owned even though their declarations are
+  public. T2b expressly excludes `src/spec/output.rs:3-52`; only the public PNG
+  type re-exports at `src/spec.rs:26` and `src/lib.rs:75` remain T2b-owned, while
+  `src/spec.rs:25` is crate-private transport. This keeps the manifests disjoint.
+- Windows existing-file publication is currently non-atomic because it renames
+  the destination to one unreserved backup candidate before installing staged
+  bytes, creating an absence window and depending on fallible rollback and
+  hidden cleanup. The target contract is one true atomic same-directory
+  replacement that preserves the old destination on every failure;
+  `artifact.windows-publication` is therefore `replace`, T3.
+- No Canvas source record is admitted. `canvas.rs:390-430` remains T2d-owned and
+  `canvas.rs:432-464` remains a T2h residual under the existing written scopes.
+- A post-correction independent rereview found no remaining semantic, schema,
+  ownership, phase, count, or order issue. Tracked-diff checks and `just verify`
+  passed on 2026-08-26. No production code, tests, snapshots, or other
+  specifications changed in T2a4.

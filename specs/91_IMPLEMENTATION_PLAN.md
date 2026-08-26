@@ -83,11 +83,11 @@ Phase T1 confirmed these rules for the approved target:
 | --- | --- | --- |
 | T1 | Approved theme architecture contract | COMPLETE |
 | T2 | Complete visual-property ownership inventory | IN PROGRESS |
-| T2a | Ledger protocol and renderer foundations | IN PROGRESS |
+| T2a | Ledger protocol and renderer foundations | COMPLETE |
 | T2a1 | Current theme and font foundations | COMPLETE |
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
 | T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
-| T2a4 | Lifecycle, output, and artifact foundations | PENDING |
+| T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
 | T2b | Public controls and policies | PENDING |
 | T2c | Layout, typography, axes, and grid | PENDING |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
@@ -254,8 +254,8 @@ then recorded as a renderer invariant.
 Rows are source-based rather than estimate-based. The pre-audit planning ranges
 were 70-85 foundation records, 58-68 public-control records, 105-120 layout and
 chrome records, and about 106 mark and annotation records. These ranges overlap,
-must not be summed, and are not completion thresholds. The completed initial
-foundation audit supersedes its range with the corrected 202-record T2a split
+must not be summed, and are not completion thresholds. The current source
+reconciliation supersedes that range with the corrected 222-record T2a split
 below; later workstreams update their scopes the same way when source evidence
 differs.
 
@@ -277,15 +277,14 @@ explained exclusion.
 
 ### Subphase T2a: Ledger Protocol And Renderer Foundations
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Create the ledger and inventory foundational private carriers and lifecycle
-sources. Source reconciliation establishes 202 records: 65 theme and font
+sources. Source reconciliation establishes 222 records: 65 theme and font
 records, 52 private style-carrier and backend-protocol records, 45 serialization,
-geometry-recording, and scene records, and 40 lifecycle and output records. T2a1
-through T2a3 have completed 162 of those records; T2a4 retains the remaining 40.
-These counts replace the earlier overlapping estimate for this workstream and
-require four bounded commits before T2a can complete.
+geometry-recording, and scene records, and 60 lifecycle and output records. T2a1
+through T2a4 complete all 222 records. These counts supersede the earlier
+overlapping range and the later 202/40 estimate for this workstream.
 
 T2a owns only foundational carrier, preset construction, draw-boundary,
 serialization, geometry-recording, scene, and lifecycle entries in mixed files.
@@ -344,9 +343,9 @@ declaration is represented by separate private stroke-paint and text-paint
 transport records linked to their T2a1 semantic owners. The existing coordinate
 protocol record also owns integer text positions, so the corrected source
 coverage does not add a record. T2a1 and T2a2 therefore complete exactly 117
-T2a records; T2a3 later corrected the four-part T2a total to 202 and brought the
-completed count to 162. T2a and T2 remain in progress while T2a4 through T2h
-are pending.
+T2a records; T2a3 brought the completed count to 162 under the now-superseded
+202-record estimate, and T2a4 reconciliation corrects the current aggregate to
+222. T2a is complete; T2 remains in progress while T2b through T2h are pending.
 
 Verification: source reconciliation and independent ownership review corrected
 private carrier ownership, the dormant rounded-rectangle fallback, degenerate
@@ -378,8 +377,9 @@ Geometry changed from 11 to 15 after lifecycle and bracket path/label
 responsibilities were separated, and Scene
 changed from 3 to 10 after terminal routes, positive checks, and four independent
 limit declarations were separated. The net correction is nine records without a
-new production source. T2a1 through T2a3 now complete 162 of the corrected 202
-T2a records, leaving 40 for T2a4.
+new production source. T2a1 through T2a3 complete 162 records. Their
+then-current 202-record aggregate left an estimated 40 for T2a4; the T2a4
+source adjudication supersedes those planning figures with 60 and 222.
 
 Independent review retained that key set while correcting post-format geometry
 collapse, stale SVG output reuse, explicit point/polygon joins, paint-aware
@@ -409,19 +409,33 @@ discrepancies assigned to their owning migration phases.
 
 #### Subphase T2a4: Lifecycle, Output, And Artifact Foundations
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Inventory `orchestrator.rs`, `orchestrator/lifecycle.rs`,
 `orchestrator/backend.rs`, `orchestrator/output.rs`,
-`orchestrator/artifacts.rs`, and `output.rs`. Cover appearance reconstruction,
-preflight-to-render reuse, deferred and null backend parity, output dimensions,
-canonical scene routing, format-local font timing, PNG sizing, and exact artifact
-publication. Exclude facet, legend, mark, and scale values owned elsewhere.
+`orchestrator/artifacts.rs`, `output.rs`, targeted PNG contexts in
+`render/svg_backend.rs`, and PNG option declarations in `spec/output.rs`. Cover
+appearance reconstruction, preflight-to-render reuse, deferred and null backend
+parity, output dimensions, canonical scene routing, format-local font timing,
+PNG options and sizing, and exact artifact publication. Exclude facet, legend,
+mark, scale, Canvas, and public re-export sources owned elsewhere.
 
-T2a4 is complete when all 40 initially identified records are either present or
-explicitly corrected, every `Plot::palette()` reconstruction and appearance
-divergence point is traced, and output policies are separated from renderer
-invariants.
+Decision record: `04_VISUAL_PROPERTY_OWNERSHIP.md` appends
+60 keyed records: 13 Plot lifecycle and sequencing records, 10 Deferred/null
+backend records, 15 output-routing and publication-timing records, 7 artifact
+records, and 15 PNG option/sizing/encoding records. The source-based correction
+from the superseded 40-record estimate adds no production scope: it separates
+independent terminal selections, plan/render phases, Null terminals, conversion
+timing, artifact failure paths, and the five T2a4-owned public PNG declarations.
+Independent findings corrected source boundaries and current behavior without
+changing the key count or order.
+
+T2a4 is complete: final independent rereview confirmed all 60 records occur once
+and in identical order in every keyed table, every `Plot::palette()`
+reconstruction and migration-risk divergence point is traced, output policies
+are separated from renderer invariants, and Windows publication targets true
+atomic replacement. Tracked-diff checks and `just verify` passed on 2026-08-26.
+No production code, test, snapshot, or other specification changed.
 
 ### Subphase T2b: Public Controls And Policies
 
@@ -437,11 +451,18 @@ owned by their semantic subphases. In `orchestrator/layers.rs`, T2b owns only th
 family-support and presence-policy validation branches; T2c and T2e own the
 tick-layout and guide-style branches respectively.
 
+T2b expressly excludes the exact `src/spec/output.rs:3-52` PNG declarations,
+which are T2a4-owned. T2b owns only their public type re-export surface at
+`src/spec.rs:26` and `src/lib.rs:75`; `src/spec.rs:25` is crate-private transport
+of the T2a4-owned `SVG_CSS_DPI` constant and is not a T2b public source.
+
 In `orchestrator/validation.rs`, T2b owns every non-data-color family-support,
-category-order, content-presence, annotation-compatibility, marker, connector,
-and policy-validation branch. T2g owns only categorical or continuous
-data-to-color mapping, domain, capacity, and color-channel validation in that
-file; T2c through T2f trace those branches as consumers where applicable.
+category-order policy/family gate, content-presence, annotation-compatibility,
+marker, connector, and policy-validation branch. T2g owns categorical or
+continuous data-to-color mapping, domain, capacity, and color-channel validation,
+plus data-dependent categorical identity, ordering, and exact-order completeness
+branches in that file; T2c through T2f trace those branches as consumers where
+applicable.
 
 At minimum, trace `CategoricalColors`, `GuideStyle`, `PointLayer`,
 `BarPointLayer`, `InteractionStyle`, `SignificanceMarkStyle`,
