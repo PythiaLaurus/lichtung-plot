@@ -1,6 +1,6 @@
 # Visual Property Ownership Ledger
 
-**Status**: Canonical T2 migration ledger; T2a umbrella COMPLETE
+**Status**: Canonical T2 migration ledger; T2a and T2b COMPLETE
 
 This ledger records current production sources and approved target ownership. It
 does not make the target APIs in `03_THEME_SYSTEM.md` current, expose them early,
@@ -21,7 +21,7 @@ independent property sources.
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
 | T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
 | T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
-| T2b | Public controls and policies | PENDING |
+| T2b | Public controls and policies | COMPLETE |
 | T2c | Layout, typography, axes, and grid | PENDING |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
 | T2e | Ordinary plot marks and local styles | PENDING |
@@ -1311,3 +1311,963 @@ remain a T2h residual under the existing source allocation.
   ownership, phase, count, or order issue. Tracked-diff checks and `just verify`
   passed on 2026-08-26. No production code, tests, snapshots, or other
   specifications changed in T2a4.
+
+## T2b: Public Controls And Policies
+
+**Status**: COMPLETE
+
+This section inventories public controls, their exact builder paths, public
+family matrices, fixed caller-geometry representation rules, and the T2b-owned
+erased validation branches. The target API remains non-current until T6.
+
+### T2b Source Manifest
+
+| ID | Production source | Owned context | Audit disposition |
+| --- | --- | --- | --- |
+| B-M1 | `src/spec.rs:28-549,592-618` | Bar spacing, histogram controls, panel text, raw overlay, split heatmap default/local-scale controls, numeric labels, null-row annotations, dumbbell endpoints, waterfall labels, and Plot/Canvas legend policies; exact significance runtime family matrix | 32 records. Three storage-only presence controls are attributed to B-M10. `NumericLabelFormat::format`, legend defaults, unified-series routing, and private render-result transport are deferred below. |
+| B-M2 | `src/spec/bar.rs:6-366` | Public bar source/error-bar policies, independent SD/SE scale controls, independent percentile/CI coverage controls, and shared validators/defaults | 12 records. Numeric payload transport and tests are rejected. |
+| B-M3 | `src/spec/categorical.rs:5-88` | Closed category-order vocabulary and exact categorical color-map construction | 5 records together with exact Plot storage paths. Used-key completeness and mapping expressions are T2g. |
+| B-M4 | `src/spec/estimate.rs:32-303` | Coefficient interval presence, split significance defaults/exact style fields, regression/Q-Q/path policies, point/line vocabularies, interaction exact styles, estimate status, and forest scale | 17 records. `Bounds` data and SVG conversion literals are excluded; generated regression legend text is deferred below. |
+| B-M5 | `src/spec/facet.rs:5-132` | Facet layout and numeric sharing policies | 2 records. Facet planning and rendering are T2d. |
+| B-M6 | `src/layers.rs:8-321` | Guide controls, PointLayer presence/content, optional exact-color precedence, size/alpha defaults and exact overrides, BarPointLayer presence/exact styles, and shared radius validation | 16 records. T2b owns the optional exact-color field/default/setter; private exact-over-selected-accent conversion is T2e, and stable accent-slot selection is T2g. |
+| B-M7 | `src/labels.rs:7-200` | Humanized/raw selection, singular and bulk alias mutation, alias precedence, display-collision failure, and fixed humanization | 6 records. |
+| B-M8 | `src/geometry.rs:7-405` | Five visible dimension identities, one shared nonempty validator, and fixed raincloud/histogram representation, topology, support, positivity, and resource rules | 39 records. Public coordinate payloads are data; fixed representation branches are records. |
+| B-M9 | `src/kind.rs:86-184` | Twenty-three independent public capability matrices after splitting Attached and Pairwise significance and rejecting SourceRows | 23 records. Marker sealing/erasure is API mechanics. |
+| B-M10 | `src/builder.rs:437-598,606-615,716-733`; `src/builder/configuration.rs:14-554`; `src/builder/accessors.rs:419-987`; `src/builder/facets.rs:5-21` | Plot storage/default/setter/accessor paths not owned by the declaration records: panel-text/null-row/waterfall presence, hue/group/series, color-guide title, highlight, estimate labels, complete significance style, seven content/tick controls, ranges, sign/zero/marker/outline/significance/size/domain/band/reference/connector controls, and histogram geometry precedence | 31 records. Theme, point-outline appearance default, data transport, layout, legend suppression, and T2g mapping contexts are prior-owned, rejected, or deferred. |
+| B-M11 | `src/canvas.rs:44-388,466-501,689-704,1079-1094` | Canvas category-label policy, split TextPanel content/validators, grid/cell policies, legend gap, split header policies, range groups, size/content/labels, and independent compatibility branches | 28 records, including complete-row occupancy for shared category labels. Composition implementation and category-domain equality are T2c/T2d/T2g; terminal methods remain T2h residual. |
+| B-M12 | `src/orchestrator/validation.rs:17-78,222-277,285-631,634-668` limited to the exact T2b branches below | Independent family, presence, compatibility, precedence, and failure branches not grouped with one exact declaration/control owner | 42 records, including the four Matrix configuration invariants. Data-dependent order/completeness/color-domain expressions are T2g; axis/layout and numeric data validity are excluded. |
+| B-M13 | `src/orchestrator/layers.rs:13-69,227-259` | Split erased numeric-x/numeric-y matrices, one atomic supplemental/facet incompatibility, exact tick numeric-axis gates, and three guide-axis gates | 8 independent records. The two exact PointLayer family gates are grouped with their B-M6 presence controls. Tick projection/validation is T2c; guide projection/style conversion is T2e. |
+| B-M14 | `src/spec.rs:14-26`; `src/lib.rs:49-77` | Public module/crate-root exposure | Evidence only. Re-exports are not property records; PNG declarations remain T2a4-owned. |
+
+The manifest is exact for the T2b production sources. Source contexts assigned
+to T2a1, T2a2, T2a4, T2c-T2g, or T2h appear only in the disposition tables
+below and are not duplicate T2b records.
+
+### T2b Consumer And Evidence References
+
+| Code | Exact production consumers or evidence |
+| --- | --- |
+| B-C-PLOT | `builder.rs` storage/defaults, `builder/configuration.rs` setters, `builder/accessors.rs` reads, `orchestrator/validation.rs`, `orchestrator/layers.rs`, Plot preflight/rendering, facets, decorations, and plot renderers. |
+| B-C-CANVAS | `canvas.rs` structure/preflight/planning and Canvas composition tests; implementation values remain T2c/T2d/T2g. |
+| B-C-STYLE | `layers.rs`, significance, plot renderers, generated legends, and private backend carriers. Carrier declarations remain T2a2; final conversions remain T2e/T2f. |
+| B-C-SCALE | T2g category/domain/mapping paths, plot renderers, facet coordination, legends, heatmap/beeswarm guides, and Canvas shared-domain planning. |
+| B-C-GEOMETRY | `HistogramInput`/`RaincloudInput`, Plot validation, histogram/raincloud renderers, axis-domain planning, clipping, and final mark geometry. |
+| B-C-LABELS | Axis/title inference, ticks, legends, annotations, facets, Canvas label overrides, and display-domain collision checks. |
+| B-E-COMPILE | Existing compile-pass/compile-fail doctests and public-contract tests for exact family availability; missing matrices are required T6 evidence, not unresolved ownership. |
+| B-E-VISUAL | Existing rendering, annotation, line/layer, heatmap, distribution, facet, Canvas, legend, and visual-regression suites. Focused evidence named per record remains required where absent. |
+| B-L-N | Paint/content/policy only; no current measurement effect. |
+| B-L-M | Measurement or wrapping. |
+| B-L-R | Reservation/range expansion. |
+| B-L-C | Collision planning. |
+| B-L-G | Geometry, projection, or final occupied extent. |
+
+### T2b Current State
+
+| Property | Current source and value | Current consumers | Current behavior | Current layout path | Semantic role | Audit evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `bars.spacing.current-bar-spacing` | B-M1 `BarSpacing::{Comfort,Compact}`; default Comfort; Plot field/setters at `builder.rs:461,547`, `configuration.rs:420-450` | B-C-PLOT | Closed replacement; Bar/HBar only | B-L-G | Within-category series spacing | B-M1; declaration/default/setters grouped |
+| `histogram.binning.current-selection` | B-M1 `HistogramBins::{Auto,Count,Width}` at `spec.rs:38-53`; Plot default/setter/read | B-C-PLOT | Closed statistical geometry policy; payload validity later | B-L-G | Histogram bin geometry selection | B-M1 |
+| `histogram.normalization.current-stat` | B-M1 `HistogramStat::{Count,Probability,Density}` at `spec.rs:55-65`; default Count | B-C-PLOT | Closed y-value preparation policy | B-L-G | Histogram vertical normalization | B-M1 |
+| `histogram.composite.kde-source` | B-M1 `HistogramKde::{Internal,Precomputed}` at `spec.rs:67-84` | B-C-PLOT | Selects generated or caller-computed curve | B-L-G | KDE geometry source | B-M1 |
+| `histogram.composite.presence` | B-M1 `HistogramComposite::{HistogramOnly,KdeAndRug}` at `spec.rs:86-100`; default inert | B-C-PLOT | Closed optional composite policy | B-L-G | KDE/rug presence | B-M1; runtime family gate grouped |
+| `annotations.panel-text.presence-control` | B-M10 Plot vector default empty; append at `configuration.rs:301-309` | B-C-PLOT | Append order retained; zero or more annotations | B-L-M,B-L-C,B-L-G | Panel-text annotation presence | B-M10 |
+| `annotations.panel-text.corner` | B-M1 `PanelCorner` plus `PanelTextAnnotation.corner` at `spec.rs:102-144` | B-C-PLOT | Four closed anchors; no fallback | B-L-C,B-L-G | Exact panel-corner placement | B-M1 |
+| `annotations.panel-text.content` | B-M1 text field/validation/accessor at `spec.rs:115-151` | B-C-PLOT | Nonempty trimmed single-line control-free text | B-L-M,B-L-C,B-L-G | Exact panel annotation content | B-M1 |
+| `marks.raw-overlay.presence-layout` | B-M1 `RawOverlay::{Hidden,Points,Jittered}`; default Hidden | B-C-PLOT,B-C-STYLE | Closed presence/displacement policy | B-L-G | Original-observation overlay | B-M1; exact runtime gate grouped |
+| `color-scales.continuous.heatmap-default` | B-M1 `HeatmapScale::default()` selects Sequential | B-C-SCALE | Every Heatmap stores this library default before any caller replacement | B-L-N | Default heatmap continuous mapping | B-M1; split from caller replacement |
+| `color-scales.continuous.heatmap-policy` | B-M1 `HeatmapScale::{Sequential,Diverging{center}}`; `Plot::scale` replaces the stored value | B-C-SCALE | Current closed caller scale selector; center unchecked at construction | B-L-N | Plot-local heatmap continuous mapping policy | B-M1; split from default |
+| `heatmap.cells.layout-policy` | B-M1 `HeatmapLayout` Cartesian/lower/upper with diagonal; default Cartesian | B-C-PLOT | Exact Heatmap-only replacement | B-L-G | Active-cell topology | B-M1; exact runtime gate grouped |
+| `heatmap.labels.fit-policy` | B-M1 `HeatmapLabelFit::{Elide,Wrap}`; default Elide | B-C-PLOT | Exact Heatmap-only replacement | B-L-M,B-L-R,B-L-G | Dense category-label fit | B-M1; exact runtime gate grouped |
+| `annotations.numeric-label.precision` | B-M1 `NumericLabelFormat.precision`; default 2; accepts 0..=12 | B-C-PLOT | Setter rejects above 12 | B-L-M,B-L-G | Fixed decimal precision | B-M1 |
+| `annotations.numeric-label.suffix` | B-M1 optional suffix; default None; nonempty/control-free setter | B-C-PLOT | Literal append; formatting implementation deferred | B-L-M,B-L-G | Numeric annotation suffix | B-M1 |
+| `annotations.heatmap.cell-value-presence` | B-M1 `HeatmapAnnotations::{Hidden,Values}`; default Hidden | B-C-PLOT | Closed cell-label presence/format policy | B-L-M,B-L-G | Heatmap cell-value content | B-M1 |
+| `annotations.heatmap.null-row-presence` | B-M10 empty vector plus append at `configuration.rs:76-84` | B-C-PLOT | Ordered zero-or-more complete annotations | B-L-M,B-L-G | Fully-null row annotation presence | B-M10 |
+| `annotations.heatmap.null-row-target` | B-M1 `row_label` at `spec.rs:301-325` | B-C-PLOT | Exact normalized y-category target | B-L-G | Null-row target identity | B-M1 |
+| `annotations.heatmap.null-row-text` | B-M1 `text` at `spec.rs:301-331` | B-C-PLOT | Verbatim wrapped content | B-L-M,B-L-G | Null-row annotation text | B-M1 |
+| `annotations.heatmap.null-row-lexical-validation` | B-M1 shared branch `spec.rs:334-341` | B-C-PLOT | Both target and text must be nonempty, trimmed, control-free | B-L-N | Null-row lexical contract | B-M1; helper occurs once |
+| `marks.dumbbell.left-endpoint-identity` | B-M1 left label at `spec.rs:345-365,389-393` | B-C-PLOT,B-C-STYLE | Caller-owned exact identity | B-L-M,B-L-G | Left endpoint label | B-M1 |
+| `marks.dumbbell.right-endpoint-identity` | B-M1 right label at `spec.rs:345-365,401-405` | B-C-PLOT,B-C-STYLE | Caller-owned exact identity | B-L-M,B-L-G | Right endpoint label | B-M1 |
+| `marks.dumbbell.endpoint-identities-nonempty` | B-M1 branch `spec.rs:366-370` | B-C-PLOT | Rejects either empty label | B-L-N | Endpoint identity presence | B-M1; independent failure |
+| `marks.dumbbell.endpoint-identities-lexical-validity` | B-M1 branch `spec.rs:371-379` | B-C-PLOT | Rejects surrounding whitespace/control characters | B-L-N | Endpoint lexical validity | B-M1; independent failure |
+| `marks.dumbbell.endpoint-identities-distinct` | B-M1 branch `spec.rs:381-385` | B-C-PLOT | Rejects equal endpoint identities | B-L-N | Endpoint identity compatibility | B-M1; independent failure |
+| `marks.dumbbell.left-endpoint-color` | B-M1 left RGB at `spec.rs:345-365,395-399` | B-C-STYLE | Exact opaque RGB; no local fallback | B-L-N | Left endpoint paint | B-M1 |
+| `marks.dumbbell.right-endpoint-color` | B-M1 right RGB at `spec.rs:345-365,407-411` | B-C-STYLE | Exact opaque RGB; no local fallback | B-L-N | Right endpoint paint | B-M1 |
+| `annotations.waterfall.total-label-presence` | B-M10 optional field default None; setter/read at `configuration.rs:547-553`, `accessors.rs:667-671` | B-C-PLOT | Complete pair replaces absence | B-L-M,B-L-G | Waterfall total-label presence | B-M10 |
+| `annotations.waterfall.base-label` | B-M1 base field/accessor `spec.rs:414-450` | B-C-PLOT | Caller-owned verbatim content | B-L-M,B-L-G | Base annotation label | B-M1 |
+| `annotations.waterfall.terminal-label` | B-M1 terminal field/accessor `spec.rs:414-456` | B-C-PLOT | Caller-owned verbatim content | B-L-M,B-L-G | Terminal annotation label | B-M1 |
+| `annotations.waterfall.labels-nonempty` | B-M1 branch `spec.rs:428-432` | B-C-PLOT | Rejects either empty label | B-L-N | Waterfall label presence | B-M1 |
+| `annotations.waterfall.labels-lexical-validity` | B-M1 branch `spec.rs:433-442` | B-C-PLOT | Rejects surrounding whitespace/control characters | B-L-N | Waterfall lexical validity | B-M1 |
+| `canvas.legend.composition-policy` | B-M1 `CanvasLegendPolicy::{PerPlot,Shared,Hidden}`; default PerPlot; Canvas setter | B-C-CANVAS | Closed Canvas legend behavior | B-L-M,B-L-R,B-L-C,B-L-G | Canvas legend sharing/presence | B-M1/B-M11 |
+| `legend.plot.visibility-placement-policy` | B-M1 `LegendPolicy` plus 25 `LegendPosition` choices; defaults Automatic/Auto | B-C-PLOT | Hidden, automatic, or exact placement; hidden/automatic position fallback Auto | B-L-M,B-L-R,B-L-C,B-L-G | Plot legend presence/placement | B-M1; exact compile gate separate |
+| `annotations.significance.erased-family-support` | B-M1 `PlotKind::supports_significance_annotations`; runtime checks in open/facet routes | B-C-PLOT | Eight-family erased union; placement matrix checked separately at compile time | B-L-N | Erased significance family support | B-M1; two runtime call sites grouped |
+| `bars.input.estimate-source-and-bounds` | B-M2 `BarInput` samples/estimates/estimates_with_error_bars | B-C-PLOT | Selects generated means/errors or caller estimates/bounds | B-L-G | Bar estimate/error geometry source | B-M2 |
+| `bars.error.generated-selection` | B-M2 `ErrorBarKind` Hidden/SD/percentile/SE/CI; default CI | B-C-PLOT | Closed generated-error taxonomy; BarSamples replacement | B-L-G | Generated error-bar presence/type | B-M2 |
+| `bars.error.standard-deviation-scale` | B-M2 `StandardDeviation.scale`; default 1.0 | B-C-PLOT | Setter uses shared positive-finite validator | B-L-G | SD interval multiplier | B-M2 |
+| `bars.error.standard-error-scale` | B-M2 `StandardError.scale`; default 1.0 | B-C-PLOT | Setter uses shared positive-finite validator | B-L-G | SE interval multiplier | B-M2 |
+| `bars.error.spread-scale-validation` | B-M2 branch `spec/bar.rs:359-366` | B-C-PLOT | Rejects nonfinite/nonpositive spread multipliers | B-L-N | Shared spread-scale domain | B-M2; helper occurs once |
+| `bars.error.percentile-interval-coverage` | B-M2 `PercentileInterval.level` | B-C-PLOT | Independent coverage control; shared default/domain | B-L-G | Original-observation percentile coverage | B-M2 |
+| `bars.error.confidence-interval-coverage` | B-M2 `ConfidenceInterval.level` | B-C-PLOT | Independent coverage control; shared default/domain | B-L-G | Mean confidence coverage | B-M2 |
+| `bars.error.shared-coverage-default-domain` | B-M2 `DEFAULT_LEVEL=0.95` and branch `350-357` | B-C-PLOT | Common default; finite strict (0,1) | B-L-N | Generated interval coverage default/domain | B-M2; declaration/validator each occur once |
+| `bars.error.confidence-algorithm` | B-M2 Bootstrap or StudentT selector; bootstrap default | B-C-PLOT | Consuming replacement; no fallback | B-L-G | CI algorithm selection | B-M2 |
+| `bars.error.bootstrap-resamples` | B-M2 default 1,000; range 1..=1,000,000 | B-C-PLOT | Setter rejects outside closed safety range | B-L-N | Bootstrap work/count policy | B-M2 |
+| `bars.error.bootstrap-seed` | B-M2 default 0; arbitrary u64 replacement | B-C-PLOT | Deterministic root seed | B-L-G | Bootstrap deterministic geometry seed | B-M2 |
+| `bars.error.bootstrap-units` | B-M2 optional CategoryValues; default None | B-C-PLOT | Optional multilevel resampling identity | B-L-G | Bootstrap sampling-unit policy | B-M2 |
+| `categories.order.closed-selection` | B-M3 Observed/Explicit/Value and Ascending/Descending | B-C-PLOT,B-C-SCALE | Closed ordering vocabulary; default Observed | B-L-G | Categorical display-order selection | B-M3 |
+| `categories.order.primary-control` | B-M10 primary field/default/setter/read; CategoryOrder capability | B-C-PLOT,B-C-SCALE | Exact replacement; family validation separate | B-L-G | Primary categorical order | B-M3/B-M10 |
+| `categories.order.heatmap-x-control` | B-M10 heatmap x field/default/setter/read | B-C-PLOT,B-C-SCALE | Exact replacement | B-L-G | Heatmap horizontal order | B-M3/B-M10 |
+| `categories.order.heatmap-y-control` | B-M10 heatmap y field/default/setter/read | B-C-PLOT,B-C-SCALE | Exact replacement | B-L-G | Heatmap vertical order | B-M3/B-M10 |
+| `color-scales.categorical.exact-map-control` | B-M3 nonempty unique exact label/RGB entries; Plot optional storage/setter | B-C-SCALE | Construction validates keys; used-key completeness later | B-L-N | Exact plot-local categorical mapping | B-M3/B-M10 |
+| `intervals.coefficient.presence` | B-M4 `CoefficientInput` estimates or estimates_with_intervals | B-C-PLOT | Optional complete bounds selected at construction | B-L-G | Coefficient interval presence | B-M4 |
+| `typography.significance.font-size-default` | B-M4 `SignificanceMarkStyle::default().font_size = 16` | B-C-STYLE | Stored as part of every Plot even when the caller supplies no exact style | B-L-M,B-L-R,B-L-G | Default significance text size | B-M4; split from exact override |
+| `annotations.significance.font-size` | B-M4 constructor/setter positive u32 replacement | B-C-STYLE | Caller exact field; constructor/setter validate the complete style; no current absence sentinel | B-L-M,B-L-R,B-L-G | Exact significance mark text size | B-M4; split from default |
+| `typography.significance.weight-default` | B-M4 `SignificanceMarkStyle::default().weight = Normal` | B-C-STYLE | Stored as part of every Plot; current text-width estimation ignores weight | B-L-N | Default significance text weight | B-M4; split from exact override |
+| `annotations.significance.weight` | B-M4 caller-selected `TextWeight::{Normal,Semibold,Bold}` | B-C-STYLE | Exact closed emphasis; current measurement still ignores the selected weight | B-L-N | Exact significance mark weight | B-M4; split from default |
+| `annotations.significance.gap-default` | B-M4 `SignificanceMarkStyle::default().gap = 8.0` px | B-C-STYLE | Stored as part of every Plot even when the caller supplies no exact style | B-L-R,B-L-G | Default significance mark clearance | B-M4; split from exact override |
+| `annotations.significance.gap` | B-M4 constructor/setter finite nonnegative f64 replacement | B-C-STYLE | Caller exact mark-to-data/label clearance; no current absence sentinel | B-L-R,B-L-G | Exact significance mark clearance | B-M4; split from default |
+| `regression.band.presence-claim` | B-M4 PointwiseMean95/Hidden; default band; `RegressionBand::legend_label` at `estimate.rs:171-176` | B-C-PLOT,B-C-STYLE | Exact Regression-only replacement; policy also selects fixed generated legend claim text | B-L-G | Generated regression-band presence/claim | B-M4; legend construction deferred below |
+| `qq.reference-line.policy` | B-M4 Quartiles/Identity/Hidden; default Quartiles | B-C-PLOT,B-C-STYLE | Exact Qq-only replacement | B-L-G | Q-Q reference line | B-M4 |
+| `line-path.color-legend.policy` | B-M4 Neutral/Hue; default Neutral | B-C-PLOT,B-C-SCALE | Hue mode requires hue; family gate exact | B-L-N,B-L-G | Complete-path color/legend policy | B-M4 |
+| `marks.point.closed-shape` | B-M4 Circle/TriangleUp; default Circle | B-C-STYLE | Closed public exact-style vocabulary | B-L-G | Point glyph shape | B-M4 |
+| `marks.line.closed-pattern` | B-M4 Solid/Dashed; default Solid | B-C-STYLE | Closed public vocabulary; dash conversion deferred | B-L-N | Connector/guide pattern | B-M4 |
+| `interaction.styles.group-selector` | B-M4 exact group String plus Plot style collection | B-C-PLOT,B-C-STYLE | One style selected by exact group identity | B-L-N | Interaction exact-style selector | B-M4/B-M10 |
+| `interaction.styles.point-shape` | B-M4 InteractionStyle shape; default Circle | B-C-STYLE | Consuming replacement | B-L-G | Interaction point glyph | B-M4 |
+| `interaction.styles.line-pattern` | B-M4 InteractionStyle pattern; default Solid | B-C-STYLE | Consuming replacement | B-L-N | Interaction connector pattern | B-M4 |
+| `estimates.status.presence` | B-M4 Estimated/NotEstimable; Plot optional aligned storage | B-C-PLOT | Optional complete status vector; length validity rejected as data | B-L-M,B-L-G | Explicit unavailable-estimate content | B-M4/B-M10 |
+| `axes.forest.scale-policy` | B-M4 Linear/Log10; default Linear; Forest-only setter | B-C-PLOT | Closed axis representation policy | B-L-M,B-L-G | Forest numeric scale | B-M4 |
+| `facets.layout.current-policy` | B-M5 Row/Column/Grid/Wrap with constructor checks; Plot optional storage | B-C-PLOT | Closed layout; grid dimensions distinct, wrap columns positive | B-L-M,B-L-R,B-L-G | Generic facet layout | B-M5/B-M10 |
+| `facets.scales.current-policy` | B-M5 Fixed/FreeX/FreeY/Free; default Fixed | B-C-PLOT | Exact replacement on FacetSpec | B-L-M,B-L-G | Facet numeric-axis sharing | B-M5 |
+| `guides.exact.color` | B-M6 GuideStyle opaque RGB | B-C-STYLE | Exact caller paint | B-L-N | Guide stroke color | B-M6 |
+| `guides.exact.width` | B-M6 finite positive f32 | B-C-STYLE | Constructor rejects invalid width | B-L-G | Guide stroke width | B-M6 |
+| `guides.exact.pattern` | B-M6 closed LinePattern | B-C-STYLE | Exact caller pattern | B-L-N | Guide stroke pattern | B-M6 |
+| `guides.geometry.presence-orientation` | B-M6 Horizontal/Vertical/Segment; Plot append vector | B-C-PLOT | Ordered guides; axis compatibility separate | B-L-G | Supplemental guide presence/orientation | B-M6/B-M10 |
+| `layers.point.presence-coordinates` | B-M6 PointLayer x/y plus Plot append vector; exact Line-only gate B-M13 `orchestrator/layers.rs:58-62` | B-C-PLOT | Ordered zero-or-more strict layers; every other family rejects after erasure | B-L-G | Supplemental point-layer presence | B-M6/B-M13; exact family gate grouped |
+| `layers.point.annotation-labels` | B-M6 optional labels; default None; consuming setter | B-C-PLOT | One label per point when present | B-L-M,B-L-G | PointLayer annotation content | B-M6 |
+| `layers.point.legend-identity` | B-M6 optional legend_label; default None | B-C-PLOT | At most one entry per layer | B-L-M,B-L-R,B-L-G | PointLayer legend presence/identity | B-M6 |
+| `layers.point.exact-color` | B-M6 `color: None` at `217` and `color(Some(rgb))` at `223-228`; private precedence conversion at `292-300` is T2e | B-C-STYLE | None selects the T2g-supplied automatic accent; Some selects exact caller paint | B-L-N | Optional PointLayer exact-paint override | B-M6; T2e precedence and T2g slot counterparts |
+| `layers.point.default-radius` | B-M6 literal radius 4 at `218` | B-C-STYLE | Hardcoded public-constructor default | B-L-G | PointLayer default radius | B-M6 |
+| `layers.point.exact-radius` | B-M6 radius setter plus shared positive validator | B-C-STYLE | Exact replacement; zero rejected | B-L-G | PointLayer exact radius | B-M6 |
+| `layers.point.default-opacity` | B-M6 literal 0.8 at `219` | B-C-STYLE | Hardcoded public-constructor default | B-L-N | PointLayer default alpha | B-M6 |
+| `layers.point.exact-opacity` | B-M6 setter accepts finite (0,1] | B-C-STYLE | Exact replacement | B-L-N | PointLayer exact alpha | B-M6 |
+| `layers.bar-point.presence-positioning` | B-M6 required category/optional series/value plus Bar/HBar append; exact family gate B-M13 `orchestrator/layers.rs:63-68` | B-C-PLOT | Complete strict layer; only ordinary Bar/HBar; no legend | B-L-G | Bar-centered point-layer presence | B-M6/B-M13; exact family gate grouped |
+| `layers.bar-point.exact-color` | B-M6 constructor-required RGB | B-C-STYLE | Exact caller paint | B-L-N | BarPointLayer paint | B-M6 |
+| `layers.bar-point.exact-radius` | B-M6 constructor-required radius; shared positive validator | B-C-STYLE | Zero rejected | B-L-G | BarPointLayer radius | B-M6 |
+| `layers.bar-point.opacity` | B-M6 constructor requires finite strict (0,1) | B-C-STYLE | Unlike PointLayer, 1.0 rejects | B-L-N | BarPointLayer alpha | B-M6 |
+| `labels.inferred.mode-selection` | B-M7 Humanized/Raw; Labels default Humanized | B-C-LABELS | Closed automatic-label fallback mode | B-L-M,B-L-G | Inferred-label presentation mode | B-M7 |
+| `labels.inferred.alias-insertion` | B-M7 `alias` inserts one raw/display pair | B-C-LABELS | Existing raw key is replaced | B-L-M,B-L-G | Singular alias mutation | B-M7 |
+| `labels.inferred.aliases-bulk-extension` | B-M7 `aliases` extends from iteration | B-C-LABELS | Iterator order determines repeated-key replacement | B-L-M,B-L-G | Bulk alias mutation | B-M7 |
+| `labels.inferred.alias-before-mode-precedence` | B-M7 alias lookup then humanized/raw fallback `72-80` | B-C-LABELS | Exact alias always wins | B-L-M,B-L-G | Alias resolution precedence | B-M7 |
+| `labels.inferred.display-collision-failure` | B-M7 domain map branch `82-107` | B-C-LABELS | Distinct raw identities may not share display | B-L-M,B-L-C | Display-domain uniqueness | B-M7 |
+| `labels.inferred.humanization-rule` | B-M7 fixed split/case/acronym functions `110-200` | B-C-LABELS | Deterministic ASCII-oriented transformation | B-L-M,B-L-G | Automatic humanization invariant | B-M7 |
+| `geometry.raincloud.dimension-category` | B-M8 `RaincloudDimensions.category` | B-C-GEOMETRY,B-C-LABELS | Required raw string; shared nonempty validation | B-L-M,B-L-G | Inferred categorical x-title identity | B-M8 |
+| `geometry.raincloud.dimension-value` | B-M8 `RaincloudDimensions.value` | B-C-GEOMETRY,B-C-LABELS | Required raw string; shared nonempty validation | B-L-M,B-L-G | Inferred continuous y-title identity | B-M8 |
+| `geometry.raincloud.dimension-hue` | B-M8 optional `RaincloudDimensions.hue` | B-C-GEOMETRY,B-C-LABELS,B-C-SCALE | Optional raw legend/color identity | B-L-M,B-L-G | Raincloud hue semantic identity | B-M8 |
+| `geometry.histogram.dimension-value` | B-M8 `HistogramDimensions.value` | B-C-GEOMETRY,B-C-LABELS | Required raw string; shared nonempty validation | B-L-M,B-L-G | Precomputed histogram x-title identity | B-M8 |
+| `geometry.histogram.dimension-density` | B-M8 `HistogramDimensions.density` | B-C-GEOMETRY,B-C-LABELS | Required raw string; shared nonempty validation | B-L-M,B-L-G | Precomputed histogram y-title identity | B-M8 |
+| `geometry.dimensions.nonempty-validation` | B-M8 `validate_dimension` at `400-405` | B-C-GEOMETRY | Rejects trim-empty; surrounding whitespace otherwise retained | B-L-N | Shared geometry-dimension presence rule | B-M8; one helper, five callers |
+| `geometry.raincloud.maximum-groups` | B-M8 `MAX_RAINCLOUD_GROUPS=512` and branch `135-140` | B-C-GEOMETRY | Rejects group count above 512 | B-L-N | Raincloud group resource ceiling | B-M8 |
+| `geometry.raincloud.maximum-density-points-per-group` | B-M8 constant 2,048 and branch `206-211` | B-C-GEOMETRY | Rejects one oversized density boundary | B-L-N | Per-group density resource ceiling | B-M8 |
+| `geometry.raincloud.maximum-density-points-total` | B-M8 constant 1,000,000 and checked accumulation `148,173-183` | B-C-GEOMETRY | Rejects overflow or aggregate excess | B-L-N | Total raincloud density work ceiling | B-M8 |
+| `geometry.raincloud.maximum-raw-points-total` | B-M8 constant 1,000,000 and checked accumulation `149,176-188` | B-C-GEOMETRY | Rejects overflow or aggregate excess | B-L-N | Total raincloud point work ceiling | B-M8 |
+| `geometry.histogram.maximum-bins` | B-M8 `MAX_HISTOGRAM_BINS=1,000,000` and branch `285-290` | B-C-GEOMETRY | Rejects excess bins | B-L-N | Histogram bin resource ceiling | B-M8 |
+| `geometry.histogram.maximum-kde-points` | B-M8 `MAX_HISTOGRAM_KDE_POINTS=2,048` and branch `291-296` | B-C-GEOMETRY | Rejects excess KDE points | B-L-N | Histogram KDE resource ceiling | B-M8 |
+| `geometry.histogram.maximum-rugs` | B-M8 `MAX_HISTOGRAM_RUGS=1,000,000` and branch `297-302` | B-C-GEOMETRY | Rejects excess rug segments | B-L-N | Histogram rug resource ceiling | B-M8 |
+| `geometry.raincloud.groups-present` | B-M8 branch `132-134` | B-C-GEOMETRY | At least one group required | B-L-G | Minimum raincloud topology | B-M8 |
+| `geometry.raincloud.hue-presence-consistency` | B-M8 branches `141-146,156-161` | B-C-GEOMETRY,B-C-SCALE | Dimension hue and every group hue are all present or all absent | B-L-G | Complete raincloud hue schema | B-M8; two levels, one invariant |
+| `geometry.raincloud.group-category-nonempty` | B-M8 branch `152-156` | B-C-GEOMETRY | Rejects trim-empty group category | B-L-N | Group categorical identity presence | B-M8 |
+| `geometry.raincloud.group-hue-nonempty` | B-M8 branch `162-166` | B-C-GEOMETRY | Present hue may not be trim-empty | B-L-N | Group hue identity presence | B-M8 |
+| `geometry.raincloud.group-identity-unique` | B-M8 set insertion branch `147,167-172` | B-C-GEOMETRY,B-C-SCALE | Rejects duplicate exact category/hue pair | B-L-G | One geometry group per semantic identity | B-M8 |
+| `geometry.raincloud.density-minimum-points` | B-M8 branch `201-205` | B-C-GEOMETRY | Each boundary needs at least two points | B-L-G | Minimum density-polyline topology | B-M8 |
+| `geometry.raincloud.density-point-domain` | B-M8 branch `212-220` | B-C-GEOMETRY | Finite y and finite normalized width in [0,1] | B-L-G | Renderable density boundary coordinates | B-M8 |
+| `geometry.raincloud.density-y-order` | B-M8 branch `221-225` | B-C-GEOMETRY | y coordinates strictly increase | B-L-G | Non-self-reversing density topology | B-M8 |
+| `geometry.raincloud.density-positive-width` | B-M8 branch `227-235` | B-C-GEOMETRY | At least one normalized width exceeds zero | B-L-G | Intelligible nonzero density body | B-M8 |
+| `geometry.raincloud.summary-order` | B-M8 branch `236-245` | B-C-GEOMETRY | Finite q1 <= median <= q3 | B-L-G | Ordered summary geometry | B-M8 |
+| `geometry.raincloud.summary-within-support` | B-M8 branch `246-252` | B-C-GEOMETRY | q1 and q3 lie within density support | B-L-G | Summary/body support compatibility | B-M8 |
+| `geometry.raincloud.raw-points-present` | B-M8 branch `253-257` | B-C-GEOMETRY | Every group requires at least one raw point | B-L-G | Minimum raw-strip topology | B-M8 |
+| `geometry.raincloud.raw-point-domain` | B-M8 branch `258-266` | B-C-GEOMETRY | Finite y and normalized strip in [0,1] | B-L-G | Renderable raw-point coordinates | B-M8 |
+| `geometry.raincloud.raw-point-within-support` | B-M8 branch `267-271` | B-C-GEOMETRY | Every raw y lies within density support | B-L-G | Raw/body support compatibility | B-M8 |
+| `geometry.histogram.bins-present` | B-M8 branch `280-284` | B-C-GEOMETRY | At least one bin required | B-L-G | Minimum histogram topology | B-M8 |
+| `geometry.histogram.bin-domain` | B-M8 branch `303-313` | B-C-GEOMETRY | Finite lower < upper and finite nonnegative density | B-L-G | Renderable histogram bin geometry | B-M8 |
+| `geometry.histogram.bins-contiguous` | B-M8 exact partial comparison `314-323` | B-C-GEOMETRY | Every lower edge exactly equals previous upper edge | B-L-G | Ordered contiguous bin topology | B-M8 |
+| `geometry.histogram.positive-bin-density` | B-M8 branch `325-329` | B-C-GEOMETRY | At least one bin density exceeds zero | B-L-G | Intelligible nonzero histogram body | B-M8 |
+| `geometry.histogram.kde-minimum-points` | B-M8 branch `337-342` | B-C-GEOMETRY | At least two KDE points required | B-L-G | Minimum KDE polyline topology | B-M8 |
+| `geometry.histogram.kde-point-domain` | B-M8 branch `343-348` | B-C-GEOMETRY | Finite x and finite nonnegative y | B-L-G | Renderable KDE coordinates | B-M8 |
+| `geometry.histogram.kde-within-bin-support` | B-M8 branch `349-354` | B-C-GEOMETRY | Every x lies in inclusive bin range | B-L-G | KDE/bin support compatibility | B-M8 |
+| `geometry.histogram.kde-x-order` | B-M8 branch `355-359` | B-C-GEOMETRY | KDE x coordinates strictly increase | B-L-G | Non-self-reversing KDE topology | B-M8 |
+| `geometry.histogram.positive-kde-density` | B-M8 branch `361-365` | B-C-GEOMETRY | At least one KDE y exceeds zero | B-L-G | Intelligible nonzero KDE | B-M8 |
+| `geometry.histogram.rugs-present` | B-M8 branch `369-374` | B-C-GEOMETRY | At least one rug required | B-L-G | Minimum rug topology | B-M8 |
+| `geometry.histogram.rug-domain` | B-M8 branch `375-385` | B-C-GEOMETRY | Finite x and 0 <= baseline < top | B-L-G | Renderable rug segment geometry | B-M8 |
+| `geometry.histogram.rug-within-bin-support` | B-M8 branch `386-391` | B-C-GEOMETRY | Every rug x lies in inclusive bin range | B-L-G | Rug/bin support compatibility | B-M8 |
+| `capabilities.hue.family-matrix` | B-M9 `kind::Hue`: Scatter, Density, Line, Trajectory, LinePath, Interaction, Marginal, Matrix | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability only | B-L-N | Categorical hue-control family matrix | B-M9 |
+| `capabilities.group.family-matrix` | B-M9 `kind::Group`: Density, Line, Marginal, Matrix, Dumbbell | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability; constructor-owned groups differ | B-L-N | Graphical-group control matrix | B-M9 |
+| `capabilities.series.family-matrix` | B-M9 `kind::Series`: Bar, HBar, Boxplot, Violin, Raincloud | B-C-PLOT,B-E-COMPILE | Sealed availability; precomputed raincloud rejected later | B-L-N | Positioned-series control matrix | B-M9 |
+| `capabilities.continuous-color.family-matrix` | B-M9 `kind::ContinuousColor`: Heatmap, Beeswarm | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Continuous-color title/control matrix | B-M9 |
+| `capabilities.numeric-x.family-matrix` | B-M9 `kind::NumericX` exact 17-family list `112-115` | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Numeric-x limit/tick matrix | B-M9 |
+| `capabilities.numeric-y.family-matrix` | B-M9 `kind::NumericY` exact 15-family list `116-119` | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Numeric-y limit/tick matrix | B-M9 |
+| `capabilities.guides.family-matrix` | B-M9 `kind::Guides` exact 23-family list `120-124` | B-C-PLOT,B-E-COMPILE | Sealed availability; orientation checked later | B-L-N | Supplemental-guide family matrix | B-M9 |
+| `capabilities.heatmap-options.family-matrix` | B-M9 `kind::HeatmapOptions`: Heatmap | B-C-PLOT,B-E-COMPILE | Sealed singleton availability | B-L-N | Heatmap-specific control matrix | B-M9 |
+| `capabilities.category-order.family-matrix` | B-M9 `kind::CategoryOrder`: PointInterval and four bar families | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Primary category-order matrix | B-M9 |
+| `capabilities.signed-bars.family-matrix` | B-M9 `kind::SignedBars`: HorizontalBar | B-C-PLOT,B-E-COMPILE | Sealed singleton availability | B-L-N | Sign-color policy matrix | B-M9 |
+| `capabilities.zero-line.family-matrix` | B-M9 `kind::ZeroLine`: PointInterval, HBar, StackedHBar, Beeswarm | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Zero-reference policy matrix | B-M9 |
+| `capabilities.estimate-status.family-matrix` | B-M9 `kind::EstimateStatus`: PointInterval, Coefficient, Forest | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Estimate-status content matrix | B-M9 |
+| `capabilities.markers.family-matrix` | B-M9 `kind::Markers`: Line, LinePath, Interaction | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Marker-visibility policy matrix | B-M9 |
+| `capabilities.coefficient-options.family-matrix` | B-M9 `kind::CoefficientOptions`: Coefficient | B-C-PLOT,B-E-COMPILE | Sealed singleton availability | B-L-N | Coefficient-label control matrix | B-M9 |
+| `capabilities.categorical-colors.family-matrix` | B-M9 `kind::CategoricalColors`: LinePath, Interaction, Violin, Raincloud | B-C-SCALE,B-E-COMPILE | Sealed compile-time availability | B-L-N | Exact categorical-map control matrix | B-M9 |
+| `capabilities.panel-text.family-matrix` | B-M9 `kind::PanelText` exact 24-family list `143-147` | B-C-PLOT,B-E-COMPILE | Matrix excluded at compile time | B-L-N | Panel-text presence matrix | B-M9 |
+| `capabilities.point-outline.family-matrix` | B-M9 `kind::PointOutline` exact 18-family list `148-151` | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Point-outline policy matrix | B-M9 |
+| `capabilities.significance-style.family-matrix` | B-M9 `kind::SignificanceStyle` exact eight-family list `152-154` | B-C-STYLE,B-E-COMPILE | Sealed compile-time availability | B-L-N | Significance exact-style matrix | B-M9 |
+| `capabilities.significance-attached.family-matrix` | B-M9 `Significance<Attached>`: Bar, HBar, Coefficient | B-C-PLOT,B-E-COMPILE | Placement-specific sealed implementations | B-L-N | Attached-significance matrix | B-M9; split from generic trait |
+| `capabilities.significance-pairwise.family-matrix` | B-M9 `Significance<Pairwise>` exact seven-family list `166-172` | B-C-PLOT,B-E-COMPILE | Placement-specific sealed implementations | B-L-N | Pairwise-significance matrix | B-M9; split from generic trait |
+| `capabilities.legend.family-matrix` | B-M9 `kind::Legend` exact 17-family list `173-176` | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Plot legend-policy matrix | B-M9 |
+| `capabilities.raw-overlay.family-matrix` | B-M9 `kind::RawOverlay`: Boxplot, Violin | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Raw-overlay policy matrix | B-M9 |
+| `capabilities.facet.family-matrix` | B-M9 `kind::Facet` exact 23-family list `180-184` | B-C-PLOT,B-E-COMPILE | Sealed compile-time availability | B-L-N | Generic-facet policy matrix | B-M9 |
+| `channels.hue.optional-control` | B-M10 optional `Plot.hue`; setter `configuration.rs:25-33` | B-C-PLOT,B-C-SCALE | Absence means no separate categorical hue | B-L-M,B-L-G | Optional categorical color identity | B-M10; capability and erased validation separate |
+| `channels.group.optional-control` | B-M10 optional `Plot.group`; setter `35-43` | B-C-PLOT | Absence means no separately configured grouping | B-L-G | Optional graphical grouping identity | B-M10 |
+| `channels.series.optional-control` | B-M10 optional `Plot.series`; setter `45-54` | B-C-PLOT,B-C-SCALE | Absence means one positioned series; constructor-owned series differ | B-L-G | Optional positioned series identity | B-M10 |
+| `legend.continuous.title-content` | B-M10 optional color label; setter/read `56-64`, `419-423` | B-C-PLOT,B-C-SCALE | Caller string replaces inferred title; no local lexical validation | B-L-M,B-L-R,B-L-G | Continuous color-guide title content | B-M10 |
+| `heatmap.highlight.presence-values` | B-M10 optional BooleanValues; setter/read `86-94`, `467-469` | B-C-PLOT | Complete aligned mask enables highlighted borders | B-L-G | Heatmap highlighted-cell presence | B-M10; family gate grouped |
+| `annotations.coefficient.estimate-label-presence` | B-M10 optional NumericLabelFormat; setter/read `96-104`, `471-475` | B-C-PLOT | Presence enables labels beside point-only estimates | B-L-M,B-L-R,B-L-G | Coefficient numeric-label presence | B-M10; family gate grouped |
+| `content.plot.title` | B-M10 optional title; setter/read `116-121`, `686-690` | B-C-PLOT | Verbatim caller content; empty behaves absent in layout paths | B-L-M,B-L-R,B-L-G | Plot title content | B-M10 |
+| `content.plot.subtitle` | B-M10 optional subtitle; setter/read `123-128`, `692-696` | B-C-PLOT | Verbatim caller content; empty behaves absent | B-L-M,B-L-R,B-L-G | Plot subtitle content | B-M10 |
+| `content.plot.caption` | B-M10 optional caption; setter/read `130-135`, `698-702` | B-C-PLOT | Verbatim caller content; empty behaves absent | B-L-M,B-L-R,B-L-G | Plot caption content | B-M10 |
+| `content.axis.x-title` | B-M10 optional x label; setter/read `137-142`, `704-708` | B-C-PLOT,B-C-LABELS | Exact content replaces family inference; empty suppresses drawn text | B-L-M,B-L-R,B-L-G | Caller-owned x-axis title | B-M10 |
+| `content.axis.y-title` | B-M10 optional y label; setter/read `144-149`, `710-714` | B-C-PLOT,B-C-LABELS | Exact content replaces family inference; empty suppresses drawn text | B-L-M,B-L-R,B-L-G | Caller-owned y-axis title | B-M10 |
+| `axes.x.exact-ticks-control` | B-M10 optional Vec<AxisTick>; setter/read `180-188`, `859-861` | B-C-PLOT | Presence replaces automatic ticks; layout validation is T2c | B-L-M,B-L-C,B-L-G | Exact numeric x-tick content | B-M10; numeric-axis gate B-M13 |
+| `axes.y.exact-ticks-control` | B-M10 optional Vec<AxisTick>; setter/read `190-198`, `869-871` | B-C-PLOT | Presence replaces automatic ticks; layout validation is T2c | B-L-M,B-L-C,B-L-G | Exact numeric y-tick content | B-M10; numeric-axis gate B-M13 |
+| `axes.x.explicit-limits-control` | B-M10 AxisSpec plus explicit flag; setter/read `158-167`, `972-978` | B-C-PLOT | Caller range distinguishes explicit from planned limits | B-L-G | Numeric x-domain policy | B-M10; AxisSpec validity T2c |
+| `axes.y.explicit-limits-control` | B-M10 AxisSpec plus explicit flag; setter/read `169-178`, `980-986` | B-C-PLOT | Caller range distinguishes explicit from planned limits | B-L-G | Numeric y-domain policy | B-M10; AxisSpec validity T2c |
+| `bars.sign-color.presence` | B-M10 false default; `color_by_sign()` sets true | B-C-PLOT,B-C-SCALE | One-way enable on HorizontalBar | B-L-N | Positive/negative data-color policy | B-M10 |
+| `references.zero-line.presence` | B-M10 false default; `zero_line()` sets true | B-C-PLOT,B-C-STYLE | One-way enable on four exact families | B-L-G | Zero-reference presence | B-M10 |
+| `marks.estimate-marker.visibility` | B-M10 true default; `markers(bool)` | B-C-PLOT,B-C-STYLE | Exact replacement; interaction compatibility later | B-L-G | Estimate marker presence | B-M10 |
+| `marks.point-outline.visibility` | B-M10 default `Some(PointOutline::default())`; hide sets None | B-C-PLOT,B-C-STYLE | One-way removal; appearance default prior/later-owned | B-L-G | Point-outline presence | B-M10 |
+| `annotations.significance.presence` | B-M10 empty erased vector; typed append setter `328-340` | B-C-PLOT | Ordered zero-or-more annotations; placement capability exact | B-L-R,B-L-C,B-L-G | Significance annotation presence | B-M10/B-M9 |
+| `output.plot.pixel-size` | B-M10 default 640x480; `size(width,height)`; accessors | B-C-PLOT | Pair replaced without setter validation; lifecycle validates later | B-L-M,B-L-R,B-L-G | Plot output dimensions | B-M10 |
+| `color-scales.continuous.heatmap-domain` | B-M10 optional `(min,max)` via Heatmap `color_limits` | B-C-SCALE | Exact saturation limits; validity/data mapping T2g | B-L-N | Plot-local heatmap numeric domain | B-M10 |
+| `color-scales.continuous.beeswarm-domain` | B-M10 optional `(min,max)` via Beeswarm `color_limits` | B-C-SCALE | Exact saturation limits; validity/data mapping T2g | B-L-N | Plot-local beeswarm numeric domain | B-M10 |
+| `intervals.line.band-presence` | B-M10 optional Bounds via Line `band` | B-C-PLOT,B-C-STYLE | Presence draws one caller-bounded band | B-L-G | Line interval-band presence | B-M10; exact family gate grouped |
+| `references.coefficient.presence-value` | B-M10 optional f64 via Coefficient `reference_line` | B-C-PLOT,B-C-STYLE | Presence draws exact scientific reference | B-L-G | Coefficient reference-line policy | B-M10; family gate grouped |
+| `references.forest.required-value` | B-M10 constructor `Plot::forest(...,reference)` stores f64; no default in public path | B-C-PLOT,B-C-STYLE | Required scientific reference; validity later | B-L-G | Forest reference-line value | B-M10 |
+| `interaction.connectors.visibility` | B-M10 optional bool; None resolves visible, setter sets exact bool | B-C-PLOT,B-C-STYLE | Explicit presence/absence with compatibility branches | B-L-G | Interaction connector presence | B-M10; family gate grouped |
+| `histogram.geometry.density-stat-precedence` | B-M10 `Plot::histogram` forces Density when input is precomputed geometry `606-615` | B-C-PLOT,B-C-GEOMETRY | Constructor correction precedes later user `stat` replacement, which may then fail preflight | B-L-G | Precomputed histogram normalization precedence | B-M10 |
+| `canvas.category-labels.sharing-policy` | B-M11 EveryPlot/FirstColumnPerRow; default EveryPlot | B-C-CANVAS | Closed replacement; exact compatibility branches below | B-L-M,B-L-R,B-L-G | Composed categorical-label sharing | B-M11 |
+| `canvas.text-panel.title-content` | B-M11 private title set by `TextPanel::new`; accessor | B-C-CANVAS | Required caller prose, measured and wrapped | B-L-M,B-L-R,B-L-G | Text-panel title content | B-M11 |
+| `canvas.text-panel.body-content` | B-M11 private body set by `TextPanel::new`; accessor | B-C-CANVAS | Required caller prose, measured and wrapped | B-L-M,B-L-R,B-L-G | Text-panel body content | B-M11 |
+| `canvas.text-panel.lexical-validation` | B-M11 shared role-aware helper `98-110`, called for title then body | B-C-CANVAS | Each value nonempty, trimmed, control-free | B-L-N | Text-panel lexical contract | B-M11; one helper, two ordered calls |
+| `canvas.grid.cardinality` | B-M11 `Canvas::grid`; rows/columns positive and checked product | B-C-CANVAS | Rejects zero or allocation overflow | B-L-G | Canvas grid dimensions/cell count | B-M11 |
+| `canvas.plot-panel.cell-range` | B-M11 `panel` bounds branch `221-226` | B-C-CANVAS | Rejects out-of-grid plot cell | B-L-N | Plot-panel cell addressing | B-M11 |
+| `canvas.text-panel.cell-range` | B-M11 `text_panel` bounds branch `244-249` | B-C-CANVAS | Rejects out-of-grid text cell | B-L-N | Text-panel cell addressing | B-M11 |
+| `canvas.cell.single-occupancy` | B-M11 identical plot/text occupancy branches `228-232,251-255` | B-C-CANVAS | A cell may contain at most one plot or text panel | B-L-G | Canvas cell occupancy invariant | B-M11; two setters, one rule |
+| `canvas.legend.shared-gap` | B-M11 optional finite nonnegative f64 px; default None | B-C-CANVAS | Exact replacement; absence uses later legend-derived fallback | B-L-R,B-L-G | Shared legend-to-grid gap | B-M11; compatibility separate |
+| `canvas.headers.column-content-range` | B-M11 `column_header` plus common header/range/lexical/overlap validators | B-C-CANVAS | Ordered nonoverlapping contiguous column spans | B-L-M,B-L-R,B-L-C,B-L-G | Shared column-header content/presence | B-M11 |
+| `canvas.headers.row-content-range` | B-M11 `row_header` plus common validators | B-C-CANVAS | Ordered nonoverlapping contiguous row spans | B-L-M,B-L-R,B-L-C,B-L-G | Shared row-header content/presence | B-M11 |
+| `canvas.headers.row-title-content` | B-M11 `row_title` as span-one header plus overlap validator | B-C-CANVAS | At most one validated title per row | B-L-M,B-L-R,B-L-C,B-L-G | Canvas row-title content/presence | B-M11 |
+| `canvas.x-range-group.cell-range` | B-M11 branch `325-331` | B-C-CANVAS | Every requested cell must be in grid | B-L-N | Shared-x group cell addressing | B-M11 |
+| `canvas.x-range-group.unique-membership` | B-M11 branch `333-342` | B-C-CANVAS | No duplicate within or across groups | B-L-G | One shared-x owner per panel | B-M11 |
+| `canvas.x-range-group.nonempty` | B-M11 branch `345-349` | B-C-CANVAS | Each group contains at least one panel | B-L-N | Minimum shared-x group cardinality | B-M11 |
+| `canvas.output.pixel-size` | B-M11 default 960x640; `size(width,height)` | B-C-CANVAS | Pair replaced; minimum checked at preflight | B-L-M,B-L-R,B-L-G | Canvas output dimensions | B-M11 |
+| `content.canvas.title` | B-M11 optional title setter | B-C-CANVAS | Verbatim caller content | B-L-M,B-L-R,B-L-G | Canvas title content | B-M11 |
+| `content.canvas.subtitle` | B-M11 optional subtitle setter | B-C-CANVAS | Verbatim caller content | B-L-M,B-L-R,B-L-G | Canvas subtitle content | B-M11 |
+| `content.canvas.caption` | B-M11 optional caption setter | B-C-CANVAS | Verbatim caller content | B-L-M,B-L-R,B-L-G | Canvas caption content | B-M11 |
+| `canvas.labels.override-policy` | B-M11 optional complete Labels via `Canvas::labels` | B-C-CANVAS,B-C-LABELS | When present, clones replacement into every configured Plot | B-L-M,B-L-G | Canvas-wide inferred-label policy | B-M11 |
+| `validation.canvas.minimum-size` | B-M11 branch `466-469`: at least 160x120 | B-C-CANVAS | Preflight failure before rendering | B-L-N | Minimum composed-canvas representability | B-M11 |
+| `validation.canvas.nonempty-content` | B-M11 branch `470-474` | B-C-CANVAS | Requires at least one plot or text panel | B-L-N | Minimum Canvas content presence | B-M11 |
+| `validation.canvas.shared-gap-requires-shared-legend` | B-M11 branch `475-479` | B-C-CANVAS | Explicit gap rejects under PerPlot/Hidden | B-L-N | Legend-gap/policy compatibility | B-M11 |
+| `validation.canvas.faceted-plot-incompatibility` | B-M11 branch `480-487` | B-C-CANVAS | Generic-faceted Plot cannot be nested | B-L-N | Canvas/facet ownership compatibility | B-M11 |
+| `validation.canvas.row-title-panel-title-incompatibility` | B-M11 branch `489-500` | B-C-CANVAS | Row title rejects any nonempty Plot title/subtitle in row | B-L-M,B-L-C | Unambiguous row-header ownership | B-M11 |
+| `validation.canvas.shared-category-label-complete-row` | B-M11 branches `689-704` | B-C-CANVAS | FirstColumnPerRow requires every cell in every row to contain a Plot, including the first-column label owner | B-L-N | Complete shared-label row occupancy | B-M11; domain comparison deferred to T2g |
+| `validation.canvas.shared-category-label-family` | B-M11 branch `1079-1088` | B-C-CANVAS | Only horizontal bar families admitted | B-L-N | Shared category-label family compatibility | B-M11 |
+| `validation.canvas.shared-category-label-axis` | B-M11 branch `1089-1094` | B-C-CANVAS | Requires categorical y-axis | B-L-N | Shared category-label axis compatibility | B-M11 |
+| `validation.raincloud-geometry.series-incompatibility` | B-M12 branch `32-37` | B-C-PLOT,B-C-GEOMETRY | Precomputed geometry rejects configured series through the unified group path before channel validation | B-L-N | Self-contained raincloud/series compatibility | B-M12; ordered overlap with external-channel rejection |
+| `validation.category-order.primary-family` | B-M12 branch `50-65` | B-C-PLOT | Non-Observed primary order limited to seven erased families | B-L-N | Erased primary-order family support | B-M12 |
+| `validation.category-order.heatmap-axis-family` | B-M12 branch `66-73` | B-C-PLOT | Non-Observed x/y orders limited to Heatmap | B-L-N | Erased heatmap-axis-order support | B-M12 |
+| `validation.category-order.value-facet-incompatibility` | B-M12 branch `74-78` | B-C-PLOT | Value-derived primary order rejects faceting | B-L-N | Value-order/facet compatibility | B-M12 |
+| `validation.facets.self-managed-family` | B-M12 branch `222-227` | B-C-PLOT | Matrix and Marginal reject generic facets | B-L-N | Self-managed/facet compatibility | B-M12 |
+| `validation.facets.panel-text-incompatibility` | B-M12 branch `228-233` | B-C-PLOT | Any panel-text annotation rejects faceting | B-L-N | Annotation panel ownership | B-M12 |
+| `validation.significance.facet-owner-requires-facet` | B-M12 branch `237-246` | B-C-PLOT | Facet-cell annotation rejects unfaceted Plot | B-L-N | Significance facet ownership | B-M12 |
+| `validation.intervals.ordinary-bar-line-band-incompatibility` | B-M12 branch `256-263` | B-C-PLOT | Ordinary bars reject generic interval-bound columns | B-L-N | Bar-bound source compatibility | B-M12 |
+| `validation.intervals.stacked-bar-bounds-incompatibility` | B-M12 branch `264-270` | B-C-PLOT | Stacked bars reject interval bounds | B-L-N | Stacked-bar interval compatibility | B-M12 |
+| `validation.panel-text.matrix-incompatibility` | B-M12 branch `286-291` | B-C-PLOT | Matrix rejects standard-panel text | B-L-N | Panel-text panel-shape compatibility | B-M12 |
+| `validation.panel-text.unique-corners` | B-M12 set branch `292-300` | B-C-PLOT | At most one annotation per PanelCorner | B-L-C | Panel-text collision ownership | B-M12 |
+| `validation.histogram-geometry.family` | B-M12 branch `302-307` | B-C-PLOT,B-C-GEOMETRY | Precomputed histogram geometry only under Histogram | B-L-N | Geometry/family compatibility | B-M12 |
+| `validation.histogram-geometry.facet-incompatibility` | B-M12 branch `308-313` | B-C-PLOT,B-C-GEOMETRY | Precomputed histogram geometry rejects facets | B-L-N | Self-contained geometry/facet compatibility | B-M12 |
+| `validation.histogram-geometry.density-stat` | B-M12 branch `314-319` | B-C-PLOT,B-C-GEOMETRY | Precomputed geometry requires Density stat | B-L-N | Geometry/axis normalization compatibility | B-M12 |
+| `validation.histogram-geometry.sample-options-incompatibility` | B-M12 branch `320-327` | B-C-PLOT,B-C-GEOMETRY | Requires Auto bins and HistogramOnly options | B-L-N | Caller geometry/sample-policy precedence | B-M12 |
+| `validation.histogram-geometry.external-channels-incompatibility` | B-M12 branch `328-337` | B-C-PLOT,B-C-GEOMETRY | Rejects x/y/hue/group channels | B-L-N | Self-contained histogram channel schema | B-M12 |
+| `validation.histogram-geometry.source-rows-incompatibility` | B-M12 branch `338-343` | B-C-PLOT,B-C-GEOMETRY | Rejects source-row inputs | B-L-N | Self-contained histogram row schema | B-M12 |
+| `validation.raincloud-geometry.family` | B-M12 branch `345-350` | B-C-PLOT,B-C-GEOMETRY | Precomputed geometry only under Raincloud | B-L-N | Geometry/family compatibility | B-M12 |
+| `validation.raincloud-geometry.facet-incompatibility` | B-M12 branch `351-355` | B-C-PLOT,B-C-GEOMETRY | Precomputed raincloud geometry rejects facets | B-L-N | Self-contained geometry/facet compatibility | B-M12 |
+| `validation.raincloud-geometry.external-channels-incompatibility` | B-M12 branch `356-365` | B-C-PLOT,B-C-GEOMETRY | Rejects external x/y/hue/group sample channels; configured series has already failed the earlier unified-group branch | B-L-N | Self-contained raincloud channel schema | B-M12; ordered overlap with series incompatibility |
+| `validation.raincloud-geometry.source-rows-incompatibility` | B-M12 branch `366-370` | B-C-PLOT,B-C-GEOMETRY | Rejects source-row inputs | B-L-N | Self-contained raincloud row schema | B-M12 |
+| `validation.raincloud-geometry.significance-incompatibility` | B-M12 branch `371-377` | B-C-PLOT,B-C-GEOMETRY | Rejects significance annotations | B-L-N | Precomputed geometry/annotation compatibility | B-M12 |
+| `validation.line-family.explicit-group-required` | B-M12 branch `398-414` | B-C-PLOT | Trajectory and LinePath require explicit group and fail here before the later five-family erased check | B-L-N | Collective line identity presence | B-M12; ordered duplicate for two required-group families |
+| `validation.line-path.hue-style-requires-hue` | B-M12 branch `415-426` | B-C-PLOT,B-C-SCALE | Hue style is LinePath-only and requires hue | B-L-N | LinePath style/channel compatibility | B-M12; family arm grouped with control |
+| `validation.channels.hue-erased-family` | B-M12 matrix/branch `427-454` | B-C-PLOT | Rejects hue outside exact erased matrix; Histogram has focused diagnostic | B-L-N | Erased hue family support | B-M12 |
+| `validation.channels.group-erased-family` | B-M12 matrix/branch `455-477` | B-C-PLOT | Rejects group outside exact erased matrix | B-L-N | Erased graphical-group support | B-M12 |
+| `validation.channels.required-group-erased-family` | B-M12 branch `478-490` | B-C-PLOT | Five collective families require group after erasure; Trajectory/LinePath missing-group cases are already rejected earlier | B-L-N | Required graphical-group presence | B-M12; ordered duplicate with line-family check |
+| `validation.interaction.styles-family-and-marker-compatibility` | B-M12 branches `491-502` | B-C-PLOT,B-C-STYLE | Styles are Interaction-only and require visible markers | B-L-N | Exact interaction-style compatibility | B-M12; two ordered failures, one configured object |
+| `validation.interaction.connectors-family` | B-M12 branch `503-508` | B-C-PLOT | Explicit connector control is Interaction-only | B-L-N | Connector-policy family support | B-M12; exact control gate grouped for migration |
+| `validation.interaction.hidden-connectors-style-incompatibility` | B-M12 branch `509-513` | B-C-PLOT,B-C-STYLE | `connectors(false)` rejects configured styles | B-L-N | Connector/style compatibility | B-M12 |
+| `validation.interaction.visible-mark-required` | B-M12 branch `515-522` | B-C-PLOT | Markers and connectors cannot both be hidden | B-L-N | Minimum interaction intelligibility | B-M12 |
+| `validation.distributions.redundant-hue-incompatibility` | B-M12 branch `523-531` | B-C-PLOT,B-C-SCALE | Intended to reject Boxplot/Violin redundant hue, but unified-series accessors compare internal `SERIES` with `X`, so the branch cannot observe equal raw identities | B-L-N | Dormant nonredundant categorical color identity check | B-M12; intentional T5d correction required |
+| `validation.legend.continuous-title-family` | B-M12 branch `539-543` | B-C-PLOT | Explicit continuous title limited to continuous-color families | B-L-N | Color-guide title family support | B-M12 |
+| `validation.estimate-status.family` | B-M12 branch `567-576` | B-C-PLOT | Status limited to PointInterval/Coefficient/Forest | B-L-N | Estimate-status family support | B-M12 |
+| `validation.intervals.bound-family` | B-M12 matrix/branch `577-589` | B-C-PLOT | Generic bound columns limited to five families | B-L-N | Erased interval-bound support | B-M12 |
+| `validation.matrix.variable-family` | B-M12 branch `595-601` | B-C-PLOT | Nonempty matrix-variable storage rejects non-Matrix kind | B-L-N | Matrix variable-list family support | B-M12 |
+| `validation.matrix.external-channels-incompatibility` | B-M12 branch `605-610` | B-C-PLOT | Matrix rejects separately configured x or y channels | B-L-N | Self-contained Matrix channel schema | B-M12 |
+| `validation.matrix.minimum-variables` | B-M12 branch `612-617` | B-C-PLOT | Matrix requires at least two ordered variables | B-L-G | Minimum Matrix panel topology | B-M12 |
+| `validation.matrix.variable-name-nonempty` | B-M12 branch `618-624` | B-C-PLOT,B-C-LABELS | Rejects trim-empty variable names; surrounding whitespace and controls otherwise pass | B-L-M,B-L-G | Matrix variable identity presence | B-M12 |
+| `validation.matrix.variable-name-unique` | B-M12 set/branch `618,625-629` | B-C-PLOT,B-C-LABELS | Rejects duplicate exact variable names | B-L-M,B-L-G | Unique Matrix panel identity | B-M12 |
+| `validation.trajectory.categorical-x-limits-incompatibility` | B-M12 branch `634-650` | B-C-PLOT | Categorical trajectory x rejects numeric x limits | B-L-N | Axis-kind/limit compatibility | B-M12 |
+| `validation.line-path.numeric-x-required` | B-M12 branch `653-668` | B-C-PLOT | LinePath x source must be numeric | B-L-N | Explicit path geometry axis invariant | B-M12 |
+| `validation.supplemental.numeric-x-family-matrix` | B-M13 `numeric_axes` x arms `227-259` | B-C-PLOT | Closed erased runtime numeric-x classification | B-L-N | Supplemental numeric-x capability | B-M13; split from y |
+| `validation.supplemental.numeric-y-family-matrix` | B-M13 `numeric_axes` y arms `227-259` | B-C-PLOT | Closed erased runtime numeric-y classification | B-L-N | Supplemental numeric-y capability | B-M13; split from x |
+| `validation.supplemental.facet-incompatibility` | B-M13 atomic branch `13-24` | B-C-PLOT | Any exact ticks, guides, or point layers reject facets | B-L-N | Supplemental/facet compatibility | B-M13 |
+| `validation.axes.x-exact-ticks-require-numeric` | B-M13 branch `27-31` | B-C-PLOT | Configured x ticks require runtime numeric x | B-L-N | Exact x-tick axis compatibility | B-M13 |
+| `validation.axes.y-exact-ticks-require-numeric` | B-M13 branch `32-36` | B-C-PLOT | Configured y ticks require runtime numeric y | B-L-N | Exact y-tick axis compatibility | B-M13 |
+| `validation.guides.horizontal-requires-numeric-y` | B-M13 match arm `39-43` | B-C-PLOT | Horizontal guide requires numeric y | B-L-N | Horizontal-guide axis compatibility | B-M13 |
+| `validation.guides.vertical-requires-numeric-x` | B-M13 match arm `44-48` | B-C-PLOT | Vertical guide requires numeric x | B-L-N | Vertical-guide axis compatibility | B-M13 |
+| `validation.guides.segment-requires-two-numeric-axes` | B-M13 match arm `49-53` | B-C-PLOT | Segment guide requires numeric x and y | B-L-N | Segment-guide axis compatibility | B-M13 |
+
+### T2b Target State
+
+| Property | Target classification and owner | Target resolution | Target validation | Public surface | Relationships |
+| --- | --- | --- | --- | --- | --- |
+| `bars.spacing.current-bar-spacing` | Explicit policy; retained within-category spacing role | Resolved Plot | Construction plus Plot preflight | Retained local control | Capability `capabilities.series.family-matrix` |
+| `histogram.binning.current-selection` | Explicit policy; retained histogram binning role | Resolved Plot | Construction and data-dependent preflight | Retained local control | Geometry precedence `histogram.geometry.density-stat-precedence` |
+| `histogram.normalization.current-stat` | Explicit policy; retained histogram normalization role | Resolved Plot | Construction and geometry compatibility preflight | Retained local control | Geometry validator `validation.histogram-geometry.density-stat` |
+| `histogram.composite.kde-source` | Explicit policy; retained caller/internal KDE source role | Resolved Plot | Input construction and Plot preflight | Retained local control | Presence sibling `histogram.composite.presence` |
+| `histogram.composite.presence` | Explicit policy; retained KDE/rug presence role | Resolved Plot | Construction and density-axis preflight | Retained local control | Source sibling `histogram.composite.kde-source` |
+| `annotations.panel-text.presence-control` | Explicit policy; retained ordered annotation presence | Resolved Plot | Annotation construction and Plot preflight | Retained local control | Content/corner siblings; facet and corner validators |
+| `annotations.panel-text.corner` | Explicit policy; retained exact panel-corner placement | Exact annotation | Closed construction | Retained `PanelTextAnnotation` field | Split parent `annotations.panel-text.presence-control` |
+| `annotations.panel-text.content` | Explicit policy; retained caller annotation content | Exact annotation | Construction: nonempty, trimmed, control-free, and single-line, explicitly rejecting U+2028 and U+2029 | Retained `PanelTextAnnotation` field | Split parent `annotations.panel-text.presence-control` |
+| `marks.raw-overlay.presence-layout` | Explicit policy; retained raw-observation presence/displacement | Resolved Plot | Closed construction and family preflight | Retained local control | Capability `capabilities.raw-overlay.family-matrix` |
+| `color-scales.continuous.heatmap-default` | Theme data scale; `ColorScales` default sequential heatmap mapping | Resolved Plot/facet theme before local-scale replacement | Complete gradient construction and domain preflight | T6 `ColorScales` default | Local replacement `color-scales.continuous.heatmap-policy` |
+| `color-scales.continuous.heatmap-policy` | Plot-local data scale; `ContinuousColorScale` kind and center | Plot-local scale before preflight | Construction plus domain/center preflight | Replaced by approved scale surface | Theme default; domain `color-scales.continuous.heatmap-domain` |
+| `heatmap.cells.layout-policy` | Explicit policy; retained heatmap topology selection | Resolved Plot | Closed construction and family preflight | Retained local control | Category-order validators |
+| `heatmap.labels.fit-policy` | Explicit policy; retained dense-label fit selection | Resolved Plot | Closed construction and layout-fit preflight | Retained local control | T2c label measurement counterpart |
+| `annotations.numeric-label.precision` | Explicit policy; retained numeric-content formatting role | Exact annotation policy | Construction: 0..=12 | Retained local control | Suffix sibling; presence `annotations.coefficient.estimate-label-presence` |
+| `annotations.numeric-label.suffix` | Explicit policy; retained numeric-content suffix role | Exact annotation policy | Construction: absent or nonempty/control-free | Retained local control | Precision sibling |
+| `annotations.heatmap.cell-value-presence` | Explicit policy; retained heatmap annotation-content presence | Resolved Plot | Closed construction and Heatmap preflight | Retained local control | Numeric-label formatting siblings |
+| `annotations.heatmap.null-row-presence` | Explicit policy; retained ordered null-row annotation presence | Resolved Plot | Annotation construction and Heatmap preflight | Retained local control | Target/text/lexical split children |
+| `annotations.heatmap.null-row-target` | Explicit policy; retained exact row identity | Exact annotation | Construction lexical validation; data identity in preflight | Retained annotation field | Parent `annotations.heatmap.null-row-presence` |
+| `annotations.heatmap.null-row-text` | Explicit policy; retained caller text content | Exact annotation | Construction lexical validation | Retained annotation field | Parent `annotations.heatmap.null-row-presence` |
+| `annotations.heatmap.null-row-lexical-validation` | Renderer invariant; private null-row lexical contract | Exact annotation construction | Both fields nonempty, trimmed, control-free; reject | Private-only behavior | Target/text siblings |
+| `marks.dumbbell.left-endpoint-identity` | Explicit policy; retained endpoint semantic label | Exact dumbbell input | Construction lexical validation | Retained input field | Right identity and compatibility validators |
+| `marks.dumbbell.right-endpoint-identity` | Explicit policy; retained endpoint semantic label | Exact dumbbell input | Construction lexical validation | Retained input field | Left identity and compatibility validators |
+| `marks.dumbbell.endpoint-identities-nonempty` | Renderer invariant; private endpoint identity validity | Input construction | Both identities nonempty; reject | Private-only behavior | Left/right identities |
+| `marks.dumbbell.endpoint-identities-lexical-validity` | Renderer invariant; private endpoint lexical validity | Input construction | Both trimmed/control-free; reject | Private-only behavior | Left/right identities |
+| `marks.dumbbell.endpoint-identities-distinct` | Renderer invariant; private endpoint compatibility | Input construction | Identities differ exactly; reject | Private-only behavior | Left/right identities |
+| `marks.dumbbell.left-endpoint-color` | Exact element style; unnamed left-endpoint paint role | Exact dumbbell mark | `Color` construction | Replaced exact-style field | Right paint sibling; T6 RGBA carrier |
+| `marks.dumbbell.right-endpoint-color` | Exact element style; unnamed right-endpoint paint role | Exact dumbbell mark | `Color` construction | Replaced exact-style field | Left paint sibling; T6 RGBA carrier |
+| `annotations.waterfall.total-label-presence` | Explicit policy; retained complete label-pair presence | Resolved Plot | Pair construction and Waterfall preflight | Retained local control | Base/terminal label children |
+| `annotations.waterfall.base-label` | Explicit policy; retained base content | Exact annotation input | Construction lexical validation | Retained input field | Parent `annotations.waterfall.total-label-presence` |
+| `annotations.waterfall.terminal-label` | Explicit policy; retained terminal content | Exact annotation input | Construction lexical validation | Retained input field | Parent `annotations.waterfall.total-label-presence` |
+| `annotations.waterfall.labels-nonempty` | Renderer invariant; private waterfall-label validity | Input construction | Both labels nonempty; reject | Private-only behavior | Base/terminal siblings |
+| `annotations.waterfall.labels-lexical-validity` | Renderer invariant; private waterfall lexical validity | Input construction | Both trimmed/control-free; reject | Private-only behavior | Base/terminal siblings |
+| `canvas.legend.composition-policy` | Explicit policy; approved `CanvasLegendPolicy` | Canvas root | Construction and shared-legend Canvas preflight | Retained named policy | Plot policy and shared-gap records |
+| `legend.plot.visibility-placement-policy` | Explicit policy; retained Plot legend visibility/placement | Resolved Plot | Closed construction; Canvas shared compatibility preflight | Retained local control | Canvas policy; T2d legend geometry |
+| `annotations.significance.erased-family-support` | Renderer invariant; private exact erased significance family support | Plot preflight after erasure | Runtime matrix equals public placement capabilities | Private-only behavior | Attached/pairwise capability records |
+| `bars.input.estimate-source-and-bounds` | Explicit policy; retained bar statistical-input selection | Plot input | Construction and data/interval preflight | Retained input surface | Generated selection sibling |
+| `bars.error.generated-selection` | Explicit policy; retained generated error-bar selection | Resolved Plot | Construction and BarSamples preflight | Retained input control | Four interval parameter siblings |
+| `bars.error.standard-deviation-scale` | Explicit policy; retained SD multiplier | Exact generated-error policy | Construction: finite positive | Retained input field | Shared validator record |
+| `bars.error.standard-error-scale` | Explicit policy; retained SE multiplier | Exact generated-error policy | Construction: finite positive | Retained input field | Shared validator record |
+| `bars.error.spread-scale-validation` | Renderer invariant; private generated spread-scale validity | Policy construction | Finite and strictly positive; reject | Private-only behavior | SD/SE scale siblings |
+| `bars.error.percentile-interval-coverage` | Explicit policy; retained percentile coverage | Exact generated-error policy | Construction: finite strict (0,1) | Retained input field | Shared coverage default/domain |
+| `bars.error.confidence-interval-coverage` | Explicit policy; retained confidence coverage | Exact generated-error policy | Construction: finite strict (0,1) | Retained input field | Shared coverage default/domain |
+| `bars.error.shared-coverage-default-domain` | Renderer invariant; private shared coverage default/validity | Policy construction | Default 0.95; finite strict (0,1) | Private-only behavior | Percentile/CI coverage siblings |
+| `bars.error.confidence-algorithm` | Explicit policy; retained CI algorithm selection | Exact generated-error policy | Closed construction | Retained input field | Resample/seed/unit siblings |
+| `bars.error.bootstrap-resamples` | Explicit policy; retained bootstrap work count | Exact generated-error policy | Construction: 1..=1,000,000 | Retained input field | Confidence algorithm sibling |
+| `bars.error.bootstrap-seed` | Explicit policy; retained deterministic bootstrap seed | Exact generated-error policy | Any u64 | Retained input field | Confidence algorithm sibling |
+| `bars.error.bootstrap-units` | Explicit policy; retained optional bootstrap unit identity | Exact generated-error policy | Alignment/data validation in preflight | Retained input field | Confidence algorithm sibling |
+| `categories.order.closed-selection` | Explicit policy; retained category-order vocabulary | Resolved Plot | Construction plus identity/order preflight | Retained local policy | Three control records |
+| `categories.order.primary-control` | Explicit policy; retained primary order | Resolved Plot | Family and data-dependent order preflight | Retained local control | Closed selection; primary-family validator |
+| `categories.order.heatmap-x-control` | Explicit policy; retained heatmap x order | Resolved Plot | Heatmap and data-dependent order preflight | Retained local control | Closed selection; axis-family validator |
+| `categories.order.heatmap-y-control` | Explicit policy; retained heatmap y order | Resolved Plot | Heatmap and data-dependent order preflight | Retained local control | Closed selection; axis-family validator |
+| `color-scales.categorical.exact-map-control` | Plot-local data scale; approved `CategoricalColorMap` | Plot-local scale before preflight | Construction key validity; preflight completeness | Replaced by approved exact map | T5d domain/mapping counterpart |
+| `intervals.coefficient.presence` | Explicit policy; retained coefficient interval presence | Plot input | Construction and interval/data preflight | Retained input surface | None |
+| `typography.significance.font-size-default` | Theme component; `TypographyTheme` significance text role | Resolved Plot/facet before optional exact style | Theme construction: positive size and valid line height; glyph/fit preflight | T6 `TypographyTheme` field | Exact override `annotations.significance.font-size`; T2a2 duplicate `typography.significance.font-size-default-copy`; T2f measurement counterpart |
+| `annotations.significance.font-size` | Exact element style; significance mark text-size override | Exact significance style after theme resolution | Construction: positive | Replaced by optional exact-style field | Theme default; weight/gap exact siblings; T2f measurement counterpart |
+| `typography.significance.weight-default` | Theme component; `TypographyTheme` significance text role | Resolved Plot/facet before optional exact style | Closed validated text weight; resolved-face measurement | T6 `TypographyTheme` field | Exact override `annotations.significance.weight` |
+| `annotations.significance.weight` | Exact element style; significance mark weight override | Exact significance style after theme resolution | Closed construction; resolved-face measurement uses weight | Replaced by optional exact-style field | Theme default; font-size/gap exact siblings |
+| `annotations.significance.gap-default` | Theme component; `AnnotationTheme` significance clearance | Resolved Plot/facet before optional exact style | Theme construction: finite nonnegative; annotation-fit preflight | T6 `AnnotationTheme` field | Exact override `annotations.significance.gap`; T2a2 duplicate `annotations.significance.label-gap-default-copy` |
+| `annotations.significance.gap` | Exact element style; significance mark clearance override | Exact significance style after theme resolution | Construction: finite nonnegative | Replaced by optional exact-style field | Theme default; font-size/weight exact siblings |
+| `regression.band.presence-claim` | Explicit policy; retained generated-band presence/claim | Resolved Plot | Closed construction and Regression family preflight | Retained local control | T2e generated-band style counterpart |
+| `qq.reference-line.policy` | Explicit policy; retained Q-Q reference selection | Resolved Plot | Closed construction and Qq family surface | Retained local control | T2e line-style counterpart |
+| `line-path.color-legend.policy` | Explicit policy; retained path hue/legend behavior | Resolved Plot | LinePath family and hue compatibility preflight | Retained local control | Hue requirement validator; categorical scale |
+| `marks.point.closed-shape` | Exact element style; retained closed point-shape vocabulary | Exact element | Closed construction | Retained local style vocabulary | Interaction point-shape field |
+| `marks.line.closed-pattern` | Exact element style; retained closed line-pattern vocabulary | Exact element | Closed construction; private dash conversion | Retained local style vocabulary | Interaction/guide pattern fields |
+| `interaction.styles.group-selector` | Exact element style; retained exact group selector | Exact interaction mark | Construction rejects empty, surrounding-whitespace, or control-bearing identities; preflight requires exactly one style for every observed group | Retained local style field with corrected validation | Shape/pattern siblings |
+| `interaction.styles.point-shape` | Exact element style; retained interaction point shape | Exact interaction mark | Closed construction | Retained local style field | Group selector; point vocabulary |
+| `interaction.styles.line-pattern` | Exact element style; retained interaction connector pattern | Exact interaction mark | Closed construction | Retained local style field | Group selector; line vocabulary |
+| `estimates.status.presence` | Explicit policy; retained unavailable-estimate content | Resolved Plot | Alignment and exact family preflight | Retained local control | Family validator |
+| `axes.forest.scale-policy` | Explicit policy; retained forest numeric-scale selection | Resolved Plot | Closed construction; positive-domain preflight | Retained local control | Forest reference and exact ticks |
+| `facets.layout.current-policy` | Explicit policy; retained generic-facet layout | Facet inherited from Plot | Construction and complete facet preflight | Retained local control | Facet capability and Canvas incompatibility |
+| `facets.scales.current-policy` | Explicit policy; retained facet range-sharing behavior | Facet inherited from Plot | Closed construction and facet planning | Retained local control | Canvas x-range groups are independent |
+| `guides.exact.color` | Exact element style; retained guide stroke paint | Exact guide | `Color` construction | Replaced exact-style paint field | Width/pattern siblings; T6 RGBA carrier |
+| `guides.exact.width` | Exact element style; retained guide stroke width | Exact guide | Construction: finite positive | Retained exact-style field | Color/pattern siblings |
+| `guides.exact.pattern` | Exact element style; retained guide line pattern | Exact guide | Closed construction | Retained exact-style field | Color/width siblings |
+| `guides.geometry.presence-orientation` | Explicit policy; retained ordered guide presence/orientation | Resolved Plot then exact guide | Family and axis compatibility preflight | Retained local control | Three guide gate records |
+| `layers.point.presence-coordinates` | Explicit policy; retained ordered supplemental-layer presence | Resolved Plot then exact layer | Construction, alignment, family and geometry preflight | Retained local control | Point-layer style/content siblings |
+| `layers.point.annotation-labels` | Explicit policy; retained point annotation content | Exact point layer | Alignment/content preflight | Retained layer field | Presence parent |
+| `layers.point.legend-identity` | Explicit policy; retained layer legend content/presence | Exact point layer | Identity and shared-legend preflight | Retained layer field | Presence parent; T2d legend counterpart |
+| `layers.point.exact-color` | Exact element style; unnamed supplemental-point paint role | Exact point layer | `Color` construction | Replaced exact-style field | Automatic color counterpart; T6 RGBA carrier |
+| `layers.point.default-radius` | Theme component; `MarkTheme` supplemental point radius | Resolved Plot theme | Theme construction: positive finite | T6 theme component field | Exact radius override |
+| `layers.point.exact-radius` | Exact element style; retained point-layer radius | Exact point layer | Construction: positive | Retained exact-style field | Theme default counterpart |
+| `layers.point.default-opacity` | Theme component; `MarkTheme` supplemental point alpha | Resolved Plot theme | Theme construction: valid alpha | T6 theme component field | Exact opacity override |
+| `layers.point.exact-opacity` | Exact element style; unnamed complete point-layer alpha role | Exact point layer | `Color`/alpha construction; no multiplication | Replaced exact-style field | Theme default; T6 alpha semantics |
+| `layers.bar-point.presence-positioning` | Explicit policy; retained ordered bar-point-layer presence | Resolved Plot then exact layer | Construction, family and positioned-data preflight | Retained local control | Exact style siblings |
+| `layers.bar-point.exact-color` | Exact element style; unnamed bar-point paint role | Exact bar-point layer | `Color` construction | Replaced exact-style field | Radius/alpha siblings |
+| `layers.bar-point.exact-radius` | Exact element style; retained bar-point radius | Exact bar-point layer | Construction: positive | Retained exact-style field | Color/alpha siblings |
+| `layers.bar-point.opacity` | Exact element style; unnamed complete bar-point alpha role | Exact bar-point layer | Valid alpha including opaque endpoint | Replaced exact-style field | Color/radius siblings; T6 alpha semantics |
+| `labels.inferred.mode-selection` | Explicit policy; retained inferred-label mode | Resolved Plot or Canvas replacement | Closed construction | Retained local policy | Alias precedence and humanization siblings |
+| `labels.inferred.alias-insertion` | Explicit policy; retained singular alias mutation | Policy construction | Exact strings are stored without a standalone lexical contract; use-site preflight rejects display collisions only | Retained local control | Bulk extension sibling |
+| `labels.inferred.aliases-bulk-extension` | Explicit policy; retained bulk alias mutation | Policy construction | Deterministic iterator insertion | Retained local control | Singular insertion sibling |
+| `labels.inferred.alias-before-mode-precedence` | Renderer invariant; private deterministic label resolution | Resolved Plot labels | Alias first, then one closed fallback mode | Private-only behavior | Mode and alias records |
+| `labels.inferred.display-collision-failure` | Renderer invariant; private display-domain uniqueness | Plot/Canvas preflight | Reject distinct raw values resolving to one display label | Private-only behavior | Alias/mode records |
+| `labels.inferred.humanization-rule` | Renderer invariant; private fixed humanization algorithm | Resolved Plot labels | Deterministic transformation; no locale fallback | Private-only behavior | Mode selection |
+| `geometry.raincloud.dimension-category` | Explicit policy; retained geometry semantic-identity field | Exact caller geometry | Construction nonempty validation | Retained geometry field | Shared dimension validator |
+| `geometry.raincloud.dimension-value` | Explicit policy; retained geometry semantic-identity field | Exact caller geometry | Construction nonempty validation | Retained geometry field | Shared dimension validator |
+| `geometry.raincloud.dimension-hue` | Explicit policy; retained optional geometry hue identity | Exact caller geometry and Plot-local scale | Construction plus hue-schema preflight | Retained geometry field | Hue consistency invariant |
+| `geometry.histogram.dimension-value` | Explicit policy; retained geometry semantic-identity field | Exact caller geometry | Construction nonempty validation | Retained geometry field | Shared dimension validator |
+| `geometry.histogram.dimension-density` | Explicit policy; retained geometry semantic-identity field | Exact caller geometry | Construction nonempty validation | Retained geometry field | Shared dimension validator |
+| `geometry.dimensions.nonempty-validation` | Renderer invariant; private semantic-dimension validity | Geometry construction/preflight | Reject empty, surrounding-whitespace, or control-bearing identities consistently | Private-only behavior | Five dimension identity records |
+| `geometry.raincloud.maximum-groups` | Renderer invariant; private raincloud resource ceiling | Geometry preflight | At most 512 groups | Private-only behavior | Other raincloud ceilings |
+| `geometry.raincloud.maximum-density-points-per-group` | Renderer invariant; private raincloud resource ceiling | Geometry preflight | At most 2,048 density points per group | Private-only behavior | Density topology records |
+| `geometry.raincloud.maximum-density-points-total` | Renderer invariant; private raincloud resource ceiling | Geometry preflight | Checked aggregate at most 1,000,000 | Private-only behavior | Per-group ceiling |
+| `geometry.raincloud.maximum-raw-points-total` | Renderer invariant; private raincloud resource ceiling | Geometry preflight | Checked aggregate at most 1,000,000 | Private-only behavior | Raw-point topology records |
+| `geometry.histogram.maximum-bins` | Renderer invariant; private histogram resource ceiling | Geometry preflight | At most 1,000,000 bins | Private-only behavior | Bin topology records |
+| `geometry.histogram.maximum-kde-points` | Renderer invariant; private histogram resource ceiling | Geometry preflight | At most 2,048 KDE points | Private-only behavior | KDE topology records |
+| `geometry.histogram.maximum-rugs` | Renderer invariant; private histogram resource ceiling | Geometry preflight | At most 1,000,000 rugs | Private-only behavior | Rug topology records |
+| `geometry.raincloud.groups-present` | Renderer invariant; private raincloud topology | Geometry preflight | At least one group | Private-only behavior | Group ceiling |
+| `geometry.raincloud.hue-presence-consistency` | Renderer invariant; private raincloud hue schema | Geometry preflight before scale resolution | Dimension and every group hue all present or all absent | Private-only behavior | Hue identity field |
+| `geometry.raincloud.group-category-nonempty` | Renderer invariant; private group-identity validity | Geometry preflight | Nonempty, trimmed, control-free category | Private-only behavior | Unique identity invariant |
+| `geometry.raincloud.group-hue-nonempty` | Renderer invariant; private group-identity validity | Geometry preflight | Present hue nonempty, trimmed, control-free | Private-only behavior | Hue consistency invariant |
+| `geometry.raincloud.group-identity-unique` | Renderer invariant; private raincloud identity topology | Geometry preflight | Exact category/hue pairs unique | Private-only behavior | Category/hue identity records |
+| `geometry.raincloud.density-minimum-points` | Renderer invariant; private density topology | Geometry preflight | At least two points per group | Private-only behavior | Per-group maximum |
+| `geometry.raincloud.density-point-domain` | Renderer invariant; private density coordinate validity | Geometry preflight | Finite y; normalized width in [0,1] | Private-only behavior | Order/positive-width siblings |
+| `geometry.raincloud.density-y-order` | Renderer invariant; private density topology | Geometry preflight | Strictly increasing y | Private-only behavior | Point-domain sibling |
+| `geometry.raincloud.density-positive-width` | Renderer invariant; private minimum visible geometry | Geometry preflight | At least one positive width | Private-only behavior | Point-domain sibling |
+| `geometry.raincloud.summary-order` | Renderer invariant; private summary topology | Geometry preflight | Finite q1 <= median <= q3 | Private-only behavior | Support sibling |
+| `geometry.raincloud.summary-within-support` | Renderer invariant; private summary/body compatibility | Geometry preflight | q1/q3 within density support | Private-only behavior | Summary-order sibling |
+| `geometry.raincloud.raw-points-present` | Renderer invariant; private raw-strip topology | Geometry preflight | At least one raw point per group | Private-only behavior | Raw ceilings/domain |
+| `geometry.raincloud.raw-point-domain` | Renderer invariant; private raw-point validity | Geometry preflight | Finite y; normalized strip in [0,1] | Private-only behavior | Support sibling |
+| `geometry.raincloud.raw-point-within-support` | Renderer invariant; private raw/body compatibility | Geometry preflight | Raw y within density support | Private-only behavior | Raw-domain sibling |
+| `geometry.histogram.bins-present` | Renderer invariant; private histogram topology | Geometry preflight | At least one bin | Private-only behavior | Bin ceiling/domain |
+| `geometry.histogram.bin-domain` | Renderer invariant; private bin geometry validity | Geometry preflight | Finite lower < upper; finite nonnegative density | Private-only behavior | Contiguity/positivity siblings |
+| `geometry.histogram.bins-contiguous` | Renderer invariant; private bin topology | Geometry preflight | Strict source order and exact shared edges | Private-only behavior | Bin-domain sibling |
+| `geometry.histogram.positive-bin-density` | Renderer invariant; private minimum visible geometry | Geometry preflight | At least one positive density | Private-only behavior | Bin-domain sibling |
+| `geometry.histogram.kde-minimum-points` | Renderer invariant; private KDE topology | Geometry preflight | At least two points | Private-only behavior | KDE ceiling |
+| `geometry.histogram.kde-point-domain` | Renderer invariant; private KDE coordinate validity | Geometry preflight | Finite x and finite nonnegative y | Private-only behavior | Support/order/positivity siblings |
+| `geometry.histogram.kde-within-bin-support` | Renderer invariant; private KDE/bin compatibility | Geometry preflight | Every x in inclusive bin support | Private-only behavior | KDE-domain sibling |
+| `geometry.histogram.kde-x-order` | Renderer invariant; private KDE topology | Geometry preflight | Strictly increasing x | Private-only behavior | KDE-domain sibling |
+| `geometry.histogram.positive-kde-density` | Renderer invariant; private minimum visible geometry | Geometry preflight | At least one positive y | Private-only behavior | KDE-domain sibling |
+| `geometry.histogram.rugs-present` | Renderer invariant; private rug topology | Geometry preflight | At least one segment | Private-only behavior | Rug ceiling/domain |
+| `geometry.histogram.rug-domain` | Renderer invariant; private rug geometry validity | Geometry preflight | Finite x and 0 <= baseline < top | Private-only behavior | Support sibling |
+| `geometry.histogram.rug-within-bin-support` | Renderer invariant; private rug/bin compatibility | Geometry preflight | Every x in inclusive bin support | Private-only behavior | Rug-domain sibling |
+| `capabilities.hue.family-matrix` | Explicit policy; retained sealed `Hue` availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Erased validator `validation.channels.hue-erased-family` |
+| `capabilities.group.family-matrix` | Explicit policy; retained sealed `Group` availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Erased validator `validation.channels.group-erased-family` |
+| `capabilities.series.family-matrix` | Explicit policy; retained sealed `Series` availability | Public compile-time Plot family | Exact compile-pass/fail matrix plus geometry preflight | Retained capability surface | Raincloud compatibility validator |
+| `capabilities.continuous-color.family-matrix` | Explicit policy; retained sealed continuous-color availability | Public compile-time Plot family | Exact Heatmap/Beeswarm matrix | Retained capability surface | Continuous title/domain controls |
+| `capabilities.numeric-x.family-matrix` | Explicit policy; retained sealed `NumericX` availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Runtime supplemental x matrix |
+| `capabilities.numeric-y.family-matrix` | Explicit policy; retained sealed `NumericY` availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Runtime supplemental y matrix |
+| `capabilities.guides.family-matrix` | Explicit policy; retained sealed `Guides` availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Three runtime guide gates |
+| `capabilities.heatmap-options.family-matrix` | Explicit policy; retained sealed Heatmap-only availability | Public compile-time Plot family | Exact compile-pass/fail singleton | Retained capability surface | Heatmap controls |
+| `capabilities.category-order.family-matrix` | Explicit policy; retained sealed primary-order availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Erased primary-order validator |
+| `capabilities.signed-bars.family-matrix` | Explicit policy; retained sealed sign-color availability | Public compile-time Plot family | Exact compile-pass/fail singleton | Retained capability surface | Sign-color control |
+| `capabilities.zero-line.family-matrix` | Explicit policy; retained sealed zero-line availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Zero-line control |
+| `capabilities.estimate-status.family-matrix` | Explicit policy; retained sealed estimate-status availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Erased family validator |
+| `capabilities.markers.family-matrix` | Explicit policy; retained sealed marker availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Marker control and interaction validators |
+| `capabilities.coefficient-options.family-matrix` | Explicit policy; retained sealed coefficient-option availability | Public compile-time Plot family | Exact compile-pass/fail singleton | Retained capability surface | Estimate-label control |
+| `capabilities.categorical-colors.family-matrix` | Explicit policy; generalized exact-map availability for every categorical data-color consumer | Public compile-time Plot family | Exact 15-family matrix: Scatter, Density, Line, Trajectory, LinePath, Interaction, Marginal, Matrix, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud | Replaced scale capability surface | Exact categorical map record; union of hue and positioned-series color semantics |
+| `capabilities.panel-text.family-matrix` | Explicit policy; retained sealed panel-text availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Runtime facet/matrix validators |
+| `capabilities.point-outline.family-matrix` | Explicit policy; retained sealed outline-policy availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Outline visibility control |
+| `capabilities.significance-style.family-matrix` | Explicit policy; retained sealed significance-style availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Three exact-style fields |
+| `capabilities.significance-attached.family-matrix` | Explicit policy; retained sealed Attached availability | Public compile-time Plot family/placement | Exact compile-pass/fail matrix | Retained capability surface | Erased support and Pairwise sibling |
+| `capabilities.significance-pairwise.family-matrix` | Explicit policy; retained sealed Pairwise availability | Public compile-time Plot family/placement | Exact compile-pass/fail matrix | Retained capability surface | Erased support and Attached sibling |
+| `capabilities.legend.family-matrix` | Explicit policy; retained sealed legend-policy availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Plot legend policy |
+| `capabilities.raw-overlay.family-matrix` | Explicit policy; retained sealed raw-overlay availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Raw-overlay control |
+| `capabilities.facet.family-matrix` | Explicit policy; retained sealed generic-facet availability | Public compile-time Plot family | Exact compile-pass/fail matrix | Retained capability surface | Facet layout and runtime incompatibility |
+| `channels.hue.optional-control` | Explicit policy; retained optional hue channel | Resolved Plot | Compile-time capability, alignment, erased-family and scale preflight | Retained local control | Hue capability and erased validator |
+| `channels.group.optional-control` | Explicit policy; retained optional group channel | Resolved Plot | Compile-time capability, alignment and erased-family preflight | Retained local control | Group capability/validators |
+| `channels.series.optional-control` | Explicit policy; retained optional positioned-series channel | Resolved Plot | Compile-time capability and geometry compatibility preflight | Retained local control | Series capability |
+| `legend.continuous.title-content` | Explicit policy; retained color-guide semantic title | Resolved Plot | Nonempty/trimmed/control-free construction; family preflight | Retained local control | Continuous-color capability and title validator |
+| `heatmap.highlight.presence-values` | Explicit policy; retained highlighted-cell mask | Resolved Plot | Alignment and Heatmap-only preflight | Retained local control | Heatmap capability |
+| `annotations.coefficient.estimate-label-presence` | Explicit policy; retained estimate-label presence | Resolved Plot | Coefficient-only and point-only preflight | Retained local control | Numeric format records |
+| `content.plot.title` | Explicit policy; retained Plot title content | Resolved Plot | Nonempty, trimmed, control-free construction | Retained local control | T2c typography measurement/draw |
+| `content.plot.subtitle` | Explicit policy; retained Plot subtitle content | Resolved Plot | Nonempty, trimmed, control-free construction | Retained local control | T2c typography measurement/draw |
+| `content.plot.caption` | Explicit policy; retained Plot caption content | Resolved Plot | Nonempty, trimmed, control-free construction | Retained local control | T2c typography measurement/draw |
+| `content.axis.x-title` | Explicit policy; retained exact x-title content | Resolved Plot | Nonempty, trimmed, control-free construction | Retained local control | Inferred-label and T2c axis counterparts |
+| `content.axis.y-title` | Explicit policy; retained exact y-title content | Resolved Plot | Nonempty, trimmed, control-free construction | Retained local control | Inferred-label and T2c axis counterparts |
+| `axes.x.exact-ticks-control` | Explicit policy; retained exact x-tick content | Resolved Plot | Construction plus numeric-axis/range/collision preflight | Retained local control | Numeric-x capability and runtime gate |
+| `axes.y.exact-ticks-control` | Explicit policy; retained exact y-tick content | Resolved Plot | Construction plus numeric-axis/range/collision preflight | Retained local control | Numeric-y capability and runtime gate |
+| `axes.x.explicit-limits-control` | Explicit policy; retained numeric x-domain limits | Resolved Plot | Finite strict range and axis-kind preflight | Retained local control | Numeric-x capability |
+| `axes.y.explicit-limits-control` | Explicit policy; retained numeric y-domain limits | Resolved Plot | Finite strict range and axis-kind preflight | Retained local control | Numeric-y capability |
+| `bars.sign-color.presence` | Explicit policy; retained sign-color behavior | Resolved Plot then data scale | HorizontalBar capability and value-domain preflight | Retained local control | SignedBars capability; T5d scale mapping |
+| `references.zero-line.presence` | Explicit policy; retained zero-reference presence | Resolved Plot | Compile-time family and representability preflight | Retained local control | ZeroLine capability; T2e style counterpart |
+| `marks.estimate-marker.visibility` | Explicit policy; retained marker presence | Resolved Plot | Compile-time family and interaction intelligibility preflight | Retained local control | Markers capability and interaction validators |
+| `marks.point-outline.visibility` | Explicit policy; retained point-outline presence | Resolved Plot | Compile-time family preflight | Retained local control | PointOutline capability; MarkTheme outline appearance |
+| `annotations.significance.presence` | Explicit policy; retained ordered significance content | Resolved Plot | Placement capability, annotation and facet preflight | Retained local control | Attached/Pairwise matrices and erased support |
+| `output.plot.pixel-size` | Explicit policy; retained Plot output dimensions | Plot render owner | Construction or preflight positive/minimum/limit checks | Retained local control | T2a scene/output dimensions |
+| `color-scales.continuous.heatmap-domain` | Plot-local data scale; `ContinuousColorScale` exact domain | Plot-local scale before preflight | Finite ordered domain; diverging center included | Replaced approved scale field | Heatmap policy; T5d mapping |
+| `color-scales.continuous.beeswarm-domain` | Plot-local data scale; `ContinuousColorScale` exact domain | Plot-local scale before preflight | Finite ordered domain | Replaced approved scale field | T5d mapping |
+| `intervals.line.band-presence` | Explicit policy; retained caller-band presence | Resolved Plot | Line family, alignment and bounds preflight | Retained local control | T2e band exact style/geometry |
+| `references.coefficient.presence-value` | Explicit policy; retained coefficient reference presence/value | Resolved Plot | Coefficient family and finite representability preflight | Retained local control | T2e reference style |
+| `references.forest.required-value` | Explicit policy; retained required forest reference value | Plot input | Finite and scale-domain preflight | Retained constructor argument | Forest scale and T2e reference style |
+| `interaction.connectors.visibility` | Explicit policy; retained connector presence | Resolved Plot | Interaction family and intelligibility compatibility preflight | Retained local control | Markers/style validators |
+| `histogram.geometry.density-stat-precedence` | Renderer invariant; private precomputed-geometry policy precedence | Plot construction/preflight | One canonical input-kind normalization; incompatible later replacement rejects | Private-only behavior | Binning/stat/composite validators |
+| `canvas.category-labels.sharing-policy` | Explicit policy; retained Canvas category-label sharing | Canvas root | Closed construction and complete row compatibility preflight | Retained Canvas control | Two shared-category validators |
+| `canvas.text-panel.title-content` | Explicit policy; retained caller text-panel title | Exact Canvas cell | Construction lexical validation; layout-fit preflight | Retained `TextPanel` field | Body and lexical siblings |
+| `canvas.text-panel.body-content` | Explicit policy; retained caller text-panel body | Exact Canvas cell | Construction lexical validation; layout-fit preflight | Retained `TextPanel` field | Title and lexical siblings |
+| `canvas.text-panel.lexical-validation` | Renderer invariant; private text-panel lexical validity | TextPanel construction | Both values nonempty, trimmed, control-free | Private-only behavior | Title/body records |
+| `canvas.grid.cardinality` | Explicit policy; retained Canvas grid shape | Canvas root construction | Positive rows/columns and checked product | Retained constructor arguments | Cell-range records |
+| `canvas.plot-panel.cell-range` | Renderer invariant; private Plot-cell address validity | Canvas mutation | Row/column inside fixed grid | Private-only behavior | Grid cardinality |
+| `canvas.text-panel.cell-range` | Renderer invariant; private text-cell address validity | Canvas mutation | Row/column inside fixed grid | Private-only behavior | Grid cardinality |
+| `canvas.cell.single-occupancy` | Renderer invariant; private Canvas cell occupancy | Canvas mutation | Reject second Plot/TextPanel in one cell | Private-only behavior | Both cell-range records |
+| `canvas.legend.shared-gap` | Theme component; `LegendTheme` shared-legend spacing | Canvas root theme | Theme construction: finite nonnegative | T6 theme component field | Canvas legend policy; current explicit override removed |
+| `canvas.headers.column-content-range` | Explicit policy; retained column-header content/span | Canvas root | Construction range/lexical/overlap validation | Retained Canvas control | `CompositionTheme` header appearance |
+| `canvas.headers.row-content-range` | Explicit policy; retained row-header content/span | Canvas root | Construction range/lexical/overlap validation | Retained Canvas control | `CompositionTheme` header appearance |
+| `canvas.headers.row-title-content` | Explicit policy; retained row-title content/presence | Canvas root | Construction plus title-ownership compatibility preflight | Retained Canvas control | `CompositionTheme` row-title appearance |
+| `canvas.x-range-group.cell-range` | Renderer invariant; private shared-range address validity | Canvas mutation | Every cell inside grid | Private-only behavior | Group uniqueness/nonempty siblings |
+| `canvas.x-range-group.unique-membership` | Renderer invariant; private shared-range ownership | Canvas mutation | A panel belongs to at most one group | Private-only behavior | Cell-range/nonempty siblings |
+| `canvas.x-range-group.nonempty` | Renderer invariant; private shared-range cardinality | Canvas mutation | At least one panel per group | Private-only behavior | Cell-range/uniqueness siblings |
+| `canvas.output.pixel-size` | Explicit policy; retained Canvas output dimensions | Canvas render owner | Preflight minimum and scene resource limits | Retained Canvas control | T2a scene/output dimensions |
+| `content.canvas.title` | Explicit policy; retained Canvas title content | Canvas root | Nonempty, trimmed, control-free construction | Retained Canvas control | Canvas `TypographyTheme` title role |
+| `content.canvas.subtitle` | Explicit policy; retained Canvas subtitle content | Canvas root | Nonempty, trimmed, control-free construction | Retained Canvas control | Canvas `TypographyTheme` subtitle role |
+| `content.canvas.caption` | Explicit policy; retained Canvas caption content | Canvas root | Nonempty, trimmed, control-free construction | Retained Canvas control | Canvas `TypographyTheme` caption role |
+| `canvas.labels.override-policy` | Explicit policy; retained Canvas-wide label replacement | Canvas root before Plot preflight | Complete policy construction and display-domain preflight | Retained Canvas control | Plot labels mode/alias records |
+| `validation.canvas.minimum-size` | Renderer invariant; private Canvas representability | Canvas preflight | At least 160x120 before measurement | Private-only behavior | Canvas pixel-size policy |
+| `validation.canvas.nonempty-content` | Renderer invariant; private Canvas content presence | Canvas preflight | At least one Plot or TextPanel | Private-only behavior | Grid/occupancy records |
+| `validation.canvas.shared-gap-requires-shared-legend` | Renderer invariant; private legend-policy compatibility | Canvas preflight | Gap owner and shared policy must agree | Private-only behavior | Shared gap and Canvas legend policy |
+| `validation.canvas.faceted-plot-incompatibility` | Renderer invariant; private composition ownership | Canvas preflight | Reject nested generic facet owner | Private-only behavior | Facet capability/layout |
+| `validation.canvas.row-title-panel-title-incompatibility` | Renderer invariant; private title-ownership compatibility | Canvas preflight | Reject competing row and panel title/subtitle content | Private-only behavior | Row-title and Plot content records |
+| `validation.canvas.shared-category-label-complete-row` | Renderer invariant; private shared-label occupancy | Canvas preflight | Every row has a first-column owner and a Plot in every compared cell | Private-only behavior | Sharing policy; family/axis validators |
+| `validation.canvas.shared-category-label-family` | Renderer invariant; private category-sharing family support | Canvas preflight | Exact admitted family matrix | Private-only behavior | Sharing policy |
+| `validation.canvas.shared-category-label-axis` | Renderer invariant; private category-sharing axis support | Canvas preflight | Every shared panel has a categorical y-axis | Private-only behavior | Sharing policy; separate T2g domain-equality owner |
+| `validation.raincloud-geometry.series-incompatibility` | Renderer invariant; private self-contained geometry compatibility | Plot preflight | Reject external series on geometry input once, before generic channel validation | Private-only behavior | Series control/capability; external-channel sibling must not duplicate the failure |
+| `validation.category-order.primary-family` | Renderer invariant; private erased primary-order support | Plot preflight | Exact runtime matrix equals supported current behavior | Private-only behavior | Primary control/capability |
+| `validation.category-order.heatmap-axis-family` | Renderer invariant; private erased heatmap-order support | Plot preflight | Non-default x/y orders require Heatmap | Private-only behavior | Heatmap x/y controls |
+| `validation.category-order.value-facet-incompatibility` | Renderer invariant; private ordering/facet compatibility | Plot preflight | Reject ambiguous value order under facets | Private-only behavior | Primary order and facet layout |
+| `validation.facets.self-managed-family` | Renderer invariant; private facet family compatibility | Plot preflight | Reject generic facets for self-managed families | Private-only behavior | Facet capability |
+| `validation.facets.panel-text-incompatibility` | Renderer invariant; private panel ownership compatibility | Plot preflight | Reject panel text under generic facets | Private-only behavior | Panel-text presence/facet layout |
+| `validation.significance.facet-owner-requires-facet` | Renderer invariant; private annotation ownership compatibility | Plot preflight | Facet-cell selector requires facet owner | Private-only behavior | Significance presence/facet layout |
+| `validation.intervals.ordinary-bar-line-band-incompatibility` | Renderer invariant; private interval-source compatibility | Plot preflight | Ordinary bars consume only bar-specific bounds | Private-only behavior | Bar input and line-band records |
+| `validation.intervals.stacked-bar-bounds-incompatibility` | Renderer invariant; private interval-family compatibility | Plot preflight | Stacked bars reject generic bounds | Private-only behavior | Interval bound-family validator |
+| `validation.panel-text.matrix-incompatibility` | Renderer invariant; private standard-panel compatibility | Plot preflight | Matrix rejects panel-corner text | Private-only behavior | PanelText capability |
+| `validation.panel-text.unique-corners` | Renderer invariant; private annotation collision rule | Plot preflight | At most one annotation per corner | Private-only behavior | Panel-text presence/corner |
+| `validation.histogram-geometry.family` | Renderer invariant; private geometry-family compatibility | Plot preflight | Exact Histogram owner | Private-only behavior | Geometry input |
+| `validation.histogram-geometry.facet-incompatibility` | Renderer invariant; private self-contained geometry ownership | Plot preflight | Reject facets | Private-only behavior | Facet layout |
+| `validation.histogram-geometry.density-stat` | Renderer invariant; private geometry normalization compatibility | Plot preflight | Require density axis | Private-only behavior | Histogram stat/precedence |
+| `validation.histogram-geometry.sample-options-incompatibility` | Renderer invariant; private caller-geometry precedence | Plot preflight | Reject sample-derived bins/composite controls | Private-only behavior | Binning/composite records |
+| `validation.histogram-geometry.external-channels-incompatibility` | Renderer invariant; private self-contained channel schema | Plot preflight | Reject external x/y/hue/group | Private-only behavior | Geometry dimensions |
+| `validation.histogram-geometry.source-rows-incompatibility` | Renderer invariant; private self-contained row schema | Plot preflight | Reject source-row mapping | Private-only behavior | None |
+| `validation.raincloud-geometry.family` | Renderer invariant; private geometry-family compatibility | Plot preflight | Exact Raincloud owner | Private-only behavior | Geometry input |
+| `validation.raincloud-geometry.facet-incompatibility` | Renderer invariant; private self-contained geometry ownership | Plot preflight | Reject facets | Private-only behavior | Facet layout |
+| `validation.raincloud-geometry.external-channels-incompatibility` | Renderer invariant; private self-contained channel schema | Plot preflight | Reject external x/y/hue/group sample channels without duplicating the series-specific failure | Private-only behavior | Geometry dimensions; series-incompatibility sibling |
+| `validation.raincloud-geometry.source-rows-incompatibility` | Renderer invariant; private self-contained row schema | Plot preflight | Reject source-row mapping | Private-only behavior | None |
+| `validation.raincloud-geometry.significance-incompatibility` | Renderer invariant; private geometry/annotation compatibility | Plot preflight | Reject significance on precomputed geometry | Private-only behavior | Significance presence |
+| `validation.line-family.explicit-group-required` | Renderer invariant; private collective-line identity validity | Plot preflight | Trajectory/LinePath require group through one canonical required-group check | Private-only behavior | Group control/capability; deduplicate with erased required-group validator |
+| `validation.line-path.hue-style-requires-hue` | Renderer invariant; private path-style compatibility | Plot preflight | Hue style requires LinePath and hue | Private-only behavior | LinePath policy/hue control |
+| `validation.channels.hue-erased-family` | Renderer invariant; private erased hue support | Plot preflight | Exact runtime matrix; reject without fallback | Private-only behavior | Hue capability/control |
+| `validation.channels.group-erased-family` | Renderer invariant; private erased group support | Plot preflight | Exact runtime matrix; reject without fallback | Private-only behavior | Group capability/control |
+| `validation.channels.required-group-erased-family` | Renderer invariant; private required-group support | Plot preflight | Exact collective family matrix through one canonical check | Private-only behavior | Group control; line-family required-group subset |
+| `validation.interaction.styles-family-and-marker-compatibility` | Renderer invariant; private exact-style compatibility | Plot preflight | Interaction-only; markers visible | Private-only behavior | Interaction style/marker records |
+| `validation.interaction.connectors-family` | Renderer invariant; private connector-policy support | Plot preflight | Interaction-only | Private-only behavior | Connector control |
+| `validation.interaction.hidden-connectors-style-incompatibility` | Renderer invariant; private connector/style compatibility | Plot preflight | Hidden connectors reject connector styles | Private-only behavior | Connector and style records |
+| `validation.interaction.visible-mark-required` | Renderer invariant; private minimum interaction intelligibility | Plot preflight | Marker or connector remains visible | Private-only behavior | Marker/connector controls |
+| `validation.distributions.redundant-hue-incompatibility` | Renderer invariant; private nonredundant scale identity | Plot preflight after raw semantic dimensions resolve | Boxplot/Violin positioned-series color identity differs from category identity | Private-only behavior | Series control and T5d domain; replaces dormant internal-key comparison |
+| `validation.legend.continuous-title-family` | Renderer invariant; private continuous-title support | Plot preflight | Require continuous-color family | Private-only behavior | Color-guide title/capability |
+| `validation.estimate-status.family` | Renderer invariant; private estimate-status support | Plot preflight | Exact three-family matrix | Private-only behavior | Status control/capability |
+| `validation.intervals.bound-family` | Renderer invariant; private interval-bound support | Plot preflight | Exact five-family matrix | Private-only behavior | Interval controls |
+| `validation.matrix.variable-family` | Renderer invariant; private matrix-list support | Plot preflight | Stored matrix list requires Matrix | Private-only behavior | Matrix constructor |
+| `validation.matrix.external-channels-incompatibility` | Renderer invariant; private Matrix channel schema | Plot preflight | Reject separately configured x/y channels | Private-only behavior | Matrix constructor |
+| `validation.matrix.minimum-variables` | Renderer invariant; private minimum Matrix topology | Plot preflight | At least two ordered variables | Private-only behavior | Matrix constructor and layout |
+| `validation.matrix.variable-name-nonempty` | Renderer invariant; private Matrix identity validity | Plot preflight | Variable names are nonempty, trimmed, and control-free | Private-only behavior | Variable uniqueness and label resolution |
+| `validation.matrix.variable-name-unique` | Renderer invariant; private Matrix identity topology | Plot preflight | Exact validated variable names are unique | Private-only behavior | Variable-name validity and panel layout |
+| `validation.trajectory.categorical-x-limits-incompatibility` | Renderer invariant; private axis-kind/limit compatibility | Plot preflight | Categorical trajectory x rejects numeric limits | Private-only behavior | x-limit control |
+| `validation.line-path.numeric-x-required` | Renderer invariant; private explicit-path axis validity | Plot preflight | Require numeric x | Private-only behavior | Numeric-x capability |
+| `validation.supplemental.numeric-x-family-matrix` | Renderer invariant; private supplemental numeric-x classification | Plot preflight | Closed exact matrix, including data-dependent Trajectory x | Private-only behavior | Public NumericX capability |
+| `validation.supplemental.numeric-y-family-matrix` | Renderer invariant; private supplemental numeric-y classification | Plot preflight | Closed exact matrix | Private-only behavior | Public NumericY capability |
+| `validation.supplemental.facet-incompatibility` | Renderer invariant; private supplemental/facet compatibility | Plot preflight | Reject any admitted supplemental control under facets | Private-only behavior | Tick/guide/layer controls |
+| `validation.axes.x-exact-ticks-require-numeric` | Renderer invariant; private exact-tick axis compatibility | Plot preflight | Require runtime numeric x | Private-only behavior | x-tick control and runtime matrix |
+| `validation.axes.y-exact-ticks-require-numeric` | Renderer invariant; private exact-tick axis compatibility | Plot preflight | Require runtime numeric y | Private-only behavior | y-tick control and runtime matrix |
+| `validation.guides.horizontal-requires-numeric-y` | Renderer invariant; private guide-axis compatibility | Plot preflight | Require runtime numeric y | Private-only behavior | Guide presence/orientation |
+| `validation.guides.vertical-requires-numeric-x` | Renderer invariant; private guide-axis compatibility | Plot preflight | Require runtime numeric x | Private-only behavior | Guide presence/orientation |
+| `validation.guides.segment-requires-two-numeric-axes` | Renderer invariant; private guide-axis compatibility | Plot preflight | Require runtime numeric x and y | Private-only behavior | Guide presence/orientation |
+
+### T2b Migration And Evidence
+
+The compact evidence codes below name required migration evidence. They do not
+claim that a future implementation check already exists or passed.
+
+| Code | Required visual or contract evidence |
+| --- | --- |
+| B-V-P | No output change expected; focused public-policy construction, default, setter, preflight, and representative snapshot assertions are required. |
+| B-V-C | No output change expected; exact compile-pass and compile-fail family matrices, plus erased-runtime parity where applicable, are required. |
+| B-V-G | No output change expected; focused valid geometry plus every independent invalid topology, support, positivity, and resource branch are required. |
+| B-V-E | No ordinary valid-output change expected; focused exact-style precedence, validation, legend-glyph, and representative SVG assertions are required. |
+| B-V-I | No output change expected; focused private invariant/preflight failure and successful render parity assertions are required. |
+| B-V-D | Intentional custom-theme or scale redesign with unchanged built-in semantic intent; focused resolution, precedence, SVG, Canvas, and scale snapshots are required. |
+| B-V-F | Intentional earlier or stricter validation correction; focused failure-timing and no-backend-output assertions are required. |
+
+| Property | Disposition and owning phase | Visual evidence |
+| --- | --- | --- |
+| `bars.spacing.current-bar-spacing` | `retain`, T6 | B-V-P; grouped Bar/HBar spacing snapshots |
+| `histogram.binning.current-selection` | `retain`, T6 | B-V-P; Auto/Count/Width geometry assertions |
+| `histogram.normalization.current-stat` | `retain`, T6 | B-V-P; Count/Probability/Density axes and bars |
+| `histogram.composite.kde-source` | `retain`, T6 | B-V-P; internal/precomputed source routing |
+| `histogram.composite.presence` | `retain`, T6 | B-V-P; histogram-only and KDE/rug snapshots |
+| `annotations.panel-text.presence-control` | `retain`, T6 | B-V-P; empty/multiple annotation order |
+| `annotations.panel-text.corner` | `retain`, T6 | B-V-P; four-corner placement snapshots |
+| `annotations.panel-text.content` | `retain`, T6 | B-V-P; exact content plus empty, untrimmed, control, U+2028, and U+2029 failures |
+| `marks.raw-overlay.presence-layout` | `retain`, T6 | B-V-P; hidden/centered/jittered distribution snapshots |
+| `color-scales.continuous.heatmap-default` | `move`, T5d; public theme connection T6 | B-V-D; built-in sequential default and custom-theme gradient snapshots |
+| `color-scales.continuous.heatmap-policy` | `replace`, T5d; public connection T6 | B-V-D; local sequential/diverging replacement, center, and saturation snapshots |
+| `heatmap.cells.layout-policy` | `retain`, T6 | B-V-P; Cartesian/lower/upper and diagonal topology |
+| `heatmap.labels.fit-policy` | `retain`, T6 | B-V-P; elide/wrap measurement and draw parity |
+| `annotations.numeric-label.precision` | `retain`, T6 | B-V-P; 0/12 boundaries and rendered labels |
+| `annotations.numeric-label.suffix` | `retain`, T6 | B-V-P; absent/present suffix output and rejection |
+| `annotations.heatmap.cell-value-presence` | `retain`, T6 | B-V-P; hidden/value cell annotations |
+| `annotations.heatmap.null-row-presence` | `retain`, T6 | B-V-P; zero/multiple ordered null-row annotations |
+| `annotations.heatmap.null-row-target` | `retain`, T6 | B-V-P; exact row targeting |
+| `annotations.heatmap.null-row-text` | `retain`, T6 | B-V-P; wrapping and exact content |
+| `annotations.heatmap.null-row-lexical-validation` | `retain`, T6 | B-V-I; every target/text lexical failure |
+| `marks.dumbbell.left-endpoint-identity` | `retain`, T6 | B-V-P; endpoint label/legend identity output |
+| `marks.dumbbell.right-endpoint-identity` | `retain`, T6 | B-V-P; endpoint label/legend identity output |
+| `marks.dumbbell.endpoint-identities-nonempty` | `retain`, T6 | B-V-I; independent left/right empty failures |
+| `marks.dumbbell.endpoint-identities-lexical-validity` | `retain`, T6 | B-V-I; whitespace/control failures |
+| `marks.dumbbell.endpoint-identities-distinct` | `retain`, T6 | B-V-I; equal-identity rejection |
+| `marks.dumbbell.left-endpoint-color` | `replace`, T6 | B-V-E; exact RGBA left endpoint and legend glyph |
+| `marks.dumbbell.right-endpoint-color` | `replace`, T6 | B-V-E; exact RGBA right endpoint and legend glyph |
+| `annotations.waterfall.total-label-presence` | `retain`, T6 | B-V-P; absent/present complete pair |
+| `annotations.waterfall.base-label` | `retain`, T6 | B-V-P; exact base text snapshot |
+| `annotations.waterfall.terminal-label` | `retain`, T6 | B-V-P; exact terminal text snapshot |
+| `annotations.waterfall.labels-nonempty` | `retain`, T6 | B-V-I; independent empty failures |
+| `annotations.waterfall.labels-lexical-validity` | `retain`, T6 | B-V-I; whitespace/control failures |
+| `canvas.legend.composition-policy` | `retain`, T6 | B-V-P; PerPlot/Shared/Hidden Canvas snapshots |
+| `legend.plot.visibility-placement-policy` | `retain`, T6 | B-V-P; hidden/automatic/all exact positions |
+| `annotations.significance.erased-family-support` | `connect`, T6 | B-V-C; erased matrix equals attached/pairwise public matrices |
+| `bars.input.estimate-source-and-bounds` | `retain`, T6 | B-V-P; samples/estimates/precomputed bounds |
+| `bars.error.generated-selection` | `retain`, T6 | B-V-P; all five generated-error selections |
+| `bars.error.standard-deviation-scale` | `retain`, T6 | B-V-P; independent SD scale geometry |
+| `bars.error.standard-error-scale` | `retain`, T6 | B-V-P; independent SE scale geometry |
+| `bars.error.spread-scale-validation` | `retain`, T6 | B-V-I; finite-positive boundary failures |
+| `bars.error.percentile-interval-coverage` | `retain`, T6 | B-V-P; independent percentile coverage geometry |
+| `bars.error.confidence-interval-coverage` | `retain`, T6 | B-V-P; independent CI coverage geometry |
+| `bars.error.shared-coverage-default-domain` | `retain`, T6 | B-V-I; 0.95 default and strict-domain failures |
+| `bars.error.confidence-algorithm` | `retain`, T6 | B-V-P; bootstrap/Student-t intervals |
+| `bars.error.bootstrap-resamples` | `retain`, T6 | B-V-P; count boundaries and deterministic output |
+| `bars.error.bootstrap-seed` | `retain`, T6 | B-V-P; same/different seed determinism |
+| `bars.error.bootstrap-units` | `retain`, T6 | B-V-P; absent/present multilevel resampling |
+| `categories.order.closed-selection` | `retain`, T6 | B-V-P; every order/direction combination |
+| `categories.order.primary-control` | `retain`, T6 | B-V-P; supported families and order snapshots |
+| `categories.order.heatmap-x-control` | `retain`, T6 | B-V-P; independent x order |
+| `categories.order.heatmap-y-control` | `retain`, T6 | B-V-P; independent y order |
+| `color-scales.categorical.exact-map-control` | `replace`, T5d; public connection T6 | B-V-D; exact raw-key map, completeness, facets, legends |
+| `intervals.coefficient.presence` | `retain`, T6 | B-V-P; point-only and bounded coefficient snapshots |
+| `typography.significance.font-size-default` | `move`, T5a; public theme connection T6 | B-V-D; built-in 16 px parity, custom-theme size, and measurement/draw identity |
+| `annotations.significance.font-size` | `replace`, T6 | B-V-E; optional exact precedence, measurement/draw identity, and positive failure |
+| `typography.significance.weight-default` | `move`, T5a; public theme connection T6 | B-V-D; built-in Normal parity and resolved-face measurement |
+| `annotations.significance.weight` | `replace`, T6 | B-V-E; three exact weights in marks and resolved-font measurement |
+| `annotations.significance.gap-default` | `move`, T5c; public theme connection T6 | B-V-D; built-in 8 px parity, custom-theme clearance, and planning/draw identity |
+| `annotations.significance.gap` | `replace`, T6 | B-V-E; optional exact clearance precedence and invalid values |
+| `regression.band.presence-claim` | `retain`, T6 | B-V-P; visible/hidden claim and legend output |
+| `qq.reference-line.policy` | `retain`, T6 | B-V-P; quartile/identity/hidden snapshots |
+| `line-path.color-legend.policy` | `retain`, T6 | B-V-P; neutral/hue marks and legend output |
+| `marks.point.closed-shape` | `retain`, T6 | B-V-E; circle/triangle geometry and legends |
+| `marks.line.closed-pattern` | `retain`, T6 | B-V-E; solid/dashed geometry and legends |
+| `interaction.styles.group-selector` | `replace`, T6 | B-V-E/B-V-F; lexical construction failures and exact group matching/completeness |
+| `interaction.styles.point-shape` | `retain`, T6 | B-V-E; per-group glyph snapshots |
+| `interaction.styles.line-pattern` | `retain`, T6 | B-V-E; per-group connector/legend snapshots |
+| `estimates.status.presence` | `retain`, T6 | B-V-P; estimated/not-estimable content |
+| `axes.forest.scale-policy` | `retain`, T6 | B-V-P; linear/log ticks, ranges, references |
+| `facets.layout.current-policy` | `retain`, T6 | B-V-P; row/column/grid/wrap snapshots |
+| `facets.scales.current-policy` | `retain`, T6 | B-V-P; fixed/free axis-sharing snapshots |
+| `guides.exact.color` | `replace`, T6 | B-V-E; exact RGBA guide stroke |
+| `guides.exact.width` | `retain`, T6 | B-V-E; exact width and invalid boundaries |
+| `guides.exact.pattern` | `retain`, T6 | B-V-E; solid/dashed guide snapshots |
+| `guides.geometry.presence-orientation` | `retain`, T6 | B-V-P; all orientations and append order |
+| `layers.point.presence-coordinates` | `retain`, T6 | B-V-P; zero/multiple supplemental layers |
+| `layers.point.annotation-labels` | `retain`, T6 | B-V-P; absent/present aligned labels |
+| `layers.point.legend-identity` | `retain`, T6 | B-V-P; layer legend and shared compatibility |
+| `layers.point.exact-color` | `replace`, T6 | B-V-E; exact RGBA override and slot stability |
+| `layers.point.default-radius` | `move`, T5c | B-V-D; resolved theme radius in layout/draw |
+| `layers.point.exact-radius` | `retain`, T6 | B-V-E; exact precedence and positive failure |
+| `layers.point.default-opacity` | `move`, T5c | B-V-D; resolved theme alpha and built-in parity |
+| `layers.point.exact-opacity` | `replace`, T6 | B-V-E; replacement alpha, including opaque endpoint |
+| `layers.bar-point.presence-positioning` | `retain`, T6 | B-V-P; Bar/HBar positioning and append order |
+| `layers.bar-point.exact-color` | `replace`, T6 | B-V-E; exact RGBA paint |
+| `layers.bar-point.exact-radius` | `retain`, T6 | B-V-E; exact radius and positive failure |
+| `layers.bar-point.opacity` | `replace`, T6 | B-V-F; complete alpha including corrected opaque endpoint |
+| `labels.inferred.mode-selection` | `retain`, T6 | B-V-P; Humanized/Raw labels across consumers |
+| `labels.inferred.alias-insertion` | `retain`, T6 | B-V-P; insertion/replacement order |
+| `labels.inferred.aliases-bulk-extension` | `retain`, T6 | B-V-P; bulk repeated-key determinism |
+| `labels.inferred.alias-before-mode-precedence` | `retain`, T6 | B-V-I; alias wins in both modes |
+| `labels.inferred.display-collision-failure` | `retain`, T6 | B-V-I; exact collision rejection before backend |
+| `labels.inferred.humanization-rule` | `retain`, T6 | B-V-I; pinned token/case/acronym corpus |
+| `geometry.raincloud.dimension-category` | `retain`, T6 | B-V-G; inferred x-title and label resolution |
+| `geometry.raincloud.dimension-value` | `retain`, T6 | B-V-G; inferred y-title and label resolution |
+| `geometry.raincloud.dimension-hue` | `retain`, T6 | B-V-G; absent/present hue legends and scales |
+| `geometry.histogram.dimension-value` | `retain`, T6 | B-V-G; inferred x-title |
+| `geometry.histogram.dimension-density` | `retain`, T6 | B-V-G; inferred density title |
+| `geometry.dimensions.nonempty-validation` | `replace`, T6 | B-V-F; consistent empty/whitespace/control rejection |
+| `geometry.raincloud.maximum-groups` | `retain`, T3 | B-V-G; 512/513 group boundary |
+| `geometry.raincloud.maximum-density-points-per-group` | `retain`, T3 | B-V-G; 2,048/2,049 boundary |
+| `geometry.raincloud.maximum-density-points-total` | `retain`, T3 | B-V-G; aggregate ceiling and checked overflow |
+| `geometry.raincloud.maximum-raw-points-total` | `retain`, T3 | B-V-G; aggregate ceiling and checked overflow |
+| `geometry.histogram.maximum-bins` | `retain`, T3 | B-V-G; bin ceiling boundary |
+| `geometry.histogram.maximum-kde-points` | `retain`, T3 | B-V-G; KDE ceiling boundary |
+| `geometry.histogram.maximum-rugs` | `retain`, T3 | B-V-G; rug ceiling boundary |
+| `geometry.raincloud.groups-present` | `retain`, T3 | B-V-G; empty-group failure |
+| `geometry.raincloud.hue-presence-consistency` | `retain`, T5d | B-V-G; dimension/group all-or-none cases |
+| `geometry.raincloud.group-category-nonempty` | `replace`, T6 | B-V-F; normalized lexical identity failures |
+| `geometry.raincloud.group-hue-nonempty` | `replace`, T6 | B-V-F; normalized lexical hue failures |
+| `geometry.raincloud.group-identity-unique` | `retain`, T5d | B-V-G; duplicate category/hue failure |
+| `geometry.raincloud.density-minimum-points` | `retain`, T3 | B-V-G; zero/one/two-point boundary |
+| `geometry.raincloud.density-point-domain` | `retain`, T3 | B-V-G; finite and [0,1] boundaries |
+| `geometry.raincloud.density-y-order` | `retain`, T3 | B-V-G; equal/decreasing y failures |
+| `geometry.raincloud.density-positive-width` | `retain`, T3 | B-V-G; all-zero width failure |
+| `geometry.raincloud.summary-order` | `retain`, T3 | B-V-G; every nonfinite/order branch |
+| `geometry.raincloud.summary-within-support` | `retain`, T3 | B-V-G; lower/upper support failures |
+| `geometry.raincloud.raw-points-present` | `retain`, T3 | B-V-G; empty raw strip failure |
+| `geometry.raincloud.raw-point-domain` | `retain`, T3 | B-V-G; finite and [0,1] boundaries |
+| `geometry.raincloud.raw-point-within-support` | `retain`, T3 | B-V-G; both support-edge failures |
+| `geometry.histogram.bins-present` | `retain`, T3 | B-V-G; empty bins failure |
+| `geometry.histogram.bin-domain` | `retain`, T3 | B-V-G; every finite/order/density branch |
+| `geometry.histogram.bins-contiguous` | `retain`, T3 | B-V-G; gap/overlap/order failures |
+| `geometry.histogram.positive-bin-density` | `retain`, T3 | B-V-G; all-zero bin failure |
+| `geometry.histogram.kde-minimum-points` | `retain`, T3 | B-V-G; zero/one/two-point boundary |
+| `geometry.histogram.kde-point-domain` | `retain`, T3 | B-V-G; every finite/nonnegative branch |
+| `geometry.histogram.kde-within-bin-support` | `retain`, T3 | B-V-G; both support-edge failures |
+| `geometry.histogram.kde-x-order` | `retain`, T3 | B-V-G; equal/decreasing x failures |
+| `geometry.histogram.positive-kde-density` | `retain`, T3 | B-V-G; all-zero KDE failure |
+| `geometry.histogram.rugs-present` | `retain`, T3 | B-V-G; empty rugs failure |
+| `geometry.histogram.rug-domain` | `retain`, T3 | B-V-G; every finite/baseline/top branch |
+| `geometry.histogram.rug-within-bin-support` | `retain`, T3 | B-V-G; both support-edge failures |
+| `capabilities.hue.family-matrix` | `retain`, T6 | B-V-C; every admitted and representative rejected family |
+| `capabilities.group.family-matrix` | `retain`, T6 | B-V-C; every admitted and representative rejected family |
+| `capabilities.series.family-matrix` | `retain`, T6 | B-V-C; exact five-family matrix |
+| `capabilities.continuous-color.family-matrix` | `retain`, T6 | B-V-C; Heatmap/Beeswarm only |
+| `capabilities.numeric-x.family-matrix` | `retain`, T6 | B-V-C; exact 17-family matrix |
+| `capabilities.numeric-y.family-matrix` | `retain`, T6 | B-V-C; exact 15-family matrix |
+| `capabilities.guides.family-matrix` | `retain`, T6 | B-V-C; exact 23-family matrix |
+| `capabilities.heatmap-options.family-matrix` | `retain`, T6 | B-V-C; Heatmap-only controls |
+| `capabilities.category-order.family-matrix` | `retain`, T6 | B-V-C; exact five-family matrix |
+| `capabilities.signed-bars.family-matrix` | `retain`, T6 | B-V-C; HorizontalBar-only control |
+| `capabilities.zero-line.family-matrix` | `retain`, T6 | B-V-C; exact four-family matrix |
+| `capabilities.estimate-status.family-matrix` | `retain`, T6 | B-V-C; exact three-family matrix |
+| `capabilities.markers.family-matrix` | `retain`, T6 | B-V-C; exact three-family matrix |
+| `capabilities.coefficient-options.family-matrix` | `retain`, T6 | B-V-C; Coefficient-only control |
+| `capabilities.categorical-colors.family-matrix` | `replace`, T6 | B-V-C/B-V-D; approved exact 15-family hue/positioned-series matrix |
+| `capabilities.panel-text.family-matrix` | `retain`, T6 | B-V-C; exact 24-family matrix |
+| `capabilities.point-outline.family-matrix` | `retain`, T6 | B-V-C; exact 18-family matrix |
+| `capabilities.significance-style.family-matrix` | `retain`, T6 | B-V-C; exact eight-family matrix |
+| `capabilities.significance-attached.family-matrix` | `retain`, T6 | B-V-C; exact three-family placement matrix |
+| `capabilities.significance-pairwise.family-matrix` | `retain`, T6 | B-V-C; exact seven-family placement matrix |
+| `capabilities.legend.family-matrix` | `retain`, T6 | B-V-C; exact 17-family matrix |
+| `capabilities.raw-overlay.family-matrix` | `retain`, T6 | B-V-C; Boxplot/Violin only |
+| `capabilities.facet.family-matrix` | `retain`, T6 | B-V-C; exact 23-family matrix |
+| `channels.hue.optional-control` | `retain`, T6 | B-V-P/B-V-C; absent/present and erased parity |
+| `channels.group.optional-control` | `retain`, T6 | B-V-P/B-V-C; absent/present and required-group cases |
+| `channels.series.optional-control` | `retain`, T6 | B-V-P/B-V-C; absent/present and raincloud geometry rejection |
+| `legend.continuous.title-content` | `retain`, T6 | B-V-F; inferred/exact title and lexical failures |
+| `heatmap.highlight.presence-values` | `retain`, T6 | B-V-P; absent/present borders and alignment |
+| `annotations.coefficient.estimate-label-presence` | `retain`, T6 | B-V-P; point-only labels and interval suppression |
+| `content.plot.title` | `retain`, T6 | B-V-F; content validation and title snapshots |
+| `content.plot.subtitle` | `retain`, T6 | B-V-F; content validation and subtitle snapshots |
+| `content.plot.caption` | `retain`, T6 | B-V-F; content validation and caption snapshots |
+| `content.axis.x-title` | `retain`, T6 | B-V-F; exact/inferred/empty rejection and layout |
+| `content.axis.y-title` | `retain`, T6 | B-V-F; exact/inferred/empty rejection and layout |
+| `axes.x.exact-ticks-control` | `retain`, T6 | B-V-P; exact labels/positions and automatic replacement |
+| `axes.y.exact-ticks-control` | `retain`, T6 | B-V-P; exact labels/positions and automatic replacement |
+| `axes.x.explicit-limits-control` | `retain`, T6 | B-V-P; explicit/planned precedence and range failures |
+| `axes.y.explicit-limits-control` | `retain`, T6 | B-V-P; explicit/planned precedence and range failures |
+| `bars.sign-color.presence` | `connect`, T5d; public control retained T6 | B-V-D; positive/negative scale colors and legends |
+| `references.zero-line.presence` | `retain`, T6 | B-V-P; absent/present reference snapshots |
+| `marks.estimate-marker.visibility` | `retain`, T6 | B-V-P; visible/hidden marks and legends |
+| `marks.point-outline.visibility` | `retain`, T6 | B-V-P; visible/hidden outline and legend glyphs |
+| `annotations.significance.presence` | `retain`, T6 | B-V-P/B-V-C; placement append order and family matrix |
+| `output.plot.pixel-size` | `retain`, T6 | B-V-P; defaults, exact dimensions, limit failures |
+| `color-scales.continuous.heatmap-domain` | `replace`, T5d; public connection T6 | B-V-D; exact/saturated/diverging-domain snapshots |
+| `color-scales.continuous.beeswarm-domain` | `replace`, T5d; public connection T6 | B-V-D; exact/saturated-domain snapshots |
+| `intervals.line.band-presence` | `retain`, T6 | B-V-P; absent/present band and bounds validation |
+| `references.coefficient.presence-value` | `retain`, T6 | B-V-P; absent/present finite reference |
+| `references.forest.required-value` | `retain`, T6 | B-V-P; linear/log reference and domain failures |
+| `interaction.connectors.visibility` | `retain`, T6 | B-V-P; default/visible/hidden compatibility |
+| `histogram.geometry.density-stat-precedence` | `retain`, T6 | B-V-I; constructor/user-call order and preflight failure timing |
+| `canvas.category-labels.sharing-policy` | `retain`, T6 | B-V-P; EveryPlot/FirstColumnPerRow rows |
+| `canvas.text-panel.title-content` | `retain`, T6 | B-V-P; wrapping/fit and exact title |
+| `canvas.text-panel.body-content` | `retain`, T6 | B-V-P; wrapping/fit and exact body |
+| `canvas.text-panel.lexical-validation` | `retain`, T6 | B-V-I; independent title/body lexical failures |
+| `canvas.grid.cardinality` | `retain`, T6 | B-V-P; positive grid and overflow failure |
+| `canvas.plot-panel.cell-range` | `retain`, T6 | B-V-I; every row/column boundary |
+| `canvas.text-panel.cell-range` | `retain`, T6 | B-V-I; every row/column boundary |
+| `canvas.cell.single-occupancy` | `retain`, T6 | B-V-I; Plot/TextPanel collision permutations |
+| `canvas.legend.shared-gap` | `move`, T5b; public theme connection T6 | B-V-D; resolved LegendTheme spacing and Canvas snapshots |
+| `canvas.headers.column-content-range` | `retain`, T6 | B-V-P; span/range/overlap/content and layout |
+| `canvas.headers.row-content-range` | `retain`, T6 | B-V-P; span/range/overlap/content and layout |
+| `canvas.headers.row-title-content` | `retain`, T6 | B-V-P; one-per-row content/wrapping/layout |
+| `canvas.x-range-group.cell-range` | `retain`, T6 | B-V-I; in/out-of-grid group cells |
+| `canvas.x-range-group.unique-membership` | `retain`, T6 | B-V-I; duplicate within/across groups |
+| `canvas.x-range-group.nonempty` | `retain`, T6 | B-V-I; empty/nonempty groups |
+| `canvas.output.pixel-size` | `retain`, T6 | B-V-P; default/exact/minimum/limit dimensions |
+| `content.canvas.title` | `retain`, T6 | B-V-F; lexical validation and Canvas title snapshots |
+| `content.canvas.subtitle` | `retain`, T6 | B-V-F; lexical validation and Canvas subtitle snapshots |
+| `content.canvas.caption` | `retain`, T6 | B-V-F; lexical validation and Canvas caption snapshots |
+| `canvas.labels.override-policy` | `retain`, T6 | B-V-P; absent/replacement label policy across panels |
+| `validation.canvas.minimum-size` | `retain`, T3 | B-V-I; 159/119 failures and exact minima |
+| `validation.canvas.nonempty-content` | `retain`, T3 | B-V-I; empty versus Plot/TextPanel content |
+| `validation.canvas.shared-gap-requires-shared-legend` | `replace`, T5b | B-V-D; theme-owned gap removes invalid local pairing |
+| `validation.canvas.faceted-plot-incompatibility` | `retain`, T5b | B-V-I; nested facet rejection before draw |
+| `validation.canvas.row-title-panel-title-incompatibility` | `retain`, T5b | B-V-I; title/subtitle conflict permutations |
+| `validation.canvas.shared-category-label-complete-row` | `retain`, T5b | B-V-I; missing first and later cells in every row position |
+| `validation.canvas.shared-category-label-family` | `retain`, T5b | B-V-I; exact admitted/rejected families |
+| `validation.canvas.shared-category-label-axis` | `retain`, T5b | B-V-I; categorical versus noncategorical y-axis cases |
+| `validation.raincloud-geometry.series-incompatibility` | `retain`, T6 | B-V-I; samples accept and geometry rejects series |
+| `validation.category-order.primary-family` | `retain`, T6 | B-V-C/B-V-I; compile/runtime matrix parity |
+| `validation.category-order.heatmap-axis-family` | `retain`, T6 | B-V-C/B-V-I; Heatmap-only x/y controls |
+| `validation.category-order.value-facet-incompatibility` | `retain`, T6 | B-V-I; faceted value-order rejection |
+| `validation.facets.self-managed-family` | `retain`, T6 | B-V-C/B-V-I; Matrix/Marginal rejection |
+| `validation.facets.panel-text-incompatibility` | `retain`, T6 | B-V-I; panel-text/facet rejection |
+| `validation.significance.facet-owner-requires-facet` | `retain`, T6 | B-V-I; facet selector ownership cases |
+| `validation.intervals.ordinary-bar-line-band-incompatibility` | `retain`, T6 | B-V-I; generic versus bar-bound source |
+| `validation.intervals.stacked-bar-bounds-incompatibility` | `retain`, T6 | B-V-I; both stacked orientations |
+| `validation.panel-text.matrix-incompatibility` | `retain`, T6 | B-V-C/B-V-I; Matrix compile/runtime exclusion |
+| `validation.panel-text.unique-corners` | `retain`, T6 | B-V-I; each duplicate-corner case |
+| `validation.histogram-geometry.family` | `retain`, T6 | B-V-I; erased wrong-family rejection |
+| `validation.histogram-geometry.facet-incompatibility` | `retain`, T6 | B-V-I; geometry/facet rejection |
+| `validation.histogram-geometry.density-stat` | `retain`, T6 | B-V-I; density requirement and call-order case |
+| `validation.histogram-geometry.sample-options-incompatibility` | `retain`, T6 | B-V-I; bins/composite independent failures |
+| `validation.histogram-geometry.external-channels-incompatibility` | `retain`, T6 | B-V-I; every external channel branch |
+| `validation.histogram-geometry.source-rows-incompatibility` | `retain`, T6 | B-V-I; source-row rejection |
+| `validation.raincloud-geometry.family` | `retain`, T6 | B-V-I; erased wrong-family rejection |
+| `validation.raincloud-geometry.facet-incompatibility` | `retain`, T6 | B-V-I; geometry/facet rejection |
+| `validation.raincloud-geometry.external-channels-incompatibility` | `deduplicate`, T6 | B-V-I; every external channel branch with one series/group failure path |
+| `validation.raincloud-geometry.source-rows-incompatibility` | `retain`, T6 | B-V-I; source-row rejection |
+| `validation.raincloud-geometry.significance-incompatibility` | `retain`, T6 | B-V-I; annotation rejection |
+| `validation.line-family.explicit-group-required` | `deduplicate`, T6 | B-V-I; one Trajectory/LinePath missing-group failure path |
+| `validation.line-path.hue-style-requires-hue` | `retain`, T6 | B-V-I; wrong family and missing hue failures |
+| `validation.channels.hue-erased-family` | `connect`, T6 | B-V-C; exact public/runtime matrix parity |
+| `validation.channels.group-erased-family` | `connect`, T6 | B-V-C; exact public/runtime matrix parity |
+| `validation.channels.required-group-erased-family` | `deduplicate`, T6 | B-V-I; exact five-family presence matrix with one failure per family |
+| `validation.interaction.styles-family-and-marker-compatibility` | `retain`, T6 | B-V-I; wrong family and hidden-marker failures |
+| `validation.interaction.connectors-family` | `retain`, T6 | B-V-C/B-V-I; Interaction-only parity |
+| `validation.interaction.hidden-connectors-style-incompatibility` | `retain`, T6 | B-V-I; hidden connector/style rejection |
+| `validation.interaction.visible-mark-required` | `retain`, T6 | B-V-I; all marker/connector combinations |
+| `validation.distributions.redundant-hue-incompatibility` | `replace`, T5d | B-V-F; raw redundant versus distinct positioned-series identities and pre-backend failure |
+| `validation.legend.continuous-title-family` | `retain`, T6 | B-V-C/B-V-I; exact continuous-color matrix |
+| `validation.estimate-status.family` | `connect`, T6 | B-V-C; exact public/runtime three-family parity |
+| `validation.intervals.bound-family` | `retain`, T6 | B-V-I; exact five-family runtime matrix |
+| `validation.matrix.variable-family` | `retain`, T6 | B-V-I; Matrix/non-Matrix erased cases |
+| `validation.matrix.external-channels-incompatibility` | `retain`, T6 | B-V-I; independent x/y channel rejection |
+| `validation.matrix.minimum-variables` | `retain`, T6 | B-V-I; zero/one/two-variable boundary |
+| `validation.matrix.variable-name-nonempty` | `replace`, T6 | B-V-F; empty, surrounding-whitespace, and control-character failures |
+| `validation.matrix.variable-name-unique` | `retain`, T6 | B-V-I; duplicate exact identity rejection |
+| `validation.trajectory.categorical-x-limits-incompatibility` | `retain`, T6 | B-V-I; categorical/numeric x and limits combinations |
+| `validation.line-path.numeric-x-required` | `retain`, T6 | B-V-I; categorical rejection/numeric success |
+| `validation.supplemental.numeric-x-family-matrix` | `connect`, T6 | B-V-C; public/runtime matrix including Trajectory |
+| `validation.supplemental.numeric-y-family-matrix` | `connect`, T6 | B-V-C; public/runtime matrix parity |
+| `validation.supplemental.facet-incompatibility` | `retain`, T6 | B-V-I; each tick/guide/layer presence under facets |
+| `validation.axes.x-exact-ticks-require-numeric` | `retain`, T6 | B-V-I; exact runtime axis matrix |
+| `validation.axes.y-exact-ticks-require-numeric` | `retain`, T6 | B-V-I; exact runtime axis matrix |
+| `validation.guides.horizontal-requires-numeric-y` | `retain`, T6 | B-V-I; admitted/rejected axis families |
+| `validation.guides.vertical-requires-numeric-x` | `retain`, T6 | B-V-I; admitted/rejected axis families |
+| `validation.guides.segment-requires-two-numeric-axes` | `retain`, T6 | B-V-I; all one/two-axis combinations |
+
+### T2b Public Exposure
+
+Public exposure is evidence for the keyed declaration and policy records, not a
+second property source.
+
+| Source surface | Exposed T2b identities | Disposition |
+| --- | --- | --- |
+| `src/spec.rs:14-17` and `src/lib.rs:65-73` | `BarInput`, `BarSamples`, `Bootstrap`, `ConfidenceInterval`, `ErrorBar`, `PercentileInterval`, `StandardDeviation`, `StandardError` | Accounted by the 12 B-M2 bar/error records or rejected as numeric payload below. |
+| `src/spec.rs:19` and `src/lib.rs:65-73` | `CategoricalColors`, `CategoryOrder`, `ValueSort` | Accounted by the five B-M3 category/scale records and their T2g consumer deferrals. |
+| `src/spec.rs:20-23` and `src/lib.rs:65-73` | `AxisScale`, `Bounds`, `CoefficientInput`, `EstimateStatus`, `InteractionStyle`, `LinePathStyle`, `LinePattern`, `PointShape`, `QqLine`, `RegressionBand`, `SignificanceMarkStyle`, `TextWeight` | Accounted by B-M4/B-M10 records; `Bounds` numeric payload is rejected below. |
+| `src/spec.rs:24` and `src/lib.rs:65-73` | `FacetScales`, `FacetSpec` | Accounted by the two B-M5 records and facet capability/control traces. |
+| `src/spec.rs:26` and `src/lib.rs:75` | `PngCompression`, `PngOptions`, `PngSizing` | Public exposure only; all five declaration/behavior records are prior-owned by T2a4. |
+| `src/lib.rs:50` | `Canvas`, `CanvasCategoryLabels`, `TextPanel` | Accounted by B-M11 and the prior/deferred Canvas contexts below. |
+| `src/lib.rs:53-56` | `HistogramBin`, `HistogramDimensions`, `HistogramGeometry`, `HistogramKdePoint`, `HistogramRug`, `RaincloudDensityPoint`, `RaincloudDimensions`, `RaincloudGeometry`, `RaincloudGroup`, `RaincloudPoint` | Accounted by the 39 B-M8 semantic-identity and fixed-representation records; coordinate payload declarations are not separate properties. |
+| `src/lib.rs:57` | `AxisValues`, `HistogramInput`, `RaincloudInput` | Public exposure only. `AxisValues` is an input carrier whose axis-kind gates are accounted by B-M12/B-M13; Histogram/Raincloud sample-versus-geometry selection is accounted by the geometry precedence and compatibility records. |
+| `src/lib.rs:58-60` | `Labels`, `BarPointLayer`, `GuideSpec`, `GuideStyle`, `PointLayer`, `AxisTick` | Labels and layer declarations are accounted by B-M6/B-M7; `AxisTick` layout representation is T2c-owned. |
+| `src/lib.rs:62-64` | `Attached`, `FacetCell`, `Pairwise`, `Significance`, `SignificanceMark`, `SignificanceTarget` | Attached/Pairwise family matrices and annotation presence are T2b-owned; exact annotation geometry/marks are T2f-owned. |
+| `src/lib.rs:65-73` remaining direct `spec.rs` identities | `BarSpacing`, `CanvasLegendPolicy`, `DumbbellEndpoints`, `HeatmapAnnotations`, `HeatmapLabelFit`, `HeatmapLayout`, `HeatmapNullRowAnnotation`, `HeatmapScale`, `HistogramBins`, `HistogramComposite`, `HistogramKde`, `HistogramStat`, `LegendPolicy`, `LegendPosition`, `NumericLabelFormat`, `PanelCorner`, `PanelTextAnnotation`, `PlotKind`, `RawOverlay`, `WaterfallLabels` | Accounted by B-M1/B-M9/B-M10 records; private legend-default behavior and numeric formatting are deferred below. |
+| `src/lib.rs:77` | `BooleanValues`, `CategoryValues`, `NumericValues`, `SourceRows` | Scientific/data carriers, not visual properties; T2b records only controls whose semantic presence consumes them. |
+
+### Deferred T2b Source Contexts
+
+| Source context | Owning phase | Reason it is not a T2b record |
+| --- | --- | --- |
+| `src/spec.rs:542-548,620-639` | T2d | Automatic/exact legend placement fallback and renderer-owned legend-clearance selection are legend construction/layout behavior, not the public visibility/placement declaration. |
+| `src/spec.rs:592-604`; `src/builder/accessors.rs:39-89` | T2g | Unified-series routing merges constructor and optional series into hue/group semantic domains; it is one data-scale/domain mapping surface, not an additional public control. |
+| `NumericLabelFormat::format` in `src/spec.rs` | T2f | Fixed string production is the annotation rendering consumer of T2b precision/suffix controls. |
+| `TextWeight::svg_value` and `LinePattern::line_style` in `src/spec/estimate.rs:79-87,221-230` | T2e/T2f | Private final style conversion; public closed vocabularies remain T2b-owned. |
+| `RegressionBand::legend_label` in `src/spec/estimate.rs:171-176` | T2d | Fixed generated legend claim is selected by the T2b band policy, but legend content construction is T2d-owned. |
+| `GuideStyle::line_style`, `PointLayer::point_style`, and `BarPointLayer::point_style` in `src/layers.rs:39-41,197-200,292-301` | T2e | Exact-style conversion, including exact PointLayer paint precedence over one already selected automatic accent, and final draw carriers are mark/guide rendering sources. |
+| Automatic PointLayer accent selection in `src/plots/line.rs:165-203` | T2g, from the T2a1 accent owner | T2g owns stable accent-slot selection and supplies that resolved paint to the T2e conversion; T2b owns the optional exact-color field/default/setter. |
+| `src/builder/accessors.rs:642-657,716-851` | T2g | Categorical color lookup, palette fallback, semantic label/domain inference, and unified legend identities are scale/domain consumers. |
+| `Plot::with_suppressed_legend` in `src/builder/accessors.rs:940-943` | T2d | Canvas composition suppresses a panel legend through an internal copy; this is a consumer of T2b policies, not another public visibility policy. |
+| `src/canvas.rs:390-430` | T2d | Canvas preflight-to-render composition lifecycle, planning, and canonical composed-scene construction. |
+| `src/canvas.rs:432-464` | T2h | Five Canvas terminal selections remain the explicitly admitted cross-source residual for final lifecycle reconciliation. |
+| `src/canvas.rs:505-1077` except the B-M11 compatibility branches | T2c/T2d/T2g | Typography measurement, grid allocation, shared headers/titles, shared legends, domain collection, plan/render order, and hidden appearance lookup are later semantic owners. In particular, shared-category domain equality at `705-708` is T2g-owned. |
+| `src/orchestrator/validation.rs:80-190,672-719` | T2g | Faceted explicit-order completeness, triangular family equality, normalization, and data-dependent category identities. |
+| `src/orchestrator/validation.rs:533-538,544-551` | T2g | Continuous color-channel family/domain validation and beeswarm limit validity. |
+| `src/orchestrator/layers.rs:10,74-225` | T2c/T2e | Tick count/projection/range/collision replacement is T2c; guide coordinate projection, style conversion, clipping, and drawing are T2e. |
+
+### Prior-Owned T2b Contexts
+
+| Source context | Prior owner | T2b treatment |
+| --- | --- | --- |
+| `Theme` storage/default/setter and every `Plot::palette()` reconstruction in `builder.rs`/`builder/`/`canvas.rs` | T2a1 and T2a4 | Consumer traces only; no duplicate theme or lifecycle record. |
+| `PointOutline` carrier/default appearance and private point/line/fill/text styles | T2a2 | T2b records only the public outline-presence policy and exact public style fields. |
+| `src/spec/output.rs:3-52` | T2a4 | All PNG declaration, mode, default, validation, and mapping records are complete there; B-M14 records exposure only. |
+| Plot/Canvas scene rendering, Output publication, PNG/SVG terminals outside `canvas.rs:432-464`, and backend lifecycle | T2a3/T2a4 | Lifecycle/output consumers only. |
+| `AxisSpec`, `AxisTick`, resolved axis ranges, exact-tick projection/collision, and axis text measurement | T2c allocation | T2b owns public content/policy controls and family gates only. |
+| `Legend`, `LegendEntry`, legend metrics, shared-entry merging, and generated glyphs | T2d allocation | T2b owns only visibility, placement, sharing, title content, and exact layer legend identity. |
+| Public significance placement/target geometry and bracket generation | T2f allocation | T2b owns annotation presence, exact text-style fields, and family/compatibility matrices only. |
+
+### Rejected T2b Matches
+
+| Source match | Disposition and reason |
+| --- | --- |
+| Imports, module declarations, ordinary derives, documentation comments, and public re-export statements | Language/API plumbing. Public exposure is accounted above and does not create duplicate properties. |
+| `kind.rs` marker declarations, sealing, `ExactFamily`, `Any`, and erasure implementation | Typed API mechanics. The 23 independent admitted capability matrices are the policy sources; `SourceRows` is data-provenance availability and is rejected. |
+| `Bounds`, coordinate/value vectors, category/boolean arrays, source-row maps, bootstrap unit payloads, and exact caller numeric positions | Scientific/data payload. Presence, fixed representation, and visible policy branches remain admitted where applicable. |
+| `RaincloudDensityPoint`, `RaincloudPoint`, `HistogramBin`, `HistogramKdePoint`, and `HistogramRug` field declarations by themselves | Caller coordinate payload. Their fixed finite/order/support/topology/resource constraints are the admitted B-M8 renderer-invariant records. |
+| `PlotInput`, row counts, aligned-column contents, matrix variable numeric payload, and `validate_value_alignment` | Data transport/integrity rather than visual policy. Independent visible presence/family branches remain admitted. |
+| Private `PlotRenderContext`, `PlotRenderResult`, `CanvasPreflight`, plan structs, internal column-key constants, and accessor forwarding | Transport/plumbing; no independent visual value. |
+| Error message prose and interpolated diagnostic values | Non-visual diagnostics. Every admitted controlling failure branch has one record. |
+| Unit tests, doctest bodies, compile-fail examples, examples, snapshots, and test-only helpers/counters | Evidence only, never independent property sources. |
+| `LinePattern` backend dash literal, point-layer automatic palette lookup, guide projection, and renderer-owned widths/colors supplied after public conversion | Deferred T2e/T2f/T2g implementation sources, not duplicate public declarations. |
+
+### T2b Reconciliation
+
+- The completed T2b inventory is exactly **261** records. Primary source
+  attribution is 32 B-M1, 12 B-M2, 5 B-M3, 17 B-M4, 2 B-M5, 16 B-M6, 6
+  B-M7, 39 B-M8, 23 B-M9, 31 B-M10, 28 B-M11, 42 B-M12, and 8 B-M13.
+  The canonical table order is independent of those attribution totals.
+- Each descriptive key occurs once in Current State, once in Target State, and
+  once in Migration And Evidence, with the same 261-key order. Public exposure,
+  deferred, prior-owned, and rejected tables are non-keyed audit dispositions
+  and do not add records.
+- Closed target-class totals are exactly **119 Explicit policy**, **112 Renderer
+  invariant**, **19 Exact element style**, **4 Plot-local data scale**, **6 Theme
+  component**, and **1 Theme data scale** records. The sum is 261, and no row
+  uses an unclosed class or occupies more than one class.
+- The corrected count preserves the binding splits: independent SD/SE scales,
+  percentile/CI coverage, significance theme defaults versus exact overrides,
+  heatmap theme default versus Plot-local replacement, PointLayer size/alpha
+  defaults versus exact overrides, panel text/null-row/dumbbell/waterfall
+  content and validity, five semantic geometry dimensions, complete Canvas row
+  occupancy, four Matrix invariants, Attached versus Pairwise significance,
+  numeric-x versus numeric-y runtime matrices, and all 42 configuration plus 8
+  independent supplemental gates.
+- `SourceRows` remains rejected; the five `canvas.rs:432-464` terminal methods
+  remain T2h residuals; unified-series routing remains T2g-owned. No T2b record
+  duplicates those contexts.
+- T2a contributes 222 complete records. The ledger therefore inventories
+  exactly **483** records through completed T2b. This is not a final-T2
+  estimate; T2c through T2h remain source-driven and pending.
+- Independent review corrected default-versus-override ownership, missing Canvas
+  and Matrix invariants, capability counts, source dispositions, and exact
+  current behavior without leaving a count, order, schema, or ownership finding.
+  Tracked-diff checks and `just verify` passed on 2026-08-26. No production code,
+  tests, snapshots, generated output, or other specifications changed in T2b.

@@ -88,7 +88,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
 | T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
 | T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
-| T2b | Public controls and policies | PENDING |
+| T2b | Public controls and policies | COMPLETE |
 | T2c | Layout, typography, axes, and grid | PENDING |
 | T2d | Legends, Canvas composition, and decorations | PENDING |
 | T2e | Ordinary plot marks and local styles | PENDING |
@@ -163,7 +163,7 @@ Acceptance:
 
 ## Phase T2: Visual-Property Ownership Inventory
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Account for every current visual value before reorganizing implementation.
 
@@ -345,7 +345,8 @@ protocol record also owns integer text positions, so the corrected source
 coverage does not add a record. T2a1 and T2a2 therefore complete exactly 117
 T2a records; T2a3 brought the completed count to 162 under the now-superseded
 202-record estimate, and T2a4 reconciliation corrects the current aggregate to
-222. T2a is complete; T2 remains in progress while T2b through T2h are pending.
+222. T2a is complete; T2 remains in progress while T2b is in progress and T2c
+through T2h are pending.
 
 Verification: source reconciliation and independent ownership review corrected
 private carrier ownership, the dormant rounded-rectangle fallback, degenerate
@@ -439,7 +440,34 @@ No production code, test, snapshot, or other specification changed.
 
 ### Subphase T2b: Public Controls And Policies
 
-**Status**: PENDING
+**Status**: IN PROGRESS
+
+Decision record: source reconciliation admits exactly 261 canonical
+T2b records attributed as 32 `spec.rs` public policies, 12 bar/error policies, 5
+categorical ordering/scale policies, 17 estimate/local-style policies, 2 facet
+policies, 16 supplemental-layer policies, 6 inferred-label policies, 39
+caller-geometry representation records, 23 independent capability matrices, 31
+builder-only controls, 28 Canvas controls, 42 independent configuration
+validation branches, and 8 independent supplemental-layer gates. These are
+source-based counts, not a completion estimate. Together with the 222 completed
+T2a records, the ledger inventories 483 records through completed T2b. T2c
+through T2h remain pending.
+
+Verification: independent source, ownership, schema, count, class, and table-order
+review corrected default-versus-override ownership, missing Canvas and Matrix
+invariants, capability counts, source dispositions, and exact current behavior.
+Final rereview found no remaining issue. Tracked-diff checks and `just verify`
+passed on 2026-08-26. No production code, test, snapshot, generated output, or
+other specification changed.
+
+The reconciled count supersedes the overlapping 133-record public-declaration,
+63-record builder, 33-record Canvas, and 55-record orchestrator audit candidate
+sets. Those candidate counts must not be summed: declaration, storage, default,
+setter, accessor, and an exact matching validator share one record only when
+they have one semantic role, one closed target owner and class, and one owning
+migration phase. Independent paired fields, capability matrices, precedence
+branches, and failure policies remain separate. There is no final-T2 estimate;
+T2c through T2h remain source-driven.
 
 Inventory the public configuration declarations and their builder access paths in
 `spec.rs`, `spec/`, `layers.rs`, `builder.rs`, `builder/`, `canvas.rs`, `kind.rs`,
