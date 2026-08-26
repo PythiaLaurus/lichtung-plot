@@ -4,6 +4,9 @@
 )]
 
 use lichtung_plot::{BarInput, BarSpacing, CategoryValues, NumericValues, Plot};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEMP_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn fixture_values() -> (NumericValues, NumericValues) {
     let xs: Vec<f64> = (0..30).map(|i| f64::from(i) * 0.5).collect();
@@ -72,16 +75,7 @@ pub(super) fn specialized_svg_structure(svg: &str, selected_text: &[&str]) -> St
 }
 
 pub(super) fn tempdir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "lichtung-plot-test-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).expect("tempdir");
-    dir
+    create_unique_dir("lichtung-plot-test")
 }
 
 pub(super) fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
@@ -115,16 +109,20 @@ pub(super) fn png_phys(bytes: &[u8]) -> Option<(u32, u32, u8)> {
 /// Helper: create a uniquely-named temp directory
 /// for the test's output artifacts.
 pub(super) fn unique_dir(prefix: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&dir).expect("tempdir");
-    dir
+    create_unique_dir(prefix)
+}
+
+fn create_unique_dir(prefix: &str) -> std::path::PathBuf {
+    loop {
+        let sequence = TEMP_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let directory =
+            std::env::temp_dir().join(format!("{prefix}-{}-{sequence}", std::process::id()));
+        match std::fs::create_dir(&directory) {
+            Ok(()) => return directory,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => panic!("tempdir: {error}"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

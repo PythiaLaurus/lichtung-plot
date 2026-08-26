@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use super::*;
 
+static TEMP_DIRECTORY_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Clone)]
 struct ScatterData {
     x: NumericValues,
@@ -31,16 +33,19 @@ fn canvas(data: &ScatterData) -> Canvas {
 }
 
 fn temp_dir(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!(
-        "lichtung-multiformat-{name}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    directory
+    loop {
+        let sequence = TEMP_DIRECTORY_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let directory = std::env::temp_dir().join(format!(
+            "lichtung-multiformat-{name}-{}-{}",
+            std::process::id(),
+            sequence
+        ));
+        match std::fs::create_dir(&directory) {
+            Ok(()) => return directory,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => panic!("tempdir: {error}"),
+        }
+    }
 }
 
 #[test]

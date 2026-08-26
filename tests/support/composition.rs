@@ -4,6 +4,9 @@
 )]
 
 use lichtung_plot::{Canvas, CategoryValues, NumericValues, Plot};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEMP_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub(super) struct EstimateData {
@@ -80,14 +83,17 @@ pub(super) fn attribute<'a>(line: &'a str, name: &str) -> &'a str {
 }
 
 pub(super) fn tempdir(name: &str) -> std::path::PathBuf {
-    let directory = std::env::temp_dir().join(format!(
-        "lichtung-plot-composition-{name}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir_all(&directory).unwrap();
-    directory
+    loop {
+        let sequence = TEMP_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let directory = std::env::temp_dir().join(format!(
+            "lichtung-plot-composition-{name}-{}-{}",
+            std::process::id(),
+            sequence
+        ));
+        match std::fs::create_dir(&directory) {
+            Ok(()) => return directory,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => panic!("tempdir: {error}"),
+        }
+    }
 }
