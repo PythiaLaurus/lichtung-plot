@@ -86,7 +86,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2a | Ledger protocol and renderer foundations | IN PROGRESS |
 | T2a1 | Current theme and font foundations | COMPLETE |
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
-| T2a3 | Serialization, geometry recording, and scene conversion | PENDING |
+| T2a3 | Serialization, geometry recording, and scene conversion | COMPLETE |
 | T2a4 | Lifecycle, output, and artifact foundations | PENDING |
 | T2b | Public controls and policies | PENDING |
 | T2c | Layout, typography, axes, and grid | PENDING |
@@ -255,8 +255,9 @@ Rows are source-based rather than estimate-based. The pre-audit planning ranges
 were 70-85 foundation records, 58-68 public-control records, 105-120 layout and
 chrome records, and about 106 mark and annotation records. These ranges overlap,
 must not be summed, and are not completion thresholds. The completed initial
-foundation audit supersedes its range with the 193-record T2a split below; later
-workstreams update their scopes the same way when source evidence differs.
+foundation audit supersedes its range with the corrected 202-record T2a split
+below; later workstreams update their scopes the same way when source evidence
+differs.
 
 Every subphase records its complete source manifest in the ledger. A production
 declaration, literal, default, or behavior branch is owned by exactly one
@@ -279,12 +280,12 @@ explained exclusion.
 **Status**: IN PROGRESS
 
 Create the ledger and inventory foundational private carriers and lifecycle
-sources. The reconciled read-only audit found 193 records: 65 theme and font
-records, 52 private style-carrier and backend-protocol records, 36 serialization,
+sources. Source reconciliation establishes 202 records: 65 theme and font
+records, 52 private style-carrier and backend-protocol records, 45 serialization,
 geometry-recording, and scene records, and 40 lifecycle and output records. T2a1
-and T2a2 have completed 117 of those records; T2a3 and T2a4 retain the remaining
-76. These counts replace the earlier overlapping estimate for this workstream
-and require four bounded commits before T2a can complete.
+through T2a3 have completed 162 of those records; T2a4 retains the remaining 40.
+These counts replace the earlier overlapping estimate for this workstream and
+require four bounded commits before T2a can complete.
 
 T2a owns only foundational carrier, preset construction, draw-boundary,
 serialization, geometry-recording, scene, and lifecycle entries in mixed files.
@@ -312,10 +313,10 @@ ledger protocol and records all 65 current theme and font foundation properties.
 The keyed current-state, target-state, and migration/evidence tables preserve
 every required schema field, exact preset values, split responsibilities,
 dormant and miswired fields, hidden preset construction, font fallbacks, and one
-closed T1 target classification and owner per record. T2a and T2 remain in
-progress while T2a2 through T2h are pending. Independent ownership review split
-five multi-owner rows into 13 exact-owner rows, increasing the initial 57-record
-count by eight without adding a production source.
+closed T1 target classification and owner per record. Independent ownership
+review split five multi-owner rows into 13 exact-owner rows, increasing the
+initial 57-record count by eight without adding a production source. T2a and T2
+remain in progress while the later admitted subphases are incomplete.
 
 Verification: the T2a1 source manifest and rejected-match table account for the
 three admitted production sources; tests are evidence only. Independent review
@@ -343,8 +344,9 @@ declaration is represented by separate private stroke-paint and text-paint
 transport records linked to their T2a1 semantic owners. The existing coordinate
 protocol record also owns integer text positions, so the corrected source
 coverage does not add a record. T2a1 and T2a2 therefore complete exactly 117
-T2a records; the reconciled four-part T2a total remains 193. T2a and T2 remain
-in progress while T2a3 through T2h are pending.
+T2a records; T2a3 later corrected the four-part T2a total to 202 and brought the
+completed count to 162. T2a and T2 remain in progress while T2a4 through T2h
+are pending.
 
 Verification: source reconciliation and independent ownership review corrected
 private carrier ownership, the dormant rounded-rectangle fallback, degenerate
@@ -365,7 +367,33 @@ and every backend-protocol fallback has a migration disposition and evidence.
 
 #### Subphase T2a3: Serialization, Geometry Recording, And Scene Conversion
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: `04_VISUAL_PROPERTY_OWNERSHIP.md` appends 45 keyed T2a3
+records: 20 SVG records including the PNG RGBA8 paint/alpha boundary, 15
+Geometry records, and 10 Scene records. The initial 36-record plan was
+corrected by disjoint source, target owner, and migration-phase rules: SVG
+changed from 22 to 20 after PNG sizing/output ownership moved to T2a4,
+Geometry changed from 11 to 15 after lifecycle and bracket path/label
+responsibilities were separated, and Scene
+changed from 3 to 10 after terminal routes, positive checks, and four independent
+limit declarations were separated. The net correction is nine records without a
+new production source. T2a1 through T2a3 now complete 162 of the corrected 202
+T2a records, leaving 40 for T2a4.
+
+Independent review retained that key set while correcting post-format geometry
+collapse, stale SVG output reuse, explicit point/polygon joins, paint-aware
+collision bounds, dormant Geometry lifecycle wiring, PNG-only Scene maximum
+guards, canonical-scene positivity, exact text/bracket whitespace, and the
+separation between T2a1 token spelling and T2a3 paint-property alpha routing.
+
+Verification: source reconciliation, identical 45-key current/target/migration
+table counts and order, and aggregate arithmetic checks passed. Paint-aware
+bounds are phased explicitly: current geometry, opacity, and font corrections
+land in T3/T5a/T5c, while complete RGBA carrier connections close in T6. Final
+independent ownership review found no remaining semantic or schema issue.
+Tracked-diff checks and `just verify` passed on 2026-08-26. No production code,
+test, snapshot, or other specification changed.
 
 Inventory `render.rs`, `render/svg_backend.rs`, `render/geometry.rs`, and
 `scene.rs`. Cover SVG and PNG paint, text, surface, precision, clipping, layer,
@@ -373,9 +401,11 @@ gradient, and alpha behavior; geometry recording and collision bounds; immutable
 scene reuse and conversion limits. Values merely supplied by semantic owners are
 consumer references, not duplicate source records.
 
-T2a3 is complete when all 36 initially identified records are either present or
-explicitly corrected, root-surface and incomplete-alpha behavior are assigned,
-and measurement-to-draw discrepancies have explicit migration evidence.
+T2a3 is complete with all 45 reconciled records present in identical keyed
+tables, root-surface and one private final RGBA-to-SVG serializer responsibility
+assigned, concrete lifecycle and independent Scene limits recorded, PNG
+sizing/output contexts deferred to T2a4, and bracket/text measurement-to-draw
+discrepancies assigned to their owning migration phases.
 
 #### Subphase T2a4: Lifecycle, Output, And Artifact Foundations
 
