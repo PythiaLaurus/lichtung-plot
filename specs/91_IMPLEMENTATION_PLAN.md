@@ -92,7 +92,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2c | Layout, typography, axes, and grid | COMPLETE |
 | T2d | Legends, Canvas composition, and decorations | COMPLETE |
 | T2e | Ordinary plot marks and local styles | COMPLETE |
-| T2f | Specialized marks and annotations | PENDING |
+| T2f | Specialized marks and annotations | COMPLETE |
 | T2g | Data scales and semantic domains | PENDING |
 | T2h | Cross-source reconciliation and migration map | PENDING |
 | T3 | One private resolved-theme pipeline | PENDING |
@@ -623,7 +623,27 @@ responsibilities are explicitly linked to T2f or T2g.
 
 ### Subphase T2f: Specialized Marks And Annotations
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: source reconciliation admits exactly 508 canonical T2f
+records: 31 beeswarm, 3 coefficient, 9 dumbbell, 2 forest, 73 heatmap, 44
+histogram, 23 interaction, 46 shared interval-estimate, 38 marginal, 62 Matrix,
+18 point-interval, 18 Q-Q, 35 Waterfall, 55 significance, 13 panel-text, 1
+numeric-label conversion, 1 text-weight conversion, 16 vertical-bar
+significance, 15 horizontal-bar significance, 2 Boxplot significance, 2 sampled
+Violin/Raincloud significance, and 1 attached-bar edge responsibility. Closed
+classes are exactly 121 Theme component, 26 Explicit policy, and 361 Renderer
+invariant records. Together with the 1155 completed T2a through T2e records, the
+ledger inventories 1663 records through completed T2f. T2g and T2h remain
+source-driven and pending.
+
+Verification: independent source-partition, ownership, behavior, schema, count,
+class, relationship, migration-phase, and table-order review corrected missing
+guide/range/title sources, data-domain leakage, overclaimed fallbacks, incomplete
+annotation migration metadata, and duplicate-cluster phase order. Final
+rereviews found no remaining issue. Tracked-diff checks and `just verify` passed
+on 2026-08-27. No production code, public API, tests, snapshots, generated
+output, intended rendering, or other specification changed.
 
 Inventory renderer-owned visual sources in `plots/beeswarm.rs`,
 `plots/coefficient.rs`, `plots/dumbbell.rs`, `plots/forest.rs`,
