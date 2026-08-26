@@ -90,7 +90,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
 | T2b | Public controls and policies | COMPLETE |
 | T2c | Layout, typography, axes, and grid | COMPLETE |
-| T2d | Legends, Canvas composition, and decorations | PENDING |
+| T2d | Legends, Canvas composition, and decorations | COMPLETE |
 | T2e | Ordinary plot marks and local styles | PENDING |
 | T2f | Specialized marks and annotations | PENDING |
 | T2g | Data scales and semantic domains | PENDING |
@@ -552,7 +552,25 @@ snapshot is named without changing it.
 
 ### Subphase T2d: Legends, Canvas Composition, And Decorations
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: source reconciliation admits exactly 292 canonical T2d records:
+106 Canvas and composed-layout responsibilities, 139 decoration and legend
+responsibilities, and 47 facet-composition responsibilities. Source attribution
+is 3/10/10/10/8/9/5/10/15 `canvas.rs` records, 2/9/9/6
+`layout/canvas.rs` records, 0 module-wiring, 3 decoration-application, 62 legend,
+2 panel-text collision, 72 panel-planning, 0 title-block, and 5/17/5/20 facet
+route/planning/legend/rendering records. Closed classes are exactly 61 Theme
+component, 4 Explicit policy, and 227 Renderer invariant records. Together with
+the 660 completed T2a through T2c records, the ledger inventories 952 records
+through completed T2d. T2e through T2h remain source-driven and pending.
+
+Verification: independent source-partition, ownership, behavior, schema, count,
+class, and table-order review corrected over-grouped Canvas and facet sources,
+legend placement ownership, and exact composition traces. Final rereviews found
+no remaining issue. Tracked-diff checks and `just verify` passed on 2026-08-26.
+No production code, test, snapshot, generated output, or other specification
+changed.
 
 Inventory composition and explanatory chrome in `canvas.rs`, `layout/canvas.rs`,
 `decorations.rs`, `decorations/`, `orchestrator/facets.rs`,

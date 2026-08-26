@@ -1,6 +1,6 @@
 # Visual Property Ownership Ledger
 
-**Status**: Canonical T2 migration ledger; T2a through T2c COMPLETE
+**Status**: Canonical T2 migration ledger; T2a through T2d COMPLETE
 
 This ledger records current production sources and approved target ownership. It
 does not make the target APIs in `03_THEME_SYSTEM.md` current, expose them early,
@@ -23,7 +23,7 @@ independent property sources.
 | T2a4 | Lifecycle, output, and artifact foundations | COMPLETE |
 | T2b | Public controls and policies | COMPLETE |
 | T2c | Layout, typography, axes, and grid | COMPLETE |
-| T2d | Legends, Canvas composition, and decorations | PENDING |
+| T2d | Legends, Canvas composition, and decorations | COMPLETE |
 | T2e | Ordinary plot marks and local styles | PENDING |
 | T2f | Specialized marks and annotations | PENDING |
 | T2g | Data scales and semantic domains | PENDING |
@@ -2196,7 +2196,7 @@ second property source.
 
 | Source context | Owning phase | Reason it is not a T2b record |
 | --- | --- | --- |
-| `src/spec.rs:542-548,620-639` | T2d | Automatic/exact legend placement fallback and renderer-owned legend-clearance selection are legend construction/layout behavior, not the public visibility/placement declaration. |
+| `src/spec.rs:620-639` | T2d | Plot-family automatic legend defaults and renderer-owned legend-clearance selection are legend construction/layout behavior. `LegendPolicy::position` at `542-548` is already owned here as part of the public visibility/placement policy. |
 | `src/spec.rs:592-604`; `src/builder/accessors.rs:39-89` | T2g | Unified-series routing merges constructor and optional series into hue/group semantic domains; it is one data-scale/domain mapping surface, not an additional public control. |
 | `NumericLabelFormat::format` in `src/spec.rs` | T2f | Fixed string production is the annotation rendering consumer of T2b precision/suffix controls. |
 | `TextWeight::svg_value` and `LinePattern::line_style` in `src/spec/estimate.rs:79-87,221-230` | T2e/T2f | Private final style conversion; public closed vocabularies remain T2b-owned. |
@@ -2908,8 +2908,8 @@ the future T4/T5a/T6 checks already exist or pass.
 
 | Source context | Owning phase | Reason it is not a T2c record |
 | --- | --- | --- |
-| `src/layout/canvas.rs:14-15,234-263,276-358` and Canvas/facet allocation/chrome around admitted T2c values | T2d/T5b | Composition gap, panel-header gap policy, grid allocation, and facet/panel chrome are composition responsibilities. Facets use the subtitle/facet-header role at line 260; C-M9 admits only the composed-Plot title/subtitle call contexts at `259-260`. |
-| Reserve-axes-false composition route at `src/layout/canvas.rs:448-466,485-507,541-550,566-599` | T2d/T5b; Canvas ownership connected in T4 where applicable | T2d owns four route-specific records: `CompositionTheme` title/subtitle gap, `CompositionTheme` caption reserve, `CompositionTheme` outer-inset aggregate, and renderer-invariant composed baseline placement. The route serves Canvas-root and faceted Plot outer titles; T4 connects only the Canvas owner. C-M9 keeps the reserve-axes-true counterparts, so no T2c record is duplicated. |
+| `src/layout/canvas.rs:14-15,234-258,260-263,276-358` and Canvas/facet allocation/chrome around admitted T2c values | T2d/T5b | Composition gap, panel-header gap policy, grid allocation, and facet/panel chrome are composition responsibilities. T2d uses line 260 only for the facet/header call context; C-M9 owns the composed-Plot title/subtitle contexts at `259-260`. |
+| Reserve-axes-false composition route at `src/layout/canvas.rs:448-466,485-507,541-550,566-599` | T2d/T5b; Canvas ownership connected in T4 where applicable | T2d owns six route-specific records: the composed wrapping-width budget, `CompositionTheme` title/subtitle gap, `CompositionTheme` caption reserve, fixed composed outer chrome, renderer aggregation of shared-axis insets, and composed baseline placement. The route serves Canvas-root and faceted Plot outer titles; T4 connects only the Canvas owner. C-M9 keeps the reserve-axes-true counterparts, so no T2c record is duplicated. |
 | Decoration candidate construction through `src/decorations/plan.rs:130-158` outside the C-M15 call | T2d | Legend/decor reservation supplies only the candidate panel. C-M15 owns post-candidate title baseline, remeasurement, final panel adjustment, and axis consequence. |
 | `src/orchestrator/facets/planning.rs:41-78,127-131,138-152` | T2d/T5b | Eight proposed facet-adjustment records stay together in facet composition: initial baseline, initial application, post-reservation baseline, four-pass budget, x extra reserve, y extra reserve, candidate adjustment, and fixed-point stabilization. They coordinate shared-axis composition/candidate geometry rather than define primitive text metrics or minimum representability; C-M14 therefore remains only the two line counts, line height, and 80x60 minimum. |
 | Legend measurement, placement, shared-entry merging, and legend typography/chrome | T2d | Legend appearance and collision are outside foundational axes/title layout. |
@@ -2953,8 +2953,9 @@ the future T4/T5a/T6 checks already exist or pass.
   tick-label metric for private automatic y-tick containment.
 - Reserve-axes route splits are complete without duplicate records: C-M9 keeps
   the three fixed reserve-axes-true Plot layout aggregates and Plot baseline
-  placement, while T2d owns three reserve-axes-false `CompositionTheme` records
-  plus composed baseline placement; T4 connects Canvas ownership where needed.
+  placement, while T2d owns the six reserve-axes-false wrapping, chrome,
+  shared-axis aggregation, and baseline records; T4 connects Canvas ownership
+  where needed.
 - C-M14 remains four primitive shared-axis records. Its eight proposed adjustment
   rows are T2d/T5b because their baseline/application, post-reservation,
   reservation-delta, candidate, and fixed-point behavior coordinates facet
@@ -2970,3 +2971,1085 @@ the future T4/T5a/T6 checks already exist or pass.
   route-specific responsibilities. Final rereviews found no remaining issue.
   Tracked-diff checks and `just verify` passed on 2026-08-26. No production code,
   tests, snapshots, generated output, or other specification changed.
+
+## T2d: Legends, Canvas Composition, And Decorations
+
+**Status**: COMPLETE
+
+This section inventories Canvas composition, discrete legends, explanatory
+chrome, generic facets, and their exact planning and drawing paths. Public
+legend/content/presence policies remain T2b-owned, foundational text and axis
+metrics remain T2c-owned, and mark, annotation, and semantic color sources
+remain allocated to T2e-T2g. T2d records only the composition-specific use and
+the renderer responsibilities defined by the exact manifest below.
+
+### T2d Source Manifest
+
+| ID | Production source | Owned context | Audit disposition |
+| --- | --- | --- | --- |
+| D-M1 | `src/canvas.rs:390-408,416-430` | Canvas preflight/render lifecycle | 3 records. The test-only backend entry at `410-414` is evidence; terminal methods `432-464` remain T2h. |
+| D-M2 | `src/canvas.rs:505-575` | Row-title measurement, reservation, and planning | 10 records. Foundational wrapping is T2c; this group owns the independent horizontal chrome, reserve/draw pitch uses, Canvas-root role selection, and composed placement. |
+| D-M3 | `src/canvas.rs:636-688` | Shared-legend construction and shared-header reservation | 10 records, including the shared-construction implementation gate and independent column-header spacing, but not the T2b public policy declaration. |
+| D-M4 | `src/canvas.rs:687-688,710,741-851` | Provisional/final allocation, category suppression, pass-specific presence, and shared-header placement | 10 records. Category-domain equality at `705-708` remains T2g. |
+| D-M5 | `src/canvas.rs:853-887,899-909` | Text-panel planning and per-panel legend role coordination | 8 records. Text content and public legend policy remain T2b-owned. |
+| D-M6 | `src/canvas.rs:930-1021` | Composed render order, draw-time Canvas chrome ownership, shared-legend draw, and Canvas-root title route | 9 records. Shared legend target drawing reuses one immutable measured plan. |
+| D-M7 | `src/canvas.rs:1052-1076` | Shared gap fallback, entry eligibility, exact merge, and title resolution | 5 records. The optional public shared-gap override remains T2b-owned. |
+| D-M8 | `src/canvas.rs:1111-1138,1145-1172,1179-1226` | Shared-header, row-title, and text-panel drawing | 10 records. Canvas root resolves the facet/header and body typography roles. |
+| D-M9 | `src/canvas.rs:1234-1264,1267,1269-1270,1272-1278,1280-1310` | Composed Plot panel-header placement | 15 records. Independent title/subtitle insets and baselines are admitted; T2c owns the excluded foundational typography values at `1265-1266,1268,1271,1279`. |
+| D-M10 | `src/layout/canvas.rs:14-15` | Composition constants | 2 records: panel gap and panel-header role gap. |
+| D-M11 | `src/layout/canvas.rs:234-258,260-263,269-271` | Panel-header requirement measurement and header-derived top maxima | 9 records. The composed-Plot title pitch at `259` and axis-only requirement values remain T2c-owned; line `260` is admitted only for the facet/header call context. |
+| D-M12 | `src/layout/canvas.rs:276-358` | Composed-grid allocator | 9 records. |
+| D-M13 | Reserve-axes-false contexts in `src/layout/canvas.rs:448-466,485-507,541-550,566-599` | Composed outer-title/caption/wrapping/inset/baseline route | Exactly 6 records: three `CompositionTheme` chrome values and three renderer wrapping, shared-axis aggregation, and baseline responsibilities, as deferred by T2c. |
+| D-M14 | `src/decorations.rs` | Module wiring | 0 records. Every responsibility is attributed to its defining module. |
+| D-M15 | `src/decorations/apply.rs:39-84` | Plot title/subtitle/caption gating, final TitleBlock draw gating, and immutable planned-legend application | 3 records. Title-block values and grid/axis application routes remain prior-owned by T2c. |
+| D-M16 | `src/decorations/legend.rs:1-891` | Typed legend identities, exact glyphs, compatibility, metrics, layout, and drawing | 62 records, including separate title and label anchor/orientation placement. Tests at `892-968` are evidence only. |
+| D-M17 | `src/decorations/panel_text.rs:48-59,146-148` | Legend/panel-text collision and rectangle overlap | 2 records. Panel-text style/geometry outside these ranges remains T2f. |
+| D-M18 | `src/decorations/plan.rs:1-906`; `src/spec.rs:620-639` | Immutable panel/legend planning, reservation, collision, clearance, and placement | 72 records. Tests are evidence only; outside spacing sources remain independent, and T2b owns `LegendPolicy::position`. |
+| D-M19 | `src/decorations/title_block.rs` | Shared title-block drawing | 0 records. All values are prior-owned by T2c; T2d records only Canvas/facet route consumers in their defining sources. |
+| D-M20 | `src/orchestrator/facets.rs:17-117,120-149` | Generic-facet composition lifecycle and outside-guide adjustment | 5 records. |
+| D-M21 | `src/orchestrator/facets/planning.rs:41-78,127-131,138-152,155-210,225-249,255-279` | Shared-axis adjustment, facet allocation, and legend-clearance stabilization | 17 records, including exactly the eight adjustment records deferred by T2c and separate fixed-x/fixed-y propagation. |
+| D-M22 | `src/orchestrator/facets/legend.rs:91-123,144-153` | Facet shared-legend policy implementation and outside reservation | 5 records. Domain/order coordination at `124-143,155-237` remains T2g. |
+| D-M23 | `src/orchestrator/facets/rendering.rs:31-80,96-124,144-192,195-205` | Facet render order, strips, shared-axis draw, and label formatting | 20 records. Fixed strip chrome and wrapping floor, shared-axis style and placement, and shared-y gap/rotation are separated; foundational axis text metrics remain T2c-owned. |
+
+The manifest is exact and source ordered. It attributes 292 records as
+3/10/10/10/8/9/5/10/15/2/9/9/6/0/3/62/2/72/0/5/17/5/20 across D-M1 through
+D-M23.
+
+### T2d Consumer, Layout, And Evidence References
+
+| Code | Exact production consumers, layout meaning, or evidence |
+| --- | --- |
+| D-C-CANVAS | Canvas preflight, composed allocation, panel/text cells, shared headers, row titles, root title block, shared legend, and one canonical composed scene. |
+| D-C-LEGEND | Plot, Canvas, and facet legend entry construction, exact merging, measurement, reservation, collision, placement, and final backend drawing. |
+| D-C-FACET | Generic facet preflight, shared ranges, composed allocation, per-panel plans, strips, shared axes, and outer title block. |
+| D-C-TEXT | T2c `TextBlock` and resolved typography consumed by Canvas/facet/legend composition; T2d owns only role selection, duplicated legend metrics, reservations, and placement. |
+| D-C-GEOMETRY | Geometry discovery, significance bounds, panel-text bounds, legend glyph bounds, overlap scoring, range expansion, and final collision proof. |
+| D-C-BACKEND | Layered grid/mark/axis/legend/header/text drawing through the one open backend lifecycle. |
+| D-L-N | `none`; policy implementation, compatibility, immutable transport, or paint only. |
+| D-L-M | `measure`; text, legend, glyph, or decoration metrics are computed. |
+| D-L-R | `reserve`; panel, grid, or outer-canvas space is consumed. |
+| D-L-C | `collision`; complete extents participate in fit or overlap decisions. |
+| D-L-G | `geometry`; final position, bounds, projection, range, or layer order changes. |
+| D-E-CANVAS | Current Canvas composition tests in `tests/composition/canvases.rs`, rendering contract tests, output reuse tests, and Canvas layout/unit tests. |
+| D-E-LEGEND | Current `tests/layout/layout_and_legends.rs`, categorical/grouping, interaction-style, annotation/panel-text, regression, facet, and legend unit tests. |
+| D-E-FACET | Current `tests/composition/facets.rs`, categorical facet tests, orchestrator facet tests, and fixed/free-scale assertions. |
+| D-T-CANVAS | Expected T4/T5b evidence: Canvas-root role ownership, complete geometry, two-pass header requirements, immutable shared legend, text-panel error propagation, and fit rejection. |
+| D-T-LEGEND | Expected T5a/T5b evidence: complete title/label `TextTheme` sizes at intentionally small/default/large values, no responsive scaling transform, exact point/line/fill/stroke/composite bounds, alpha-separated container fill/outline, immutable measurement/draw identity, and final collision proof. |
+| D-T-FACET | Expected T5b evidence: two requirement passes, four shared-axis adjustment attempts, two facet legend-clearance propagation passes, final fit/collision/stability rejection, and Auto=`OutsideRightTop`. |
+| D-S-CANVAS | Expected corrective snapshots named `canvas-root-theme-chrome`, `canvas-shared-legend-immutable-plan`, `canvas-row-header-text-panel-chrome`, and `canvas-narrow-complete-geometry`. |
+| D-S-LEGEND | Expected corrective snapshots named `legend-text-theme-small-default-large`, `legend-container-alpha-outline`, `legend-complete-composite-glyphs`, and `legend-inside-outside-collision`. Also inspect `visual_regression__scatter_smoke_snapshot`. |
+| D-S-FACET | Expected corrective snapshots named `facet-auto-outside-right-top`, `facet-strip-theme-chrome`, `facet-shared-axis-multiline`, and `facet-legend-final-stability`. |
+
+### T2d Current State
+
+| Property | Current source and value | Current consumers | Current behavior | Current layout path | Semantic role | Audit evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `canvas.lifecycle.deferred-backend-finish` | D-M1 `canvas.rs:390-399`; `DeferredBackend::new(width,height)` wraps `render_open_canvas`, then `finish` | D-C-CANVAS,D-C-BACKEND | One deferred composed result is finalized with context `composed canvas` | D-L-N,D-L-G | Composed backend completion | D-M1 |
+| `canvas.lifecycle.preflight-plan-only` | D-M1 `canvas.rs:401-408`; `preflight_plan().map(drop)` | D-C-CANVAS | Validates the complete composition without opening a backend | D-L-M,D-L-R,D-L-C,D-L-G | Side-effect-free Canvas preflight | D-M1 |
+| `canvas.lifecycle.canonical-scene-single-plan` | D-M1 `canvas.rs:416-430`; preflight once, render once to in-memory SVG, freeze `RenderedScene` | D-C-CANVAS,D-C-BACKEND | One immutable canonical scene carries exact Canvas dimensions and bytes | D-L-G | Canonical composed-scene construction | D-M1 |
+| `composition.canvas-row-title.current-horizontal-padding` | D-M2 `canvas.rs:513`; subtract `16.0` from the spanning-cell width | D-C-CANVAS | Current row-title wrapping reserves 8 px on each horizontal side | D-L-M,D-L-R | Row-title horizontal chrome | D-M2 |
+| `canvas.row-title.maximum-wrap-width` | D-M2 `canvas.rs:511-519`; spanning cell width minus the independent `16.0` chrome, floored to `1.0` | D-C-CANVAS,D-C-TEXT | Every row title wraps across the complete row span | D-L-M,D-L-R | Row-title logical width | D-M2 |
+| `typography.canvas-row-title.current-font-size` | D-M2 `canvas.rs:514-519`; first-Plot/fallback palette `title_font_size` | D-C-CANVAS,D-C-TEXT | Row-title measurement uses the Plot-title size rather than a Canvas header role | D-L-M,D-L-R | Row-title typography size | D-M2 |
+| `canvas.row-title.wrap-error-propagation` | D-M2 `canvas.rs:514-520,532-534,562-564`; `try_wrap_text` errors propagate | D-C-CANVAS,D-C-TEXT | No local shortening or unwrapped fallback | D-L-M | Row-title representability | D-M2 |
+| `typography.canvas-row-title.current-reserve-line-pitch` | D-M2 `canvas.rs:534`; `title_font_size + 6.0` inside the requirement calculation | D-C-CANVAS,D-C-TEXT | Reserve-side row-title pitch is independently reconstructed | D-L-M,D-L-R | Row-title reserve line spacing | D-M2 |
+| `canvas.row-title.current-requirement-clearance` | D-M2 `canvas.rs:534`; line stack plus `8.0` top requirement | D-C-CANVAS | Row title contributes only to first-column requirement for its row | D-L-R | Row-title-to-panel clearance | D-M2 |
+| `typography.canvas-row-title.current-draw-line-pitch` | D-M2 `canvas.rs:557`; independent `title_font_size + 6.0` | D-C-CANVAS,D-C-TEXT | Planned baselines reconstruct the same pitch separately from reservation | D-L-M,D-L-G | Row-title draw line spacing | D-M2 |
+| `canvas.row-title.horizontal-span-centering` | D-M2 `canvas.rs:559-561`; midpoint of first cell left and last cell right | D-C-CANVAS | One row title is centered over all columns | D-L-G | Row-title horizontal anchor | D-M2 |
+| `canvas.row-title.reverse-line-placement` | D-M2 `canvas.rs:562-568`; wrapped lines reverse before ascending y placement | D-C-CANVAS,D-C-TEXT | Source line order remains visual top-to-bottom in math coordinates | D-L-G | Row-title multiline orientation | D-M2 |
+| `canvas.row-title.current-baseline-offset` | D-M2 `canvas.rs:571`; first baseline is cell top + `14.0` | D-C-CANVAS | Fixed composition offset precedes line-pitch increments | D-L-R,D-L-G | Row-title panel gap | D-M2 |
+| `canvas.legend.shared-construction-gate` | D-M3 `canvas.rs:636-640`; construct only when `CanvasLegendPolicy::Shared` | D-C-CANVAS,D-C-LEGEND | PerPlot/Hidden bypass shared construction | D-L-N,D-L-M | Shared-legend implementation policy branch | D-M3; T2b declaration excluded |
+| `canvas.legend.shared-measured-construction` | D-M3 `canvas.rs:642-648`; `Legend::new(title,entries,canvas width,height)` | D-C-CANVAS,D-C-LEGEND | Shared entries are measured against Canvas dimensions | D-L-M,D-L-R | Shared-legend measured value | D-M3 |
+| `canvas.legend.shared-height-fit` | D-M3 `canvas.rs:649-653`; reject when box height exceeds `full_outer.height()` | D-C-CANVAS,D-C-LEGEND | No clipping or vertical elision | D-L-M,D-L-C | Shared-legend vertical fit | D-M3 |
+| `canvas.legend.shared-right-reservation` | D-M3 `canvas.rs:654-655`; subtract box width + resolved gap + `legend.metrics.pad` from `outer.x1` | D-C-CANVAS,D-C-LEGEND | Shared legend owns one right-side band | D-L-R,D-L-G | Shared-legend Canvas reservation | D-M3 |
+| `canvas.headers.current-appearance-owner` | D-M3 `canvas.rs:657-662`; first configured Plot palette, else hidden Publication palette | D-C-CANVAS,D-C-TEXT | One incidental common palette routes row-title/shared-header measurement only; draw ownership is separately split in D-M6 | D-L-N,D-L-M | Current Canvas measurement-style route | D-M3 |
+| `composition.canvas-column-header.current-band-spacing` | D-M3 `canvas.rs:663-667`; nonempty headers add `18.0` beyond the typography height | D-C-CANVAS | One fixed composition spacing value applies to the shared column-header band | D-L-R | Column-header vertical chrome | D-M3 |
+| `canvas.headers.column.current-band-height` | D-M3 `canvas.rs:663-667`; zero or `title_font_size` plus the independent `18.0` spacing | D-C-CANVAS,D-C-TEXT | One typography-plus-chrome aggregate serves all column headers | D-L-M,D-L-R | Column-header vertical band | D-M3 |
+| `canvas.headers.row.current-width-measurement` | D-M3 `canvas.rs:668-674`; maximum deterministic title-size text width | D-C-CANVAS,D-C-TEXT | Longest unwrapped row header controls the shared left band | D-L-M,D-L-R | Row-header measured width | D-M3 |
+| `canvas.headers.row.current-band-padding` | D-M3 `canvas.rs:675-679`; zero or `20.0` beyond measured width | D-C-CANVAS | Fixed horizontal comfort is added once | D-L-R | Row-header horizontal padding | D-M3 |
+| `canvas.headers.minimum-remaining-panel-fit` | D-M3 `canvas.rs:680-685`; reserve bands then require outer width >=80 and height >=60 | D-C-CANVAS | Rejects before composed-grid allocation | D-L-R,D-L-C,D-L-G | Shared-header representability | D-M3 |
+| `canvas.grid.provisional-unadorned-allocation` | D-M4 `canvas.rs:687-688`; allocate with empty requirements | D-C-CANVAS | Provisional equal cells feed category and panel measurement | D-L-R,D-L-G | Canvas first allocation | D-M4 |
+| `canvas.category-labels.non-first-suppression` | D-M4 `canvas.rs:689-710`; under `FirstColumnPerRow`, non-first charts set y tick labels invisible | D-C-CANVAS | First column retains categorical labels after T2b/T2g compatibility checks | D-L-N,D-L-R | Shared-category implementation branch | D-M4; T2b policy excluded |
+| `canvas.panels.initial-self-managed-rejection` | D-M4 `canvas.rs:741-752`; reject a provisional result with `DecorationMode::SelfManaged` | D-C-CANVAS | A self-managed family cannot enter composed header measurement | D-L-N,D-L-C | Initial composed-panel compatibility gate | D-M4 |
+| `canvas.panel-header.first-pass-title-presence-resolution` | D-M4 `canvas.rs:753-758`; `show_title` then nonempty title filtering | D-C-CANVAS,D-C-TEXT | First requirement pass can suppress semantic title content through the palette flag | D-L-N,D-L-M,D-L-R | First-pass title presence | D-M4 |
+| `canvas.panel-header.first-pass-subtitle-presence-resolution` | D-M4 `canvas.rs:759-763`; `show_subtitle` then nonempty subtitle filtering | D-C-CANVAS,D-C-TEXT | First requirement pass can suppress semantic subtitle content through the palette flag | D-L-N,D-L-M,D-L-R | First-pass subtitle presence | D-M4 |
+| `canvas.panels.two-pass-header-allocation` | D-M4 `canvas.rs:741-822`; preflight provisional cells, measure headers, allocate, remeasure, allocate final cells | D-C-CANVAS,D-C-TEXT | Second measurement uses first allocated widths | D-L-M,D-L-R,D-L-C,D-L-G | Stable Canvas decoration allocation | D-M4 |
+| `canvas.panel-header.second-pass-title-presence-resolution` | D-M4 `canvas.rs:792-796,805-811`; repeat the same title content/style branch and reshape at the first allocated cell width | D-C-CANVAS,D-C-TEXT | Semantic content and resolved style stay identical while line shaping follows the second-pass width | D-L-N,D-L-M,D-L-R | Second-pass title presence and reshaping | D-M4 |
+| `canvas.panel-header.second-pass-subtitle-presence-resolution` | D-M4 `canvas.rs:797-811`; repeat the same subtitle content/style branch and reshape at the first allocated cell width | D-C-CANVAS,D-C-TEXT | Semantic content and resolved style stay identical while line shaping follows the second-pass width | D-L-N,D-L-M,D-L-R | Second-pass subtitle presence and reshaping | D-M4 |
+| `canvas.headers.column.span-placement` | D-M4 `canvas.rs:823-831`; midpoint of spanned final cells, centered in reserved column band | D-C-CANVAS | Header order and declared spans are retained | D-L-G | Column-header placement | D-M4 |
+| `canvas.headers.row.span-placement` | D-M4 `canvas.rs:833-850`; min/max final row extents and reserved-band midpoint | D-C-CANVAS | Multirow header is vertically centered over its span | D-L-G | Row-header placement | D-M4 |
+| `canvas.text-panel.current-horizontal-inset` | D-M5 `canvas.rs:858-865`; cell width minus `32.0`, floored to `1.0` | D-C-CANVAS,D-C-TEXT | Title and body share one inner width | D-L-M,D-L-R | Text-panel horizontal chrome | D-M5 |
+| `typography.canvas-text-panel-title.current-role` | D-M5 `canvas.rs:860-865`; hidden Publication `title_font_size` | D-C-CANVAS,D-C-TEXT | Text-panel title is measured as a generic title | D-L-M,D-L-R | Text-panel title typography | D-M5 |
+| `typography.canvas-text-panel-body.current-role` | D-M5 `canvas.rs:866-871`; hidden Publication `label_font_size` | D-C-CANVAS,D-C-TEXT | Text-panel body is measured as a generic label | D-L-M,D-L-R | Text-panel body typography | D-M5 |
+| `canvas.text-panel.current-title-body-gap` | D-M5 `canvas.rs:872`; `12.0` between title and body blocks | D-C-CANVAS | Gap participates in fit and later drawing | D-L-R,D-L-G | Text-panel internal spacing | D-M5 |
+| `canvas.text-panel.current-vertical-inset` | D-M5 `canvas.rs:873-879`; available height is cell height minus `32.0` | D-C-CANVAS | Symmetric fixed vertical comfort bounds the complete block | D-L-R,D-L-C | Text-panel vertical chrome | D-M5 |
+| `canvas.text-panel.complete-fit-plan` | D-M5 `canvas.rs:872-886`; require title height + gap + body height to fit, then freeze both blocks | D-C-CANVAS,D-C-TEXT | Planning errors and overfit reject before draw | D-L-M,D-L-C,D-L-G | Immutable text-panel plan | D-M5 |
+| `canvas.legend.per-panel-role-coordination` | D-M5 `canvas.rs:899-904`; PerPlot => `LegendRole::Panel`, Shared/Hidden => Suppressed | D-C-CANVAS,D-C-LEGEND | Public Canvas policy is translated once into each panel plan role | D-L-N,D-L-R | Per-panel legend implementation policy | D-M5; T2b declaration excluded |
+| `canvas.panels.final-self-managed-rejection` | D-M5 `canvas.rs:904-909`; reject a final panel plan with `DecorationMode::SelfManaged` | D-C-CANVAS | Final legend-aware planning cannot admit a self-managed family | D-L-N,D-L-C | Final composed-panel compatibility gate | D-M5 |
+| `canvas.headers.current-draw-appearance-owner` | D-M6 `canvas.rs:935-941,993-994`; row titles use first Plot or Publication fallback while shared headers use Publication | D-C-CANVAS,D-C-TEXT | Draw has its own split incidental routes, separate from D-M3's common measurement palette | D-L-N,D-L-G | Current Canvas chrome draw ownership | D-M6 |
+| `canvas.render.grid-before-panels` | D-M6 `canvas.rs:942-952`; apply every panel grid in a first pass | D-C-CANVAS,D-C-BACKEND | All composed grids are below all panel marks | D-L-G | Canvas grid z-order | D-M6 |
+| `canvas.render.panel-layer-order` | D-M6 `canvas.rs:953-989`; marks, significance, axes, planned legend, then panel header | D-C-CANVAS,D-C-BACKEND | Frozen panel plans drive one deterministic per-panel sequence | D-L-G | Composed Plot layer order | D-M6 |
+| `canvas.render.composition-chrome-order` | D-M6 `canvas.rs:990-994`; text panels, row titles, then shared headers | D-C-CANVAS,D-C-BACKEND | Canvas-owned explanatory chrome follows Plot panels | D-L-G | Canvas chrome z-order | D-M6 |
+| `canvas.legend.shared-render-reconstruction` | D-M6 `canvas.rs:995-1001`; reconstruct `Legend` from stored title/entries and Canvas size | D-C-CANVAS,D-C-LEGEND | Measurement and draw create separate responsive Legend values | D-L-M,D-L-G | Shared-legend draw-time value | D-M6 |
+| `canvas.legend.shared-horizontal-placement` | D-M6 `canvas.rs:1002`; left = reserved outer right + resolved shared gap | D-C-CANVAS,D-C-LEGEND | Places the shared legend in the reserved right band | D-L-R,D-L-G | Shared-legend x placement | D-M6 |
+| `canvas.legend.shared-vertical-placement` | D-M6 `canvas.rs:1003-1005`; top-aligned bottom clamped with `max(full_outer.y0)` | D-C-CANVAS,D-C-LEGEND | Clamp can mask incomplete geometry after separate reconstruction | D-L-C,D-L-G | Shared-legend y placement | D-M6 |
+| `canvas.legend.shared-layer-draw` | D-M6 `canvas.rs:1005-1008`; draw at frozen-box anchor in `canvas-shared-legend` layer | D-C-CANVAS,D-C-LEGEND,D-C-BACKEND | Shared legend follows other Canvas chrome | D-L-G | Shared-legend layer ownership | D-M6 |
+| `canvas.root-title.current-theme-route` | D-M6 `canvas.rs:995-1020`; after the optional shared legend, TitleBlock receives the hidden Publication palette and composed layout | D-C-CANVAS,D-C-TEXT,D-C-BACKEND | Canvas root title/subtitle/caption bypass any Canvas owner and draw last in Canvas chrome | D-L-N,D-L-M,D-L-G | Canvas-root title ownership and tail z-order | D-M6 |
+| `canvas.legend.shared-gap-current-fallback` | D-M7 `canvas.rs:1052-1054`; T2b override else `legend.metrics.pad * 2.0` | D-C-CANVAS,D-C-LEGEND | Fallback depends on responsive legend padding | D-L-R,D-L-G | Shared legend-to-grid gap fallback | D-M7 |
+| `canvas.legend.shared-entry-eligibility` | D-M7 `canvas.rs:1056-1065`; preflight every configured chart and extend all returned entries without consulting its `LegendPolicy` | D-C-CANVAS,D-C-LEGEND | A Plot configured Hidden can still contribute entries to a shared Canvas legend | D-L-N,D-L-M | Shared-entry implementation policy | D-M7; public policy excluded |
+| `canvas.legend.shared-entry-source-order` | D-M7 `canvas.rs:1060-1065`; configured chart order then renderer entry order | D-C-CANVAS,D-C-LEGEND | Stable row-major collection precedes merging | D-L-N | Shared-entry deterministic order | D-M7 |
+| `canvas.legend.shared-entry-exact-merge` | D-M7 `canvas.rs:1066-1067`; `merge_exact_entries(...,"shared canvas legend")` | D-C-CANVAS,D-C-LEGEND | Conflicts reject; exact duplicates collapse | D-L-M,D-L-C | Shared-entry compatibility | D-M7 |
+| `canvas.legend.shared-title-resolution` | D-M7 `canvas.rs:1068-1074`; empty => None, otherwise one resolved title plus entries | D-C-CANVAS,D-C-LEGEND | One shared section only | D-L-M,D-L-R | Shared legend title/content plan | D-M7 |
+| `canvas.headers.empty-draw-skip` | D-M8 `canvas.rs:1111-1118`; empty plan returns before layer creation | D-C-CANVAS,D-C-BACKEND | No empty shared-header layer | D-L-N | Shared-header presence consequence | D-M8 |
+| `typography.canvas-shared-header.current-style` | D-M8 `canvas.rs:1119-1123`; palette foreground/family/title size and Normal weight | D-C-CANVAS,D-C-TEXT | Column and row span headers use the hidden Publication palette; anchor and rotation are placement, not typography | D-L-N,D-L-M | Shared-header appearance style | D-M8 |
+| `canvas.headers.centered-rounded-draw` | D-M8 `canvas.rs:1124-1137`; Middle anchor, zero rotation, and planned centers rounded to u32 in one layer | D-C-CANVAS,D-C-BACKEND | Source order, semantic anchor/orientation, and planned coordinates are preserved | D-L-G | Shared-header final placement and draw | D-M8 |
+| `canvas.row-title.empty-draw-skip` | D-M8 `canvas.rs:1145-1152`; empty plan returns before layer creation | D-C-CANVAS,D-C-BACKEND | No empty row-title layer | D-L-N | Row-title presence consequence | D-M8 |
+| `typography.canvas-row-title.current-style` | D-M8 `canvas.rs:1153-1157`; palette foreground/family/title size and Normal weight | D-C-CANVAS,D-C-TEXT | Draw appearance follows the first-Plot/fallback palette selected earlier; anchor and rotation are placement | D-L-N,D-L-M | Row-title appearance style | D-M8 |
+| `canvas.row-title.centered-rounded-draw` | D-M8 `canvas.rs:1158-1171`; Middle anchor, zero rotation, and planned centers rounded to u32 in one layer | D-C-CANVAS,D-C-BACKEND | Planned line order and semantic placement are drawn exactly | D-L-G | Row-title final placement and draw | D-M8 |
+| `canvas.text-panel.current-draw-gap` | D-M8 `canvas.rs:1184-1185,1218`; independent `12.0` title/body gap | D-C-CANVAS,D-C-TEXT | Draw-side literal duplicates planning gap | D-L-R,D-L-G | Text-panel draw spacing | D-M8 |
+| `canvas.text-panel.centered-block-placement` | D-M8 `canvas.rs:1185-1188,1194-1195,1202-1225`; Middle anchors, zero rotations, vertical centering, then descent by planned line heights | D-C-CANVAS,D-C-TEXT | One immutable title/body plan supplies lines and line heights; anchor/orientation remain renderer placement | D-L-G | Text-panel block geometry | D-M8 |
+| `typography.canvas-text-panel-title.current-style` | D-M8 `canvas.rs:1189-1193`; foreground/family/title size and Normal weight | D-C-CANVAS,D-C-TEXT | Hidden Publication supplies title appearance | D-L-N,D-L-M | Text-panel title appearance role | D-M8 |
+| `typography.canvas-text-panel-body.current-style` | D-M8 `canvas.rs:1197-1201`; foreground/family/label size and Normal weight | D-C-CANVAS,D-C-TEXT | Hidden Publication supplies body appearance | D-L-N,D-L-M | Text-panel body appearance role | D-M8 |
+| `canvas.panel-header.title-presence-resolution` | D-M9 `canvas.rs:1235-1240`; palette show-title plus nonempty Plot title | D-C-CANVAS,D-C-TEXT | T2b content and T2a1 flag resolve before placement | D-L-N,D-L-M | Composed panel-title presence | D-M9 |
+| `canvas.panel-header.subtitle-presence-resolution` | D-M9 `canvas.rs:1241-1245`; palette show-subtitle plus nonempty Plot subtitle | D-C-CANVAS,D-C-TEXT | T2b content and T2a1 flag resolve before placement | D-L-N,D-L-M | Composed panel-subtitle presence | D-M9 |
+| `canvas.panel-header.empty-draw-skip` | D-M9 `canvas.rs:1246-1248`; both absent returns | D-C-CANVAS,D-C-BACKEND | No panel-title layer is emitted | D-L-N | Panel-header presence consequence | D-M9 |
+| `canvas.panel-header.current-wrap-width` | D-M9 `canvas.rs:1249`; cell width minus `16.0`, floored to `1.0` | D-C-CANVAS,D-C-TEXT | Both roles share one composition budget | D-L-M,D-L-R | Panel-header logical width | D-M9 |
+| `canvas.panel-header.title-wrap-plan` | D-M9 `canvas.rs:1250-1253`; title wraps with Plot title size and propagates errors | D-C-CANVAS,D-C-TEXT | Absent title becomes an empty planned vector | D-L-M,D-L-R | Composed title line plan | D-M9 |
+| `canvas.panel-header.subtitle-wrap-plan` | D-M9 `canvas.rs:1254-1264`; subtitle wraps with Plot subtitle size and propagates errors | D-C-CANVAS,D-C-TEXT | Absent subtitle becomes an empty planned vector | D-L-M,D-L-R | Composed subtitle line plan | D-M9 |
+| `canvas.panel-header.subtitle-start-anchor` | D-M9 `canvas.rs:1267,1269-1274`; Plot family/size with Start anchor and zero rotation | D-C-CANVAS,D-C-TEXT | Appearance values are prior-owned; T2d owns left-aligned placement use | D-L-G | Panel-subtitle semantic anchor | D-M9 |
+| `canvas.panel-header.title-start-anchor` | D-M9 `canvas.rs:1275-1282`; Plot foreground/family/size with Start anchor and zero rotation | D-C-CANVAS,D-C-TEXT | Appearance values are prior-owned; T2d owns left-aligned placement use | D-L-G | Panel-title semantic anchor | D-M9 |
+| `canvas.panel-header.layer-ownership` | D-M9 `canvas.rs:1283`; chart-scoped `title` layer | D-C-CANVAS,D-C-BACKEND | Both roles share one Plot-owned layer | D-L-G | Composed panel-header layer | D-M9 |
+| `canvas.panel-header.subtitle.current-left-inset` | D-M9 `canvas.rs:1286`; subtitle x is cell left + `8.0` | D-C-CANVAS | Subtitle placement reconstructs its own horizontal inset | D-L-R,D-L-G | Panel-subtitle left padding | D-M9 |
+| `canvas.panel-header.subtitle.current-baseline-offset` | D-M9 `canvas.rs:1287`; first subtitle baseline is cell top + `14.0` | D-C-CANVAS | Subtitle placement reconstructs its own panel clearance | D-L-R,D-L-G | Panel-subtitle panel clearance | D-M9 |
+| `canvas.panel-header.title.current-baseline-offset` | D-M9 `canvas.rs:1292-1294`; title base starts from an independent cell top + `14.0` | D-C-CANVAS | Title placement independently reconstructs the same panel clearance before subtitle stacking | D-L-R,D-L-G | Panel-title panel clearance | D-M9 |
+| `canvas.panel-header.title-after-subtitle-placement` | D-M9 `canvas.rs:1292-1299`; subtitle stack plus conditional `PANEL_HEADER_GAP` precedes title | D-C-CANVAS,D-C-TEXT | Roles never overlap when both have lines | D-L-R,D-L-G | Panel-header role ordering | D-M9 |
+| `canvas.panel-header.title.current-left-inset` | D-M9 `canvas.rs:1302`; title x is independently cell left + `8.0` | D-C-CANVAS | Title placement reconstructs its own horizontal inset | D-L-R,D-L-G | Panel-title left padding | D-M9 |
+| `canvas.panel-header.reverse-line-placement` | D-M9 `canvas.rs:1284-1306`; each role reverses lines and increases math y | D-C-CANVAS,D-C-TEXT | Visual source order is retained above the panel | D-L-G | Panel-header multiline orientation | D-M9 |
+| `composition.panel.current-inter-panel-gap` | D-M10 `layout/canvas.rs:14`; `COMPOSED_PANEL_GAP = 12.0` | D-C-CANVAS,D-C-FACET | Same horizontal and vertical gap separates adjacent cells | D-L-R,D-L-G | Composed panel spacing | D-M10 |
+| `composition.panel-header.current-title-subtitle-gap` | D-M10 `layout/canvas.rs:15`; `PANEL_HEADER_GAP = 4.0` | D-C-CANVAS | Shared reserve/draw constant applies only when both roles have lines | D-L-R,D-L-G | Panel-header inter-role spacing | D-M10 |
+| `composition.panel-header.current-wrap-inset` | D-M11 `layout/canvas.rs:234`; available width minus `16.0`, floored to `1.0` | D-C-CANVAS,D-C-FACET,D-C-TEXT | Header measurement mirrors Canvas panel draw width | D-L-M,D-L-R | Panel/facet-header horizontal chrome | D-M11 |
+| `composition.panel-header.title-line-count` | D-M11 `layout/canvas.rs:235-239`; wrapped title line count | D-C-CANVAS,D-C-TEXT | T2c wrapping result becomes T2d top reservation | D-L-M,D-L-R | Panel-title requirement count | D-M11 |
+| `composition.panel-header.subtitle-line-count` | D-M11 `layout/canvas.rs:240-250`; wrapped subtitle or facet-strip line count | D-C-CANVAS,D-C-FACET,D-C-TEXT | One path serves Plot subtitle and facet/header role | D-L-M,D-L-R | Secondary-header requirement count | D-M11 |
+| `composition.panel-header.conditional-role-gap` | D-M11 `layout/canvas.rs:251-255`; use `PANEL_HEADER_GAP` only when both counts exceed zero | D-C-CANVAS | No gap for an absent role | D-L-R | Header role-gap application | D-M11 |
+| `composition.panel-header.empty-top-reserve` | D-M11 `layout/canvas.rs:256-258`; no header => `4.0` top requirement | D-C-CANVAS,D-C-FACET | Every composed cell retains minimal top comfort | D-L-R | Empty-header top chrome | D-M11 |
+| `typography.composition-panel-subtitle.current-line-pitch` | D-M11 facet/header call context of `layout/canvas.rs:260`; subtitle size + `6.0` | D-C-FACET,D-C-TEXT | Composition-specific reserve metric serves facet strips; T2c owns the composed-Plot subtitle context | D-L-M,D-L-R | Facet/header reserve line height | D-M11 |
+| `composition.panel-header.current-bottom-clearance` | D-M11 `layout/canvas.rs:261-263`; complete stack plus `8.0` | D-C-CANVAS,D-C-FACET | Fixed clearance separates header stack from data panel | D-L-R | Header-to-panel clearance | D-M11 |
+| `composition.panel-header.y-title-overhang-maximum` | D-M11 `layout/canvas.rs:269-270`; top max with y-title overhang + `4.0` | D-C-CANVAS,D-C-FACET | Header and T2c axis overhang requirements combine by maximum | D-L-R,D-L-G | Top-edge collision reserve | D-M11 |
+| `composition.panel-header.y-tick-overhang-maximum` | D-M11 `layout/canvas.rs:270-271`; top max with y-tick overhang + `4.0` | D-C-CANVAS,D-C-FACET | Tick overhang cannot be hidden by header allocation | D-L-R,D-L-G | Top tick/header reserve | D-M11 |
+| `composition.grid.positive-shape` | D-M12 `layout/canvas.rs:288-292`; rows and columns must both be nonzero | D-C-CANVAS,D-C-FACET | Invalid shape rejects before allocation | D-L-N | Composed-grid structural validity | D-M12 |
+| `composition.grid.requirement-cell-range` | D-M12 `layout/canvas.rs:297-302`; each requirement row/column must be in shape | D-C-CANVAS,D-C-FACET | Misaddressed decoration requirement rejects | D-L-N | Requirement addressing validity | D-M12 |
+| `composition.grid.edge-requirement-maxima` | D-M12 `layout/canvas.rs:293-307`; per-column left/right and per-row bottom/top maxima | D-C-CANVAS,D-C-FACET | Cells in one grid line share the largest measured gutter | D-L-R | Grid-aligned gutter aggregation | D-M12 |
+| `composition.grid.total-reservation` | D-M12 `layout/canvas.rs:309-314`; sum edge maxima plus `(count-1)*12.0` gaps | D-C-CANVAS,D-C-FACET | Horizontal and vertical reservations are independent | D-L-R | Complete grid chrome reserve | D-M12 |
+| `composition.grid.equal-panel-size` | D-M12 `layout/canvas.rs:315-316`; remaining width/columns and height/rows | D-C-CANVAS,D-C-FACET | Every data panel receives equal dimensions | D-L-R,D-L-G | Equal-cell data geometry | D-M12 |
+| `composition.grid.minimum-panel-fit` | D-M12 `layout/canvas.rs:317-321`; reject below 80x60 | D-C-CANVAS,D-C-FACET | No clamp, elision, or unequal rescue | D-L-C,D-L-G | Dense-grid representability | D-M12 |
+| `composition.grid.horizontal-cursor-placement` | D-M12 `layout/canvas.rs:323-332`; left gutter, panel, right gutter, then gap | D-C-CANVAS,D-C-FACET | Column order is deterministic left-to-right | D-L-G | Column coordinate construction | D-M12 |
+| `composition.grid.vertical-cursor-placement` | D-M12 `layout/canvas.rs:333-342`; top gutter, panel, bottom gutter, then gap descending | D-C-CANVAS,D-C-FACET | Row order is deterministic top-to-bottom in math coordinates | D-L-G | Row coordinate construction | D-M12 |
+| `composition.grid.row-major-box-construction` | D-M12 `layout/canvas.rs:344-357`; row-major `PanelBox` values from cursor positions | D-C-CANVAS,D-C-FACET | Exact allocation order matches Canvas/facet indexing | D-L-G | Final composed cells | D-M12 |
+| `composition.outer.current-wrapping-width-budget` | D-M13 `layout/canvas.rs:448-466`; composed title/subtitle/caption width is canvas width minus `32.0`, floored to `1.0` | D-C-CANVAS,D-C-FACET,D-C-TEXT | One composed route budget drives all three outer text line counts | D-L-M,D-L-R | Composed outer-text logical width | D-M13; reserve-axes=true route excluded |
+| `composition.outer-title.current-top-gap` | D-M13 reserve-axes=false `layout/canvas.rs:485-502`; title/subtitle presence adds `14.0` | D-C-CANVAS,D-C-FACET | Composed outer title route shares the current fixed structural gap | D-L-R,D-L-G | Composed root-title clearance | D-M13; reserve-axes=true excluded |
+| `composition.outer-caption.current-extra-reserve` | D-M13 reserve-axes=false `layout/canvas.rs:503-507`; caption stack adds `12.0` | D-C-CANVAS,D-C-FACET | Extra reserve applies once when caption exists | D-L-R,D-L-G | Composed root-caption clearance | D-M13 |
+| `composition.outer.current-fixed-inset-aggregate` | D-M13 reserve-axes=false `layout/canvas.rs:541-550`; left/right `16.0`, bottom +`8.0`, top +`12.0` with minimum `30.0` | D-C-CANVAS,D-C-FACET | Composition-specific fixed chrome is combined with text stacks once | D-L-R,D-L-G | Composed outer safety chrome | D-M13 |
+| `composition.outer.current-shared-axis-inset-aggregate` | D-M13 reserve-axes=false `layout/canvas.rs:518-539,541-550`; optional shared x/y title measurements enter bottom/left insets | D-C-FACET,D-C-TEXT | Faceted shared-axis insets are aggregated with composed outer chrome | D-L-M,D-L-R,D-L-G | Composed shared-axis outer reservation | D-M13; primitive metrics prior-owned by T2c |
+| `composition.outer.current-baseline-placement` | D-M13 reserve-axes=false `layout/canvas.rs:566-599`; title `h-20`, subtitle below title, caption upward from size+6 | D-C-CANVAS,D-C-FACET,D-C-TEXT | Planned line counts and duplicated role pitches determine baselines | D-L-G | Composed root text geometry | D-M13 |
+| `decorations.apply.canvas-text-presence-gates` | D-M15 `apply.rs:39-59`; title/subtitle/caption each require their palette show gate and optional Plot content | D-C-CANVAS,D-C-FACET,D-C-TEXT | The three role gates populate one TitleBlock before any draw | D-L-N,D-L-M | Plot canvas-text presence routing | D-M15; public controls prior-owned by T2b |
+| `decorations.apply.canvas-text-final-draw-gate` | D-M15 `apply.rs:60-68`; `TitleBlock::has_content()` gates measured-layout lookup and draw | D-C-CANVAS,D-C-FACET,D-C-TEXT,D-C-BACKEND | Empty content emits no title-block draw; nonempty content uses the Plot layout and palette | D-L-N,D-L-M,D-L-G | Final Plot TitleBlock route | D-M15; values/drawing prior-owned by T2c |
+| `decorations.apply.immutable-legend-route` | D-M15 `apply.rs:71-84`; absent skips, present uses planned bounds anchor and stored Legend | D-C-LEGEND,D-C-BACKEND | Final drawing consumes the preflight-frozen legend without repositioning | D-L-G | Planned legend application | D-M15 |
+| `legend.identity.closed-typed-representation` | D-M16 `legend.rs:28-45`; `Single{field,value}`, `Pair{group_field,group_value,hue_field,hue_value}`, or `Literal{title,value}` | D-C-LEGEND | Raw typed identities remain separate from display strings | D-L-N | Legend semantic identity | D-M16 |
+| `legend.identity.title-identity-extraction` | D-M16 `legend.rs:47-53,83-93`; title key is Single field, Pair field pair, or Literal title | D-C-LEGEND | Shared compatibility compares typed title identity before display title | D-L-N,D-L-C | Legend section identity | D-M16 |
+| `legend.identity.single-display-resolution` | D-M16 `legend.rs:95-99`; label resolver maps field and value separately | D-C-LEGEND | Raw identity survives display aliasing | D-L-M | Single-field legend text | D-M16 |
+| `legend.identity.pair-display-resolution` | D-M16 `legend.rs:100-116`; title `group × hue`, label `group, hue` after label resolution | D-C-LEGEND | Fixed multiplication and comma grammar exposes both channels | D-L-M | Paired legend text | D-M16 |
+| `legend.identity.literal-display-resolution` | D-M16 `legend.rs:117`; literal title/value clone verbatim | D-C-LEGEND | Renderer-generated claims bypass label resolution | D-L-M | Literal legend text | D-M16 |
+| `legend.identity.hue-value-projection` | D-M16 `legend.rs:121-134`; matching Single/Pair hue field returns raw hue value | D-C-LEGEND,D-C-FACET | Nonmatching or Literal identities contribute no hue projection | D-L-N | Legend-to-domain coordination hook | D-M16 |
+| `legend.glyph.complete-component-aggregate` | D-M16 `legend.rs:137-143`; optional point, line, and fill components | D-C-LEGEND | All seven nonempty component combinations are representable | D-L-N,D-L-G | Exact legend glyph representation | D-M16 |
+| `legend.glyph.component-exact-equality` | D-M16 `legend.rs:145-150`; point, line, and fill optional equality all required | D-C-LEGEND | Missing/present component differences conflict | D-L-C | Composite glyph compatibility | D-M16 |
+| `legend.entry.resolved-aggregate-and-default` | D-M16 `legend.rs:153-171`; identity, empty title/label, glyph, `contributes_hue_level=true` | D-C-LEGEND | Entries resolve display text later and contribute hue by default | D-L-N | Renderer-owned legend entry | D-M16 |
+| `legend.glyph.point-construction` | D-M16 `legend.rs:174-182`; exact PointStyle only | D-C-LEGEND | No generic swatch reconstruction | D-L-G | Point legend glyph | D-M16 |
+| `legend.glyph.line-construction` | D-M16 `legend.rs:184-192`; exact LineStyle only | D-C-LEGEND | Dash, width, and paint are retained | D-L-G | Line legend glyph | D-M16 |
+| `legend.glyph.fill-construction` | D-M16 `legend.rs:194-202`; exact FillStyle only | D-C-LEGEND | Fill, stroke, width, and alpha are retained | D-L-G | Fill legend glyph | D-M16 |
+| `legend.glyph.composite-construction-grammar` | D-M16 `legend.rs:204-251`; point-line, point-fill, line-fill, and point-line-fill | D-C-LEGEND | Exact components share one handle in fixed fill/line/point order | D-L-G | Composite legend glyph grammar | D-M16 |
+| `legend.entry.display-resolution` | D-M16 `legend.rs:253-255`; identity resolves into stored title and label | D-C-LEGEND | Resolution occurs before merging | D-L-M | Entry display text resolution | D-M16 |
+| `legend.entry.hue-contribution-suppression` | D-M16 `legend.rs:261-264`; consuming setter flips contribution false | D-C-LEGEND | Labeled supplemental layers remain entries without changing coordinated hue levels | D-L-N | Entry/domain separation | D-M16 |
+| `legend.entry.coordinated-hue-eligibility` | D-M16 `legend.rs:266-270`; contribution gate then typed hue projection | D-C-LEGEND,D-C-FACET | Ineligible entries cannot leak into global hue coordination | D-L-N | Coordinated hue-entry eligibility | D-M16 |
+| `legend.entry.complete-exact-equality` | D-M16 `legend.rs:272-277`; identity, title, label, and complete glyph equality | D-C-LEGEND | Same raw identity merges only with exact visible equality | D-L-C | Entry merge equivalence | D-M16 |
+| `legend.glyph.current-point-only-extent` | D-M16 `legend.rs:279-285`; extent is point radius or zero | D-C-LEGEND,D-C-GEOMETRY | Line stroke, fill stroke, and composite extents are omitted from row bounds | D-L-M,D-L-C | Current glyph collision extent | D-M16 |
+| `legend.entries.plot-resolution-and-merge` | D-M16 `legend.rs:287-295`; resolve every entry then merge with context `plot legend` | D-C-LEGEND | Plot labels are canonical before compatibility checks | D-L-M,D-L-C | Plot legend entry preflight | D-M16 |
+| `legend.merge.stable-first-order` | D-M16 `legend.rs:298-335`; iterate source order and push only first exact identity | D-C-LEGEND | Exact duplicates collapse without reordering | D-L-N | Deterministic legend order | D-M16 |
+| `legend.merge.semantic-title-identity-compatibility` | D-M16 `legend.rs:304-311`; every entry title identity must equal first | D-C-LEGEND | Multiple semantic sections reject | D-L-C | Typed title compatibility | D-M16 |
+| `legend.merge.resolved-title-compatibility` | D-M16 `legend.rs:305-311`; every resolved title must equal first | D-C-LEGEND | Equal typed fields with conflicting display titles reject | D-L-M,D-L-C | Display title compatibility | D-M16 |
+| `legend.merge.display-label-uniqueness` | D-M16 `legend.rs:313-321`; distinct identities may not share one display label | D-C-LEGEND | Alias collisions reject before layout | D-L-M,D-L-C | Legend label disambiguation | D-M16 |
+| `legend.merge.same-identity-glyph-compatibility` | D-M16 `legend.rs:322-330`; duplicate identity must pass complete entry equality | D-C-LEGEND | Conflicting label, title, alpha, paint, or glyph structure rejects | D-L-C | Duplicate identity compatibility | D-M16 |
+| `legend.title.complete-resolution` | D-M16 `legend.rs:338-351`; empty entries => empty title, else all typed/display titles must agree | D-C-LEGEND | Returns exactly one shared title | D-L-M,D-L-C | Legend title finalization | D-M16 |
+| `legend.glyph.point-style-equality` | D-M16 `legend.rs:353-372`; color/radius/shape/opacity bits and outline color/width-ratio bits | D-C-LEGEND | Option presence and every current point field compare exactly | D-L-C | Point glyph equality | D-M16 |
+| `legend.glyph.line-style-equality` | D-M16 `legend.rs:374-384`; color, width bits, and dash string | D-C-LEGEND | Complete current line stroke compares exactly | D-L-C | Line glyph equality | D-M16 |
+| `legend.glyph.fill-style-equality` | D-M16 `legend.rs:386-397`; color, stroke, stroke-width bits, and opacity bits | D-C-LEGEND | Complete current fill/stroke compares exactly | D-L-C | Fill glyph equality | D-M16 |
+| `legend.metrics.current-reference-size` | D-M16 `legend.rs:401-402`; `REF_SIZE=640.0` | D-C-LEGEND | Canvas short edge is normalized to this private reference | D-L-M | Responsive legend scale reference | D-M16 |
+| `typography.legend.current-base-responsive-size` | D-M16 `legend.rs:403-404`; `BASE_FONT=14.0` | D-C-LEGEND,D-C-TEXT | One base supplies label size and title scaling | D-L-M,D-L-R | Current legend base typography | D-M16 |
+| `legend.metrics.current-minimum-font-clamp` | D-M16 `legend.rs:405-406`; `MIN_FONT=11.0` | D-C-LEGEND | Small canvases stop shrinking | D-L-M,D-L-R | Responsive minimum size | D-M16 |
+| `legend.metrics.current-maximum-font-clamp` | D-M16 `legend.rs:407-408`; `MAX_FONT=18.0` | D-C-LEGEND | Large canvases stop growing | D-L-M,D-L-R | Responsive maximum size | D-M16 |
+| `legend.container.current-border-padding-factor` | D-M16 `legend.rs:412-413`; `0.8 * font_size` | D-C-LEGEND | Font-relative padding surrounds content | D-L-M,D-L-R | Legend container padding | D-M16 |
+| `legend.entries.current-row-spacing-factor` | D-M16 `legend.rs:414-415`; `0.5 * font_size` added to entry pitch | D-C-LEGEND | Same factor serves every row | D-L-M,D-L-R | Legend row spacing | D-M16 |
+| `legend.glyph.current-handle-text-gap-factor` | D-M16 `legend.rs:416-417`; `0.8 * font_size` | D-C-LEGEND | Fixed gap separates handle and label | D-L-M,D-L-R | Legend handle-label spacing | D-M16 |
+| `legend.glyph.current-handle-length-factor` | D-M16 `legend.rs:418-419`; `1.0 * font_size` | D-C-LEGEND | Fill/line/point composites share one handle width | D-L-M,D-L-R,D-L-G | Legend handle length | D-M16 |
+| `legend.glyph.current-half-height-estimate` | D-M16 `legend.rs:420-421`; `0.6 * role font size` | D-C-LEGEND,D-C-GEOMETRY | Estimated title/entry half-height substitutes for glyph bounds | D-L-M,D-L-C | Current legend text extent | D-M16 |
+| `legend.container.current-glyph-edge-padding-factor` | D-M16 `legend.rs:422-423`; extra `0.2 * entry font size` | D-C-LEGEND | Added to ordinary pad at both vertical edges | D-L-R | Legend glyph edge comfort | D-M16 |
+| `legend.entries.current-column-spacing-factor` | D-M16 `legend.rs:424-425`; `1.2 * font_size` | D-C-LEGEND | Same spacing separates every adjacent column | D-L-R,D-L-G | Legend column spacing | D-M16 |
+| `legend.entries.current-single-column-limit` | D-M16 `legend.rs:426-427,859-881`; at most 6 automatic entries return one column; a multi-column search with no fitting candidate also falls back to one | D-C-LEGEND | Seven entries start the bounded multi-column search, but failure to fit any candidate returns one column for later fit handling | D-L-R,D-L-C,D-L-G | Legend column work/layout threshold and fallback | D-M16 |
+| `legend.title.current-entry-spacing-factor` | D-M16 `legend.rs:428-429`; title-to-first-entry pitch/offset reserve `1.8 * font_size` | D-C-LEGEND,D-C-TEXT | Independent of the T2c 1.2 text line height | D-L-M,D-L-R | Current title-entry spacing | D-M16 |
+| `legend.container.current-fill-alpha` | D-M16 `legend.rs:430-431`; `FRAME_ALPHA=0.8` | D-C-LEGEND,D-C-BACKEND | Fill opacity is 0.8 while the gray outline remains opaque | D-L-N | Legend container fill alpha | D-M16 |
+| `legend.container.current-corner-radius` | D-M16 `legend.rs:432-433`; `2.0` px | D-C-LEGEND,D-C-BACKEND | Fixed rounded rectangle corners | D-L-G | Legend container corner radius | D-M16 |
+| `legend.metrics.current-responsive-transform` | D-M16 `legend.rs:452-457`; `min(canvas_w,canvas_h)/640`, then `14*scale` clamped 11..18 | D-C-LEGEND | Every legend appearance/spacing metric changes with canvas size | D-L-M,D-L-R,D-L-G | Private responsive scaling algorithm | D-M16 |
+| `legend.container.current-derived-padding` | D-M16 `legend.rs:458,463-466`; derived border pad stored in metrics | D-C-LEGEND | Used by box size, anchor, gap fallbacks, and outside spacing | D-L-M,D-L-R,D-L-G | Resolved legend padding metric | D-M16 |
+| `legend.entries.current-derived-row-pitch` | D-M16 `legend.rs:459,466,818-823`; font size plus half-size spacing, later offset against a separate 1.2 label line-height estimate | D-C-LEGEND,D-C-TEXT | One aggregate conflates label typography height with independent inter-row spacing | D-L-M,D-L-R,D-L-G | Resolved label height and entry spacing | D-M16 |
+| `legend.title.current-derived-entry-offset` | D-M16 `legend.rs:460,467,815-818`; `1.8 * responsive font_size` sets the first entry-row offset after title lines | D-C-LEGEND,D-C-TEXT | Independent title-entry spacing is resolved separately from the T2c title block line height | D-L-M,D-L-R,D-L-G | Resolved title-entry offset | D-M16 |
+| `legend.glyph.current-derived-handle-width` | D-M16 `legend.rs:461,468`; `1.0 * responsive font_size` | D-C-LEGEND | Shared by fill, line, and point glyph components | D-L-M,D-L-R,D-L-G | Resolved handle width | D-M16 |
+| `legend.glyph.current-derived-handle-text-gap` | D-M16 `legend.rs:462,469`; `0.8 * responsive font_size` | D-C-LEGEND | Stored separately from handle width | D-L-M,D-L-R,D-L-G | Resolved handle-label gap | D-M16 |
+| `legend.title.current-responsive-width-budget` | D-M16 `legend.rs:522-534`; max(canvas width * `0.5`, responsive font size) | D-C-LEGEND,D-C-TEXT | Private title wrap budget scales with Canvas width | D-L-M,D-L-R | Legend title width budget | D-M16 |
+| `legend.label.current-responsive-width-budget` | D-M16 `legend.rs:522-534`; max(canvas width * `0.35`, responsive font size) | D-C-LEGEND,D-C-TEXT | Every entry shares one private label budget | D-L-M,D-L-R | Legend label width budget | D-M16 |
+| `legend.box.current-responsive-available-budget` | D-M16 `legend.rs:532-533`; available width and height are each 80% of Canvas | D-C-LEGEND | Column search fits within private responsive bounds | D-L-R,D-L-C | Legend balancing budget | D-M16 |
+| `legend.box.complete-column-size` | D-M16 `legend.rs:537-570,770-834,796-825,859-882`; clamp column count, max per-column widths, title maximum, row half-extents, spacing, and deterministic balance score | D-C-LEGEND,D-C-GEOMETRY | Width/height include text estimates and point-only glyph extent; tie favors fewer columns, while no fitting multi-column candidate falls back to one | D-L-M,D-L-R,D-L-C,D-L-G | Legend measured box and column layout | D-M16 |
+| `legend.inside.current-aligned-candidate-geometry` | D-M16 `legend.rs:572-632`; 4% short-edge inset, normalized align clamped 0..1, candidates ordered RT,LT,RB,LB | D-C-LEGEND | Equal overlap favors top then right according to candidate order | D-L-R,D-L-C,D-L-G | Inside legend candidate geometry | D-M16 |
+| `legend.box.current-clamped-anchor-geometry` | D-M16 `legend.rs:608-645`; lower-left clamped at zero; anchor is pad from left and title-half/edge-pad below top | D-C-LEGEND,D-C-GEOMETRY | Current clamp can move a box without proving complete fit | D-L-C,D-L-G | Legend box/anchor representation | D-M16 |
+| `legend.container.current-complete-style` | D-M16 `legend.rs:657-671`; white fill at opacity 0.8, opaque gray `(200,200,200)` stroke, width 1, radius 2 | D-C-LEGEND,D-C-BACKEND | The backend applies `FillStyle::opacity` to fill only; outline paint is already separately opaque | D-L-N,D-L-G | Legend container chrome | D-M16 |
+| `typography.legend-title.current-complete-style` | D-M16 `legend.rs:673-679,754-755`; `(60,60,60)`, default stack, rounded `1.1*font_size`, and Normal weight | D-C-LEGEND,D-C-TEXT | Draw and wrap use the responsive title appearance; anchor/orientation are placement | D-L-M,D-L-G | Legend title typography | D-M16 |
+| `legend.title.current-start-anchor-orientation` | D-M16 `legend.rs:680-690`; Start anchor, zero rotation, rounded x, and y decremented by title-block line height per multiline index | D-C-LEGEND,D-C-TEXT,D-C-BACKEND | Every planned title line follows one private ordered placement geometry | D-L-G | Legend title anchor/orientation and multiline draw geometry | D-M16 |
+| `typography.legend-label.current-complete-style` | D-M16 `legend.rs:691-696,758-759`; `(40,40,40)`, default stack, rounded font size, and Normal weight | D-C-LEGEND,D-C-TEXT | One appearance style serves every entry; anchor/orientation are placement | D-L-M,D-L-G | Legend label typography | D-M16 |
+| `legend.label.current-start-anchor-orientation` | D-M16 `legend.rs:697-698,736-748`; Start anchor, zero rotation, handle-relative x, multiline vertical centering, and y decremented by label-block line height | D-C-LEGEND,D-C-TEXT,D-C-BACKEND | Every planned label line follows one private row-relative placement geometry | D-L-G | Legend label anchor/orientation and multiline draw geometry | D-M16 |
+| `legend.glyph.current-draw-and-bounds` | D-M16 `legend.rs:701-735,772-778`; fill rectangle half-height `0.32*entry size`, then line and point handle geometry, with the separately inventoried point-only extent contribution | D-C-LEGEND,D-C-GEOMETRY,D-C-BACKEND | Handle draw preserves exact styles, but handle bounds omit line/fill stroke and composites beyond point radius; label text geometry is excluded | D-L-M,D-L-C,D-L-G | Exact glyph-handle rendering and current bounds | D-M16 |
+| `legend.text.current-fallback-to-unwrapped` | D-M16 `legend.rs:836-857,885-890`; failed title/label layout silently becomes `TextBlock::unwrapped` | D-C-LEGEND,D-C-TEXT | Planning error is discarded and may produce overwide geometry | D-L-M,D-L-C | Legend text failure behavior | D-M16 |
+| `panel-text.legend-corner-conflict-planning` | D-M17 `panel_text.rs:48-59`; plan all panel text, compare each bounds with legend box, return first corner | D-C-LEGEND,D-C-GEOMETRY | Panel-text planning errors canonically propagate | D-L-M,D-L-C | Legend/panel-text conflict detection | D-M17 |
+| `geometry.rectangles.strict-overlap` | D-M17 `panel_text.rs:146-148`; strict inequalities on both axes | D-C-LEGEND,D-C-GEOMETRY | Touching edges do not overlap | D-L-C | Rectangle collision predicate | D-M17 |
+| `legend.clearance.current-pass-budget` | D-M18 `plan.rs:14-16`; maximum 8 clearance attempts | D-C-LEGEND,D-C-GEOMETRY | Bounded work; exhaustion is checked only by final inside validation | D-L-C,D-L-G | Legend-clearance iteration bound | D-M18 |
+| `legend.plan.current-role-representation` | D-M18 `plan.rs:18-22`; private Panel or Suppressed | D-C-LEGEND | Composition translates prior-owned policy into one closed planning role | D-L-N | Legend planning role | D-M18 |
+| `legend.plan.current-resolved-legend-aggregate` | D-M18 `plan.rs:24-27`; measured Legend plus LegendBox | D-C-LEGEND | Immutable aggregate is consumed by final drawing | D-L-M,D-L-G | Resolved legend plan | D-M18 |
+| `legend.plan.current-panel-aggregate` | D-M18 `plan.rs:29-35`; panel, render result, optional legend, optional planned x/y limits | D-C-LEGEND,D-C-CANVAS,D-C-FACET | One plan freezes geometry and range consequences | D-L-G | Complete panel decoration plan | D-M18 |
+| `legend.outside.standalone-plan-construction` | D-M18 `plan.rs:37-59`; resolve title, construct Legend, reserve panel, resolve LowestOverlap outside box | D-C-LEGEND,D-C-FACET | Standalone facet outside legend is measured once before attachment | D-L-M,D-L-R,D-L-G | Outside-legend planning entry | D-M18 |
+| `legend.position.inside-outside-classification` | D-M18 `plan.rs:61-81`; exactly 12 Outside variants; all other positions are inside | D-C-LEGEND | Classification consumes but does not redeclare T2b placement policy | D-L-N | Placement implementation taxonomy | D-M18 |
+| `legend.plan.planned-axis-limit-replay` | D-M18 `plan.rs:83-100`; apply frozen x then y limits to render chart when present | D-C-LEGEND,D-C-GEOMETRY | Final marks use the ranges proven during collision planning | D-L-G | Legend-clearance range replay | D-M18 |
+| `legend.plan.panel-context-construction` | D-M18 `plan.rs:103-116,123-130`; preserve data/source rows and cell | D-C-LEGEND | Canonical Plot context enters immutable planning | D-L-N,D-L-G | Panel planning context | D-M18 |
+| `legend.plan.family-default-resolution` | D-M18 `spec.rs:620-639`, called at `plan.rs:130-131`; closed `kind.legend_default(explicit_y_limits)` match | D-C-LEGEND | Family and explicit y-limit state select private Auto behavior | D-L-N | Automatic legend default | D-M18; T2b `LegendPolicy::position` excluded |
+| `legend.plan.role-suppression-application` | D-M18 `plan.rs:132-135`; Suppressed clones chart with hidden legend | D-C-LEGEND,D-C-CANVAS,D-C-FACET | Internal copy coordinates composition without changing public policy storage | D-L-N | Legend-role consequence | D-M18 |
+| `legend.plan.discovery-render` | D-M18 `plan.rs:136-137`; first render to GeometryBackend | D-C-LEGEND,D-C-GEOMETRY | Discovers layout, entries, marks, and bounds before reservation | D-L-M,D-L-C,D-L-G | Decoration discovery pass | D-M18 |
+| `legend.plan.coordinated-entry-replacement` | D-M18 `plan.rs:138-140`; supplied facet entries atomically replace discovered entries | D-C-LEGEND,D-C-FACET | No merge with panel-local discovery | D-L-N,D-L-M | Facet legend-entry coordination | D-M18 |
+| `legend.plan.visibility-eligibility` | D-M18 `plan.rs:141-143`; Panel role, non-Hidden Plot policy, and nonempty entries | D-C-LEGEND | All three conditions are required | D-L-N | Legend construction eligibility | D-M18 |
+| `legend.plan.measured-construction` | D-M18 `plan.rs:144-153`; resolve title, clone entries, use Plot width/height | D-C-LEGEND | Invisible cases store no Legend | D-L-M,D-L-R | Per-panel measured legend | D-M18 |
+| `legend.outside.reservation-call` | D-M18 `plan.rs:154-156`; visible Legend may shrink cell according to position | D-C-LEGEND | Inside positions leave panel unchanged | D-L-R,D-L-G | Outside reservation application | D-M18 |
+| `legend.plan.axis-title-adjustment-candidate` | D-M18 `plan.rs:157-158`; pass cell and decoration-shrunk panel to T2c rewrap adjustment | D-C-LEGEND,D-C-TEXT | T2d supplies only the decoration candidate; T2c owns axis consequence | D-L-M,D-L-R,D-L-G | Post-decoration axis candidate | D-M18 |
+| `legend.plan.changed-panel-rerender` | D-M18 `plan.rs:160-170`; rerender geometry only when final panel differs from cell | D-C-LEGEND,D-C-GEOMETRY | Reserved geometry is rediscovered at final panel size | D-L-C,D-L-G | Final panel discovery | D-M18 |
+| `legend.plan.unchanged-discovery-reuse` | D-M18 `plan.rs:171-173`; unchanged panel moves discovery backend into geometry | D-C-LEGEND,D-C-GEOMETRY | Avoids a duplicate render while retaining exact bounds | D-L-N,D-L-C | Discovery reuse | D-M18 |
+| `legend.collision.significance-bounds-inclusion` | D-M18 `plan.rs:174,343-351`; render planned significance brackets into geometry | D-C-LEGEND,D-C-GEOMETRY | Legend collision includes generated bracket geometry | D-L-C | Complete panel collision scene | D-M18 |
+| `legend.auto.initial-candidate-call` | D-M18 `plan.rs:177-188`; Auto selects family-default candidate from final panel and geometry | D-C-LEGEND,D-C-GEOMETRY | Initial candidate precedes panel-text avoidance | D-L-C,D-L-G | Automatic initial placement | D-M18 |
+| `legend.auto.panel-text-avoidance-call` | D-M18 `plan.rs:188-195`; rotate candidates through panel-text conflict helper | D-C-LEGEND,D-C-GEOMETRY | Planning errors propagate | D-L-C,D-L-G | Automatic annotation avoidance | D-M18 |
+| `legend.position.explicit-box-call` | D-M18 `plan.rs:196-205`; non-Auto uses exact position resolver with axes, reserved panel, cell, geometry | D-C-LEGEND | Public exact placement maps to one private box | D-L-R,D-L-G | Explicit legend placement | D-M18 |
+| `legend.inside.panel-text-conflict-rejection` | D-M18 `plan.rs:210-221`; any inside box overlapping planned panel text rejects | D-C-LEGEND,D-C-GEOMETRY | Explicit inside positions are not silently moved | D-L-C | Inside legend/panel-text compatibility | D-M18 |
+| `legend.clearance.iterative-collision-gate` | D-M18 `plan.rs:223-233`; up to 8 passes, stop when no legend or overlap <=0 | D-C-LEGEND,D-C-GEOMETRY | Positive overlap enters candidate/range clearance | D-L-C,D-L-G | Iterative legend clearance | D-M18 |
+| `legend.collision.current-font-relative-margin` | D-M18 `plan.rs:225-230,318`; margin `max(font_size,6.0)` | D-C-LEGEND,D-C-GEOMETRY | Responsive text size also controls mark clearance | D-L-C | Legend-to-mark comfort margin | D-M18 |
+| `legend.clearance.automatic-dispatch` | D-M18 `plan.rs:235-254`; Auto asks family-default clearance and may replace candidate | D-C-LEGEND,D-C-GEOMETRY | No clearance result ends the loop | D-L-C,D-L-G | Automatic collision response | D-M18 |
+| `legend.clearance.explicit-dispatch` | D-M18 `plan.rs:235-269`; every non-Auto explicit position, inside or outside, chooses a preferred edge then minimum expansion | D-C-LEGEND,D-C-GEOMETRY | Exact box stays fixed while data range may expand; outside clearance can run when outside spacing is smaller than the collision margin | D-L-C,D-L-G | All-explicit-position collision response | D-M18 |
+| `legend.auto.candidate-only-replacement` | D-M18 `plan.rs:270-278`; a clear alternate candidate may change without range expansion | D-C-LEGEND | Loop continues to prove the changed box | D-L-C,D-L-G | Automatic candidate transition | D-M18 |
+| `legend.clearance.x-limit-application` | D-M18 `plan.rs:280-284`; X expansion stores planned x limits and updates chart | D-C-LEGEND,D-C-GEOMETRY | One axis changes per pass | D-L-G | Horizontal legend clearance | D-M18 |
+| `legend.clearance.y-limit-application` | D-M18 `plan.rs:285-288`; Y expansion stores planned y limits and updates chart | D-C-LEGEND,D-C-GEOMETRY | One axis changes per pass | D-L-G | Vertical legend clearance | D-M18 |
+| `legend.clearance.rerender-after-expansion` | D-M18 `plan.rs:290-297`; reset geometry, render with final panel, rerecord brackets | D-C-LEGEND,D-C-GEOMETRY | Collision scene matches expanded ranges | D-L-C,D-L-G | Clearance rediscovery | D-M18 |
+| `legend.clearance.box-recompute` | D-M18 `plan.rs:298-313`; retain Legend, recompute Auto candidate or exact position against new projection | D-C-LEGEND | Metrics remain fixed while box follows changed panel geometry | D-L-C,D-L-G | Post-expansion legend box | D-M18 |
+| `legend.inside.final-fit-validation` | D-M18 `plan.rs:315-330`; final inside box must fit projection panel | D-C-LEGEND,D-C-GEOMETRY | Failure rejects with no clamp or omission | D-L-C | Final legend containment proof | D-M18 |
+| `legend.inside.final-collision-validation` | D-M18 `plan.rs:315-330`; final weighted overlap must be zero | D-C-LEGEND,D-C-GEOMETRY | Pass exhaustion cannot silently leave overlap | D-L-C | Final legend collision proof | D-M18 |
+| `legend.plan.frozen-result` | D-M18 `plan.rs:334-340`; return final panel/result/legend/limits | D-C-LEGEND,D-C-CANVAS,D-C-FACET | Render consumes one immutable preflight product | D-L-G | Frozen panel plan | D-M18 |
+| `legend.collision.significance-recording` | D-M18 `plan.rs:343-351`; only nonempty bracket list is rendered into geometry | D-C-LEGEND,D-C-GEOMETRY | Exact generated bracket extents participate | D-L-C | Significance collision inclusion branch | D-M18 |
+| `legend.clearance.explicit-preferred-edge` | D-M18 `plan.rs:255-260,354-400`; non-Auto right/left/bottom/top positions select matching edges; the Auto arm is unreachable from the sole caller | D-C-LEGEND | Semantic non-Auto position determines the first expansion direction | D-L-N,D-L-G | Explicit clearance orientation | D-M18 |
+| `legend.clearance.current-nearest-edge-fallback` | D-M18 `plan.rs:389-400`; residual non-Auto positions choose minimum box-to-panel distance; the four-element iterator makes `map_or(Top)` unreachable | D-C-LEGEND | Nearest-edge selection remains active for residual non-Auto positions; Top is not a reachable fallback | D-L-C,D-L-G | Nearest-edge clearance selection | D-M18 |
+| `legend.clearance.automatic-family-dispatch` | D-M18 `plan.rs:404-427`; TopRight uses requested maximum; LowestOverlap/SelfManaged use lowest-overlap path | D-C-LEGEND | Private PlotKind default selects algorithm | D-L-N,D-L-C | Automatic clearance family | D-M18 |
+| `legend.clearance.top-right-candidate-order` | D-M18 `plan.rs:429-445`; scan inside candidates from current index onward | D-C-LEGEND | No wrap in this helper | D-L-C,D-L-G | Top-right alternate order | D-M18 |
+| `legend.clearance.top-right-panel-text-screen` | D-M18 `plan.rs:446-450`; planning error or occupied corner skips candidate | D-C-LEGEND,D-C-GEOMETRY | `map_or(true,...)` treats planning error as a skip | D-L-C | Current top-right annotation screen | D-M18 |
+| `legend.clearance.top-right-fit-and-overlap-screen` | D-M18 `plan.rs:451-465`; skip unfit; zero overlap returns candidate without expansion | D-C-LEGEND,D-C-GEOMETRY | Complete current box is checked before range work | D-L-C | Top-right candidate acceptance | D-M18 |
+| `legend.clearance.candidate-edge-order` | D-M18 `plan.rs:479-492`; horizontal/vertical edge pair determined by corner and requested maximum | D-C-LEGEND | HorizontalMaximum tries horizontal first; VerticalMaximum reverses | D-L-N,D-L-G | Automatic expansion edge order | D-M18 |
+| `legend.clearance.top-right-first-expansion` | D-M18 `plan.rs:466-476`; first representable candidate/edge expansion wins | D-C-LEGEND,D-C-GEOMETRY | No global expansion scoring in TopRight path | D-L-C,D-L-G | Top-right range expansion | D-M18 |
+| `legend.clearance.lowest-overlap-candidate-screen` | D-M18 `plan.rs:494-521`; require fit and no panel-text conflict | D-C-LEGEND,D-C-GEOMETRY | Planning errors currently disqualify candidate | D-L-C | Lowest-overlap candidate eligibility | D-M18 |
+| `legend.clearance.lowest-overlap-edge-grammar` | D-M18 `plan.rs:503-508,522-527`; each corner has horizontal then vertical edge | D-C-LEGEND | Exactly two expansions are considered per candidate | D-L-N,D-L-G | Lowest-overlap expansion grammar | D-M18 |
+| `legend.clearance.lowest-overlap-tie-break` | D-M18 `plan.rs:528-567`; minimize overlap, span ratio, candidate index, then edge index | D-C-LEGEND,D-C-GEOMETRY | Deterministic total ordering selects one expansion | D-L-C,D-L-G | Lowest-overlap expansion selection | D-M18 |
+| `legend.clearance.explicit-edge-order` | D-M18 `plan.rs:569-594`; preferred edge then Left,Right,Bottom,Top | D-C-LEGEND | Duplicate preferred edge may be evaluated twice | D-L-N,D-L-G | Explicit expansion candidate order | D-M18 |
+| `legend.clearance.explicit-minimum-expansion` | D-M18 `plan.rs:587-601`; minimize span ratio then edge index | D-C-LEGEND,D-C-GEOMETRY | Smallest representable expansion wins | D-L-C,D-L-G | Explicit range expansion selection | D-M18 |
+| `legend.inside.current-fit-epsilon` | D-M18 `plan.rs:603-609`; containment tolerance `1e-6` | D-C-LEGEND,D-C-GEOMETRY | All four edges use the same epsilon | D-L-C | Legend panel fit tolerance | D-M18 |
+| `legend.collision.panel-clipped-geometry` | D-M18 `plan.rs:611-635`; each recorded box clips to panel and empty clips drop | D-C-LEGEND,D-C-GEOMETRY | Outside mark portions do not contribute | D-L-C | Panel-local collision geometry | D-M18 |
+| `legend.collision.weighted-overlap-sum` | D-M18 `plan.rs:617-637`; Legend weight 1, sum each clipped box overlap area with margin | D-C-LEGEND,D-C-GEOMETRY | Any positive total means collision | D-L-C | Legend collision score | D-M18 |
+| `legend.clearance.continuous-axis-gate` | D-M18 `plan.rs:640-676`; edge expansion only on matching continuous x/y domain | D-C-LEGEND,D-C-GEOMETRY | Categorical axes cannot be expanded for a legend | D-L-N,D-L-G | Clearance axis eligibility | D-M18 |
+| `legend.clearance.explicit-limit-prohibition` | D-M18 `plan.rs:677-681`; user limits block expansion on that axis | D-C-LEGEND | Exact limits are never silently changed | D-L-N | Limit/clearance compatibility | D-M18 |
+| `legend.clearance.zero-anchor-preservation` | D-M18 `plan.rs:682-685,699-714`; bar numeric zero endpoint cannot move outward | D-C-LEGEND,D-C-GEOMETRY | Ordinary/stacked vertical and horizontal bar axes are protected | D-L-C,D-L-G | Bar baseline preservation | D-M18 |
+| `legend.clearance.current-fraction-threshold` | D-M18 `plan.rs:686-689`; span finite positive, fraction finite and >0.05 | D-C-LEGEND,D-C-GEOMETRY | Smaller available fractions reject expansion | D-L-C | Clearance arithmetic validity | D-M18 |
+| `legend.clearance.current-expansion-formula` | D-M18 `plan.rs:690-695`; span / clamp(fraction,0.05,0.95) * `1.05` | D-C-LEGEND,D-C-GEOMETRY | Fixed five-percent safety broadens one endpoint | D-L-G | Legend-driven range expansion | D-M18 |
+| `legend.clearance.finite-limit-result` | D-M18 `plan.rs:696`; both limits finite and strictly ascending | D-C-LEGEND,D-C-GEOMETRY | Invalid arithmetic returns no expansion | D-L-C | Expanded-range validity | D-M18 |
+| `legend.clearance.bar-axis-classification` | D-M18 `plan.rs:699-714`; Bar/StackedBar Y and HBar/StackedHBar X | D-C-LEGEND | Exact family/axis pairs define zero-anchor guard | D-L-N | Anchored bar clearance matrix | D-M18 |
+| `legend.auto.panel-text-cyclic-search` | D-M18 `plan.rs:725-742`; test four candidates from preferred with modulo wrap | D-C-LEGEND,D-C-GEOMETRY | First conflict-free corner wins | D-L-C,D-L-G | Automatic panel-text avoidance algorithm | D-M18 |
+| `legend.auto.all-panel-text-conflict-rejection` | D-M18 `plan.rs:743-748`; reject when all four corners conflict | D-C-LEGEND,D-C-GEOMETRY | No inside fallback remains | D-L-C | Automatic annotation conflict failure | D-M18 |
+| `legend.outside.current-reservation-gap` | D-M18 `plan.rs:750-755`; independent `max(legend.metrics.pad,8.0)` | D-C-LEGEND | Reservation source is separate from four placement-helper gaps | D-L-R,D-L-G | Outside reservation spacing | D-M18 |
+| `legend.outside.band-dimension-fit` | D-M18 `plan.rs:756-780`; vertical bands require height fit, horizontal bands width fit | D-C-LEGEND,D-C-GEOMETRY | Oversized outside legend rejects before panel mutation | D-L-C | Outside-band representability | D-M18 |
+| `legend.outside.directional-panel-reservation` | D-M18 `plan.rs:781-795`; right/left subtract/add width+gap; top/bottom subtract/add height+gap | D-C-LEGEND | Inside positions leave panel unchanged | D-L-R,D-L-G | Outside panel shrink | D-M18 |
+| `legend.outside.minimum-panel-fit` | D-M18 `plan.rs:796-802`; final panel must remain at least 80x60 | D-C-LEGEND | Rejects without clamp | D-L-C,D-L-G | Outside legend/panel fit | D-M18 |
+| `legend.auto.default-and-overlap-selection` | D-M18 `plan.rs:805-828`; TopRight/SelfManaged => index 0; LowestOverlap minimizes score in candidate order | D-C-LEGEND,D-C-GEOMETRY | Ties retain first candidate | D-L-C,D-L-G | Initial Auto candidate | D-M18 |
+| `legend.position.complete-inside-routing` | D-M18 `plan.rs:830-858`; Auto plus all inside aliases map to normalized alignments | D-C-LEGEND | Corner aliases share exact boxes | D-L-G | Complete inside placement map | D-M18 |
+| `legend.position.complete-outside-routing` | D-M18 `plan.rs:859-870`; all twelve outside variants route to side helper with 0/0.5/1 alignment | D-C-LEGEND | Public outside placement is exhaustive | D-L-G | Complete outside placement map | D-M18 |
+| `legend.outside.right.current-spacing` | D-M18 `plan.rs:874-881`; independent gap `max(pad,8)`, place at panel right and clamped vertical residual * align | D-C-LEGEND | Right helper recomputes spacing separately | D-L-R,D-L-G | Outside-right placement spacing | D-M18 |
+| `legend.outside.left.current-spacing` | D-M18 `plan.rs:883-890`; independent gap `max(pad,8)`, subtract width, clamped vertical residual * align | D-C-LEGEND | Left helper recomputes spacing separately | D-L-R,D-L-G | Outside-left placement spacing | D-M18 |
+| `legend.outside.top.current-spacing` | D-M18 `plan.rs:892-898`; independent gap `max(pad,8)`, clamped horizontal residual * align | D-C-LEGEND | Top helper recomputes spacing separately | D-L-R,D-L-G | Outside-top placement spacing | D-M18 |
+| `legend.outside.bottom.current-spacing` | D-M18 `plan.rs:900-906`; independent gap `max(pad,8)`, subtract height, clamped horizontal residual * align | D-C-LEGEND | Bottom helper recomputes spacing separately | D-L-R,D-L-G | Outside-bottom placement spacing | D-M18 |
+| `facets.lifecycle.coordinated-composition-order` | D-M20 `facets.rs:17-117`; validate, select, composed layout, preflight twice for hue, shared ranges/legend, axis rewrap, grid plans, render | D-C-FACET,D-C-LEGEND | One ordered lifecycle coordinates every generic facet | D-L-M,D-L-R,D-L-C,D-L-G | Facet composition orchestration | D-M20 |
+| `facets.grid.initial-empty-requirement-allocation` | D-M20 `facets.rs:43-50`; allocate the initial selector-shaped grid with an empty requirement set | D-C-FACET | Provisional cells drive data extraction and coordinated domain preflight before measured strip/axis requirements | D-L-R,D-L-G | Facet lifecycle provisional allocation | D-M20 |
+| `facets.shared-axis.current-origin` | D-M20 `facets.rs:78-84,120-130,146`; default shared-axis origin is adjusted outer left/bottom and non-left/bottom positions retain it | D-C-FACET,D-C-LEGEND | No legend and right/top/inside positions use the untransformed adjusted-outer origin | D-L-G | Shared-axis guide origin and no-translation behavior | D-M20 |
+| `facets.shared-axis.outside-left-adjustment` | D-M20 `facets.rs:131-139`; extra left moves x origin and translates legend bounds | D-C-FACET,D-C-LEGEND | Shared y title and left legend stay aligned after rewrap | D-L-R,D-L-G | Outside-left guide coordination | D-M20 |
+| `facets.shared-axis.outside-bottom-adjustment` | D-M20 `facets.rs:132-145`; extra bottom moves y origin and translates legend bounds | D-C-FACET,D-C-LEGEND | Shared x title and bottom legend stay aligned after rewrap | D-L-R,D-L-G | Outside-bottom guide coordination | D-M20 |
+| `facets.shared-axis.initial-line-baseline` | D-M21 `planning.rs:41-51`; baseline is `(usize::from(x present),usize::from(y present))` | D-C-FACET,D-C-TEXT | Initial composed layout assumes one line per present shared title | D-L-M,D-L-R | Facet shared-axis initial baseline | D-M21; deferred by T2c |
+| `facets.shared-axis.initial-inset-application` | D-M21 `planning.rs:45-55`; apply adjusted panel and add left/bottom deltas to Canvas insets | D-C-FACET | Panel and outer insets change together | D-L-R,D-L-G | Initial shared-axis reservation | D-M21; deferred by T2c |
+| `facets.shared-axis.post-reservation-rewrap-baseline` | D-M21 `planning.rs:58-78`; measure baseline on reserved panel, adjust candidate after legend reservation | D-C-FACET,D-C-LEGEND,D-C-TEXT | Outside legend can rewrap shared titles | D-L-M,D-L-R,D-L-G | Post-decoration shared-axis baseline | D-M21; deferred by T2c |
+| `facets.shared-axis.adjustment-pass-budget` | D-M21 `planning.rs:127`; exactly 4 adjustment attempts | D-C-FACET | Work is bounded; exhaustion rejects | D-L-M,D-L-R,D-L-G | Shared-axis fixed-point bound | D-M21; deferred by T2c |
+| `facets.shared-axis.x-additional-bottom-reservation` | D-M21 `planning.rs:128-131`; excess x lines times T2c line height | D-C-FACET,D-C-TEXT | Saturating subtraction adds no reserve below baseline | D-L-M,D-L-R,D-L-G | Shared x-title extra reserve | D-M21; deferred by T2c |
+| `facets.shared-axis.y-additional-left-reservation` | D-M21 `planning.rs:128-131`; excess y lines times T2c line height | D-C-FACET,D-C-TEXT | Saturating subtraction adds no reserve below baseline | D-L-M,D-L-R,D-L-G | Shared y-title extra reserve | D-M21; deferred by T2c |
+| `facets.shared-axis.candidate-geometry-adjustment` | D-M21 `planning.rs:138-143`; move left/bottom, retain right/top | D-C-FACET | Candidate is right/top anchored after minimum-fit check | D-L-R,D-L-G | Shared-axis candidate panel | D-M21; deferred by T2c |
+| `facets.shared-axis.fixed-point-stabilization` | D-M21 `planning.rs:144-152`; exact PanelBox equality succeeds; four-pass exhaustion rejects | D-C-FACET | No tolerance or clamp; this is a measure/reserve/geometry fixed point, not collision handling | D-L-M,D-L-R,D-L-G | Shared-axis layout stability | D-M21; deferred by T2c |
+| `facets.grid.provisional-allocation` | D-M21 `planning.rs:155-166`; empty requirements produce equal provisional cells | D-C-FACET | Initial cells drive per-facet layout discovery | D-L-R,D-L-G | Facet first allocation | D-M21 |
+| `facets.grid.first-requirement-measurement` | D-M21 `planning.rs:167-190`; render each facet, build label, measure axes plus strip | D-C-FACET,D-C-TEXT | Exact per-panel palette and result supply requirements | D-L-M,D-L-R,D-L-G | Facet requirement pass one | D-M21 |
+| `facets.grid.second-requirement-measurement` | D-M21 `planning.rs:191-206`; allocate first cells then remeasure each result/label at new width | D-C-FACET,D-C-TEXT | Exactly two requirement measurements are performed | D-L-M,D-L-R,D-L-G | Facet requirement pass two | D-M21 |
+| `facets.grid.final-allocation` | D-M21 `planning.rs:207-210`; allocate from second requirements and assign row-major cells | D-C-FACET | Final panels are frozen before legend plans | D-L-R,D-L-G | Facet final grid | D-M21 |
+| `facets.legend-clearance.current-pass-budget` | D-M21 `planning.rs:225`; exactly 2 coordinated panel-planning passes | D-C-FACET,D-C-LEGEND | Shared limit propagation is bounded across measurement, reservation, collision, and final geometry | D-L-M,D-L-R,D-L-C,D-L-G | Facet legend-clearance propagation bound | D-M21 |
+| `facets.legend.per-panel-owner-coordination` | D-M21 `planning.rs:226-249,255-258`; first eligible panel owns legend unless outside legend exists; later roles Suppressed | D-C-FACET,D-C-LEGEND | Only one facet plan carries the shared entry set; the defensive SelfManaged rejection at `250-254` remains prior-owned by T2b | D-L-N,D-L-M,D-L-R | Facet legend owner | D-M21 |
+| `facets.legend.shared-x-limit-propagation` | D-M21 `planning.rs:260-262,266-271`; when x is fixed, find the first planned x limits and apply them to the shared chart | D-C-FACET,D-C-LEGEND,D-C-GEOMETRY | X propagation is independently optional within the two-pass loop and has no explicit post-loop stability proof | D-L-C,D-L-G | Facet-wide horizontal legend clearance | D-M21 |
+| `facets.legend.shared-y-limit-propagation` | D-M21 `planning.rs:263-275`; when y is fixed, find the first planned y limits, apply them, and stop only when neither axis supplies limits | D-C-FACET,D-C-LEGEND,D-C-GEOMETRY | Y propagation is independently optional within the two-pass loop and shares its incomplete final-stability exit | D-L-C,D-L-G | Facet-wide vertical legend clearance | D-M21 |
+| `facets.legend.outside-final-attachment` | D-M21 `planning.rs:276-279`; outside legend moves into first final plan | D-C-FACET,D-C-LEGEND | Same measured outside value is reused at render | D-L-G | Facet outside legend ownership | D-M21 |
+| `facets.legend.auto-outside-right-top` | D-M22 `facets/legend.rs:104-108`; Auto maps to `OutsideRightTop` | D-C-FACET,D-C-LEGEND | Generic facets do not use inside lowest-overlap Auto | D-L-N,D-L-R,D-L-G | Facet Auto placement behavior | D-M22 |
+| `facets.legend.explicit-outside-routing` | D-M22 `facets/legend.rs:108-112`; exact outside position retained; inside position has no pre-reserved legend | D-C-FACET,D-C-LEGEND | Inside shared legend is delegated to one panel plan | D-L-N,D-L-R | Facet placement routing | D-M22 |
+| `facets.legend.hidden-entry-suppression` | D-M22 `facets/legend.rs:113-115`; Hidden yields empty entry vector | D-C-FACET,D-C-LEGEND | No shared legend is constructed | D-L-N | Facet hidden-policy consequence | D-M22 |
+| `facets.legend.exact-entry-merge` | D-M22 `facets/legend.rs:116-122`; stable merge all panel entries with context `shared facet legend` | D-C-FACET,D-C-LEGEND | Typed title, label, and exact glyph conflicts reject | D-L-M,D-L-C | Facet shared-entry compatibility | D-M22 |
+| `facets.legend.outside-reservation` | D-M22 `facets/legend.rs:144-153`; clone shared chart with resolved outside position and call `plan_outside_legend` | D-C-FACET,D-C-LEGEND | One immutable measured outside legend shrinks outer panel | D-L-M,D-L-R,D-L-G | Facet outside legend plan | D-M22 |
+| `facets.render.grid-first-pass` | D-M23 `facets/rendering.rs:31-42`; zip panels/plans and apply all grids | D-C-FACET,D-C-BACKEND | Every grid is below every facet mark | D-L-G | Facet grid z-order | D-M23 |
+| `facets.render.panel-plan-cardinality` | D-M23 `facets/rendering.rs:31,44`; iterator zip silently truncates unequal vectors | D-C-FACET | Current code assumes planning preserves exact cardinality | D-L-N,D-L-G | Facet plan/panel pairing | D-M23 |
+| `facets.render.panel-layer-order` | D-M23 `facets/rendering.rs:44-71`; marks, significance, axes, planned legend, then facet strip | D-C-FACET,D-C-BACKEND | Frozen panel plan controls geometry and legend | D-L-G | Facet panel z-order | D-M23 |
+| `facets.render.composition-tail-order` | D-M23 `facets/rendering.rs:72-79`; shared axes draw after every panel | D-C-FACET,D-C-BACKEND | Shared guides overlay panel scene | D-L-G | Facet composition tail | D-M23 |
+| `facets.render.root-title-route` | D-M23 `facets/rendering.rs:80`; apply source Plot canvas text after shared axes | D-C-FACET,D-C-TEXT | Faceted outer title remains Plot-owned | D-L-G | Facet root title route | D-M23 |
+| `composition.facet-strip.current-horizontal-inset` | D-M23 `facets/rendering.rs:96-100`; panel width minus independent `16.0` chrome | D-C-FACET,D-C-TEXT | Strip wrapping reserves 8 px on each horizontal side | D-L-M,D-L-R | Facet-strip horizontal chrome | D-M23 |
+| `facets.strip.current-minimum-wrap-width` | D-M23 `facets/rendering.rs:99`; wrapping width is independently floored to `1.0` | D-C-FACET,D-C-TEXT | Narrow panels retain a positive logical wrapping budget for line geometry | D-L-M,D-L-G | Facet-strip wrap representability | D-M23 |
+| `typography.facet-strip.current-role` | D-M23 `facets/rendering.rs:96-101,112-116`; palette subtitle size, foreground/family, and Normal weight | D-C-FACET,D-C-TEXT | Plot-inherited palette supplies current strip appearance; anchor and rotation are placement | D-L-N,D-L-M | Facet/header typography role | D-M23 |
+| `typography.facet-strip.current-line-pitch` | D-M23 `facets/rendering.rs:102`; subtitle size + `6.0` | D-C-FACET,D-C-TEXT | Duplicates requirement-side facet/header pitch | D-L-M,D-L-R,D-L-G | Facet-strip line spacing | D-M23 |
+| `composition.facet-strip.current-baseline-offset` | D-M23 `facets/rendering.rs:107-110`; panel top + `14.0` | D-C-FACET | Fixed strip-to-panel gap | D-L-R,D-L-G | Facet-strip baseline clearance | D-M23 |
+| `facets.strip.reverse-centered-draw` | D-M23 `facets/rendering.rs:103-124`; dedicated layer, Middle anchor, zero rotation, reverse lines, center x, ascend math y | D-C-FACET,D-C-BACKEND | Source line order and semantic placement remain visual top-to-bottom | D-L-G | Facet-strip final placement and draw | D-M23 |
+| `facets.shared-axis.empty-draw-skip` | D-M23 `facets/rendering.rs:141-144`; both labels absent returns before layer | D-C-FACET,D-C-BACKEND | No empty shared-axis layer | D-L-N | Shared-axis presence consequence | D-M23 |
+| `typography.facets-shared-axis.current-style` | D-M23 `facets/rendering.rs:144-150`; palette foreground/family/label size and Normal weight | D-C-FACET,D-C-TEXT | T2c axis-title appearance is reconstructed for composition drawing | D-L-N,D-L-M | Shared-axis typography style use | D-M23 |
+| `facets.shared-axis.current-anchor-orientation` | D-M23 `facets/rendering.rs:150-152,178-181`; shared x/y begin Middle and unrotated, then shared y replaces rotation with -90 | D-C-FACET,D-C-TEXT | Anchor and orientation are renderer placement rather than typography | D-L-G | Shared-axis semantic anchor and orientation | D-M23 |
+| `facets.shared-x-title.text-planning` | D-M23 `facets/rendering.rs:153-159`; TextBlock at grid width floored to `1.0` | D-C-FACET,D-C-TEXT | Drawing remeasures the shared x title | D-L-M,D-L-G | Shared x-title line plan | D-M23 |
+| `facets.shared-x-title.current-placement` | D-M23 `facets/rendering.rs:160-168`; first y = axis origin bottom minus label font size, centered over grid | D-C-FACET,D-C-TEXT | Lines descend by block line height under a private renderer placement rule | D-L-R,D-L-G | Shared x-title placement | D-M23 |
+| `facets.shared-y-title.text-planning` | D-M23 `facets/rendering.rs:170-176`; TextBlock at grid height floored to `1.0` | D-C-FACET,D-C-TEXT | Drawing remeasures the rotated shared y title | D-L-M,D-L-G | Shared y-title line plan | D-M23 |
+| `axis.facets.shared-y-title.current-grid-gap` | D-M23 `facets/rendering.rs:177`; first x includes an independent `8.0` beyond label size | D-C-FACET,D-C-TEXT | Fixed shared-y clearance is separate from rotation and line placement | D-L-R,D-L-G | Shared y-title grid gap | D-M23 |
+| `facets.shared-y-title.rotated-placement` | D-M23 `facets/rendering.rs:177-189`; first x starts left of the gap, rotation is -90, y is centered, and lines move left by block line height | D-C-FACET,D-C-TEXT | Rotated multiline geometry is a private placement rule | D-L-G | Shared y-title rotated placement | D-M23 |
+| `facets.label.current-display-format` | D-M23 `facets/rendering.rs:195-205`; each selector `variable = level`, joined by a space-delimited vertical bar after label resolution | D-C-FACET,D-C-TEXT | Selector order is retained in strip content and then participates in measurement, reservation, and placement | D-L-M,D-L-R,D-L-G | Facet-strip generated label grammar | D-M23 |
+
+### T2d Target State
+
+| Property | Target classification and owner | Target resolution | Target validation | Public surface | Relationships |
+| --- | --- | --- | --- | --- | --- |
+| `canvas.lifecycle.deferred-backend-finish` | Renderer invariant; private Canvas backend completion | After one resolved Canvas plan/render | Exactly one finish; propagate plan/render/backend failure | Private-only behavior | T2a lifecycle and canonical scene |
+| `canvas.lifecycle.preflight-plan-only` | Renderer invariant; private side-effect-free Canvas preflight | After root/Plot theme resolution, before backend begin | Complete composition plan or error; no output | Private-only behavior | T4 ownership; all Canvas fit rows |
+| `canvas.lifecycle.canonical-scene-single-plan` | Renderer invariant; private canonical scene construction | One preflight value reused by one render | Exact dimensions/bytes; no second planning pass | Private-only behavior | Deferred finish; immutable shared legend |
+| `composition.canvas-row-title.current-horizontal-padding` | Theme component; `CompositionTheme` row-title horizontal padding | Canvas root before row-title measurement | Finite nonnegative; applied once across the span | T6 `CompositionTheme` | Row-title wrapping-width budget |
+| `canvas.row-title.maximum-wrap-width` | Renderer invariant; private row-title logical width | Canvas-root header role after final cells | Positive finite span minus resolved horizontal chrome | Private-only behavior | T2c shaped text; horizontal padding owner |
+| `typography.canvas-row-title.current-font-size` | Theme component; complete `TypographyTheme` facet/header `TextTheme` | Canvas root before row-title measurement | Complete role; finite positive size/line height; face availability | T6 `TypographyTheme` | Shared-header/facet-strip role; no Plot-title fallback |
+| `canvas.row-title.wrap-error-propagation` | Renderer invariant; private row-title planning failure | Canvas preflight | Canonical shaped-text error propagates; no fallback | Private-only behavior | T2c text validity |
+| `typography.canvas-row-title.current-reserve-line-pitch` | Theme component; `TypographyTheme` facet/header line height | Canvas root reservation | Finite positive; exact identity with the planned draw line height | T6 `TypographyTheme` | Row-title style and draw-pitch row |
+| `canvas.row-title.current-requirement-clearance` | Theme component; `CompositionTheme` row-title clearance | Canvas root before allocation | Finite nonnegative; applied once | T6 `CompositionTheme` | Requirement and baseline offset |
+| `typography.canvas-row-title.current-draw-line-pitch` | Theme component; `TypographyTheme` facet/header line height | Canvas root row-title plan | Reuse the reserve-side resolved value exactly | T6 `TypographyTheme` | Reserve pitch and baseline rows |
+| `canvas.row-title.horizontal-span-centering` | Renderer invariant; private semantic center | Final composed cells | Complete finite span and center | Private-only behavior | Header-span placement |
+| `canvas.row-title.reverse-line-placement` | Renderer invariant; private math-coordinate line ordering | Frozen row-title plan | Exact planned line order/cardinality | Private-only behavior | T2c logical lines |
+| `canvas.row-title.current-baseline-offset` | Theme component; `CompositionTheme` row-title panel gap | Canvas root | Finite nonnegative; reserve/draw parity | T6 `CompositionTheme` | Requirement clearance and line height |
+| `canvas.legend.shared-construction-gate` | Explicit policy; Canvas `Shared` implementation branch | Resolved T2b `CanvasLegendPolicy` before entry planning | Shared constructs exactly one plan; other variants do not | Retained `CanvasLegendPolicy` | Per-panel role and eligibility branches |
+| `canvas.legend.shared-measured-construction` | Renderer invariant; private immutable shared-legend plan | Canvas root LegendTheme/typography plus exact Plot glyphs | One measured value reused unchanged through draw | Private-only behavior | Shared render reconstruction removed |
+| `canvas.legend.shared-height-fit` | Renderer invariant; private shared-band fit | Canvas preflight after complete legend bounds | Full bounds inside available band or reject | Private-only behavior | Complete glyph/text bounds |
+| `canvas.legend.shared-right-reservation` | Renderer invariant; private shared-right-band allocation | After immutable legend measurement and T2b gap resolution | Finite complete reservation; minimum grid fit | Private-only behavior | Shared gap fallback/override; outside spacing separate |
+| `canvas.headers.current-appearance-owner` | Renderer invariant; private Canvas-root measurement-style routing | T4 root resolution before Canvas measurement | Consume one resolved `CompositionTheme`/`TypographyTheme` set; no first-Plot or hidden Publication lookup | Private-only behavior | Row-title/shared-header measurement; draw route separate |
+| `composition.canvas-column-header.current-band-spacing` | Theme component; `CompositionTheme` column-header vertical spacing | Canvas root | Finite nonnegative; applied once for a nonempty header band | T6 `CompositionTheme` | Header role TextTheme height |
+| `canvas.headers.column.current-band-height` | Renderer invariant; private column-header band aggregation | Resolved T2c facet/header `TextTheme` height plus independently owned `CompositionTheme` spacing | Complete finite aggregate; zero only when no headers exist | Private-only behavior | Independent column-header spacing and T2c text height |
+| `canvas.headers.row.current-width-measurement` | Renderer invariant; private resolved row-header measurement | Canvas-root facet/header role | Shaped logical widths; complete longest header | Private-only behavior | T2c text measurement |
+| `canvas.headers.row.current-band-padding` | Theme component; `CompositionTheme` row-header horizontal padding | Canvas root | Finite nonnegative; applied once | T6 `CompositionTheme` | Row-header width reservation |
+| `canvas.headers.minimum-remaining-panel-fit` | Renderer invariant; private header/grid representability | Canvas preflight | Complete geometry retains 80x60 panels or rejects | Private-only behavior | T2c minima; grid allocator |
+| `canvas.grid.provisional-unadorned-allocation` | Renderer invariant; private first allocation | After outer/shared bands, before requirements | Complete finite equal cells; no clamp | Private-only behavior | Two-pass allocation |
+| `canvas.category-labels.non-first-suppression` | Explicit policy; non-first branch of retained sharing policy | After T2b family/occupancy and T2g domain equality | Suppress exactly non-first columns; preserve axes otherwise | Retained `CanvasCategoryLabels` | T2b policy; T2g category domain |
+| `canvas.panels.initial-self-managed-rejection` | Renderer invariant; private composed-family compatibility gate | Initial provisional panel preflight | Reject every SelfManaged result before requirements | Private-only behavior | T2b family selection; two-pass allocation |
+| `canvas.panel-header.first-pass-title-presence-resolution` | Renderer invariant; private semantic-title presence consequence | First requirement measurement after T4/T5a role resolution | Nonempty T2b title content is measured; target theme cannot suppress it | Private-only behavior | Specs/03 Visibility; title TextTheme |
+| `canvas.panel-header.first-pass-subtitle-presence-resolution` | Renderer invariant; private semantic-subtitle presence consequence | First requirement measurement after T4/T5a role resolution | Nonempty T2b subtitle content is measured | Private-only behavior | Specs/03 Visibility; subtitle TextTheme |
+| `canvas.panels.two-pass-header-allocation` | Renderer invariant; private Canvas requirement fixed workflow | Canvas preflight with resolved styles | Exactly two requirement measurements, final complete fit/collision validation | Private-only behavior | Grid allocator; panel/header plans |
+| `canvas.panel-header.second-pass-title-presence-resolution` | Renderer invariant; private semantic-title presence and reshaping consequence | Second requirement measurement at first allocated width | Preserve semantic content/resolved style, reshape at second-pass width, and reuse that final plan for draw | Private-only behavior | T5a shaped title plan; final allocation/draw identity |
+| `canvas.panel-header.second-pass-subtitle-presence-resolution` | Renderer invariant; private semantic-subtitle presence and reshaping consequence | Second requirement measurement at first allocated width | Preserve semantic content/resolved style, reshape at second-pass width, and reuse that final plan for draw | Private-only behavior | T5a shaped subtitle plan; final allocation/draw identity |
+| `canvas.headers.column.span-placement` | Renderer invariant; private column-span geometry | Final composed cells | Valid span and finite midpoint/band | Private-only behavior | T2b header ranges |
+| `canvas.headers.row.span-placement` | Renderer invariant; private row-span geometry | Final composed cells | Valid span and complete min/max extents | Private-only behavior | T2b header ranges |
+| `canvas.text-panel.current-horizontal-inset` | Theme component; `CompositionTheme` text-panel horizontal padding | Canvas root | Finite nonnegative; positive content width | T6 `CompositionTheme` | Text-panel title/body measurement |
+| `typography.canvas-text-panel-title.current-role` | Theme component; complete `TypographyTheme` facet/header `TextTheme` | Canvas root before planning | Complete role; resolved face/glyph/line height | T6 `TypographyTheme` | Row/header role; no private title transform |
+| `typography.canvas-text-panel-body.current-role` | Theme component; complete `TypographyTheme` body `TextTheme` | Canvas root before planning | Complete role; resolved face/glyph/line height | T6 `TypographyTheme` | Text-panel body draw style |
+| `canvas.text-panel.current-title-body-gap` | Theme component; `CompositionTheme` text-panel role gap | Canvas root | Finite nonnegative; measurement/draw identity | T6 `CompositionTheme` | Draw-gap duplicate |
+| `canvas.text-panel.current-vertical-inset` | Theme component; `CompositionTheme` text-panel vertical padding | Canvas root | Finite nonnegative; complete block fit | T6 `CompositionTheme` | Text-panel fit plan |
+| `canvas.text-panel.complete-fit-plan` | Renderer invariant; private immutable text-panel plan | Canvas preflight after resolved roles | Canonical errors propagate; full bounds fit or reject | Private-only behavior | Title/body roles and spacing |
+| `canvas.legend.per-panel-role-coordination` | Explicit policy; Canvas per-panel implementation branch | Resolved T2b Canvas policy before panel plans | PerPlot preserves Plot policy; Shared/Hidden suppress panel placement | Retained `CanvasLegendPolicy` | Shared construction gate |
+| `canvas.panels.final-self-managed-rejection` | Renderer invariant; private final composed-family compatibility gate | Final legend-aware panel plan | Reject every SelfManaged result before freezing the Canvas plan | Private-only behavior | Initial gate; final panel plan |
+| `canvas.headers.current-draw-appearance-owner` | Renderer invariant; private Canvas-root appearance route | T4 root resolution before final draw | Reuse the same Canvas-root resolved roles as measurement; no first-Plot/Publication fallback | Private-only behavior | Current appearance-owner row; style identity |
+| `canvas.render.grid-before-panels` | Renderer invariant; private Canvas z-order | Final scene draw | Every grid before every mark | Private-only behavior | T2c grid order |
+| `canvas.render.panel-layer-order` | Renderer invariant; private composed Plot z-order | Frozen panel plan | Marks, significance, axes, legend, header exactly once | Private-only behavior | T2e/T2f mark geometry |
+| `canvas.render.composition-chrome-order` | Renderer invariant; private Canvas chrome z-order | Final scene after panels | Text panels, row titles, shared headers in documented order | Private-only behavior | Canvas-owned role separation |
+| `canvas.legend.shared-render-reconstruction` | Renderer invariant; private plan/draw identity | Canvas preflight and draw | Remove reconstruction; reuse one immutable measured Legend | Private-only behavior | Shared measured construction |
+| `canvas.legend.shared-horizontal-placement` | Renderer invariant; private shared-band x geometry | Immutable legend plus resolved reservation | Complete finite bounds; exact reserved relationship | Private-only behavior | Shared right reservation |
+| `canvas.legend.shared-vertical-placement` | Renderer invariant; private shared-band y geometry | Immutable legend plus full outer band | Validated complete top alignment; reject instead of clamp | Private-only behavior | Shared height fit |
+| `canvas.legend.shared-layer-draw` | Renderer invariant; private shared-legend layer | Final Canvas draw | Frozen anchor/bounds and one draw | Private-only behavior | Immutable legend route |
+| `canvas.root-title.current-theme-route` | Renderer invariant; Canvas-root ownership and tail z-order route | T4 Canvas-root style and T2c title plan, then T5b final Canvas-chrome draw | Reuse the resolved root plan and draw after the optional shared legend, last in Canvas chrome | Private-only behavior | T4 ownership change; T5b tail order retained |
+| `canvas.legend.shared-gap-current-fallback` | Theme component; `LegendTheme` default shared spacing | Canvas root when T2b override absent | Finite nonnegative; override remains exact policy | T6 `LegendTheme` | T2b `canvas.legend.shared-gap` |
+| `canvas.legend.shared-entry-eligibility` | Explicit policy; shared-entry implementation branch | Resolved Plot legend policy/entries during Canvas preflight | Hidden contributes no entries; automatic contributes owned entries; exact position compatibility enforced | Retained legend policies | Specs/03 Shared Legends |
+| `canvas.legend.shared-entry-source-order` | Renderer invariant; private deterministic collection | Row-major configured Plot order | Stable complete sequence before merge | Private-only behavior | T2g row-major domain is separate |
+| `canvas.legend.shared-entry-exact-merge` | Renderer invariant; private shared compatibility | After every entry resolves | Typed title/label/complete glyph equality or reject | Private-only behavior | Legend merge records |
+| `canvas.legend.shared-title-resolution` | Renderer invariant; private single-section resolution | After exact merge | Zero entries => no legend; exactly one compatible title otherwise | Private-only behavior | Specs/03 one shared title |
+| `canvas.headers.empty-draw-skip` | Renderer invariant; private empty-plan consequence | Final Canvas draw | No empty layer/draw | Private-only behavior | T2b header presence |
+| `typography.canvas-shared-header.current-style` | Theme component; complete Canvas-root facet/header `TextTheme` appearance | T4 root resolution | Complete font/color/size/weight; built-in contrast evidence | T6 `TypographyTheme` | Header appearance owner; placement separate |
+| `canvas.headers.centered-rounded-draw` | Renderer invariant; private shared-header anchor/orientation/draw | Frozen header plan | Middle anchor, zero rotation, finite center; backend conversion after validation | Private-only behavior | Column/row span placement |
+| `canvas.row-title.empty-draw-skip` | Renderer invariant; private empty-plan consequence | Final Canvas draw | No empty layer/draw | Private-only behavior | T2b row-title presence |
+| `typography.canvas-row-title.current-style` | Theme component; complete Canvas-root facet/header `TextTheme` appearance | T4 root resolution | Same resolved font/color/size/weight as measurement | T6 `TypographyTheme` | Row-title font-size/line-height rows; placement separate |
+| `canvas.row-title.centered-rounded-draw` | Renderer invariant; private row-title anchor/orientation/draw | Frozen row-title plan | Middle anchor, zero rotation, exact planned lines and finite centers | Private-only behavior | Row-title placement rows |
+| `canvas.text-panel.current-draw-gap` | Theme component; `CompositionTheme` text-panel role gap | Canvas root | Deduplicate with planning gap | T6 `CompositionTheme` | `canvas.text-panel.current-title-body-gap` |
+| `canvas.text-panel.centered-block-placement` | Renderer invariant; private text-panel anchor/orientation/block geometry | Frozen title/body plans | Middle anchors, zero rotations, exact line/baseline cardinality, complete cell fit | Private-only behavior | Text-panel complete fit plan |
+| `typography.canvas-text-panel-title.current-style` | Theme component; complete Canvas-root facet/header `TextTheme` appearance | T4 root resolution | Font/color/size/weight measurement/draw identity | T6 `TypographyTheme` | Title role planning row; placement separate |
+| `typography.canvas-text-panel-body.current-style` | Theme component; complete Canvas-root body `TextTheme` appearance | T4 root resolution | Font/color/size/weight measurement/draw identity | T6 `TypographyTheme` | Body role planning row; placement separate |
+| `canvas.panel-header.title-presence-resolution` | Renderer invariant; private Plot-content consequence | Resolved Plot before panel-header plan | T2b content present => measured/drawn; theme cannot suppress semantic content at target | Private-only behavior | Specs/03 Visibility; T2b content |
+| `canvas.panel-header.subtitle-presence-resolution` | Renderer invariant; private Plot-content consequence | Resolved Plot before panel-header plan | T2b content present => measured/drawn | Private-only behavior | T2b content; Plot typography |
+| `canvas.panel-header.empty-draw-skip` | Renderer invariant; private empty-header consequence | Final composed draw | No layer when both roles absent | Private-only behavior | Presence rows |
+| `canvas.panel-header.current-wrap-width` | Renderer invariant; private panel-header logical budget | Final cell plus resolved horizontal padding | Positive finite; one planned width reused | Private-only behavior | T2c text wrapping |
+| `canvas.panel-header.title-wrap-plan` | Renderer invariant; private composed Plot title plan | Resolved Plot title role | Canonical error propagation; immutable shaped lines | Private-only behavior | T2c panel-title typography |
+| `canvas.panel-header.subtitle-wrap-plan` | Renderer invariant; private composed Plot subtitle plan | Resolved Plot subtitle role | Canonical error propagation; immutable shaped lines | Private-only behavior | T2c panel-subtitle typography |
+| `canvas.panel-header.subtitle-start-anchor` | Renderer invariant; private semantic start anchor | Final composed Plot draw | Start/horizontal anchor with validated geometry | Private-only behavior | Subtitle placement |
+| `canvas.panel-header.title-start-anchor` | Renderer invariant; private semantic start anchor | Final composed Plot draw | Start/horizontal anchor with validated geometry | Private-only behavior | Title placement |
+| `canvas.panel-header.layer-ownership` | Renderer invariant; private Plot-scoped title layer | Final composed draw | One layer and exact role order | Private-only behavior | Panel layer order |
+| `canvas.panel-header.subtitle.current-left-inset` | Theme component; `CompositionTheme` panel-subtitle horizontal padding | Resolved Plot panel chrome | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Requirement wrap inset; title padding independent |
+| `canvas.panel-header.subtitle.current-baseline-offset` | Theme component; `CompositionTheme` panel-subtitle panel gap | Resolved Plot panel chrome | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Header bottom clearance; title gap independent |
+| `canvas.panel-header.title.current-baseline-offset` | Theme component; `CompositionTheme` panel-title panel gap | Resolved Plot panel chrome | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Subtitle stack and role gap |
+| `canvas.panel-header.title-after-subtitle-placement` | Renderer invariant; private header role stacking | Frozen title/subtitle plans | Exact nonoverlap and cardinality | Private-only behavior | Header role gap |
+| `canvas.panel-header.title.current-left-inset` | Theme component; `CompositionTheme` panel-title horizontal padding | Resolved Plot panel chrome | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Requirement wrap inset; subtitle padding independent |
+| `canvas.panel-header.reverse-line-placement` | Renderer invariant; private math-coordinate line order | Final composed draw | Preserve source visual order | Private-only behavior | T2c logical lines |
+| `composition.panel.current-inter-panel-gap` | Theme component; `CompositionTheme` panel gap | Canvas root or Plot-inherited facet composition | Finite nonnegative | T6 `CompositionTheme` | Grid total reservation |
+| `composition.panel-header.current-title-subtitle-gap` | Theme component; `CompositionTheme` panel-header role gap | Resolved Plot panel chrome | Finite nonnegative; only when both roles present | T6 `CompositionTheme` | Requirement/draw stacking |
+| `composition.panel-header.current-wrap-inset` | Theme component; `CompositionTheme` panel-header horizontal padding | Resolved Plot/facet composition | Finite nonnegative; positive logical width | T6 `CompositionTheme` | Draw left inset; facet strip inset |
+| `composition.panel-header.title-line-count` | Renderer invariant; private composed title measurement | Resolved Plot role and candidate cell | One shaped line plan reused in reserve/draw | Private-only behavior | Title wrap plan |
+| `composition.panel-header.subtitle-line-count` | Renderer invariant; private secondary-header measurement | Resolved Plot subtitle or facet/header role | One shaped line plan reused | Private-only behavior | Subtitle/facet strip plan |
+| `composition.panel-header.conditional-role-gap` | Renderer invariant; private role-presence application | Header plan | Apply one resolved gap iff both line sets nonempty | Private-only behavior | CompositionTheme gap source |
+| `composition.panel-header.empty-top-reserve` | Theme component; `CompositionTheme` empty-header top comfort | Resolved composition | Finite nonnegative | T6 `CompositionTheme` | Axis overhang maxima |
+| `typography.composition-panel-subtitle.current-line-pitch` | Theme component; resolved facet/header `TextTheme` line height | Plot-inherited facet role for strip requirements | Finite positive; reserve/draw identity | T6 `TypographyTheme` | Facet-strip role; composed-Plot subtitle owned by T2c |
+| `composition.panel-header.current-bottom-clearance` | Theme component; `CompositionTheme` header-to-panel clearance | Resolved composition | Finite nonnegative; exact reserve/draw relationship | T6 `CompositionTheme` | Baseline offset |
+| `composition.panel-header.y-title-overhang-maximum` | Renderer invariant; private header/axis reserve aggregation | Final requirement plan | Complete maxima from T2c axis bounds and T2d header | Private-only behavior | T2c y-title overhang |
+| `composition.panel-header.y-tick-overhang-maximum` | Renderer invariant; private header/tick reserve aggregation | Final requirement plan | Complete maxima from resolved tick bounds | Private-only behavior | T2c y-tick overhang |
+| `composition.grid.positive-shape` | Renderer invariant; private allocator validity | Before allocation | Positive rows/columns; reject | Private-only behavior | T2b Canvas/facet shape controls |
+| `composition.grid.requirement-cell-range` | Renderer invariant; private requirement validity | Before maxima aggregation | Every requirement in shape; reject | Private-only behavior | Requirement producers |
+| `composition.grid.edge-requirement-maxima` | Renderer invariant; private aligned-gutter aggregation | After complete requirements | Finite nonnegative maxima per grid line | Private-only behavior | Header/axis requirements |
+| `composition.grid.total-reservation` | Renderer invariant; private complete grid reservation | After maxima and resolved panel gap | Checked finite sums; no double counting | Private-only behavior | CompositionTheme panel gap |
+| `composition.grid.equal-panel-size` | Renderer invariant; private equal-cell geometry | After complete reservation | Finite equal dimensions | Private-only behavior | Minimum fit |
+| `composition.grid.minimum-panel-fit` | Renderer invariant; private composed-panel representability | Final allocation | At least 80x60 or reject | Private-only behavior | T2c panel minima |
+| `composition.grid.horizontal-cursor-placement` | Renderer invariant; private column geometry | Final validated allocation | Exact gutters/gaps and ordered finite edges | Private-only behavior | Row-major boxes |
+| `composition.grid.vertical-cursor-placement` | Renderer invariant; private row geometry | Final validated allocation | Exact gutters/gaps and ordered finite edges | Private-only behavior | Row-major boxes |
+| `composition.grid.row-major-box-construction` | Renderer invariant; private final cell construction | After cursor planning | Exact rows*columns cardinality and finite boxes | Private-only behavior | Canvas/facet indexing |
+| `composition.outer.current-wrapping-width-budget` | Renderer invariant; private composed outer-text logical width | Final Canvas width and resolved outer chrome | Positive finite budget reused for title, subtitle, and caption line planning | Private-only behavior | T2c shaped text; TitleBlock draw identity |
+| `composition.outer-title.current-top-gap` | Theme component; `CompositionTheme` composed title/subtitle clearance | Canvas root for Canvas; resolved Plot for facet outer block | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | T2c reserve-axes=true counterpart |
+| `composition.outer-caption.current-extra-reserve` | Theme component; `CompositionTheme` composed caption clearance | Canvas root or faceted Plot | Finite nonnegative; applied once | T6 `CompositionTheme` | T2c Plot counterpart |
+| `composition.outer.current-fixed-inset-aggregate` | Theme component; `CompositionTheme` fixed composed outer chrome | Canvas root or faceted Plot | Complete finite left/right/bottom/top chrome and 80x60 fit | T6 `CompositionTheme` | T2c reserve-axes=true aggregate |
+| `composition.outer.current-shared-axis-inset-aggregate` | Renderer invariant; private shared-axis/composed-chrome aggregation | Faceted Plot after resolved AxisTheme measurement | Combine complete shared x/y title requirements exactly once; preserve 80x60 fit | Private-only behavior | T2c shared-axis metrics; fixed composed chrome |
+| `composition.outer.current-baseline-placement` | Renderer invariant; private composed title-block geometry | Exact resolved line boxes after T4/T5a | Complete finite baselines; no clamp/zip truncation | Private-only behavior | T2c TitleBlock pairing |
+| `decorations.apply.canvas-text-presence-gates` | Renderer invariant; private Plot canvas-text route | Resolved T2b content/presence and Plot typography | Populate exactly the semantically present title/subtitle/caption roles; no appearance-owned suppression | Private-only behavior | T2b content/presence; T2c TitleBlock values |
+| `decorations.apply.canvas-text-final-draw-gate` | Renderer invariant; private final TitleBlock route | Complete resolved title-block plan | Empty skips; nonempty draws once with exact measured layout/style | Private-only behavior | T2c TitleBlock drawing and plan identity |
+| `decorations.apply.immutable-legend-route` | Renderer invariant; private planned-legend application | Final draw boundary | Consume exact frozen Legend/bounds once | Private-only behavior | ResolvedLegend aggregate |
+| `legend.identity.closed-typed-representation` | Renderer invariant; private typed legend identity | Entry construction before display labels | Closed Single/Pair/Literal structure; nonempty semantic inputs validated by owners | Private-only behavior | T2g raw domains; T2b layer identity |
+| `legend.identity.title-identity-extraction` | Renderer invariant; private typed title key | Before merge | Structural exact equality; no display-string substitution | Private-only behavior | Shared one-title rule |
+| `legend.identity.single-display-resolution` | Renderer invariant; private single display mapping | Resolved Plot labels | Preserve raw identity and resolve field/value once | Private-only behavior | T2b Labels |
+| `legend.identity.pair-display-resolution` | Renderer invariant; private paired display grammar | Resolved Plot labels | Deterministic `×` title and comma label; lexical validity | Private-only behavior | T2g group/hue semantics |
+| `legend.identity.literal-display-resolution` | Renderer invariant; private literal display mapping | Renderer-owned entry construction | Exact validated literal content | Private-only behavior | Generated claims from T2e/T2f |
+| `legend.identity.hue-value-projection` | Renderer invariant; private typed hue projection | Facet/Canvas coordination | Return only matching raw field value | Private-only behavior | T2g hue domain |
+| `legend.glyph.complete-component-aggregate` | Renderer invariant; private exact glyph aggregate | After final mark-style resolution | Point/line/fill and every composite structurally complete | Private-only behavior | T2e/T2f originating styles |
+| `legend.glyph.component-exact-equality` | Renderer invariant; private complete composite equality | Plot/facet/Canvas merge | Compare every present component and absence exactly | Private-only behavior | Point/line/fill equality rows |
+| `legend.entry.resolved-aggregate-and-default` | Renderer invariant; private legend entry | Entry construction then label resolution | Complete identity/glyph; explicit hue-contribution flag | Private-only behavior | Shared-entry eligibility |
+| `legend.glyph.point-construction` | Renderer invariant; private exact point-glyph preservation | Originating Plot style resolution | Preserve shape, radius, RGBA, outline | Private-only behavior | T2e/T2f point styles |
+| `legend.glyph.line-construction` | Renderer invariant; private exact line-glyph preservation | Originating Plot style resolution | Preserve stroke RGBA/width/pattern | Private-only behavior | T2e/T2f line styles |
+| `legend.glyph.fill-construction` | Renderer invariant; private exact fill-glyph preservation | Originating Plot style resolution | Preserve fill RGBA and separate stroke RGBA/width | Private-only behavior | T2e/T2f fill styles |
+| `legend.glyph.composite-construction-grammar` | Renderer invariant; private exact composite grammar | Originating Plot style resolution | Preserve all component combinations and draw order | Private-only behavior | Specs/03 Shared Legends |
+| `legend.entry.display-resolution` | Renderer invariant; private entry text resolution | Resolved Plot labels before merge | Resolve exactly once and freeze | Private-only behavior | Identity display rows |
+| `legend.entry.hue-contribution-suppression` | Renderer invariant; private layer/domain distinction | Entry construction | Supplemental entry remains visible but cannot alter hue domain | Private-only behavior | T2g accent slots |
+| `legend.entry.coordinated-hue-eligibility` | Renderer invariant; private hue eligibility | Facet/Canvas domain coordination | Flag and typed field must both match | Private-only behavior | T2g domain owner |
+| `legend.entry.complete-exact-equality` | Renderer invariant; private entry equivalence | Shared merge | Identity, resolved text, and complete glyph equal | Private-only behavior | Same-identity compatibility |
+| `legend.glyph.current-point-only-extent` | Renderer invariant; private complete glyph bounds | Legend measurement/collision | Replace point-only radius with complete point, line stroke, fill/stroke, and composite bounds | Private-only behavior | T2a3 geometry bounds; glyph draw |
+| `legend.entries.plot-resolution-and-merge` | Renderer invariant; private Plot entry finalization | Plot preflight | Resolve then stable exact merge; propagate all errors | Private-only behavior | Shared merge algorithm |
+| `legend.merge.stable-first-order` | Renderer invariant; private merge order | Entry finalization | Retain first occurrence order deterministically | Private-only behavior | Canvas row-major/facet order |
+| `legend.merge.semantic-title-identity-compatibility` | Renderer invariant; private typed-title compatibility | Plot/facet/Canvas preflight | One exact typed title identity or reject | Private-only behavior | Specs/03 one section |
+| `legend.merge.resolved-title-compatibility` | Renderer invariant; private display-title compatibility | After label resolution | One exact display title or reject | Private-only behavior | Typed-title row |
+| `legend.merge.display-label-uniqueness` | Renderer invariant; private label disambiguation | After label resolution | Distinct identity with equal display label rejects | Private-only behavior | T2b label collision |
+| `legend.merge.same-identity-glyph-compatibility` | Renderer invariant; private duplicate compatibility | Shared preflight | Complete text/glyph equality including RGBA alpha or reject | Private-only behavior | Exact style equality rows |
+| `legend.title.complete-resolution` | Renderer invariant; private single-title result | After merge | Empty has no section; nonempty has exactly one title | Private-only behavior | Canvas/facet title resolution |
+| `legend.glyph.point-style-equality` | Renderer invariant; private complete point equality | Shared compatibility | Compare final RGBA, geometry, shape, and outline exactly | Private-only behavior | Point glyph preservation |
+| `legend.glyph.line-style-equality` | Renderer invariant; private complete line equality | Shared compatibility | Compare final RGBA, width, and semantic pattern exactly | Private-only behavior | Line glyph preservation |
+| `legend.glyph.fill-style-equality` | Renderer invariant; private complete fill equality | Shared compatibility | Compare final fill/stroke RGBA and stroke geometry exactly | Private-only behavior | Fill glyph preservation |
+| `legend.metrics.current-reference-size` | Renderer invariant; removed private responsive reference | Legend resolution | No canvas-size typography transform remains | Private-only behavior | Complete title/label TextThemes |
+| `typography.legend.current-base-responsive-size` | Theme component; complete legend-label `TextTheme` size | Resolved Plot or Canvas root | Finite positive; intentionally small/default/large target evidence | T6 `TypographyTheme` | Title role independently complete |
+| `legend.metrics.current-minimum-font-clamp` | Renderer invariant; removed responsive minimum clamp | Legend resolution | Complete TextTheme size used exactly | Private-only behavior | No private scaling transform |
+| `legend.metrics.current-maximum-font-clamp` | Renderer invariant; removed responsive maximum clamp | Legend resolution | Complete TextTheme size used exactly | Private-only behavior | Multi-size evidence |
+| `legend.container.current-border-padding-factor` | Theme component; `LegendTheme` container padding | Resolved Plot/Canvas legend | Finite nonnegative concrete spacing | T6 `LegendTheme` | Derived padding duplicate |
+| `legend.entries.current-row-spacing-factor` | Theme component; `LegendTheme` entry spacing | Resolved Plot/Canvas legend | Finite nonnegative concrete spacing | T6 `LegendTheme` | Resolved TextTheme line boxes |
+| `legend.glyph.current-handle-text-gap-factor` | Theme component; `LegendTheme` key-label gap | Resolved Plot/Canvas legend | Finite nonnegative concrete spacing | T6 `LegendTheme` | Derived gap duplicate |
+| `legend.glyph.current-handle-length-factor` | Theme component; `LegendTheme` key length | Resolved Plot/Canvas legend | Finite positive and complete glyph fit | T6 `LegendTheme` | Composite glyph bounds |
+| `legend.glyph.current-half-height-estimate` | Renderer invariant; private exact text/glyph bounds | Resolved face/glyph/weight | Remove factor; use complete logical/paint bounds as appropriate | Private-only behavior | T2c glyph measurement |
+| `legend.container.current-glyph-edge-padding-factor` | Theme component; `LegendTheme` edge comfort | Resolved legend | Finite nonnegative concrete spacing | T6 `LegendTheme` | Container padding relationship |
+| `legend.entries.current-column-spacing-factor` | Theme component; `LegendTheme` column spacing | Resolved legend | Finite nonnegative concrete spacing | T6 `LegendTheme` | Column layout |
+| `legend.entries.current-single-column-limit` | Renderer invariant; private deterministic column threshold/fallback | Legend layout | Retain one column for at most six entries and when no multi-column candidate fits; final complete fit still decides acceptance | Private-only behavior | Balanced column count and final fit |
+| `legend.title.current-entry-spacing-factor` | Theme component; `LegendTheme` title-entry spacing | Resolved Plot or Canvas root | Finite nonnegative concrete spacing; independent of T2c text line height | T6 `LegendTheme` | Title block bounds and first entry row |
+| `legend.container.current-fill-alpha` | Theme component; `LegendTheme` container fill `Color` alpha | Resolved legend | Preserve alpha 0.8 for built-ins; outline remains separately opaque | T6 `LegendTheme` | Complete container style |
+| `legend.container.current-corner-radius` | Theme component; `LegendTheme` corner radius | Resolved legend | Finite nonnegative and representable | T6 `LegendTheme` | Container geometry |
+| `legend.metrics.current-responsive-transform` | Renderer invariant; removed responsive metric transform | Theme resolution before measurement | Exact complete TextTheme/LegendTheme values; no scale/clamp | Private-only behavior | Small/default/large evidence |
+| `legend.container.current-derived-padding` | Theme component; resolved `LegendTheme` padding | Legend measurement | One concrete value reused by box/draw/outside relationships | T6 `LegendTheme` | Border-padding source |
+| `legend.entries.current-derived-row-pitch` | Theme component; label `TypographyTheme` line height | Legend measurement with independent resolved entry spacing | Use the complete label line height without deriving it from spacing; exact row bounds/draw identity | T6 `TypographyTheme` | Independent `LegendTheme` spacing row; row bounds algorithm |
+| `legend.title.current-derived-entry-offset` | Theme component; resolved `LegendTheme` title-entry spacing | Legend measurement | One concrete offset after complete T2c title line boxes; no font-size multiplier | T6 `LegendTheme` | Title-entry spacing source |
+| `legend.glyph.current-derived-handle-width` | Theme component; resolved `LegendTheme` key length | Legend measurement | Complete glyph including strokes fits key box | T6 `LegendTheme` | Handle-length source |
+| `legend.glyph.current-derived-handle-text-gap` | Theme component; resolved `LegendTheme` key-label gap | Legend measurement | One concrete reserve/draw value | T6 `LegendTheme` | Handle-text source |
+| `legend.title.current-responsive-width-budget` | Renderer invariant; private title width budget | Final available legend region | Retain private renderer budget; positive finite and shaped fit | Private-only behavior | TextTheme size is not responsive |
+| `legend.label.current-responsive-width-budget` | Renderer invariant; private label width budget | Final available legend region | Retain private renderer budget; positive finite and shaped fit | Private-only behavior | Entry column layout |
+| `legend.box.current-responsive-available-budget` | Renderer invariant; private balancing budget | Final placement region | Complete finite width/height; no typography scaling | Private-only behavior | Column search and final fit |
+| `legend.box.complete-column-size` | Renderer invariant; private complete legend box algorithm | Resolved text/glyph/spacing | Include all complete bounds; deterministic columns including one-column fallback; final finite fit | Private-only behavior | Entry limit and width budgets |
+| `legend.inside.current-aligned-candidate-geometry` | Renderer invariant; private inside candidate geometry | Final panel and complete legend box | Validated finite inset/alignment; fixed tie order | Private-only behavior | T2b positions; final fit |
+| `legend.box.current-clamped-anchor-geometry` | Renderer invariant; private validated box/anchor | After complete placement planning | Remove left/bottom clamps; complete in-bounds geometry or reject | Private-only behavior | Final containment proof |
+| `legend.container.current-complete-style` | Theme component; complete `LegendTheme` container | Resolved Plot or Canvas root | Preserve fill `Color` alpha 0.8 and the already separate opaque outline paint/width; valid radius | T6 `LegendTheme` | Surface role and alpha contract |
+| `typography.legend-title.current-complete-style` | Theme component; complete legend-title `TextTheme` | Plot theme for per-Plot/facet; Canvas root for shared Canvas | Complete color/size/weight/line height; no placement fields or responsive `1.1` transform | T6 `TypographyTheme` | T2c 1.2 text line height; title placement separate |
+| `legend.title.current-start-anchor-orientation` | Renderer invariant; private legend-title multiline placement | Resolved title `TextTheme`, frozen title block, and legend anchor | Start anchor, zero rotation, exact line order/cardinality, rounded x, and line-height y progression | Private-only behavior | Title typography; title text geometry excluded from glyph handles |
+| `typography.legend-label.current-complete-style` | Theme component; complete legend-label `TextTheme` | Plot theme for per-Plot/facet; Canvas root for shared Canvas | Complete color/size/weight/line height; no placement fields | T6 `TypographyTheme` | T2c 1.2 text line height; intentional multi-size snapshots |
+| `legend.label.current-start-anchor-orientation` | Renderer invariant; private legend-label multiline placement | Resolved label `TextTheme`, frozen label block, row center, and handle-relative origin | Start anchor, zero rotation, exact line order/cardinality, and centered multiline x/y progression | Private-only behavior | Label typography; label text geometry excluded from glyph handles |
+| `legend.glyph.current-draw-and-bounds` | Renderer invariant; private exact glyph-handle plan | Originating final point/line/fill styles before legend layout | Preserve and draw only point, line stroke, fill/stroke, and composite handle geometry with complete handle bounds | Private-only behavior | T2e/T2f exact styles; title/label placement rows own text geometry |
+| `legend.text.current-fallback-to-unwrapped` | Renderer invariant; private canonical legend text planning | Legend preflight | Remove fallback; propagate shaped wrap/fit errors | Private-only behavior | T2c text errors; responsive budgets private |
+| `panel-text.legend-corner-conflict-planning` | Renderer invariant; private canonical panel-text/legend collision | Panel planning before legend acceptance | Propagate panel-text planning errors; complete bounds | Private-only behavior | T2f panel-text plan |
+| `geometry.rectangles.strict-overlap` | Renderer invariant; private rectangle predicate | Collision planning | Strict overlap; touching remains nonoverlap; finite ordered boxes | Private-only behavior | Legend/panel-text and geometry bounds |
+| `legend.clearance.current-pass-budget` | Renderer invariant; private legend-clearance work bound | Per-panel collision planning | Retain exactly 8 attempts; final fit/collision/stability proof rejects exhaustion | Private-only behavior | Facet two-pass propagation is separate |
+| `legend.plan.current-role-representation` | Renderer invariant; private Panel/Suppressed role | After policy resolution | Closed exhaustive role; no public duplicate | Private-only behavior | Canvas/facet policy branches |
+| `legend.plan.current-resolved-legend-aggregate` | Renderer invariant; private immutable measured Legend/bounds | Preflight through draw | Complete internally consistent value | Private-only behavior | Apply immutable route |
+| `legend.plan.current-panel-aggregate` | Renderer invariant; private complete panel plan | After discovery/reservation/collision | Panel/result/legend/limits agree and are reused | Private-only behavior | Canvas/facet final plans |
+| `legend.outside.standalone-plan-construction` | Renderer invariant; private outside-plan entry | Facet shared legend before grid allocation | One measured title/entries/box; complete fit | Private-only behavior | Outside reservation sources |
+| `legend.position.inside-outside-classification` | Renderer invariant; private exhaustive position classification | T2b exact position supplied | Every current variant classified exactly once | Private-only behavior | T2b LegendPosition |
+| `legend.plan.planned-axis-limit-replay` | Renderer invariant; private clearance-range replay | Final render chart | Apply exact frozen x/y limits once | Private-only behavior | T2c range planning |
+| `legend.plan.panel-context-construction` | Renderer invariant; private canonical panel context | Before discovery | Preserve data/source rows/cell exactly | Private-only behavior | T2a lifecycle |
+| `legend.plan.family-default-resolution` | Renderer invariant; private Auto family default | Before legend construction | Closed PlotKind/default matrix | Private-only behavior | T2b deferred default branch |
+| `legend.plan.role-suppression-application` | Renderer invariant; private suppression consequence | Planning clone only | Do not mutate public policy or mark/domain visibility | Private-only behavior | Canvas/facet role coordination |
+| `legend.plan.discovery-render` | Renderer invariant; private geometry discovery | Before reservation | Complete marks/layout/entries/bounds or error | Private-only behavior | GeometryBackend |
+| `legend.plan.coordinated-entry-replacement` | Renderer invariant; private facet entry replacement | After discovery before legend construction | Atomic complete shared set; no merge ambiguity | Private-only behavior | Facet shared merge |
+| `legend.plan.visibility-eligibility` | Renderer invariant; private construction predicate | Resolved role/policy/content | All required conditions; no appearance-owned visibility | Private-only behavior | T2b policy/content |
+| `legend.plan.measured-construction` | Renderer invariant; private measured per-panel Legend | Resolved Plot theme and entries | Immutable complete title/text/glyph plan | Private-only behavior | Legend TextThemes and exact glyphs |
+| `legend.outside.reservation-call` | Renderer invariant; private placement-driven reservation | After Legend measurement | Inside no shrink; outside complete validated shrink | Private-only behavior | Independent outside gap sources |
+| `legend.plan.axis-title-adjustment-candidate` | Renderer invariant; private decoration candidate handoff | After outside reserve | T2d supplies candidate only; T2c proves axis consequence | Private-only behavior | T2c C-M15 boundary |
+| `legend.plan.changed-panel-rerender` | Renderer invariant; private final-panel rediscovery | When candidate differs | Complete geometry recomputed exactly once per state | Private-only behavior | Clearance loop |
+| `legend.plan.unchanged-discovery-reuse` | Renderer invariant; private discovery reuse | When panel unchanged | Reuse exact bounds; no second render | Private-only behavior | Canonical plan lifecycle |
+| `legend.collision.significance-bounds-inclusion` | Renderer invariant; private complete collision scene | After panel discovery | Include all planned significance geometry | Private-only behavior | T2f originating geometry |
+| `legend.auto.initial-candidate-call` | Renderer invariant; private Auto candidate selection | Final panel/geometry before clearance | Deterministic family default and candidate order | Private-only behavior | Initial selection helper |
+| `legend.auto.panel-text-avoidance-call` | Renderer invariant; private Auto annotation screen | After initial candidate | Canonical panel-text errors propagate; complete bounds | Private-only behavior | Panel-text collision records |
+| `legend.position.explicit-box-call` | Renderer invariant; private exact position application | Final panel/reservation | Complete finite box for exact T2b position | Private-only behavior | Position routing rows |
+| `legend.inside.panel-text-conflict-rejection` | Renderer invariant; private inside compatibility | Before range clearance | Exact inside position conflict rejects; no movement | Private-only behavior | T2b exact placement |
+| `legend.clearance.iterative-collision-gate` | Renderer invariant; private bounded collision loop | Complete geometry and Legend plan | Stop only on proven zero overlap/no legend; otherwise continue/final reject | Private-only behavior | Eight-attempt bound |
+| `legend.collision.current-font-relative-margin` | Renderer invariant; private collision comfort | Resolved LegendTheme/TextTheme | One finite nonnegative resolved margin, measured/drawn consistently | Private-only behavior | Legend spacing; no responsive transform |
+| `legend.clearance.automatic-dispatch` | Renderer invariant; private Auto collision response | Positive overlap | Deterministic candidate/expansion or final rejection | Private-only behavior | Family dispatch |
+| `legend.clearance.explicit-dispatch` | Renderer invariant; private all-explicit-position response | Positive overlap at any non-Auto inside or outside box | Preserve exact placement; canonicalize outside spacing against collision margin or run validated range clearance, then accept only a proven result or reject | Private-only behavior | Preferred-edge records; outside-spacing sources |
+| `legend.auto.candidate-only-replacement` | Renderer invariant; private candidate transition | Auto clearance | Changed candidate must receive final fit/collision proof | Private-only behavior | Clearance loop stability |
+| `legend.clearance.x-limit-application` | Renderer invariant; private x expansion state | Valid x clearance result | Finite strict limits frozen/replayed | Private-only behavior | T2c range invariants |
+| `legend.clearance.y-limit-application` | Renderer invariant; private y expansion state | Valid y clearance result | Finite strict limits frozen/replayed | Private-only behavior | T2c range invariants |
+| `legend.clearance.rerender-after-expansion` | Renderer invariant; private clearance rediscovery | After each accepted limit change | Recompute complete marks/brackets/bounds | Private-only behavior | Final collision proof |
+| `legend.clearance.box-recompute` | Renderer invariant; private post-expansion placement | Updated projection | Same immutable measured Legend; complete new box | Private-only behavior | Plan/draw identity |
+| `legend.inside.final-fit-validation` | Renderer invariant; private final containment proof | After bounded clearance | Complete Legend bounds inside panel or reject | Private-only behavior | No clamp fallback |
+| `legend.inside.final-collision-validation` | Renderer invariant; private final overlap proof | After bounded clearance | Zero weighted overlap or reject | Private-only behavior | Complete glyph/geometry bounds |
+| `legend.plan.frozen-result` | Renderer invariant; private immutable output | Successful panel preflight | Exact complete panel/result/legend/limits | Private-only behavior | Final render routes |
+| `legend.collision.significance-recording` | Renderer invariant; private bracket recording branch | Collision discovery | Record every nonempty generated bracket exactly | Private-only behavior | T2f significance style/geometry |
+| `legend.clearance.explicit-preferred-edge` | Renderer invariant; private non-Auto semantic edge mapping | Any exact non-Auto inside or outside position | Exhaustive deterministic active or nearest outside edges; Auto arm remains unreachable from the explicit-only caller | Private-only behavior | LegendPosition; outside nearest-edge selection |
+| `legend.clearance.current-nearest-edge-fallback` | Renderer invariant; private non-Auto nearest-edge selection | Complete validated residual non-Auto placement | Retain deterministic nearest-edge selection; the unreachable `map_or(Top)` branch adds no fallback contract | Private-only behavior | Explicit preferred-edge mapping |
+| `legend.clearance.automatic-family-dispatch` | Renderer invariant; private Auto algorithm selection | PlotKind/default resolved | Closed deterministic dispatch | Private-only behavior | Family default resolution |
+| `legend.clearance.top-right-candidate-order` | Renderer invariant; private candidate order | TopRight Auto clearance | Deterministic bounded sequence | Private-only behavior | Inside candidate order |
+| `legend.clearance.top-right-panel-text-screen` | Renderer invariant; private annotation eligibility | Candidate evaluation | Propagate planning error; skip only proven overlap | Private-only behavior | Canonical panel-text propagation |
+| `legend.clearance.top-right-fit-and-overlap-screen` | Renderer invariant; private candidate acceptance | Candidate evaluation | Complete containment and zero overlap | Private-only behavior | Final proof rows |
+| `legend.clearance.candidate-edge-order` | Renderer invariant; private clearance-priority grammar | Candidate and family maximum | Exact horizontal/vertical order | Private-only behavior | TopRight expansion |
+| `legend.clearance.top-right-first-expansion` | Renderer invariant; private first-valid expansion | Ordered candidate/edge scan | Valid finite range; final loop proves result | Private-only behavior | Expansion arithmetic |
+| `legend.clearance.lowest-overlap-candidate-screen` | Renderer invariant; private candidate eligibility | LowestOverlap Auto | Complete fit, canonical panel-text plan, valid geometry | Private-only behavior | Candidate tie-break |
+| `legend.clearance.lowest-overlap-edge-grammar` | Renderer invariant; private corner-edge grammar | LowestOverlap candidate | Exactly two semantic edges per corner | Private-only behavior | Expansion selector |
+| `legend.clearance.lowest-overlap-tie-break` | Renderer invariant; private deterministic scoring | All valid expansions | Total order by overlap/span/candidate/edge | Private-only behavior | Stable Auto behavior |
+| `legend.clearance.explicit-edge-order` | Renderer invariant; private explicit expansion order | Exact position | Deduplicate edges and retain semantic deterministic order | Private-only behavior | Preferred edge |
+| `legend.clearance.explicit-minimum-expansion` | Renderer invariant; private explicit selection | Valid edge expansions | Minimum finite expansion with deterministic tie | Private-only behavior | Exact box preservation |
+| `legend.inside.current-fit-epsilon` | Renderer invariant; private numeric containment tolerance | Complete finite bounds | Retain pinned 1e-6 boundary behavior | Private-only behavior | Final fit evidence |
+| `legend.collision.panel-clipped-geometry` | Renderer invariant; private panel-local clipping | Before overlap scoring | Finite ordered intersection; omit empty clips | Private-only behavior | T2a3 geometry boxes |
+| `legend.collision.weighted-overlap-sum` | Renderer invariant; private overlap score | Clipped complete geometry | Deterministic finite weighted sum | Private-only behavior | Final zero-overlap rule |
+| `legend.clearance.continuous-axis-gate` | Renderer invariant; private axis eligibility | Resolved axis domains | Expand only matching continuous axis | Private-only behavior | T2g domains |
+| `legend.clearance.explicit-limit-prohibition` | Renderer invariant; private exact-limit precedence | Before expansion | Never alter T2b user limits | Private-only behavior | T2b explicit limits |
+| `legend.clearance.zero-anchor-preservation` | Renderer invariant; private bar baseline protection | Candidate expansion | Preserve exact zero endpoint on anchored bar axis | Private-only behavior | T2e bar geometry |
+| `legend.clearance.current-fraction-threshold` | Renderer invariant; private representability threshold | Expansion arithmetic | Finite positive span/fraction and pinned >0.05 | Private-only behavior | Expansion formula |
+| `legend.clearance.current-expansion-formula` | Renderer invariant; private deterministic expansion | Valid fraction | Retain pinned clamp and 1.05 safety; finite result | Private-only behavior | Collision final proof |
+| `legend.clearance.finite-limit-result` | Renderer invariant; private expanded-range validity | Before chart mutation | Finite strictly ascending or no expansion | Private-only behavior | T2c range validity |
+| `legend.clearance.bar-axis-classification` | Renderer invariant; private anchored family matrix | Zero-anchor check | Exact four family/axis combinations | Private-only behavior | T2e/T2g source roles |
+| `legend.auto.panel-text-cyclic-search` | Renderer invariant; private four-corner search | Initial Auto candidate | Deterministic modulo order; canonical errors | Private-only behavior | Candidate set |
+| `legend.auto.all-panel-text-conflict-rejection` | Renderer invariant; private no-candidate failure | After complete search | Reject if no proven conflict-free candidate | Private-only behavior | No fallback placement |
+| `legend.outside.current-reservation-gap` | Theme component; resolved `LegendTheme` outside spacing source | Outside reservation | Finite nonnegative concrete value; independent source retained | T6 `LegendTheme` | Four helper spacing sources; T2h reconciliation |
+| `legend.outside.band-dimension-fit` | Renderer invariant; private outside-band fit | Complete immutable Legend | Full orthogonal dimension fits or reject | Private-only behavior | Complete glyph/text bounds |
+| `legend.outside.directional-panel-reservation` | Renderer invariant; private side-specific shrink | Exact outside position and resolved gap | Finite ordered panel; no clamp | Private-only behavior | Minimum panel fit |
+| `legend.outside.minimum-panel-fit` | Renderer invariant; private outside representability | After reservation | At least 80x60 or reject | Private-only behavior | T2c minima |
+| `legend.auto.default-and-overlap-selection` | Renderer invariant; private initial Auto selection | Family default and complete geometry | Deterministic candidate; ties pinned | Private-only behavior | Auto facet override separate |
+| `legend.position.complete-inside-routing` | Renderer invariant; private exhaustive inside map | Exact T2b position | Complete validated geometry for every alias | Private-only behavior | Candidate/align geometry |
+| `legend.position.complete-outside-routing` | Renderer invariant; private exhaustive outside map | Exact T2b position | Complete side/alignment mapping | Private-only behavior | Independent side spacing |
+| `legend.outside.right.current-spacing` | Theme component; resolved `LegendTheme` right-outside spacing source | Right placement | Finite nonnegative; complete residual alignment; no max clamp | T6 `LegendTheme` | Reservation gap; T2h reconciles relationship |
+| `legend.outside.left.current-spacing` | Theme component; resolved `LegendTheme` left-outside spacing source | Left placement | Finite nonnegative; complete residual alignment; no max clamp | T6 `LegendTheme` | Independent source retained |
+| `legend.outside.top.current-spacing` | Theme component; resolved `LegendTheme` top-outside spacing source | Top placement | Finite nonnegative; complete residual alignment; no max clamp | T6 `LegendTheme` | Independent source retained |
+| `legend.outside.bottom.current-spacing` | Theme component; resolved `LegendTheme` bottom-outside spacing source | Bottom placement | Finite nonnegative; complete residual alignment; no max clamp | T6 `LegendTheme` | Independent source retained |
+| `facets.lifecycle.coordinated-composition-order` | Renderer invariant; private facet lifecycle | Resolved Plot theme/data before backend | One ordered complete plan; every error propagates | Private-only behavior | T2a lifecycle; T2g domains |
+| `facets.grid.initial-empty-requirement-allocation` | Renderer invariant; private lifecycle provisional facet cells | After composed outer reservation, before data/domain preflight | Empty requirements produce complete finite selector-shaped cells | Private-only behavior | Later two-pass measured allocation |
+| `facets.shared-axis.current-origin` | Renderer invariant; private shared-guide origin/no-translation route | After all outer reservations | Finite complete origin; no/right/top/inside legend paths preserve it exactly | Private-only behavior | Left/bottom outside adjustments |
+| `facets.shared-axis.outside-left-adjustment` | Renderer invariant; private left-band coordination | Shared-axis rewrap plus outside-left legend | Exact common translation and final fit | Private-only behavior | Legend immutable bounds |
+| `facets.shared-axis.outside-bottom-adjustment` | Renderer invariant; private bottom-band coordination | Shared-axis rewrap plus outside-bottom legend | Exact common translation and final fit | Private-only behavior | Legend immutable bounds |
+| `facets.shared-axis.initial-line-baseline` | Renderer invariant; private initial shared-title baseline | First composed Plot plan | Exact resolved line plan replaces one-line assumption | Private-only behavior | T2c C-M14 primitives |
+| `facets.shared-axis.initial-inset-application` | Renderer invariant; private initial reservation application | First checked plan | Apply one authoritative panel/inset result | Private-only behavior | T2c axis-title metrics |
+| `facets.shared-axis.post-reservation-rewrap-baseline` | Renderer invariant; private post-legend shared-title baseline | Candidate after legend reservation | Remeasure exact resolved lines | Private-only behavior | Outside legend candidate |
+| `facets.shared-axis.adjustment-pass-budget` | Renderer invariant; private shared-axis work bound | Fixed-point planning | Retain exactly 4 attempts; final stability or reject | Private-only behavior | Candidate/stability rows |
+| `facets.shared-axis.x-additional-bottom-reservation` | Renderer invariant; private shared x-title reserve | Resolved line boxes | Exact complete excess reserve; no duplicate delta | Private-only behavior | T2c line height |
+| `facets.shared-axis.y-additional-left-reservation` | Renderer invariant; private shared y-title reserve | Resolved rotated line boxes | Exact complete excess reserve | Private-only behavior | T2c line height |
+| `facets.shared-axis.candidate-geometry-adjustment` | Renderer invariant; private right/top-anchored adjustment | Checked candidate | Finite ordered geometry; preserve 80x60 or reject | Private-only behavior | Grid allocator |
+| `facets.shared-axis.fixed-point-stabilization` | Renderer invariant; private measure/reserve/geometry fixed point | After at most 4 attempts | Exact stable PanelBox or reject; no collision semantics | Private-only behavior | Post-reservation baseline |
+| `facets.grid.provisional-allocation` | Renderer invariant; private first facet cells | After outer reservations | Complete finite equal cells | Private-only behavior | Grid allocator |
+| `facets.grid.first-requirement-measurement` | Renderer invariant; private requirement pass one | Provisional cells and resolved per-panel styles | Canonical errors; complete axes/strip bounds | Private-only behavior | T2c axes; facet strip |
+| `facets.grid.second-requirement-measurement` | Renderer invariant; private requirement pass two | First allocated cells | Retain exactly two numeric requirement passes | Private-only behavior | Final allocation |
+| `facets.grid.final-allocation` | Renderer invariant; private final facet grid | Second requirements | Complete 80x60 fit/collision validation | Private-only behavior | Panel plans |
+| `facets.legend-clearance.current-pass-budget` | Renderer invariant; private facet clearance propagation bound | Per-panel measurement, reservation, collision, and geometry with fixed scales | Retain exactly 2 passes; final fit/collision/stability proof or reject | Private-only behavior | Eight-pass local clearance separate |
+| `facets.legend.per-panel-owner-coordination` | Renderer invariant; private single owner selection | Shared entry set/outside plan | Exactly one eligible panel or outside plan owns legend | Private-only behavior | T2b visibility policy; prior-owned SelfManaged defense excluded |
+| `facets.legend.shared-x-limit-propagation` | Renderer invariant; private fixed-x clearance propagation | Up to 2 facet passes | Propagate the complete fixed x range, then prove final x stability or reject | Private-only behavior | Final local horizontal collision proofs |
+| `facets.legend.shared-y-limit-propagation` | Renderer invariant; private fixed-y clearance propagation | Up to 2 facet passes | Propagate the complete fixed y range, then prove final y stability or reject | Private-only behavior | Final local vertical collision proofs |
+| `facets.legend.outside-final-attachment` | Renderer invariant; private outside-plan attachment | After successful final plans | Reuse same immutable measured legend | Private-only behavior | Outside reservation |
+| `facets.legend.auto-outside-right-top` | Renderer invariant; private facet Auto behavior | T2b Auto in generic facets | Retain current `OutsideRightTop` exactly | Private-only behavior | Specs/03 policy separation |
+| `facets.legend.explicit-outside-routing` | Renderer invariant; private facet placement consequence | Exact T2b position | Outside reserves globally; inside delegates to one panel | Private-only behavior | Complete position routing |
+| `facets.legend.hidden-entry-suppression` | Renderer invariant; private hidden-policy consequence | T2b Hidden before merge | No entries/legend; marks/domains unaffected | Private-only behavior | T2g domain coordination |
+| `facets.legend.exact-entry-merge` | Renderer invariant; private facet shared compatibility | All resolved panel entries | Stable exact typed/text/glyph merge or reject | Private-only behavior | Legend equality records |
+| `facets.legend.outside-reservation` | Renderer invariant; private shared outside plan | Resolved position/theme/entries | One immutable measured value and complete grid fit | Private-only behavior | `plan_outside_legend` |
+| `facets.render.grid-first-pass` | Renderer invariant; private facet grid z-order | Final plans | Every grid before all marks | Private-only behavior | T2c grid order |
+| `facets.render.panel-plan-cardinality` | Renderer invariant; private panel/plan cardinality | Before final draw | Exact equal nonzero counts; reject mismatch, never truncating zip | Private-only behavior | Final allocation/planning |
+| `facets.render.panel-layer-order` | Renderer invariant; private facet panel z-order | Frozen plans | Marks, significance, axes, legend, strip exactly once | Private-only behavior | T2e/T2f geometry |
+| `facets.render.composition-tail-order` | Renderer invariant; private facet tail z-order | After all panels | Shared axes then outer title route | Private-only behavior | Shared-axis draw |
+| `facets.render.root-title-route` | Renderer invariant; private faceted Plot title route | Resolved owning Plot | Reuse T2c outer title plan/style | Private-only behavior | T2c TitleBlock; not Canvas root |
+| `composition.facet-strip.current-horizontal-inset` | Theme component; `CompositionTheme` facet-strip horizontal padding | Plot-inherited composition theme | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Panel-header inset relationship |
+| `facets.strip.current-minimum-wrap-width` | Renderer invariant; private positive facet-strip wrapping floor | Final facet panel and resolved horizontal padding | Finite positive logical width used by shaped line geometry; no collision ownership | Private-only behavior | T2c shaped text; strip padding |
+| `typography.facet-strip.current-role` | Theme component; complete facet/header `TextTheme` appearance | Facet inherits resolved Plot theme | Complete font/color/size/weight and face/glyph availability | T6 `TypographyTheme` | Canvas row/header role; placement separate |
+| `typography.facet-strip.current-line-pitch` | Theme component; facet/header `TextTheme` line height | Resolved Plot | Finite positive; requirement/draw identity | T6 `TypographyTheme` | T2c foundational text |
+| `composition.facet-strip.current-baseline-offset` | Theme component; `CompositionTheme` strip-to-panel gap | Resolved Plot composition | Finite nonnegative; reserve/draw identity | T6 `CompositionTheme` | Requirement bottom clearance |
+| `facets.strip.reverse-centered-draw` | Renderer invariant; private strip anchor/orientation/order | Frozen strip plan | Exact lines, Middle anchor, zero rotation, centered horizontal, semantic math order | Private-only behavior | Facet label grammar |
+| `facets.shared-axis.empty-draw-skip` | Renderer invariant; private empty-shared-guide consequence | Final draw | No empty layer/draw | Private-only behavior | T2b content presence |
+| `typography.facets-shared-axis.current-style` | Theme component; complete shared-axis-title `TextTheme` appearance | Facet inherits resolved Plot typography | Complete font/color/size/weight; measurement/draw identity | T6 `TypographyTheme` | T2c axis-title role; placement separate |
+| `facets.shared-axis.current-anchor-orientation` | Renderer invariant; private shared-axis semantic placement | Frozen shared-axis plans | Middle anchor; shared x unrotated and shared y rotated -90 exactly | Private-only behavior | Shared x/y placement rows |
+| `facets.shared-x-title.text-planning` | Renderer invariant; private shared x-title plan | Final grid width and T2c role | Reuse exact shaped lines from preflight | Private-only behavior | T2c C-M14 line count |
+| `facets.shared-x-title.current-placement` | Renderer invariant; private shared-x multiline placement | Frozen plan and shared-axis origin | Finite centered x and exact descending baselines | Private-only behavior | Shared-axis origin and line height |
+| `facets.shared-y-title.text-planning` | Renderer invariant; private shared y-title plan | Final grid height and T2c role | Reuse exact shaped rotated lines from preflight | Private-only behavior | T2c C-M14 line count |
+| `axis.facets.shared-y-title.current-grid-gap` | Theme component; `AxisTheme` shared-y title-to-grid gap | Resolved Plot axes | Finite nonnegative; exact reserve/draw relationship | T6 `AxisTheme` | Shared-axis origin and rotated placement |
+| `facets.shared-y-title.rotated-placement` | Renderer invariant; private shared-y multiline placement | Frozen plan and shared-axis origin | Finite centered y, -90 orientation, and exact leftward line progression | Private-only behavior | AxisTheme gap; shared-axis orientation |
+| `facets.label.current-display-format` | Renderer invariant; private facet label grammar | Resolved selector labels before strip planning | Deterministic selector/join order; complete lexical text reused through measure/reserve/geometry | Private-only behavior | T2b Labels; T2g facet identities |
+
+### T2d Migration And Evidence
+
+The compact evidence names identify current coverage, required target
+corrections, and expected snapshot families to inspect. They do not claim that
+future T4/T5a/T5b/T6 checks already exist or pass.
+
+| Property | Disposition and owning phase | Visual evidence |
+| --- | --- | --- |
+| `canvas.lifecycle.deferred-backend-finish` | `retain`, T3 | Current D-E-CANVAS; target D-T-CANVAS; snapshot D-S-CANVAS |
+| `canvas.lifecycle.preflight-plan-only` | `retain`, T3 | Current D-E-CANVAS; target D-T-CANVAS; snapshot D-S-CANVAS |
+| `canvas.lifecycle.canonical-scene-single-plan` | `retain`, T3 | Current D-E-CANVAS; target D-T-CANVAS immutable plan; snapshot D-S-CANVAS |
+| `composition.canvas-row-title.current-horizontal-padding` | `move`, T5b; public connection T6 | Current D-E-CANVAS fixed 16; target D-T-CANVAS custom horizontal chrome; snapshot D-S-CANVAS |
+| `canvas.row-title.maximum-wrap-width` | `replace`, T5b with T5a metrics | Current D-E-CANVAS; target D-T-CANVAS shaped fit with resolved padding; snapshot D-S-CANVAS |
+| `typography.canvas-row-title.current-font-size` | `move`, T4/T5b; public connection T6 | Current D-E-CANVAS first-Plot fallback; target D-T-CANVAS Canvas-root role; snapshot D-S-CANVAS |
+| `canvas.row-title.wrap-error-propagation` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS canonical error; snapshot D-S-CANVAS |
+| `typography.canvas-row-title.current-reserve-line-pitch` | `deduplicate`, T5a/T5b; public connection T6 | Current D-E-CANVAS reserve duplicate; target D-T-CANVAS one role line height; snapshot D-S-CANVAS |
+| `canvas.row-title.current-requirement-clearance` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS custom spacing; snapshot D-S-CANVAS |
+| `typography.canvas-row-title.current-draw-line-pitch` | `deduplicate`, T5a/T5b; public connection T6 | Current D-E-CANVAS draw duplicate; target D-T-CANVAS one role line height; snapshot D-S-CANVAS |
+| `canvas.row-title.horizontal-span-centering` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS span matrix; snapshot D-S-CANVAS |
+| `canvas.row-title.reverse-line-placement` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS multiline order; snapshot D-S-CANVAS |
+| `canvas.row-title.current-baseline-offset` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS reserve/draw parity; snapshot D-S-CANVAS |
+| `canvas.legend.shared-construction-gate` | `retain`, T5b; public control retained T6 | Current D-E-LEGEND; target D-T-LEGEND policy matrix; snapshot D-S-LEGEND |
+| `canvas.legend.shared-measured-construction` | `replace`, T4/T5b | Current D-E-LEGEND; target D-T-LEGEND immutable plan; snapshot D-S-CANVAS |
+| `canvas.legend.shared-height-fit` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete bounds; snapshot D-S-CANVAS |
+| `canvas.legend.shared-right-reservation` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS exact reservation; snapshot D-S-CANVAS |
+| `canvas.headers.current-appearance-owner` | `replace`, T4/T5b | Current D-E-CANVAS common measurement-only incidental palette; target D-T-CANVAS private root-resolved style route; snapshot D-S-CANVAS |
+| `composition.canvas-column-header.current-band-spacing` | `move`, T5b; public connection T6 | Current D-E-CANVAS fixed 18; target D-T-CANVAS resolved spacing; snapshot D-S-CANVAS |
+| `canvas.headers.column.current-band-height` | `replace`, T5a/T5b | Current D-E-CANVAS typography-plus-18 aggregate; target D-T-CANVAS private aggregation of T2c role height and independent CompositionTheme spacing; snapshot D-S-CANVAS |
+| `canvas.headers.row.current-width-measurement` | `replace`, T5a/T5b | Current D-E-CANVAS; target D-T-CANVAS shaped width; snapshot D-S-CANVAS |
+| `canvas.headers.row.current-band-padding` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS custom padding; snapshot D-S-CANVAS |
+| `canvas.headers.minimum-remaining-panel-fit` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS 80x60 complete fit; snapshot D-S-CANVAS |
+| `canvas.grid.provisional-unadorned-allocation` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS complete first cells; snapshot D-S-CANVAS |
+| `canvas.category-labels.non-first-suppression` | `retain`, T5b; public control retained T6 | Current D-E-CANVAS; target D-T-CANVAS exact columns; snapshot D-S-CANVAS |
+| `canvas.panels.initial-self-managed-rejection` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS initial family rejection; snapshot D-S-CANVAS |
+| `canvas.panel-header.first-pass-title-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS theme flag; target D-T-CANVAS semantic title plus shaped role; snapshot D-S-CANVAS |
+| `canvas.panel-header.first-pass-subtitle-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS theme flag; target D-T-CANVAS semantic subtitle plus shaped role; snapshot D-S-CANVAS |
+| `canvas.panels.two-pass-header-allocation` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS two-pass plus final proof; snapshot D-S-CANVAS |
+| `canvas.panel-header.second-pass-title-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS repeated gate/second-width reshape; target D-T-CANVAS content/style identity with final second-pass plan reused for draw; snapshot D-S-CANVAS |
+| `canvas.panel-header.second-pass-subtitle-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS repeated gate/second-width reshape; target D-T-CANVAS content/style identity with final second-pass plan reused for draw; snapshot D-S-CANVAS |
+| `canvas.headers.column.span-placement` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS span geometry; snapshot D-S-CANVAS |
+| `canvas.headers.row.span-placement` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS span geometry; snapshot D-S-CANVAS |
+| `canvas.text-panel.current-horizontal-inset` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS custom inset; snapshot D-S-CANVAS |
+| `typography.canvas-text-panel-title.current-role` | `replace`, T4/T5b; public connection T6 | Current D-E-CANVAS title size; target D-T-CANVAS facet/header role; snapshot D-S-CANVAS |
+| `typography.canvas-text-panel-body.current-role` | `replace`, T4/T5b; public connection T6 | Current D-E-CANVAS label size; target D-T-CANVAS body role; snapshot D-S-CANVAS |
+| `canvas.text-panel.current-title-body-gap` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS gap parity; snapshot D-S-CANVAS |
+| `canvas.text-panel.current-vertical-inset` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS complete block fit; snapshot D-S-CANVAS |
+| `canvas.text-panel.complete-fit-plan` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS error propagation/immutable plan; snapshot D-S-CANVAS |
+| `canvas.legend.per-panel-role-coordination` | `retain`, T5b; public control retained T6 | Current D-E-LEGEND; target D-T-LEGEND PerPlot/Shared/Hidden; snapshot D-S-CANVAS |
+| `canvas.panels.final-self-managed-rejection` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS final legend-aware family rejection; snapshot D-S-CANVAS |
+| `canvas.headers.current-draw-appearance-owner` | `replace`, T4/T5b | Current D-E-CANVAS first-Plot/Publication split; target D-T-CANVAS one root-resolved draw route; snapshot D-S-CANVAS |
+| `canvas.render.grid-before-panels` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS z-order; snapshot D-S-CANVAS |
+| `canvas.render.panel-layer-order` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS complete layer order; snapshot D-S-CANVAS |
+| `canvas.render.composition-chrome-order` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS chrome order; snapshot D-S-CANVAS |
+| `canvas.legend.shared-render-reconstruction` | `remove`, T5b | Current D-E-LEGEND duplicate construction; target D-T-LEGEND immutable reuse; snapshot D-S-CANVAS |
+| `canvas.legend.shared-horizontal-placement` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND validated band; snapshot D-S-CANVAS |
+| `canvas.legend.shared-vertical-placement` | `replace`, T5b | Current D-E-LEGEND clamp; target D-T-LEGEND complete geometry/rejection; snapshot D-S-CANVAS |
+| `canvas.legend.shared-layer-draw` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND one draw; snapshot D-S-CANVAS |
+| `canvas.root-title.current-theme-route` | `replace`, T4 ownership with T5b tail order retained | Current D-E-CANVAS hidden Publication TitleBlock after shared legend/last in Canvas chrome; target D-T-CANVAS root role with identical tail z-order; snapshot D-S-CANVAS |
+| `canvas.legend.shared-gap-current-fallback` | `move`, T5b; public connection T6 | Current D-E-LEGEND pad-derived fallback; target D-T-LEGEND LegendTheme default; snapshot D-S-CANVAS |
+| `canvas.legend.shared-entry-eligibility` | `replace`, T5b; public controls retained T6 | Current D-E-LEGEND; target D-T-LEGEND hidden/automatic/exact matrix; snapshot D-S-CANVAS |
+| `canvas.legend.shared-entry-source-order` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND row-major order; snapshot D-S-CANVAS |
+| `canvas.legend.shared-entry-exact-merge` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete RGBA/glyph conflicts; snapshot D-S-LEGEND |
+| `canvas.legend.shared-title-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND one-title failures; snapshot D-S-CANVAS |
+| `canvas.headers.empty-draw-skip` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS empty/present layers; snapshot D-S-CANVAS |
+| `typography.canvas-shared-header.current-style` | `move`, T4/T5b; public connection T6 | Current D-E-CANVAS appearance only; target D-T-CANVAS Canvas-root TextTheme; snapshot D-S-CANVAS |
+| `canvas.headers.centered-rounded-draw` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS anchor/orientation and validated coordinates; snapshot D-S-CANVAS |
+| `canvas.row-title.empty-draw-skip` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS empty/present layers; snapshot D-S-CANVAS |
+| `typography.canvas-row-title.current-style` | `deduplicate`, T4/T5b; public connection T6 | Current D-E-CANVAS appearance only; target D-T-CANVAS one facet/header role; snapshot D-S-CANVAS |
+| `canvas.row-title.centered-rounded-draw` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS anchor/orientation and plan/draw parity; snapshot D-S-CANVAS |
+| `canvas.text-panel.current-draw-gap` | `deduplicate`, T5b; public connection T6 | Current D-E-CANVAS duplicate 12; target D-T-CANVAS one gap; snapshot D-S-CANVAS |
+| `canvas.text-panel.centered-block-placement` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS anchor/orientation and exact line boxes; snapshot D-S-CANVAS |
+| `typography.canvas-text-panel-title.current-style` | `deduplicate`, T4/T5b; public connection T6 | Current D-E-CANVAS appearance only; target D-T-CANVAS title plan/style identity; snapshot D-S-CANVAS |
+| `typography.canvas-text-panel-body.current-style` | `deduplicate`, T4/T5b; public connection T6 | Current D-E-CANVAS appearance only; target D-T-CANVAS body plan/style identity; snapshot D-S-CANVAS |
+| `canvas.panel-header.title-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS theme flag; target D-T-CANVAS semantic-content presence with resolved title plan; snapshot D-S-CANVAS |
+| `canvas.panel-header.subtitle-presence-resolution` | `replace`, T5a/T5b | Current D-E-CANVAS theme flag; target D-T-CANVAS semantic-content presence with resolved subtitle plan; snapshot D-S-CANVAS |
+| `canvas.panel-header.empty-draw-skip` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS empty/present layer; snapshot D-S-CANVAS |
+| `canvas.panel-header.current-wrap-width` | `replace`, T5a/T5b | Current D-E-CANVAS; target D-T-CANVAS resolved inset/shaped width; snapshot D-S-CANVAS |
+| `canvas.panel-header.title-wrap-plan` | `replace`, T5a/T5b | Current D-E-CANVAS; target D-T-CANVAS immutable shaped lines; snapshot D-S-CANVAS |
+| `canvas.panel-header.subtitle-wrap-plan` | `replace`, T5a/T5b | Current D-E-CANVAS; target D-T-CANVAS immutable shaped lines; snapshot D-S-CANVAS |
+| `canvas.panel-header.subtitle-start-anchor` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS anchor evidence; snapshot D-S-CANVAS |
+| `canvas.panel-header.title-start-anchor` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS anchor evidence; snapshot D-S-CANVAS |
+| `canvas.panel-header.layer-ownership` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS Plot-owned layer; snapshot D-S-CANVAS |
+| `canvas.panel-header.subtitle.current-left-inset` | `move`, T5b; public connection T6 | Current D-E-CANVAS independent subtitle 8; target D-T-CANVAS custom subtitle padding; snapshot D-S-CANVAS |
+| `canvas.panel-header.subtitle.current-baseline-offset` | `move`, T5b; public connection T6 | Current D-E-CANVAS independent subtitle 14; target D-T-CANVAS reserve/draw parity; snapshot D-S-CANVAS |
+| `canvas.panel-header.title.current-baseline-offset` | `move`, T5b; public connection T6 | Current D-E-CANVAS independent title 14; target D-T-CANVAS reserve/draw parity; snapshot D-S-CANVAS |
+| `canvas.panel-header.title-after-subtitle-placement` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS exact role boxes; snapshot D-S-CANVAS |
+| `canvas.panel-header.title.current-left-inset` | `move`, T5b; public connection T6 | Current D-E-CANVAS independent title 8; target D-T-CANVAS custom title padding; snapshot D-S-CANVAS |
+| `canvas.panel-header.reverse-line-placement` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS multiline order; snapshot D-S-CANVAS |
+| `composition.panel.current-inter-panel-gap` | `move`, T5b; public connection T6 | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS custom gap; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.panel-header.current-title-subtitle-gap` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS custom role gap; snapshot D-S-CANVAS |
+| `composition.panel-header.current-wrap-inset` | `deduplicate`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS one horizontal padding; snapshot D-S-CANVAS |
+| `composition.panel-header.title-line-count` | `deduplicate`, T5a/T5b | Current D-E-CANVAS; target D-T-CANVAS one title plan; snapshot D-S-CANVAS |
+| `composition.panel-header.subtitle-line-count` | `deduplicate`, T5a/T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS one secondary plan; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.panel-header.conditional-role-gap` | `retain`, T5b | Current D-E-CANVAS; target D-T-CANVAS presence matrix; snapshot D-S-CANVAS |
+| `composition.panel-header.empty-top-reserve` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS empty chrome; snapshot D-S-CANVAS |
+| `typography.composition-panel-subtitle.current-line-pitch` | `deduplicate`, T5a/T5b; public connection T6 | Current D-E-FACET call context only; target D-T-FACET one facet/header line height; snapshot D-S-FACET |
+| `composition.panel-header.current-bottom-clearance` | `move`, T5b; public connection T6 | Current D-E-CANVAS; target D-T-CANVAS custom clearance; snapshot D-S-CANVAS |
+| `composition.panel-header.y-title-overhang-maximum` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS complete axis/header bounds; snapshot D-S-CANVAS |
+| `composition.panel-header.y-tick-overhang-maximum` | `replace`, T5b | Current D-E-CANVAS; target D-T-CANVAS complete tick/header bounds; snapshot D-S-CANVAS |
+| `composition.grid.positive-shape` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS structural failures; snapshot D-S-CANVAS |
+| `composition.grid.requirement-cell-range` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS range failures; snapshot D-S-CANVAS |
+| `composition.grid.edge-requirement-maxima` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS maxima corpus; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.total-reservation` | `replace`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS checked sums; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.equal-panel-size` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS equal geometry; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.minimum-panel-fit` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS 79/80 and 59/60; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.horizontal-cursor-placement` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS exact gutters; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.vertical-cursor-placement` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS exact gutters; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.grid.row-major-box-construction` | `retain`, T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS cardinality/order; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.outer.current-wrapping-width-budget` | `replace`, T5a/T5b | Current D-E-CANVAS/D-E-FACET fixed 32/floor 1; target D-T-CANVAS one shaped outer-text budget; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.outer-title.current-top-gap` | `move`, T4/T5b; public connection T6 | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS root-specific spacing; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.outer-caption.current-extra-reserve` | `move`, T4/T5b; public connection T6 | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS root-specific spacing; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.outer.current-fixed-inset-aggregate` | `move`, T4/T5b; public connection T6 | Current D-E-CANVAS/D-E-FACET fixed chrome; target D-T-CANVAS resolved chrome; snapshot D-S-CANVAS/D-S-FACET |
+| `composition.outer.current-shared-axis-inset-aggregate` | `replace`, T5a/T5b | Current D-E-FACET axis/chrome aggregate; target D-T-FACET exact resolved shared-axis reserve; snapshot D-S-FACET |
+| `composition.outer.current-baseline-placement` | `replace`, T4/T5a/T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS complete baselines; snapshot D-S-CANVAS/D-S-FACET |
+| `decorations.apply.canvas-text-presence-gates` | `replace`, T5a/T5b | Current D-E-CANVAS/D-E-FACET palette gates; target D-T-CANVAS semantic role presence; snapshot D-S-CANVAS/D-S-FACET |
+| `decorations.apply.canvas-text-final-draw-gate` | `replace`, T5a/T5b | Current D-E-CANVAS/D-E-FACET; target D-T-CANVAS immutable TitleBlock route; snapshot D-S-CANVAS/D-S-FACET |
+| `decorations.apply.immutable-legend-route` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND immutable draw; snapshot D-S-LEGEND |
+| `legend.identity.closed-typed-representation` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND typed identity matrix; snapshot D-S-LEGEND |
+| `legend.identity.title-identity-extraction` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND title-key matrix; snapshot D-S-LEGEND |
+| `legend.identity.single-display-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND raw/display parity; snapshot D-S-LEGEND |
+| `legend.identity.pair-display-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND pair grammar; snapshot D-S-LEGEND |
+| `legend.identity.literal-display-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND generated literals; snapshot D-S-LEGEND |
+| `legend.identity.hue-value-projection` | `retain`, T5b; T2g relationship | Current D-E-LEGEND/D-E-FACET; target D-T-LEGEND typed projection; snapshot D-S-LEGEND/D-S-FACET |
+| `legend.glyph.complete-component-aggregate` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND all composites; snapshot D-S-LEGEND |
+| `legend.glyph.component-exact-equality` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete component equality; snapshot D-S-LEGEND |
+| `legend.entry.resolved-aggregate-and-default` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND entry completeness; snapshot D-S-LEGEND |
+| `legend.glyph.point-construction` | `retain`, T5b; T2e/T2f source relationship | Current D-E-LEGEND; target D-T-LEGEND exact point; snapshot D-S-LEGEND |
+| `legend.glyph.line-construction` | `retain`, T5b; T2e/T2f source relationship | Current D-E-LEGEND; target D-T-LEGEND exact line; snapshot D-S-LEGEND |
+| `legend.glyph.fill-construction` | `retain`, T5b; T2e/T2f source relationship | Current D-E-LEGEND; target D-T-LEGEND exact fill/stroke; snapshot D-S-LEGEND |
+| `legend.glyph.composite-construction-grammar` | `retain`, T5b; T2e/T2f source relationship | Current D-E-LEGEND; target D-T-LEGEND every composite; snapshot D-S-LEGEND |
+| `legend.entry.display-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND resolve-once evidence; snapshot D-S-LEGEND |
+| `legend.entry.hue-contribution-suppression` | `retain`, T5b; T2g relationship | Current D-E-LEGEND; target D-T-LEGEND layer/domain distinction; snapshot D-S-LEGEND |
+| `legend.entry.coordinated-hue-eligibility` | `retain`, T5b; T2g relationship | Current D-E-LEGEND/D-E-FACET; target D-T-LEGEND eligibility; snapshot D-S-LEGEND |
+| `legend.entry.complete-exact-equality` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete RGBA/glyph equality; snapshot D-S-LEGEND |
+| `legend.glyph.current-point-only-extent` | `replace`, T5b | Current D-E-LEGEND point-only bounds; target D-T-LEGEND point/line/fill/stroke/composite bounds; snapshot D-S-LEGEND |
+| `legend.entries.plot-resolution-and-merge` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND canonical merge errors; snapshot D-S-LEGEND |
+| `legend.merge.stable-first-order` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND stable duplicate order; snapshot D-S-LEGEND |
+| `legend.merge.semantic-title-identity-compatibility` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND typed conflicts; snapshot D-S-LEGEND |
+| `legend.merge.resolved-title-compatibility` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND display conflicts; snapshot D-S-LEGEND |
+| `legend.merge.display-label-uniqueness` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND alias collisions; snapshot D-S-LEGEND |
+| `legend.merge.same-identity-glyph-compatibility` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND alpha/style conflicts; snapshot D-S-LEGEND |
+| `legend.title.complete-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND empty/one-title matrix; snapshot D-S-LEGEND |
+| `legend.glyph.point-style-equality` | `replace`, T5b; T2e/T2f relationship | Current D-E-LEGEND; target D-T-LEGEND final RGBA/outline; snapshot D-S-LEGEND |
+| `legend.glyph.line-style-equality` | `replace`, T5b; T2e/T2f relationship | Current D-E-LEGEND; target D-T-LEGEND semantic pattern/RGBA; snapshot D-S-LEGEND |
+| `legend.glyph.fill-style-equality` | `replace`, T5b; T2e/T2f relationship | Current D-E-LEGEND; target D-T-LEGEND separate fill/stroke RGBA; snapshot D-S-LEGEND |
+| `legend.metrics.current-reference-size` | `remove`, T5b | Current D-E-LEGEND responsive 640; target D-T-LEGEND no transform; snapshot D-S-LEGEND |
+| `typography.legend.current-base-responsive-size` | `move`, T5a/T5b; public connection T6 | Current D-E-LEGEND size 14; target D-T-LEGEND complete label TextTheme; snapshot D-S-LEGEND |
+| `legend.metrics.current-minimum-font-clamp` | `remove`, T5b | Current D-E-LEGEND size 11 clamp; target D-T-LEGEND exact TextTheme; snapshot D-S-LEGEND |
+| `legend.metrics.current-maximum-font-clamp` | `remove`, T5b | Current D-E-LEGEND size 18 clamp; target D-T-LEGEND exact TextTheme; snapshot D-S-LEGEND |
+| `legend.container.current-border-padding-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor .8; target D-T-LEGEND concrete padding; snapshot D-S-LEGEND |
+| `legend.entries.current-row-spacing-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor .5; target D-T-LEGEND concrete spacing; snapshot D-S-LEGEND |
+| `legend.glyph.current-handle-text-gap-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor .8; target D-T-LEGEND concrete gap; snapshot D-S-LEGEND |
+| `legend.glyph.current-handle-length-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor 1; target D-T-LEGEND complete key length; snapshot D-S-LEGEND |
+| `legend.glyph.current-half-height-estimate` | `replace`, T5a/T5b | Current D-E-LEGEND factor .6; target D-T-LEGEND complete glyph/text bounds; snapshot D-S-LEGEND |
+| `legend.container.current-glyph-edge-padding-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor .2; target D-T-LEGEND concrete comfort; snapshot D-S-LEGEND |
+| `legend.entries.current-column-spacing-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor 1.2; target D-T-LEGEND concrete spacing; snapshot D-S-LEGEND |
+| `legend.entries.current-single-column-limit` | `retain`, T5b | Current D-E-LEGEND six/seven and no-fitting-candidate one-column fallbacks; target D-T-LEGEND finite balancing/final fit; snapshot D-S-LEGEND |
+| `legend.title.current-entry-spacing-factor` | `move`, T5b; public connection T6 | Current D-E-LEGEND factor 1.8 title-entry spacing; target D-T-LEGEND concrete LegendTheme spacing; snapshot D-S-LEGEND |
+| `legend.container.current-fill-alpha` | `move`, T5b; public connection T6 | Current D-E-LEGEND fill alpha .8 with already opaque outline; target D-T-LEGEND preserves separation; snapshot D-S-LEGEND |
+| `legend.container.current-corner-radius` | `move`, T5b; public connection T6 | Current D-E-LEGEND radius 2; target D-T-LEGEND custom radius; snapshot D-S-LEGEND |
+| `legend.metrics.current-responsive-transform` | `remove`, T5b | Current D-E-LEGEND 11..18 transform; target D-T-LEGEND small/default/large exact sizes; snapshot D-S-LEGEND |
+| `legend.container.current-derived-padding` | `deduplicate`, T5b; public connection T6 | Current D-E-LEGEND; target D-T-LEGEND one resolved padding; snapshot D-S-LEGEND |
+| `legend.entries.current-derived-row-pitch` | `replace`, T5a/T5b; public connection T6 | Current D-E-LEGEND conflated pitch; target D-T-LEGEND TypographyTheme label height plus independent LegendTheme spacing; snapshot D-S-LEGEND |
+| `legend.title.current-derived-entry-offset` | `deduplicate`, T5b; public connection T6 | Current D-E-LEGEND independent 1.8 offset; target D-T-LEGEND one resolved LegendTheme title-entry spacing; snapshot D-S-LEGEND |
+| `legend.glyph.current-derived-handle-width` | `deduplicate`, T5b; public connection T6 | Current D-E-LEGEND; target D-T-LEGEND one key length; snapshot D-S-LEGEND |
+| `legend.glyph.current-derived-handle-text-gap` | `deduplicate`, T5b; public connection T6 | Current D-E-LEGEND; target D-T-LEGEND one key-label gap; snapshot D-S-LEGEND |
+| `legend.title.current-responsive-width-budget` | `retain`, T5a/T5b | Current D-E-LEGEND 50%; target D-T-LEGEND private shaped-width budget; snapshot D-S-LEGEND |
+| `legend.label.current-responsive-width-budget` | `retain`, T5a/T5b | Current D-E-LEGEND 35%; target D-T-LEGEND private shaped-width budget; snapshot D-S-LEGEND |
+| `legend.box.current-responsive-available-budget` | `retain`, T5b | Current D-E-LEGEND 80% budgets; target D-T-LEGEND private complete fit; snapshot D-S-LEGEND |
+| `legend.box.complete-column-size` | `replace`, T5a/T5b | Current D-E-LEGEND point-only extents; target D-T-LEGEND complete columns/bounds; snapshot D-S-LEGEND |
+| `legend.inside.current-aligned-candidate-geometry` | `replace`, T5b | Current D-E-LEGEND clamps; target D-T-LEGEND validated candidates; snapshot D-S-LEGEND |
+| `legend.box.current-clamped-anchor-geometry` | `replace`, T5b | Current D-E-LEGEND top/left clamps; target D-T-LEGEND complete geometry/reject; snapshot D-S-LEGEND |
+| `legend.container.current-complete-style` | `move`, T5b; public connection T6 | Current D-E-LEGEND already alpha-separated fill/opaque outline; target D-T-LEGEND complete container ownership; snapshot D-S-LEGEND |
+| `typography.legend-title.current-complete-style` | `replace`, T5a/T5b; public connection T6 | Current D-E-LEGEND responsive title appearance only; target D-T-LEGEND complete TextTheme fields; snapshot D-S-LEGEND |
+| `legend.title.current-start-anchor-orientation` | `retain`, T5b | Current D-E-LEGEND Start/zero and multiline title x/y progression; target D-T-LEGEND exact planned-title geometry; snapshot D-S-LEGEND |
+| `typography.legend-label.current-complete-style` | `replace`, T5a/T5b; public connection T6 | Current D-E-LEGEND responsive label appearance only; target D-T-LEGEND complete TextTheme fields; snapshot D-S-LEGEND |
+| `legend.label.current-start-anchor-orientation` | `retain`, T5b | Current D-E-LEGEND Start/zero and handle-relative multiline label geometry; target D-T-LEGEND exact planned-label geometry; snapshot D-S-LEGEND |
+| `legend.glyph.current-draw-and-bounds` | `replace`, T5b; T2e/T2f relationship | Current D-E-LEGEND handle-only point bounds; target D-T-LEGEND exact composite handle draw/bounds without label text; snapshot D-S-LEGEND |
+| `legend.text.current-fallback-to-unwrapped` | `remove`, T5a/T5b | Current D-E-LEGEND silent fallback; target D-T-LEGEND canonical error; snapshot D-S-LEGEND |
+| `panel-text.legend-corner-conflict-planning` | `retain`, T5b; T2f relationship | Current D-E-LEGEND; target D-T-LEGEND propagated planning errors; snapshot D-S-LEGEND |
+| `geometry.rectangles.strict-overlap` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND touching/overlap boundaries; snapshot D-S-LEGEND |
+| `legend.clearance.current-pass-budget` | `retain`, T5b | Current D-E-LEGEND eight attempts; target D-T-LEGEND final proof/exhaustion; snapshot D-S-LEGEND |
+| `legend.plan.current-role-representation` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND role matrix; snapshot D-S-LEGEND |
+| `legend.plan.current-resolved-legend-aggregate` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND immutable complete plan; snapshot D-S-LEGEND |
+| `legend.plan.current-panel-aggregate` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete frozen fields; snapshot D-S-LEGEND |
+| `legend.outside.standalone-plan-construction` | `replace`, T5b | Current D-E-FACET/D-E-LEGEND; target D-T-LEGEND immutable outside plan; snapshot D-S-FACET |
+| `legend.position.inside-outside-classification` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND all 25 positions; snapshot D-S-LEGEND |
+| `legend.plan.planned-axis-limit-replay` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND exact x/y replay; snapshot D-S-LEGEND |
+| `legend.plan.panel-context-construction` | `retain`, T3/T5b | Current D-E-LEGEND; target D-T-LEGEND source-row parity; snapshot D-S-LEGEND |
+| `legend.plan.family-default-resolution` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND family/default matrix; snapshot D-S-LEGEND |
+| `legend.plan.role-suppression-application` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND no public mutation; snapshot D-S-CANVAS/D-S-FACET |
+| `legend.plan.discovery-render` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete discovery; snapshot D-S-LEGEND |
+| `legend.plan.coordinated-entry-replacement` | `retain`, T5b | Current D-E-FACET; target D-T-FACET atomic shared entries; snapshot D-S-FACET |
+| `legend.plan.visibility-eligibility` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND role/policy/content matrix; snapshot D-S-LEGEND |
+| `legend.plan.measured-construction` | `replace`, T5a/T5b | Current D-E-LEGEND; target D-T-LEGEND final styles/immutable plan; snapshot D-S-LEGEND |
+| `legend.outside.reservation-call` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete outside geometry; snapshot D-S-LEGEND |
+| `legend.plan.axis-title-adjustment-candidate` | `retain`, T5a/T5b | Current D-E-LEGEND; target D-T-CANVAS T2c consequence boundary; snapshot D-S-LEGEND |
+| `legend.plan.changed-panel-rerender` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND exact rediscovery; snapshot D-S-LEGEND |
+| `legend.plan.unchanged-discovery-reuse` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND no duplicate render; snapshot D-S-LEGEND |
+| `legend.collision.significance-bounds-inclusion` | `retain`, T5b; T2f relationship | Current D-E-LEGEND; target D-T-LEGEND complete brackets; snapshot D-S-LEGEND |
+| `legend.auto.initial-candidate-call` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND deterministic Auto; snapshot D-S-LEGEND |
+| `legend.auto.panel-text-avoidance-call` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND canonical errors; snapshot D-S-LEGEND |
+| `legend.position.explicit-box-call` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete exact boxes; snapshot D-S-LEGEND |
+| `legend.inside.panel-text-conflict-rejection` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND all corners/positions; snapshot D-S-LEGEND |
+| `legend.clearance.iterative-collision-gate` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND zero-overlap/final rejection; snapshot D-S-LEGEND |
+| `legend.collision.current-font-relative-margin` | `replace`, T5b | Current D-E-LEGEND responsive margin; target D-T-LEGEND resolved margin; snapshot D-S-LEGEND |
+| `legend.clearance.automatic-dispatch` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND algorithm matrix; snapshot D-S-LEGEND |
+| `legend.clearance.explicit-dispatch` | `replace`, T5b | Current D-E-LEGEND every non-Auto position, including outside spacing below collision margin; target D-T-LEGEND canonicalized or fully validated exact-position clearance; snapshot D-S-LEGEND |
+| `legend.auto.candidate-only-replacement` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND post-change proof; snapshot D-S-LEGEND |
+| `legend.clearance.x-limit-application` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND finite x range; snapshot D-S-LEGEND |
+| `legend.clearance.y-limit-application` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND finite y range; snapshot D-S-LEGEND |
+| `legend.clearance.rerender-after-expansion` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete rediscovery; snapshot D-S-LEGEND |
+| `legend.clearance.box-recompute` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND immutable metrics/new box; snapshot D-S-LEGEND |
+| `legend.inside.final-fit-validation` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete fit; snapshot D-S-LEGEND |
+| `legend.inside.final-collision-validation` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete zero overlap; snapshot D-S-LEGEND |
+| `legend.plan.frozen-result` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND plan/render identity; snapshot D-S-LEGEND |
+| `legend.collision.significance-recording` | `retain`, T5b; T2f relationship | Current D-E-LEGEND; target D-T-LEGEND bracket bounds; snapshot D-S-LEGEND |
+| `legend.clearance.explicit-preferred-edge` | `retain`, T5b | Current D-E-LEGEND non-Auto edge map/unreachable Auto arm; target D-T-LEGEND exhaustive active edges; snapshot D-S-LEGEND |
+| `legend.clearance.current-nearest-edge-fallback` | `retain`, T5b | Current D-E-LEGEND active non-Auto nearest-edge selection with unreachable Top `map_or`; target D-T-LEGEND deterministic residual edge; snapshot D-S-LEGEND |
+| `legend.clearance.automatic-family-dispatch` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND closed dispatch; snapshot D-S-LEGEND |
+| `legend.clearance.top-right-candidate-order` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND pinned order; snapshot D-S-LEGEND |
+| `legend.clearance.top-right-panel-text-screen` | `replace`, T5b | Current D-E-LEGEND errors-as-skip; target D-T-LEGEND propagated error; snapshot D-S-LEGEND |
+| `legend.clearance.top-right-fit-and-overlap-screen` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete bounds; snapshot D-S-LEGEND |
+| `legend.clearance.candidate-edge-order` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND Horizontal/Vertical matrix; snapshot D-S-LEGEND |
+| `legend.clearance.top-right-first-expansion` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND first-valid/final-proof; snapshot D-S-LEGEND |
+| `legend.clearance.lowest-overlap-candidate-screen` | `replace`, T5b | Current D-E-LEGEND errors-as-skip; target D-T-LEGEND canonical error/fit; snapshot D-S-LEGEND |
+| `legend.clearance.lowest-overlap-edge-grammar` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND corner matrix; snapshot D-S-LEGEND |
+| `legend.clearance.lowest-overlap-tie-break` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND deterministic ties; snapshot D-S-LEGEND |
+| `legend.clearance.explicit-edge-order` | `deduplicate`, T5b | Current D-E-LEGEND duplicate preferred; target D-T-LEGEND one edge each; snapshot D-S-LEGEND |
+| `legend.clearance.explicit-minimum-expansion` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND minimum/tie corpus; snapshot D-S-LEGEND |
+| `legend.inside.current-fit-epsilon` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND 1e-6 boundaries; snapshot D-S-LEGEND |
+| `legend.collision.panel-clipped-geometry` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND clipping boundaries; snapshot D-S-LEGEND |
+| `legend.collision.weighted-overlap-sum` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND weighted zero/nonzero; snapshot D-S-LEGEND |
+| `legend.clearance.continuous-axis-gate` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND axis-domain matrix; snapshot D-S-LEGEND |
+| `legend.clearance.explicit-limit-prohibition` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND exact-limit precedence; snapshot D-S-LEGEND |
+| `legend.clearance.zero-anchor-preservation` | `retain`, T5b; T2e relationship | Current D-E-LEGEND; target D-T-LEGEND bar zero endpoints; snapshot D-S-LEGEND |
+| `legend.clearance.current-fraction-threshold` | `retain`, T5b | Current D-E-LEGEND .05 boundary; target D-T-LEGEND finite threshold; snapshot D-S-LEGEND |
+| `legend.clearance.current-expansion-formula` | `retain`, T5b | Current D-E-LEGEND .05/.95/1.05 corpus; target D-T-LEGEND stable expansion; snapshot D-S-LEGEND |
+| `legend.clearance.finite-limit-result` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND finite/strict range; snapshot D-S-LEGEND |
+| `legend.clearance.bar-axis-classification` | `retain`, T5b; T2e relationship | Current D-E-LEGEND; target D-T-LEGEND four family/axis cases; snapshot D-S-LEGEND |
+| `legend.auto.panel-text-cyclic-search` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND four-corner order; snapshot D-S-LEGEND |
+| `legend.auto.all-panel-text-conflict-rejection` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND no-candidate failure; snapshot D-S-LEGEND |
+| `legend.outside.current-reservation-gap` | `move`, T5b; public connection T6 | Current D-E-LEGEND; target D-T-LEGEND independent resolved spacing; snapshot D-S-LEGEND |
+| `legend.outside.band-dimension-fit` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete glyph/text fit; snapshot D-S-LEGEND |
+| `legend.outside.directional-panel-reservation` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND validated geometry; snapshot D-S-LEGEND |
+| `legend.outside.minimum-panel-fit` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND 79/80 and 59/60; snapshot D-S-LEGEND |
+| `legend.auto.default-and-overlap-selection` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND family/tie corpus; snapshot D-S-LEGEND |
+| `legend.position.complete-inside-routing` | `replace`, T5b | Current D-E-LEGEND; target D-T-LEGEND complete geometry/no clamp; snapshot D-S-LEGEND |
+| `legend.position.complete-outside-routing` | `retain`, T5b | Current D-E-LEGEND; target D-T-LEGEND all side/align cases; snapshot D-S-LEGEND |
+| `legend.outside.right.current-spacing` | `move`, T5b; public connection T6 | Current D-E-LEGEND independent source; target D-T-LEGEND validated right spacing; snapshot D-S-LEGEND |
+| `legend.outside.left.current-spacing` | `move`, T5b; public connection T6 | Current D-E-LEGEND independent source; target D-T-LEGEND validated left spacing; snapshot D-S-LEGEND |
+| `legend.outside.top.current-spacing` | `move`, T5b; public connection T6 | Current D-E-LEGEND independent source; target D-T-LEGEND validated top spacing; snapshot D-S-LEGEND |
+| `legend.outside.bottom.current-spacing` | `move`, T5b; public connection T6 | Current D-E-LEGEND independent source; target D-T-LEGEND validated bottom spacing; snapshot D-S-LEGEND |
+| `facets.lifecycle.coordinated-composition-order` | `retain`, T5b | Current D-E-FACET; target D-T-FACET complete lifecycle; snapshot D-S-FACET |
+| `facets.grid.initial-empty-requirement-allocation` | `retain`, T5b | Current D-E-FACET lifecycle provisional cells; target D-T-FACET complete empty-requirement allocation; snapshot D-S-FACET |
+| `facets.shared-axis.current-origin` | `replace`, T5b | Current D-E-FACET including no-translation paths; target D-T-FACET complete origin relationship; snapshot D-S-FACET |
+| `facets.shared-axis.outside-left-adjustment` | `replace`, T5b | Current D-E-FACET; target D-T-FACET legend/guide alignment; snapshot D-S-FACET |
+| `facets.shared-axis.outside-bottom-adjustment` | `replace`, T5b | Current D-E-FACET; target D-T-FACET legend/guide alignment; snapshot D-S-FACET |
+| `facets.shared-axis.initial-line-baseline` | `replace`, T5b with T5a metrics | Current D-E-FACET one-line baseline; target D-T-FACET exact lines; snapshot D-S-FACET |
+| `facets.shared-axis.initial-inset-application` | `deduplicate`, T5b | Current D-E-FACET; target D-T-FACET one reservation; snapshot D-S-FACET |
+| `facets.shared-axis.post-reservation-rewrap-baseline` | `replace`, T5b with T5a metrics | Current D-E-FACET; target D-T-FACET exact post-legend lines; snapshot D-S-FACET |
+| `facets.shared-axis.adjustment-pass-budget` | `retain`, T5b | Current D-E-FACET four attempts; target D-T-FACET stability/exhaustion; snapshot D-S-FACET |
+| `facets.shared-axis.x-additional-bottom-reservation` | `deduplicate`, T5b | Current D-E-FACET; target D-T-FACET complete x reserve; snapshot D-S-FACET |
+| `facets.shared-axis.y-additional-left-reservation` | `deduplicate`, T5b | Current D-E-FACET; target D-T-FACET complete y reserve; snapshot D-S-FACET |
+| `facets.shared-axis.candidate-geometry-adjustment` | `replace`, T5b | Current D-E-FACET; target D-T-FACET complete geometry/reject; snapshot D-S-FACET |
+| `facets.shared-axis.fixed-point-stabilization` | `retain`, T5b | Current D-E-FACET exact measure/reserve/geometry equality; target D-T-FACET four-pass proof; snapshot D-S-FACET |
+| `facets.grid.provisional-allocation` | `retain`, T5b | Current D-E-FACET; target D-T-FACET first cells; snapshot D-S-FACET |
+| `facets.grid.first-requirement-measurement` | `replace`, T5b with T5a metrics | Current D-E-FACET; target D-T-FACET complete axes/strip plan; snapshot D-S-FACET |
+| `facets.grid.second-requirement-measurement` | `replace`, T5b with T5a metrics | Current D-E-FACET two passes; target D-T-FACET pass-two identity; snapshot D-S-FACET |
+| `facets.grid.final-allocation` | `replace`, T5b | Current D-E-FACET; target D-T-FACET final fit/collision proof; snapshot D-S-FACET |
+| `facets.legend-clearance.current-pass-budget` | `retain`, T5b | Current D-E-FACET two measure/reserve/collision/geometry passes; target D-T-FACET final stability/rejection; snapshot D-S-FACET |
+| `facets.legend.per-panel-owner-coordination` | `retain`, T5b | Current D-E-FACET owner-only ranges excluding prior T2b SelfManaged defense; target D-T-FACET one owner; snapshot D-S-FACET |
+| `facets.legend.shared-x-limit-propagation` | `replace`, T5b | Current D-E-FACET independent x propagation/no post-loop proof; target D-T-FACET final x stability; snapshot D-S-FACET |
+| `facets.legend.shared-y-limit-propagation` | `replace`, T5b | Current D-E-FACET independent y propagation/no post-loop proof; target D-T-FACET final y stability; snapshot D-S-FACET |
+| `facets.legend.outside-final-attachment` | `retain`, T5b | Current D-E-FACET; target D-T-FACET immutable attachment; snapshot D-S-FACET |
+| `facets.legend.auto-outside-right-top` | `retain`, T5b | Current D-E-FACET; target D-T-FACET Auto outside-right-top; snapshot D-S-FACET |
+| `facets.legend.explicit-outside-routing` | `retain`, T5b | Current D-E-FACET; target D-T-FACET inside/outside matrix; snapshot D-S-FACET |
+| `facets.legend.hidden-entry-suppression` | `retain`, T5b | Current D-E-FACET; target D-T-FACET hidden entries/domain parity; snapshot D-S-FACET |
+| `facets.legend.exact-entry-merge` | `replace`, T5b | Current D-E-FACET; target D-T-FACET complete glyph compatibility; snapshot D-S-FACET |
+| `facets.legend.outside-reservation` | `replace`, T5b | Current D-E-FACET; target D-T-FACET immutable complete fit; snapshot D-S-FACET |
+| `facets.render.grid-first-pass` | `retain`, T5b | Current D-E-FACET; target D-T-FACET global grid order; snapshot D-S-FACET |
+| `facets.render.panel-plan-cardinality` | `replace`, T5b | Current D-E-FACET truncating zip assumption; target D-T-FACET exact cardinality; snapshot D-S-FACET |
+| `facets.render.panel-layer-order` | `retain`, T5b | Current D-E-FACET; target D-T-FACET complete z-order; snapshot D-S-FACET |
+| `facets.render.composition-tail-order` | `retain`, T5b | Current D-E-FACET; target D-T-FACET shared-axis order; snapshot D-S-FACET |
+| `facets.render.root-title-route` | `retain`, T5b | Current D-E-FACET; target D-T-FACET Plot-owned title route; snapshot D-S-FACET |
+| `composition.facet-strip.current-horizontal-inset` | `move`, T5b; public connection T6 | Current D-E-FACET; target D-T-FACET custom strip padding; snapshot D-S-FACET |
+| `facets.strip.current-minimum-wrap-width` | `retain`, T5a/T5b | Current D-E-FACET 1 px measure/geometry floor; target D-T-FACET positive shaped line budget without collision scope; snapshot D-S-FACET |
+| `typography.facet-strip.current-role` | `move`, T5b; public connection T6 | Current D-E-FACET appearance only; target D-T-FACET complete facet/header role; snapshot D-S-FACET |
+| `typography.facet-strip.current-line-pitch` | `deduplicate`, T5a/T5b; public connection T6 | Current D-E-FACET; target D-T-FACET one role line height; snapshot D-S-FACET |
+| `composition.facet-strip.current-baseline-offset` | `move`, T5b; public connection T6 | Current D-E-FACET; target D-T-FACET reserve/draw gap; snapshot D-S-FACET |
+| `facets.strip.reverse-centered-draw` | `retain`, T5b | Current D-E-FACET; target D-T-FACET multiline anchor/orientation/order; snapshot D-S-FACET |
+| `facets.shared-axis.empty-draw-skip` | `retain`, T5b | Current D-E-FACET; target D-T-FACET empty/present layer; snapshot D-S-FACET |
+| `typography.facets-shared-axis.current-style` | `deduplicate`, T5a/T5b; public connection T6 | Current D-E-FACET reconstructed appearance; target D-T-FACET exact resolved TextTheme; snapshot D-S-FACET |
+| `facets.shared-axis.current-anchor-orientation` | `retain`, T5b | Current D-E-FACET Middle/0/-90 placement; target D-T-FACET semantic anchor/orientation; snapshot D-S-FACET |
+| `facets.shared-x-title.text-planning` | `deduplicate`, T5a/T5b | Current D-E-FACET draw-time plan; target D-T-FACET preflight line reuse; snapshot D-S-FACET |
+| `facets.shared-x-title.current-placement` | `replace`, T5b | Current D-E-FACET size-derived private placement; target D-T-FACET exact plan/origin geometry; snapshot D-S-FACET |
+| `facets.shared-y-title.text-planning` | `deduplicate`, T5a/T5b | Current D-E-FACET draw-time plan; target D-T-FACET preflight rotated reuse; snapshot D-S-FACET |
+| `axis.facets.shared-y-title.current-grid-gap` | `move`, T5b; public connection T6 | Current D-E-FACET independent 8 px gap; target D-T-FACET AxisTheme gap; snapshot D-S-FACET |
+| `facets.shared-y-title.rotated-placement` | `replace`, T5b | Current D-E-FACET rotation/center/line progression; target D-T-FACET exact rotated plan geometry; snapshot D-S-FACET |
+| `facets.label.current-display-format` | `retain`, T5b | Current D-E-FACET measure/reserve/geometry path; target D-T-FACET selector/join grammar identity; snapshot D-S-FACET |
+
+### Prior-Owned T2d Source Contexts
+
+| Source context | Prior owner | T2d treatment |
+| --- | --- | --- |
+| `CanvasLegendPolicy`, `LegendPolicy`, `LegendPosition`, Canvas shared-gap override, header/row-title/text-panel content, and all public presence controls | T2b | Public declarations are not duplicated. T2d admits only four Explicit-policy implementation records: shared construction, non-first category suppression, per-panel role coordination, and shared-entry eligibility. |
+| `src/orchestrator/facets/planning.rs:250-254` defensive SelfManaged rejection | T2b `validation.facets.self-managed-family` | This repeats the prior-owned family validation after per-panel planning; D-M21 owner coordination is narrowed to `226-249,255-258`. |
+| `ThemePalette` fields, preset literals, font stack, title/subtitle/caption/axis text roles, foundational wrapping, glyph measurement target, panel minima, axes, and axis consequences | T2a1/T2c | Consumer/relationship references only. T2d owns Canvas-root role selection, legend-specific duplicated metrics, composition reservations, chrome, and placement. |
+| `TitleBlock` values and drawing in `src/decorations/title_block.rs`, plus `apply_canvas_text` title values | T2c | D-M19 has zero records; Canvas/facet route ownership is recorded at the invoking composition sources. |
+| Private backend carriers, RGBA serialization, layer protocol, geometry recording, deferred backend lifecycle, and output publication | T2a2-T2a4 | Final consumers/evidence only. T2d records composition order and immutable-plan application, not duplicate carrier/protocol records. |
+| Originating point, line, fill, outline, band, annotation, and significance styles/geometry | T2e/T2f allocation | T2d preserves exact resolved legend glyphs and collision consequences; it does not claim the originating mark defaults or annotation geometry. |
+| Category/hue/series domains, identity order, palette/gradient mapping, shared Canvas hue groups, and facet domain/order coordination | T2g allocation | T2d owns typed legend compatibility and composition only. Domain construction and color mapping remain T2g. |
+
+### Deferred T2d Source Contexts
+
+| Source context | Owning phase | Reason it is not a T2d record |
+| --- | --- | --- |
+| `src/canvas.rs:432-464` | T2h | The five Canvas terminal methods remain the explicitly admitted final lifecycle residual. |
+| `src/canvas.rs:705-708,1023-1050,1079-1104` | T2g | Shared category-domain equality, Canvas hue collection/order, and category-key fallback are semantic domain responsibilities. |
+| `src/decorations/panel_text.rs:1-47,60-145` except collision trace consumers | T2f | Panel-text style, padding, placement, annotation overlap, and draw are specialized annotation responsibilities; D-M17 owns only legend conflict use and the shared rectangle predicate. |
+| Legend entry construction call sites in `src/plots/`, public style conversion, and generated mark geometry | T2e/T2f | T2d owns exact preservation/equality/layout after final styles are supplied. |
+| `src/orchestrator/facets/legend.rs:14-90,124-143,155-237` and `orchestrator/facets/data.rs` | T2g | Facet hue-level coordination, identity ordering, fixed domain equality/range aggregation, and categorical signatures are semantic domain/scale sources. |
+| Complete Canvas-to-Plot theme inheritance and explicit Plot replacement | T4 | T2d names the Canvas-root versus Plot-owned chrome routes; T4 implements ownership before T5b consumes it. |
+| Resolved font shaping and foundational logical/painted text bounds | T5a | T2d names legend/composition consumers and expected evidence; T5a implements the shared typography machinery. |
+| Public construction and atomic current-API replacement for target components | T6 | T2d assigns existing spec-03 component ownership only and introduces no public target early. |
+
+### Rejected T2d Matches
+
+| Source match | Disposition and reason |
+| --- | --- |
+| Imports, module declarations/re-exports, derives, accessors, constructor forwarding, diagnostics, and documentation comments | Language/API plumbing or non-visual prose. Every controlling visual branch is represented by an admitted key. |
+| `CanvasPreflight`, `CanvasPanelPreflight`, `TextPanelPlan`, `CanvasHeaderPlan`, `LegendMetrics`, `LegendBox`, `ResolvedLegend`, and `PanelPlan` fields without independent behavior | Private transport. Aggregate/freeze semantics are admitted only where they establish immutable measurement/draw identity or complete geometry. |
+| Test modules, test-only backend entry points, doctests, examples, snapshots, and counters | Evidence only, never property sources. Expected corrective snapshot families are named above without changing tests. |
+| Caller content strings, exact data coordinates, facet selectors, source-row payloads, and panel dimensions | Input/scientific payload. Fixed representation, validation, generated formatting, fit, and placement rules remain admitted. |
+| Existing palette/font/size/color reads by themselves | Prior-owned appearance inputs. T2d records only a distinct current fallback, duplicated legend metric, composition-specific role use, or target ownership correction. |
+| Mark/annotation colors and geometry visible inside a legend | T2e/T2f source properties. T2d records exact preservation, equality, complete bounds, and composition consequences only. |
+| Semantic color/domain collection and sorting | T2g. Legend compatibility does not become a second scale/domain owner. |
+
+### T2d Reconciliation
+
+- The source-derived T2d inventory is exactly **292** records. Primary source
+  attribution is 3 D-M1, 10 D-M2, 10 D-M3, 10 D-M4, 8 D-M5, 9 D-M6, 5
+  D-M7, 10 D-M8, 15 D-M9, 2 D-M10, 9 D-M11, 9 D-M12, 6 D-M13, 0 D-M14,
+  3 D-M15, 62 D-M16, 2 D-M17, 72 D-M18, 0 D-M19, 5 D-M20, 17 D-M21,
+  5 D-M22, and 20 D-M23.
+- Canvas/layout attribution is 106 records with exactly **32 Theme component**,
+  **4 Explicit policy**, and **70 Renderer invariant** records. Decorations
+  attribution is 139 records with exactly **23 Theme component**, **0 Explicit
+  policy**, and **116 Renderer invariant** records; its theme records divide
+  exactly into 19 `LegendTheme` and 4 `TypographyTheme` owners. Facet
+  attribution is 47 records with exactly **6 Theme component**, **0 Explicit
+  policy**, and **41 Renderer invariant** records.
+- Closed target-class totals are therefore exactly **61 Theme component**, **4
+  Explicit policy**, and **227 Renderer invariant** records. Theme data scale,
+  Plot-local data scale, and Exact element style each have zero T2d records; no
+  row uses another class or more than one class.
+- Every descriptive key occurs exactly once in Current State, once in Target
+  State, and once in Migration And Evidence, in identical 292-key source-group
+  order. Prior-owned, deferred, rejected, manifest, and compact-reference tables
+  are non-keyed audit context and add no records.
+- T2b remains the sole owner of public legend placement/visibility/sharing,
+  shared-gap override, and content/presence. The four T2d Explicit-policy rows
+  are distinct Canvas implementation branches and do not redeclare those public
+  controls.
+- T2c remains the owner of foundational wrapping/metrics, axes, title-block
+  values, panel minima, and axis consequences. T2d includes exactly the six
+  reserve-axes-false wrapping/chrome/aggregation/baseline records deferred by
+  T2c and exactly the eight D-M21 facet adjustment records; the four C-M14
+  shared-axis primitives remain prior-owned. The D-M20 lifecycle provisional
+  allocation precedes domain preflight and is distinct from D-M21's later
+  measured-layout provisional allocation.
+- Canvas root resolves row-title and text-panel-title typography from the
+  facet/header role and text-panel body typography from the body role. Complete
+  legend-title and legend-label `TextTheme` sizes replace responsive font
+  scaling; small, default, and large values are intentional evidence. Responsive
+  title/label width budgets remain private renderer invariants. Canvas pass-one,
+  pass-two, and draw-time presence/ownership branches migrate through T5a and
+  T5b; second-pass text is reshaped at the second-pass width and that final plan
+  is reused for draw. Title/subtitle placement values and row-title reserve/draw
+  pitches remain independently inventoried before deduplication. Canvas-root
+  measurement-style routing and typography-plus-spacing band aggregation are
+  renderer invariants that consume resolved theme components. Canvas-root
+  TitleBlock ownership changes in T4 while T5b retains its draw after the shared
+  legend, last in Canvas chrome.
+- Legend container fill retains alpha 0.8 and its outline is already separately
+  opaque. `TypographyTheme` owns label line height while `LegendTheme` owns
+  independent entry spacing, including both current 1.8 title-to-first-entry
+  factor/offset records; T2c retains the actual 1.2 text line height. Legend
+  title and label Start-anchor/zero-rotation plus multiline text geometry are
+  separate renderer invariants from their TextTheme appearance rows. Point,
+  line stroke, fill/stroke, and composite glyph handles receive complete bounds
+  and equality without claiming title/label text geometry. Shared
+  Canvas drawing reuses one immutable measured plan; canonical text/panel-text
+  planning errors propagate; geometry clamps and unwrap fallbacks are replaced
+  by validation or rejection. The `clearance_edge` Auto arm is unreachable from
+  its non-Auto caller. Explicit clearance covers every non-Auto position,
+  including outside spacing below the collision margin; target handling
+  canonicalizes or fully validates that path. Residual non-Auto nearest-edge
+  selection remains; its `map_or(Top)` branch is unreachable and creates no
+  fallback contract.
+  One-column selection remains explicit for at most six entries and when no
+  multi-column candidate fits, subject to final fit.
+- The local legend-clearance loop retains its current eight-attempt bound; the
+  facet legend-clearance propagation loop retains its current two-pass bound;
+  fixed-x and fixed-y propagation are independent. The facet shared-axis
+  measure/reserve/geometry adjustment retains four attempts, and facet
+  requirement measurement retains two passes. Each bounded path performs the
+  applicable final fit, collision, or geometric-stability validation and rejects
+  when its proof is incomplete. Facet Auto retains current `OutsideRightTop`
+  behavior. The five independent outside-spacing sources remain separate for
+  T2h relationship reconciliation.
+- T2a contributes 222 records, T2b 261, and T2c 177. The ledger therefore
+  inventories exactly **952** records through T2d.
+- Independent source-partition, ownership, behavior, schema, count, class, and
+  table-order review corrected over-grouped Canvas and facet sources, legend
+  placement ownership, and exact composition traces. Final rereviews found no
+  remaining issue. Tracked-diff checks and `just verify` passed on 2026-08-26.
+  No production code, tests, snapshots, generated output, or specification
+  outside this ledger and the implementation-plan status changed.
