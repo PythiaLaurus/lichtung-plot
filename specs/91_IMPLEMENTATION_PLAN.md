@@ -84,7 +84,7 @@ Phase T1 confirmed these rules for the approved target:
 | T1 | Approved theme architecture contract | COMPLETE |
 | T2 | Complete visual-property ownership inventory | IN PROGRESS |
 | T2a | Ledger protocol and renderer foundations | IN PROGRESS |
-| T2a1 | Current theme and font foundations | PENDING |
+| T2a1 | Current theme and font foundations | COMPLETE |
 | T2a2 | Private style carriers and backend protocol | PENDING |
 | T2a3 | Serialization, geometry recording, and scene conversion | PENDING |
 | T2a4 | Lifecycle, output, and artifact foundations | PENDING |
@@ -255,7 +255,7 @@ Rows are source-based rather than estimate-based. The pre-audit planning ranges
 were 70-85 foundation records, 58-68 public-control records, 105-120 layout and
 chrome records, and about 106 mark and annotation records. These ranges overlap,
 must not be summed, and are not completion thresholds. The completed initial
-foundation audit supersedes its range with the 185-record T2a split below; later
+foundation audit supersedes its range with the 193-record T2a split below; later
 workstreams update their scopes the same way when source evidence differs.
 
 Every subphase records its complete source manifest in the ledger. A production
@@ -279,7 +279,7 @@ explained exclusion.
 **Status**: IN PROGRESS
 
 Create the ledger and inventory foundational private carriers and lifecycle
-sources. The initial read-only audit found 185 records: 57 theme and font
+sources. The reconciled read-only audit found 193 records: 65 theme and font
 records, 52 private style-carrier and backend-protocol records, 36 serialization,
 geometry-recording, and scene records, and 40 lifecycle and output records. These
 counts replace the earlier overlapping estimate for this workstream and require
@@ -304,7 +304,22 @@ fallback paths are explicitly linked to T3, T4, T5a, or T5d remediation.
 
 #### Subphase T2a1: Current Theme And Font Foundations
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: `04_VISUAL_PROPERTY_OWNERSHIP.md` instantiates the canonical
+ledger protocol and records all 65 current theme and font foundation properties.
+The keyed current-state, target-state, and migration/evidence tables preserve
+every required schema field, exact preset values, split responsibilities,
+dormant and miswired fields, hidden preset construction, font fallbacks, and one
+closed T1 target classification and owner per record. T2a and T2 remain in
+progress while T2a2 through T2h are pending. Independent ownership review split
+five multi-owner rows into 13 exact-owner rows, increasing the initial 57-record
+count by eight without adding a production source.
+
+Verification: the T2a1 source manifest and rejected-match table account for the
+three admitted production sources; tests are evidence only. Independent review
+found no remaining ownership or schema issue. Tracked-diff checks and `just
+verify` passed on 2026-08-26. No production code, test, or snapshot changed.
 
 Create `04_VISUAL_PROPERTY_OWNERSHIP.md` with the required schema, source
 manifest, rejected-match table, and every current property record from
@@ -312,7 +327,7 @@ manifest, rejected-match table, and every current property record from
 `ThemePalette` responsibility, dormant fields, split semantic roles, RGB
 serialization, global font constants, and host-font discovery and fallback.
 
-T2a1 is complete when all 57 initially identified records are either present or
+T2a1 is complete when all 65 reconciled records are either present or
 explicitly corrected by a reviewed source-manifest reconciliation, and every
 theme or font match has one record or rejection reason.
 
