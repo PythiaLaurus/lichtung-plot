@@ -91,7 +91,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2b | Public controls and policies | COMPLETE |
 | T2c | Layout, typography, axes, and grid | COMPLETE |
 | T2d | Legends, Canvas composition, and decorations | COMPLETE |
-| T2e | Ordinary plot marks and local styles | PENDING |
+| T2e | Ordinary plot marks and local styles | COMPLETE |
 | T2f | Specialized marks and annotations | PENDING |
 | T2g | Data scales and semantic domains | PENDING |
 | T2h | Cross-source reconciliation and migration map | PENDING |
@@ -587,7 +587,24 @@ and each expected corrective snapshot is named without changing it.
 
 ### Subphase T2e: Ordinary Plot Marks And Local Styles
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: source reconciliation admits exactly 203 canonical T2e records:
+19 vertical-bar, 13 shared-bar, 22 horizontal-bar, 13 boxplot, 19 density, 8
+distribution-sample, 38 sampled violin/raincloud, 20 precomputed raincloud, 26
+line, 9 regression, 4 scatter, 8 guide-rendering, 3 exact-style-conversion, and 1
+closed-line-pattern-conversion responsibilities. Closed classes are exactly 59
+Theme component, 6 Explicit policy, and 138 Renderer invariant records. Together
+with the 952 completed T2a through T2d records, the ledger inventories 1155
+records through completed T2e. T2f through T2h remain source-driven and pending.
+
+Verification: independent source-partition, ownership, behavior, schema, count,
+class, relationship, and table-order review corrected significance and data-scale
+leakage, over-grouped styles and geometry, incomplete source ranges, and exact
+point/legend measurement traces. Final rereviews found no remaining issue.
+Tracked-diff checks and `just verify` passed on 2026-08-27. No production code,
+public API, tests, snapshots, generated output, intended rendering, or other
+specification changed.
 
 Inventory renderer-owned visual sources in `plots/bar.rs`, `plots/bar_data.rs`,
 `plots/boxplot.rs`, `plots/density.rs`, `plots/distribution_sample.rs`,
