@@ -85,7 +85,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2 | Complete visual-property ownership inventory | IN PROGRESS |
 | T2a | Ledger protocol and renderer foundations | IN PROGRESS |
 | T2a1 | Current theme and font foundations | COMPLETE |
-| T2a2 | Private style carriers and backend protocol | PENDING |
+| T2a2 | Private style carriers and backend protocol | COMPLETE |
 | T2a3 | Serialization, geometry recording, and scene conversion | PENDING |
 | T2a4 | Lifecycle, output, and artifact foundations | PENDING |
 | T2b | Public controls and policies | PENDING |
@@ -281,9 +281,10 @@ explained exclusion.
 Create the ledger and inventory foundational private carriers and lifecycle
 sources. The reconciled read-only audit found 193 records: 65 theme and font
 records, 52 private style-carrier and backend-protocol records, 36 serialization,
-geometry-recording, and scene records, and 40 lifecycle and output records. These
-counts replace the earlier overlapping estimate for this workstream and require
-four bounded commits before T2a can complete.
+geometry-recording, and scene records, and 40 lifecycle and output records. T2a1
+and T2a2 have completed 117 of those records; T2a3 and T2a4 retain the remaining
+76. These counts replace the earlier overlapping estimate for this workstream
+and require four bounded commits before T2a can complete.
 
 T2a owns only foundational carrier, preset construction, draw-boundary,
 serialization, geometry-recording, scene, and lifecycle entries in mixed files.
@@ -333,7 +334,25 @@ theme or font match has one record or rejection reason.
 
 #### Subphase T2a2: Private Style Carriers And Backend Protocol
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: `04_VISUAL_PROPERTY_OWNERSHIP.md` appends 52 keyed T2a2
+records for `render/backend.rs`. Source reconciliation confirmed the initial
+count without a net split correction: the combined `BracketStyle::color`
+declaration is represented by separate private stroke-paint and text-paint
+transport records linked to their T2a1 semantic owners. The existing coordinate
+protocol record also owns integer text positions, so the corrected source
+coverage does not add a record. T2a1 and T2a2 therefore complete exactly 117
+T2a records; the reconciled four-part T2a total remains 193. T2a and T2 remain
+in progress while T2a3 through T2h are pending.
+
+Verification: source reconciliation and independent ownership review corrected
+private carrier ownership, the dormant rounded-rectangle fallback, degenerate
+primitive validation, gradient-stop replacement, and the rejected-match table.
+The keyed current-state, target-state, and migration/evidence table counts
+account for the admitted production source; independent re-review found no
+remaining ownership or schema issue. Tracked-diff checks and `just verify`
+passed on 2026-08-26. No production code, test, or snapshot changed.
 
 Inventory the foundational declarations, defaults, mutators, validation, and
 protocol fallbacks in `render/backend.rs`. Cover point, line, fill, gradient,
