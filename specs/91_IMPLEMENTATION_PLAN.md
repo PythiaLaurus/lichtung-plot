@@ -93,7 +93,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2d | Legends, Canvas composition, and decorations | COMPLETE |
 | T2e | Ordinary plot marks and local styles | COMPLETE |
 | T2f | Specialized marks and annotations | COMPLETE |
-| T2g | Data scales and semantic domains | PENDING |
+| T2g | Data scales and semantic domains | COMPLETE |
 | T2h | Cross-source reconciliation and migration map | PENDING |
 | T3 | One private resolved-theme pipeline | PENDING |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
@@ -668,7 +668,24 @@ current style and evidence consumer.
 
 ### Subphase T2g: Data Scales And Semantic Domains
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: source reconciliation admits exactly 173 canonical T2g
+records: 32 core semantic-value/accessor, 10 facet/Canvas/validation, 58 ordinary
+plot-consumer, 71 specialized plot-consumer, and 2 focused residual
+responsibilities. Closed classes are exactly 167 Renderer invariant, 3 Theme
+data scale, 2 Plot-local data scale, and 1 Theme component records. Together
+with the 1663 completed T2a through T2f records, the ledger inventories 1836
+records through completed T2g. T2h remains source-driven and pending.
+
+Verification: independent source-partition, current-behavior, target-ownership,
+public-name, schema, count, class, relationship, migration-phase, and table-order
+review corrected over-grouped facet/Canvas sources, missing Beeswarm and Dumbbell
+semantics, exact-map and hue-projection attribution, constant-domain handling,
+accent naming, and ungated facet hue contribution. Final rereviews found no
+remaining issue. Tracked-diff checks and `just verify` passed on 2026-08-27. No
+production code, public API, tests, snapshots, generated output, intended
+rendering, or specification outside the ownership ledger and this status changed.
 
 Inventory current categorical identity order, domain construction, palette
 selection, continuous-color routing, and facet-wide coordination in the relevant
