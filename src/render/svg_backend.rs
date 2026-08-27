@@ -9,7 +9,7 @@ use super::backend::{
     validate_line_style, validate_linear_gradient, validate_point_style, validate_points,
     validate_polygon_points, validate_rounded_rect, validate_text, validate_triangle_points,
     Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle, Point2D, PointStyle,
-    SignificanceBracket, TextAnchor, TextStyle,
+    SignificanceBracket, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
 };
 use super::coordinates::CanonicalPoint;
 use crate::layout::PanelBox;
@@ -480,8 +480,8 @@ impl Backend for SvgBackend {
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             self.buf(),
-                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\"/>",
-                            style.opacity
+                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
+                            style.opacity,
                         );
                     } else {
                         let _ = writeln!(
@@ -535,8 +535,8 @@ impl Backend for SvgBackend {
         let buf = self.buf();
         let _ = writeln!(
             buf,
-            "<polygon points=\"{pts_str}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\"/>",
-            style.opacity, style.stroke_width
+            "<polygon points=\"{pts_str}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
+            style.opacity, style.stroke_width,
         );
         Ok(())
     }
@@ -891,6 +891,203 @@ mod tests {
     }
 
     #[test]
+    fn point_shapes_and_polygon_joins_have_exact_closed_serialization() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_scatter(
+                &[Point2D::new(10.0, 20.0)],
+                &PointStyle::plain((0, 0, 0), 2),
+            )
+            .unwrap();
+        backend
+            .draw_scatter(
+                &[Point2D::new(20.0, 20.0)],
+                &PointStyle::plain((1, 2, 3), 2).with_shape(PointShape::TriangleUp),
+            )
+            .unwrap();
+        backend
+            .draw_scatter(&[Point2D::new(15.0, 20.0)], &PointStyle::new((7, 8, 9), 2))
+            .unwrap();
+        backend
+            .draw_scatter(
+                &[Point2D::new(30.0, 20.0)],
+                &PointStyle::new((4, 5, 6), 2).with_shape(PointShape::TriangleUp),
+            )
+            .unwrap();
+        backend
+            .draw_polygon(
+                &[
+                    Point2D::new(10.0, 10.0),
+                    Point2D::new(20.0, 10.0),
+                    Point2D::new(10.0, 20.0),
+                ],
+                &test_fill_style(),
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let primitives = svg
+            .lines()
+            .filter(|line| line.starts_with("<circle ") || line.starts_with("<polygon "))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            primitives,
+            [
+                "<circle cx=\"10.000\" cy=\"80.000\" r=\"2\" fill=\"#000000\" fill-opacity=\"0.82\"/>",
+                "<polygon points=\"20.000,78.000 18.268,81.000 21.732,81.000\" fill=\"#010203\" fill-opacity=\"0.82\"/>",
+                "<circle cx=\"15.000\" cy=\"80.000\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2\"/>",
+                "<polygon points=\"30.000,78.000 28.268,81.000 31.732,81.000\" fill=\"#040506\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<polygon points=\"10.000,90.000 20.000,90.000 10.000,80.000\" fill=\"#010203\" fill-opacity=\"1.00\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+            ]
+        );
+    }
+
+    #[test]
+    fn line_patterns_are_exact_and_degenerate_invalid_carriers_are_noops() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_line(
+                &[Point2D::new(f64::NAN, f64::NAN)],
+                &LineStyle::solid((0, 0, 0), f32::NAN),
+            )
+            .unwrap();
+        backend
+            .draw_polygon(
+                &[
+                    Point2D::new(f64::NAN, f64::NAN),
+                    Point2D::new(f64::NAN, f64::NAN),
+                ],
+                &FillStyle {
+                    color: (0, 0, 0),
+                    stroke: (0, 0, 0),
+                    stroke_width: f32::NAN,
+                    opacity: f64::NAN,
+                },
+            )
+            .unwrap();
+        let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
+        for style in [
+            LineStyle::solid((0, 0, 0), 1.25),
+            LineStyle::short_dashed((0, 0, 0), 1.25),
+            LineStyle::medium_dashed((0, 0, 0), 1.25),
+            LineStyle::long_dashed((0, 0, 0), 1.25),
+        ] {
+            backend.draw_line(&points, &style).unwrap();
+        }
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let lines = svg
+            .lines()
+            .filter(|line| line.starts_with("<polyline "))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            lines,
+            [
+                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"3 2\"/>",
+                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"4 3\"/>",
+                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"5 3\"/>",
+            ]
+        );
+        assert!(!svg.contains("fill-opacity=\"NaN\""));
+    }
+
+    #[test]
+    fn rounded_rect_uses_native_geometry() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_rounded_rect(
+                10.0,
+                6.0,
+                30.0,
+                20.0,
+                3.0,
+                &FillStyle {
+                    color: (1, 2, 3),
+                    stroke: (4, 5, 6),
+                    stroke_width: 1.5,
+                    opacity: 0.25,
+                },
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let rounded_rects = svg
+            .lines()
+            .filter(|line| line.starts_with("<rect x="))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rounded_rects,
+            ["<rect x=\"10.00\" y=\"74.00\" width=\"30.00\" height=\"20.00\" rx=\"3.0\" ry=\"3.0\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"]
+        );
+        assert!(!svg.contains("<polygon"));
+    }
+
+    #[test]
+    fn xml_special_characters_are_escaped_in_every_current_context() {
+        let special = "<&\"'>";
+        let escaped = "&lt;&amp;&quot;&apos;&gt;";
+        let mut text_style = test_text_style();
+        text_style.font_family = special.into();
+        let bracket_style = BracketStyle {
+            color: (0, 0, 0),
+            width: 1.0,
+            font_family: special.into(),
+            font_size: 12,
+            weight: crate::TextWeight::Normal,
+            label_gap: 5.0,
+        };
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend.begin_layer(special).unwrap();
+        backend
+            .draw_text(Point2D::new(10.0, 10.0), special, &text_style)
+            .unwrap();
+        backend.end_layer().unwrap();
+        backend
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 10.0,
+                    x_right: 20.0,
+                    y: 30.0,
+                    label: special.into(),
+                    orientation: super::super::backend::BracketOrientation::Vertical,
+                },
+                &bracket_style,
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains(&format!("<g id=\"{escaped}\">")));
+        assert_eq!(
+            svg.matches(&format!("font-family=\"{escaped}\"")).count(),
+            2
+        );
+        assert_eq!(svg.matches(&format!(">{escaped}</text>")).count(), 2);
+        assert!(!svg.contains(special));
+    }
+
+    #[test]
+    fn empty_canvas_has_exact_canonical_document_framing() {
+        let mut backend = SvgBackend::in_memory(2, 3);
+        backend.begin(2, 3).unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert_eq!(
+            svg,
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\" viewBox=\"0 0 2 3\" role=\"img\">\n<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>\n<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n</svg>\n"
+        );
+    }
+
+    #[test]
     fn positive_subprecision_extents_and_stops_remain_representable() {
         let mut backend = SvgBackend::in_memory(100, 100);
         backend.begin(100, 100).unwrap();
@@ -1103,6 +1300,14 @@ mod tests {
                     &stops,
                 )
                 .unwrap();
+            backend
+                .draw_linear_gradient(
+                    PanelBox::new(30.0, 42.0, 20.0, 80.0),
+                    Point2D::new(36.0, 20.0),
+                    Point2D::new(36.0, 80.0),
+                    &stops,
+                )
+                .unwrap();
             backend.end().unwrap();
             String::from_utf8(backend.into_bytes().unwrap()).unwrap()
         };
@@ -1111,11 +1316,19 @@ mod tests {
         let second = render();
         assert_eq!(first, second);
         assert!(first.contains(
-            "<linearGradient id=\"linear-gradient-0\" gradientUnits=\"userSpaceOnUse\" x1=\"16.000\" y1=\"80.000\" x2=\"16.000\" y2=\"20.000\">"
+            "<linearGradient id=\"linear-gradient-0\" gradientUnits=\"userSpaceOnUse\" x1=\"16.000\" y1=\"80.000\" x2=\"16.000\" y2=\"20.000\">\n<stop offset=\"0.000000\" stop-color=\"#3182BD\"/>\n<stop offset=\"0.250000\" stop-color=\"#F7F7F7\"/>\n<stop offset=\"1.000000\" stop-color=\"#DE2D26\"/>\n</linearGradient>\n"
         ));
-        assert!(first.contains("<stop offset=\"0.250000\" stop-color=\"#F7F7F7\"/>"));
         assert!(first.contains(
             "<rect x=\"10.000\" y=\"20.000\" width=\"12.000\" height=\"60.000\" fill=\"url(#linear-gradient-0)\"/>"
         ));
+        let first_gradient = first.find("id=\"linear-gradient-0\"").unwrap();
+        let second_gradient = first.find("id=\"linear-gradient-1\"").unwrap();
+        let background = first.find("<rect width=\"100%\"").unwrap();
+        let first_fill = first.find("fill=\"url(#linear-gradient-0)\"").unwrap();
+        let second_fill = first.find("fill=\"url(#linear-gradient-1)\"").unwrap();
+        assert!(first_gradient < second_gradient);
+        assert!(second_gradient < background);
+        assert!(background < first_fill);
+        assert!(first_fill < second_fill);
     }
 }

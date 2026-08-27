@@ -364,10 +364,37 @@ impl Backend for NullBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::backend::BracketOrientation;
+    use crate::render::svg_backend::SvgBackend;
+
+    fn paired_draw_result(
+        draw: impl Fn(&mut dyn Backend) -> Result<(), Error>,
+    ) -> (Result<(), String>, String) {
+        let mut null = NullBackend::default();
+        null.begin(100, 100).unwrap();
+        let null_result = draw(&mut null).map_err(|error| error.to_string());
+        null.end().unwrap();
+
+        let mut svg = SvgBackend::in_memory(100, 100);
+        svg.begin(100, 100).unwrap();
+        let svg_result = draw(&mut svg).map_err(|error| error.to_string());
+        svg.end().unwrap();
+        let output = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+
+        assert_eq!(null_result, svg_result);
+        (null_result, output)
+    }
+
+    fn assert_paired_rejection(draw: impl Fn(&mut dyn Backend) -> Result<(), Error>) {
+        assert!(paired_draw_result(draw).0.is_err());
+    }
+
+    fn assert_paired_success(draw: impl Fn(&mut dyn Backend) -> Result<(), Error>) {
+        assert_eq!(paired_draw_result(draw).0, Ok(()));
+    }
 
     #[test]
     fn null_backend_preserves_degenerate_line_and_polygon_noops() {
-        let mut backend = NullBackend::default();
         let invalid_line = LineStyle::solid((0, 0, 0), f32::NAN);
         let invalid_fill = FillStyle {
             color: (0, 0, 0),
@@ -376,20 +403,167 @@ mod tests {
             opacity: f64::NAN,
         };
 
-        backend.begin(100, 100).unwrap();
-        assert!(backend
-            .draw_line(&[Point2D::new(f64::NAN, f64::NAN)], &invalid_line)
-            .is_ok());
-        assert!(backend
-            .draw_polygon(
+        let (result, svg) = paired_draw_result(|backend| {
+            backend.draw_line(&[Point2D::new(f64::NAN, f64::NAN)], &invalid_line)?;
+            backend.draw_polygon(
                 &[
                     Point2D::new(f64::NAN, f64::NAN),
                     Point2D::new(f64::NAN, f64::NAN),
                 ],
                 &invalid_fill,
             )
-            .is_ok());
-        backend.end().unwrap();
+        });
+
+        assert_eq!(result, Ok(()));
+        assert!(!svg.contains("<polyline"));
+        assert!(!svg.contains("<polygon"));
+    }
+
+    #[test]
+    fn null_and_svg_share_non_degenerate_line_and_polygon_failures() {
+        let invalid_fill = FillStyle {
+            color: (0, 0, 0),
+            stroke: (0, 0, 0),
+            stroke_width: f32::NAN,
+            opacity: f64::NAN,
+        };
+
+        assert_paired_rejection(|backend| {
+            backend.draw_line(
+                &[Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)],
+                &LineStyle::solid((0, 0, 0), 1.0),
+            )
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_line(
+                &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)],
+                &LineStyle::solid((0, 0, 0), f32::NAN),
+            )
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_polygon(
+                &[
+                    Point2D::new(0.0, 0.0),
+                    Point2D::new(1.0, 0.0),
+                    Point2D::new(0.0, 1.0),
+                ],
+                &invalid_fill,
+            )
+        });
+    }
+
+    #[test]
+    fn null_and_svg_share_gradient_geometry_and_stop_failures() {
+        let bounds = PanelBox::new(0.0, 10.0, 0.0, 10.0);
+        let start = Point2D::new(0.0, 0.0);
+        let end = Point2D::new(10.0, 10.0);
+        let stops = [
+            GradientStop::new(0.0, (0, 0, 0)),
+            GradientStop::new(1.0, (255, 255, 255)),
+        ];
+
+        assert_paired_rejection(|backend| {
+            backend.draw_linear_gradient(PanelBox::new(0.0, 0.0, 0.0, 10.0), start, end, &stops)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_linear_gradient(bounds, start, start, &stops)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_linear_gradient(bounds, start, end, &[GradientStop::new(0.0, (0, 0, 0))])
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_linear_gradient(
+                bounds,
+                start,
+                end,
+                &[
+                    GradientStop::new(0.0, (0, 0, 0)),
+                    GradientStop::new(0.5, (127, 127, 127)),
+                    GradientStop::new(0.5, (128, 128, 128)),
+                    GradientStop::new(1.0, (255, 255, 255)),
+                ],
+            )
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_linear_gradient(
+                bounds,
+                start,
+                end,
+                &[
+                    GradientStop::new(0.0, (0, 0, 0)),
+                    GradientStop::new(0.000_000_4, (127, 127, 127)),
+                    GradientStop::new(1.0, (255, 255, 255)),
+                ],
+            )
+        });
+    }
+
+    #[test]
+    fn null_and_svg_share_rounded_rect_geometry_style_and_order() {
+        let valid_fill = FillStyle {
+            color: (0, 0, 0),
+            stroke: (0, 0, 0),
+            stroke_width: 1.0,
+            opacity: 1.0,
+        };
+        let invalid_fill = FillStyle {
+            color: (0, 0, 0),
+            stroke: (0, 0, 0),
+            stroke_width: f32::NAN,
+            opacity: f64::NAN,
+        };
+
+        assert_paired_success(|backend| {
+            backend.draw_rounded_rect(1.0, 2.0, 0.0, 0.0, 0.0, &valid_fill)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_rounded_rect(1.0, 2.0, -1.0, 4.0, 1.0, &valid_fill)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_rounded_rect(1.0, 2.0, 4.0, 4.0, 3.0, &valid_fill)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_rounded_rect(f64::MAX, 2.0, f64::MAX, 4.0, 1.0, &valid_fill)
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_rounded_rect(1.0, 2.0, 4.0, 4.0, 1.0, &invalid_fill)
+        });
+        let (result, _) = paired_draw_result(|backend| {
+            backend.draw_rounded_rect(1.0, 2.0, -1.0, 4.0, 1.0, &invalid_fill)
+        });
+        assert!(result
+            .unwrap_err()
+            .contains("dimensions and radius must be non-negative"));
+    }
+
+    #[test]
+    fn null_and_svg_share_bracket_geometry_and_style_failures() {
+        let bracket = SignificanceBracket {
+            x_left: 10.0,
+            x_right: 20.0,
+            y: 20.0,
+            label: "*".into(),
+            orientation: BracketOrientation::Vertical,
+        };
+        let bracket_style = BracketStyle {
+            color: (0, 0, 0),
+            width: 1.0,
+            font_family: "sans-serif".into(),
+            font_size: 12,
+            weight: crate::TextWeight::Normal,
+            label_gap: 4.0,
+        };
+
+        let mut invalid_geometry = bracket.clone();
+        invalid_geometry.y = f64::NAN;
+        assert_paired_rejection(|backend| backend.draw_bracket(&invalid_geometry, &bracket_style));
+        let mut collapsed = bracket.clone();
+        collapsed.x_left = 0.0;
+        collapsed.x_right = 0.0004;
+        assert_paired_rejection(|backend| backend.draw_bracket(&collapsed, &bracket_style));
+        let mut invalid_style = bracket_style.clone();
+        invalid_style.width = f32::NAN;
+        assert_paired_rejection(|backend| backend.draw_bracket(&bracket, &invalid_style));
     }
 
     #[test]

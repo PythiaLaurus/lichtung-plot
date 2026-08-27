@@ -323,6 +323,8 @@ pub(crate) const SIGNIFICANCE_BRACKET_METRICS: BracketMetrics = BracketMetrics {
     panel_padding: 2.0,
 };
 
+pub(crate) const POLYGON_MITER_LIMIT: f64 = 4.0;
+
 /// Visual style for a significance bracket.
 #[derive(Debug, Clone)]
 pub struct BracketStyle {
