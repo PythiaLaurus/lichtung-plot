@@ -34,6 +34,7 @@ use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range, quantile};
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 #[derive(Debug, PartialEq)]
@@ -60,7 +61,8 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    render_samples(chart, context, backend, DistributionLayout::Mirrored)
+    let theme = context.theme;
+    render_samples(chart, context, theme, backend, DistributionLayout::Mirrored)
 }
 
 pub(crate) fn render_raincloud(
@@ -68,19 +70,26 @@ pub(crate) fn render_raincloud(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     if let Some(input) = chart.raincloud_geometry_input() {
         return precomputed::render(chart, input, context, backend);
     }
-    render_samples(chart, context, backend, DistributionLayout::Raincloud)
+    render_samples(
+        chart,
+        context,
+        theme,
+        backend,
+        DistributionLayout::Raincloud,
+    )
 }
 
 fn render_samples(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
     distribution_layout: DistributionLayout,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
     let family = match distribution_layout {
         DistributionLayout::Mirrored => "violin",
         DistributionLayout::Raincloud => "raincloud",
@@ -142,16 +151,17 @@ fn render_samples(
     let rendered_maxima = vec![support_range.1; x_levels.len()];
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, panel, x_levels)?;
+    let panel =
+        crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, panel, x_levels, theme)?;
     let legend_entries = hue_levels
         .iter()
         .enumerate()
         .map(|(idx, label)| {
-            let color = chart.categorical_color(family, label, idx)?;
+            let color = chart.categorical_color(family, label, idx, theme)?;
             let identity = chart.legend_identity(label.clone());
             let fill = FillStyle {
                 color,
-                stroke: palette.foreground,
+                stroke: theme.foreground,
                 stroke_width: 1.0,
                 opacity: 0.70,
             };
@@ -239,8 +249,8 @@ fn render_samples(
             };
 
             let fill = FillStyle {
-                color: group_color(chart, group, i, group_active, family)?,
-                stroke: palette.foreground,
+                color: group_color(chart, group, i, group_active, family, theme)?,
+                stroke: theme.foreground,
                 stroke_width: 1.0,
                 opacity: 0.70,
             };
@@ -271,7 +281,7 @@ fn render_samples(
                     let (_, q3_px) = proj.project(center_x_data, summary.q3);
                     let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
                     let (_, median_px) = proj.project(center_x_data, summary.median);
-                    let whisker_line = LineStyle::solid(palette.foreground, palette.axis_width);
+                    let whisker_line = LineStyle::solid(theme.foreground, theme.axis_width);
                     backend.draw_line(
                         &[
                             Point2D::new(cx_px, lo_whisker_px),
@@ -301,13 +311,13 @@ fn render_samples(
                     ];
                     let box_fill = FillStyle {
                         color: (255, 255, 255),
-                        stroke: palette.foreground,
+                        stroke: theme.foreground,
                         stroke_width: 1.0,
                         opacity: 1.0,
                     };
                     backend.draw_polygon(&box_pts, &box_fill)?;
 
-                    let median_line = LineStyle::solid(palette.foreground, 1.5);
+                    let median_line = LineStyle::solid(theme.foreground, 1.5);
                     backend.draw_line(
                         &[
                             Point2D::new(cx_px - box_w_px, median_px),
@@ -346,7 +356,7 @@ fn render_samples(
                         ],
                         &FillStyle {
                             color: (255, 255, 255),
-                            stroke: palette.foreground,
+                            stroke: theme.foreground,
                             stroke_width: 1.0,
                             opacity: 1.0,
                         },
@@ -356,7 +366,7 @@ fn render_samples(
                             Point2D::new(box_left, median),
                             Point2D::new(box_right, median),
                         ],
-                        &LineStyle::solid(palette.foreground, 1.5),
+                        &LineStyle::solid(theme.foreground, 1.5),
                     )?;
                 }
             }
@@ -381,7 +391,7 @@ fn render_samples(
                             .into(),
                     ));
                 }
-                let color = group_color(chart, group, index, group_active, family)?;
+                let color = group_color(chart, group, index, group_active, family, theme)?;
                 let points = group
                     .observations
                     .iter()
@@ -408,7 +418,7 @@ fn render_samples(
             };
             for (index, group) in sample.groups.iter().enumerate() {
                 let center = crate::plots::distribution_sample::center(group, group_levels.len());
-                let color = group_color(chart, group, index, group_active, family)?;
+                let color = group_color(chart, group, index, group_active, family, theme)?;
                 let points = group
                     .observations
                     .iter()
@@ -447,15 +457,15 @@ fn group_color(
     default_index: usize,
     group_active: bool,
     family: &'static str,
+    theme: &ResolvedTheme,
 ) -> Result<(u8, u8, u8), Error> {
     let color_index = group
         .hue_index
         .unwrap_or(if group_active { 0 } else { default_index });
     if let Some(label) = group.hue_label.as_deref() {
-        chart.categorical_color(family, label, color_index)
+        chart.categorical_color(family, label, color_index, theme)
     } else {
-        let palette = chart.palette();
-        Ok(palette.colors[color_index % palette.colors.len()])
+        Ok(theme.colors[color_index % theme.colors.len()])
     }
 }
 

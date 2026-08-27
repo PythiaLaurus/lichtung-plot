@@ -58,7 +58,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = chart.palette();
+    let palette = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for curve in &prepared.curves {

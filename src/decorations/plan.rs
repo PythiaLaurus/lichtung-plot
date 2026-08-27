@@ -106,12 +106,13 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<PanelPlan, Error> {
     let chart = crate::kind::into_erased(chart.clone());
     let source_rows = chart.configured_source_rows()?;
     let context = source_rows.map_or_else(
-        || PlotRenderContext::new(chart.data(), cell),
-        |rows| PlotRenderContext::with_source_rows(chart.data(), rows, cell),
+        || PlotRenderContext::new(chart.data(), cell, theme),
+        |rows| PlotRenderContext::with_source_rows(chart.data(), rows, cell, theme),
     );
     plan_panel_with_context(&chart, kind, role, context, None)
 }
@@ -154,8 +155,13 @@ pub(crate) fn plan_panel_with_context(
     let panel = legend.as_ref().map_or(Ok(cell), |legend| {
         reserve_outside_panel(cell, legend, planning_chart.legend_position_spec())
     })?;
-    let panel =
-        planning_chart.reserve_rewrapped_axis_titles(kind, cell, panel, &discovered.layout)?;
+    let panel = planning_chart.reserve_rewrapped_axis_titles(
+        kind,
+        cell,
+        panel,
+        &discovered.layout,
+        context.theme,
+    )?;
 
     let (mut result, mut geometry) = if panel == cell {
         (discovered, discovery)
@@ -180,6 +186,7 @@ pub(crate) fn plan_panel_with_context(
                     &result,
                     &legend,
                     preferred,
+                    context.theme,
                 )?;
                 auto_candidate_index = Some(index);
                 legend.inside_candidates(result.layout.projection.pixel_box())[index]
@@ -203,6 +210,7 @@ pub(crate) fn plan_panel_with_context(
                 &planning_chart,
                 &result.layout,
                 legend.bounds,
+                context.theme,
             )? {
                 return Err(Error::Render(format!(
                     "panel text annotation at {corner:?} is incompatible with the resolved inside legend; hide the legend or choose an outside legend position"
@@ -231,6 +239,7 @@ pub(crate) fn plan_panel_with_context(
                 geometry.bounds(),
                 legend_default,
                 auto_candidate_index.unwrap_or(0),
+                context.theme,
             ) else {
                 break;
             };
@@ -326,10 +335,11 @@ pub(crate) fn plan_panel_with_context(
 fn record_brackets(
     chart: &Plot,
     result: &PlotRenderResult,
+    theme: &crate::theme::ResolvedTheme,
     geometry: &mut GeometryBackend,
 ) -> Result<(), Error> {
     if !result.significance_brackets.is_empty() {
-        crate::significance::render(chart, &result.significance_brackets, geometry)?;
+        crate::significance::render(chart, &result.significance_brackets, theme, geometry)?;
     }
     Ok(())
 }
@@ -342,7 +352,7 @@ fn discover_geometry(
     let mut geometry = GeometryBackend::default();
     geometry.begin(chart.width(), chart.height())?;
     let result = render(chart, kind, context, &mut geometry).and_then(|result| {
-        record_brackets(chart, &result, &mut geometry)?;
+        record_brackets(chart, &result, context.theme, &mut geometry)?;
         Ok(result)
     });
     let result = backend::finish_scope(result, geometry.end(), "geometry discovery")?;
@@ -399,6 +409,10 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) 
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "automatic legend clearance consumes one immutable planned scene and theme"
+)]
 fn automatic_clearance(
     kind: PlotKind,
     chart: &Plot,
@@ -407,6 +421,7 @@ fn automatic_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     default: LegendDefault,
     current_candidate: usize,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Option<AutomaticClearance> {
     match default {
         LegendDefault::TopRight(clearance) => top_right_clearance(
@@ -417,13 +432,18 @@ fn automatic_clearance(
             geometry,
             clearance,
             current_candidate,
+            theme,
         ),
         LegendDefault::LowestOverlap | LegendDefault::SelfManaged => {
-            lowest_overlap_clearance(kind, chart, result, legend, geometry)
+            lowest_overlap_clearance(kind, chart, result, legend, geometry, theme)
         }
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "candidate selection keeps the immutable legend-planning inputs explicit"
+)]
 fn top_right_clearance(
     kind: PlotKind,
     chart: &Plot,
@@ -432,6 +452,7 @@ fn top_right_clearance(
     geometry: &[crate::render::geometry::GeometryBox],
     clearance: LegendClearance,
     current_candidate: usize,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Option<AutomaticClearance> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -441,8 +462,13 @@ fn top_right_clearance(
         .enumerate()
         .skip(current_candidate)
     {
-        if crate::decorations::panel_text::conflicting_legend_corner(chart, &result.layout, bounds)
-            .map_or(true, |corner| corner.is_some())
+        if crate::decorations::panel_text::conflicting_legend_corner(
+            chart,
+            &result.layout,
+            bounds,
+            theme,
+        )
+        .map_or(true, |corner| corner.is_some())
         {
             continue;
         }
@@ -495,6 +521,7 @@ fn lowest_overlap_clearance(
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
+    theme: &crate::theme::ResolvedTheme,
 ) -> Option<AutomaticClearance> {
     let margin = legend.metrics.font_size.max(6.0);
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
@@ -512,6 +539,7 @@ fn lowest_overlap_clearance(
                 chart,
                 &result.layout,
                 bounds,
+                theme,
             )
             .map_or(true, |corner| corner.is_some())
         {
@@ -725,6 +753,7 @@ fn auto_candidate_avoiding_panel_text(
     result: &PlotRenderResult,
     legend: &Legend,
     preferred: usize,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<usize, Error> {
     let candidates = legend.inside_candidates(result.layout.projection.pixel_box());
     for offset in 0..candidates.len() {
@@ -733,6 +762,7 @@ fn auto_candidate_avoiding_panel_text(
             chart,
             &result.layout,
             candidates[index],
+            theme,
         )?
         .is_none()
         {

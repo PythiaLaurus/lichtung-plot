@@ -858,14 +858,14 @@ fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
 pub(crate) fn render(
     chart: &Plot,
     brackets: &[SignificanceBracket],
+    theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let palette = chart.palette();
     let mark_style = chart.significance_mark_style_spec();
     let style = BracketStyle {
-        color: palette.foreground,
-        width: palette.bracket_width,
-        font_family: palette.font_family,
+        color: theme.foreground,
+        width: theme.bracket_width,
+        font_family: theme.font_family.clone(),
         font_size: mark_style.font_size_spec(),
         weight: mark_style.weight_spec(),
         label_gap: mark_style.gap_spec(),

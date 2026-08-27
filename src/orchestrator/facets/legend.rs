@@ -10,21 +10,23 @@ use crate::render::backend::Backend;
 use crate::spec::{
     AxisDomain, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
 };
+use crate::theme::ResolvedTheme;
 
 pub(super) fn preflight_coordinated_panels(
     source: &Plot,
     chart: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(Plot, Vec<PlotRenderResult>), Error> {
     let facet_scales = source.facet_scales_spec();
-    let preflight = preflight_panels(&chart, kind, panels, facet_scales, backend)?;
+    let preflight = preflight_panels(&chart, kind, panels, facet_scales, theme, backend)?;
     if source.hue_dimension_key().is_none() {
         return Ok((chart, preflight));
     }
     let chart = coordinate_hue_levels(source, chart, &preflight)?;
-    let preflight = preflight_panels(&chart, kind, panels, facet_scales, backend)?;
+    let preflight = preflight_panels(&chart, kind, panels, facet_scales, theme, backend)?;
     Ok((chart, preflight))
 }
 
@@ -33,6 +35,7 @@ fn preflight_panels(
     kind: PlotKind,
     panels: &[FacetPanel],
     facet_scales: crate::FacetScales,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<Vec<PlotRenderResult>, Error> {
     let mut preflight = Vec::with_capacity(panels.len());
@@ -47,6 +50,7 @@ fn preflight_panels(
                 PlotRenderContext::new(
                     crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                     facet.panel,
+                    theme,
                 )
                 .with_facet_scales(facet_scales),
                 backend,

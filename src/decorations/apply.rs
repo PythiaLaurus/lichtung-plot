@@ -61,7 +61,7 @@ pub(crate) fn apply_canvas_text(
         title_block.draw(
             backend,
             chart.width(),
-            &chart.measured_canvas_layout()?,
+            &chart.measured_canvas_layout(palette)?,
             palette,
         )?;
     }

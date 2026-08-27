@@ -2,7 +2,8 @@ use std::sync::atomic::Ordering;
 
 use super::{
     test_directory, BackendFailure, Plot, PlotKind, RecordingBackend, Significance,
-    SignificanceMark, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
+    SignificanceMark, ValueSort, FINAL_PLOT_RENDER_CALLS, PLOT_PLAN_CALLS, RENDER_PANEL_CALLS,
+    RENDER_THEME_ADDRESSES, TEMP_FILE_COUNTER,
 };
 use crate::orchestrator::DeferredBackend;
 use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
@@ -131,6 +132,62 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 }
 
 #[test]
+fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
+    crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
+    PLOT_PLAN_CALLS.with(|calls| calls.set(0));
+    FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
+    RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .theme(crate::Theme::Nature);
+    let mut backend = RecordingBackend::default();
+
+    chart.render_with_backend(&mut backend).unwrap();
+
+    assert_eq!(
+        crate::theme::THEME_RESOLUTION_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!((backend.begins, backend.ends), (1, 1));
+    RENDER_THEME_ADDRESSES.with(|addresses| {
+        let addresses = addresses.borrow();
+        assert!(!addresses.is_empty());
+        assert!(addresses.iter().all(|address| *address == addresses[0]));
+    });
+}
+
+#[test]
+fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
+    crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
+    PLOT_PLAN_CALLS.with(|calls| calls.set(0));
+    FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
+    RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
+    let chart = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .theme(crate::Theme::CHI);
+
+    chart.preflight().unwrap();
+
+    assert_eq!(
+        crate::theme::THEME_RESOLUTION_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 0);
+    RENDER_THEME_ADDRESSES.with(|addresses| {
+        let addresses = addresses.borrow();
+        assert!(!addresses.is_empty());
+        assert!(addresses.iter().all(|address| *address == addresses[0]));
+    });
+}
+
+#[test]
 fn invalid_chart_preflights_before_output_path_access() {
     let chart = Plot::scatter(
         crate::NumericValues::new("x", [1.0, 2.0]),
@@ -256,7 +313,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        (2, 8, 3, 2, 3)
+        (3, 10, 3, 2, 3)
     );
 }
 

@@ -19,8 +19,8 @@ pub(super) fn render_scene(
     source: &Plot,
     chart: &Plot,
     kind: PlotKind,
-    panels: Vec<FacetPanel>,
-    plans: Vec<PanelPlan>,
+    panels: &[FacetPanel],
+    plans: &[PanelPlan],
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
     outer: PanelBox,
@@ -28,20 +28,15 @@ pub(super) fn render_scene(
     palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    for (facet, plan) in panels.iter().zip(&plans) {
+    for (facet, plan) in panels.iter().zip(plans) {
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
-        crate::decorations::apply::apply_grid(
-            &panel_chart,
-            &plan.result,
-            &panel_chart.palette(),
-            backend,
-        )?;
+        crate::decorations::apply::apply_grid(&panel_chart, &plan.result, palette, backend)?;
     }
 
-    for (facet, plan) in panels.into_iter().zip(plans) {
+    for (facet, plan) in panels.iter().zip(plans) {
         let panel_chart = chart
             .clone()
             .with_render_scope(facet.render_scope())
@@ -49,25 +44,26 @@ pub(super) fn render_scene(
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
             plan.panel,
+            palette,
         )
         .with_facet_scales(source.facet_scales_spec());
         plan.chart_for_render(&panel_chart)
             .render_panel(kind, context, backend)?;
         if !plan.result.significance_brackets.is_empty() {
-            crate::significance::render(&panel_chart, &plan.result.significance_brackets, backend)?;
+            crate::significance::render(
+                &panel_chart,
+                &plan.result.significance_brackets,
+                palette,
+                backend,
+            )?;
         }
-        crate::decorations::apply::apply_axes(
-            &panel_chart,
-            &plan.result,
-            &panel_chart.palette(),
-            backend,
-        )?;
+        crate::decorations::apply::apply_axes(&panel_chart, &plan.result, palette, backend)?;
         crate::decorations::apply::apply_planned_legend(
             &panel_chart,
             plan.legend.as_ref(),
             backend,
         )?;
-        draw_facet_strip(&panel_chart, &facet, backend)?;
+        draw_facet_strip(&panel_chart, facet, palette, backend)?;
     }
     draw_shared_facet_axis_labels(
         horizontal_axis_label,
@@ -77,7 +73,7 @@ pub(super) fn render_scene(
         palette,
         backend,
     )?;
-    crate::decorations::apply::apply_canvas_text(source, &source.palette(), backend)
+    crate::decorations::apply::apply_canvas_text(source, palette, backend)
 }
 
 #[expect(
@@ -87,10 +83,10 @@ pub(super) fn render_scene(
 fn draw_facet_strip(
     chart: &Plot,
     facet: &FacetPanel,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let label = facet_label(chart, &facet.cell);
-    let palette = chart.palette();
     let lines = try_wrap_text(
         &label,
         palette.subtitle_font_size,

@@ -28,6 +28,10 @@ impl Plot {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
+    pub(crate) const fn theme_spec(&self) -> crate::Theme {
+        self.theme
+    }
+
     pub(crate) fn source_row_map(&self) -> Option<&[usize]> {
         self.source_rows.as_ref().map(crate::SourceRows::as_slice)
     }
@@ -644,6 +648,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         family: &str,
         label: &str,
         default_index: usize,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<(u8, u8, u8), Error> {
         if let Some(colors) = self.categorical_colors_spec() {
             colors.color(label).ok_or_else(|| {
@@ -652,8 +657,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 ))
             })
         } else {
-            let palette = self.palette();
-            Ok(palette.colors[default_index % palette.colors.len()])
+            Ok(theme.colors[default_index % theme.colors.len()])
         }
     }
 

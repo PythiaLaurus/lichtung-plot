@@ -9,9 +9,9 @@ use crate::{Error, Output};
 
 impl Plot {
     fn render_scene(&self) -> Result<RenderedScene, Error> {
-        self.preflight_erased()?;
+        let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
         let mut backend = SvgBackend::in_memory(self.width(), self.height());
-        self.render_with_backend_erased(&mut backend)?;
+        plan.render(&mut backend)?;
         Ok(RenderedScene::new(
             self.width(),
             self.height(),

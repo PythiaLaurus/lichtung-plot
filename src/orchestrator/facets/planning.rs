@@ -152,6 +152,10 @@ fn adjusted_shared_axis_panel(
     ))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "facet measurement keeps the immutable grid, scale, theme, and backend inputs explicit"
+)]
 pub(super) fn layout_panels(
     chart: &Plot,
     kind: PlotKind,
@@ -159,6 +163,7 @@ pub(super) fn layout_panels(
     outer: PanelBox,
     shape: (usize, usize),
     facet_scales: FacetScales,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let (rows, columns) = shape;
@@ -174,14 +179,14 @@ pub(super) fn layout_panels(
             PlotRenderContext::new(
                 crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                 provisional[facet.row * columns + facet.column],
+                theme,
             )
             .with_facet_scales(facet_scales),
             backend,
         )?;
         let label = facet_label(&panel_chart, &facet.cell);
         let cell = provisional[facet.row * columns + facet.column];
-        let requirement =
-            PanelRequirements::measure(&result.layout, &panel_chart.palette(), Some(&label), cell)?;
+        let requirement = PanelRequirements::measure(&result.layout, theme, Some(&label), cell)?;
         measured.push((facet.row, facet.column, result, label, requirement));
     }
     let requirements = measured
@@ -197,7 +202,7 @@ pub(super) fn layout_panels(
                 *column,
                 PanelRequirements::measure(
                     &result.layout,
-                    &chart.palette(),
+                    theme,
                     Some(label),
                     first_cells[*row * columns + *column],
                 )?,
@@ -218,6 +223,7 @@ pub(super) fn plan_panels(
     outside_legend: Option<ResolvedLegend>,
     legend_entries: &[crate::decorations::legend::LegendEntry],
     facet_scales: FacetScales,
+    theme: &ResolvedTheme,
 ) -> Result<(Plot, Vec<PanelPlan>), Error> {
     let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
     let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
@@ -238,6 +244,7 @@ pub(super) fn plan_panels(
             let context = PlotRenderContext::new(
                 crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
                 facet.panel,
+                theme,
             )
             .with_facet_scales(facet_scales);
             let plan = crate::decorations::plan::plan_panel_with_context(

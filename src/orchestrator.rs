@@ -22,6 +22,9 @@ pub(crate) use backend::DeferredBackend;
 #[cfg(test)]
 thread_local! {
     static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static RENDER_THEME_ADDRESSES: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
+    static PLOT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FINAL_PLOT_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
@@ -65,12 +68,13 @@ impl Plot {
     ///
     /// Returns an error when backend startup or finalization fails, or the
     /// selected renderer rejects its data or options.
+    #[cfg(test)]
     fn render_with_backend_erased(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        self.render_kind_erased(self.kind(), backend)
+        lifecycle::PlotPlan::new(self, self.kind())?.render(backend)
     }
 
     fn preflight_erased(&self) -> Result<(), Error> {
-        self.render_with_backend_erased(&mut backend::NullBackend::default())
+        lifecycle::PlotPlan::new(self, self.kind()).map(|_| ())
     }
 
     pub(crate) fn render_panel(
@@ -80,7 +84,14 @@ impl Plot {
         backend: &mut dyn Backend,
     ) -> Result<PlotRenderResult, Error> {
         #[cfg(test)]
-        RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
+        {
+            RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
+            RENDER_THEME_ADDRESSES.with(|addresses| {
+                addresses
+                    .borrow_mut()
+                    .push(std::ptr::from_ref(context.theme).addr());
+            });
+        }
         let mut result = match kind {
             PlotKind::Scatter => crate::plots::scatter::render(self, context, backend),
             PlotKind::Histogram => crate::plots::histogram::render(self, context, backend),
@@ -133,17 +144,21 @@ impl Plot {
         };
         result.x_domain = domains.0;
         result.y_domain = domains.1;
-        layers::apply(self, &mut result, backend)?;
+        layers::apply(self, &mut result, context.theme, backend)?;
         let (x_label, y_label) = self.resolved_axis_labels(kind);
         result.layout.x_axis.label = x_label;
         result.layout.y_axis.label = y_label;
-        resolve_rendered_labels(self, &mut result)?;
-        crate::decorations::panel_text::draw(self, &result.layout, backend)?;
+        resolve_rendered_labels(self, &mut result, context.theme)?;
+        crate::decorations::panel_text::draw(self, &result.layout, context.theme, backend)?;
         Ok(result)
     }
 }
 
-fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Result<(), Error> {
+fn resolve_rendered_labels(
+    chart: &Plot,
+    result: &mut PlotRenderResult,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(), Error> {
     if result.x_domain == AxisDomain::Categorical && result.x_tick_keys.is_none() {
         let raw = result
             .layout
@@ -177,7 +192,7 @@ fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Resul
     if !result.legend_entries.is_empty() {
         crate::decorations::legend::resolve_entries(chart, &mut result.legend_entries)?;
     }
-    validate_axis_text(chart, &result.layout)?;
+    validate_axis_text(&result.layout, theme)?;
     Ok(())
 }
 
@@ -185,8 +200,10 @@ fn resolve_rendered_labels(chart: &Plot, result: &mut PlotRenderResult) -> Resul
     clippy::cast_precision_loss,
     reason = "tick counts are bounded by the finite panel width and allocated tick vector"
 )]
-fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<(), Error> {
-    let palette = chart.palette();
+fn validate_axis_text(
+    layout: &crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(), Error> {
     let panel = layout.projection.panel_box();
     let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;
     for tick in layout
@@ -197,7 +214,7 @@ fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<()
     {
         crate::layout::TextBlock::layout(
             &tick.label,
-            palette.tick_font_size,
+            theme.tick_font_size,
             x_tick_width.max(1.0),
             "x-axis tick label",
         )?;
@@ -205,7 +222,7 @@ fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<()
     if !layout.x_axis.label.is_empty() {
         crate::layout::TextBlock::layout(
             &layout.x_axis.label,
-            palette.label_font_size,
+            theme.label_font_size,
             panel.width().max(1.0),
             "x-axis title",
         )?;
@@ -214,7 +231,7 @@ fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<()
     if !layout.y_axis.label.is_empty() {
         crate::layout::TextBlock::layout(
             &layout.y_axis.label,
-            palette.label_font_size,
+            theme.label_font_size,
             panel.height().max(1.0),
             "y-axis title",
         )?;
@@ -228,7 +245,7 @@ fn validate_axis_text(chart: &Plot, layout: &crate::layout::Layout) -> Result<()
     {
         crate::layout::TextBlock::layout(
             &tick.label,
-            palette.tick_font_size,
+            theme.tick_font_size,
             y_tick_width,
             "y-axis tick label",
         )?;

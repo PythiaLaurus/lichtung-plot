@@ -10,6 +10,7 @@ use crate::spec::{
     BarInput, BarSource, ConfidenceIntervalAlgorithm, ErrorBarKind, PercentileInterval,
     StandardDeviation, StandardError,
 };
+use crate::theme::ResolvedTheme;
 use crate::{CategoryOrder, Plot, ValueSort};
 
 /// Bar arrangement mode.
@@ -639,8 +640,11 @@ fn sort_single_values(prepared: &mut PreparedBars, sort: ValueSort) {
 }
 
 /// Legend entries for positioned series.
-pub(crate) fn legend_entries(prepared: &PreparedBars, chart: &Plot) -> Vec<LegendEntry> {
-    let palette = chart.palette();
+pub(crate) fn legend_entries(
+    prepared: &PreparedBars,
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Vec<LegendEntry> {
     prepared
         .hues
         .iter()
@@ -649,8 +653,8 @@ pub(crate) fn legend_entries(prepared: &PreparedBars, chart: &Plot) -> Vec<Legen
             LegendEntry::fill(
                 chart.legend_identity(label.clone()),
                 FillStyle {
-                    color: palette.colors[index % palette.colors.len()],
-                    stroke: palette.foreground,
+                    color: theme.colors[index % theme.colors.len()],
+                    stroke: theme.foreground,
                     stroke_width: 1.0,
                     opacity: 1.0,
                 },

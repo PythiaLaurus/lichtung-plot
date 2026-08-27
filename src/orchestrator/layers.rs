@@ -5,6 +5,7 @@ use crate::Error;
 use crate::layout::{AxisSide, AxisTick};
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::{GuideSpec, Plot};
 
 const MAX_EXPLICIT_TICKS: usize = 10_000;
@@ -74,6 +75,7 @@ impl Plot {
 pub(crate) fn apply(
     chart: &Plot,
     result: &mut PlotRenderResult,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let projection = &result.layout.projection;
@@ -84,7 +86,7 @@ pub(crate) fn apply(
         result.layout.x_axis.validate_explicit_tick_collisions(
             projection,
             AxisSide::Bottom,
-            &chart.palette(),
+            theme,
             "x-axis",
         )?;
     }
@@ -94,7 +96,7 @@ pub(crate) fn apply(
         result.layout.y_axis.validate_explicit_tick_collisions(
             projection,
             AxisSide::Left,
-            &chart.palette(),
+            theme,
             "y-axis",
         )?;
     }

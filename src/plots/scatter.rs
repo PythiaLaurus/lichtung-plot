@@ -33,7 +33,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let palette = context.theme;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;

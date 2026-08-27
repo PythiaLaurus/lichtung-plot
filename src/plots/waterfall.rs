@@ -20,6 +20,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let label_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("waterfall: label column not set".into()))?;
@@ -69,6 +70,7 @@ pub(crate) fn render(
         chart,
         context.panel,
         &display_labels,
+        theme,
     )?;
     let initial_layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
@@ -81,7 +83,6 @@ pub(crate) fn render(
         &x_axis_spec,
         chart.y_axis_spec(),
     );
-    let palette = chart.palette();
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
         .map_or(("base", "total"), |labels| {
@@ -95,7 +96,7 @@ pub(crate) fn render(
             (base, format!("{base_label} {base:.3}")),
             (terminal, format!("{terminal_label} {terminal:.3}")),
         ],
-        palette.detail_font_size,
+        theme.detail_font_size,
     )?;
     if annotations.height > panel.height() - MINIMUM_MARK_PANEL_HEIGHT {
         return Err(Error::Render(format!(
@@ -105,7 +106,7 @@ pub(crate) fn render(
     }
     let mut mark_panel = panel;
     mark_panel.y1 -= annotations.height;
-    crate::plots::horizontal_bar::validate_y_tick_label_rows(chart, mark_panel, &display_labels)?;
+    crate::plots::horizontal_bar::validate_y_tick_label_rows(mark_panel, &display_labels, theme)?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
         (0.0, labels.len() as f64),
@@ -124,9 +125,9 @@ pub(crate) fn render(
             let (left, bottom) = layout.projection.project(*start, y0);
             let (right, top) = layout.projection.project(*end, y1);
             let color = if *delta >= 0.0 {
-                palette.colors[0]
+                theme.colors[0]
             } else {
-                palette.colors[1 % palette.colors.len()]
+                theme.colors[1 % theme.colors.len()]
             };
             backend.draw_polygon(
                 &[
@@ -137,7 +138,7 @@ pub(crate) fn render(
                 ],
                 &FillStyle {
                     color,
-                    stroke: palette.foreground,
+                    stroke: theme.foreground,
                     stroke_width: 0.8,
                     opacity: 1.0,
                 },
@@ -147,7 +148,7 @@ pub(crate) fn render(
                 let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
                 backend.draw_line(
                     &[Point2D::new(x, from_y), Point2D::new(x, to_y)],
-                    &LineStyle::short_dashed(palette.foreground, 0.7),
+                    &LineStyle::short_dashed(theme.foreground, 0.7),
                 )?;
             }
         }
@@ -156,15 +157,15 @@ pub(crate) fn render(
             let (_, y1) = layout.projection.project(value, labels.len() as f64);
             backend.draw_line(
                 &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::medium_dashed(palette.foreground, 0.7),
+                &LineStyle::medium_dashed(theme.foreground, 0.7),
             )?;
         }
         Ok(())
     })?;
     let total_style = TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family,
-        font_size: palette.detail_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Middle,
         rotation: 0.0,
@@ -175,9 +176,9 @@ pub(crate) fn render(
                 annotation.x.trunc(),
                 (layout.projection.panel_box().y1
                     + ANNOTATION_PADDING
-                    + f64::from(palette.detail_font_size) / 2.0
+                    + f64::from(theme.detail_font_size) / 2.0
                     + annotation.row as f64
-                        * (f64::from(palette.detail_font_size) + ANNOTATION_ROW_GAP))
+                        * (f64::from(theme.detail_font_size) + ANNOTATION_ROW_GAP))
                     .round(),
             ),
             &annotation.text,

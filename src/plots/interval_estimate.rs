@@ -7,6 +7,7 @@ use crate::Error;
 use crate::layout::{AxisSpec, AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor, TextStyle};
 use crate::spec::{AxisScale, EstimateStatus, FacetScales, PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
@@ -176,24 +177,23 @@ pub(crate) fn fixed_facet_estimate_tuples(
 }
 
 pub(crate) fn draw_not_estimable(
-    chart: &Plot,
+    theme: &ResolvedTheme,
     layout: &Layout,
     y: f64,
     vertical_guide_x: Option<f64>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let palette = chart.palette();
     let panel = layout.projection.panel_box();
-    let width = crate::layout::estimated_text_width(NOT_ESTIMABLE_TEXT, palette.detail_font_size);
+    let width = crate::layout::estimated_text_width(NOT_ESTIMABLE_TEXT, theme.detail_font_size);
     let x = not_estimable_text_x(panel, width, vertical_guide_x)?;
     let (_, y) = layout.projection.project(layout.projection.x_range().0, y);
     backend.draw_text(
         Point2D::new(x.round(), y.round()),
         NOT_ESTIMABLE_TEXT,
         &TextStyle {
-            color: palette.foreground,
-            font_family: palette.font_family,
-            font_size: palette.detail_font_size,
+            color: theme.foreground,
+            font_family: theme.font_family.clone(),
+            font_size: theme.detail_font_size,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Middle,
             rotation: 0.0,
@@ -250,6 +250,7 @@ pub(crate) fn render(
     require_intervals: bool,
     reference: f64,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let estimate_col = chart
         .x_col()
         .ok_or_else(|| Error::Data(format!("{family}: estimate column not set")))?;
@@ -435,16 +436,16 @@ pub(crate) fn render(
         .enumerate()
         .map(|(index, label)| AxisTick::new(row_count - index as f64 - 0.5, label.clone()))
         .collect();
-    let palette = chart.palette();
     let display_labels =
         chart.resolve_label_domain("y-axis categories", labels.iter().map(String::as_str))?;
     let panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
         chart,
         context.panel,
         &display_labels,
+        theme,
     )?;
     let x_ticks = if scale == AxisScale::Log10 {
-        log_ticks(x_range, panel, palette.tick_font_size)
+        log_ticks(x_range, panel, theme.tick_font_size)
     } else {
         Vec::new()
     };
@@ -481,12 +482,12 @@ pub(crate) fn render(
         let (_, y1) = layout.projection.project(transformed_reference, row_count);
         backend.draw_line(
             &[Point2D::new(reference_x, y0), Point2D::new(reference_x, y1)],
-            &LineStyle::medium_dashed(palette.foreground, 1.0),
+            &LineStyle::medium_dashed(theme.foreground, 1.0),
         )?;
         for index in 0..labels.len() {
             let y = row_count - index as f64 - 0.5;
             let Some(tuple) = transformed_estimates[index] else {
-                draw_not_estimable(chart, &layout, y, reference_line_x, backend)?;
+                draw_not_estimable(theme, &layout, y, reference_line_x, backend)?;
                 continue;
             };
             if let Some((lower, upper)) = tuple.lower.zip(tuple.upper) {
@@ -494,13 +495,13 @@ pub(crate) fn render(
                 let (right, _) = layout.projection.project(upper, y);
                 backend.draw_line(
                     &[Point2D::new(left, py), Point2D::new(right, py)],
-                    &LineStyle::solid(palette.foreground, 1.4),
+                    &LineStyle::solid(theme.foreground, 1.4),
                 )?;
             }
             let (x, y) = layout.projection.project(tuple.estimate, y);
             backend.draw_scatter(
                 &[Point2D::new(x, y)],
-                &chart.point_style(palette.colors[0], 4),
+                &chart.point_style(theme.colors[0], 4),
             )?;
             let original_estimate = estimates[index]
                 .ok_or_else(|| {
@@ -522,7 +523,7 @@ pub(crate) fn render(
                 let font_size = if is_significance {
                     significance_style.font_size_spec()
                 } else {
-                    palette.detail_font_size
+                    theme.detail_font_size
                 };
                 let weight = if is_significance {
                     significance_style.weight_spec()
@@ -556,8 +557,8 @@ pub(crate) fn render(
                     Point2D::new(label_x.round(), y.round()),
                     &label,
                     &TextStyle {
-                        color: palette.foreground,
-                        font_family: palette.font_family.clone(),
+                        color: theme.foreground,
+                        font_family: theme.font_family.clone(),
                         font_size,
                         weight,
                         anchor,

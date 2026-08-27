@@ -100,7 +100,12 @@ pub(crate) fn render(
         .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
         .collect();
     let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, panel, &x_levels)?;
+    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
+        chart,
+        panel,
+        &x_levels,
+        context.theme,
+    )?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (0.0, x_levels.len() as f64),
         y_range,
@@ -132,8 +137,12 @@ pub(crate) fn render(
             let color_index = hue
                 .and_then(|hue| hue_levels.iter().position(|level| level == hue))
                 .unwrap_or(0);
-            let color =
-                chart.categorical_color("interaction", hue.unwrap_or(trace_level), color_index)?;
+            let color = chart.categorical_color(
+                "interaction",
+                hue.unwrap_or(trace_level),
+                color_index,
+                context.theme,
+            )?;
             let mut points = Vec::new();
             for (x_index, x_level) in x_levels.iter().enumerate() {
                 if let Some(row) =
@@ -188,8 +197,12 @@ pub(crate) fn render(
             let color_index = hue
                 .and_then(|hue| hue_levels.iter().position(|level| level == hue))
                 .unwrap_or(0);
-            let color =
-                chart.categorical_color("interaction", hue.unwrap_or(trace_level), color_index)?;
+            let color = chart.categorical_color(
+                "interaction",
+                hue.unwrap_or(trace_level),
+                color_index,
+                context.theme,
+            )?;
             let style = trace_styles
                 .as_ref()
                 .map_or(TraceStyle::default(), |styles| styles[trace_index]);

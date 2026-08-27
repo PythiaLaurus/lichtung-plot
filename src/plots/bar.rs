@@ -16,6 +16,7 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 /// Render a vertical bar plot.
@@ -24,7 +25,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let theme = context.theme;
 
     let mode = match chart.kind() {
         PlotKind::StackedBar => BarMode::Stacked,
@@ -32,7 +33,7 @@ pub(crate) fn render(
         _ => BarMode::Single,
     };
     let prepared = bar_data::prepare(chart, context.data, mode)?;
-    let legend_entries = bar_data::legend_entries(&prepared, chart);
+    let legend_entries = bar_data::legend_entries(&prepared, chart, theme);
     let mut base_y_range =
         crate::layout::anchored_auto_range(prepared.value_range, chart.y_axis_spec(), 0.0);
     let mut rendered_maxima = vec![0.0_f64; prepared.categories.len()];
@@ -63,6 +64,7 @@ pub(crate) fn render(
         chart,
         panel,
         &prepared.categories,
+        theme,
     )?;
     base_y_range = range_for_bar_marks(chart, &prepared, panel, base_y_range);
     let value_per_pixel = (base_y_range.1 - base_y_range.0) / panel.height();
@@ -150,14 +152,14 @@ pub(crate) fn render(
                 bar.start,
                 bar.end,
                 &FillStyle {
-                    color: palette.colors[color_index % palette.colors.len()],
-                    stroke: palette.foreground,
+                    color: theme.colors[color_index % theme.colors.len()],
+                    stroke: theme.foreground,
                     stroke_width: 1.0,
                     opacity: 1.0,
                 },
             )?;
             if let Some((lower, upper)) = bar.interval {
-                let style = LineStyle::solid(palette.foreground, palette.axis_width);
+                let style = LineStyle::solid(theme.foreground, theme.axis_width);
                 draw_error_bar(
                     backend,
                     &layout.projection,
@@ -170,7 +172,7 @@ pub(crate) fn render(
             }
         }
         for mark in &prepared.significance {
-            draw_bar_significance(chart, mark, &prepared, mode, &layout, backend)?;
+            draw_bar_significance(chart, mark, &prepared, mode, &layout, theme, backend)?;
         }
         for point in &prepared.points {
             let x_center = point_center(point.category_index, point.series_index, &prepared, mode);
@@ -218,6 +220,7 @@ fn draw_bar_significance(
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let style = chart.significance_mark_style_spec();
@@ -239,8 +242,8 @@ fn draw_bar_significance(
         Point2D::new(x.round(), y.round()),
         &mark.label,
         &TextStyle {
-            color: chart.palette().foreground,
-            font_family: chart.palette().font_family,
+            color: theme.foreground,
+            font_family: theme.font_family.clone(),
             font_size: style.font_size_spec(),
             weight: style.weight_spec(),
             anchor: TextAnchor::Middle,

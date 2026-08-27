@@ -14,6 +14,7 @@ use crate::render::backend::{
     with_clip, Backend, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::Plot;
 
@@ -22,6 +23,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let category_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
@@ -61,7 +63,7 @@ pub(crate) fn render(
     };
     let x_range = crate::layout::continuous_auto_range(x_data, chart.x_axis_spec());
     let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let detail_font_size = chart.palette().detail_font_size;
+    let detail_font_size = theme.detail_font_size;
     let high_label = format_colorbar_value(color_range.1);
     let low_label = format_colorbar_value(color_range.0);
     let color_label = chart.resolved_color_label();
@@ -75,6 +77,7 @@ pub(crate) fn render(
         chart,
         context.panel,
         &display_levels,
+        theme,
     )?;
     let value_width = [&high_label, &low_label]
         .into_iter()
@@ -114,7 +117,7 @@ pub(crate) fn render(
             let (_, y1) = layout.projection.project(0.0, levels.len() as f64);
             backend.draw_line(
                 &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::solid(chart.palette().foreground, 0.8),
+                &LineStyle::solid(theme.foreground, 0.8),
             )?;
         }
 
@@ -162,25 +165,25 @@ pub(crate) fn render(
         Ok(())
     })?;
     draw_colorbar(
-        chart,
         backend,
         &layout,
         &color_label_block,
         color_range,
         &high_label,
         &low_label,
+        theme,
     )?;
     Ok(PlotRenderResult::new(layout, Vec::new()))
 }
 
 fn draw_colorbar(
-    chart: &Plot,
     backend: &mut dyn Backend,
     layout: &Layout,
     label: &crate::layout::TextBlock,
     range: (f64, f64),
     high_label: &str,
     low_label: &str,
+    theme: &ResolvedTheme,
 ) -> Result<(), Error> {
     let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
     let left = panel_right + 18.0;
@@ -197,9 +200,9 @@ fn draw_colorbar(
         &stops,
     )?;
     let value_style = TextStyle {
-        color: chart.palette().foreground,
-        font_family: chart.palette().font_family,
-        font_size: chart.palette().detail_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Start,
         rotation: 0.0,

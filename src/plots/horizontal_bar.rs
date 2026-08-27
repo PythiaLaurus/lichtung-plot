@@ -16,6 +16,7 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
 };
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 pub(crate) fn render(
@@ -23,7 +24,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let theme = context.theme;
 
     let mode = match chart.kind() {
         PlotKind::StackedHorizontalBar => BarMode::Stacked,
@@ -35,7 +36,7 @@ pub(crate) fn render(
         "y-axis categories",
         prepared.categories.iter().map(String::as_str),
     )?;
-    let legend_entries = bar_data::legend_entries(&prepared, chart);
+    let legend_entries = bar_data::legend_entries(&prepared, chart, theme);
     let mut base_x_range =
         crate::layout::anchored_auto_range(prepared.value_range, chart.x_axis_spec(), 0.0);
     let y_count = prepared.categories.len() as f64;
@@ -56,7 +57,7 @@ pub(crate) fn render(
         .collect();
     let semantic_panel = context.panel;
     let panel_box = if chart.y_tick_labels_visible() {
-        panel_box_for_y_tick_labels(chart, semantic_panel, &display_categories)?
+        panel_box_for_y_tick_labels(chart, semantic_panel, &display_categories, theme)?
     } else {
         semantic_panel
     };
@@ -134,7 +135,7 @@ pub(crate) fn render(
             let (_, y1) = layout.projection.project(0.0, y_count);
             backend.draw_line(
                 &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::solid(palette.foreground, 0.8),
+                &LineStyle::solid(theme.foreground, 0.8),
             )?;
         }
         for bar in &prepared.bars {
@@ -148,12 +149,12 @@ pub(crate) fn render(
             });
             let color = if chart.colors_by_sign() {
                 if bar.end >= bar.start {
-                    palette.colors[0]
+                    theme.colors[0]
                 } else {
-                    palette.colors[1 % palette.colors.len()]
+                    theme.colors[1 % theme.colors.len()]
                 }
             } else {
-                palette.colors[color_index % palette.colors.len()]
+                theme.colors[color_index % theme.colors.len()]
             };
             draw_bar(
                 backend,
@@ -164,13 +165,13 @@ pub(crate) fn render(
                 height,
                 &FillStyle {
                     color,
-                    stroke: palette.foreground,
+                    stroke: theme.foreground,
                     stroke_width: 1.0,
                     opacity: 1.0,
                 },
             )?;
             if let Some((lower, upper)) = bar.interval {
-                let style = LineStyle::solid(palette.foreground, palette.axis_width);
+                let style = LineStyle::solid(theme.foreground, theme.axis_width);
                 draw_error_bar(
                     backend,
                     &layout.projection,
@@ -183,7 +184,7 @@ pub(crate) fn render(
             }
         }
         for mark in &prepared.significance {
-            draw_bar_significance(chart, mark, &prepared, mode, &layout, backend)?;
+            draw_bar_significance(chart, mark, &prepared, mode, &layout, theme, backend)?;
         }
         for point in &prepared.points {
             let y_center = point_center(point.category_index, point.series_index, &prepared, mode);
@@ -231,6 +232,7 @@ fn draw_bar_significance(
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let style = chart.significance_mark_style_spec();
@@ -255,8 +257,8 @@ fn draw_bar_significance(
         Point2D::new(x.round(), y.round()),
         &mark.label,
         &TextStyle {
-            color: chart.palette().foreground,
-            font_family: chart.palette().font_family,
+            color: theme.foreground,
+            font_family: theme.font_family.clone(),
             font_size: style.font_size_spec(),
             weight: style.weight_spec(),
             anchor,
@@ -405,16 +407,18 @@ pub(crate) fn panel_box_for_y_tick_labels(
     chart: &Plot,
     panel: PanelBox,
     labels: &[String],
+    theme: &ResolvedTheme,
 ) -> Result<PanelBox, Error> {
-    panel_box_for_y_tick_labels_impl(chart, panel, labels, true)
+    panel_box_for_y_tick_labels_impl(chart, panel, labels, true, theme)
 }
 
 pub(crate) fn panel_box_for_elided_y_tick_labels(
     chart: &Plot,
     panel: PanelBox,
     labels: &[String],
+    theme: &ResolvedTheme,
 ) -> Result<PanelBox, Error> {
-    panel_box_for_y_tick_labels_impl(chart, panel, labels, false)
+    panel_box_for_y_tick_labels_impl(chart, panel, labels, false, theme)
 }
 
 fn panel_box_for_y_tick_labels_impl(
@@ -422,12 +426,12 @@ fn panel_box_for_y_tick_labels_impl(
     mut panel: PanelBox,
     labels: &[String],
     validate_row_height: bool,
+    theme: &ResolvedTheme,
 ) -> Result<PanelBox, Error> {
     if labels.is_empty() || chart.composed_axis_text_is_measured() {
         return Ok(panel);
     }
-    let palette = chart.palette();
-    let blocks = y_tick_label_blocks(chart, panel, labels)?;
+    let blocks = y_tick_label_blocks(panel, labels, theme)?;
     let max_label_width = blocks
         .iter()
         .map(crate::layout::TextBlock::width)
@@ -442,10 +446,10 @@ fn panel_box_for_y_tick_labels_impl(
     let min_panel_w = 80.0;
     let required_left = crate::layout::y_axis_left_inset_for_tick_labels(
         max_label_width,
-        palette.tick_length,
-        palette.label_font_size,
+        theme.tick_length,
+        theme.label_font_size,
     );
-    let base_left = chart.base_canvas_layout().panel_box.x0;
+    let base_left = chart.base_canvas_layout(theme).panel_box.x0;
     let additional_inset = (required_left - base_left.min(panel.x0)).max(0.0);
     if additional_inset > 0.0 {
         panel.x0 = (panel.x0 + additional_inset).min(panel.x1 - min_panel_w);
@@ -454,35 +458,31 @@ fn panel_box_for_y_tick_labels_impl(
 }
 
 pub(crate) fn validate_y_tick_label_rows(
-    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
+    theme: &ResolvedTheme,
 ) -> Result<(), Error> {
     if labels.is_empty() {
         return Ok(());
     }
-    let blocks = y_tick_label_blocks(chart, panel, labels)?;
+    let blocks = y_tick_label_blocks(panel, labels, theme)?;
     validate_y_tick_label_row_height(panel, labels.len(), &blocks)
 }
 
 fn y_tick_label_blocks(
-    chart: &Plot,
     panel: PanelBox,
     labels: &[String],
+    theme: &ResolvedTheme,
 ) -> Result<Vec<crate::layout::TextBlock>, Error> {
-    let palette = chart.palette();
-    let maximum_width = (panel.x1
-        - 80.0
-        - f64::from(palette.tick_length)
-        - f64::from(palette.label_font_size)
-        - 20.0)
-        .max(1.0);
+    let maximum_width =
+        (panel.x1 - 80.0 - f64::from(theme.tick_length) - f64::from(theme.label_font_size) - 20.0)
+            .max(1.0);
     labels
         .iter()
         .map(|label| {
             crate::layout::TextBlock::layout(
                 label,
-                palette.tick_font_size,
+                theme.tick_font_size,
                 maximum_width,
                 "y-axis category label",
             )
@@ -509,11 +509,11 @@ pub(crate) fn panel_box_for_x_tick_labels(
     chart: &Plot,
     mut panel: PanelBox,
     labels: &[String],
+    theme: &ResolvedTheme,
 ) -> Result<PanelBox, Error> {
     if labels.is_empty() || chart.axis_text_is_measured() {
         return Ok(panel);
     }
-    let palette = chart.palette();
     let display =
         chart.resolve_label_domain("x-axis categories", labels.iter().map(String::as_str))?;
     let maximum_width = panel.width() / labels.len() as f64 * 0.9;
@@ -522,7 +522,7 @@ pub(crate) fn panel_box_for_x_tick_labels(
         .map(|label| {
             crate::layout::TextBlock::layout(
                 label,
-                palette.tick_font_size,
+                theme.tick_font_size,
                 maximum_width.max(1.0),
                 "x-axis category label",
             )
@@ -531,7 +531,7 @@ pub(crate) fn panel_box_for_x_tick_labels(
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .fold(0.0_f64, f64::max);
-    let extra = (maximum_height - f64::from(palette.tick_font_size) * 1.2).max(0.0);
+    let extra = (maximum_height - f64::from(theme.tick_font_size) * 1.2).max(0.0);
     if panel.height() - extra < 60.0 {
         return Err(Error::Render(
             "multiline x-axis category labels do not fit while preserving the minimum 60px plot panel; increase chart height"

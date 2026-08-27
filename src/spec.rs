@@ -659,14 +659,20 @@ pub(crate) enum LegendClearance {
 pub(crate) struct PlotRenderContext<'a> {
     pub(crate) data: crate::data::PlotData<'a>,
     pub(crate) panel: PanelBox,
+    pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
 }
 
 impl<'a> PlotRenderContext<'a> {
-    pub(crate) const fn new(data: crate::data::PlotData<'a>, panel: PanelBox) -> Self {
+    pub(crate) const fn new(
+        data: crate::data::PlotData<'a>,
+        panel: PanelBox,
+        theme: &'a crate::theme::ResolvedTheme,
+    ) -> Self {
         Self {
             data,
             panel,
+            theme,
             facet_scales: None,
         }
     }
@@ -675,10 +681,12 @@ impl<'a> PlotRenderContext<'a> {
         data: crate::data::PlotData<'a>,
         source_rows: &'a [usize],
         panel: PanelBox,
+        theme: &'a crate::theme::ResolvedTheme,
     ) -> Self {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
+            theme,
             facet_scales: None,
         }
     }

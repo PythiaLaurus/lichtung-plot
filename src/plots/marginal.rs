@@ -26,6 +26,7 @@ use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{
     gaussian_kde_with_bandwidth, kde, kde_support_range, strict_scott_bandwidth,
 };
+use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::Plot;
 
@@ -60,10 +61,10 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let theme = context.theme;
 
     // --- Extract data (grouped or ungrouped) ---
-    let (groups, _hue_levels) = build_groups(chart, context.data)?;
+    let (groups, _hue_levels) = build_groups(chart, context.data, theme)?;
 
     // Collect all x/y for range computation.
     let all_x: Vec<f64> = groups.iter().flat_map(|g| g.x.iter().copied()).collect();
@@ -124,7 +125,7 @@ pub(crate) fn render(
                 (x_low, x_high),
                 &projection,
                 crate::layout::AxisSide::Bottom,
-                palette.tick_font_size,
+                theme.tick_font_size,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,
@@ -135,7 +136,7 @@ pub(crate) fn render(
                 (y_low, y_high),
                 &projection,
                 crate::layout::AxisSide::Left,
-                palette.tick_font_size,
+                theme.tick_font_size,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,
@@ -155,9 +156,8 @@ pub(crate) fn render(
     let proj = &layout.projection;
 
     // --- Tick marks on marginal panels (no labels, matching seaborn) ---
-    let tick_len = f64::from(palette.tick_length);
-    let tick_style =
-        crate::render::backend::LineStyle::solid(palette.foreground, palette.axis_width);
+    let tick_len = f64::from(theme.tick_length);
+    let tick_style = crate::render::backend::LineStyle::solid(theme.foreground, theme.axis_width);
 
     // Top KDE panel: x-axis ticks along the bottom edge (y = top_y0).
     // Positions match the central scatter's x-axis ticks.
@@ -365,9 +365,9 @@ fn validate_marginal_range<'a>(
 fn build_groups<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
+    theme: &ResolvedTheme,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let data = data.into();
-    let palette = chart.palette();
 
     let x_col = chart
         .x_col()
@@ -425,7 +425,7 @@ fn build_groups<'a>(
             y,
             x_bandwidth,
             y_bandwidth,
-            color: palette.colors[color_index % palette.colors.len()],
+            color: theme.colors[color_index % theme.colors.len()],
         });
     }
     Ok((groups, hue_levels))

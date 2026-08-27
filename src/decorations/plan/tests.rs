@@ -2,6 +2,10 @@ use super::*;
 use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{CategoryValues, NumericValues};
 
+fn theme() -> crate::theme::ResolvedTheme {
+    crate::Theme::Publication.resolve()
+}
+
 struct LineValues {
     x: NumericValues,
     y: NumericValues,
@@ -80,13 +84,17 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let chart = line_chart(&data);
     let cell = PanelBox::new(60.0, 440.0, 50.0, 310.0);
 
-    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let final_chart = plan.chart_for_render(&chart);
     let (result, geometry) = discover_geometry(
         &final_chart,
         PlotKind::Line,
-        PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
+        PlotRenderContext::new(
+            crate::data::PlotData::new(&final_chart),
+            plan.panel,
+            &theme(),
+        ),
     )
     .unwrap();
     let margin = legend.legend.metrics.font_size.max(6.0);
@@ -109,7 +117,7 @@ fn production_geometry_discovery_returns_a_closed_session() {
     let (_, mut geometry) = discover_geometry(
         &chart,
         PlotKind::Line,
-        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell, &theme()),
     )
     .unwrap();
 
@@ -131,7 +139,7 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     let (result, _) = discover_geometry(
         &chart,
         PlotKind::Line,
-        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell, &theme()),
     )
     .unwrap();
     let legend = Legend::new(
@@ -198,8 +206,8 @@ fn outside_legend_reservation_uses_measured_label_width_and_stays_in_cell() {
     let short = line_chart(&short_data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
     let long = line_chart(&long_data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
 
-    let short = plan_panel(&short, PlotKind::Line, cell, LegendRole::Panel).unwrap();
-    let long = plan_panel(&long, PlotKind::Line, cell, LegendRole::Panel).unwrap();
+    let short = plan_panel(&short, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
+    let long = plan_panel(&long, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let long_legend = long.legend.unwrap().bounds;
 
     assert!(long.panel.x1 < short.panel.x1);
@@ -217,8 +225,8 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
     ]);
     let cell = PanelBox::new(40.0, 700.0, 50.0, 390.0);
     let initial = line_chart(&data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
-    let initial = plan_panel(&initial, PlotKind::Line, cell, LegendRole::Panel).unwrap();
-    let font_size = line_chart(&data).palette().label_font_size;
+    let initial = plan_panel(&initial, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
+    let font_size = theme().label_font_size;
     let label = (1..=200)
         .map(|length| vec!["x"; length].join(" "))
         .find(|label| {
@@ -243,7 +251,7 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
         .x_label(label)
         .legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
 
-    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
 
     assert!((plan.panel.x1 - initial.panel.x1).abs() <= f64::EPSILON);
     assert!(plan.panel.y0 > initial.panel.y0);
@@ -263,7 +271,7 @@ fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
     ]);
     let cell = PanelBox::new(60.0, 220.0, 30.0, 180.0);
 
-    let plan = plan_panel(&chart, PlotKind::Scatter, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Scatter, cell, LegendRole::Panel, &theme()).unwrap();
 
     assert!(plan.panel.y0 > cell.y0);
 }
@@ -276,14 +284,15 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
     let outside = line_chart(&data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
     let hidden = line_chart(&data).legend(LegendPolicy::Hidden);
 
-    let auto = plan_panel(&auto, PlotKind::Line, cell, LegendRole::Panel).unwrap();
-    let outside = plan_panel(&outside, PlotKind::Line, cell, LegendRole::Panel).unwrap();
-    let hidden = plan_panel(&hidden, PlotKind::Line, cell, LegendRole::Panel).unwrap();
+    let auto = plan_panel(&auto, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
+    let outside = plan_panel(&outside, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
+    let hidden = plan_panel(&hidden, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let shared = plan_panel(
         &line_chart(&data),
         PlotKind::Line,
         cell,
         LegendRole::Suppressed,
+        &theme(),
     )
     .unwrap();
 
@@ -316,8 +325,22 @@ fn scatter_with_automatic_y_limits_keeps_top_right_default() {
     let hidden = visible.clone().legend(LegendPolicy::Hidden);
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
-    let visible = plan_panel(&visible, PlotKind::Scatter, cell, LegendRole::Panel).unwrap();
-    let hidden = plan_panel(&hidden, PlotKind::Scatter, cell, LegendRole::Panel).unwrap();
+    let visible = plan_panel(
+        &visible,
+        PlotKind::Scatter,
+        cell,
+        LegendRole::Panel,
+        &theme(),
+    )
+    .unwrap();
+    let hidden = plan_panel(
+        &hidden,
+        PlotKind::Scatter,
+        cell,
+        LegendRole::Panel,
+        &theme(),
+    )
+    .unwrap();
 
     let legend = visible.legend.as_ref().unwrap();
     let top_right = legend
@@ -344,7 +367,7 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
     .legend(LegendPolicy::Visible(LegendPosition::InsideRight));
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
 
-    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap().bounds;
     let rightmost_point = plan.result.layout.projection.project(10.0, 5.0).0;
 
@@ -361,7 +384,7 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     let (initial, initial_geometry) = discover_geometry(
         &chart,
         PlotKind::HorizontalBar,
-        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell, &theme()),
     )
     .unwrap();
     let initial_legend = Legend::new(
@@ -386,13 +409,24 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
         "test data must collide at every initial corner"
     );
 
-    let plan = plan_panel(&chart, PlotKind::HorizontalBar, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(
+        &chart,
+        PlotKind::HorizontalBar,
+        cell,
+        LegendRole::Panel,
+        &theme(),
+    )
+    .unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let final_chart = plan.chart_for_render(&chart);
     let (final_result, final_geometry) = discover_geometry(
         &final_chart,
         PlotKind::HorizontalBar,
-        PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
+        PlotRenderContext::new(
+            crate::data::PlotData::new(&final_chart),
+            plan.panel,
+            &theme(),
+        ),
     )
     .unwrap();
 
@@ -428,8 +462,22 @@ fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_top_left_fallba
     let chart = dense_bar_chart(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
-    let first = plan_panel(&chart, PlotKind::HorizontalBar, cell, LegendRole::Panel).unwrap();
-    let second = plan_panel(&chart, PlotKind::HorizontalBar, cell, LegendRole::Panel).unwrap();
+    let first = plan_panel(
+        &chart,
+        PlotKind::HorizontalBar,
+        cell,
+        LegendRole::Panel,
+        &theme(),
+    )
+    .unwrap();
+    let second = plan_panel(
+        &chart,
+        PlotKind::HorizontalBar,
+        cell,
+        LegendRole::Panel,
+        &theme(),
+    )
+    .unwrap();
     let legend = first.legend.as_ref().unwrap();
     let top_left = legend
         .legend
@@ -450,7 +498,7 @@ fn positive_vertical_bars_keep_zero_minimum_at_top_right() {
     let chart = dense_bar_chart(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
-    let plan = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let top_right = legend
         .legend
@@ -470,7 +518,7 @@ fn negative_vertical_bars_keep_zero_maximum_with_bottom_right_fallback() {
     let chart = dense_bar_chart(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
-    let plan = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel).unwrap();
+    let plan = plan_panel(&chart, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let bottom_right = legend
         .legend
@@ -492,7 +540,7 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     let (mut result, geometry) = discover_geometry(
         &chart,
         PlotKind::HorizontalBar,
-        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell, &theme()),
     )
     .unwrap();
     result.x_domain = crate::spec::AxisDomain::Categorical;
@@ -512,6 +560,7 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
         geometry.bounds(),
         PlotKind::HorizontalBar.legend_default(false),
         0,
+        &theme(),
     )
     .is_none());
 }

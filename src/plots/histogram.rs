@@ -8,12 +8,13 @@
 
 use crate::{Error, HistogramKdePoint};
 
-use crate::layout::Layout;
+use crate::layout::{Layout, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{
     HistogramBins, HistogramComposite, HistogramKde, HistogramStat, PlotRenderContext,
     PlotRenderResult,
 };
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_AUTO_BINS: usize = 512;
@@ -32,7 +33,7 @@ pub(crate) fn render(
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
     if let Some(input) = chart.histogram_composite_geometry_input() {
-        return render_precomputed_composite(chart, input, context, backend);
+        return render_precomputed_composite(chart, input, context.panel, context.theme, backend);
     }
     if let Some(hue) = chart.hue_col() {
         return Err(Error::Data(format!(
@@ -69,7 +70,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = chart.palette();
+    let palette = context.theme;
     let fill = FillStyle {
         color: palette.colors[0],
         stroke: palette.foreground,
@@ -120,7 +121,8 @@ pub(crate) fn render(
 fn render_precomputed_composite(
     chart: &Plot,
     input: &crate::HistogramGeometry,
-    context: PlotRenderContext<'_>,
+    panel: PanelBox,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
     let x_range = input.validate()?;
@@ -137,13 +139,13 @@ fn render_precomputed_composite(
     let layout = Layout::new_with_axis_specs_in_panel_box(
         x_range,
         y_range,
-        context.panel,
+        panel,
         chart.x_label_text().unwrap_or("").to_string(),
         chart.y_label_text().unwrap_or("Density").to_string(),
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = chart.palette();
+    let palette = theme;
     let fill = FillStyle {
         color: palette.colors[0],
         stroke: palette.foreground,

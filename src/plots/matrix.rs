@@ -30,6 +30,7 @@ use crate::render::backend::{
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
+use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::{LegendPosition, Plot};
 
@@ -53,7 +54,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let theme = context.theme;
     let df = context.data;
 
     let cols = chart
@@ -65,12 +66,12 @@ pub(crate) fn render(
     let display_cols = chart.resolve_label_domain("matrix variables", cols.iter().copied())?;
 
     // --- Build graphical groups ---
-    let (groups, _hue_levels) = build_groups(chart, &cols, df)?;
+    let (groups, _hue_levels) = build_groups(chart, &cols, df, theme)?;
     let legend = matrix_legend(chart, &groups)?;
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
-    let canvas = matrix_canvas_layout(chart)?;
+    let canvas = matrix_canvas_layout(chart, theme)?;
     let outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
         (legend_total_width(legend) + 32.0 - canvas.insets.right).max(0.0)
@@ -81,7 +82,7 @@ pub(crate) fn render(
     let provisional_grid_height = (outer.y1 - outer.y0 - gap * n.saturating_sub(1) as f64).max(1.0);
     let mut candidate_cell_width = provisional_grid_width / n as f64;
     let mut candidate_cell_height = provisional_grid_height / n as f64;
-    let label_line_height = f64::from(palette.label_font_size) * 1.2;
+    let label_line_height = f64::from(theme.label_font_size) * 1.2;
     let mut resolved_layout = None;
     for _ in 0..8 {
         let column_blocks = display_cols
@@ -89,7 +90,7 @@ pub(crate) fn render(
             .map(|label| {
                 crate::layout::TextBlock::layout(
                     label,
-                    palette.label_font_size,
+                    theme.label_font_size,
                     candidate_cell_width.max(1.0),
                     "matrix column label",
                 )
@@ -100,7 +101,7 @@ pub(crate) fn render(
             .map(|label| {
                 crate::layout::TextBlock::layout(
                     label,
-                    palette.label_font_size,
+                    theme.label_font_size,
                     candidate_cell_height.max(1.0),
                     "matrix row label",
                 )
@@ -171,27 +172,27 @@ pub(crate) fn render(
         .collect::<Result<_, _>>()?;
 
     // --- Styles ---
-    let frame_style = LineStyle::solid(palette.foreground, palette.axis_width);
-    let tick_style = LineStyle::solid(palette.foreground, palette.axis_width);
+    let frame_style = LineStyle::solid(theme.foreground, theme.axis_width);
+    let tick_style = LineStyle::solid(theme.foreground, theme.axis_width);
     let tick_text_style = TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.tick_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.tick_font_size,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Middle,
         rotation: 0.0,
     };
     let label_style = TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.label_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.label_font_size,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Middle,
         rotation: 0.0,
     };
-    let tick_len = f64::from(palette.tick_length);
+    let tick_len = f64::from(theme.tick_length);
 
-    draw_title_block(chart, backend)?;
+    draw_title_block(chart, theme, backend)?;
 
     // --- Render cells ---
     for row in 0..n {
@@ -205,7 +206,7 @@ pub(crate) fn render(
 
             if row == col {
                 // --- Diagonal: KDE density curves + open frame ---
-                if palette.show_frame {
+                if theme.show_frame {
                     draw_frame(backend, x0, x1, y0, y1, &frame_style)?;
                 }
                 with_clip(backend, cell_panel, |backend| {
@@ -225,7 +226,7 @@ pub(crate) fn render(
                 })?;
             } else {
                 // --- Off-diagonal: scatter + open frame ---
-                if palette.show_frame {
+                if theme.show_frame {
                     draw_frame(backend, x0, x1, y0, y1, &frame_style)?;
                 }
                 let (x_lo, x_hi) = variable_ranges[col];
@@ -262,14 +263,14 @@ pub(crate) fn render(
                     (x_lo, x_hi),
                     &projection,
                     crate::layout::AxisSide::Bottom,
-                    palette.tick_font_size,
+                    theme.tick_font_size,
                 );
                 let ticks = if row == n - 1 {
                     layout::retain_automatic_ticks_inside_panel(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Bottom,
-                        palette.tick_font_size,
+                        theme.tick_font_size,
                     )
                 } else {
                     ticks
@@ -285,14 +286,14 @@ pub(crate) fn render(
                     let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
                     let px = x0 + t * cell_w;
                     // Tick mark on every cell
-                    if palette.show_ticks {
+                    if theme.show_ticks {
                         backend.draw_line(
                             &[Point2D::new(px, y0), Point2D::new(px, y0 - tick_len)],
                             &tick_style,
                         )?;
                     }
                     // Tick label only on bottom row
-                    if row == n - 1 && palette.show_tick_labels {
+                    if row == n - 1 && theme.show_tick_labels {
                         backend.draw_text(
                             Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
                             &tick.label,
@@ -301,7 +302,7 @@ pub(crate) fn render(
                     }
                 }
                 // Column label below ticks (bottom row only)
-                if row == n - 1 && palette.show_x_label {
+                if row == n - 1 && theme.show_x_label {
                     let cx = f64::midpoint(x0, x1);
                     let first_y = y0 - tick_len - 28.0;
                     for (index, line) in column_blocks[col].lines().iter().enumerate() {
@@ -328,14 +329,14 @@ pub(crate) fn render(
                     (y_lo, y_hi),
                     &projection,
                     crate::layout::AxisSide::Left,
-                    palette.tick_font_size,
+                    theme.tick_font_size,
                 );
                 let ticks = if col == 0 {
                     layout::retain_automatic_ticks_inside_panel(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Left,
-                        palette.tick_font_size,
+                        theme.tick_font_size,
                     )
                 } else {
                     ticks
@@ -355,14 +356,14 @@ pub(crate) fn render(
                     let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
                     let py = y0 + t * cell_h;
                     // Tick mark on every cell
-                    if palette.show_ticks {
+                    if theme.show_ticks {
                         backend.draw_line(
                             &[Point2D::new(x0, py), Point2D::new(x0 - tick_len, py)],
                             &tick_style,
                         )?;
                     }
                     // Tick label only on left column
-                    if col == 0 && palette.show_tick_labels {
+                    if col == 0 && theme.show_tick_labels {
                         backend.draw_text(
                             Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
                             &tick.label,
@@ -371,7 +372,7 @@ pub(crate) fn render(
                     }
                 }
                 // Row label to the left of ticks (left column only)
-                if col == 0 && palette.show_y_label {
+                if col == 0 && theme.show_y_label {
                     let cy = f64::midpoint(y0, y1);
                     let row_label_style = TextStyle {
                         anchor: TextAnchor::Middle,
@@ -426,8 +427,11 @@ pub(crate) fn render(
     Ok(PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations())
 }
 
-pub(crate) fn panel_box(chart: &Plot) -> Result<crate::layout::PanelBox, Error> {
-    Ok(matrix_canvas_layout(chart)?.panel_box)
+pub(crate) fn panel_box(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<crate::layout::PanelBox, Error> {
+    Ok(matrix_canvas_layout(chart, theme)?.panel_box)
 }
 
 fn matrix_legend(chart: &Plot, groups: &[HueGroup]) -> Result<Option<Legend>, Error> {
@@ -465,45 +469,46 @@ fn legend_total_width(legend: &Legend) -> f64 {
     legend.compute_box_width()
 }
 
-fn draw_title_block(chart: &Plot, backend: &mut dyn Backend) -> Result<(), Error> {
-    let palette = chart.palette();
-    let mut title_block = TitleBlock::new().font_family(palette.font_family.clone());
-    if palette.show_title {
+fn draw_title_block(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    let mut title_block = TitleBlock::new().font_family(theme.font_family.clone());
+    if theme.show_title {
         if let Some(title) = chart.title_text() {
             title_block = title_block.title(title.to_string());
         }
     }
-    if palette.show_subtitle {
+    if theme.show_subtitle {
         if let Some(subtitle) = chart.subtitle_text() {
             title_block = title_block.subtitle(subtitle.to_string());
         }
     }
-    if palette.show_caption {
+    if theme.show_caption {
         if let Some(caption) = chart.caption_text() {
             title_block = title_block.caption(caption.to_string());
         }
     }
     if title_block.has_content() {
-        let canvas = matrix_canvas_layout(chart)?;
-        title_block.draw(backend, chart.width(), &canvas, &palette)?;
+        let canvas = matrix_canvas_layout(chart, theme)?;
+        title_block.draw(backend, chart.width(), &canvas, theme)?;
     }
     Ok(())
 }
 
-fn matrix_canvas_layout(chart: &Plot) -> Result<CanvasLayout, Error> {
-    let palette = chart.palette();
+fn matrix_canvas_layout(chart: &Plot, theme: &ResolvedTheme) -> Result<CanvasLayout, Error> {
     CanvasLayout::measured_single_panel(
         chart.width(),
         chart.height(),
-        &palette,
+        theme,
         CanvasLayoutSpec {
-            has_title: palette.show_title && chart.title_text().is_some_and(|s| !s.is_empty()),
-            has_subtitle: palette.show_subtitle
+            has_title: theme.show_title && chart.title_text().is_some_and(|s| !s.is_empty()),
+            has_subtitle: theme.show_subtitle
                 && chart.subtitle_text().is_some_and(|s| !s.is_empty()),
-            has_caption: palette.show_caption
-                && chart.caption_text().is_some_and(|s| !s.is_empty()),
-            has_x_label: palette.show_x_label,
-            has_y_label: palette.show_y_label,
+            has_caption: theme.show_caption && chart.caption_text().is_some_and(|s| !s.is_empty()),
+            has_x_label: theme.show_x_label,
+            has_y_label: theme.show_y_label,
         },
         (
             chart.title_text(),
@@ -616,8 +621,8 @@ fn build_groups(
     chart: &Plot,
     cols: &[&str],
     data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
-    let palette = chart.palette();
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
@@ -654,7 +659,7 @@ fn build_groups(
                 .map(|column| rows.iter().map(|row| column[*row]).collect())
                 .collect(),
             bandwidths: Vec::new(),
-            color: palette.colors[color_index % palette.colors.len()],
+            color: theme.colors[color_index % theme.colors.len()],
         });
     }
     if groups.is_empty() {

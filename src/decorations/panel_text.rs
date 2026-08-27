@@ -4,6 +4,7 @@ use crate::Error;
 
 use crate::layout::{Layout, PanelBox};
 use crate::render::backend::{with_clip, with_layer, Backend, Point2D, TextAnchor, TextStyle};
+use crate::theme::ResolvedTheme;
 use crate::{PanelCorner, Plot};
 
 const PANEL_TEXT_PADDING: f64 = 8.0;
@@ -16,12 +17,16 @@ struct PanelTextPlan<'a> {
     corner: PanelCorner,
 }
 
-pub(crate) fn draw(chart: &Plot, layout: &Layout, backend: &mut dyn Backend) -> Result<(), Error> {
+pub(crate) fn draw(
+    chart: &Plot,
+    layout: &Layout,
+    theme: &ResolvedTheme,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
     if chart.panel_text_annotations().is_empty() {
         return Ok(());
     }
-    let plans = plans(chart, layout)?;
-    let palette = chart.palette();
+    let plans = plans(chart, layout, theme)?;
     with_layer(backend, &chart.layer_name("panel-text"), |backend| {
         with_clip(backend, layout.projection.panel_box(), |backend| {
             for plan in plans {
@@ -29,9 +34,9 @@ pub(crate) fn draw(chart: &Plot, layout: &Layout, backend: &mut dyn Backend) -> 
                     plan.position,
                     plan.text,
                     &TextStyle {
-                        color: palette.foreground,
-                        font_family: palette.font_family.clone(),
-                        font_size: palette.detail_font_size,
+                        color: theme.foreground,
+                        font_family: theme.font_family.clone(),
+                        font_size: theme.detail_font_size,
                         weight: crate::TextWeight::Normal,
                         anchor: plan.anchor,
                         rotation: 0.0,
@@ -47,8 +52,9 @@ pub(crate) fn conflicting_legend_corner(
     chart: &Plot,
     layout: &Layout,
     legend: crate::decorations::legend::LegendBox,
+    theme: &ResolvedTheme,
 ) -> Result<Option<PanelCorner>, Error> {
-    Ok(plans(chart, layout)?.into_iter().find_map(|plan| {
+    Ok(plans(chart, layout, theme)?.into_iter().find_map(|plan| {
         rectangles_overlap(
             plan.bounds,
             PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
@@ -57,11 +63,14 @@ pub(crate) fn conflicting_legend_corner(
     }))
 }
 
-fn plans<'a>(chart: &'a Plot, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>, Error> {
-    let palette = chart.palette();
+fn plans<'a>(
+    chart: &'a Plot,
+    layout: &Layout,
+    theme: &ResolvedTheme,
+) -> Result<Vec<PanelTextPlan<'a>>, Error> {
     let panel = layout.projection.panel_box();
     let available_width = panel.width() - PANEL_TEXT_PADDING * 2.0;
-    let text_height = f64::from(palette.detail_font_size) * 1.2;
+    let text_height = f64::from(theme.detail_font_size) * 1.2;
     if available_width <= 0.0 || text_height + PANEL_TEXT_PADDING * 2.0 > panel.height() {
         return Err(Error::Render(
             "panel text has no usable space inside the resolved chart panel; increase the canvas"
@@ -74,7 +83,7 @@ fn plans<'a>(chart: &'a Plot, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>,
         .iter()
         .map(|annotation| {
             let width =
-                crate::layout::estimated_text_width(annotation.text(), palette.detail_font_size);
+                crate::layout::estimated_text_width(annotation.text(), theme.detail_font_size);
             if width > available_width {
                 return Err(Error::Render(format!(
                     "panel text {:?} requires {width:.1}px but only {available_width:.1}px is available; increase chart width or shorten the annotation",

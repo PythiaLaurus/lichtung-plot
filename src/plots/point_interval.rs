@@ -70,6 +70,7 @@ pub(crate) fn render(
         chart,
         context.panel,
         &display_labels,
+        context.theme,
     )?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
@@ -82,7 +83,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = chart.palette();
+    let palette = context.theme;
     let interval_style = LineStyle::solid(palette.foreground, 1.4);
     let zero_line_x = (chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0)
         .then(|| layout.projection.project(0.0, 0.0).0);
@@ -101,7 +102,7 @@ pub(crate) fn render(
             let y = row_y(index, rows.len());
             let Some(tuple) = row.estimate else {
                 crate::plots::interval_estimate::draw_not_estimable(
-                    chart,
+                    context.theme,
                     &layout,
                     y,
                     zero_line_x,

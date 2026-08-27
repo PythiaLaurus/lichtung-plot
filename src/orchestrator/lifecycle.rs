@@ -1,81 +1,166 @@
-//! One-canvas chart lifecycle and unfaceted scene coordination.
+//! One-canvas chart lifecycle and immutable standalone scene planning.
 
 use crate::Error;
 
 use super::backend::{validate_with_null_backend, DeferredBackend};
 use crate::builder::Plot;
+use crate::decorations::plan::PanelPlan;
 use crate::render::backend::Backend;
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 
-impl Plot {
-    pub(super) fn render_kind_erased(
-        &self,
-        kind: PlotKind,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        self.validate_configuration(kind)?;
-        let mut backend = DeferredBackend::new(backend, self.width(), self.height());
-        let rendered = if self.has_facets() {
-            self.render_facets(kind, &mut backend)
+pub(super) struct PlotPlan<'a> {
+    source: &'a Plot,
+    kind: PlotKind,
+    theme: Box<ResolvedTheme>,
+    scene: PlotScenePlan,
+}
+
+enum PlotScenePlan {
+    Open(Box<OpenPlotPlan>),
+    Faceted(Box<super::facets::FacetPlan>),
+}
+
+struct OpenPlotPlan {
+    chart: Plot,
+    panel: PanelPlan,
+}
+
+impl<'a> PlotPlan<'a> {
+    pub(super) fn new(source: &'a Plot, kind: PlotKind) -> Result<Self, Error> {
+        #[cfg(test)]
+        super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let theme = Box::new(source.theme_spec().resolve());
+        source.validate_configuration(kind)?;
+        let scene = if source.has_facets() {
+            PlotScenePlan::Faceted(Box::new(super::facets::FacetPlan::new(
+                source, kind, &theme,
+            )?))
         } else {
-            self.render_open_canvas(kind, &mut backend)
+            PlotScenePlan::Open(Box::new(OpenPlotPlan::new(source, kind, &theme)?))
         };
+        let plan = Self {
+            source,
+            kind,
+            theme,
+            scene,
+        };
+        validate_with_null_backend(
+            source.width(),
+            source.height(),
+            "prepared plot preflight",
+            |backend| plan.render_scene(backend),
+        )?;
+        Ok(plan)
+    }
+
+    pub(super) fn render(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        super::FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let mut backend = DeferredBackend::new(backend, self.source.width(), self.source.height());
+        let rendered = self.render_scene(&mut backend);
         backend.finish(rendered, "backend canvas")
     }
 
-    fn render_open_canvas(&self, kind: PlotKind, backend: &mut dyn Backend) -> Result<(), Error> {
-        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+    fn render_scene(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        match &self.scene {
+            PlotScenePlan::Open(plan) => plan.render(self.source, self.kind, &self.theme, backend),
+            PlotScenePlan::Faceted(plan) => {
+                plan.render(self.source, self.kind, &self.theme, backend)
+            }
+        }
+    }
+}
+
+impl OpenPlotPlan {
+    fn new(source: &Plot, kind: PlotKind, theme: &ResolvedTheme) -> Result<Self, Error> {
+        if !source.significance_annotations().is_empty()
+            && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
             )));
         }
-        let palette = self.palette();
         let cell = match kind {
-            PlotKind::Matrix => crate::plots::matrix::panel_box(self)?,
-            _ => self.measured_canvas_layout()?.panel_box,
+            PlotKind::Matrix => crate::plots::matrix::panel_box(source, theme)?,
+            _ => source.measured_canvas_layout(theme)?.panel_box,
         };
-        let plan = crate::decorations::plan::plan_panel(
-            self,
+        let panel = crate::decorations::plan::plan_panel(
+            source,
             kind,
             cell,
             crate::decorations::plan::LegendRole::Panel,
+            theme,
         )?;
-        if plan.result.decoration_mode == DecorationMode::Standard {
-            crate::decorations::apply::apply_grid(self, &plan.result, &palette, backend)?;
+        let chart = panel.chart_for_render(source);
+        Ok(Self { chart, panel })
+    }
+
+    fn render(
+        &self,
+        source: &Plot,
+        kind: PlotKind,
+        theme: &ResolvedTheme,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        if self.panel.result.decoration_mode == DecorationMode::Standard {
+            crate::decorations::apply::apply_grid(source, &self.panel.result, theme, backend)?;
         }
-        let source_rows = self.configured_source_rows()?;
-        let render_chart = plan.chart_for_render(self);
+        let source_rows = self.chart.configured_source_rows()?;
         let context = source_rows.map_or_else(
-            || PlotRenderContext::new(render_chart.data(), plan.panel),
-            |rows| PlotRenderContext::with_source_rows(render_chart.data(), rows, plan.panel),
+            || PlotRenderContext::new(self.chart.data(), self.panel.panel, theme),
+            |rows| {
+                PlotRenderContext::with_source_rows(
+                    self.chart.data(),
+                    rows,
+                    self.panel.panel,
+                    theme,
+                )
+            },
         );
-        let rendered = render_chart.render_panel(kind, context, backend)?;
+        let rendered = self.chart.render_panel(kind, context, backend)?;
 
-        if !plan.result.significance_brackets.is_empty() {
-            crate::significance::render(self, &plan.result.significance_brackets, backend)?;
+        if !self.panel.result.significance_brackets.is_empty() {
+            crate::significance::render(
+                source,
+                &self.panel.result.significance_brackets,
+                theme,
+                backend,
+            )?;
         }
 
-        match plan.result.decoration_mode {
+        match self.panel.result.decoration_mode {
             DecorationMode::Standard => {
-                crate::decorations::apply::apply_axes(self, &plan.result, &palette, backend)?;
+                crate::decorations::apply::apply_axes(source, &self.panel.result, theme, backend)?;
                 crate::decorations::apply::apply_planned_legend(
-                    self,
-                    plan.legend.as_ref(),
+                    source,
+                    self.panel.legend.as_ref(),
                     backend,
                 )?;
-                crate::decorations::apply::apply_canvas_text(self, &palette, backend)?;
+                crate::decorations::apply::apply_canvas_text(source, theme, backend)?;
             }
             DecorationMode::SelfManaged => {}
         }
-        debug_assert_eq!(rendered.decoration_mode, plan.result.decoration_mode);
+        debug_assert_eq!(rendered.decoration_mode, self.panel.result.decoration_mode);
         Ok(())
+    }
+}
+
+impl Plot {
+    #[cfg(test)]
+    pub(super) fn render_kind_erased(
+        &self,
+        kind: PlotKind,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        PlotPlan::new(self, kind)?.render(backend)
     }
 
     pub(crate) fn preflight_panel(
         &self,
         kind: PlotKind,
         panel: crate::layout::PanelBox,
+        theme: &ResolvedTheme,
     ) -> Result<PlotRenderResult, Error> {
         self.validate_category_order_configuration(kind)?;
         if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
@@ -86,8 +171,8 @@ impl Plot {
         }
         let source_rows = self.configured_source_rows()?;
         let context = source_rows.map_or_else(
-            || PlotRenderContext::new(self.data(), panel),
-            |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel),
+            || PlotRenderContext::new(self.data(), panel, theme),
+            |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
         );
         validate_with_null_backend(self.width(), self.height(), "panel preflight", |backend| {
             self.render_panel(kind, context, backend)
@@ -98,8 +183,9 @@ impl Plot {
         &self,
         kind: PlotKind,
         panel: crate::layout::PanelBox,
+        theme: &ResolvedTheme,
     ) -> Result<Vec<String>, Error> {
-        let result = self.preflight_panel(kind, panel)?;
+        let result = self.preflight_panel(kind, panel, theme)?;
         let Some(field) = self.hue_dimension_key() else {
             return Ok(Vec::new());
         };

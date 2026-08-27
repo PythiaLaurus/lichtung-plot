@@ -6,26 +6,21 @@ use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
 
 impl<K: crate::kind::Marker> Plot<K> {
-    /// Resolve the active theme appearance.
-    #[must_use]
-    pub(crate) fn palette(&self) -> ResolvedTheme {
-        self.theme.resolve()
-    }
-
     /// Resolve the canvas layout for this chart's canvas and configured text.
     #[must_use]
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> CanvasLayout {
-        crate::kind::into_erased(self.clone()).canvas_layout_erased()
+        let theme = self.theme.resolve();
+        crate::kind::into_erased(self.clone()).canvas_layout_erased(&theme)
     }
 }
 
 impl Plot {
     #[cfg(test)]
-    fn canvas_layout_erased(&self) -> CanvasLayout {
+    fn canvas_layout_erased(&self, theme: &ResolvedTheme) -> CanvasLayout {
         let mut canvas = self
-            .measured_canvas_layout()
-            .unwrap_or_else(|_| self.resolve_canvas_layout());
+            .measured_canvas_layout(theme)
+            .unwrap_or_else(|_| self.resolve_canvas_layout(theme));
         if self.has_facets() {
             return canvas;
         }
@@ -39,6 +34,7 @@ impl Plot {
             kind,
             cell,
             crate::decorations::plan::LegendRole::Panel,
+            theme,
         ) {
             canvas.insets.left += plan.panel.x0 - cell.x0;
             canvas.insets.right += cell.x1 - plan.panel.x1;
@@ -49,25 +45,27 @@ impl Plot {
         canvas
     }
 
-    pub(crate) fn base_canvas_layout(&self) -> CanvasLayout {
-        self.resolve_canvas_layout()
+    pub(crate) fn base_canvas_layout(&self, theme: &ResolvedTheme) -> CanvasLayout {
+        self.resolve_canvas_layout(theme)
     }
 
-    pub(crate) fn measured_canvas_layout(&self) -> Result<CanvasLayout, Error> {
-        let palette = self.palette();
+    pub(crate) fn measured_canvas_layout(
+        &self,
+        theme: &ResolvedTheme,
+    ) -> Result<CanvasLayout, Error> {
         let labels_present = self.axis_label_presence();
         let mut canvas = CanvasLayout::measured_single_panel(
             self.width,
             self.height,
-            &palette,
+            theme,
             CanvasLayoutSpec {
-                has_title: palette.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
-                has_subtitle: palette.show_subtitle
+                has_title: theme.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
+                has_subtitle: theme.show_subtitle
                     && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
-                has_caption: palette.show_caption
+                has_caption: theme.show_caption
                     && self.caption.as_ref().is_some_and(|s| !s.is_empty()),
-                has_x_label: palette.show_x_label && labels_present.0,
-                has_y_label: palette.show_y_label && labels_present.1,
+                has_x_label: theme.show_x_label && labels_present.0,
+                has_y_label: theme.show_y_label && labels_present.1,
             },
             (
                 self.title.as_deref(),
@@ -75,7 +73,7 @@ impl Plot {
                 self.caption.as_deref(),
             ),
         )?;
-        self.reserve_multiline_axis_titles(&mut canvas, true)?;
+        self.reserve_multiline_axis_titles(&mut canvas, true, theme)?;
         Ok(canvas)
     }
 
@@ -84,24 +82,23 @@ impl Plot {
         (!x.is_empty(), !y.is_empty())
     }
 
-    fn resolve_canvas_layout(&self) -> CanvasLayout {
-        let palette = self.palette();
+    fn resolve_canvas_layout(&self, theme: &ResolvedTheme) -> CanvasLayout {
         let labels_present = self.axis_label_presence();
         let mut canvas = CanvasLayout::single_panel(
             self.width,
             self.height,
-            &palette,
+            theme,
             CanvasLayoutSpec {
-                has_title: palette.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
-                has_subtitle: palette.show_subtitle
+                has_title: theme.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
+                has_subtitle: theme.show_subtitle
                     && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
-                has_caption: palette.show_caption
+                has_caption: theme.show_caption
                     && self.caption.as_ref().is_some_and(|s| !s.is_empty()),
-                has_x_label: palette.show_x_label && labels_present.0,
-                has_y_label: palette.show_y_label && labels_present.1,
+                has_x_label: theme.show_x_label && labels_present.0,
+                has_y_label: theme.show_y_label && labels_present.1,
             },
         );
-        let _ = self.reserve_multiline_axis_titles(&mut canvas, false);
+        let _ = self.reserve_multiline_axis_titles(&mut canvas, false, theme);
         canvas
     }
 
@@ -109,12 +106,13 @@ impl Plot {
         &self,
         canvas: &mut CanvasLayout,
         checked: bool,
+        theme: &ResolvedTheme,
     ) -> Result<(), Error> {
         let kind = self.kind;
-        let baseline = self.axis_title_line_counts(kind, canvas.panel_box)?;
+        let baseline = self.axis_title_line_counts(kind, canvas.panel_box, theme)?;
         let baseline = (baseline.0.min(1), baseline.1.min(1));
         let (panel, extra_left, extra_bottom) =
-            self.adjusted_axis_title_panel(kind, baseline, canvas.panel_box, checked)?;
+            self.adjusted_axis_title_panel(kind, baseline, canvas.panel_box, checked, theme)?;
         canvas.panel_box = panel;
         canvas.insets.left += extra_left;
         canvas.insets.bottom += extra_bottom;
@@ -131,12 +129,12 @@ impl Plot {
         reserved_panel: PanelBox,
         mut candidate_panel: PanelBox,
         discovered_layout: &Layout,
+        theme: &ResolvedTheme,
     ) -> Result<PanelBox, Error> {
-        let baseline = self.axis_title_line_counts(kind, reserved_panel)?;
+        let baseline = self.axis_title_line_counts(kind, reserved_panel, theme)?;
         if !self.axis_text_measured
             && discovered_layout.projection.panel_box().y0 <= reserved_panel.y0 + f64::EPSILON
         {
-            let palette = self.palette();
             let tick_width =
                 candidate_panel.width() / discovered_layout.x_axis.ticks.len().max(1) as f64 * 0.9;
             let maximum_height = discovered_layout
@@ -147,7 +145,7 @@ impl Plot {
                 .map(|tick| {
                     TextBlock::layout(
                         &tick.label,
-                        palette.tick_font_size,
+                        theme.tick_font_size,
                         tick_width.max(1.0),
                         "x-axis tick label",
                     )
@@ -156,7 +154,7 @@ impl Plot {
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
                 .fold(0.0_f64, f64::max);
-            let extra = (maximum_height - f64::from(palette.tick_font_size) * 1.2).max(0.0);
+            let extra = (maximum_height - f64::from(theme.tick_font_size) * 1.2).max(0.0);
             if candidate_panel.height() - extra < 60.0 {
                 return Err(Error::Render(
                     "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or shorten the tick labels"
@@ -165,7 +163,7 @@ impl Plot {
             }
             candidate_panel.y0 += extra;
         }
-        self.adjusted_axis_title_panel(kind, baseline, candidate_panel, true)
+        self.adjusted_axis_title_panel(kind, baseline, candidate_panel, true, theme)
             .map(|(panel, _, _)| panel)
     }
 
@@ -173,13 +171,13 @@ impl Plot {
         &self,
         kind: PlotKind,
         panel: PanelBox,
+        theme: &ResolvedTheme,
     ) -> Result<(usize, usize), Error> {
-        let palette = self.palette();
         let (x_label, y_label) = self.resolved_axis_labels(kind);
-        let x_lines = if palette.show_x_label && !x_label.is_empty() {
+        let x_lines = if theme.show_x_label && !x_label.is_empty() {
             TextBlock::layout(
                 &x_label,
-                palette.label_font_size,
+                theme.label_font_size,
                 panel.width().max(1.0),
                 "x-axis title",
             )?
@@ -188,10 +186,10 @@ impl Plot {
         } else {
             0
         };
-        let y_lines = if palette.show_y_label && !y_label.is_empty() {
+        let y_lines = if theme.show_y_label && !y_label.is_empty() {
             TextBlock::layout(
                 &y_label,
-                palette.label_font_size,
+                theme.label_font_size,
                 panel.height().max(1.0),
                 "y-axis title",
             )?
@@ -213,11 +211,12 @@ impl Plot {
         baseline: (usize, usize),
         candidate: PanelBox,
         checked: bool,
+        theme: &ResolvedTheme,
     ) -> Result<(PanelBox, f64, f64), Error> {
-        let line_height = f64::from(self.palette().label_font_size) * 1.2;
+        let line_height = f64::from(theme.label_font_size) * 1.2;
         let mut panel = candidate;
         for _ in 0..4 {
-            let lines = self.axis_title_line_counts(kind, panel)?;
+            let lines = self.axis_title_line_counts(kind, panel, theme)?;
             let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
             let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
             if checked

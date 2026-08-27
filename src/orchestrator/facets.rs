@@ -8,39 +8,46 @@ use crate::decorations::plan::ResolvedLegend;
 use crate::layout::canvas::allocate_composed_grid;
 use crate::render::backend::Backend;
 use crate::spec::{FacetScales, LegendPosition, PlotKind};
+use crate::theme::ResolvedTheme;
 
 mod data;
 mod legend;
 mod planning;
 mod rendering;
 
-impl Plot {
+pub(super) struct FacetPlan {
+    chart: Plot,
+    panels: Vec<data::FacetPanel>,
+    plans: Vec<crate::decorations::plan::PanelPlan>,
+    horizontal_axis_label: Option<String>,
+    vertical_axis_label: Option<String>,
+    outer: crate::layout::PanelBox,
+    shared_axis_origin: (f64, f64),
+}
+
+impl FacetPlan {
     #[expect(
         clippy::too_many_lines,
         reason = "facet coordination keeps both balanced validation sessions explicit"
     )]
-    pub(super) fn render_facets(
-        &self,
-        kind: PlotKind,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+    pub(super) fn new(source: &Plot, kind: PlotKind, theme: &ResolvedTheme) -> Result<Self, Error> {
+        if !source.significance_annotations().is_empty()
+            && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}"
             )));
         }
 
-        let selectors = data::facet_selectors(self)?;
-        let palette = self.palette();
-        let (horizontal_axis_label, vertical_axis_label) = self.resolved_axis_labels(kind);
-        let horizontal_axis_label = (palette.show_x_label && !horizontal_axis_label.is_empty())
+        let selectors = data::facet_selectors(source)?;
+        let (horizontal_axis_label, vertical_axis_label) = source.resolved_axis_labels(kind);
+        let horizontal_axis_label = (theme.show_x_label && !horizontal_axis_label.is_empty())
             .then_some(horizontal_axis_label);
-        let vertical_axis_label = (palette.show_y_label && !vertical_axis_label.is_empty())
-            .then_some(vertical_axis_label);
+        let vertical_axis_label =
+            (theme.show_y_label && !vertical_axis_label.is_empty()).then_some(vertical_axis_label);
         let canvas_layout = planning::canvas_layout(
-            self,
-            &palette,
+            source,
+            theme,
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
         )?;
@@ -53,20 +60,22 @@ impl Plot {
             "facet layout",
         )?;
         let base = data::base_chart(
-            self,
+            source,
             kind,
             horizontal_axis_label.is_some(),
             vertical_axis_label.is_some(),
         )?;
-        let mut panels = data::extract_panels(self, &selectors, &provisional)?;
-        data::validate_significance_facet_anchors(self, &panels)?;
-        let facet_scales = self.facet_scales_spec();
+        let mut panels = data::extract_panels(source, &selectors, &provisional)?;
+        data::validate_significance_facet_anchors(source, &panels)?;
+        let facet_scales = source.facet_scales_spec();
 
         let (base, preflight) = validate_with_null_backend(
-            self.width(),
-            self.height(),
+            source.width(),
+            source.height(),
             "facet panel preflight",
-            |backend| legend::preflight_coordinated_panels(self, base, kind, &panels, backend),
+            |backend| {
+                legend::preflight_coordinated_panels(source, base, kind, &panels, theme, backend)
+            },
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
@@ -74,16 +83,16 @@ impl Plot {
         let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
         let shared = base.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
         let (reserved_outer, mut outside_legend, legend_entries) =
-            legend::reserve_shared_legend(self, &shared, &preflight, outer)?;
+            legend::reserve_shared_legend(source, &shared, &preflight, outer)?;
         outer = planning::reserve_rewrapped_shared_axis_titles(
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
-            &palette,
+            theme,
             canvas_layout.panel_box,
             reserved_outer,
         )?;
         let shared_axis_origin = position_shared_axis_guides(
-            self.legend_position_spec(),
+            source.legend_position_spec(),
             canvas_layout.panel_box,
             reserved_outer,
             outer,
@@ -91,8 +100,8 @@ impl Plot {
         );
 
         validate_with_null_backend(
-            self.width(),
-            self.height(),
+            source.width(),
+            source.height(),
             "facet layout preflight",
             |backend| {
                 planning::layout_panels(
@@ -102,6 +111,7 @@ impl Plot {
                     outer,
                     (selectors.rows, selectors.columns),
                     facet_scales,
+                    theme,
                     backend,
                 )
             },
@@ -114,18 +124,37 @@ impl Plot {
             outside_legend,
             &legend_entries,
             facet_scales,
+            theme,
         )?;
-        rendering::render_scene(
-            self,
-            &shared,
-            kind,
+        Ok(Self {
+            chart: shared,
             panels,
             plans,
-            horizontal_axis_label.as_deref(),
-            vertical_axis_label.as_deref(),
+            horizontal_axis_label,
+            vertical_axis_label,
             outer,
             shared_axis_origin,
-            &palette,
+        })
+    }
+
+    pub(super) fn render(
+        &self,
+        source: &Plot,
+        kind: PlotKind,
+        theme: &ResolvedTheme,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        rendering::render_scene(
+            source,
+            &self.chart,
+            kind,
+            &self.panels,
+            &self.plans,
+            self.horizontal_axis_label.as_deref(),
+            self.vertical_axis_label.as_deref(),
+            self.outer,
+            self.shared_axis_origin,
+            theme,
             backend,
         )
     }

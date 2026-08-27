@@ -20,6 +20,7 @@ use crate::spec::{
     CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
     PlotRenderContext, PlotRenderResult,
 };
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_CELLS: usize = 1_000_000;
@@ -50,6 +51,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let prepared = prepare(chart, context.data)?;
     let x_labels = chart.resolve_label_domain(
         "heatmap x-axis categories",
@@ -60,7 +62,7 @@ pub(crate) fn render(
         prepared.y_levels.iter().map(String::as_str),
     )?;
     let color_label = chart.resolved_color_label();
-    let detail_font_size = chart.palette().detail_font_size;
+    let detail_font_size = theme.detail_font_size;
     let color_label_block = crate::layout::TextBlock::layout(
         &color_label,
         detail_font_size,
@@ -88,12 +90,18 @@ pub(crate) fn render(
     ) + 4.0;
     let wrap_labels = chart.heatmap_label_fit_spec() == HeatmapLabelFit::Wrap;
     let mut panel = if wrap_labels {
-        crate::plots::horizontal_bar::panel_box_for_y_tick_labels(chart, context.panel, &y_labels)?
+        crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
+            chart,
+            context.panel,
+            &y_labels,
+            theme,
+        )?
     } else {
         crate::plots::horizontal_bar::panel_box_for_elided_y_tick_labels(
             chart,
             context.panel,
             &y_labels,
+            theme,
         )?
     };
     if panel.width() - colorbar_reserve < 40.0 {
@@ -128,7 +136,7 @@ pub(crate) fn render(
         fitted_unique_labels(
             &y_labels,
             (panel.x0 - 38.0).max(20.0),
-            chart.palette().tick_font_size,
+            theme.tick_font_size,
             "y",
         )?
     };
@@ -157,7 +165,7 @@ pub(crate) fn render(
         fitted_unique_labels(
             &x_labels,
             panel.width() / x_count as f64 * 0.9,
-            chart.palette().tick_font_size,
+            theme.tick_font_size,
             "x",
         )?
     };
@@ -166,9 +174,9 @@ pub(crate) fn render(
     }
 
     with_clip(backend, panel, |backend| {
-        draw_cells(chart, &prepared, &layout, backend)
+        draw_cells(chart, &prepared, &layout, theme, backend)
     })?;
-    draw_colorbar(chart, &prepared, &layout, &color_label_block, backend)?;
+    draw_colorbar(&prepared, &layout, &color_label_block, theme, backend)?;
 
     Ok(PlotRenderResult::new(layout, Vec::new())
         .with_resolved_axis_keys(prepared.x_levels.clone(), prepared.y_levels.clone()))
@@ -598,6 +606,7 @@ fn draw_cells(
     chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let x_count = prepared.x_levels.len();
@@ -626,7 +635,7 @@ fn draw_cells(
                     opacity: 1.0,
                 },
             )?;
-            draw_null_row_annotation(chart, annotation, left, right, bottom, top, backend)?;
+            draw_null_row_annotation(theme, annotation, left, right, bottom, top, backend)?;
             continue;
         }
         for x_index in 0..x_count {
@@ -650,7 +659,7 @@ fn draw_cells(
                 &FillStyle {
                     color,
                     stroke: if highlighted {
-                        chart.palette().foreground
+                        theme.foreground
                     } else {
                         (255, 255, 255)
                     },
@@ -662,7 +671,7 @@ fn draw_cells(
                 if let Some(format) = annotation_format {
                     let style = TextStyle {
                         color: contrasting_text(color),
-                        font_family: chart.palette().font_family,
+                        font_family: theme.font_family.clone(),
                         font_size: ANNOTATION_FONT_SIZE,
                         weight: crate::TextWeight::Normal,
                         anchor: TextAnchor::Middle,
@@ -701,7 +710,7 @@ fn draw_cells(
 }
 
 fn draw_null_row_annotation(
-    chart: &Plot,
+    theme: &ResolvedTheme,
     annotation: &str,
     left: f64,
     right: f64,
@@ -716,8 +725,8 @@ fn draw_null_row_annotation(
         "heatmap fully-null row annotation",
     )?;
     let style = TextStyle {
-        color: chart.palette().foreground,
-        font_family: chart.palette().font_family,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
         font_size: ANNOTATION_FONT_SIZE,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Middle,
@@ -788,10 +797,10 @@ fn validate_annotation_fit(
 }
 
 fn draw_colorbar(
-    chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
     color_label: &crate::layout::TextBlock,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
@@ -810,11 +819,10 @@ fn draw_colorbar(
         Point2D::new(left + 6.0, bottom + height),
         &stops,
     )?;
-    let palette = chart.palette();
     let value_style = TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.detail_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,
         anchor: TextAnchor::Start,
         rotation: 0.0,

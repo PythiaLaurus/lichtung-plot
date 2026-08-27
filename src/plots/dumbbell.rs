@@ -56,6 +56,7 @@ pub(crate) fn render(
         chart,
         context.panel,
         &display_categories,
+        context.theme,
     )?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
@@ -68,7 +69,7 @@ pub(crate) fn render(
         &x_axis,
         &y_axis,
     );
-    let connector = LineStyle::solid(chart.palette().foreground, 1.2);
+    let connector = LineStyle::solid(context.theme.foreground, 1.2);
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for row in &prepared.rows {
             let y = replicate_y(

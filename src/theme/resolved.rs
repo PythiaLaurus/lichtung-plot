@@ -9,6 +9,11 @@
 /// Built-in axis tick-label font size in points.
 pub(crate) const TICK_FONT_SIZE: u32 = 16;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static THEME_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 macro_rules! define_themes {
     ($($variant:ident => ($documentation:literal, $resolver:ident)),+ $(,)?) => {
         /// Predefined publication themes with hardcoded journal/venue palettes.
@@ -26,6 +31,8 @@ macro_rules! define_themes {
 
         impl Theme {
             pub(crate) fn resolve(self) -> ResolvedTheme {
+                #[cfg(test)]
+                THEME_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
                 match self { $(Self::$variant => $resolver()),+ }
             }
         }

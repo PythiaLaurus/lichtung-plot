@@ -56,7 +56,8 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    render_series(chart, context, backend)
+    let theme = context.theme;
+    render_series(chart, context, theme, backend)
 }
 
 pub(crate) fn render_trajectory(
@@ -64,7 +65,8 @@ pub(crate) fn render_trajectory(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    render_grouped(chart, context, backend, false)
+    let theme = context.theme;
+    render_grouped(chart, context, theme, backend, false)
 }
 
 pub(crate) fn render_path(
@@ -72,16 +74,18 @@ pub(crate) fn render_path(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    render_grouped(chart, context, backend, true)
+    let theme = context.theme;
+    render_grouped(chart, context, theme, backend, true)
 }
 
 fn render_series(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
     let (series, primary_color_slots) = prepare(chart, context.data)?;
-    let point_layers = prepare_point_layers(chart, primary_color_slots)?;
+    let point_layers = prepare_point_layers(chart, primary_color_slots, theme)?;
     let x_range = crate::layout::continuous_auto_range(
         crate::data::min_max(
             series
@@ -126,15 +130,14 @@ fn render_series(
         &x_axis,
         &y_axis,
     );
-    let palette = chart.palette();
-    draw_series(chart, &layout, &series, &palette, backend)?;
+    draw_series(chart, &layout, &series, theme, backend)?;
     draw_point_layers(&layout, &point_layers, backend)?;
 
     let mut legends = series
         .iter()
         .filter(|series| series.identity.hue.is_some())
         .map(|series| {
-            let color = palette.colors[series.hue_index.unwrap_or(0) % palette.colors.len()];
+            let color = theme.colors[series.hue_index.unwrap_or(0) % theme.colors.len()];
             let identity = chart.collective_legend_identity(&series.identity)?;
             let point = chart.point_style(color, 3);
             let line = LineStyle::solid(color, 1.8);
@@ -165,8 +168,8 @@ fn render_series(
 fn prepare_point_layers(
     chart: &Plot,
     primary_color_slots: usize,
+    theme: &ResolvedTheme,
 ) -> Result<Vec<PreparedPointLayer>, Error> {
-    let palette = chart.palette();
     chart
         .point_layers()
         .iter()
@@ -196,9 +199,8 @@ fn prepare_point_layers(
                 points: x.into_iter().zip(y).collect(),
                 labels,
                 legend_label: layer.legend_label_text().map(str::to_owned),
-                style: layer.point_style(
-                    palette.colors[(primary_color_slots + index) % palette.colors.len()],
-                ),
+                style: layer
+                    .point_style(theme.colors[(primary_color_slots + index) % theme.colors.len()]),
             })
         })
         .collect()
@@ -264,6 +266,7 @@ fn draw_point_layers(
 fn render_grouped(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
     ordered_path: bool,
 ) -> Result<PlotRenderResult, Error> {
@@ -317,7 +320,12 @@ fn render_grouped(
         .condition_levels
         .as_ref()
         .map_or(Ok(context.panel), |levels| {
-            crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, context.panel, levels)
+            crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
+                chart,
+                context.panel,
+                levels,
+                theme,
+            )
         })?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
@@ -330,7 +338,6 @@ fn render_grouped(
         &x_axis,
         &y_axis,
     );
-    let palette = chart.palette();
     let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for group in &trajectory.groups {
@@ -343,9 +350,9 @@ fn render_grouped(
                 })
                 .collect::<Vec<_>>();
             let color = if hue_paths {
-                hue_path_color(chart, &trajectory.hue_levels, group.hue_index)?
+                hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?
             } else {
-                palette.foreground
+                theme.foreground
             };
             backend.draw_line(&projected, &LineStyle::solid(color, 1.4))?;
         }
@@ -354,10 +361,10 @@ fn render_grouped(
                 for point in &group.points {
                     let (x, y) = layout.projection.project(point.x, point.y);
                     let color = if hue_paths {
-                        hue_path_color(chart, &trajectory.hue_levels, group.hue_index)?
+                        hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?
                     } else {
-                        point.hue_index.map_or(palette.colors[0], |index| {
-                            palette.colors[index % palette.colors.len()]
+                        point.hue_index.map_or(theme.colors[0], |index| {
+                            theme.colors[index % theme.colors.len()]
                         })
                     };
                     backend.draw_scatter(&[Point2D::new(x, y)], &chart.point_style(color, 4))?;
@@ -366,14 +373,14 @@ fn render_grouped(
         }
         Ok(())
     })?;
-    let legends = trajectory_legends(chart, &trajectory, &palette, hue_paths)?;
+    let legends = trajectory_legends(chart, &trajectory, theme, hue_paths)?;
     Ok(PlotRenderResult::new(layout, legends).with_axis_domains(x_domain, AxisDomain::Continuous))
 }
 
 fn trajectory_legends(
     chart: &Plot,
     trajectory: &TrajectoryData,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     hue_paths: bool,
 ) -> Result<Vec<LegendEntry>, Error> {
     if hue_paths {
@@ -382,7 +389,7 @@ fn trajectory_legends(
             .iter()
             .filter_map(|group| group.identity.as_ref().map(|identity| (group, identity)))
             .map(|(group, identity)| {
-                let color = hue_path_color(chart, &trajectory.hue_levels, group.hue_index)?;
+                let color = hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?;
                 let identity = chart.collective_legend_identity(identity)?;
                 let line = LineStyle::solid(color, 1.4);
                 if chart.markers_visible() {
@@ -405,7 +412,7 @@ fn trajectory_legends(
         .iter()
         .enumerate()
         .map(|(index, label)| {
-            let color = palette.colors[index % palette.colors.len()];
+            let color = theme.colors[index % theme.colors.len()];
             Ok(LegendEntry::point(
                 chart.legend_identity(label.clone()),
                 chart.point_style(color, 4),
@@ -418,6 +425,7 @@ fn hue_path_color(
     chart: &Plot,
     hue_levels: &[String],
     hue_index: Option<usize>,
+    theme: &ResolvedTheme,
 ) -> Result<(u8, u8, u8), Error> {
     let index = hue_index.ok_or_else(|| {
         Error::Render("line path: hue-styled path has no resolved hue index".into())
@@ -425,20 +433,20 @@ fn hue_path_color(
     let label = hue_levels.get(index).ok_or_else(|| {
         Error::Render("line path: hue-styled path index exceeds resolved hues".into())
     })?;
-    chart.categorical_color("line path", label, index)
+    chart.categorical_color("line path", label, index, theme)
 }
 
 fn draw_series(
     chart: &Plot,
     layout: &Layout,
     series: &[SeriesData],
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for series in series {
             let color_index = series.hue_index.unwrap_or(0);
-            let color = palette.colors[color_index % palette.colors.len()];
+            let color = theme.colors[color_index % theme.colors.len()];
             if series.points.iter().all(|point| point.2.is_some()) {
                 let mut polygon = series
                     .points

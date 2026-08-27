@@ -55,7 +55,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = chart.palette();
+    let palette = context.theme;
 
     let sample = crate::plots::distribution_sample::prepare(chart, context.data, "boxplot")?;
     let x_levels = &sample.x_levels;
@@ -114,7 +114,12 @@ pub(crate) fn render(
     }
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, panel, x_levels)?;
+    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
+        chart,
+        panel,
+        x_levels,
+        context.theme,
+    )?;
     let legend_entries: Vec<LegendEntry> = hue_levels
         .iter()
         .enumerate()

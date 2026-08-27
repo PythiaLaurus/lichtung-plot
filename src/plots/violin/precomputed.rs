@@ -4,6 +4,7 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
+use crate::theme::ResolvedTheme;
 use crate::{Plot, RaincloudGeometry, RaincloudGroup};
 
 pub(super) fn render(
@@ -12,6 +13,7 @@ pub(super) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
+    let theme = context.theme;
     let data_y_range = input.validate()?;
     let raw_x_levels = input
         .groups
@@ -34,6 +36,7 @@ pub(super) fn render(
         chart,
         context.panel,
         &display_x_levels,
+        theme,
     )?;
     let display_range = crate::layout::continuous_auto_range(data_y_range, chart.y_axis_spec());
     let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
@@ -57,14 +60,18 @@ pub(super) fn render(
         .iter()
         .enumerate()
         .map(|(index, hue)| {
-            let color =
-                chart.categorical_color("raincloud", hue, chart.hue_color_index(hue, index))?;
+            let color = chart.categorical_color(
+                "raincloud",
+                hue,
+                chart.hue_color_index(hue, index),
+                theme,
+            )?;
             Ok(LegendEntry::point_fill(
                 chart.legend_identity(hue.clone()),
                 crate::plots::distribution_sample::overlay_style(color),
                 FillStyle {
                     color,
-                    stroke: chart.palette().foreground,
+                    stroke: theme.foreground,
                     stroke_width: 1.0,
                     opacity: 0.70,
                 },
@@ -74,10 +81,10 @@ pub(super) fn render(
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for (index, group) in input.groups.iter().enumerate() {
-            draw_cloud_and_summary(chart, &layout, group, &hue_levels, index, backend)?;
+            draw_cloud_and_summary(chart, &layout, group, &hue_levels, index, theme, backend)?;
         }
         for (index, group) in input.groups.iter().enumerate() {
-            draw_strip(chart, &layout, group, &hue_levels, index, backend)?;
+            draw_strip(chart, &layout, group, &hue_levels, index, theme, backend)?;
         }
         Ok(())
     })?;
@@ -91,6 +98,7 @@ fn draw_cloud_and_summary(
     group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let center = index as f64 + 0.5;
@@ -108,12 +116,11 @@ fn draw_cloud_and_summary(
     let (baseline_low_x, baseline_low_y) = layout.projection.project(baseline, support_low);
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-    let palette = chart.palette();
     backend.draw_polygon(
         &cloud,
         &FillStyle {
-            color: group_color(chart, group, hue_levels, index)?,
-            stroke: palette.foreground,
+            color: group_color(chart, group, hue_levels, index, theme)?,
+            stroke: theme.foreground,
             stroke_width: 1.0,
             opacity: 0.70,
         },
@@ -135,7 +142,7 @@ fn draw_cloud_and_summary(
         ],
         &FillStyle {
             color: (255, 255, 255),
-            stroke: palette.foreground,
+            stroke: theme.foreground,
             stroke_width: 1.0,
             opacity: 1.0,
         },
@@ -145,7 +152,7 @@ fn draw_cloud_and_summary(
             Point2D::new(box_left, median),
             Point2D::new(box_right, median),
         ],
-        &LineStyle::solid(palette.foreground, 1.5),
+        &LineStyle::solid(theme.foreground, 1.5),
     )
 }
 
@@ -155,6 +162,7 @@ fn draw_strip(
     group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let center = index as f64 + 0.5;
@@ -183,7 +191,7 @@ fn draw_strip(
     backend.draw_scatter(
         &points,
         &crate::plots::distribution_sample::overlay_style(group_color(
-            chart, group, hue_levels, index,
+            chart, group, hue_levels, index, theme,
         )?),
     )
 }
@@ -193,6 +201,7 @@ fn group_color(
     group: &RaincloudGroup,
     hue_levels: &[String],
     index: usize,
+    theme: &ResolvedTheme,
 ) -> Result<(u8, u8, u8), Error> {
     if let Some(hue) = &group.hue {
         let local_index = hue_levels
@@ -200,9 +209,8 @@ fn group_color(
             .position(|level| level == hue)
             .unwrap_or(index);
         let color_index = chart.hue_color_index(hue, local_index);
-        chart.categorical_color("raincloud", hue, color_index)
+        chart.categorical_color("raincloud", hue, color_index, theme)
     } else {
-        let palette = chart.palette();
-        Ok(palette.colors[index % palette.colors.len()])
+        Ok(theme.colors[index % theme.colors.len()])
     }
 }
