@@ -178,8 +178,10 @@ impl Axis {
                             - block.line_height() / 2.0;
                         for (index, line) in block.lines().iter().enumerate() {
                             backend.draw_text(
-                                x_px.round() as u32,
-                                (first_y - index as f64 * block.line_height()).round() as u32,
+                                Point2D::new(
+                                    x_px.round(),
+                                    (first_y - index as f64 * block.line_height()).round(),
+                                ),
                                 line,
                                 &tick_text_style,
                             )?;
@@ -211,10 +213,12 @@ impl Axis {
                                 / 2.0;
                         for (index, line) in block.lines().iter().enumerate() {
                             backend.draw_text(
-                                ((x0 - f64::from(palette.tick_length)) - 6.0)
-                                    .max(0.0)
-                                    .round() as u32,
-                                (first_y - index as f64 * block.line_height()).round() as u32,
+                                Point2D::new(
+                                    ((x0 - f64::from(palette.tick_length)) - 6.0)
+                                        .max(0.0)
+                                        .round(),
+                                    (first_y - index as f64 * block.line_height()).round(),
+                                ),
                                 line,
                                 &y_tick_style,
                             )?;
@@ -265,8 +269,10 @@ impl Axis {
                         - block.line_height() / 2.0;
                     for (index, line) in block.lines().iter().enumerate() {
                         backend.draw_text(
-                            cx.round() as u32,
-                            (first_y - index as f64 * block.line_height()).round() as u32,
+                            Point2D::new(
+                                cx.round(),
+                                (first_y - index as f64 * block.line_height()).round(),
+                            ),
                             line,
                             &label_style,
                         )?;
@@ -320,8 +326,10 @@ impl Axis {
                     };
                     for (index, line) in block.lines().iter().enumerate() {
                         backend.draw_text(
-                            (lx - index as f64 * block.line_height()).max(0.0).round() as u32,
-                            cy.round() as u32,
+                            Point2D::new(
+                                (lx - index as f64 * block.line_height()).max(0.0).round(),
+                                cy.round(),
+                            ),
                             line,
                             &y_label_style,
                         )?;

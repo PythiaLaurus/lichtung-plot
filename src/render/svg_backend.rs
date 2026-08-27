@@ -5,11 +5,13 @@ use std::fmt::Write as _;
 use crate::Error;
 
 use super::backend::{
-    validate_bracket, validate_clip_region, validate_fill_style, validate_line_style,
-    validate_linear_gradient, validate_point_style, validate_points, validate_rounded_rect,
-    validate_text_style, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
-    Point2D, PointStyle, SignificanceBracket, TextAnchor, TextStyle,
+    validate_bracket, validate_clip_region, validate_fill_style, validate_line_points,
+    validate_line_style, validate_linear_gradient, validate_point_style, validate_points,
+    validate_polygon_points, validate_rounded_rect, validate_text, validate_triangle_points,
+    Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle, Point2D, PointStyle,
+    SignificanceBracket, TextAnchor, TextStyle,
 };
+use super::coordinates::CanonicalPoint;
 use crate::layout::PanelBox;
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use crate::theme::rgb_to_hex;
@@ -37,10 +39,6 @@ impl SvgBackend {
             .ok_or_else(|| Error::Render("in-memory SVG backend did not finish rendering".into()))
     }
 
-    fn y_mark(&self, y: f64) -> f64 {
-        f64::from(self.height) - y
-    }
-
     /// Returns a reference to the active output buffer (grid or main body).
     fn buf(&mut self) -> &mut String {
         if self
@@ -54,15 +52,16 @@ impl SvgBackend {
         }
     }
 
-    fn fmt_points(&self, points: &[Point2D]) -> String {
+    fn fmt_points(&self, points: &[CanonicalPoint]) -> Result<String, Error> {
         let mut out = String::new();
         for (i, p) in points.iter().enumerate() {
             if i > 0 {
                 out.push(' ');
             }
-            let _ = write!(out, "{:.3},{:.3}", p.x, self.y_mark(p.y));
+            let y = p.y.inverted(self.height)?;
+            let _ = write!(out, "{},{}", p.x, y);
         }
-        out
+        Ok(out)
     }
 
     fn escape_text(text: &str) -> String {
@@ -408,16 +407,14 @@ impl Backend for SvgBackend {
 
     fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
         self.ensure_begun("begin_clip")?;
-        validate_clip_region(region)?;
+        let region = validate_clip_region(region)?;
         let id = self.next_clip_id;
         self.next_clip_id += 1;
-        let svg_y = f64::from(self.height) - region.y1;
-        let width = region.width();
-        let height = region.height();
+        let svg_y = region.top.inverted(self.height)?;
         let _ = writeln!(
             self.clip_defs,
-            "<clipPath id=\"clip-{id}\"><rect x=\"{:.3}\" y=\"{svg_y:.3}\" width=\"{width:.3}\" height=\"{height:.3}\"/></clipPath>",
-            region.x0,
+            "<clipPath id=\"clip-{id}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>",
+            region.left, svg_y, region.width, region.height,
         );
         let _ = writeln!(self.buf(), "<g clip-path=\"url(#clip-{id})\">");
         self.group_stack.push(GroupState::Clip);
@@ -443,7 +440,7 @@ impl Backend for SvgBackend {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        validate_points(points, "scatter")?;
+        let canonical_points = validate_points(points, "scatter")?;
         validate_point_style(style)?;
         let color = rgb_to_hex(style.color);
         let outline = style.outline.map(|outline| {
@@ -452,26 +449,25 @@ impl Backend for SvgBackend {
                 outline.width_for_radius(style.radius),
             )
         });
-        let h = f64::from(self.height);
+        let height = self.height;
         match style.shape {
             PointShape::Circle => {
                 let buf = self.buf();
-                for p in points {
+                for p in canonical_points {
+                    let y = p.y.inverted(height)?;
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             buf,
-                            "<circle cx=\"{:.3}\" cy=\"{:.3}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\"/>",
-                            p.x,
-                            h - p.y,
+                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\"/>",
+                            p.x, y,
                             style.radius,
                             style.opacity
                         );
                     } else {
                         let _ = writeln!(
                             buf,
-                            "<circle cx=\"{:.3}\" cy=\"{:.3}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            p.x,
-                            h - p.y,
+                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
+                            p.x, y,
                             style.radius,
                             style.opacity
                         );
@@ -479,15 +475,8 @@ impl Backend for SvgBackend {
                 }
             }
             PointShape::TriangleUp => {
-                let radius = f64::from(style.radius);
-                let half_width = radius * 0.866_025_403_784_438_6;
-                for p in points {
-                    let triangle = [
-                        Point2D::new(p.x, p.y + radius),
-                        Point2D::new(p.x - half_width, p.y - radius * 0.5),
-                        Point2D::new(p.x + half_width, p.y - radius * 0.5),
-                    ];
-                    let vertices = self.fmt_points(&triangle);
+                for triangle in validate_triangle_points(points, style.radius)? {
+                    let vertices = self.fmt_points(&triangle)?;
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             self.buf(),
@@ -512,10 +501,10 @@ impl Backend for SvgBackend {
         if points.len() < 2 {
             return Ok(());
         }
-        validate_points(points, "line")?;
+        let points = validate_line_points(points)?;
         validate_line_style(style)?;
         let color = rgb_to_hex(style.color);
-        let pts_str = self.fmt_points(points);
+        let pts_str = self.fmt_points(&points)?;
         let buf = self.buf();
         if let Some(dasharray) = style.pattern.svg_dasharray() {
             let _ = writeln!(
@@ -538,11 +527,11 @@ impl Backend for SvgBackend {
         if points.len() < 3 {
             return Ok(());
         }
-        validate_points(points, "polygon")?;
+        let points = validate_polygon_points(points)?;
         validate_fill_style(style)?;
         let fill = rgb_to_hex(style.color);
         let stroke = rgb_to_hex(style.stroke);
-        let pts_str = self.fmt_points(points);
+        let pts_str = self.fmt_points(&points)?;
         let buf = self.buf();
         let _ = writeln!(
             buf,
@@ -560,32 +549,33 @@ impl Backend for SvgBackend {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.ensure_begun("draw_linear_gradient")?;
-        validate_linear_gradient(bounds, start, end, stops)?;
+        let gradient = validate_linear_gradient(bounds, start, end, stops)?;
         let id = self.next_gradient_id;
         self.next_gradient_id += 1;
-        let start_y = self.y_mark(start.y);
-        let end_y = self.y_mark(end.y);
+        let start_y = gradient.start.y.inverted(self.height)?;
+        let end_y = gradient.end.y.inverted(self.height)?;
         let _ = writeln!(
             self.gradient_defs,
-            "<linearGradient id=\"linear-gradient-{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{:.3}\" y1=\"{start_y:.3}\" x2=\"{:.3}\" y2=\"{end_y:.3}\">",
-            start.x, end.x
+            "<linearGradient id=\"linear-gradient-{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">",
+            gradient.start.x, start_y, gradient.end.x, end_y,
         );
-        for stop in stops {
+        for stop in gradient.stops {
             let color = rgb_to_hex(stop.color);
             let _ = writeln!(
                 self.gradient_defs,
-                "<stop offset=\"{:.6}\" stop-color=\"{color}\"/>",
+                "<stop offset=\"{}\" stop-color=\"{color}\"/>",
                 stop.offset
             );
         }
         let _ = writeln!(self.gradient_defs, "</linearGradient>");
-        let svg_y = self.y_mark(bounds.y1);
-        let width = bounds.width();
-        let height = bounds.height();
+        let svg_y = gradient.bounds.top.inverted(self.height)?;
         let _ = writeln!(
             self.buf(),
-            "<rect x=\"{:.3}\" y=\"{svg_y:.3}\" width=\"{width:.3}\" height=\"{height:.3}\" fill=\"url(#linear-gradient-{id})\"/>",
-            bounds.x0
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"url(#linear-gradient-{id})\"/>",
+            gradient.bounds.left,
+            svg_y,
+            gradient.bounds.width,
+            gradient.bounds.height,
         );
         Ok(())
     }
@@ -600,37 +590,34 @@ impl Backend for SvgBackend {
         style: &FillStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_rounded_rect")?;
-        validate_rounded_rect(rect_x, rect_y, rect_w, rect_h, radius)?;
+        let rounded = validate_rounded_rect(rect_x, rect_y, rect_w, rect_h, radius)?;
         validate_fill_style(style)?;
         let fill = rgb_to_hex(style.color);
         let stroke = rgb_to_hex(style.stroke);
-        // Convert math coords to SVG coords: top-left in SVG is (x, height - (y + h))
-        let svg_x = rect_x;
-        let svg_y = self.y_mark(rect_y + rect_h);
+        let svg_y = rounded.rect.top.inverted(self.height)?;
         let buf = self.buf();
         let _ = writeln!(
             buf,
-            "<rect x=\"{svg_x:.2}\" y=\"{svg_y:.2}\" width=\"{rect_w:.2}\" height=\"{rect_h:.2}\" rx=\"{radius:.1}\" ry=\"{radius:.1}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\"/>",
-            style.opacity, style.stroke_width
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\"/>",
+            rounded.rect.left,
+            svg_y,
+            rounded.rect.width,
+            rounded.rect.height,
+            rounded.radius,
+            rounded.radius,
+            style.opacity,
+            style.stroke_width,
         );
         Ok(())
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    fn draw_text(
-        &mut self,
-        x_pixel: u32,
-        y_pixel: u32,
-        text: &str,
-        style: &TextStyle,
-    ) -> Result<(), Error> {
+    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.ensure_begun("draw_text")?;
-        validate_text_style(style)?;
+        let canonical = validate_text(position, style)?;
         let color = rgb_to_hex(style.color);
         let escaped = Self::escape_text(text);
-        let x = x_pixel;
-        let h = f64::from(self.height);
-        let y = (h - f64::from(y_pixel)).round() as u32;
+        let x = canonical.position.x;
+        let y = canonical.position.y.inverted(self.height)?;
         let anchor = match style.anchor {
             TextAnchor::Start => "start",
             TextAnchor::Middle => "middle",
@@ -647,14 +634,14 @@ impl Backend for SvgBackend {
             ""
         };
         let buf = self.buf();
-        if style.rotation.abs() > f64::EPSILON {
+        if canonical.rotation.units() != 0 {
             let _ = writeln!(
                 buf,
-                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} fill=\"{color}\" text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({:.1},{},{})\">{escaped}</text>",
+                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} fill=\"{color}\" text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
                 x, y,
                 Self::escape_text(&style.font_family),
                 style.font_size,
-                style.rotation,
+                canonical.rotation,
                 x, y
             );
         } else {
@@ -675,10 +662,8 @@ impl Backend for SvgBackend {
         style: &BracketStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_bracket")?;
-        validate_bracket(bracket, style)?;
-        let metrics = super::backend::SIGNIFICANCE_BRACKET_METRICS;
+        let canonical = validate_bracket(bracket, style)?;
         let color = rgb_to_hex(style.color);
-        let h = f64::from(self.height);
         let label = Self::escape_text(&bracket.label);
         let font_family = Self::escape_text(&style.font_family);
         let weight = if style.weight == crate::TextWeight::Normal {
@@ -686,38 +671,64 @@ impl Backend for SvgBackend {
         } else {
             format!(" font-weight=\"{}\"", style.weight.svg_value())
         };
+        let height = self.height;
+        let line_start_y = canonical.line_start.y.inverted(height)?;
+        let line_end_y = canonical.line_end.y.inverted(height)?;
+        let first_tick_y = canonical.first_tick_end.y.inverted(height)?;
+        let second_tick_y = canonical.second_tick_end.y.inverted(height)?;
+        let label_y = canonical.label_position.y.inverted(height)?;
         let buf = self.buf();
-        match bracket.orientation {
+        match canonical.orientation {
             super::backend::BracketOrientation::Vertical => {
-                let y = h - bracket.y;
                 let _ = writeln!(
                     buf,
-                    "<path class=\"significance-bracket\" d=\"M {:.3} {:.3} L {:.3} {:.3} M {:.3} {:.3} L {:.3} {:.3} M {:.3} {:.3} L {:.3} {:.3}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
-                    bracket.x_left, y, bracket.x_right, y, bracket.x_left, y,
-                    bracket.x_left, y + metrics.tick_height, bracket.x_right, y,
-                    bracket.x_right, y + metrics.tick_height, style.width
+                    "<path class=\"significance-bracket\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+                    canonical.line_start.x,
+                    line_start_y,
+                    canonical.line_end.x,
+                    line_end_y,
+                    canonical.line_start.x,
+                    line_start_y,
+                    canonical.first_tick_end.x,
+                    first_tick_y,
+                    canonical.line_end.x,
+                    line_end_y,
+                    canonical.second_tick_end.x,
+                    second_tick_y,
+                    style.width,
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
-                    f64::midpoint(bracket.x_left, bracket.x_right), y - style.label_gap,
+                    "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    canonical.label_position.x,
+                    label_y,
                     style.font_size,
                 );
             }
             super::backend::BracketOrientation::Horizontal => {
-                let x = bracket.y;
-                let bottom = h - bracket.x_left;
-                let top = h - bracket.x_right;
                 let _ = writeln!(
                     buf,
-                    "<path class=\"significance-bracket horizontal\" d=\"M {:.3} {:.3} L {:.3} {:.3} M {:.3} {:.3} L {:.3} {:.3} M {:.3} {:.3} L {:.3} {:.3}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
-                    x, bottom, x, top, x, bottom, x - metrics.tick_height, bottom,
-                    x, top, x - metrics.tick_height, top, style.width
+                    "<path class=\"significance-bracket horizontal\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+                    canonical.line_start.x,
+                    line_start_y,
+                    canonical.line_end.x,
+                    line_end_y,
+                    canonical.line_start.x,
+                    line_start_y,
+                    canonical.first_tick_end.x,
+                    first_tick_y,
+                    canonical.line_end.x,
+                    line_end_y,
+                    canonical.second_tick_end.x,
+                    second_tick_y,
+                    style.width,
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{:.3}\" y=\"{:.3}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
-                    x + style.label_gap, f64::midpoint(bottom, top), style.font_size,
+                    "<text x=\"{}\" y=\"{}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    canonical.label_position.x,
+                    label_y,
+                    style.font_size,
                 );
             }
         }
@@ -777,6 +788,26 @@ mod tests {
             .unwrap();
     }
 
+    fn test_text_style() -> TextStyle {
+        TextStyle {
+            color: (0, 0, 0),
+            font_family: "sans-serif".into(),
+            font_size: 12,
+            weight: crate::TextWeight::Normal,
+            anchor: TextAnchor::Start,
+            rotation: 0.0,
+        }
+    }
+
+    fn test_fill_style() -> FillStyle {
+        FillStyle {
+            color: (1, 2, 3),
+            stroke: (4, 5, 6),
+            stroke_width: 0.0,
+            opacity: 1.0,
+        }
+    }
+
     #[test]
     fn canvas_lifecycle_reuses_clean_state_and_invalidates_stale_output() {
         let mut backend = SvgBackend::in_memory(200, 100);
@@ -804,6 +835,128 @@ mod tests {
         assert!(backend.begin(120, 0).is_err());
         assert!(backend.output.is_none());
         assert!(backend.into_bytes().is_err());
+    }
+
+    #[test]
+    fn signed_text_positions_preserve_off_canvas_values_and_y_orientation() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_text(Point2D::new(-7.0, 125.0), "off canvas", &test_text_style())
+            .unwrap();
+        backend
+            .draw_text(Point2D::new(10.0, 25.0), "low", &test_text_style())
+            .unwrap();
+        backend
+            .draw_text(Point2D::new(10.0, 75.0), "high", &test_text_style())
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains("<text x=\"-7\" y=\"-25\""));
+        assert!(svg.contains("<text x=\"10\" y=\"75\""));
+        assert!(svg.contains("<text x=\"10\" y=\"25\""));
+    }
+
+    #[test]
+    fn subprecision_points_use_the_shared_canonical_spelling() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_line(
+                &[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)],
+                &LineStyle::solid((0, 0, 0), 0.0),
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains("points=\"0.000,100.000 0.001,99.999\""));
+    }
+
+    #[test]
+    fn triangle_vertices_are_derived_before_the_single_canonical_conversion() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_scatter(
+                &[Point2D::new(10.00049, 20.0)],
+                &PointStyle::plain((0, 0, 0), 1).with_shape(PointShape::TriangleUp),
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains("points=\"10.000,79.000 9.134,80.500 10.867,80.500\""));
+    }
+
+    #[test]
+    fn positive_subprecision_extents_and_stops_remain_representable() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .begin_clip(PanelBox::new(0.0, 0.0006, 0.0, 0.0006))
+            .unwrap();
+        backend.end_clip().unwrap();
+        backend
+            .draw_linear_gradient(
+                PanelBox::new(0.0, 0.0006, 0.0, 0.0006),
+                Point2D::new(0.0, 0.0),
+                Point2D::new(0.0006, 0.0006),
+                &[
+                    GradientStop::new(0.0, (0, 0, 0)),
+                    GradientStop::new(0.000_000_6, (127, 127, 127)),
+                    GradientStop::new(1.0, (255, 255, 255)),
+                ],
+            )
+            .unwrap();
+        backend
+            .draw_rounded_rect(0.0, 0.0, 0.006, 0.006, 0.0, &test_fill_style())
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains(
+            "<clipPath id=\"clip-0\"><rect x=\"0.000\" y=\"99.999\" width=\"0.001\" height=\"0.001\"/></clipPath>"
+        ));
+        assert!(svg.contains("<stop offset=\"0.000001\" stop-color=\"#7F7F7F\"/>"));
+        assert!(svg.contains(
+            "<rect x=\"0.000\" y=\"99.999\" width=\"0.001\" height=\"0.001\" fill=\"url(#linear-gradient-0)\"/>"
+        ));
+        assert!(svg.contains(
+            "<rect x=\"0.00\" y=\"99.99\" width=\"0.01\" height=\"0.01\" rx=\"0.0\" ry=\"0.0\""
+        ));
+    }
+
+    #[test]
+    fn subprecision_bracket_anchors_remain_distinct_after_conversion() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 0.0,
+                    x_right: 0.0006,
+                    y: 20.0,
+                    label: "*".into(),
+                    orientation: super::super::backend::BracketOrientation::Vertical,
+                },
+                &BracketStyle {
+                    color: (0, 0, 0),
+                    width: 1.0,
+                    font_family: "sans-serif".into(),
+                    font_size: 12,
+                    weight: crate::TextWeight::Normal,
+                    label_gap: 5.0,
+                },
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains(
+            "d=\"M 0.000 80.000 L 0.001 80.000 M 0.000 80.000 L 0.000 87.000 M 0.001 80.000 L 0.001 87.000\""
+        ));
     }
 
     #[test]

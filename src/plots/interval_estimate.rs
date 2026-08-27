@@ -187,14 +187,8 @@ pub(crate) fn draw_not_estimable(
     let width = crate::layout::estimated_text_width(NOT_ESTIMABLE_TEXT, palette.detail_font_size);
     let x = not_estimable_text_x(panel, width, vertical_guide_x)?;
     let (_, y) = layout.projection.project(layout.projection.x_range().0, y);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "validated panel coordinates are finite and bounded by the canvas"
-    )]
     backend.draw_text(
-        x.round() as u32,
-        y.round() as u32,
+        Point2D::new(x.round(), y.round()),
         NOT_ESTIMABLE_TEXT,
         &TextStyle {
             color: palette.foreground,
@@ -246,9 +240,7 @@ fn not_estimable_text_x(
 #[expect(
     clippy::too_many_lines,
     clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated row counts and bounded non-negative panel coordinates are converted to plot coordinates"
+    reason = "validated row counts are converted to plot coordinates"
 )]
 pub(crate) fn render(
     chart: &Plot,
@@ -561,8 +553,7 @@ pub(crate) fn render(
                     return Err(Error::Render(message));
                 };
                 backend.draw_text(
-                    label_x.round() as u32,
-                    y.round() as u32,
+                    Point2D::new(label_x.round(), y.round()),
                     &label,
                     &TextStyle {
                         color: palette.foreground,

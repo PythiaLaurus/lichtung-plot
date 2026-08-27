@@ -171,13 +171,15 @@ pub(crate) fn render(
     };
     for annotation in annotations.items {
         backend.draw_text(
-            annotation.x as u32,
-            (layout.projection.panel_box().y1
-                + ANNOTATION_PADDING
-                + f64::from(palette.detail_font_size) / 2.0
-                + annotation.row as f64
-                    * (f64::from(palette.detail_font_size) + ANNOTATION_ROW_GAP))
-                .round() as u32,
+            Point2D::new(
+                annotation.x.trunc(),
+                (layout.projection.panel_box().y1
+                    + ANNOTATION_PADDING
+                    + f64::from(palette.detail_font_size) / 2.0
+                    + annotation.row as f64
+                        * (f64::from(palette.detail_font_size) + ANNOTATION_ROW_GAP))
+                    .round(),
+            ),
             &annotation.text,
             &total_style,
         )?;

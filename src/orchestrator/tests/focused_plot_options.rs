@@ -503,10 +503,10 @@ fn text_bounds(backend: &RecordingBackend, text: &str) -> PanelBox {
         crate::layout::deterministic_text_width(text, f64::from(style.font_size)) / 2.0;
     let half_height = f64::from(style.font_size) / 2.0;
     PanelBox::new(
-        f64::from(*x) - half_width,
-        f64::from(*x) + half_width,
-        f64::from(*y) - half_height,
-        f64::from(*y) + half_height,
+        *x - half_width,
+        *x + half_width,
+        *y - half_height,
+        *y + half_height,
     )
 }
 

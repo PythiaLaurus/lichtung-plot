@@ -252,8 +252,7 @@ fn draw_bar_significance(
         )));
     }
     backend.draw_text(
-        x.round() as u32,
-        y.round() as u32,
+        Point2D::new(x.round(), y.round()),
         &mark.label,
         &TextStyle {
             color: chart.palette().foreground,

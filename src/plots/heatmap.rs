@@ -669,8 +669,10 @@ fn draw_cells(
                         rotation: 0.0,
                     };
                     backend.draw_text(
-                        f64::midpoint(left, right).round() as u32,
-                        f64::midpoint(bottom, top).round() as u32,
+                        Point2D::new(
+                            f64::midpoint(left, right).round(),
+                            f64::midpoint(bottom, top).round(),
+                        ),
                         &format.format(value),
                         &style,
                     )?;
@@ -725,8 +727,10 @@ fn draw_null_row_annotation(
         + block.lines().len().saturating_sub(1) as f64 * block.line_height() / 2.0;
     for (index, line) in block.lines().iter().enumerate() {
         backend.draw_text(
-            f64::midpoint(left, right).round() as u32,
-            (first_y - index as f64 * block.line_height()).round() as u32,
+            Point2D::new(
+                f64::midpoint(left, right).round(),
+                (first_y - index as f64 * block.line_height()).round(),
+            ),
             line,
             &style,
         )?;
@@ -816,30 +820,33 @@ fn draw_colorbar(
         rotation: 0.0,
     };
     backend.draw_text(
-        (left + 18.0).round() as u32,
-        (bottom + height - 4.0).max(0.0).round() as u32,
+        Point2D::new(
+            (left + 18.0).round(),
+            (bottom + height - 4.0).max(0.0).round(),
+        ),
         &format_colorbar_value(prepared.domain.maximum),
         &value_style,
     )?;
     backend.draw_text(
-        (left + 18.0).round() as u32,
-        (bottom - 12.0).max(0.0).round() as u32,
+        Point2D::new((left + 18.0).round(), (bottom - 12.0).max(0.0).round()),
         &format_colorbar_value(prepared.domain.minimum),
         &value_style,
     )?;
     if let Some(center) = prepared.domain.center {
         if center > prepared.domain.minimum && center < prepared.domain.maximum {
             backend.draw_text(
-                (left + 18.0).round() as u32,
-                (bottom
-                    + height
-                        * normalized_fraction(
-                            center,
-                            prepared.domain.minimum,
-                            prepared.domain.maximum,
-                        ))
-                .max(0.0)
-                .round() as u32,
+                Point2D::new(
+                    (left + 18.0).round(),
+                    (bottom
+                        + height
+                            * normalized_fraction(
+                                center,
+                                prepared.domain.minimum,
+                                prepared.domain.maximum,
+                            ))
+                    .max(0.0)
+                    .round(),
+                ),
                 &format_colorbar_value(center),
                 &value_style,
             )?;
@@ -852,8 +859,10 @@ fn draw_colorbar(
     };
     for (index, line) in color_label.lines().iter().enumerate() {
         backend.draw_text(
-            (left + 55.0 + index as f64 * color_label.line_height()).round() as u32,
-            (bottom + height / 2.0).round() as u32,
+            Point2D::new(
+                (left + 55.0 + index as f64 * color_label.line_height()).round(),
+                (bottom + height / 2.0).round(),
+            ),
             line,
             &title_style,
         )?;
@@ -876,8 +885,7 @@ fn draw_colorbar(
             },
         )?;
         backend.draw_text(
-            (left + 18.0).round() as u32,
-            (swatch_bottom + 6.0).round() as u32,
+            Point2D::new((left + 18.0).round(), (swatch_bottom + 6.0).round()),
             "Missing",
             &value_style,
         )?;

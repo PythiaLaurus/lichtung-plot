@@ -205,14 +205,15 @@ fn draw_colorbar(
         rotation: 0.0,
     };
     backend.draw_text(
-        (left + 16.0) as u32,
-        (bottom + height - 4.0).max(0.0) as u32,
+        Point2D::new(
+            (left + 16.0).trunc(),
+            (bottom + height - 4.0).max(0.0).trunc(),
+        ),
         high_label,
         &value_style,
     )?;
     backend.draw_text(
-        (left + 16.0) as u32,
-        (bottom - 13.0).max(0.0) as u32,
+        Point2D::new((left + 16.0).trunc(), (bottom - 13.0).max(0.0).trunc()),
         low_label,
         &value_style,
     )?;
@@ -223,8 +224,10 @@ fn draw_colorbar(
     };
     for (index, line) in label.lines().iter().enumerate() {
         backend.draw_text(
-            (left + 47.0 + index as f64 * label.line_height()) as u32,
-            (bottom + height / 2.0) as u32,
+            Point2D::new(
+                (left + 47.0 + index as f64 * label.line_height()).trunc(),
+                (bottom + height / 2.0).trunc(),
+            ),
             line,
             &title_style,
         )?;

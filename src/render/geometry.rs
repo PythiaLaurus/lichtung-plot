@@ -5,8 +5,9 @@ use crate::Error;
 use crate::layout::{estimated_text_width, PanelBox};
 use crate::render::backend::{
     self, Backend, BracketOrientation, BracketStyle, FillStyle, GradientStop, LineStyle, Point2D,
-    PointStyle, SignificanceBracket, TextAnchor, TextStyle, SIGNIFICANCE_BRACKET_METRICS,
+    PointStyle, SignificanceBracket, TextAnchor, TextStyle,
 };
+use crate::PointShape;
 
 // Labels and annotation glyphs are less tolerable legend targets than translucent marks.
 const ANNOTATION_COLLISION_WEIGHT: f64 = 100.0;
@@ -86,8 +87,8 @@ impl Backend for GeometryBackend {
     }
 
     fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
-        backend::validate_clip_region(region)?;
-        self.clips.push(region);
+        let region = backend::validate_clip_region(region)?;
+        self.clips.push(region.panel());
         Ok(())
     }
 
@@ -99,13 +100,27 @@ impl Backend for GeometryBackend {
     }
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
-        backend::validate_points(points, "scatter")?;
+        let canonical_points = backend::validate_points(points, "scatter")?;
         backend::validate_point_style(style)?;
-        for point in points {
-            self.record(GeometryBox::from_points(
-                std::slice::from_ref(point),
-                f64::from(style.radius),
-            ));
+        match style.shape {
+            PointShape::Circle => {
+                for point in canonical_points {
+                    let point = point.value();
+                    self.record(GeometryBox::from_points(
+                        std::slice::from_ref(&point),
+                        f64::from(style.radius),
+                    ));
+                }
+            }
+            PointShape::TriangleUp => {
+                let outline_padding = style
+                    .outline
+                    .map_or(0.0, |outline| outline.width_for_radius(style.radius) / 2.0);
+                for triangle in backend::validate_triangle_points(points, style.radius)? {
+                    let triangle = triangle.map(super::coordinates::CanonicalPoint::value);
+                    self.record(GeometryBox::from_points(&triangle, outline_padding));
+                }
+            }
         }
         Ok(())
     }
@@ -114,8 +129,12 @@ impl Backend for GeometryBackend {
         if points.len() < 2 {
             return Ok(());
         }
-        backend::validate_points(points, "line")?;
+        let points = backend::validate_line_points(points)?;
         backend::validate_line_style(style)?;
+        let points = points
+            .into_iter()
+            .map(super::coordinates::CanonicalPoint::value)
+            .collect::<Vec<_>>();
         for segment in points.windows(2) {
             self.record(GeometryBox::from_points(
                 segment,
@@ -129,10 +148,14 @@ impl Backend for GeometryBackend {
         if points.len() < 3 {
             return Ok(());
         }
-        backend::validate_points(points, "polygon")?;
+        let points = backend::validate_polygon_points(points)?;
         backend::validate_fill_style(style)?;
+        let points = points
+            .into_iter()
+            .map(super::coordinates::CanonicalPoint::value)
+            .collect::<Vec<_>>();
         self.record(GeometryBox::from_points(
-            points,
+            &points,
             f64::from(style.stroke_width) / 2.0,
         ));
         Ok(())
@@ -145,29 +168,31 @@ impl Backend for GeometryBackend {
         end: Point2D,
         stops: &[GradientStop],
     ) -> Result<(), Error> {
-        backend::validate_linear_gradient(bounds, start, end, stops)?;
+        let gradient = backend::validate_linear_gradient(bounds, start, end, stops)?;
+        let bounds = gradient.bounds;
         self.record(Some(GeometryBox {
-            left: bounds.x0,
-            right: bounds.x1,
-            bottom: bounds.y0,
-            top: bounds.y1,
+            left: bounds.left.value(),
+            right: bounds.right.value(),
+            bottom: bounds.bottom.value(),
+            top: bounds.top.value(),
             weight: 1.0,
         }));
         Ok(())
     }
 
-    fn draw_text(&mut self, x: u32, y: u32, text: &str, style: &TextStyle) -> Result<(), Error> {
-        backend::validate_text_style(style)?;
+    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
+        let canonical = backend::validate_text(position, style)?;
         let width = estimated_text_width(text, style.font_size);
         let height = f64::from(style.font_size) * 1.2;
-        let x = f64::from(x);
-        let y = f64::from(y);
+        let x = canonical.position.x.value();
+        let y = canonical.position.y.value();
         let left = match style.anchor {
             TextAnchor::Start => x,
             TextAnchor::Middle => x - width / 2.0,
             TextAnchor::End => x - width,
         };
-        if style.rotation == 0.0 {
+        let rotation = canonical.rotation.value();
+        if rotation == 0.0 {
             self.record(Some(GeometryBox {
                 left,
                 right: left + width,
@@ -176,7 +201,7 @@ impl Backend for GeometryBackend {
                 weight: ANNOTATION_COLLISION_WEIGHT,
             }));
         } else {
-            let radians = style.rotation.to_radians();
+            let radians = rotation.to_radians();
             let projected_width = width * radians.cos().abs() + height * radians.sin().abs();
             let projected_height = width * radians.sin().abs() + height * radians.cos().abs();
             self.record(Some(GeometryBox {
@@ -199,14 +224,14 @@ impl Backend for GeometryBackend {
         radius: f64,
         style: &FillStyle,
     ) -> Result<(), Error> {
-        backend::validate_rounded_rect(x, y, width, height, radius)?;
+        let rounded = backend::validate_rounded_rect(x, y, width, height, radius)?;
         backend::validate_fill_style(style)?;
         let padding = f64::from(style.stroke_width) / 2.0;
         self.record(Some(GeometryBox {
-            left: x - padding,
-            right: x + width + padding,
-            bottom: y - padding,
-            top: y + height + padding,
+            left: rounded.rect.left.value() - padding,
+            right: rounded.rect.right.value() + padding,
+            bottom: rounded.rect.bottom.value() - padding,
+            top: rounded.rect.top.value() + padding,
             weight: 1.0,
         }));
         Ok(())
@@ -217,40 +242,40 @@ impl Backend for GeometryBackend {
         bracket: &SignificanceBracket,
         style: &BracketStyle,
     ) -> Result<(), Error> {
-        backend::validate_bracket(bracket, style)?;
-        let metrics = SIGNIFICANCE_BRACKET_METRICS;
+        let canonical = backend::validate_bracket(bracket, style)?;
         let label_width = estimated_text_width(&bracket.label, style.font_size);
-        let bounds = match bracket.orientation {
-            BracketOrientation::Vertical => {
-                let label_center = f64::midpoint(bracket.x_left, bracket.x_right);
-                GeometryBox {
-                    left: bracket
-                        .x_left
-                        .min(bracket.x_right)
-                        .min(label_center - label_width / 2.0),
-                    right: bracket
-                        .x_left
-                        .max(bracket.x_right)
-                        .max(label_center + label_width / 2.0),
-                    bottom: bracket.y - metrics.tick_height,
-                    top: bracket.y + style.label_gap + f64::from(style.font_size),
-                    weight: ANNOTATION_COLLISION_WEIGHT,
-                }
-            }
+        let line_start = canonical.line_start.value();
+        let line_end = canonical.line_end.value();
+        let first_tick_end = canonical.first_tick_end.value();
+        let second_tick_end = canonical.second_tick_end.value();
+        let label_position = canonical.label_position.value();
+        let bounds = match canonical.orientation {
+            BracketOrientation::Vertical => GeometryBox {
+                left: line_start
+                    .x
+                    .min(line_end.x)
+                    .min(label_position.x - label_width / 2.0),
+                right: line_start
+                    .x
+                    .max(line_end.x)
+                    .max(label_position.x + label_width / 2.0),
+                bottom: first_tick_end.y.min(second_tick_end.y),
+                top: label_position.y + f64::from(style.font_size),
+                weight: ANNOTATION_COLLISION_WEIGHT,
+            },
             BracketOrientation::Horizontal => {
-                let label_center = f64::midpoint(bracket.x_left, bracket.x_right);
                 let label_half_height = f64::from(style.font_size) / 2.0;
                 GeometryBox {
-                    left: bracket.y - metrics.tick_height,
-                    right: bracket.y + style.label_gap + label_width,
-                    bottom: bracket
-                        .x_left
-                        .min(bracket.x_right)
-                        .min(label_center - label_half_height),
-                    top: bracket
-                        .x_left
-                        .max(bracket.x_right)
-                        .max(label_center + label_half_height),
+                    left: first_tick_end.x.min(second_tick_end.x),
+                    right: label_position.x + label_width,
+                    bottom: line_start
+                        .y
+                        .min(line_end.y)
+                        .min(label_position.y - label_half_height),
+                    top: line_start
+                        .y
+                        .max(line_end.y)
+                        .max(label_position.y + label_half_height),
                     weight: ANNOTATION_COLLISION_WEIGHT,
                 }
             }
@@ -267,6 +292,17 @@ impl Backend for GeometryBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_text_style() -> TextStyle {
+        TextStyle {
+            color: (0, 0, 0),
+            font_family: "sans-serif".into(),
+            font_size: 12,
+            weight: crate::TextWeight::Normal,
+            anchor: TextAnchor::Middle,
+            rotation: 0.0,
+        }
+    }
 
     #[test]
     fn scatter_and_polyline_record_individual_local_obstacles() {
@@ -288,6 +324,79 @@ mod tests {
         assert!(backend.bounds()[0].right < backend.bounds()[1].left);
         assert!((backend.bounds()[2].right - 91.0).abs() < f64::EPSILON);
         assert!((backend.bounds()[3].left - 9.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn geometry_records_the_same_converted_subprecision_points_as_svg() {
+        let mut backend = GeometryBackend::default();
+        backend
+            .draw_line(
+                &[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)],
+                &LineStyle::solid((0, 0, 0), 0.0),
+            )
+            .unwrap();
+
+        assert_eq!(
+            backend.bounds(),
+            &[GeometryBox {
+                left: 0.0,
+                right: 0.001,
+                bottom: 0.0,
+                top: 0.001,
+                weight: 1.0,
+            }]
+        );
+    }
+
+    #[test]
+    fn geometry_records_signed_text_without_unsigned_saturation() {
+        let mut backend = GeometryBackend::default();
+        backend
+            .draw_text(Point2D::new(-7.0, 125.0), "", &test_text_style())
+            .unwrap();
+
+        let bounds = backend.bounds()[0];
+        assert!((f64::midpoint(bounds.left, bounds.right) + 7.0).abs() < f64::EPSILON);
+        assert!((f64::midpoint(bounds.bottom, bounds.top) - 125.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn geometry_and_svg_reject_the_same_collapsed_line() {
+        let points = [Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)];
+        let style = LineStyle::solid((0, 0, 0), 0.0);
+        let mut geometry = GeometryBackend::default();
+        let geometry_error = geometry.draw_line(&points, &style).unwrap_err();
+        let mut svg = crate::render::svg_backend::SvgBackend::in_memory(100, 100);
+        svg.begin(100, 100).unwrap();
+        let svg_error = svg.draw_line(&points, &style).unwrap_err();
+
+        assert_eq!(geometry_error.to_string(), svg_error.to_string());
+        assert!(geometry.bounds().is_empty());
+    }
+
+    #[test]
+    fn geometry_and_svg_share_final_triangle_coordinates() {
+        let points = [Point2D::new(10.0004, 20.0004)];
+        let style = PointStyle::plain((0, 0, 0), 1).with_shape(PointShape::TriangleUp);
+        let mut geometry = GeometryBackend::default();
+        geometry.draw_scatter(&points, &style).unwrap();
+        let mut svg = crate::render::svg_backend::SvgBackend::in_memory(100, 100);
+        svg.begin(100, 100).unwrap();
+        svg.draw_scatter(&points, &style).unwrap();
+        svg.end().unwrap();
+        let output = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+
+        assert_eq!(
+            geometry.bounds(),
+            &[GeometryBox {
+                left: 9.134,
+                right: 10.866,
+                bottom: 19.5,
+                top: 21.0,
+                weight: 1.0,
+            }]
+        );
+        assert!(output.contains("points=\"10.000,79.000 9.134,80.500 10.866,80.500\""));
     }
 
     #[test]

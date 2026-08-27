@@ -10,7 +10,7 @@ use crate::layout::canvas::{
     allocate_composed_grid, try_wrap_text, PanelRequirements, PANEL_HEADER_GAP,
 };
 use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox};
-use crate::render::backend::{with_layer, Backend};
+use crate::render::backend::{with_layer, Backend, Point2D};
 use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
@@ -1103,11 +1103,6 @@ fn chart_category_domain(chart: &Plot, panel: PanelBox) -> Result<Vec<String>, E
     }))
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated shared-header positions are bounded by the canvas"
-)]
 fn draw_canvas_headers(
     headers: &[CanvasHeaderPlan],
     palette: &crate::theme::ResolvedTheme,
@@ -1127,8 +1122,7 @@ fn draw_canvas_headers(
     with_layer(backend, "canvas-shared-headers", |backend| {
         for header in headers {
             backend.draw_text(
-                header.x.round() as u32,
-                header.y.round() as u32,
+                Point2D::new(header.x.round(), header.y.round()),
                 &header.text,
                 &style,
             )?;
@@ -1137,11 +1131,6 @@ fn draw_canvas_headers(
     })
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated row-title positions are bounded by the canvas"
-)]
 fn draw_canvas_row_titles(
     titles: &[CanvasHeaderPlan],
     palette: &crate::theme::ResolvedTheme,
@@ -1161,8 +1150,7 @@ fn draw_canvas_row_titles(
     with_layer(backend, "canvas-row-titles", |backend| {
         for title in titles {
             backend.draw_text(
-                title.x.round() as u32,
-                title.y.round() as u32,
+                Point2D::new(title.x.round(), title.y.round()),
                 &title.text,
                 &style,
             )?;
@@ -1171,11 +1159,6 @@ fn draw_canvas_row_titles(
     })
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated text-panel positions are bounded by the canvas"
-)]
 fn draw_text_panel(
     panel: &TextPanelPlan,
     palette: &crate::theme::ResolvedTheme,
@@ -1208,8 +1191,7 @@ fn draw_text_panel(
         |backend| {
             for line in panel.title.lines() {
                 backend.draw_text(
-                    center_x.round() as u32,
-                    y.round() as u32,
+                    Point2D::new(center_x.round(), y.round()),
                     line,
                     &title_style,
                 )?;
@@ -1217,7 +1199,7 @@ fn draw_text_panel(
             }
             y -= gap;
             for line in panel.body.lines() {
-                backend.draw_text(center_x.round() as u32, y.round() as u32, line, &body_style)?;
+                backend.draw_text(Point2D::new(center_x.round(), y.round()), line, &body_style)?;
                 y -= panel.body.line_height();
             }
             Ok(())
@@ -1226,10 +1208,8 @@ fn draw_text_panel(
 }
 
 #[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
     clippy::cast_precision_loss,
-    reason = "validated panel title positions are projected into backend pixel coordinates"
+    reason = "small text-line indexes are projected into backend coordinates"
 )]
 fn draw_panel_header(chart: &Plot, cell: PanelBox, backend: &mut dyn Backend) -> Result<(), Error> {
     let palette = chart.palette();
@@ -1283,8 +1263,10 @@ fn draw_panel_header(chart: &Plot, cell: PanelBox, backend: &mut dyn Backend) ->
     with_layer(backend, &chart.layer_name("title"), |backend| {
         for (index, line) in subtitle_lines.iter().rev().enumerate() {
             backend.draw_text(
-                (cell.x0 + 8.0).round() as u32,
-                (cell.y1 + 14.0 + index as f64 * subtitle_line_height).round() as u32,
+                Point2D::new(
+                    (cell.x0 + 8.0).round(),
+                    (cell.y1 + 14.0 + index as f64 * subtitle_line_height).round(),
+                ),
                 line,
                 &subtitle_style,
             )?;
@@ -1299,8 +1281,10 @@ fn draw_panel_header(chart: &Plot, cell: PanelBox, backend: &mut dyn Backend) ->
             };
         for (index, line) in title_lines.iter().rev().enumerate() {
             backend.draw_text(
-                (cell.x0 + 8.0).round() as u32,
-                (title_base + index as f64 * title_line_height).round() as u32,
+                Point2D::new(
+                    (cell.x0 + 8.0).round(),
+                    (title_base + index as f64 * title_line_height).round(),
+                ),
                 line,
                 &title_style,
             )?;

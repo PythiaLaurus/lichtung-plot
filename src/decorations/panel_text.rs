@@ -3,15 +3,14 @@
 use crate::Error;
 
 use crate::layout::{Layout, PanelBox};
-use crate::render::backend::{with_clip, with_layer, Backend, TextAnchor, TextStyle};
+use crate::render::backend::{with_clip, with_layer, Backend, Point2D, TextAnchor, TextStyle};
 use crate::{PanelCorner, Plot};
 
 const PANEL_TEXT_PADDING: f64 = 8.0;
 
 struct PanelTextPlan<'a> {
     text: &'a str,
-    x: u32,
-    y: u32,
+    position: Point2D,
     anchor: TextAnchor,
     bounds: PanelBox,
     corner: PanelCorner,
@@ -27,8 +26,7 @@ pub(crate) fn draw(chart: &Plot, layout: &Layout, backend: &mut dyn Backend) -> 
         with_clip(backend, layout.projection.panel_box(), |backend| {
             for plan in plans {
                 backend.draw_text(
-                    plan.x,
-                    plan.y,
+                    plan.position,
                     plan.text,
                     &TextStyle {
                         color: palette.foreground,
@@ -59,11 +57,6 @@ pub(crate) fn conflicting_legend_corner(
     }))
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated panel coordinates are finite and bounded by the canvas"
-)]
 fn plans<'a>(chart: &'a Plot, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>, Error> {
     let palette = chart.palette();
     let panel = layout.projection.panel_box();
@@ -106,24 +99,22 @@ fn plans<'a>(chart: &'a Plot, layout: &Layout) -> Result<Vec<PanelTextPlan<'a>>,
                     panel.y0 + PANEL_TEXT_PADDING + text_height / 2.0
                 }
             };
-            let x = x.round() as u32;
-            let y = y.round() as u32;
-            let rounded_x = f64::from(x);
+            let x = x.round();
+            let y = y.round();
             let (left, right) = match anchor {
-                TextAnchor::Start => (rounded_x, rounded_x + width),
-                TextAnchor::End => (rounded_x - width, rounded_x),
-                TextAnchor::Middle => (rounded_x - width / 2.0, rounded_x + width / 2.0),
+                TextAnchor::Start => (x, x + width),
+                TextAnchor::End => (x - width, x),
+                TextAnchor::Middle => (x - width / 2.0, x + width / 2.0),
             };
             Ok(PanelTextPlan {
                 text: annotation.text(),
-                x,
-                y,
+                position: Point2D::new(x, y),
                 anchor,
                 bounds: PanelBox::new(
                     left,
                     right,
-                    f64::from(y) - text_height / 2.0,
-                    f64::from(y) + text_height / 2.0,
+                    y - text_height / 2.0,
+                    y + text_height / 2.0,
                 ),
                 corner: annotation.corner(),
             })

@@ -18,7 +18,7 @@
 )]
 
 use crate::layout::CanvasLayout;
-use crate::render::backend::{Backend, TextAnchor, TextStyle};
+use crate::render::backend::{Backend, Point2D, TextAnchor, TextStyle};
 use crate::theme::ResolvedTheme;
 use crate::Error;
 
@@ -119,7 +119,7 @@ impl TitleBlock {
             .iter()
             .zip(&canvas.title_lines_y)
             {
-                backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
+                backend.draw_text(Point2D::new(cx.round(), y.round()), line, &style)?;
             }
         }
 
@@ -141,7 +141,7 @@ impl TitleBlock {
             .iter()
             .zip(&canvas.subtitle_lines_y)
             {
-                backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
+                backend.draw_text(Point2D::new(cx.round(), y.round()), line, &style)?;
             }
         }
 
@@ -163,7 +163,7 @@ impl TitleBlock {
             .iter()
             .zip(&canvas.caption_lines_y)
             {
-                backend.draw_text(cx.round() as u32, y.round() as u32, line, &style)?;
+                backend.draw_text(Point2D::new(cx.round(), y.round()), line, &style)?;
             }
         }
 

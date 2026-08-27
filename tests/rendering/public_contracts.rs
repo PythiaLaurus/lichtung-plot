@@ -233,15 +233,17 @@ fn preflight_rejects_invalid_explicit_axis_limits_centrally() {
 }
 
 #[test]
-fn waterfall_terminal_follows_ordered_cancellation() {
+fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
     let plot = Plot::waterfall(
         CategoryValues::new("label", ["a", "b"]).unwrap(),
         NumericValues::new("delta", [-10_000_000_000_000_000.0, 1.0]),
         10_000_000_000_000_000.0,
     );
 
-    plot.preflight().unwrap();
-    assert!(render(plot, "waterfall-ordered-total").contains(">total 1.000</text>"));
+    let error = plot.preflight().unwrap_err().to_string();
+
+    assert!(error.contains("polygon"));
+    assert!(error.contains("collapse"));
 }
 
 #[test]

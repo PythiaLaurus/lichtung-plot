@@ -682,8 +682,10 @@ impl Legend {
         };
         for (index, line) in title_block.lines().iter().enumerate() {
             backend.draw_text(
-                x.round() as u32,
-                (y - index as f64 * title_block.line_height()).round() as u32,
+                Point2D::new(
+                    x.round(),
+                    (y - index as f64 * title_block.line_height()).round(),
+                ),
                 line,
                 &title_style,
             )?;
@@ -740,8 +742,10 @@ impl Legend {
                 row_y + block.lines().len().saturating_sub(1) as f64 * block.line_height() / 2.0;
             for (line_index, line) in block.lines().iter().enumerate() {
                 backend.draw_text(
-                    text_x.round() as u32,
-                    (first_y - line_index as f64 * block.line_height()).round() as u32,
+                    Point2D::new(
+                        text_x.round(),
+                        (first_y - line_index as f64 * block.line_height()).round(),
+                    ),
                     line,
                     &entry_style,
                 )?;

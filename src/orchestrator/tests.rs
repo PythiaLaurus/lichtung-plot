@@ -54,8 +54,8 @@ struct RecordingBackend {
     scatter_draws: Vec<(Vec<Point2D>, PointStyle, usize)>,
     line_draws: Vec<(Vec<Point2D>, LineStyle, usize)>,
     gradients: Vec<Vec<GradientStop>>,
-    texts: Vec<(u32, u32, String)>,
-    text_draws: Vec<(u32, u32, String, TextStyle)>,
+    texts: Vec<(f64, f64, String)>,
+    text_draws: Vec<(f64, f64, String, TextStyle)>,
     rounded_rects: Vec<PanelBox>,
     bracket_clip_depths: Vec<usize>,
     failures: Vec<BackendFailure>,
@@ -149,16 +149,10 @@ impl Backend for RecordingBackend {
         Ok(())
     }
 
-    fn draw_text(
-        &mut self,
-        x_pixel: u32,
-        y_pixel: u32,
-        text: &str,
-        style: &TextStyle,
-    ) -> Result<(), Error> {
-        self.texts.push((x_pixel, y_pixel, text.to_string()));
+    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
+        self.texts.push((position.x, position.y, text.to_string()));
         self.text_draws
-            .push((x_pixel, y_pixel, text.to_string(), style.clone()));
+            .push((position.x, position.y, text.to_string(), style.clone()));
         Ok(())
     }
 

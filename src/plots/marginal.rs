@@ -274,6 +274,14 @@ pub(crate) fn render(
         let mut top_poly = Vec::with_capacity(n_grid + 2);
         top_poly.push(Point2D::new(central_x0, top_y0));
         for (i, &d) in x_density.iter().enumerate() {
+            if i == 0 {
+                top_poly.push(Point2D::new(central_x0, top_y0));
+                continue;
+            }
+            if i + 1 == x_density.len() {
+                top_poly.push(Point2D::new(central_x1, top_y0));
+                continue;
+            }
             let px = central_x0 + (i as f64 / (n_grid - 1) as f64) * (central_x1 - central_x0);
             let py = top_y0 + (d / x_dens_max) * usable_h;
             top_poly.push(Point2D::new(px, py));
@@ -294,6 +302,14 @@ pub(crate) fn render(
         let mut right_poly = Vec::with_capacity(n_grid + 2);
         right_poly.push(Point2D::new(right_x0, central_y0));
         for (i, &d) in y_density.iter().enumerate() {
+            if i == 0 {
+                right_poly.push(Point2D::new(right_x0, central_y0));
+                continue;
+            }
+            if i + 1 == y_density.len() {
+                right_poly.push(Point2D::new(right_x0, central_y1));
+                continue;
+            }
             let gy = y_grid[i];
             let py = proj.project(x_low, gy).1;
             let px = right_x0 + (d / y_dens_max) * usable_w;

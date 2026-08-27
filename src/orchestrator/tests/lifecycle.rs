@@ -5,7 +5,7 @@ use super::{
     SignificanceMark, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
 };
 use crate::orchestrator::DeferredBackend;
-use crate::render::backend::{Backend, LineStyle, Point2D};
+use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
 use crate::{AxisValues, CategoryValues, NumericValues};
 
 fn valid_line() -> ([Point2D; 2], LineStyle) {
@@ -44,6 +44,31 @@ fn deferred_backend_empty_success_starts_and_finalizes_once() {
 
     assert_eq!(recorded.begin_sizes, [(320, 200)]);
     assert_eq!((recorded.begins, recorded.ends), (1, 1));
+}
+
+#[test]
+fn deferred_backend_forwards_signed_text_positions_unchanged() {
+    let mut recorded = RecordingBackend::default();
+    {
+        let mut backend = DeferredBackend::new(&mut recorded, 320, 200);
+        backend
+            .draw_text(
+                Point2D::new(-7.0, 225.0),
+                "outside",
+                &TextStyle {
+                    color: (0, 0, 0),
+                    font_family: "sans-serif".into(),
+                    font_size: 12,
+                    weight: crate::TextWeight::Normal,
+                    anchor: TextAnchor::Start,
+                    rotation: 0.0,
+                },
+            )
+            .unwrap();
+        backend.finish(Ok(()), "test canvas").unwrap();
+    }
+
+    assert_eq!(recorded.texts, [(-7.0, 225.0, "outside".into())]);
 }
 
 #[test]

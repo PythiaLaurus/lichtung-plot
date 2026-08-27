@@ -136,15 +136,9 @@ impl Backend for DeferredBackend<'_> {
         self.backend.draw_linear_gradient(bounds, start, end, stops)
     }
 
-    fn draw_text(
-        &mut self,
-        x_pixel: u32,
-        y_pixel: u32,
-        text: &str,
-        style: &TextStyle,
-    ) -> Result<(), Error> {
+    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.ensure_started()?;
-        self.backend.draw_text(x_pixel, y_pixel, text, style)
+        self.backend.draw_text(position, text, style)
     }
 
     fn draw_rounded_rect(
@@ -294,7 +288,7 @@ impl Backend for NullBackend {
         if points.len() < 2 {
             return Ok(());
         }
-        backend::validate_points(points, "line")?;
+        backend::validate_line_points(points)?;
         backend::validate_line_style(style)
     }
 
@@ -303,7 +297,7 @@ impl Backend for NullBackend {
         if points.len() < 3 {
             return Ok(());
         }
-        backend::validate_points(points, "polygon")?;
+        backend::validate_polygon_points(points)?;
         backend::validate_fill_style(style)
     }
 
@@ -315,18 +309,19 @@ impl Backend for NullBackend {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.ensure_open("draw_linear_gradient")?;
-        backend::validate_linear_gradient(bounds, start, end, stops)
+        backend::validate_linear_gradient(bounds, start, end, stops)?;
+        Ok(())
     }
 
     fn draw_text(
         &mut self,
-        _x_pixel: u32,
-        _y_pixel: u32,
+        position: Point2D,
         _text: &str,
         style: &TextStyle,
     ) -> Result<(), Error> {
         self.ensure_open("draw_text")?;
-        backend::validate_text_style(style)
+        backend::validate_text(position, style)?;
+        Ok(())
     }
 
     fn draw_rounded_rect(
@@ -349,7 +344,8 @@ impl Backend for NullBackend {
         style: &BracketStyle,
     ) -> Result<(), Error> {
         self.ensure_open("draw_bracket")?;
-        backend::validate_bracket(bracket, style)
+        backend::validate_bracket(bracket, style)?;
+        Ok(())
     }
 
     fn end(&mut self) -> Result<(), Error> {

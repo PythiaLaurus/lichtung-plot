@@ -1030,7 +1030,7 @@ Acceptance:
 
 #### T3c3: Canonical Coordinate Conversion
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Use one checked signed post-conversion geometry representation in measurement,
 recording, and SVG serialization.

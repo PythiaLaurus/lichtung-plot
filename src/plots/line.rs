@@ -235,14 +235,11 @@ fn draw_point_layers(
                     {
                         continue;
                     }
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        clippy::cast_sign_loss,
-                        reason = "projected point-layer coordinates are finite canvas positions"
-                    )]
                     backend.draw_text(
-                        (point.x + label_offset).max(0.0).round() as u32,
-                        (point.y + label_offset).max(0.0).round() as u32,
+                        Point2D::new(
+                            (point.x + label_offset).max(0.0).round(),
+                            (point.y + label_offset).max(0.0).round(),
+                        ),
                         label,
                         &TextStyle {
                             color: layer.style.color,

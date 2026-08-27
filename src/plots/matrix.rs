@@ -25,7 +25,8 @@ use crate::decorations::legend::{Legend, LegendEntry};
 use crate::decorations::title_block::TitleBlock;
 use crate::layout::{self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox};
 use crate::render::backend::{
-    with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
+    points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
+    TextAnchor, TextStyle,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
@@ -293,8 +294,7 @@ pub(crate) fn render(
                     // Tick label only on bottom row
                     if row == n - 1 && palette.show_tick_labels {
                         backend.draw_text(
-                            px.round() as u32,
-                            (y0 - tick_len - 8.0).round() as u32,
+                            Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
                             &tick.label,
                             &tick_text_style,
                         )?;
@@ -306,9 +306,10 @@ pub(crate) fn render(
                     let first_y = y0 - tick_len - 28.0;
                     for (index, line) in column_blocks[col].lines().iter().enumerate() {
                         backend.draw_text(
-                            cx.round() as u32,
-                            (first_y - index as f64 * column_blocks[col].line_height()).round()
-                                as u32,
+                            Point2D::new(
+                                cx.round(),
+                                (first_y - index as f64 * column_blocks[col].line_height()).round(),
+                            ),
                             line,
                             &label_style,
                         )?;
@@ -363,8 +364,7 @@ pub(crate) fn render(
                     // Tick label only on left column
                     if col == 0 && palette.show_tick_labels {
                         backend.draw_text(
-                            (x0 - tick_len - 4.0).max(0.0).round() as u32,
-                            py.round() as u32,
+                            Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
                             &tick.label,
                             &y_tick_text,
                         )?;
@@ -381,10 +381,12 @@ pub(crate) fn render(
                     let first_x = (x0 - tick_len - 40.0).max(4.0);
                     for (index, line) in row_blocks[row].lines().iter().enumerate() {
                         backend.draw_text(
-                            (first_x - index as f64 * row_blocks[row].line_height())
-                                .max(4.0)
-                                .round() as u32,
-                            cy.round() as u32,
+                            Point2D::new(
+                                (first_x - index as f64 * row_blocks[row].line_height())
+                                    .max(4.0)
+                                    .round(),
+                                cy.round(),
+                            ),
                             line,
                             &row_label_style,
                         )?;
@@ -581,7 +583,21 @@ fn draw_diagonal_kde(
         for (i, &d) in densities.iter().enumerate() {
             let px = x0 + (i as f64 / (n_kde - 1) as f64) * cell_w;
             let py = y0 + (d / d_max) * usable_h;
-            poly.push(Point2D::new(px, py));
+            let point = Point2D::new(px, py);
+            let closure = if i == 0 {
+                Some(Point2D::new(x0, y0))
+            } else if i + 1 == densities.len() {
+                Some(Point2D::new(x1, y0))
+            } else {
+                None
+            };
+            if let Some(closure) = closure {
+                if points_share_canonical_position(point, closure, "matrix KDE closure")? {
+                    poly.push(closure);
+                    continue;
+                }
+            }
+            poly.push(point);
         }
         poly.push(Point2D::new(x1, y0));
         let fill = FillStyle {

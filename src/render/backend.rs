@@ -12,6 +12,10 @@
 use crate::Error;
 
 use crate::layout::PanelBox;
+use crate::render::coordinates::{
+    self, CanonicalBracket, CanonicalGradient, CanonicalPoint, CanonicalRect, CanonicalRoundedRect,
+    CanonicalText,
+};
 use crate::PointShape;
 
 /// A 2D point in math-style canvas coordinates after data projection.
@@ -401,15 +405,9 @@ pub trait Backend {
         stops: &[GradientStop],
     ) -> Result<(), Error>;
 
-    /// Draw a text label at integer math-style canvas coordinates with
+    /// Draw a text label at finite signed math-style canvas coordinates with
     /// alignment and optional rotation.
-    fn draw_text(
-        &mut self,
-        x_pixel: u32,
-        y_pixel: u32,
-        text: &str,
-        style: &TextStyle,
-    ) -> Result<(), Error>;
+    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error>;
 
     /// Draw a rounded rectangle. Coordinates are in math-coordinate space
     /// (y increases upward). `x` and `y` are the bottom-left corner,
@@ -437,33 +435,39 @@ pub trait Backend {
     fn end(&mut self) -> Result<(), Error>;
 }
 
-pub(crate) fn validate_clip_region(region: PanelBox) -> Result<(), Error> {
-    let values = [region.x0, region.x1, region.y0, region.y1];
-    if values.iter().any(|value| !value.is_finite()) {
-        return Err(Error::Render(format!(
-            "clip region must contain only finite coordinates; got {region:?}"
-        )));
-    }
-    let width = region.width();
-    let height = region.height();
-    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
-        return Err(Error::Render(format!(
-            "clip region must have finite positive width and height; got {region:?}"
-        )));
-    }
-    Ok(())
+pub(crate) fn validate_clip_region(region: PanelBox) -> Result<CanonicalRect, Error> {
+    coordinates::canonical_clip(region)
 }
 
-pub(crate) fn validate_points(points: &[Point2D], context: &str) -> Result<(), Error> {
-    for (index, point) in points.iter().enumerate() {
-        if !point.x.is_finite() || !point.y.is_finite() {
-            return Err(Error::Render(format!(
-                "{context} point {index} must contain finite coordinates; got ({}, {})",
-                point.x, point.y
-            )));
-        }
-    }
-    Ok(())
+pub(crate) fn validate_points(
+    points: &[Point2D],
+    context: &str,
+) -> Result<Vec<CanonicalPoint>, Error> {
+    coordinates::canonical_points(points, context)
+}
+
+pub(crate) fn points_share_canonical_position(
+    first: Point2D,
+    second: Point2D,
+    context: &str,
+) -> Result<bool, Error> {
+    let points = coordinates::canonical_points(&[first, second], context)?;
+    Ok(points[0].same_position(points[1]))
+}
+
+pub(crate) fn validate_line_points(points: &[Point2D]) -> Result<Vec<CanonicalPoint>, Error> {
+    coordinates::canonical_line_points(points)
+}
+
+pub(crate) fn validate_polygon_points(points: &[Point2D]) -> Result<Vec<CanonicalPoint>, Error> {
+    coordinates::canonical_polygon_points(points)
+}
+
+pub(crate) fn validate_triangle_points(
+    points: &[Point2D],
+    radius: u32,
+) -> Result<Vec<[CanonicalPoint; 3]>, Error> {
+    coordinates::canonical_triangles(points, radius)
 }
 
 pub(crate) fn validate_point_style(style: &PointStyle) -> Result<(), Error> {
@@ -517,64 +521,8 @@ pub(crate) fn validate_linear_gradient(
     start: Point2D,
     end: Point2D,
     stops: &[GradientStop],
-) -> Result<(), Error> {
-    let bounds_values = [bounds.x0, bounds.x1, bounds.y0, bounds.y1];
-    if bounds_values.iter().any(|value| !value.is_finite())
-        || !bounds.width().is_finite()
-        || !bounds.height().is_finite()
-        || bounds.width() <= 0.0
-        || bounds.height() <= 0.0
-    {
-        return Err(Error::Render(format!(
-            "linear gradient bounds must have finite coordinates and positive width and height; got {bounds:?}"
-        )));
-    }
-    validate_points(&[start, end], "linear gradient vector")?;
-    if same_finite_coordinate(start.x, end.x) && same_finite_coordinate(start.y, end.y) {
-        return Err(Error::Render(
-            "linear gradient vector endpoints must be distinct".into(),
-        ));
-    }
-    if stops.len() < 2 {
-        return Err(Error::Render(format!(
-            "linear gradient requires at least two stops; got {}",
-            stops.len()
-        )));
-    }
-    for (index, stop) in stops.iter().enumerate() {
-        if !stop.offset.is_finite() || !(0.0..=1.0).contains(&stop.offset) {
-            return Err(Error::Render(format!(
-                "linear gradient stop {index} offset must be finite and in [0, 1]; got {}",
-                stop.offset
-            )));
-        }
-    }
-    if stops[0].offset.to_bits() != 0.0_f64.to_bits()
-        || stops[stops.len() - 1].offset.to_bits() != 1.0_f64.to_bits()
-    {
-        return Err(Error::Render(format!(
-            "linear gradient stops must begin at 0 and end at 1; got {}..{}",
-            stops[0].offset,
-            stops[stops.len() - 1].offset
-        )));
-    }
-    for (index, pair) in stops.windows(2).enumerate() {
-        if pair[0].offset >= pair[1].offset {
-            return Err(Error::Render(format!(
-                "linear gradient stop offsets must be strictly increasing; stops {index} and {} are {} and {}",
-                index + 1,
-                pair[0].offset,
-                pair[1].offset
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn same_finite_coordinate(left: f64, right: f64) -> bool {
-    const MAGNITUDE_BITS: u64 = 0x7fff_ffff_ffff_ffff;
-    left.to_bits() == right.to_bits()
-        || (left.to_bits() & MAGNITUDE_BITS == 0 && right.to_bits() & MAGNITUDE_BITS == 0)
+) -> Result<CanonicalGradient, Error> {
+    coordinates::canonical_gradient(bounds, start, end, stops)
 }
 
 pub(crate) fn validate_text_style(style: &TextStyle) -> Result<(), Error> {
@@ -588,57 +536,25 @@ pub(crate) fn validate_text_style(style: &TextStyle) -> Result<(), Error> {
     }
 }
 
+pub(crate) fn validate_text(position: Point2D, style: &TextStyle) -> Result<CanonicalText, Error> {
+    validate_text_style(style)?;
+    coordinates::canonical_text(position, style.rotation)
+}
+
 pub(crate) fn validate_rounded_rect(
     x: f64,
     y: f64,
     width: f64,
     height: f64,
     radius: f64,
-) -> Result<(), Error> {
-    if [x, y, width, height, radius]
-        .iter()
-        .any(|value| !value.is_finite())
-    {
-        return Err(Error::Render(format!(
-            "rounded rectangle must contain finite geometry; got ({x}, {y}, {width}, {height}, {radius})"
-        )));
-    }
-    if width < 0.0 || height < 0.0 || radius < 0.0 {
-        return Err(Error::Render(format!(
-            "rounded rectangle dimensions and radius must be non-negative; got ({width}, {height}, {radius})"
-        )));
-    }
-    if !(x + width).is_finite() || !(y + height).is_finite() {
-        return Err(Error::Render(format!(
-            "rounded rectangle far edges must be finite; got ({x}, {y}, {width}, {height})"
-        )));
-    }
-    if radius > width / 2.0 || radius > height / 2.0 {
-        return Err(Error::Render(format!(
-            "rounded rectangle radius must not exceed half either extent; got radius {radius} for {width}x{height}"
-        )));
-    }
-    Ok(())
+) -> Result<CanonicalRoundedRect, Error> {
+    coordinates::canonical_rounded_rect(x, y, width, height, radius)
 }
 
 pub(crate) fn validate_bracket(
     bracket: &SignificanceBracket,
     style: &BracketStyle,
-) -> Result<(), Error> {
-    if [bracket.x_left, bracket.x_right, bracket.y]
-        .iter()
-        .any(|value| !value.is_finite())
-    {
-        return Err(Error::Render(format!(
-            "significance bracket must contain finite coordinates; got ({}, {}, {})",
-            bracket.x_left, bracket.x_right, bracket.y
-        )));
-    }
-    if same_finite_coordinate(bracket.x_left, bracket.x_right) {
-        return Err(Error::Render(
-            "significance bracket must span two distinct rendered anchors".into(),
-        ));
-    }
+) -> Result<CanonicalBracket, Error> {
     if !style.width.is_finite() || style.width < 0.0 {
         return Err(Error::Render(format!(
             "bracket width must be finite and non-negative; got {}",
@@ -650,7 +566,11 @@ pub(crate) fn validate_bracket(
             "bracket label style requires positive font size and finite nonnegative gap".into(),
         ));
     }
-    Ok(())
+    coordinates::canonical_bracket(
+        bracket,
+        SIGNIFICANCE_BRACKET_METRICS.tick_height,
+        style.label_gap,
+    )
 }
 
 pub(crate) fn with_clip<T>(
@@ -740,6 +660,17 @@ mod tests {
         )
     }
 
+    fn valid_text_style() -> TextStyle {
+        TextStyle {
+            color: (0, 0, 0),
+            font_family: "sans-serif".into(),
+            font_size: 12,
+            weight: crate::TextWeight::Normal,
+            anchor: TextAnchor::Start,
+            rotation: 0.0,
+        }
+    }
+
     #[test]
     fn line_patterns_have_one_exact_closed_serialization() {
         let styles = [
@@ -765,6 +696,110 @@ mod tests {
         assert!(validate_points(&[Point2D::new(1.0, 2.0)], "test").is_ok());
         assert!(validate_points(&[Point2D::new(f64::NAN, 2.0)], "test").is_err());
         assert!(validate_points(&[Point2D::new(1.0, f64::INFINITY)], "test").is_err());
+    }
+
+    #[test]
+    fn coordinate_conversion_rejects_values_outside_exact_signed_range() {
+        let error = validate_points(&[Point2D::new(f64::MAX, 0.0)], "test").unwrap_err();
+
+        assert!(error.to_string().contains("signed coordinate range"));
+    }
+
+    #[test]
+    fn text_conversion_rejects_nonfinite_and_unrepresentable_signed_positions() {
+        let nonfinite =
+            validate_text(Point2D::new(f64::NAN, 0.0), &valid_text_style()).unwrap_err();
+        let unrepresentable =
+            validate_text(Point2D::new(f64::MAX, 0.0), &valid_text_style()).unwrap_err();
+
+        assert!(nonfinite
+            .to_string()
+            .contains("text position x must be finite"));
+        assert!(unrepresentable
+            .to_string()
+            .contains("signed coordinate range"));
+    }
+
+    #[test]
+    fn primitive_conversion_retains_representable_subprecision_points() {
+        let points =
+            validate_line_points(&[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)]).unwrap();
+
+        assert_eq!(points[1].value(), Point2D::new(0.001, 0.001));
+    }
+
+    #[test]
+    fn primitive_conversion_rejects_collapsed_required_distinction() {
+        let error = validate_line_points(&[Point2D::new(0.0, 0.0), Point2D::new(0.0004, 0.0004)])
+            .unwrap_err();
+
+        assert!(error.to_string().contains("distinct points"));
+        assert!(error.to_string().contains("collapse"));
+    }
+
+    #[test]
+    fn primitive_conversion_rejects_partial_point_collapse() {
+        let error = validate_line_points(&[
+            Point2D::new(0.0, 0.0),
+            Point2D::new(0.0004, 0.0004),
+            Point2D::new(1.0, 1.0),
+        ])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("distinct points"));
+    }
+
+    #[test]
+    fn polygon_conversion_rejects_partial_point_collapse() {
+        let error = validate_polygon_points(&[
+            Point2D::new(0.0, 0.0),
+            Point2D::new(0.0004, 0.0004),
+            Point2D::new(1.0, 1.0),
+            Point2D::new(2.0, 0.0),
+        ])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("distinct adjacent points"));
+    }
+
+    #[test]
+    fn polygon_conversion_retains_nonadjacent_canonical_self_touch() {
+        let points = validate_polygon_points(&[
+            Point2D::new(0.0, 0.0),
+            Point2D::new(2.0, 0.0),
+            Point2D::new(0.0004, 0.0004),
+            Point2D::new(0.0, 2.0),
+        ])
+        .unwrap();
+
+        assert_eq!(points[0], points[2]);
+    }
+
+    #[test]
+    fn polygon_conversion_rejects_adjacent_signed_zero_collapse() {
+        let error = validate_polygon_points(&[
+            Point2D::new(0.0, -0.0004),
+            Point2D::new(0.0, 0.0004),
+            Point2D::new(2.0, 0.0),
+            Point2D::new(0.0, 2.0),
+        ])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("distinct adjacent points"));
+    }
+
+    #[test]
+    fn clip_conversion_retains_positive_subprecision_extents() {
+        let rect = validate_clip_region(PanelBox::new(0.0, 0.0006, 0.0, 0.0006)).unwrap();
+
+        assert_eq!(rect.panel(), PanelBox::new(0.0, 0.001, 0.0, 0.001));
+    }
+
+    #[test]
+    fn clip_conversion_rejects_collapsed_positive_extents() {
+        let error = validate_clip_region(PanelBox::new(0.0, 0.0004, 0.0, 0.0004)).unwrap_err();
+
+        assert!(error.to_string().contains("positive extent collapses"));
     }
 
     #[test]
@@ -851,6 +886,32 @@ mod tests {
     }
 
     #[test]
+    fn linear_gradient_conversion_rejects_collapsed_endpoints_and_stops() {
+        let (bounds, _, _, stops) = valid_gradient();
+        let endpoint_error = validate_linear_gradient(
+            bounds,
+            Point2D::new(0.0, 0.0),
+            Point2D::new(0.0004, 0.0004),
+            &stops,
+        )
+        .unwrap_err();
+        let stop_error = validate_linear_gradient(
+            bounds,
+            Point2D::new(0.0, 0.0),
+            Point2D::new(1.0, 1.0),
+            &[
+                GradientStop::new(0.0, (0, 0, 0)),
+                GradientStop::new(0.000_000_4, (127, 127, 127)),
+                GradientStop::new(1.0, (255, 255, 255)),
+            ],
+        )
+        .unwrap_err();
+
+        assert!(endpoint_error.to_string().contains("endpoints collapse"));
+        assert!(stop_error.to_string().contains("stop offsets collapse"));
+    }
+
+    #[test]
     fn rounded_rectangle_validation_covers_geometry_and_radius_bounds() {
         assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 3.0).is_ok());
         assert!(validate_rounded_rect(1.0, 2.0, 0.0, 0.0, 0.0).is_ok());
@@ -863,6 +924,13 @@ mod tests {
         assert!(validate_rounded_rect(1.0, f64::MAX, 8.0, f64::MAX, 2.0).is_err());
         assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 4.0).is_err());
         assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 3.1).is_err());
+    }
+
+    #[test]
+    fn rounded_rectangle_conversion_rejects_collapsed_positive_extent() {
+        let error = validate_rounded_rect(0.0, 0.0, 0.004, 1.0, 0.0).unwrap_err();
+
+        assert!(error.to_string().contains("positive extent collapses"));
     }
 
     #[test]
@@ -897,6 +965,28 @@ mod tests {
         let mut invalid_style = style;
         invalid_style.label_gap = -1.0;
         assert!(validate_bracket(&bracket, &invalid_style).is_err());
+    }
+
+    #[test]
+    fn significance_bracket_conversion_rejects_collapsed_anchors() {
+        let (mut bracket, style) = valid_bracket();
+        bracket.x_left = 0.0;
+        bracket.x_right = 0.0004;
+
+        let error = validate_bracket(&bracket, &style).unwrap_err();
+
+        assert!(error.to_string().contains("anchors collapse"));
+    }
+
+    #[test]
+    fn significance_bracket_conversion_retains_subprecision_anchor_span() {
+        let (mut bracket, style) = valid_bracket();
+        bracket.x_left = 0.0;
+        bracket.x_right = 0.0006;
+
+        let canonical = validate_bracket(&bracket, &style).unwrap();
+
+        assert_eq!(canonical.line_end.x.units(), 1);
     }
 
     #[test]

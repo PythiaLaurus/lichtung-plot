@@ -7,7 +7,7 @@ use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::canvas::try_wrap_text;
 use crate::layout::{PanelBox, TextBlock};
-use crate::render::backend::{Backend, TextAnchor, TextStyle};
+use crate::render::backend::{Backend, Point2D, TextAnchor, TextStyle};
 use crate::spec::{PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -82,9 +82,7 @@ pub(super) fn render_scene(
 
 #[expect(
     clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated finite facet coordinates are rounded for the integer text backend"
+    reason = "small facet-line indexes are projected into backend coordinates"
 )]
 fn draw_facet_strip(
     chart: &Plot,
@@ -106,8 +104,10 @@ fn draw_facet_strip(
         |backend| {
             for (index, line) in lines.iter().rev().enumerate() {
                 backend.draw_text(
-                    f64::midpoint(facet.panel.x0, facet.panel.x1).round() as u32,
-                    (facet.panel.y1 + 14.0 + index as f64 * line_height).round() as u32,
+                    Point2D::new(
+                        f64::midpoint(facet.panel.x0, facet.panel.x1).round(),
+                        (facet.panel.y1 + 14.0 + index as f64 * line_height).round(),
+                    ),
                     line,
                     &TextStyle {
                         color: palette.foreground,
@@ -126,9 +126,7 @@ fn draw_facet_strip(
 
 #[expect(
     clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "validated finite canvas coordinates are rounded for the integer text backend"
+    reason = "small wrapped-line indexes are projected into backend coordinates"
 )]
 fn draw_shared_facet_axis_labels(
     horizontal_label: Option<&str>,
@@ -160,8 +158,10 @@ fn draw_shared_facet_axis_labels(
             let first_y = axis_origin.1 - f64::from(palette.label_font_size);
             for (index, line) in block.lines().iter().enumerate() {
                 backend.draw_text(
-                    f64::midpoint(grid.x0, grid.x1).round() as u32,
-                    (first_y - index as f64 * block.line_height()).round() as u32,
+                    Point2D::new(
+                        f64::midpoint(grid.x0, grid.x1).round(),
+                        (first_y - index as f64 * block.line_height()).round(),
+                    ),
                     line,
                     &base_style,
                 )?;
@@ -181,8 +181,10 @@ fn draw_shared_facet_axis_labels(
             };
             for (index, line) in block.lines().iter().enumerate() {
                 backend.draw_text(
-                    (first_x - index as f64 * block.line_height()).round() as u32,
-                    f64::midpoint(grid.y0, grid.y1).round() as u32,
+                    Point2D::new(
+                        (first_x - index as f64 * block.line_height()).round(),
+                        f64::midpoint(grid.y0, grid.y1).round(),
+                    ),
                     line,
                     &style,
                 )?;

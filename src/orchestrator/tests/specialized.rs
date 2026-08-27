@@ -31,15 +31,15 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
         .iter()
         .find(|(_, _, text)| text == "1.000")
         .unwrap();
-    assert!((f64::from(high_label.0) - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
-    assert!((f64::from(high_label.1) - (bottom + height - 4.0).trunc()).abs() < f64::EPSILON);
+    assert!((high_label.0 - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
+    assert!((high_label.1 - (bottom + height - 4.0).trunc()).abs() < f64::EPSILON);
     let low_label = beeswarm_backend
         .texts
         .iter()
         .find(|(_, _, text)| text == "0.100")
         .unwrap();
-    assert!((f64::from(low_label.0) - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
-    assert!((f64::from(low_label.1) - (bottom - 13.0).max(0.0).trunc()).abs() < f64::EPSILON);
+    assert!((low_label.0 - (beeswarm_panel.x1 + 34.0).trunc()).abs() < f64::EPSILON);
+    assert!((low_label.1 - (bottom - 13.0).max(0.0).trunc()).abs() < f64::EPSILON);
 
     let marginal = Plot::marginal(x.clone(), y.clone());
     let mut marginal_backend = RecordingBackend::default();
@@ -139,8 +139,8 @@ fn point_layer_label_uses_math_space_y() {
         .iter()
         .find(|(_, _, text)| text == "2.0")
         .unwrap();
-    assert!((f64::from(label.0) - (peak.x + 6.0).round()).abs() < f64::EPSILON);
-    assert!((f64::from(label.1) - (peak.y + 6.0).round()).abs() < f64::EPSILON);
+    assert!((label.0 - (peak.x + 6.0).round()).abs() < f64::EPSILON);
+    assert!((label.1 - (peak.y + 6.0).round()).abs() < f64::EPSILON);
 }
 
 #[test]
