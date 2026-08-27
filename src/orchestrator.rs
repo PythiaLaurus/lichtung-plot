@@ -70,7 +70,7 @@ impl Plot {
     }
 
     fn preflight_erased(&self) -> Result<(), Error> {
-        self.render_with_backend_erased(&mut backend::NullBackend)
+        self.render_with_backend_erased(&mut backend::NullBackend::default())
     }
 
     pub(crate) fn render_panel(

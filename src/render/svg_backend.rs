@@ -28,7 +28,7 @@ impl SvgBackend {
             group_stack: Vec::new(),
             next_clip_id: 0,
             next_gradient_id: 0,
-            begun: false,
+            state: SvgCanvasState::Fresh,
         }
     }
 
@@ -79,7 +79,7 @@ impl SvgBackend {
     }
 
     fn ensure_begun(&self, operation: &str) -> Result<(), Error> {
-        if self.begun {
+        if self.state == SvgCanvasState::Open {
             Ok(())
         } else {
             Err(Error::Render(format!(
@@ -94,6 +94,13 @@ enum GroupState {
     Grid,
     Layer,
     Clip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SvgCanvasState {
+    Fresh,
+    Open,
+    Closed,
 }
 
 /// Convert canonical SVG scene text to vector paths using installed fonts.
@@ -322,12 +329,13 @@ pub struct SvgBackend {
     group_stack: Vec<GroupState>,
     next_clip_id: usize,
     next_gradient_id: usize,
-    begun: bool,
+    state: SvgCanvasState,
 }
 
 impl Backend for SvgBackend {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        if self.begun {
+        self.output = None;
+        if self.state == SvgCanvasState::Open {
             return Err(Error::Render(
                 "svg backend begin called while a canvas is already open".into(),
             ));
@@ -346,7 +354,7 @@ impl Backend for SvgBackend {
         self.group_stack.clear();
         self.next_clip_id = 0;
         self.next_gradient_id = 0;
-        self.begun = true;
+        self.state = SvgCanvasState::Open;
         Ok(())
     }
 
@@ -717,7 +725,7 @@ impl Backend for SvgBackend {
     }
 
     fn end(&mut self) -> Result<(), Error> {
-        if !self.begun {
+        if self.state != SvgCanvasState::Open {
             return Err(Error::Render("svg backend ended before begin".into()));
         }
         if !self.group_stack.is_empty() {
@@ -751,7 +759,7 @@ impl Backend for SvgBackend {
         svg.push_str(&content);
         svg.push_str("</svg>\n");
         self.output = Some(svg.into_bytes());
-        self.begun = false;
+        self.state = SvgCanvasState::Closed;
         Ok(())
     }
 }
@@ -759,6 +767,76 @@ impl Backend for SvgBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn draw_test_line(backend: &mut SvgBackend) {
+        backend
+            .draw_line(
+                &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
+                &LineStyle::solid((0, 0, 0), 1.0),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn canvas_lifecycle_reuses_clean_state_and_invalidates_stale_output() {
+        let mut backend = SvgBackend::in_memory(200, 100);
+        let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
+        let style = LineStyle::solid((0, 0, 0), 1.0);
+
+        assert!(backend.end().is_err());
+        assert!(backend.draw_line(&points, &style).is_err());
+        assert!(backend.begin(0, 100).is_err());
+
+        backend.begin(200, 100).unwrap();
+        assert!(backend.begin(200, 100).is_err());
+        draw_test_line(&mut backend);
+        backend.end().unwrap();
+        assert!(backend.output.is_some());
+        assert!(backend.end().is_err());
+        assert!(backend.draw_line(&points, &style).is_err());
+
+        backend.begin(120, 80).unwrap();
+        backend.end().unwrap();
+        let latest = String::from_utf8(backend.output.clone().unwrap()).unwrap();
+        assert!(latest.contains("width=\"120\" height=\"80\""));
+        assert!(!latest.contains("<polyline"));
+
+        assert!(backend.begin(120, 0).is_err());
+        assert!(backend.output.is_none());
+        assert!(backend.into_bytes().is_err());
+    }
+
+    #[test]
+    fn canvas_end_requires_balanced_scopes() {
+        let mut backend = SvgBackend::in_memory(200, 100);
+        backend.begin(200, 100).unwrap();
+
+        assert!(backend.end_clip().is_err());
+        backend
+            .begin_clip(PanelBox::new(10.0, 190.0, 20.0, 80.0))
+            .unwrap();
+        assert!(backend.end().is_err());
+        backend.end_clip().unwrap();
+        backend.end().unwrap();
+    }
+
+    #[test]
+    fn grid_role_serializes_before_generic_layers() {
+        let mut backend = SvgBackend::in_memory(200, 100);
+        backend.begin(200, 100).unwrap();
+        backend.begin_layer("marks").unwrap();
+        draw_test_line(&mut backend);
+        backend.end_layer().unwrap();
+        backend
+            .begin_layer_with_role("grid", LayerRole::Grid)
+            .unwrap();
+        draw_test_line(&mut backend);
+        backend.end_layer().unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.find("<g id=\"grid\">").unwrap() < svg.find("<g id=\"marks\">").unwrap());
+    }
 
     #[test]
     fn text_outlining_preserves_glyph_geometry() {

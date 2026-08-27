@@ -43,6 +43,7 @@ enum BackendFailure {
 #[derive(Default)]
 struct RecordingBackend {
     begins: usize,
+    begin_sizes: Vec<(u32, u32)>,
     ends: usize,
     clips: Vec<PanelBox>,
     clip_ends: usize,
@@ -67,8 +68,9 @@ impl RecordingBackend {
 }
 
 impl Backend for RecordingBackend {
-    fn begin(&mut self, _width: u32, _height: u32) -> Result<(), Error> {
+    fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.begins += 1;
+        self.begin_sizes.push((width, height));
         if self.should_fail(BackendFailure::Begin) {
             Err(Error::Render("canvas begin failed".into()))
         } else {

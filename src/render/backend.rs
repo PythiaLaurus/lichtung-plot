@@ -898,4 +898,28 @@ mod tests {
         invalid_style.label_gap = -1.0;
         assert!(validate_bracket(&bracket, &invalid_style).is_err());
     }
+
+    #[test]
+    fn scope_cleanup_errors_preserve_primary_context() {
+        let cleanup_only = finish_scope::<()>(
+            Ok(()),
+            Err(Error::Render("cleanup failed".into())),
+            "test scope",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(cleanup_only.contains("failed to close test scope"));
+        assert!(cleanup_only.contains("cleanup failed"));
+
+        let combined = finish_scope::<()>(
+            Err(Error::Render("primary failed".into())),
+            Err(Error::Render("cleanup failed".into())),
+            "test scope",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(combined.contains("primary failed"));
+        assert!(combined.contains("additionally failed to close test scope"));
+        assert!(combined.contains("cleanup failed"));
+    }
 }

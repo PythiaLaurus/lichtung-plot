@@ -100,7 +100,7 @@ Phase T1 confirmed these rules for the approved target:
 | T3b | Private resolved-theme foundation | COMPLETE |
 | T3c | Backend lifecycle and protocol parity | IN PROGRESS |
 | T3c1 | Closed primitive protocol and validation | COMPLETE |
-| T3c2 | Backend lifecycle state machines | PENDING |
+| T3c2 | Backend lifecycle state machines | COMPLETE |
 | T3c3 | Canonical coordinate conversion | PENDING |
 | T3c4 | Concrete SVG and Null protocol parity | PENDING |
 | T3d | Geometry discovery and painted bounds | PENDING |
@@ -984,7 +984,7 @@ Acceptance:
 
 #### T3c2: Backend Lifecycle State Machines
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Give SVG, Deferred, and Null explicit balanced canvas/scope state before one plan
 or Scene is reused.

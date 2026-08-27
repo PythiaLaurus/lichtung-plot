@@ -4,7 +4,90 @@ use super::{
     test_directory, BackendFailure, Plot, PlotKind, RecordingBackend, Significance,
     SignificanceMark, ValueSort, RENDER_PANEL_CALLS, TEMP_FILE_COUNTER,
 };
+use crate::orchestrator::DeferredBackend;
+use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{AxisValues, CategoryValues, NumericValues};
+
+fn valid_line() -> ([Point2D; 2], LineStyle) {
+    (
+        [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
+        LineStyle::solid((0, 0, 0), 1.0),
+    )
+}
+
+#[test]
+fn deferred_backend_enforces_dimensions_and_one_shot_lifecycle() {
+    let mut recorded = RecordingBackend::default();
+    {
+        let mut backend = DeferredBackend::new(&mut recorded, 320, 200);
+        assert!(backend.begin(319, 200).is_err());
+        let (points, style) = valid_line();
+        backend.draw_line(&points, &style).unwrap();
+        assert!(backend.begin(320, 200).is_err());
+        backend.end().unwrap();
+        assert!(backend.draw_line(&points, &style).is_err());
+        assert!(backend.end().is_err());
+        backend.finish(Ok(()), "test canvas").unwrap();
+    }
+
+    assert_eq!(recorded.begin_sizes, [(320, 200)]);
+    assert_eq!((recorded.begins, recorded.ends), (1, 1));
+}
+
+#[test]
+fn deferred_backend_empty_success_starts_and_finalizes_once() {
+    let mut recorded = RecordingBackend::default();
+
+    DeferredBackend::new(&mut recorded, 320, 200)
+        .finish(Ok(()), "test canvas")
+        .unwrap();
+
+    assert_eq!(recorded.begin_sizes, [(320, 200)]);
+    assert_eq!((recorded.begins, recorded.ends), (1, 1));
+}
+
+#[test]
+fn deferred_backend_failed_start_and_end_are_terminal() {
+    let (points, style) = valid_line();
+    let mut begin_failure = RecordingBackend {
+        failures: vec![BackendFailure::Begin],
+        ..RecordingBackend::default()
+    };
+    {
+        let mut backend = DeferredBackend::new(&mut begin_failure, 320, 200);
+        assert!(backend.draw_line(&points, &style).is_err());
+        assert!(backend.draw_line(&points, &style).is_err());
+    }
+    assert_eq!((begin_failure.begins, begin_failure.ends), (1, 0));
+
+    let mut end_failure = RecordingBackend {
+        failures: vec![BackendFailure::End],
+        ..RecordingBackend::default()
+    };
+    {
+        let mut backend = DeferredBackend::new(&mut end_failure, 320, 200);
+        backend.draw_line(&points, &style).unwrap();
+        assert!(backend.end().is_err());
+        assert!(backend.end().is_err());
+    }
+    assert_eq!((end_failure.begins, end_failure.ends), (1, 1));
+}
+
+#[test]
+fn deferred_backend_reports_cleanup_only_failure() {
+    let mut recorded = RecordingBackend {
+        failures: vec![BackendFailure::End],
+        ..RecordingBackend::default()
+    };
+
+    let error = DeferredBackend::new(&mut recorded, 320, 200)
+        .finish(Ok(()), "test canvas")
+        .unwrap_err();
+
+    assert!(error.to_string().contains("failed to close test canvas"));
+    assert!(error.to_string().contains("canvas cleanup failed"));
+    assert_eq!((recorded.begins, recorded.ends), (1, 1));
+}
 
 #[test]
 fn impossible_wrapped_caption_fails_before_backend_begin() {

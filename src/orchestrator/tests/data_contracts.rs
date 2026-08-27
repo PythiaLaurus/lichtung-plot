@@ -443,7 +443,8 @@ fn stacked_bars_reject_unrepresentable_offsets_before_begin() {
 
 #[test]
 fn null_backend_rejects_non_finite_geometry_and_styles() {
-    let mut backend = NullBackend;
+    let mut backend = NullBackend::default();
+    backend.begin(100, 100).unwrap();
     let point_error = backend
         .draw_polygon(
             &[
@@ -471,6 +472,7 @@ fn null_backend_rejects_non_finite_geometry_and_styles() {
     let derived_clip_error = backend
         .begin_clip(PanelBox::new(-f64::MAX, f64::MAX, 0.0, 1.0))
         .unwrap_err();
+    backend.end().unwrap();
 
     assert!(point_error.to_string().contains("finite coordinates"));
     assert!(style_error.to_string().contains("line width"));

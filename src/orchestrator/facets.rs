@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use super::backend::NullBackend;
+use super::backend::validate_with_null_backend;
 use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
 use crate::layout::canvas::allocate_composed_grid;
@@ -15,6 +15,10 @@ mod planning;
 mod rendering;
 
 impl Plot {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "facet coordination keeps both balanced validation sessions explicit"
+    )]
     pub(super) fn render_facets(
         &self,
         kind: PlotKind,
@@ -58,9 +62,12 @@ impl Plot {
         data::validate_significance_facet_anchors(self, &panels)?;
         let facet_scales = self.facet_scales_spec();
 
-        let mut null_backend = NullBackend;
-        let (base, preflight) =
-            legend::preflight_coordinated_panels(self, base, kind, &panels, &mut null_backend)?;
+        let (base, preflight) = validate_with_null_backend(
+            self.width(),
+            self.height(),
+            "facet panel preflight",
+            |backend| legend::preflight_coordinated_panels(self, base, kind, &panels, backend),
+        )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
         let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
@@ -83,14 +90,21 @@ impl Plot {
             outside_legend.as_mut(),
         );
 
-        planning::layout_panels(
-            &shared,
-            kind,
-            &mut panels,
-            outer,
-            (selectors.rows, selectors.columns),
-            facet_scales,
-            &mut null_backend,
+        validate_with_null_backend(
+            self.width(),
+            self.height(),
+            "facet layout preflight",
+            |backend| {
+                planning::layout_panels(
+                    &shared,
+                    kind,
+                    &mut panels,
+                    outer,
+                    (selectors.rows, selectors.columns),
+                    facet_scales,
+                    backend,
+                )
+            },
         )?;
         let shared = shared.with_measured_axis_text();
         let (shared, plans) = planning::plan_panels(

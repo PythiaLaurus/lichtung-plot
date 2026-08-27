@@ -2,7 +2,7 @@
 
 use crate::Error;
 
-use super::backend::{DeferredBackend, NullBackend};
+use super::backend::{validate_with_null_backend, DeferredBackend};
 use crate::builder::Plot;
 use crate::render::backend::Backend;
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
@@ -89,7 +89,9 @@ impl Plot {
             || PlotRenderContext::new(self.data(), panel),
             |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel),
         );
-        self.render_panel(kind, context, &mut NullBackend)
+        validate_with_null_backend(self.width(), self.height(), "panel preflight", |backend| {
+            self.render_panel(kind, context, backend)
+        })
     }
 
     pub(crate) fn preflight_hue_levels(
