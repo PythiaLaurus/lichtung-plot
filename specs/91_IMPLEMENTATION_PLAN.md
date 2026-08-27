@@ -98,7 +98,11 @@ Phase T1 confirmed these rules for the approved target:
 | T3 | One private resolved-theme pipeline | IN PROGRESS |
 | T3a | T3 implementation partition | COMPLETE |
 | T3b | Private resolved-theme foundation | COMPLETE |
-| T3c | Backend lifecycle and protocol parity | PENDING |
+| T3c | Backend lifecycle and protocol parity | IN PROGRESS |
+| T3c1 | Closed primitive protocol and validation | PENDING |
+| T3c2 | Backend lifecycle state machines | PENDING |
+| T3c3 | Canonical coordinate conversion | PENDING |
+| T3c4 | Concrete SVG and Null protocol parity | PENDING |
 | T3d | Geometry discovery and painted bounds | PENDING |
 | T3e | One resolved Plot theme and immutable plan | PENDING |
 | T3f | Canvas resolved-theme handoff | PENDING |
@@ -908,7 +912,7 @@ Acceptance:
 
 ### T3c: Backend Lifecycle And Protocol Parity
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Establish the lifecycle and concrete-protocol guarantees required before one
 plan and one canonical Scene can be reused safely.
@@ -926,6 +930,8 @@ Scope:
   subprecision representability.
 - Remove implicit rounded-rectangle fallback behavior and keep backend traits
   independent of themes.
+- Replace arbitrary line dash strings with one closed private pattern carrier and
+  retain exact degenerate primitive, gradient, and bracket validation parity.
 
 Acceptance:
 
@@ -934,6 +940,171 @@ Acceptance:
 - Geometry and SVG consume identical checked converted values; malformed or
   collapsed values fail rather than silently changing geometry.
 - Existing successful built-in snapshots remain unchanged.
+
+#### T3c1: Closed Primitive Protocol And Validation
+
+**Status**: PENDING
+
+Replace open or fallback primitive protocol states before tightening concrete
+backend lifecycle and coordinate conversion.
+
+Dependencies: T3a.
+
+Ledger assignments:
+
+- `backend.line.dash-string-carrier`,
+  `backend.line.pattern-constructor-branches`,
+  `backend.protocol.gradient-contract`, and
+  `backend.protocol.rounded-rectangle-fallback`.
+- `backend.validation.primitive-points`, `backend.validation.line-style`,
+  `backend.validation.linear-gradient`,
+  `backend.validation.rounded-rectangle`, and
+  `backend.validation.significance-bracket`.
+
+Scope:
+
+- Replace the private arbitrary dash string and empty-string sentinel with one
+  closed line-pattern carrier that serializes only admitted fixed patterns.
+- Remove the `Backend::draw_rounded_rect` polygon fallback so every admitted
+  backend must implement rounded rectangles explicitly.
+- Reject rounded radii larger than half either extent and retain the exact
+  current arity, gradient-stop, and significance-bracket protocols.
+- Add focused shared validation evidence without changing successful built-in
+  rendering.
+
+Acceptance:
+
+- Malformed line patterns are unrepresentable and solid/dashed construction is
+  exhaustive.
+- Deferred, Geometry, Null, SVG, and the test backend each compile only with an
+  explicit rounded-rectangle implementation.
+- Focused tests cover degenerate line/polygon bypass, invalid line widths, every
+  gradient branch, rounded finite/nonnegative/far-edge/oversized-radius cases,
+  and invalid bracket anchors/styles.
+
+#### T3c2: Backend Lifecycle State Machines
+
+**Status**: PENDING
+
+Give SVG, Deferred, and Null explicit balanced canvas/scope state before one plan
+or Scene is reused.
+
+Dependencies: T3c1.
+
+Ledger assignments:
+
+- `backend.layer.semantic-role`, `backend.protocol.begin-end-lifecycle`,
+  `backend.protocol.ordinary-layer-fallbacks`,
+  `backend.protocol.grid-role-delegation`,
+  `backend.protocol.clip-scope-contract`, `backend.validation.clip-region`, and
+  `backend.protocol.scope-cleanup-precedence`.
+- `backend.svg.concrete-canvas-lifecycle`,
+  `backend.svg.layer-buffering-and-grid-order`,
+  `backend.svg.clip-scope-serialization`,
+  `backend.deferred.lazy-canvas-state-machine`,
+  `backend.null.canvas-lifecycle-parity`, and
+  `backend.null.clip-validation-parity`.
+
+Scope:
+
+- Invalidate SVG output before every attempted new session and expose bytes only
+  from the most recently completed session.
+- Make Deferred dimensions authoritative, reject mismatched explicit begin,
+  start at most once, end the underlying backend exactly once, and reject every
+  post-end operation.
+- Make Null validate dimensions, open/closed state, nested clip balance, and
+  draw-within-canvas parity.
+- Replace panel Null calls that currently draw without begin/end with one balanced
+  private validation session. This resolves the T2 wording conflict in favor of
+  the target `backend.null.canvas-lifecycle-parity` contract; "without opening a
+  canvas" means no output-producing canvas, not no backend lifecycle.
+
+Acceptance:
+
+- Focused tests cover begin/end reuse and failure paths, stale-byte invalidation,
+  stored-dimension mismatch, empty success, post-end rejection, exactly-once
+  finalization, invalid dimensions, unmatched/unclosed clips, and draws outside
+  an open canvas.
+- Scope helpers preserve cleanup-only and primary-plus-cleanup errors.
+- Existing grid-before-marks and balanced-layer snapshots remain unchanged.
+
+#### T3c3: Canonical Coordinate Conversion
+
+**Status**: PENDING
+
+Use one checked signed post-conversion geometry representation in measurement,
+recording, and SVG serialization.
+
+Dependencies: T3c2.
+
+Ledger assignments:
+
+- `backend.coordinates.projected-point-carrier`,
+  `backend.protocol.coordinate-convention`, `backend.text.anchor-default`,
+  `backend.text.placement-carrier`, and
+  `backend.svg.coordinate-conversion-and-precision`.
+
+Scope:
+
+- Replace unsigned text placement at the private backend boundary with finite
+  signed coordinates while retaining current ordinary integer placement bytes.
+- Centralize every fixed-precision geometry conversion used by SVG and make
+  Geometry consume the identical converted values.
+- Reject nonfinite, saturated, or precision-collapsed distinct points, extents,
+  bracket anchors, gradient endpoints, and stops without clamping or fallback.
+
+Acceptance:
+
+- Exact tests cover signed off-canvas text, y orientation, representable
+  subprecision geometry, positive subprecision extents, and rejection when a
+  serialization step would collapse a required distinction.
+- Geometry and SVG tests observe identical post-conversion values.
+- Ordinary built-in snapshots retain their current bytes.
+
+#### T3c4: Concrete SVG And Null Protocol Parity
+
+**Status**: PENDING
+
+Close the retained primitive serializer and validating-backend evidence after the
+shared protocol, lifecycle, and coordinates are canonical.
+
+Dependencies: T3c1, T3c2, and T3c3.
+
+Ledger assignments:
+
+- `backend.point.geometry-carrier`, `backend.line.stroke-width-carrier`,
+  `backend.bracket.geometry-carrier`, `backend.svg.xml-escaping`,
+  `backend.svg.scatter-glyph-serialization`,
+  `backend.svg.line-degenerate-noop`,
+  `backend.svg.line-structure-and-pattern-serialization`,
+  `backend.svg.polygon-degenerate-noop`,
+  `backend.svg.polygon-structure-serialization`,
+  `backend.svg.linear-gradient-serialization`,
+  `backend.svg.rounded-rectangle-serialization`, and
+  `backend.svg.document-framing`.
+- `backend.null.line-degenerate-parity`,
+  `backend.null.gradient-validation-parity`, the T3 portion of
+  `backend.null.rounded-rectangle-validation-parity`, and the T3 portion of
+  `backend.null.bracket-validation-parity`.
+
+Scope:
+
+- Emit exact closed line patterns, explicit cap/join rules, fixed triangle and
+  polygon miter join/limit, deterministic gradients, native rounded rectangles,
+  escaped XML, and canonical document framing.
+- Keep short lines and polygons explicit no-ops that consume neither coordinates
+  nor style.
+- Prove Null rejects every current line, gradient, rounded-rectangle, and bracket
+  input that final SVG rejects while deferring later RGBA and typography work to
+  its assigned phases.
+
+Acceptance:
+
+- Exact SVG tests cover all admitted point shapes, solid/dashed lines, polygon
+  joins, gradient order, rounded geometry, escaping, and document order.
+- Degenerate invalid-carrier bypass and nondegenerate Null/SVG failure parity are
+  explicit.
+- Representative visual snapshots remain unchanged and `just verify` passes.
 
 ### T3d: Geometry Discovery And Painted Bounds
 
