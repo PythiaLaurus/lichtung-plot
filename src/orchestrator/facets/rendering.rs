@@ -9,7 +9,7 @@ use crate::layout::canvas::try_wrap_text;
 use crate::layout::{PanelBox, TextBlock};
 use crate::render::backend::{Backend, TextAnchor, TextStyle};
 use crate::spec::{PlotKind, PlotRenderContext};
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 #[expect(
     clippy::too_many_arguments,
@@ -25,7 +25,7 @@ pub(super) fn render_scene(
     vertical_axis_label: Option<&str>,
     outer: PanelBox,
     shared_axis_origin: (f64, f64),
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     for (facet, plan) in panels.iter().zip(&plans) {
@@ -135,7 +135,7 @@ fn draw_shared_facet_axis_labels(
     vertical_label: Option<&str>,
     grid: PanelBox,
     axis_origin: (f64, f64),
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if horizontal_label.is_none() && vertical_label.is_none() {

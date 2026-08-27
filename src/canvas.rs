@@ -506,7 +506,7 @@ impl Canvas {
         &self,
         title: &CanvasHeader,
         cells: &[PanelBox],
-        palette: &crate::theme::ThemePalette,
+        palette: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<String>, Error> {
         let first = title.start * self.columns;
         let last = first + self.columns - 1;
@@ -527,7 +527,7 @@ impl Canvas {
         &self,
         requirements: &mut Vec<(usize, usize, PanelRequirements)>,
         cells: &[PanelBox],
-        palette: &crate::theme::ThemePalette,
+        palette: &crate::theme::ResolvedTheme,
     ) -> Result<(), Error> {
         for title in &self.row_titles {
             let lines = self.row_title_lines(title, cells, palette)?;
@@ -551,7 +551,7 @@ impl Canvas {
     fn plan_row_titles(
         &self,
         cells: &[PanelBox],
-        palette: &crate::theme::ThemePalette,
+        palette: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<CanvasHeaderPlan>, Error> {
         let mut plans = Vec::new();
         let line_height = f64::from(palette.title_font_size) + 6.0;
@@ -581,7 +581,7 @@ impl Canvas {
     )]
     fn preflight_plan(&self) -> Result<CanvasPreflight, Error> {
         self.validate_structure()?;
-        let palette = Theme::Publication.palette();
+        let palette = Theme::Publication.resolve();
         let canvas_layout = CanvasLayout::measured_composed_canvas(
             self.width,
             self.height,
@@ -932,7 +932,7 @@ impl Canvas {
         preflight: CanvasPreflight,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        let palette = Theme::Publication.palette();
+        let palette = Theme::Publication.resolve();
         let row_title_palette = preflight
             .charts
             .iter()
@@ -1110,7 +1110,7 @@ fn chart_category_domain(chart: &Plot, panel: PanelBox) -> Result<Vec<String>, E
 )]
 fn draw_canvas_headers(
     headers: &[CanvasHeaderPlan],
-    palette: &crate::theme::ThemePalette,
+    palette: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if headers.is_empty() {
@@ -1144,7 +1144,7 @@ fn draw_canvas_headers(
 )]
 fn draw_canvas_row_titles(
     titles: &[CanvasHeaderPlan],
-    palette: &crate::theme::ThemePalette,
+    palette: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if titles.is_empty() {
@@ -1178,7 +1178,7 @@ fn draw_canvas_row_titles(
 )]
 fn draw_text_panel(
     panel: &TextPanelPlan,
-    palette: &crate::theme::ThemePalette,
+    palette: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let gap = 12.0;

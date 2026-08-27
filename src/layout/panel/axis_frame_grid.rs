@@ -7,7 +7,7 @@ use crate::layout::canvas::{
 };
 use crate::layout::TextBlock;
 use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 const Y_AXIS_LABEL_EDGE_PADDING: f64 = 12.0;
 const Y_AXIS_LABEL_TICK_GAP: f64 = 16.0;
@@ -50,7 +50,7 @@ impl Axis {
         &self,
         projection: &Projection,
         side: AxisSide,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         axis: &str,
     ) -> Result<(), Error> {
         if !palette.show_tick_labels {
@@ -117,7 +117,7 @@ impl Axis {
         &self,
         projection: &Projection,
         side: AxisSide,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let (x0, x1, y0, y1) = projection.pixel_box();
@@ -346,7 +346,7 @@ impl Frame {
     /// and left ones.
     pub fn draw(
         projection: &Projection,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         if !palette.show_frame {
@@ -373,7 +373,7 @@ impl Grid {
         projection: &Projection,
         x_axis: &Axis,
         y_axis: &Axis,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         if !palette.show_grid || palette.grid_width == 0.0 {

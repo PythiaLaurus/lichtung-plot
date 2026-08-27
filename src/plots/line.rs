@@ -10,7 +10,7 @@ use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
 };
 use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 #[derive(Debug)]
@@ -376,7 +376,7 @@ fn render_grouped(
 fn trajectory_legends(
     chart: &Plot,
     trajectory: &TrajectoryData,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     hue_paths: bool,
 ) -> Result<Vec<LegendEntry>, Error> {
     if hue_paths {
@@ -435,7 +435,7 @@ fn draw_series(
     chart: &Plot,
     layout: &Layout,
     series: &[SeriesData],
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_clip(backend, layout.projection.panel_box(), |backend| {

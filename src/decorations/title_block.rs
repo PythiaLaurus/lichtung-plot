@@ -19,7 +19,7 @@
 
 use crate::layout::CanvasLayout;
 use crate::render::backend::{Backend, TextAnchor, TextStyle};
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 use crate::Error;
 
 /// A canvas-level title / subtitle / caption block.
@@ -97,7 +97,7 @@ impl TitleBlock {
         backend: &mut dyn Backend,
         canvas_width: u32,
         canvas: &CanvasLayout,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
     ) -> Result<(), Error> {
         let cx = f64::from(canvas_width) / 2.0;
 

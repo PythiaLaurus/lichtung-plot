@@ -3,13 +3,13 @@ use crate::Error;
 use super::Plot;
 use crate::layout::{CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, TextBlock};
 use crate::spec::PlotKind;
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 impl<K: crate::kind::Marker> Plot<K> {
-    /// Borrow the active theme palette.
+    /// Resolve the active theme appearance.
     #[must_use]
-    pub(crate) fn palette(&self) -> ThemePalette {
-        self.theme.palette()
+    pub(crate) fn palette(&self) -> ResolvedTheme {
+        self.theme.resolve()
     }
 
     /// Resolve the canvas layout for this chart's canvas and configured text.

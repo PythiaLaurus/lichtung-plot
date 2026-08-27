@@ -442,7 +442,7 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
 
 #[test]
 fn affected_detail_text_uses_publication_detail_typography() {
-    let expected = crate::Theme::Publication.palette().detail_font_size;
+    let expected = crate::Theme::Publication.resolve().detail_font_size;
     assert!(expected >= 11);
 
     let beeswarm_data = beeswarm_data(&[0.0, 1.0]);

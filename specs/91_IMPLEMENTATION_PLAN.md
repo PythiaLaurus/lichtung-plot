@@ -97,7 +97,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2h | Cross-source reconciliation and migration map | COMPLETE |
 | T3 | One private resolved-theme pipeline | IN PROGRESS |
 | T3a | T3 implementation partition | COMPLETE |
-| T3b | Private resolved-theme foundation | PENDING |
+| T3b | Private resolved-theme foundation | COMPLETE |
 | T3c | Backend lifecycle and protocol parity | PENDING |
 | T3d | Geometry discovery and painted bounds | PENDING |
 | T3e | One resolved Plot theme and immutable plan | PENDING |
@@ -881,7 +881,7 @@ Acceptance:
 
 ### T3b: Private Resolved-Theme Foundation
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Replace the private palette identity with the one resolved appearance value that
 later T3 subphases will carry through rendering.

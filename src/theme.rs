@@ -1,6 +1,6 @@
-//! Publication themes: hardcoded palettes per `Theme` variant.
+//! Built-in publication themes and private appearance resolution.
 
-mod palette;
+mod resolved;
 
-pub use palette::Theme;
-pub(crate) use palette::{rgb_to_hex, ThemePalette, TICK_FONT_SIZE};
+pub use resolved::Theme;
+pub(crate) use resolved::{rgb_to_hex, ResolvedTheme, TICK_FONT_SIZE};

@@ -10,11 +10,11 @@ use crate::layout::canvas::{allocate_composed_grid, PanelRequirements};
 use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, TextBlock};
 use crate::render::backend::Backend;
 use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 pub(super) fn canvas_layout(
     chart: &Plot,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
 ) -> Result<CanvasLayout, Error> {
@@ -58,7 +58,7 @@ pub(super) fn canvas_layout(
 pub(super) fn reserve_rewrapped_shared_axis_titles(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     reserved_panel: PanelBox,
     candidate_panel: PanelBox,
 ) -> Result<PanelBox, Error> {
@@ -81,7 +81,7 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
 fn shared_axis_line_counts(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     panel: PanelBox,
 ) -> Result<(usize, usize), Error> {
     let horizontal_lines = horizontal_axis_label
@@ -118,7 +118,7 @@ fn shared_axis_line_counts(
 fn adjusted_shared_axis_panel(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     baseline: (usize, usize),
     candidate: PanelBox,
 ) -> Result<(PanelBox, f64, f64), Error> {

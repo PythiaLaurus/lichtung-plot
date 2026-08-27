@@ -8,7 +8,7 @@
 //! Every plot renderer consumes a `Layout` and only talks to the `Backend`
 //! through primitive draw calls. Per the theme-driven defaults
 //! policy, the `Plot` render orchestrator applies the theme's
-//! `ThemePalette` layout grammar (frame on/off, grid on/off, etc.)
+//! resolved-theme layout grammar (frame on/off, grid on/off, etc.)
 //! after each plot renderer returns, so callers get a
 //! publication-quality canvas by default.
 

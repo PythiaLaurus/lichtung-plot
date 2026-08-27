@@ -7,13 +7,13 @@ use crate::decorations::plan::ResolvedLegend as PlannedLegend;
 use crate::decorations::title_block::TitleBlock;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
 use crate::spec::PlotRenderResult;
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 /// Draw one panel's grid before its marks.
 pub(crate) fn apply_grid(
     chart: &Plot,
     result: &PlotRenderResult,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer_role(
@@ -28,7 +28,7 @@ pub(crate) fn apply_grid(
 pub(crate) fn apply_axes(
     chart: &Plot,
     result: &PlotRenderResult,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer(backend, &chart.layer_name("axes"), |backend| {
@@ -38,7 +38,7 @@ pub(crate) fn apply_axes(
 
 pub(crate) fn apply_canvas_text(
     chart: &Plot,
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let mut title_block = TitleBlock::new().font_family(palette.font_family.clone());

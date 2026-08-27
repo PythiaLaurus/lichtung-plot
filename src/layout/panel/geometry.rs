@@ -7,7 +7,7 @@ use super::{
 };
 use crate::layout::{PanelBox, TextBlock};
 use crate::render::backend::Backend;
-use crate::theme::{ThemePalette, TICK_FONT_SIZE};
+use crate::theme::{ResolvedTheme, TICK_FONT_SIZE};
 
 const Y_AXIS_LABEL_EDGE_PADDING: f64 = 12.0;
 const Y_AXIS_LABEL_TICK_GAP: f64 = 16.0;
@@ -169,7 +169,7 @@ impl Layout {
     /// Grid is drawn separately via `draw_grid_below()` BEFORE data.
     pub fn draw_decorations(
         &self,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         Frame::draw(&self.projection, palette, backend)?;
@@ -184,7 +184,7 @@ impl Layout {
     /// data marks so the grid appears behind the data.
     pub fn draw_grid_below(
         &self,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         Grid::draw(

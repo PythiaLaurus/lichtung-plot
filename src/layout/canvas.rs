@@ -7,7 +7,7 @@
 use crate::Error;
 
 use crate::layout::Layout;
-use crate::theme::ThemePalette;
+use crate::theme::ResolvedTheme;
 
 const MIN_PANEL_WIDTH: f64 = 80.0;
 const MIN_PANEL_HEIGHT: f64 = 60.0;
@@ -69,7 +69,7 @@ impl PanelRequirements {
     /// Measure decorations emitted by [`crate::layout::Axis`] around a panel.
     pub(crate) fn measure(
         layout: &Layout,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         top_text: Option<&str>,
         available_panel: PanelBox,
     ) -> Result<Self, Error> {
@@ -86,7 +86,7 @@ impl PanelRequirements {
     )]
     pub(crate) fn measure_header(
         layout: &Layout,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         top_title: Option<&str>,
         top_subtitle: Option<&str>,
         available_panel: PanelBox,
@@ -410,7 +410,7 @@ impl CanvasLayout {
     pub(crate) fn single_panel(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         spec: CanvasLayoutSpec,
     ) -> Self {
         Self::resolve(
@@ -428,7 +428,7 @@ impl CanvasLayout {
     pub(crate) fn measured_single_panel(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
@@ -448,7 +448,7 @@ impl CanvasLayout {
     pub(crate) fn measured_composed_canvas(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
@@ -473,7 +473,7 @@ impl CanvasLayout {
     fn resolve(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ThemePalette,
+        palette: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         line_counts: (usize, usize, usize),
         checked: bool,
@@ -602,7 +602,7 @@ impl CanvasLayout {
 
 fn measured_line_counts(
     text: (Option<&str>, Option<&str>, Option<&str>),
-    palette: &ThemePalette,
+    palette: &ResolvedTheme,
     maximum_width: f64,
 ) -> Result<(usize, usize, usize), Error> {
     Ok((
@@ -664,7 +664,7 @@ mod tests {
 
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
-        let palette = Theme::Publication.palette();
+        let palette = Theme::Publication.resolve();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let spec = CanvasLayoutSpec {
