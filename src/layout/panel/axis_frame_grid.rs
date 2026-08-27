@@ -123,11 +123,7 @@ impl Axis {
         let (x0, x1, y0, y1) = projection.pixel_box();
         // y0 = bottom of plot area (math), y1 = top (math).
 
-        let tick_style = LineStyle {
-            color: palette.foreground,
-            width: palette.axis_width,
-            dash: String::new(),
-        };
+        let tick_style = LineStyle::solid(palette.foreground, palette.axis_width);
         let label_style = TextStyle {
             color: palette.foreground,
             font_family: palette.font_family.clone(),
@@ -353,11 +349,7 @@ impl Frame {
             return Ok(());
         }
         let (x0, x1, y0, y1) = projection.pixel_box();
-        let line_style = LineStyle {
-            color: palette.foreground,
-            width: palette.axis_width,
-            dash: String::new(),
-        };
+        let line_style = LineStyle::solid(palette.foreground, palette.axis_width);
         backend.draw_line(&[Point2D::new(x0, y0), Point2D::new(x1, y0)], &line_style)?;
         backend.draw_line(&[Point2D::new(x1, y0), Point2D::new(x1, y1)], &line_style)?;
         backend.draw_line(&[Point2D::new(x1, y1), Point2D::new(x0, y1)], &line_style)?;
@@ -379,11 +371,7 @@ impl Grid {
         if !palette.show_grid || palette.grid_width == 0.0 {
             return Ok(());
         }
-        let line_style = LineStyle {
-            color: palette.grid_color,
-            width: palette.grid_width,
-            dash: "4 3".to_string(),
-        };
+        let line_style = LineStyle::medium_dashed(palette.grid_color, palette.grid_width);
         for tick in &x_axis.ticks {
             let (x_px, _) = projection.project(tick.position, 0.0);
             let (_, y_min) = projection.project(tick.position, projection.y_range().0);

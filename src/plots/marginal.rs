@@ -156,11 +156,8 @@ pub(crate) fn render(
 
     // --- Tick marks on marginal panels (no labels, matching seaborn) ---
     let tick_len = f64::from(palette.tick_length);
-    let tick_style = crate::render::backend::LineStyle {
-        color: palette.foreground,
-        width: palette.axis_width,
-        dash: String::new(),
-    };
+    let tick_style =
+        crate::render::backend::LineStyle::solid(palette.foreground, palette.axis_width);
 
     // Top KDE panel: x-axis ticks along the bottom edge (y = top_y0).
     // Positions match the central scatter's x-axis ticks.

@@ -176,11 +176,7 @@ pub(crate) fn render(
                 stroke_width: 1.0,
                 opacity: 1.0,
             };
-            let style = LineStyle {
-                color: palette.foreground,
-                width: palette.axis_width,
-                dash: String::new(),
-            };
+            let style = LineStyle::solid(palette.foreground, palette.axis_width);
 
             let x_center_data =
                 crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());

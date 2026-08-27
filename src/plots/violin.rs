@@ -271,11 +271,7 @@ fn render_samples(
                     let (_, q3_px) = proj.project(center_x_data, summary.q3);
                     let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
                     let (_, median_px) = proj.project(center_x_data, summary.median);
-                    let whisker_line = LineStyle {
-                        color: palette.foreground,
-                        width: palette.axis_width,
-                        dash: String::new(),
-                    };
+                    let whisker_line = LineStyle::solid(palette.foreground, palette.axis_width);
                     backend.draw_line(
                         &[
                             Point2D::new(cx_px, lo_whisker_px),
@@ -311,11 +307,7 @@ fn render_samples(
                     };
                     backend.draw_polygon(&box_pts, &box_fill)?;
 
-                    let median_line = LineStyle {
-                        color: palette.foreground,
-                        width: 1.5,
-                        dash: String::new(),
-                    };
+                    let median_line = LineStyle::solid(palette.foreground, 1.5);
                     backend.draw_line(
                         &[
                             Point2D::new(cx_px - box_w_px, median_px),
@@ -364,11 +356,7 @@ fn render_samples(
                             Point2D::new(box_left, median),
                             Point2D::new(box_right, median),
                         ],
-                        &LineStyle {
-                            color: palette.foreground,
-                            width: 1.5,
-                            dash: String::new(),
-                        },
+                        &LineStyle::solid(palette.foreground, 1.5),
                     )?;
                 }
             }

@@ -170,16 +170,8 @@ pub(crate) fn render(
         .collect::<Result<_, _>>()?;
 
     // --- Styles ---
-    let frame_style = LineStyle {
-        color: palette.foreground,
-        width: palette.axis_width,
-        dash: String::new(),
-    };
-    let tick_style = LineStyle {
-        color: palette.foreground,
-        width: palette.axis_width,
-        dash: String::new(),
-    };
+    let frame_style = LineStyle::solid(palette.foreground, palette.axis_width);
+    let tick_style = LineStyle::solid(palette.foreground, palette.axis_width);
     let tick_text_style = TextStyle {
         color: palette.foreground,
         font_family: palette.font_family.clone(),

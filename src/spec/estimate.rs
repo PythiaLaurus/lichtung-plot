@@ -226,7 +226,7 @@ impl LinePattern {
     ) -> crate::render::backend::LineStyle {
         match self {
             Self::Solid => crate::render::backend::LineStyle::solid(color, width),
-            Self::Dashed => crate::render::backend::LineStyle::dashed(color, width, "5 3"),
+            Self::Dashed => crate::render::backend::LineStyle::long_dashed(color, width),
         }
     }
 }

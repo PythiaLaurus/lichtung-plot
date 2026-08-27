@@ -227,3 +227,33 @@ impl Backend for NullBackend {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn null_backend_preserves_degenerate_line_and_polygon_noops() {
+        let mut backend = NullBackend;
+        let invalid_line = LineStyle::solid((0, 0, 0), f32::NAN);
+        let invalid_fill = FillStyle {
+            color: (0, 0, 0),
+            stroke: (0, 0, 0),
+            stroke_width: f32::NAN,
+            opacity: f64::NAN,
+        };
+
+        assert!(backend
+            .draw_line(&[Point2D::new(f64::NAN, f64::NAN)], &invalid_line)
+            .is_ok());
+        assert!(backend
+            .draw_polygon(
+                &[
+                    Point2D::new(f64::NAN, f64::NAN),
+                    Point2D::new(f64::NAN, f64::NAN),
+                ],
+                &invalid_fill,
+            )
+            .is_ok());
+    }
+}

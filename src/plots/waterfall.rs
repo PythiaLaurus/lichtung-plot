@@ -147,7 +147,7 @@ pub(crate) fn render(
                 let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
                 backend.draw_line(
                     &[Point2D::new(x, from_y), Point2D::new(x, to_y)],
-                    &LineStyle::dashed(palette.foreground, 0.7, "3 2"),
+                    &LineStyle::short_dashed(palette.foreground, 0.7),
                 )?;
             }
         }
@@ -156,7 +156,7 @@ pub(crate) fn render(
             let (_, y1) = layout.projection.project(value, labels.len() as f64);
             backend.draw_line(
                 &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::dashed(palette.foreground, 0.7, "4 3"),
+                &LineStyle::medium_dashed(palette.foreground, 0.7),
             )?;
         }
         Ok(())

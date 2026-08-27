@@ -376,7 +376,7 @@ fn optional_line_style_eq(left: Option<&LineStyle>, right: Option<&LineStyle>) -
         (Some(left), Some(right)) => {
             left.color == right.color
                 && left.width.to_bits() == right.width.to_bits()
-                && left.dash == right.dash
+                && left.pattern == right.pattern
         }
         (None, None) => true,
         _ => false,

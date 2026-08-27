@@ -489,7 +489,7 @@ pub(crate) fn render(
         let (_, y1) = layout.projection.project(transformed_reference, row_count);
         backend.draw_line(
             &[Point2D::new(reference_x, y0), Point2D::new(reference_x, y1)],
-            &LineStyle::dashed(palette.foreground, 1.0, "4 3"),
+            &LineStyle::medium_dashed(palette.foreground, 1.0),
         )?;
         for index in 0..labels.len() {
             let y = row_count - index as f64 - 0.5;

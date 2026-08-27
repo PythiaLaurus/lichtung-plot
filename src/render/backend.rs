@@ -134,9 +134,8 @@ pub struct LineStyle {
     pub color: (u8, u8, u8),
     /// Stroke width in pixels (supports sub-pixel, e.g. 0.8).
     pub width: f32,
-    /// Optional dash pattern (e.g. "4 2" for 4px dash, 2px gap).
-    /// Empty string means solid line.
-    pub dash: String,
+    /// Closed stroke pattern.
+    pub pattern: StrokePattern,
 }
 
 impl LineStyle {
@@ -146,17 +145,61 @@ impl LineStyle {
         Self {
             color,
             width,
-            dash: String::new(),
+            pattern: StrokePattern::Solid,
         }
     }
 
-    /// Create a dashed line style.
+    /// Create a line using the fixed `3 2` dash pattern.
     #[must_use]
-    pub fn dashed(color: (u8, u8, u8), width: f32, pattern: &str) -> Self {
+    pub(crate) fn short_dashed(color: (u8, u8, u8), width: f32) -> Self {
         Self {
             color,
             width,
-            dash: pattern.to_string(),
+            pattern: StrokePattern::ShortDash,
+        }
+    }
+
+    /// Create a line using the fixed `4 3` dash pattern.
+    #[must_use]
+    pub(crate) fn medium_dashed(color: (u8, u8, u8), width: f32) -> Self {
+        Self {
+            color,
+            width,
+            pattern: StrokePattern::MediumDash,
+        }
+    }
+
+    /// Create a line using the fixed `5 3` dash pattern.
+    #[must_use]
+    pub(crate) fn long_dashed(color: (u8, u8, u8), width: f32) -> Self {
+        Self {
+            color,
+            width,
+            pattern: StrokePattern::LongDash,
+        }
+    }
+}
+
+/// Closed line-stroke patterns accepted by the private backend protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrokePattern {
+    /// Continuous stroke.
+    Solid,
+    /// Fixed `3 2` dash and gap lengths.
+    ShortDash,
+    /// Fixed `4 3` dash and gap lengths.
+    MediumDash,
+    /// Fixed `5 3` dash and gap lengths.
+    LongDash,
+}
+
+impl StrokePattern {
+    pub(crate) const fn svg_dasharray(self) -> Option<&'static str> {
+        match self {
+            Self::Solid => None,
+            Self::ShortDash => Some("3 2"),
+            Self::MediumDash => Some("4 3"),
+            Self::LongDash => Some("5 3"),
         }
     }
 }
@@ -372,24 +415,15 @@ pub trait Backend {
     /// (y increases upward). `x` and `y` are the bottom-left corner,
     /// `w` and `h` are width and height, `r` is the corner radius.
     ///
-    /// Default implementation falls back to `draw_polygon` (no rounding).
     fn draw_rounded_rect(
         &mut self,
         x: f64,
         y: f64,
         w: f64,
         h: f64,
-        _r: f64,
+        r: f64,
         style: &FillStyle,
-    ) -> Result<(), Error> {
-        let pts = vec![
-            Point2D::new(x, y),
-            Point2D::new(x + w, y),
-            Point2D::new(x + w, y + h),
-            Point2D::new(x, y + h),
-        ];
-        self.draw_polygon(&pts, style)
-    }
+    ) -> Result<(), Error>;
 
     /// Draw a significance bracket.
     fn draw_bracket(
@@ -579,6 +613,11 @@ pub(crate) fn validate_rounded_rect(
             "rounded rectangle far edges must be finite; got ({x}, {y}, {width}, {height})"
         )));
     }
+    if radius > width / 2.0 || radius > height / 2.0 {
+        return Err(Error::Render(format!(
+            "rounded rectangle radius must not exceed half either extent; got radius {radius} for {width}x{height}"
+        )));
+    }
     Ok(())
 }
 
@@ -669,6 +708,26 @@ pub(crate) fn finish_scope<T>(
 mod tests {
     use super::*;
 
+    fn valid_bracket() -> (SignificanceBracket, BracketStyle) {
+        (
+            SignificanceBracket {
+                x_left: 2.0,
+                x_right: 8.0,
+                y: 10.0,
+                label: "*".into(),
+                orientation: BracketOrientation::Vertical,
+            },
+            BracketStyle {
+                color: (0, 0, 0),
+                width: 1.0,
+                font_family: "sans-serif".into(),
+                font_size: 12,
+                weight: crate::TextWeight::Normal,
+                label_gap: 5.0,
+            },
+        )
+    }
+
     fn valid_gradient() -> (PanelBox, Point2D, Point2D, [GradientStop; 2]) {
         (
             PanelBox::new(1.0, 5.0, 2.0, 8.0),
@@ -682,6 +741,42 @@ mod tests {
     }
 
     #[test]
+    fn line_patterns_have_one_exact_closed_serialization() {
+        let styles = [
+            LineStyle::solid((1, 2, 3), 1.0),
+            LineStyle::short_dashed((1, 2, 3), 1.0),
+            LineStyle::medium_dashed((1, 2, 3), 1.0),
+            LineStyle::long_dashed((1, 2, 3), 1.0),
+        ];
+
+        assert_eq!(
+            styles.map(|style| (style.pattern, style.pattern.svg_dasharray())),
+            [
+                (StrokePattern::Solid, None),
+                (StrokePattern::ShortDash, Some("3 2")),
+                (StrokePattern::MediumDash, Some("4 3")),
+                (StrokePattern::LongDash, Some("5 3")),
+            ]
+        );
+    }
+
+    #[test]
+    fn primitive_point_validation_rejects_nonfinite_coordinates() {
+        assert!(validate_points(&[Point2D::new(1.0, 2.0)], "test").is_ok());
+        assert!(validate_points(&[Point2D::new(f64::NAN, 2.0)], "test").is_err());
+        assert!(validate_points(&[Point2D::new(1.0, f64::INFINITY)], "test").is_err());
+    }
+
+    #[test]
+    fn line_style_validation_accepts_nonnegative_finite_widths_only() {
+        assert!(validate_line_style(&LineStyle::solid((0, 0, 0), 0.0)).is_ok());
+        assert!(validate_line_style(&LineStyle::solid((0, 0, 0), 1.0)).is_ok());
+        for width in [-1.0, f32::NAN, f32::INFINITY] {
+            assert!(validate_line_style(&LineStyle::solid((0, 0, 0), width)).is_err());
+        }
+    }
+
+    #[test]
     fn linear_gradient_validation_accepts_strict_complete_stops() {
         let (bounds, start, end, stops) = valid_gradient();
 
@@ -691,9 +786,28 @@ mod tests {
     #[test]
     fn linear_gradient_validation_rejects_invalid_geometry() {
         let (bounds, start, end, stops) = valid_gradient();
-        let invalid_bounds = PanelBox::new(bounds.x0, bounds.x0, bounds.y0, bounds.y1);
 
-        assert!(validate_linear_gradient(invalid_bounds, start, end, &stops).is_err());
+        assert!(validate_linear_gradient(
+            PanelBox::new(f64::NAN, bounds.x1, bounds.y0, bounds.y1),
+            start,
+            end,
+            &stops
+        )
+        .is_err());
+        assert!(validate_linear_gradient(
+            PanelBox::new(bounds.x0, bounds.x0, bounds.y0, bounds.y1),
+            start,
+            end,
+            &stops
+        )
+        .is_err());
+        assert!(validate_linear_gradient(
+            PanelBox::new(-f64::MAX, f64::MAX, bounds.y0, bounds.y1),
+            start,
+            end,
+            &stops
+        )
+        .is_err());
         assert!(validate_linear_gradient(bounds, start, start, &stops).is_err());
         assert!(
             validate_linear_gradient(bounds, Point2D::new(f64::NAN, start.y), end, &stops).is_err()
@@ -712,6 +826,10 @@ mod tests {
             vec![
                 GradientStop::new(0.0, (0, 0, 0)),
                 GradientStop::new(0.5, (127, 127, 127)),
+            ],
+            vec![
+                GradientStop::new(0.0, (0, 0, 0)),
+                GradientStop::new(0.5, (127, 127, 127)),
                 GradientStop::new(0.5, (128, 128, 128)),
                 GradientStop::new(1.0, (255, 255, 255)),
             ],
@@ -720,10 +838,64 @@ mod tests {
                 GradientStop::new(f64::NAN, (127, 127, 127)),
                 GradientStop::new(1.0, (255, 255, 255)),
             ],
+            vec![
+                GradientStop::new(0.0, (0, 0, 0)),
+                GradientStop::new(1.1, (127, 127, 127)),
+                GradientStop::new(1.0, (255, 255, 255)),
+            ],
         ];
 
         assert!(cases
             .iter()
             .all(|stops| validate_linear_gradient(bounds, start, end, stops).is_err()));
+    }
+
+    #[test]
+    fn rounded_rectangle_validation_covers_geometry_and_radius_bounds() {
+        assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 3.0).is_ok());
+        assert!(validate_rounded_rect(1.0, 2.0, 0.0, 0.0, 0.0).is_ok());
+
+        assert!(validate_rounded_rect(f64::NAN, 2.0, 8.0, 6.0, 2.0).is_err());
+        assert!(validate_rounded_rect(1.0, 2.0, -8.0, 6.0, 2.0).is_err());
+        assert!(validate_rounded_rect(1.0, 2.0, 8.0, -6.0, 2.0).is_err());
+        assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, -2.0).is_err());
+        assert!(validate_rounded_rect(f64::MAX, 2.0, f64::MAX, 6.0, 2.0).is_err());
+        assert!(validate_rounded_rect(1.0, f64::MAX, 8.0, f64::MAX, 2.0).is_err());
+        assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 4.0).is_err());
+        assert!(validate_rounded_rect(1.0, 2.0, 8.0, 6.0, 3.1).is_err());
+    }
+
+    #[test]
+    fn significance_bracket_validation_rejects_invalid_anchors_and_styles() {
+        let (bracket, style) = valid_bracket();
+        assert!(validate_bracket(&bracket, &style).is_ok());
+
+        let mut invalid_bracket = bracket.clone();
+        invalid_bracket.y = f64::NAN;
+        assert!(validate_bracket(&invalid_bracket, &style).is_err());
+
+        let mut invalid_bracket = bracket.clone();
+        invalid_bracket.x_right = invalid_bracket.x_left;
+        assert!(validate_bracket(&invalid_bracket, &style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.width = f32::NAN;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.width = -1.0;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.font_size = 0;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.label_gap = f64::NAN;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style;
+        invalid_style.label_gap = -1.0;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
     }
 }

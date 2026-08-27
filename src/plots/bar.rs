@@ -157,11 +157,7 @@ pub(crate) fn render(
                 },
             )?;
             if let Some((lower, upper)) = bar.interval {
-                let style = LineStyle {
-                    color: palette.foreground,
-                    width: palette.axis_width,
-                    dash: String::new(),
-                };
+                let style = LineStyle::solid(palette.foreground, palette.axis_width);
                 draw_error_bar(
                     backend,
                     &layout.projection,

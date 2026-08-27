@@ -99,7 +99,7 @@ Phase T1 confirmed these rules for the approved target:
 | T3a | T3 implementation partition | COMPLETE |
 | T3b | Private resolved-theme foundation | COMPLETE |
 | T3c | Backend lifecycle and protocol parity | IN PROGRESS |
-| T3c1 | Closed primitive protocol and validation | PENDING |
+| T3c1 | Closed primitive protocol and validation | COMPLETE |
 | T3c2 | Backend lifecycle state machines | PENDING |
 | T3c3 | Canonical coordinate conversion | PENDING |
 | T3c4 | Concrete SVG and Null protocol parity | PENDING |
@@ -943,7 +943,7 @@ Acceptance:
 
 #### T3c1: Closed Primitive Protocol And Validation
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Replace open or fallback primitive protocol states before tightening concrete
 backend lifecycle and coordinate conversion.

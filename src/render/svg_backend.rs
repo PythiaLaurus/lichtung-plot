@@ -509,17 +509,17 @@ impl Backend for SvgBackend {
         let color = rgb_to_hex(style.color);
         let pts_str = self.fmt_points(points);
         let buf = self.buf();
-        if style.dash.is_empty() {
+        if let Some(dasharray) = style.pattern.svg_dasharray() {
             let _ = writeln!(
                 buf,
-                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-                style.width
+                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"{dasharray}\"/>",
+                style.width,
             );
         } else {
             let _ = writeln!(
                 buf,
-                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"{}\"/>",
-                style.width, style.dash
+                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+                style.width
             );
         }
         Ok(())
