@@ -95,7 +95,15 @@ Phase T1 confirmed these rules for the approved target:
 | T2f | Specialized marks and annotations | COMPLETE |
 | T2g | Data scales and semantic domains | COMPLETE |
 | T2h | Cross-source reconciliation and migration map | COMPLETE |
-| T3 | One private resolved-theme pipeline | PENDING |
+| T3 | One private resolved-theme pipeline | IN PROGRESS |
+| T3a | T3 implementation partition | COMPLETE |
+| T3b | Private resolved-theme foundation | PENDING |
+| T3c | Backend lifecycle and protocol parity | PENDING |
+| T3d | Geometry discovery and painted bounds | PENDING |
+| T3e | One resolved Plot theme and immutable plan | PENDING |
+| T3f | Canvas resolved-theme handoff | PENDING |
+| T3g | Canonical Scene and terminal conversion routing | PENDING |
+| T3h | Failure-atomic artifact publication | PENDING |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -806,7 +814,7 @@ Acceptance:
 
 ## Phase T3: Private Resolved-Theme Pipeline
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Create one internal path for built-in appearance without changing the public API
 or intended rendered output.
@@ -842,6 +850,235 @@ Acceptance:
 - Focused lifecycle, layout, theme, and visual-regression tests pass without
   unintended snapshot changes.
 - `just verify` passes.
+
+### T3a: Implementation Partition
+
+**Status**: COMPLETE
+
+Split T3 before production implementation so private representation changes,
+intentional geometry corrections, lifecycle enforcement, planning reuse, output
+routing, and filesystem publication do not land as one unreviewable change.
+
+Scope:
+
+- Assign every T3-owned concern to exactly one T3b-through-T3h implementation
+  subphase and record the dependency order below.
+- Keep the public `Theme`, Plot, Canvas, `Output`, terminal, options, and backend
+  extension surfaces unchanged throughout T3.
+- Preserve built-in rendered output except for the geometry and lifecycle defects
+  explicitly assigned to T3c and T3d with focused evidence.
+- Leave optional Plot themes, Canvas root-theme replacement, and inheritance to
+  T4. T3f carries only the current selected Plot themes and hidden Publication
+  Canvas appearance through one private resolved path.
+
+Acceptance:
+
+- T3b through T3h each define one reviewable objective, explicit dependencies,
+  focused evidence, and a public-boundary constraint.
+- The union of the subphases covers the parent T3 scope without authorizing T4
+  inheritance or T5/T6 appearance and API migrations.
+- No production code, public API, snapshot, or rendered output changes in T3a.
+
+### T3b: Private Resolved-Theme Foundation
+
+**Status**: PENDING
+
+Replace the private palette identity with the one resolved appearance value that
+later T3 subphases will carry through rendering.
+
+Dependencies: T3a.
+
+Scope:
+
+- Replace private `ThemePalette` with `ResolvedTheme` without an alias or second
+  representation.
+- Preserve the current flat fields and exact four-preset values until T5 moves
+  them into the approved component taxonomy.
+- Make each built-in preset construct one structurally complete resolved value
+  and validate all built-ins with exhaustive private tests.
+- Keep the current public `Theme` enum and variants unchanged and expose no T6
+  component, color, builder, inspection, or scale API.
+
+Acceptance:
+
+- All four built-ins resolve to complete values with nonempty colors and font
+  family, positive finite widths, positive font sizes, and exact current values.
+- No `ThemePalette` identity remains in production or test code.
+- Existing theme tests and snapshots pass without changes.
+
+### T3c: Backend Lifecycle And Protocol Parity
+
+**Status**: PENDING
+
+Establish the lifecycle and concrete-protocol guarantees required before one
+plan and one canonical Scene can be reused safely.
+
+Dependencies: T3a.
+
+Scope:
+
+- Enforce fresh begin/open/end state, balanced scopes, post-end rejection, and
+  cleanup-error precedence consistently across SVG, Deferred, and Null backends.
+- Invalidate stale SVG bytes whenever a later session begins or fails, and allow
+  extraction only from one successfully finalized session.
+- Replace lossy or saturating coordinate conversion with one checked canonical
+  post-conversion geometry path, including signed off-canvas text and
+  subprecision representability.
+- Remove implicit rounded-rectangle fallback behavior and keep backend traits
+  independent of themes.
+
+Acceptance:
+
+- Focused tests cover exactly-one begin/end, reuse, failed reuse, balanced clips
+  and layers, primary-plus-cleanup failures, and draw-outside-canvas rejection.
+- Geometry and SVG consume identical checked converted values; malformed or
+  collapsed values fail rather than silently changing geometry.
+- Existing successful built-in snapshots remain unchanged.
+
+### T3d: Geometry Discovery And Painted Bounds
+
+**Status**: PENDING
+
+Make decoration discovery obey backend lifecycle and record the occupied bounds
+of what current paint carriers actually draw.
+
+Dependencies: T3c.
+
+Scope:
+
+- Require direct decoration geometry passes to begin and end one fresh Geometry
+  session and reject unbalanced clips or drawing outside that session.
+- Intersect every active clip and prevent bounds from leaking across sessions.
+- Omit degenerate, zero-width, transparent, or otherwise unpainted current
+  geometry as assigned by the T2 ledger.
+- Record line caps and joins, polygon miter-limited stroke extent, and the painted
+  fill/stroke union for rounded rectangles using rules shared with SVG.
+- Defer complete independent RGBA handling to T6 and other explicitly assigned
+  scatter, text, bracket, and mark-style work to T5.
+
+Acceptance:
+
+- Focused tests cover lifecycle balance, fresh reuse, nested noncontained clips,
+  zero-width lines, transparent shapes, no-painted-area shapes, acute miters, and
+  rounded-rectangle painted unions.
+- Automatic-legend collision evidence reflects the corrected local bounds.
+- Every intentional visual correction has separately reviewed snapshot or exact
+  structural evidence.
+
+### T3e: One Resolved Plot Theme And Immutable Plan
+
+**Status**: PENDING
+
+Resolve and plan a standalone Plot once, then reuse those immutable inputs for
+preflight and the single final render.
+
+Dependencies: T3b, T3c, and T3d.
+
+Scope:
+
+- Resolve the selected built-in once before canonical Plot validation and backend
+  begin.
+- Pass the same borrowed resolved value through layout, Null preflight, geometry
+  discovery, facet planning, legend planning, planned-chart substitutions,
+  post-panel validation, decorations, and final rendering.
+- Remove `Plot::palette()` and every renderer call that reconstructs appearance.
+- Produce one immutable private preflight plan that the final render consumes;
+  public preflight reports from that same planning path without exposing the
+  plan.
+- Keep backend traits theme-agnostic and preserve all public Plot methods and
+  terminal signatures.
+
+Acceptance:
+
+- Focused identity and call-count tests prove one resolution, one plan, and one
+  final canvas lifecycle per Plot terminal.
+- Facets and planned range/data substitutions cannot reconstruct appearance.
+- Existing standalone, facet, lifecycle, and representative visual snapshots
+  remain unchanged except for T3d corrections.
+
+### T3f: Canvas Resolved-Theme Handoff
+
+**Status**: PENDING
+
+Carry current Canvas and child-Plot appearance through preflight and rendering
+without adding T4 inheritance behavior.
+
+Dependencies: T3b, T3c, T3d, and T3e.
+
+Scope:
+
+- Resolve one private Publication value for current Canvas-owned chrome and one
+  selected value per child Plot during Canvas preflight.
+- Store those values in the private Canvas plan and reuse them for text, header,
+  row-title, layout, legend, panel, and final drawing paths.
+- Remove draw-time hidden Publication and child-Plot reconstruction while
+  preserving current first-Plot header and row-title behavior until T4.
+- Retain all five Canvas terminal choices as policies and do not add
+  `Canvas::theme`, optional Plot themes, or inheritance.
+
+Acceptance:
+
+- Focused tests prove preflight/render identity for text-only, homogeneous, and
+  mixed-preset canvases.
+- Canvas-owned chrome has no draw-time `Theme::Publication` reconstruction.
+- Existing composition snapshots and public Canvas behavior remain unchanged.
+
+### T3g: Canonical Scene And Terminal Conversion Routing
+
+**Status**: PENDING
+
+Construct one checked immutable Scene and make every terminal conversion consume
+that canonical result with call-local policy.
+
+Dependencies: T3c, T3e, and T3f.
+
+Scope:
+
+- Construct a Scene only from successfully finalized SVG bytes and canonical
+  positive dimensions; remove duplicate source-dimension validation from PNG.
+- Reuse exact canonical bytes for preserve-text SVG and as the source for
+  outlined SVG and PNG conversion without rerendering.
+- Compute PNG target dimensions and work limits once per call while preserving
+  SVG bypasses, terminal-specific errors, and non-sticky options.
+- Preserve Plot, Canvas, and reusable `Output` terminal signatures and choices;
+  do not expose private plans, scenes, or resolved themes.
+
+Acceptance:
+
+- Tests reject incomplete output, zero dimensions, and dimension mismatches at
+  canonical Scene construction.
+- Chained outputs prove one render and exact Scene-byte reuse across SVG and PNG
+  routes.
+- Source and target limits, sizing modes, conversion failures, and call-local
+  options retain exact route-specific behavior.
+
+### T3h: Failure-Atomic Artifact Publication
+
+**Status**: PENDING
+
+Publish fully derived terminal bytes atomically without exposing partial files or
+destroying an existing destination on failure.
+
+Dependencies: T3g.
+
+Scope:
+
+- Retain derive-before-stage timing, exclusive same-directory sibling
+  reservation, deterministic cleanup, and POSIX rename publication.
+- Replace Windows backup-and-rollback publication with one true atomic
+  same-directory replacement that preserves the previous destination on every
+  failure.
+- Aggregate cleanup failures deterministically and retain Drop cleanup as a final
+  retry without masking the primary conversion, write, or publication error.
+
+Acceptance:
+
+- Focused tests cover reservation collisions, sibling placement, conversion and
+  write failures, publication failure, cleanup aggregation, and no staging
+  residue.
+- Supported-host Windows evidence proves successful replacement, old-destination
+  preservation on failure, and absence of backup artifacts.
+- `just verify` passes and T3 can be marked complete.
 
 ## Phase T4: Canvas Theme Inheritance
 
