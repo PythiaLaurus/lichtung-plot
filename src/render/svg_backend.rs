@@ -17,6 +17,11 @@ use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use crate::theme::rgb_to_hex;
 use crate::PointShape;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static PNG_TARGET_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl SvgBackend {
     pub(crate) fn in_memory(width: u32, height: u32) -> Self {
         Self {
@@ -34,8 +39,14 @@ impl SvgBackend {
         }
     }
 
-    pub(crate) fn into_bytes(self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn into_output(self) -> Option<FinalizedSvgOutput> {
         self.output
+    }
+
+    #[cfg(test)]
+    pub(crate) fn into_bytes(self) -> Result<Vec<u8>, Error> {
+        self.into_output()
+            .map(|output| output.bytes.into_vec())
             .ok_or_else(|| Error::Render("in-memory SVG backend did not finish rendering".into()))
     }
 
@@ -88,6 +99,18 @@ impl SvgBackend {
     }
 }
 
+pub(crate) struct FinalizedSvgOutput {
+    width_css_px: u32,
+    height_css_px: u32,
+    bytes: Box<[u8]>,
+}
+
+impl FinalizedSvgOutput {
+    pub(crate) fn into_parts(self) -> (u32, u32, Box<[u8]>) {
+        (self.width_css_px, self.height_css_px, self.bytes)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GroupState {
     Grid,
@@ -131,12 +154,10 @@ pub(crate) fn convert_svg_text_to_paths(
 /// Rasterize canonical SVG scene bytes to PNG bytes with explicit export options.
 pub(crate) fn rasterize_svg_bytes_to_png(
     svg_data: &[u8],
-    width_css_px: u32,
-    height_css_px: u32,
+    source_size: resvg::tiny_skia::IntSize,
     png_options: &PngOptions,
 ) -> Result<Vec<u8>, Error> {
-    validate_png_options(png_options)?;
-    validate_png_target_for_source(width_css_px, height_css_px, png_options.sizing)?;
+    let plan = PngTargetPlan::new(source_size, png_options)?;
 
     let mut options = resvg::usvg::Options::default();
     crate::font::configure_system_fonts(options.fontdb_mut())?;
@@ -144,18 +165,54 @@ pub(crate) fn rasterize_svg_bytes_to_png(
     let tree = resvg::usvg::Tree::from_data(svg_data, &options)
         .map_err(|e| Error::Render(format!("parse svg for png rasterization: {e}")))?;
     let source_size = tree.size().to_int_size();
-    if source_size.width() != width_css_px || source_size.height() != height_css_px {
+    if source_size != plan.source_size {
         return Err(Error::Render(
             "rendered SVG scene dimensions do not match its canonical CSS dimensions".into(),
         ));
     }
-    let size = png_target_size(source_size, png_options.sizing)?;
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(size.width(), size.height())
-        .ok_or_else(|| Error::Render("allocate png pixmap".into()))?;
-    let transform = png_transform(source_size, size);
+    let mut pixmap =
+        resvg::tiny_skia::Pixmap::new(plan.target_size.width(), plan.target_size.height())
+            .ok_or_else(|| Error::Render("allocate png pixmap".into()))?;
+    let transform = png_transform(plan.source_size, plan.target_size);
 
     resvg::render(&tree, transform, &mut pixmap.as_mut());
-    encode_png(pixmap, png_options)
+    encode_png(pixmap, png_options.compression, plan.dpi)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PngTargetPlan {
+    source_size: resvg::tiny_skia::IntSize,
+    target_size: resvg::tiny_skia::IntSize,
+    dpi: Option<u32>,
+}
+
+impl PngTargetPlan {
+    fn new(source_size: resvg::tiny_skia::IntSize, options: &PngOptions) -> Result<Self, Error> {
+        #[cfg(test)]
+        PNG_TARGET_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
+        validate_png_options(options)?;
+        let target_size = match options.sizing {
+            PngSizing::Source => Some(source_size),
+            PngSizing::Dpi(dpi) => source_size.scale_by(dpi / SVG_CSS_DPI),
+            PngSizing::Scale(scale) => source_size.scale_by(scale),
+            PngSizing::Width(width) => source_size.scale_to_width(width),
+            PngSizing::Height(height) => source_size.scale_to_height(height),
+        }
+        .ok_or_else(|| Error::Render("computed zero-sized png output".into()))?;
+        crate::scene::validate_png_target_dimensions(
+            f64::from(target_size.width()),
+            f64::from(target_size.height()),
+        )?;
+        let dpi = match options.sizing {
+            PngSizing::Dpi(dpi) => Some(dpi_to_pixels_per_meter(dpi)?),
+            _ => None,
+        };
+        Ok(Self {
+            source_size,
+            target_size,
+            dpi,
+        })
+    }
 }
 
 fn validate_png_options(options: &PngOptions) -> Result<(), Error> {
@@ -186,55 +243,6 @@ fn ensure_positive_dimension(value: u32, label: &str) -> Result<(), Error> {
     }
 }
 
-fn png_target_size(
-    source_size: resvg::tiny_skia::IntSize,
-    sizing: PngSizing,
-) -> Result<resvg::tiny_skia::IntSize, Error> {
-    validate_png_target_for_source(source_size.width(), source_size.height(), sizing)?;
-    let size = match sizing {
-        PngSizing::Source => Some(source_size),
-        PngSizing::Dpi(dpi) => source_size.scale_by(dpi / SVG_CSS_DPI),
-        PngSizing::Scale(scale) => source_size.scale_by(scale),
-        PngSizing::Width(width) => source_size.scale_to_width(width),
-        PngSizing::Height(height) => source_size.scale_to_height(height),
-    };
-    let size = size.ok_or_else(|| Error::Render("computed zero-sized png output".into()))?;
-    crate::scene::validate_png_target_dimensions(
-        f64::from(size.width()),
-        f64::from(size.height()),
-    )?;
-    Ok(size)
-}
-
-fn validate_png_target_for_source(
-    source_width: u32,
-    source_height: u32,
-    sizing: PngSizing,
-) -> Result<(), Error> {
-    let source_width = f64::from(source_width);
-    let source_height = f64::from(source_height);
-    let (target_width, target_height) = match sizing {
-        PngSizing::Source => (source_width, source_height),
-        PngSizing::Dpi(dpi) => {
-            let scale = f64::from(dpi / SVG_CSS_DPI);
-            (source_width * scale, source_height * scale)
-        }
-        PngSizing::Scale(scale) => {
-            let scale = f64::from(scale);
-            (source_width * scale, source_height * scale)
-        }
-        PngSizing::Width(width) => {
-            let width = f64::from(width);
-            (width, source_height * width / source_width)
-        }
-        PngSizing::Height(height) => {
-            let height = f64::from(height);
-            (source_width * height / source_height, height)
-        }
-    };
-    crate::scene::validate_png_target_dimensions(target_width, target_height)
-}
-
 fn png_transform(
     source_size: resvg::tiny_skia::IntSize,
     target_size: resvg::tiny_skia::IntSize,
@@ -247,17 +255,21 @@ fn png_transform(
     )
 }
 
-fn encode_png(pixmap: resvg::tiny_skia::Pixmap, options: &PngOptions) -> Result<Vec<u8>, Error> {
+fn encode_png(
+    pixmap: resvg::tiny_skia::Pixmap,
+    compression: PngCompression,
+    dpi: Option<u32>,
+) -> Result<Vec<u8>, Error> {
     let mut bytes = Vec::new();
     {
         let mut encoder = png::Encoder::new(&mut bytes, pixmap.width(), pixmap.height());
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
-        encoder.set_compression(map_png_compression(options.compression));
-        if let PngSizing::Dpi(dpi) = options.sizing {
+        encoder.set_compression(map_png_compression(compression));
+        if let Some(dpi) = dpi {
             encoder.set_pixel_dims(Some(png::PixelDimensions {
-                xppu: dpi_to_pixels_per_meter(dpi)?,
-                yppu: dpi_to_pixels_per_meter(dpi)?,
+                xppu: dpi,
+                yppu: dpi,
                 unit: png::Unit::Meter,
             }));
         }
@@ -317,7 +329,7 @@ fn dpi_to_pixels_per_meter(dpi: f32) -> Result<u32, Error> {
 /// emitted before all other content at `end()` time, ensuring grid lines
 /// always appear behind data marks without constraining their unique IDs.
 pub struct SvgBackend {
-    output: Option<Vec<u8>>,
+    output: Option<FinalizedSvgOutput>,
     width: u32,
     height: u32,
     body: String,
@@ -769,7 +781,11 @@ impl Backend for SvgBackend {
         }
         svg.push_str(&content);
         svg.push_str("</svg>\n");
-        self.output = Some(svg.into_bytes());
+        self.output = Some(FinalizedSvgOutput {
+            width_css_px: self.width,
+            height_css_px: self.height,
+            bytes: svg.into_bytes().into_boxed_slice(),
+        });
         self.state = SvgCanvasState::Closed;
         Ok(())
     }
@@ -778,6 +794,84 @@ impl Backend for SvgBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn source_size(width: u32, height: u32) -> resvg::tiny_skia::IntSize {
+        resvg::tiny_skia::IntSize::from_wh(width, height).unwrap()
+    }
+
+    fn target_size(width: u32, height: u32, sizing: PngSizing) -> (u32, u32) {
+        let plan = PngTargetPlan::new(
+            source_size(width, height),
+            &PngOptions {
+                sizing,
+                compression: PngCompression::Balanced,
+            },
+        )
+        .unwrap();
+        (plan.target_size.width(), plan.target_size.height())
+    }
+
+    #[test]
+    fn png_target_plan_computes_each_sizing_mode_once() {
+        PNG_TARGET_PLAN_CALLS.with(|calls| calls.set(0));
+        crate::scene::PNG_TARGET_VALIDATION_CALLS.with(|calls| calls.set(0));
+        assert_eq!(target_size(319, 241, PngSizing::Source), (319, 241));
+        assert_eq!(target_size(319, 241, PngSizing::Dpi(300.0)), (997, 753));
+        assert_eq!(target_size(319, 241, PngSizing::Scale(1.5)), (479, 362));
+        assert_eq!(target_size(319, 241, PngSizing::Width(500)), (500, 378));
+        assert_eq!(target_size(319, 241, PngSizing::Height(500)), (662, 500));
+        assert_eq!(PNG_TARGET_PLAN_CALLS.with(std::cell::Cell::get), 5);
+        assert_eq!(
+            crate::scene::PNG_TARGET_VALIDATION_CALLS.with(std::cell::Cell::get),
+            5
+        );
+    }
+
+    #[test]
+    fn png_target_plan_rejects_rounded_zero_and_exact_limit_overflow() {
+        let options = |sizing| PngOptions {
+            sizing,
+            compression: PngCompression::Balanced,
+        };
+        assert!(PngTargetPlan::new(
+            source_size(320, 240),
+            &options(PngSizing::Scale(f32::MIN_POSITIVE))
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("zero-sized"));
+        assert!(PngTargetPlan::new(source_size(32_768, 1), &options(PngSizing::Source),).is_ok());
+        assert!(
+            PngTargetPlan::new(source_size(32_769, 1), &options(PngSizing::Source),)
+                .unwrap_err()
+                .to_string()
+                .contains("conversion limit")
+        );
+        assert!(
+            PngTargetPlan::new(source_size(10_000, 10_000), &options(PngSizing::Source)).is_ok()
+        );
+        assert!(
+            PngTargetPlan::new(source_size(10_000, 10_001), &options(PngSizing::Source))
+                .unwrap_err()
+                .to_string()
+                .contains("work")
+        );
+    }
+
+    #[test]
+    fn png_dpi_plan_preserves_f32_sizing_and_checks_target_before_metadata() {
+        assert_eq!(target_size(10_000, 10_000, PngSizing::Dpi(4.2)), (438, 438));
+
+        let error = PngTargetPlan::new(
+            source_size(1, 1),
+            &PngOptions {
+                sizing: PngSizing::Dpi(120_000_000.0),
+                compression: PngCompression::Balanced,
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("conversion limit"));
+    }
 
     fn draw_test_line(backend: &mut SvgBackend) {
         backend
@@ -828,7 +922,7 @@ mod tests {
 
         backend.begin(120, 80).unwrap();
         backend.end().unwrap();
-        let latest = String::from_utf8(backend.output.clone().unwrap()).unwrap();
+        let latest = String::from_utf8(backend.output.as_ref().unwrap().bytes.to_vec()).unwrap();
         assert!(latest.contains("width=\"120\" height=\"80\""));
         assert!(!latest.contains("<polyline"));
 
@@ -1196,6 +1290,28 @@ mod tests {
 
         assert!(!outlined.contains("<text"));
         assert!(outlined.contains("<path"));
+    }
+
+    #[test]
+    fn png_conversion_keeps_parse_and_dimension_failures_route_specific() {
+        let options = PngOptions::default();
+        let error =
+            rasterize_svg_bytes_to_png(b"not svg", source_size(10, 10), &options).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("parse svg for png rasterization"));
+
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="10" viewBox="0 0 11 10"/>"#;
+        let error = rasterize_svg_bytes_to_png(svg, source_size(10, 10), &options).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("dimensions do not match its canonical CSS dimensions"));
+    }
+
+    #[test]
+    fn dpi_metadata_rejects_values_outside_png_range() {
+        let error = dpi_to_pixels_per_meter(f32::MAX).unwrap_err();
+        assert!(error.to_string().contains("too large to encode"));
     }
 
     #[test]

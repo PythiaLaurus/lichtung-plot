@@ -327,6 +327,117 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one chained terminal exercise keeps Plot, Canvas, Scene, SVG, and PNG evidence together"
+)]
+fn chained_terminals_reuse_one_canonical_scene_and_one_png_target_plan() {
+    FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
+    crate::scene::SCENE_CONSTRUCTION_CALLS.with(|calls| calls.set(0));
+    crate::scene::SCENE_ROUTE_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
+    crate::scene::PNG_TARGET_VALIDATION_CALLS.with(|calls| calls.set(0));
+    crate::render::svg_backend::PNG_TARGET_PLAN_CALLS.with(|calls| calls.set(0));
+    let directory = test_directory("canonical-scene-routing");
+    let first = directory.join("first.svg");
+    let outlined = directory.join("outlined.svg");
+    let png = directory.join("preview.png");
+    let second = directory.join("second.svg");
+    Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0]),
+        NumericValues::new("y", [3.0, 1.0, 2.0]),
+    )
+    .size(320, 240)
+    .title("Canonical scene")
+    .svg_preserve_text(&first)
+    .unwrap()
+    .svg(&outlined)
+    .unwrap()
+    .png_preview(&png)
+    .unwrap()
+    .svg_preserve_text(&second)
+    .unwrap();
+
+    assert_eq!(
+        std::fs::read(&first).unwrap(),
+        std::fs::read(&second).unwrap()
+    );
+    assert!(!std::fs::read_to_string(outlined).unwrap().contains("<text"));
+    let png = std::fs::read(png).unwrap();
+    assert_eq!(
+        (
+            u32::from_be_bytes(png[16..20].try_into().unwrap()),
+            u32::from_be_bytes(png[20..24].try_into().unwrap()),
+        ),
+        (320, 240)
+    );
+    assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(
+        crate::scene::SCENE_CONSTRUCTION_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(
+        crate::render::svg_backend::PNG_TARGET_PLAN_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(
+        crate::scene::PNG_TARGET_VALIDATION_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    crate::scene::SCENE_ROUTE_EVIDENCE.with(|evidence| {
+        let evidence = evidence.borrow();
+        assert_eq!(
+            evidence
+                .iter()
+                .map(|(route, _, _)| *route)
+                .collect::<Vec<_>>(),
+            ["preserve", "outline", "png", "preserve"]
+        );
+        assert!(evidence
+            .iter()
+            .all(|(_, address, length)| (*address, *length) == (evidence[0].1, evidence[0].2)));
+    });
+
+    crate::canvas::CANVAS_SCENE_RENDER_CALLS.with(|calls| calls.set(0));
+    crate::scene::SCENE_CONSTRUCTION_CALLS.with(|calls| calls.set(0));
+    crate::scene::SCENE_ROUTE_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
+    let canvas_first = directory.join("canvas-first.svg");
+    let canvas_second = directory.join("canvas-second.svg");
+    crate::Canvas::grid(1, 1)
+        .unwrap()
+        .panel(
+            0,
+            0,
+            Plot::scatter(
+                NumericValues::new("x", [1.0, 2.0, 3.0]),
+                NumericValues::new("y", [3.0, 1.0, 2.0]),
+            ),
+        )
+        .unwrap()
+        .svg_preserve_text(&canvas_first)
+        .unwrap()
+        .svg_preserve_text(&canvas_second)
+        .unwrap();
+    assert_eq!(
+        std::fs::read(canvas_first).unwrap(),
+        std::fs::read(canvas_second).unwrap()
+    );
+    assert_eq!(
+        crate::canvas::CANVAS_SCENE_RENDER_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    assert_eq!(
+        crate::scene::SCENE_CONSTRUCTION_CALLS.with(std::cell::Cell::get),
+        1
+    );
+    crate::scene::SCENE_ROUTE_EVIDENCE.with(|evidence| {
+        let evidence = evidence.borrow();
+        assert_eq!(evidence.len(), 2);
+        assert_eq!(evidence[0], evidence[1]);
+    });
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn invalid_chart_preflights_before_output_path_access() {
     let chart = Plot::scatter(
         crate::NumericValues::new("x", [1.0, 2.0]),

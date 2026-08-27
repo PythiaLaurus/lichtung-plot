@@ -20,6 +20,7 @@ use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 #[cfg(test)]
 thread_local! {
     pub(crate) static CANVAS_THEME_EVIDENCE: std::cell::RefCell<Vec<(usize, &'static str, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static CANVAS_SCENE_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -436,14 +437,12 @@ impl Canvas {
     ///
     /// Returns an error when canvas preflight or SVG rendering fails.
     fn render_scene(&self) -> Result<RenderedScene, Error> {
+        #[cfg(test)]
+        CANVAS_SCENE_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
         let preflight = self.preflight_plan()?;
         let mut backend = SvgBackend::in_memory(self.width, self.height);
         self.render_preflighted(preflight, &mut backend)?;
-        Ok(RenderedScene::new(
-            self.width,
-            self.height,
-            backend.into_bytes()?,
-        ))
+        RenderedScene::new(self.width, self.height, backend.into_output())
     }
 
     /// Render once, publish an outlined SVG, and return a reusable output.

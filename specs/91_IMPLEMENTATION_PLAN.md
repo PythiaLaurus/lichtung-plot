@@ -1196,7 +1196,7 @@ Acceptance:
 
 ### T3g: Canonical Scene And Terminal Conversion Routing
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Construct one checked immutable Scene and make every terminal conversion consume
 that canonical result with call-local policy.

@@ -12,11 +12,7 @@ impl Plot {
         let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
         let mut backend = SvgBackend::in_memory(self.width(), self.height());
         plan.render(&mut backend)?;
-        Ok(RenderedScene::new(
-            self.width(),
-            self.height(),
-            backend.into_bytes()?,
-        ))
+        RenderedScene::new(self.width(), self.height(), backend.into_output())
     }
 }
 
