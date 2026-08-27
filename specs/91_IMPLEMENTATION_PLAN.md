@@ -912,7 +912,7 @@ Acceptance:
 
 ### T3c: Backend Lifecycle And Protocol Parity
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Establish the lifecycle and concrete-protocol guarantees required before one
 plan and one canonical Scene can be reused safely.
@@ -1108,7 +1108,7 @@ Acceptance:
 
 ### T3d: Geometry Discovery And Painted Bounds
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Make decoration discovery obey backend lifecycle and record the occupied bounds
 of what current paint carriers actually draw.

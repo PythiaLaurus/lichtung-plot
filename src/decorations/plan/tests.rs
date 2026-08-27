@@ -1,4 +1,5 @@
 use super::*;
+use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{CategoryValues, NumericValues};
 
 struct LineValues {
@@ -82,15 +83,12 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let plan = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let final_chart = plan.chart_for_render(&chart);
-    let mut geometry = GeometryBackend::default();
-    let result = render(
+    let (result, geometry) = discover_geometry(
         &final_chart,
         PlotKind::Line,
         PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
-        &mut geometry,
     )
     .unwrap();
-    record_brackets(&final_chart, &result, &mut geometry).unwrap();
     let margin = legend.legend.metrics.font_size.max(6.0);
 
     assert!(
@@ -100,6 +98,90 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
             margin,
             result.layout.projection.panel_box(),
         ) <= f64::EPSILON
+    );
+}
+
+#[test]
+fn production_geometry_discovery_returns_a_closed_session() {
+    let data = line_data(["upper", "upper", "lower", "lower"]);
+    let chart = crate::kind::into_erased(line_chart(&data));
+    let cell = PanelBox::new(60.0, 440.0, 50.0, 310.0);
+    let (_, mut geometry) = discover_geometry(
+        &chart,
+        PlotKind::Line,
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+    )
+    .unwrap();
+
+    let error = geometry
+        .draw_line(
+            &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
+            &LineStyle::solid((0, 0, 0), 1.0),
+        )
+        .unwrap_err();
+
+    assert!(error.to_string().contains("outside begin/end"));
+}
+
+#[test]
+fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
+    let data = line_data(["upper", "upper", "lower", "lower"]);
+    let chart = crate::kind::into_erased(line_chart(&data));
+    let cell = PanelBox::new(60.0, 440.0, 50.0, 310.0);
+    let (result, _) = discover_geometry(
+        &chart,
+        PlotKind::Line,
+        PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
+    )
+    .unwrap();
+    let legend = Legend::new(
+        "hue".into(),
+        result.legend_entries,
+        f64::from(chart.width()),
+        f64::from(chart.height()),
+    );
+    let panel = result.layout.projection.panel_box();
+    let top_right = legend.inside_candidates(result.layout.projection.pixel_box())[0];
+    let line = [
+        Point2D::new(
+            top_right.left,
+            f64::midpoint(top_right.bottom, top_right.top),
+        ),
+        Point2D::new(
+            top_right.right,
+            f64::midpoint(top_right.bottom, top_right.top),
+        ),
+    ];
+    let mut zero_width = GeometryBackend::default();
+    zero_width.begin(chart.width(), chart.height()).unwrap();
+    zero_width
+        .draw_line(&line, &LineStyle::solid((0, 0, 0), 0.0))
+        .unwrap();
+    zero_width.end().unwrap();
+    let mut painted = GeometryBackend::default();
+    painted.begin(chart.width(), chart.height()).unwrap();
+    painted
+        .draw_line(&line, &LineStyle::solid((0, 0, 0), 4.0))
+        .unwrap();
+    painted.end().unwrap();
+
+    assert_eq!(
+        initial_auto_candidate(
+            &legend,
+            panel,
+            zero_width.bounds(),
+            LegendDefault::LowestOverlap,
+        ),
+        0
+    );
+    assert_ne!(
+        initial_auto_candidate(
+            &legend,
+            panel,
+            painted.bounds(),
+            LegendDefault::LowestOverlap,
+        ),
+        0
     );
 }
 
@@ -276,12 +358,10 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     let chart = dense_bar_chart(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
-    let mut initial_geometry = GeometryBackend::default();
-    let initial = render(
+    let (initial, initial_geometry) = discover_geometry(
         &chart,
         PlotKind::HorizontalBar,
         PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
-        &mut initial_geometry,
     )
     .unwrap();
     let initial_legend = Legend::new(
@@ -308,13 +388,11 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
 
     let plan = plan_panel(&chart, PlotKind::HorizontalBar, cell, LegendRole::Panel).unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let mut final_geometry = GeometryBackend::default();
     let final_chart = plan.chart_for_render(&chart);
-    let final_result = render(
+    let (final_result, final_geometry) = discover_geometry(
         &final_chart,
         PlotKind::HorizontalBar,
         PlotRenderContext::new(crate::data::PlotData::new(&final_chart), plan.panel),
-        &mut final_geometry,
     )
     .unwrap();
 
@@ -411,12 +489,10 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     let data = dense_horizontal_data();
     let chart = dense_bar_chart(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
-    let mut geometry = GeometryBackend::default();
-    let mut result = render(
+    let (mut result, geometry) = discover_geometry(
         &chart,
         PlotKind::HorizontalBar,
         PlotRenderContext::new(crate::data::PlotData::new(&chart), cell),
-        &mut geometry,
     )
     .unwrap();
     result.x_domain = crate::spec::AxisDomain::Categorical;

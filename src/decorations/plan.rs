@@ -4,6 +4,7 @@ use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendBox};
 use crate::layout::PanelBox;
+use crate::render::backend::{self, Backend};
 use crate::render::geometry::GeometryBackend;
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
@@ -133,8 +134,7 @@ pub(crate) fn plan_panel_with_context(
         LegendRole::Panel => chart.clone(),
         LegendRole::Suppressed => chart.clone().with_suppressed_legend(),
     };
-    let mut discovery = GeometryBackend::default();
-    let mut discovered = render(&planning_chart, kind, context, &mut discovery)?;
+    let (mut discovered, discovery) = discover_geometry(&planning_chart, kind, context)?;
     if let Some(entries) = legend_entries {
         discovered.legend_entries = entries.to_vec();
     }
@@ -157,21 +157,11 @@ pub(crate) fn plan_panel_with_context(
     let panel =
         planning_chart.reserve_rewrapped_axis_titles(kind, cell, panel, &discovered.layout)?;
 
-    let mut geometry = GeometryBackend::default();
-    let mut result = if panel == cell {
-        discovered
+    let (mut result, mut geometry) = if panel == cell {
+        (discovered, discovery)
     } else {
-        render(
-            &planning_chart,
-            kind,
-            context.with_panel(panel),
-            &mut geometry,
-        )?
+        discover_geometry(&planning_chart, kind, context.with_panel(panel))?
     };
-    if panel == cell {
-        geometry = discovery;
-    }
-    record_brackets(&planning_chart, &result, &mut geometry)?;
     let mut planned_x_limits = None;
     let mut planned_y_limits = None;
     let position = planning_chart.legend_position_spec();
@@ -287,14 +277,7 @@ pub(crate) fn plan_panel_with_context(
                 planned_y_limits = Some(limits);
             }
         }
-        geometry = GeometryBackend::default();
-        result = render(
-            &planning_chart,
-            kind,
-            context.with_panel(panel),
-            &mut geometry,
-        )?;
-        record_brackets(&planning_chart, &result, &mut geometry)?;
+        (result, geometry) = discover_geometry(&planning_chart, kind, context.with_panel(panel))?;
         let legend = resolved.take().expect("resolved legend exists").legend;
         let bounds = if position == LegendPosition::Auto {
             legend.inside_candidates(result.layout.projection.pixel_box())
@@ -349,6 +332,21 @@ fn record_brackets(
         crate::significance::render(chart, &result.significance_brackets, geometry)?;
     }
     Ok(())
+}
+
+fn discover_geometry(
+    chart: &Plot,
+    kind: PlotKind,
+    context: PlotRenderContext<'_>,
+) -> Result<(PlotRenderResult, GeometryBackend), Error> {
+    let mut geometry = GeometryBackend::default();
+    geometry.begin(chart.width(), chart.height())?;
+    let result = render(chart, kind, context, &mut geometry).and_then(|result| {
+        record_brackets(chart, &result, &mut geometry)?;
+        Ok(result)
+    });
+    let result = backend::finish_scope(result, geometry.end(), "geometry discovery")?;
+    Ok((result, geometry))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
