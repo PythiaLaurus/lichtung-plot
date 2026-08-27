@@ -26,8 +26,9 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 ## Testing
 
 Run the narrowest relevant check while iterating. Before completing a change,
-run `just verify`. Snapshot changes must be inspected and committed with the
-source change that intentionally alters SVG output.
+run `just verify` if you modified code. If the change only affects documentation,
+do not run the test suite. Snapshot changes must be inspected and committed with
+the source change that intentionally alters SVG output.
 
 ## Commits
 
