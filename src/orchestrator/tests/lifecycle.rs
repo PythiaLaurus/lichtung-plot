@@ -16,6 +16,42 @@ fn valid_line() -> ([Point2D; 2], LineStyle) {
     )
 }
 
+fn reset_theme_evidence() {
+    crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
+    RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
+    crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
+}
+
+fn resolved_theme_count() -> usize {
+    crate::theme::THEME_RESOLUTION_CALLS.with(std::cell::Cell::get)
+}
+
+fn rendered_theme_identity_count() -> usize {
+    RENDER_THEME_ADDRESSES.with(|addresses| {
+        let mut addresses = addresses.borrow().clone();
+        addresses.sort_unstable();
+        addresses.dedup();
+        addresses.len()
+    })
+}
+
+fn assert_canvas_theme_identity(owner: usize, stages: &[&str]) {
+    crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| {
+        let evidence = evidence.borrow();
+        let records = evidence
+            .iter()
+            .filter(|(candidate, _, _)| *candidate == owner)
+            .collect::<Vec<_>>();
+        assert!(!records.is_empty());
+        assert!(records
+            .iter()
+            .all(|(_, _, address)| *address == records[0].2));
+        for stage in stages {
+            assert!(records.iter().any(|(_, candidate, _)| candidate == stage));
+        }
+    });
+}
+
 #[test]
 fn deferred_backend_enforces_dimensions_and_one_shot_lifecycle() {
     let mut recorded = RecordingBackend::default();
@@ -185,6 +221,109 @@ fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
         assert!(!addresses.is_empty());
         assert!(addresses.iter().all(|address| *address == addresses[0]));
     });
+}
+
+#[test]
+fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
+    let text_canvas = || {
+        crate::Canvas::grid(1, 1)
+            .unwrap()
+            .text_panel(0, 0, crate::TextPanel::new("Title", "Body").unwrap())
+            .unwrap()
+    };
+    reset_theme_evidence();
+    text_canvas().preflight().unwrap();
+    assert_eq!(
+        (resolved_theme_count(), rendered_theme_identity_count()),
+        (1, 0)
+    );
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &["resolved", "layout", "header-plan", "text-plan"],
+    );
+    reset_theme_evidence();
+    let mut backend = RecordingBackend::default();
+    text_canvas().render_with_backend(&mut backend).unwrap();
+    assert_eq!(
+        (resolved_theme_count(), rendered_theme_identity_count()),
+        (1, 0)
+    );
+    assert_eq!((backend.begins, backend.ends), (1, 1));
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &[
+            "resolved",
+            "layout",
+            "header-plan",
+            "text-plan",
+            "render",
+            "header-render",
+            "text-render",
+        ],
+    );
+
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let nature_color = crate::Theme::Nature.resolve().colors[0];
+    let science_color = crate::Theme::Science.resolve().colors[0];
+    let canvas = |themes: [crate::Theme; 2]| {
+        crate::Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, Plot::scatter(x.clone(), y.clone()).theme(themes[0]))
+            .unwrap()
+            .panel(0, 1, Plot::scatter(x.clone(), y.clone()).theme(themes[1]))
+            .unwrap()
+    };
+    for themes in [
+        [crate::Theme::Nature, crate::Theme::Nature],
+        [crate::Theme::Nature, crate::Theme::Science],
+    ] {
+        reset_theme_evidence();
+        canvas(themes).preflight().unwrap();
+        assert_eq!(
+            (resolved_theme_count(), rendered_theme_identity_count()),
+            (3, 2)
+        );
+        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout"]);
+        assert_canvas_theme_identity(0, &["resolved", "header-plan", "panel-plan"]);
+        assert_canvas_theme_identity(1, &["resolved", "panel-plan"]);
+
+        reset_theme_evidence();
+        let mut backend = RecordingBackend::default();
+        canvas(themes).render_with_backend(&mut backend).unwrap();
+        assert_eq!(
+            (resolved_theme_count(), rendered_theme_identity_count()),
+            (3, 2)
+        );
+        assert_eq!((backend.begins, backend.ends), (1, 1));
+        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render"]);
+        assert_canvas_theme_identity(
+            0,
+            &[
+                "resolved",
+                "header-plan",
+                "panel-plan",
+                "header-render",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+        assert_canvas_theme_identity(
+            1,
+            &["resolved", "panel-plan", "grid-render", "panel-render"],
+        );
+        let colors = backend
+            .scatter_draws
+            .iter()
+            .map(|(_, style, _)| style.color)
+            .collect::<Vec<_>>();
+        let expected = if themes[0] == themes[1] {
+            vec![nature_color, nature_color]
+        } else {
+            vec![nature_color, science_color]
+        };
+        assert_eq!(colors, expected);
+    }
 }
 
 #[test]
