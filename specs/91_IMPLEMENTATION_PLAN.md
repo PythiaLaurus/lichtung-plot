@@ -95,19 +95,19 @@ Phase T1 confirmed these rules for the approved target:
 | T2f | Specialized marks and annotations | COMPLETE |
 | T2g | Data scales and semantic domains | COMPLETE |
 | T2h | Cross-source reconciliation and migration map | COMPLETE |
-| T3 | One private resolved-theme pipeline | IN PROGRESS |
+| T3 | One private resolved-theme pipeline | COMPLETE |
 | T3a | T3 implementation partition | COMPLETE |
 | T3b | Private resolved-theme foundation | COMPLETE |
-| T3c | Backend lifecycle and protocol parity | IN PROGRESS |
+| T3c | Backend lifecycle and protocol parity | COMPLETE |
 | T3c1 | Closed primitive protocol and validation | COMPLETE |
 | T3c2 | Backend lifecycle state machines | COMPLETE |
-| T3c3 | Canonical coordinate conversion | PENDING |
-| T3c4 | Concrete SVG and Null protocol parity | PENDING |
-| T3d | Geometry discovery and painted bounds | PENDING |
-| T3e | One resolved Plot theme and immutable plan | PENDING |
-| T3f | Canvas resolved-theme handoff | PENDING |
-| T3g | Canonical Scene and terminal conversion routing | PENDING |
-| T3h | Failure-atomic artifact publication | PENDING |
+| T3c3 | Canonical coordinate conversion | COMPLETE |
+| T3c4 | Concrete SVG and Null protocol parity | COMPLETE |
+| T3d | Geometry discovery and painted bounds | COMPLETE |
+| T3e | One resolved Plot theme and immutable plan | COMPLETE |
+| T3f | Canvas resolved-theme handoff | COMPLETE |
+| T3g | Canonical Scene and terminal conversion routing | COMPLETE |
+| T3h | Failure-atomic artifact publication | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -818,7 +818,7 @@ Acceptance:
 
 ## Phase T3: Private Resolved-Theme Pipeline
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Create one internal path for built-in appearance without changing the public API
 or intended rendered output.
@@ -1225,7 +1225,7 @@ Acceptance:
 
 ### T3h: Failure-Atomic Artifact Publication
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Publish fully derived terminal bytes atomically without exposing partial files or
 destroying an existing destination on failure.

@@ -245,6 +245,7 @@ dependencies = [
  "png",
  "resvg",
  "statrs",
+ "tempfile",
  "thiserror",
  "unicode-segmentation",
 ]

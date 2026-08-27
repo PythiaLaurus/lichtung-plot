@@ -1,10 +1,11 @@
 use super::{
     assert_no_staging_files, publish_staged, reserve_unique_sibling_temp_path, test_directory,
-    with_temporary_artifacts, Error,
+    with_temporary_artifacts, Error, TEMP_RESERVATION_CALLS,
 };
 
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
+    TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
     let dir = test_directory("failed-svg-publication");
     let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
@@ -14,6 +15,34 @@ fn render_failure_preserves_existing_svg_and_removes_staging_files() {
     );
 
     assert!(chart.svg(&output).is_err());
+    assert_eq!(
+        std::fs::read_to_string(&output).unwrap(),
+        "existing artifact"
+    );
+    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 0);
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn outlined_svg_conversion_failure_happens_before_staging_reservation() {
+    TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
+    let dir = test_directory("failed-outlined-conversion");
+    let output = dir.join("canvas.svg");
+    std::fs::write(&output, "existing artifact").unwrap();
+    let scene = crate::scene::RenderedScene::new(
+        10,
+        10,
+        Some(crate::render::svg_backend::FinalizedSvgOutput::from_test_bytes(10, 10, b"not svg")),
+    )
+    .unwrap();
+
+    let Err(error) = crate::Output::new(scene).svg(&output) else {
+        panic!("malformed canonical bytes unexpectedly converted")
+    };
+
+    assert!(error.to_string().contains("parse svg for text outlining"));
+    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 0);
     assert_eq!(
         std::fs::read_to_string(&output).unwrap(),
         "existing artifact"
@@ -70,6 +99,7 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     use crate::spec::{PngCompression, PngOptions, PngSizing};
 
     let dir = test_directory("failed-png-publication");
+    TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
     let output = dir.join("canvas.png");
     std::fs::write(&output, b"existing png artifact").unwrap();
     let options = PngOptions {
@@ -85,6 +115,114 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     .png_with_options(&output, options)
     .is_err());
     assert_eq!(std::fs::read(&output).unwrap(), b"existing png artifact");
+    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 0);
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn publication_replaces_existing_file_without_backup_artifacts() {
+    let dir = test_directory("successful-replacement");
+    let output = dir.join("canvas.svg");
+    std::fs::write(&output, "existing artifact").unwrap();
+    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
+    std::fs::write(&staged, "replacement artifact").unwrap();
+
+    with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output)).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output).unwrap(),
+        "replacement artifact"
+    );
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_failed_atomic_replace_preserves_locked_destination_without_backup() {
+    use std::io::{Read, Seek};
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let dir = test_directory("windows-failed-replacement");
+    let output = dir.join("canvas.svg");
+    std::fs::write(&output, "existing artifact").unwrap();
+    let mut locked = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(0)
+        .open(&output)
+        .unwrap();
+    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
+    std::fs::write(&staged, "replacement artifact").unwrap();
+
+    let result =
+        with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output));
+
+    assert!(result.is_err());
+    locked.rewind().unwrap();
+    let mut preserved = String::new();
+    locked.read_to_string(&mut preserved).unwrap();
+    assert_eq!(preserved, "existing artifact");
+    drop(locked);
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_atomic_replace_supports_long_destination_paths() {
+    use std::os::windows::ffi::OsStrExt;
+
+    let root = test_directory("windows-long-replacement");
+    let mut dir = root.clone();
+    while dir.as_os_str().encode_wide().count() < 280 {
+        dir.push("long-publication-directory");
+        std::fs::create_dir(&dir).unwrap();
+    }
+    let output = dir.join("canvas.svg");
+    std::fs::write(&output, "existing artifact").unwrap();
+    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
+    std::fs::write(&staged, "replacement artifact").unwrap();
+
+    with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output)).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output).unwrap(),
+        "replacement artifact"
+    );
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_reservation_rejects_reserved_device_name_without_retrying() {
+    use std::os::windows::ffi::OsStringExt;
+
+    TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
+    let dir = test_directory("windows-reserved-name");
+
+    let error = reserve_unique_sibling_temp_path(&dir.join("NUL.svg"), "svg").unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("invalid or reserved Windows file name"));
+    let error = reserve_unique_sibling_temp_path(&dir.join("COM1:data"), "svg").unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("invalid or reserved Windows file name"));
+    let non_unicode = std::ffi::OsString::from_wide(&[
+        u16::from(b'N'),
+        u16::from(b'U'),
+        u16::from(b'L'),
+        u16::from(b'.'),
+        0xD800,
+    ]);
+    let error = reserve_unique_sibling_temp_path(&dir.join(non_unicode), "svg").unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("invalid or reserved Windows file name"));
+    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 3);
     assert_no_staging_files(&dir);
     std::fs::remove_dir_all(dir).unwrap();
 }

@@ -306,8 +306,9 @@ No fallback renderer or alternate output path is attempted after an error.
 Each file output is staged at a unique sibling path and renamed only after
 rendering or conversion succeeds. Consuming output calls publish independently;
 if a later chained publication fails, an earlier successful publication remains
-in place. Failures preserve the destination of the failing call where the
-underlying filesystem supports ordinary same-directory rename semantics.
+in place. Supported POSIX and Windows hosts publish with one atomic
+same-directory replacement: success installs the complete staged bytes and every
+failure preserves the prior destination without a backup or rollback window.
 
 ## Regression Evidence
 

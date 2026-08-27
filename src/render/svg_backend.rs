@@ -109,6 +109,15 @@ impl FinalizedSvgOutput {
     pub(crate) fn into_parts(self) -> (u32, u32, Box<[u8]>) {
         (self.width_css_px, self.height_css_px, self.bytes)
     }
+
+    #[cfg(test)]
+    pub(crate) fn from_test_bytes(width_css_px: u32, height_css_px: u32, bytes: &[u8]) -> Self {
+        Self {
+            width_css_px,
+            height_css_px,
+            bytes: bytes.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
