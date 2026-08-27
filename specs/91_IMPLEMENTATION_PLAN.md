@@ -82,7 +82,7 @@ Phase T1 confirmed these rules for the approved target:
 | Phase | Objective | Status |
 | --- | --- | --- |
 | T1 | Approved theme architecture contract | COMPLETE |
-| T2 | Complete visual-property ownership inventory | IN PROGRESS |
+| T2 | Complete visual-property ownership inventory | COMPLETE |
 | T2a | Ledger protocol and renderer foundations | COMPLETE |
 | T2a1 | Current theme and font foundations | COMPLETE |
 | T2a2 | Private style carriers and backend protocol | COMPLETE |
@@ -94,7 +94,7 @@ Phase T1 confirmed these rules for the approved target:
 | T2e | Ordinary plot marks and local styles | COMPLETE |
 | T2f | Specialized marks and annotations | COMPLETE |
 | T2g | Data scales and semantic domains | COMPLETE |
-| T2h | Cross-source reconciliation and migration map | PENDING |
+| T2h | Cross-source reconciliation and migration map | COMPLETE |
 | T3 | One private resolved-theme pipeline | PENDING |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Surfaces, typography, titles, axes, and grid | PENDING |
@@ -163,7 +163,7 @@ Acceptance:
 
 ## Phase T2: Visual-Property Ownership Inventory
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Account for every current visual value before reorganizing implementation.
 
@@ -560,10 +560,12 @@ responsibilities, and 47 facet-composition responsibilities. Source attribution
 is 3/10/10/10/8/9/5/10/15 `canvas.rs` records, 2/9/9/6
 `layout/canvas.rs` records, 0 module-wiring, 3 decoration-application, 62 legend,
 2 panel-text collision, 72 panel-planning, 0 title-block, and 5/17/5/20 facet
-route/planning/legend/rendering records. Closed classes are exactly 61 Theme
-component, 4 Explicit policy, and 227 Renderer invariant records. Together with
-the 660 completed T2a through T2c records, the ledger inventories 952 records
-through completed T2d. T2e through T2h remain source-driven and pending.
+route/planning/legend/rendering records. T2h reconciles the closed classes to
+exactly 57 Theme component, 4 Explicit policy, and 231 Renderer invariant
+records after four directional outside-spacing sources become consumers.
+Together with the 660 completed T2a through T2c records, the ledger inventories
+952 records through completed T2d. T2e through T2h remain source-driven and
+pending.
 
 Verification: independent source-partition, ownership, behavior, schema, count,
 class, and table-order review corrected over-grouped Canvas and facet sources,
@@ -625,17 +627,18 @@ responsibilities are explicitly linked to T2f or T2g.
 
 **Status**: COMPLETE
 
-Decision record: source reconciliation admits exactly 508 canonical T2f
-records: 31 beeswarm, 3 coefficient, 9 dumbbell, 2 forest, 73 heatmap, 44
+Decision record: T2h source reconciliation corrects T2f to exactly 509 canonical
+records: 31 beeswarm, 3 coefficient, 9 dumbbell, 2 forest, 73 heatmap, 45
 histogram, 23 interaction, 46 shared interval-estimate, 38 marginal, 62 Matrix,
 18 point-interval, 18 Q-Q, 35 Waterfall, 55 significance, 13 panel-text, 1
 numeric-label conversion, 1 text-weight conversion, 16 vertical-bar
 significance, 15 horizontal-bar significance, 2 Boxplot significance, 2 sampled
 Violin/Raincloud significance, and 1 attached-bar edge responsibility. Closed
-classes are exactly 121 Theme component, 26 Explicit policy, and 361 Renderer
+classes are exactly 115 Theme component, 26 Explicit policy, and 368 Renderer
 invariant records. Together with the 1155 completed T2a through T2e records, the
-ledger inventories 1663 records through completed T2f. T2g and T2h remain
-source-driven and pending.
+ledger inventories 1664 records through reconciled T2f. The net increase splits
+sampled Histogram rug relative height from its shared stroke role; it adds no
+production source or implementation change.
 
 Verification: independent source-partition, ownership, behavior, schema, count,
 class, relationship, migration-phase, and table-order review corrected missing
@@ -675,8 +678,8 @@ records: 32 core semantic-value/accessor, 10 facet/Canvas/validation, 58 ordinar
 plot-consumer, 71 specialized plot-consumer, and 2 focused residual
 responsibilities. Closed classes are exactly 167 Renderer invariant, 3 Theme
 data scale, 2 Plot-local data scale, and 1 Theme component records. Together
-with the 1663 completed T2a through T2f records, the ledger inventories 1836
-records through completed T2g. T2h remains source-driven and pending.
+with the 1664 reconciled T2a through T2f records, the ledger inventories 1837
+records through completed T2g after the T2h granularity correction.
 
 Verification: independent source-partition, current-behavior, target-ownership,
 public-name, schema, count, class, relationship, migration-phase, and table-order
@@ -710,7 +713,25 @@ misclassified as a data-scale slot.
 
 ### Subphase T2h: Cross-Source Reconciliation And Migration Map
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Decision record: repository-wide residual and duplicate-cluster reconciliation
+adds 23 T2h records: 5 Canvas terminal policies, 10 horizontal categorical-axis
+helper sources, 3 significance selector policies, 3 significance resolver
+invariants, 1 Canvas shared-x policy, and 1 KDE-support invariant. Together with
+the one-record T2f rug split, the final ledger contains exactly 1860 records.
+The corrected T2a-T2g manifests and T2h manifest are disjoint at the owned
+expression/semantic-aspect boundary; their union plus explicit scientific,
+transport, test, example, and supplemental-guide exclusions covers production
+`src/`. Duplicate current sources retain separate evidence records while the
+relationship matrix fixes one target owner or explicitly proves independent
+semantic roles. No production code, public API, snapshot, generated output, or
+intended rendering changed.
+
+Verification: independent source-partition, target-owner, class, relationship,
+public-name, schema-width, count, table-order, and T3-T7 scope review found no
+remaining issue. All three keyed table sets contain the same 1860 unique keys in
+identical order; `git diff --check` and `just verify` passed on 2026-08-27.
 
 Re-run repository-wide coverage searches, including `input.rs`, `data.rs`,
 `values.rs`, `stats.rs`, `stats/`, `error.rs`, and every other residual production
@@ -800,6 +821,11 @@ Scope:
   rendering.
 - Remove repeated owned palette construction and renderer calls back into
   `Plot::palette()`.
+- Apply the T3-owned lifecycle, geometry-recording, Scene, output, and artifact
+  corrections as explicit private changes: one immutable preflight plan, one
+  canonical reusable Scene, paint-aware current-carrier geometry, exact terminal
+  conversion routing, and failure-atomic publication. Retain the five Canvas
+  terminal choices as policies rather than folding them into the pipeline.
 - Keep backend traits theme-agnostic and continue passing concrete styles at draw
   boundaries.
 - Preserve current intended built-in visuals and snapshots. Handle known visual
@@ -809,6 +835,9 @@ Acceptance:
 
 - One resolved theme instance governs both preflight and final rendering.
 - No renderer independently reconstructs a built-in palette or hidden default.
+- Geometry discovery, canonical Scene storage, Output conversion, and artifact
+  publication consume the same immutable plan and preserve terminal-specific
+  policy/error identity.
 - Backends remain independent of public theme types.
 - Focused lifecycle, layout, theme, and visual-regression tests pass without
   unintended snapshot changes.
@@ -830,8 +859,10 @@ Scope:
 - Apply the resolved Canvas theme consistently to canvas title blocks, text
   panels, shared headers, row titles, spacing, and other Canvas-owned chrome.
 - Make header and text measurement use the same resolved values as rendering.
-- Define and enforce exact shared-legend compatibility when panels intentionally
-  use different themes.
+- Carry exact Canvas/Plot theme provenance into shared-legend planning. T4 does
+  not claim final compatibility: T5b owns legend/chrome comparison, T5c owns
+  final mark-glyph style identity, T5d owns resolved mappings, and T6 closes the
+  public replacement surface.
 - Preserve plot erasure and ownership boundaries without global or thread-local
   theme state.
 
@@ -842,9 +873,10 @@ Acceptance:
 - Canvas-owned chrome never falls back to hidden `Theme::Publication` calls.
 - Unthemed plots inherit; explicitly themed plots replace; neither behavior is
   sticky outside its owner.
-- Measurement and rendering agree for headers, titles, text panels, facets, and
-  shared legends.
-- Focused standalone, Canvas, facet, and shared-legend tests pass.
+- Measurement and rendering agree for headers, titles, text panels, and the
+  inherited inputs supplied to facets/shared legends.
+- Focused standalone, Canvas, facet, and inheritance-input tests pass; the final
+  mixed-theme shared-legend acceptance gate remains in T5b/T5c/T5d/T6.
 - `just verify` passes.
 
 ## Phase T5a: Surfaces, Typography, Titles, Axes, And Grid
@@ -860,8 +892,13 @@ Scope:
   frame sides, and grid appearance.
 - Remove backend-owned background color and title-block hardcoded grays.
 - Separate title or label content presence from theme appearance.
-- Wire or remove dormant frame, label, background, and line properties according
-  to the approved inventory.
+- Wire or remove dormant frame, label, and background properties according to
+  the approved inventory. The dormant general line-width field belongs to T5c,
+  where its mark-role consumers can be migrated together.
+- Replace the horizontal categorical-axis helper duplicates with canonical
+  raw/display resolution, logical-box measurement, line height, reserves, and
+  final panel-fit checks; replace Canvas shared-x replay with a validated
+  automatic continuous-range union that rejects exact-limit conflicts.
 - Ensure every font and spacing value used for measurement is the value used for
   drawing.
 
@@ -889,6 +926,10 @@ Scope:
 - Preserve exact legend glyph reproduction from resolved mark styles.
 - Keep collision planning, outside reservation, and shared-legend compatibility
   synchronized with the resolved theme.
+- Resolve outside spacing once from `LegendTheme` and reuse it for reservation
+  and all four directional placements; do not reconstruct helper-local gaps.
+- Complete Canvas shared-x integration after T5a range validation without
+  overriding explicit limits or admitting categorical domains.
 - Remove implicit Publication styling and duplicated fixed whites and grays from
   composition code.
 
@@ -898,6 +939,9 @@ Acceptance:
 - Shared and per-plot legends use one component contract while retaining exact
   mark glyphs.
 - Mixed explicit Plot themes have deterministic documented behavior.
+- Shared-legend compatibility is complete only after T5c supplies final glyph
+  styles, T5d supplies final mappings, and T6 supplies the current public theme
+  values; T5b owns the final comparison and failure path across those inputs.
 - Focused legend, facet, Canvas, collision, and visual-regression tests pass.
 - `just verify` passes.
 
@@ -915,6 +959,14 @@ Scope:
   specialized component defaults, exact caller styles, or renderer invariants.
 - Centralize panel text, significance, value annotation, missing-value, raw
   overlay, and supplemental-layer appearance.
+- Replace the dormant general line-width field with coherent semantic mark roles;
+  deduplicate grouped-bar point/significance spans, sampled/precomputed Histogram
+  and Raincloud styles, interval/PointInterval styles, mark/legend style
+  reconstruction, and local automatic-range retries exactly as the T2h
+  relationship matrix specifies.
+- Connect exact significance rendered-target/facet-panel resolution from T5d to
+  annotation geometry, and make shared KDE-support widening reject any result
+  that is still nonfinite or constant.
 - Integrate existing typed local APIs into the approved precedence model rather
   than adding parallel replacements.
 - Preserve exact legend glyph agreement with the final resolved mark styles.
@@ -937,8 +989,9 @@ Separate data-to-color mapping from non-data theme appearance.
 
 Scope:
 
-- Define typed qualitative, sequential, and diverging palette or scale values,
-  including neutral and missing-value behavior where applicable.
+- Define typed qualitative, sequential, and diverging palette or scale values.
+  Missing-mark appearance is a non-data `MarkTheme` role owned by T5c/T6, not a
+  scale endpoint; T5d owns only actual missing-value mapping semantics.
 - Make built-in themes supply default data scales without conflating those
   scales with foreground, surface, grid, and annotation colors.
 - Define exact keyed categorical mappings, ordered palette mappings, continuous
@@ -948,6 +1001,10 @@ Scope:
   the same semantic mapping, or document why a family has a distinct owner.
 - Coordinate facets and Canvas global hue order without silently changing exact
   caller mappings.
+- Migrate every non-data accent-slot consumer from the current mixed palette into
+  its resolved `MarkTheme` role while preserving T5d ownership of categorical
+  identity/domain mapping and handing one final opaque color to T5c style
+  assembly.
 
 Acceptance:
 
@@ -973,12 +1030,18 @@ Scope:
   `Theme` API and built-in constructors or presets.
 - Expose only validated component theme, color, typography, and scale types
   required by the full-foundations milestone.
-- Add or migrate explicit `Canvas::theme(...)` and `Plot::theme(...)` ownership
-  without global state or compatibility aliases.
+- Add or migrate explicit Canvas-root and Plot-replacement theme ownership using
+  the exact public attachment names approved during T6; this plan does not
+  pre-authorize `Canvas::theme(...)`, `Plot::theme(...)`, aliases, or a second
+  attachment surface.
 - Provide a typed way to derive a modified complete theme from a built-in base.
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
 - Keep backend styles private and avoid exposing renderer implementation details.
+- Close the complete RGBA carrier migration through the sole per-paint SVG alpha
+  serializer, gradient stops, text/bracket paints, paint-aware geometry, and PNG
+  conversion. RGB token spelling remains a serialization dependency, not an
+  alpha owner.
 - Atomically update `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` to the
   implemented theme contract, mark `03_THEME_SYSTEM.md` current, and reconcile
   `99_DEFERRED_FEATURES.md`; no target/current specification interval remains.
@@ -1017,6 +1080,9 @@ Scope:
   custom themes.
 - Search for retired theme APIs, repeated hidden Publication defaults, dormant
   theme fields, unclassified hardcoded style values, and duplicate scale logic.
+- Reconcile all 1860 final ledger keys against implemented owners, current
+  public names, focused evidence, and deletion of every superseded source. A
+  historical 1836-record pre-T2h count is not an acceptance threshold.
 - Audit all specifications, README, guides, examples, and rustdoc for residual
   drift from the already-current implemented contract.
 
@@ -1025,7 +1091,8 @@ Acceptance:
 - Phases T1 through T7 and all admitted T5 subphases are complete with commit and
   verification evidence.
 - Every visual property has one implemented owner matching the approved
-  inventory.
+  1860-key inventory, with every source addition, split, consumer relationship,
+  and explained exclusion re-audited.
 - No mutable global theme, hidden Canvas default, late theme lookup, compatibility
   alias, or unclassified renderer style constant remains.
 - Snapshot changes are intentional, reviewed, and committed with their owning
