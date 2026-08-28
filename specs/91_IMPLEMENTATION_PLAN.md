@@ -10,11 +10,13 @@ available in Git history through commit `0dcff20`; it is not a second current
 plan.
 
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
-implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement
-architecture, not a second current API. Its custom themes, colors, scales, and
-inheritance behavior remain non-current until Phase T6 performs the atomic public
-migration. Later implementation phases do not begin merely because they are
-listed here.
+implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement theme
+architecture. `05_LAYOUT_SYSTEM.md` is the approved replacement layout
+architecture. Neither is a second current API. Their
+custom themes, colors, scales, inheritance, automatic layout, bounded-width
+sizing, and rendered-dimension behavior remain non-current until Phase T6
+performs the atomic public migration. Later implementation phases do not begin
+merely because they are listed here.
 
 Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
 phase when it starts, completes, changes scope, or discovers a blocker. Complete
@@ -36,28 +38,51 @@ discussion:
 - Theme values that affect text measurement, layout, legend size, or collision
   planning must resolve before preflight and remain identical during final
   rendering.
+- Scientific layout follows one private constraint, complete-candidate
+  measurement, root-selection, arrangement, convergence, accounting, and freeze
+  protocol. Parents pass named width and height constraints downward, children
+  return complete nonempty candidate collections upward, every parent candidate
+  is provisionally arranged, and only the selected root tree is promoted to
+  final positions.
+- An unconstrained or bounded root selects one finite publishable candidate
+  through the exact eligibility, nonexact viability, dense-rank, and total-key
+  rules in `05_LAYOUT_SYSTEM.md`; it does not use a hidden fixed canvas,
+  locally pruned child result, sampled continuous interval, or universal
+  per-panel multiplier.
+- Exact `.size(width,height)` remains exact. Automatic and bounded candidates
+  pass default-PNG and canonical-SVG viability before ranking; exact roots retain
+  format-local SVG behavior and apply PNG limits only on a PNG terminal.
 
-Phase T1 settled the exact public types, replacement semantics, component
-boundaries, validation, and scope of local overrides in `03_THEME_SYSTEM.md`.
+Phase T1 settled the exact theme and scale public types, replacement semantics,
+component boundaries, validation, and scope of local overrides in
+`03_THEME_SYSTEM.md`. Phase T3j settles the private layout terminology, public
+sizing boundary, migration partition, and final ledger impact before T4 begins.
 
 ## Reference Philosophy
 
-The approved architecture combines three relevant models:
+The target architecture combines four relevant models:
 
 - ggplot2 supplies the plotting-specific separation between non-data theme
   appearance, data-to-aesthetic scales, and exact layer aesthetics.
 - Flutter supplies immutable complete theme data, organized component themes,
-  and explicit parent-scope inheritance.
+  explicit parent-scope inheritance, and the constraints-down, sizes-up,
+  parent-positions layout direction.
 - Vega-Lite supplies typed component configuration and deterministic precedence
   from broad defaults to exact mark settings.
+- CSS intrinsic sizing supplies the useful distinction between minimum content,
+  natural content, and constraint-dependent fit without admitting CSS selectors
+  or its open cascade.
 
 The design should not copy Flutter's widget-context lookup, reactive rebuilding,
-animation, or dynamic theme extensions. It should not copy Matplotlib's mutable
-process-global runtime configuration or CSS's selector-driven open cascade.
+animation, dynamic theme extensions, silent overflow widgets, or mandatory
+single-pass restriction. It should not copy Matplotlib's mutable process-global
+runtime configuration or CSS's selector-driven open cascade. Static scientific
+output may use explicit bounded remeasurement, but semantic content never
+silently clips, elides, scrolls, or disappears to force fit.
 
 ## Target Contract Rules
 
-Phase T1 confirmed these rules for the approved target:
+The approved theme and layout targets follow these rules:
 
 - A theme owns visual defaults. It does not own scientific data, statistical
   behavior, semantic labels, or output routing.
@@ -71,6 +96,15 @@ Phase T1 confirmed these rules for the approved target:
   gradient, and bracket styles rather than a public theme object.
 - One resolved internal theme is shared by preflight, measurement, collision
   planning, legend construction, and final rendering.
+- Visual spacing resolves from the local text, glyph, mark, axis, annotation, or
+  composition metrics it separates. Root-canvas dimensions are not a global
+  spacing or typography scale.
+- Final rendering consumes one immutable arranged plan. It does not wrap text,
+  select ticks, choose legend flow, resize tracks, derive spacing, or alter
+  domains.
+- Layout quality ordering, convergence, scientific aspect, resource budgets,
+  and minimum representability are private renderer policies rather than theme
+  fields or public callbacks.
 - Public customization remains typed and validated. Do not add arbitrary CSS,
   backend dash strings, string-keyed property maps, dynamic style plugins,
   unvalidated mutable palettes, or silent fallback chains.
@@ -116,12 +150,17 @@ Phase T1 confirmed these rules for the approved target:
 | T3i5 | Canvas coordination identity coverage | COMPLETE |
 | T3i6 | PNG metadata and reuse boundaries | COMPLETE |
 | T3i7 | Owned artifact staging and commit boundary | COMPLETE |
+| T3j | Scientific layout architecture adjudication | COMPLETE |
+| T3j1 | Normative layout contract and private terminology | COMPLETE |
+| T3j2 | Layout ownership-ledger reconciliation | COMPLETE |
+| T3j3 | Migration, evidence, and resource-boundary map | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
-| T5a | Surfaces, typography, titles, axes, and grid | PENDING |
+| T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
 | T5d | Categorical and continuous data scales | PENDING |
-| T6 | Public immutable theme and scale API | PENDING |
+| T5e | Scientific layout closure | PENDING |
+| T6 | Public immutable theme, scale, and sizing API | PENDING |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
 ## Phase T1: Approved Theme Architecture
@@ -1519,9 +1558,272 @@ Aggregate acceptance:
   adjudication and T4 ownership changes.
 - `just verify` passes before T3i is marked complete and T3j begins.
 
+## Phase T3j: Scientific Layout Architecture Adjudication
+
+**Status**: COMPLETE
+
+Define and reconcile the layout replacement before theme inheritance or visual
+component migrations make new assumptions about fixed root dimensions.
+
+Dependencies: T3i.
+
+No production code changes in this phase.
+
+### T3j1: Normative Layout Contract And Private Terminology
+
+**Status**: COMPLETE
+
+Dependencies: T3i.
+
+Scope:
+
+- Complete `05_LAYOUT_SYSTEM.md` as the sole target for normalized integer
+  constraints, complete candidate collections, finite generation, root
+  selection, arrangement, convergence, resource accounting, reservation, exact
+  sizing, bounded width, automatic roots, and rendered dimensions.
+- Define `LayoutScalar` as signed 64-bit quanta and close every outward,
+  inward, nearest-even, exact-size, nonspatial-`f64`, checked-arithmetic, and
+  overflow disposition.
+- Define one successful measurement call as one complete nonempty
+  `MeasuredCandidates<LayoutPlan>` collection. Only root selection chooses one
+  candidate; parent combinations do not locally prune child alternatives.
+- Define complete text, generated-tick, legend, aspect, exact-total residual,
+  track, packing, preferred-size, and specialized-family generation.
+- Define closed canonical addresses, role and type discriminants, PlotKind order,
+  and specialized interior traversal.
+- Define every total-key formula, eligibility gate, dense-rank pool, signature
+  field, duplicate identity, and nonexact viability filter.
+- Define the complete next-pass frontier, convergence state, cache key, cache-hit
+  accounting, pass limit, five cumulative accounting identities, reservation
+  stages, and failure order.
+- Define exact/nonexact canonical-SVG behavior without changing the public API.
+- Keep the complete kernel private and admit no public measurement, constraint,
+  candidate, plan, callback, or plugin surface.
+
+Acceptance:
+
+- Every successful child measurement has one mechanically defined cardinality
+  contract and every parent combination preserves the complete child set.
+- Every finite candidate source and every preference has an exact producer,
+  ordering, deduplication rule, and budget disposition.
+- Every two surviving candidates compare under one total key with no undefined
+  numeric conversion, rank, vector, signature, or overflow behavior.
+- Convergence equality includes every next-pass alternative and breakpoint input,
+  and cache reuse requires equality of the complete consumed frontier.
+- Candidate counting, reservation timing, nonexact viability, and final
+  reservation occur in one exact failure order before backend creation.
+- Exact SVG and nonexact SVG/PNG limits have disjoint, explicit scopes.
+- The target introduces no public API, hidden fixed candidate, fallback route,
+  or second plan representation.
+
+### T3j2: Layout Ownership-Ledger Reconciliation
+
+**Status**: COMPLETE
+
+Dependencies: T3j1.
+
+Scope:
+
+- Reconcile the layout target through the broad ownership interpretation: one
+  property owner covers the property's source or derivation and every
+  measurement, candidate-generation, quality, convergence, accounting,
+  arrangement, frozen-plan, and draw consumer of that same value.
+- Require a trace for every layout input from its ownership-ledger or target-only
+  key through canonical address, exhaustive source category, validated or
+  normalized value, consuming stages, and immutable measured- or frozen-plan
+  field.
+- Treat derived breakpoints, candidate descriptors, rank tuples, state fields,
+  capacities, and serialization counts as traced consumers of their owning
+  policy rather than unrecorded visual properties.
+- Re-adjudicate every current fixed dimension, panel minimum, padding, gap,
+  spacing factor, wrapping branch, post-allocation fit check, legend flow rule,
+  semantic content input, resolved style metric, mark or annotation extent,
+  topology source, domain identity, specialized reserve, aspect rule, and
+  draw-time layout decision in `04_VISUAL_PROPERTY_OWNERSHIP.md`.
+- Preserve the 1860-key T2 count as historical completed-inventory evidence.
+  Record one canonical overlay for affected historical keys and target-only
+  policies, then calculate one materialized final acceptance count without
+  inserting future-only identities into historical Current rows.
+- Distinguish theme-owned relative visual relationships from renderer-owned
+  scientific geometry, data density, aspect, quality ordering, convergence, and
+  resource limits.
+- Reconcile Plot and Canvas root title/subtitle gaps and caption-to-content
+  clearance as `CompositionTheme` relationships resolved against adjacent
+  typography, rather than retaining parallel private fixed spacing owners.
+- Trace each measurement input to the exact immutable plan value consumed by
+  drawing. Draw-time reconstruction is a defect, not an admitted duplicate.
+- Remove from the overlay every dormant or overwritten source with no reachable
+  successful-output effect; retain its historical source row as T2 provenance.
+
+Acceptance:
+
+- The three completed T2 keyed tables remain historical evidence containing
+  exactly 1860 unique keys in identical order. Future-only target policies are
+  not inserted into those historical Current, Target, or Migration tables.
+- One canonical post-adjudication overlay expands to exactly 1574 unique rows:
+  1552 rows re-adjudicate existing historical keys and 22 rows introduce
+  target-only keys. The existing-key set consists of 691 corrected `A-*` keys
+  and 861 broad-trace `B-*` additions. Existing overlay keys occur in the
+  historical inventory; target-only keys do not; no overlay key occurs twice.
+- Exactly 54 existing keys replace their historical target disposition. The
+  other 1498 existing keys retain that disposition and gain the broad immutable-
+  plan relationship and focused evidence route.
+- Materializing the target inventory applies existing-key overlay rows in the
+  historical 1860-key order and then appends the 22 target-only keys in their
+  recorded canonical order, producing exactly 1882 unique final keys.
+- Every source consumed by measurement, generation, quality, convergence,
+  accounting, arrangement, the frozen plan, or drawing retains its historical
+  source evidence and has one final target owner, migration phase, exact
+  relationship to the private layout protocol, and focused evidence route.
+- The former 696-key narrow overlay is not an acceptance threshold. Its five
+  no-effect removals and 861 broad additions are mechanically reproducible from
+  the historical key order and Current layout-path fields.
+- T7 refers only to the recalculated 1882-key final inventory. The historical
+  1836-record pre-T2h count and completed 1860-record T2 count remain provenance
+  and are not post-adjudication thresholds.
+
+### T3j3: Migration, Evidence, And Resource-Boundary Map
+
+**Status**: COMPLETE
+
+Dependencies: T3j2.
+
+Scope:
+
+- Partition the private layout migration across T5a through T5e so each phase
+  leaves one coherent internal representation and no temporary public API.
+- Define focused preservation evidence while the new protocol runs under the
+  current exact defaults, then separate intentional automatic-output snapshot
+  changes for the atomic T6 switch.
+- Adjudicate one finite automatic-layout resource envelope against canonical SVG,
+  outlined-text conversion, default PNG source and target work, grid cardinality,
+  arithmetic overflow, and allocation failure. Do not add arbitrary caps without
+  source and boundary evidence.
+- Define deterministic convergence state, repeated-state failure, pass budgets,
+  complete next-pass frontier, cache identity, rounding, and pre-backend failure
+  timing.
+- Fix one spatial quantum at `1/1024` CSS pixel, one eight-complete-pass root
+  budget, five independent, non-pooling cumulative `1_000_000` limits for
+  candidate evaluations, candidate-generation slots, candidate-generation work,
+  measurement-call attempts, and measurement-cache entries, and one
+  `1_000_000`-slot prepared canonical structural-topology limit.
+- Charge candidate-generation work from one canonical logical-operation census,
+  including fixed per-record sort and dedup charges, never from implementation-
+  specific loop or comparator counts.
+- Reuse the current inclusive `32_768` PNG axis, `100_000_000` PNG pixel, and
+  `67_108_864` canonical SVG byte limits. Require automatic and bounded roots to
+  pass exact default-300-DPI target prediction while exact roots retain
+  format-local terminal validation.
+- Require checked topology and candidate arithmetic and five exact fallible
+  first-party reservation stages for prepared topology and canonical font
+  candidates/provenance, the fixed measurement cache, layout alternatives,
+  candidates, convergence state, and the final plan/serializer/scene census.
+  Project-owned capacity refusal is a render failure before backend creation;
+  do not promise recovery from process-global allocation failure inside an
+  external dependency.
+- Apply candidate gates and nonexact viability before dense-rank construction.
+  Count every cache-miss candidate before evaluation, including candidates later
+  rejected or deduplicated; a complete-frontier cache hit counts zero.
+
+Migration partition:
+
+- T5a introduces the sole normalized constraint/complete-candidate/arrangement
+  kernel, immutable text plans, ordinary Plot measurement, and exact-root
+  preservation. Every not-yet-migrated family enters through one typed private
+  measurement adapter that produces the same complete collection of candidate-
+  local plans; root selection later promotes one to the sole root-plan
+  representation, with no second backend or root-plan route.
+- T5a builds and reserves every canonical generation-host font list before text
+  measurement, enforcing the exact matching, occurrence, identity,
+  deduplication, ordering, primary-face, glyph-fallback, and provenance contract
+  from `03_THEME_SYSTEM.md` without treating font faces as layout candidates.
+- T5b migrates legends, facets, Canvas tracks, shared chrome, headers, row
+  titles, and text panels onto complete measured candidate collections. It
+  establishes the sole kind-discriminated shared-guide representation and
+  compatibility/failure path.
+- T5c supplies exact mark ink, category/cell pitch, interval, density, and
+  annotation requirements and removes post-allocation family-local fit logic.
+- T5d supplies final scale domains, guide content, and significance targets to
+  the same plans without creating another layout representation. It supplies
+  final continuous contributor descriptors and performs the exact automatic-
+  union/equal-exact/contained-automatic merge through T5b's shared-guide path
+  before label generation or guide measurement.
+- T5e removes the last adapter, implements complete finite generation, the one
+  total-order key, root convergence and cache identity, automatic/bounded roots,
+  specialized composite measurement, the five-stage resource census, and the
+  pre-backend failure boundary.
+- T6 alone switches the public defaults and sizing/accessor surface. T7 audits
+  the completed owners and does not add missing foundational behavior.
+
+Deletion targets:
+
+- T5a deletes current single-panel fixed-layout constructors, axis/title local
+  retry helpers, draw-time text wrapping fallbacks, and generic fixed panel
+  minima as their consumers migrate.
+- T5b deletes equal-cell Canvas/facet allocators, `PanelRequirements`,
+  provisional/first/final composition passes, draw-time shared-legend
+  reconstruction, and facet draw-time text wrapping.
+- T5c deletes family-local post-allocation reserve/retry branches and duplicate
+  mark/legend geometry reconstruction assigned by the ledger.
+- T5d deletes mixed current-palette consumers, hardcoded Heatmap/Beeswarm guide
+  mappings, and duplicate guide/domain reconstruction while retaining the old
+  public types until T6.
+- T5e deletes every typed legacy measurement adapter, Matrix's local iteration
+  loop, fixed marginal bands, hardcoded specialized reserves, remaining
+  draw-time layout/domain mutation, and every fixed-size fallback.
+- T6 deletes unconditional default width/height storage, pre-render Plot
+  dimension getters, old public theme/color representations, and all replaced
+  compatibility surfaces.
+
+Evidence and snapshot policy:
+
+- T5a through T5e preserve explicit-size canonical preserve-text SVG bytes
+  unless one named ledger row authorizes an intentional correction. Outlined SVG
+  and PNG use structural, dimension, and controlled-font hash evidence.
+- T5e private automatic tests assert exact structure, dimensions, total-order
+  behavior, convergence, and resource boundaries without changing public
+  default snapshots early.
+- Before T6 changes no-sizing-call defaults, add explicit `640x480` Plot and
+  `960x640` Canvas preservation fixtures. T6 alone reviews automatic-default
+  snapshot changes, each with the complete selected quality key and competing
+  candidate frontier.
+- Numeric evidence covers limits minus one, equal limits, and limits plus one for
+  each independent candidate-evaluation, candidate-generation-slot, candidate-
+  generation-work, measurement-call, measurement-cache-entry, and prepared-
+  topology limit;
+  default-PNG source axis `10_485` versus `10_486`; default target work at
+  `3_200 x 3_200` versus `3_200 x 3_201`; pass-two/pass-eight stability; changed
+  pass eight; non-adjacent repetition; candidate-order permutation; checked
+  arithmetic overflow; and injected first-party reservation failure at each of
+  the five reservation stages.
+- Candidate evidence covers complete child Cartesian combination, no local
+  quality pruning, exact dense-rank pools and formulas, specialized traversal,
+  changed-frontier cache misses, unchanged-frontier cache hits, and cumulative
+  accounting of rejected and deduplicated candidates. Work-unit evidence proves
+  equal charges under loop fusion, vectorization, and different sorting
+  implementations.
+- Ownership evidence covers every historical or target-only layout input from
+  owner through each consumer and immutable plan field, with no unowned
+  generation, convergence, accounting, arrangement, or draw input.
+
+Acceptance:
+
+- Every layout unit has explicit dependencies, focused tests, snapshot policy,
+  and deletion targets.
+- Automatic resource failure cannot clamp, scale down, omit content, fall back
+  to fixed dimensions, or select a second renderer.
+- The complete source-backed resource envelope, failure order, exact finite
+  quality key, convergence identity, and historical-ledger overlay are complete
+  enough to implement without inventing policy in source code.
+- `git diff --check`, the repository's documentation-only checks, and focused
+  independent specification review pass before the adjudication closes. This
+  documentation-only phase does not run the test suite.
+
 ## Phase T4: Canvas Theme Inheritance
 
 **Status**: PENDING
+
+Dependencies: T3j.
 
 Make composition ownership explicit and consistent.
 
@@ -1534,13 +1836,17 @@ Scope:
 - Make an explicit Plot theme replace the inherited Canvas theme for that plot.
 - Apply the resolved Canvas theme consistently to canvas title blocks, text
   panels, shared headers, row titles, spacing, and other Canvas-owned chrome.
+- Resolve Canvas and Plot provenance before constructing the future measurement
+  context so every child receives the exact owner used by its final plan.
 - Make header and text measurement use the same resolved values as rendering.
 - Carry exact Canvas/Plot theme provenance into shared-legend planning. T4 does
-  not claim final compatibility: T5b owns legend/chrome comparison, T5c owns
-  final mark-glyph style identity, T5d owns resolved mappings, and T6 closes the
-  public replacement surface.
+  not claim final compatibility: T5b establishes legend/chrome comparison, T5c
+  supplies final mark-glyph style identity, T5d supplies resolved mappings, and
+  T6 closes compatibility over the public replacement values.
 - Preserve plot erasure and ownership boundaries without global or thread-local
   theme state.
+- Preserve current exact dimensions and public sizing behavior; T4 establishes
+  ownership inputs and does not implement the T5 layout protocol early.
 
 Acceptance:
 
@@ -1555,14 +1861,33 @@ Acceptance:
   mixed-theme shared-legend acceptance gate remains in T5b/T5c/T5d/T6.
 - `just verify` passes.
 
-## Phase T5a: Surfaces, Typography, Titles, Axes, And Grid
+## Phase T5a: Layout Foundation, Surfaces, Typography, Titles, Axes, And Grid
 
 **Status**: PENDING
 
-Move foundational non-data appearance into the resolved theme.
+Dependencies: T4.
+
+Establish the private layout kernel while moving foundational non-data
+appearance into the resolved theme.
 
 Scope:
 
+- Add the private normalized `LengthConstraint`, `LayoutConstraints`,
+  `LayoutSize`, measurement context, `MeasuredLayout<LayoutPlan>`, and complete
+  nonempty `MeasuredCandidates<LayoutPlan>` kernel. Keep generic parameter and
+  field names explicit in definitions and signatures.
+- Separate measurement, candidate-local provisional arrangement, root selection,
+  and final promotion. Parents combine and provisionally position every admitted
+  child candidate without local quality pruning; only the root-selected
+  rectangles become final, and rectangles are not incoming constraints.
+- Resolve generation-host faces and glyphs before text measurement. Produce
+  immutable text plans containing exact lines, metrics, and baselines, and delete
+  draw-time wrapping or unwrapped fallback routes.
+- Build and census one canonical font candidate list for every used
+  `(stack,weight)` before text measurement. Enforce exact Unicode matching,
+  occurrence generation, file identity, deduplication, ordering, primary-face,
+  per-scalar fallback, provenance, and checked-reservation rules from
+  `03_THEME_SYSTEM.md`.
 - Centralize canvas and panel surfaces, foreground and muted text roles,
   typography roles, title/subtitle/caption styles, axis lines, ticks, labels,
   frame sides, and grid appearance.
@@ -1577,12 +1902,26 @@ Scope:
   automatic continuous-range union that rejects exact-limit conflicts.
 - Ensure every font and spacing value used for measurement is the value used for
   drawing.
+- Resolve line leading and axis/title spacing from local final typography and
+  stroke metrics instead of root-canvas scaling or disconnected pixel copies.
+- Define the standard-panel measurement carrier and populate its T5a-owned tick,
+  typography, axis, and renderer-owned aspect requirements. T5a remains an exact
+  root migration and does not claim the final mark-extent or data-density inputs
+  assigned to T5c, or automatic root selection assigned to T5e.
+- Migrate standalone ordinary Plot measurement, arrangement, and immutable plan
+  construction onto the private protocol while supplying the current exact root
+  dimensions until the T6 switch. Its measurement calls return complete
+  candidate collections even when exact constraints leave one survivor.
 
 Acceptance:
 
 - These components contain no unclassified visual constants.
 - Theme changes cannot silently remove caller-provided semantic text.
 - Layout and paint use identical typography and spacing.
+- Ordinary Plot plans contain the selected root size, text lines, ticks, axis
+  gutters, data panel, and final arrangement before Null or concrete rendering.
+- No public constraint, automatic-size, bounded-width, or Output-dimension API is
+  exposed early.
 - Built-in preset changes, if any, have reviewed snapshot evidence.
 - Focused layout, axes, typography, output, and visual-regression tests pass.
 - `just verify` passes.
@@ -1591,10 +1930,19 @@ Acceptance:
 
 **Status**: PENDING
 
+Dependencies: T5a.
+
 Give composed and explanatory chrome coherent theme ownership.
 
 Scope:
 
+- Prepare legend semantic entries independently from layout and measure finite
+  complete row/column alternatives using final typography and exact glyphs;
+  return all admitted candidates to parent combination rather than selecting a
+  local flow.
+- Replace equal-cell subtraction with measured row and column tracks that
+  preserve shared data-panel alignment separately from unequal decoration
+  gutters.
 - Centralize legend container, title, label, key, outline, opacity, padding, and
   spacing styles while keeping visibility and placement in legend policy.
 - Apply role-based typography and surfaces to facet strips, panel headers, shared
@@ -1602,12 +1950,22 @@ Scope:
 - Preserve exact legend glyph reproduction from resolved mark styles.
 - Keep collision planning, outside reservation, and shared-legend compatibility
   synchronized with the resolved theme.
+- Establish one kind-discriminated shared-guide descriptor and failure path.
+  Reject mixed kinds and incompatible discrete or continuous descriptors before
+  measurement; do not select one Plot's labels, gradient, or domain.
 - Resolve outside spacing once from `LegendTheme` and reuse it for reservation
   and all four directional placements; do not reconstruct helper-local gaps.
 - Complete Canvas shared-x integration after T5a range validation without
   overriding explicit limits or admitting categorical domains.
 - Remove implicit Publication styling and duplicated fixed whites and grays from
   composition code.
+- Make Canvas `TextPanel` participate in bottom-up track measurement before
+  arrangement. Keep Plot panel-text annotations in the overlay path.
+- Remeasure constraint-dependent children when track constraints change; freeze
+  final headers, row titles, shared legends, text lines, cells, and child plans
+  before Canvas rendering.
+- Preserve declared sparse coordinates, spans, groups, and facet topology. Do
+  not compact empty rows or columns implicitly.
 
 Acceptance:
 
@@ -1615,9 +1973,11 @@ Acceptance:
 - Shared and per-plot legends use one component contract while retaining exact
   mark glyphs.
 - Mixed explicit Plot themes have deterministic documented behavior.
-- Shared-legend compatibility is complete only after T5c supplies final glyph
-  styles, T5d supplies final mappings, and T6 supplies the current public theme
-  values; T5b owns the final comparison and failure path across those inputs.
+- Facet and Canvas plans have one measured root size and perform no layout
+  reconstruction during final drawing.
+- T5b establishes one comparison and failure path and proves it against the
+  current inputs. T5c and T5d feed their final values into that same path, and T6
+  closes mixed-theme compatibility over the public replacement values.
 - Focused legend, facet, Canvas, collision, and visual-regression tests pass.
 - `just verify` passes.
 
@@ -1625,10 +1985,17 @@ Acceptance:
 
 **Status**: PENDING
 
+Dependencies: T5b.
+
 Unify common mark roles without erasing typed local control.
 
 Scope:
 
+- Complete the T5a measurement carrier with exact mark ink extents, data-density
+  requirements, category and cell pitch, interval clearance, annotation reserve,
+  and family-specific hard or preferred panel requirements.
+- Separate normal-flow measurement from inside-legend, significance, value-label,
+  panel-text, and supplemental-layer overlay planning.
 - Define common point, line, fill, interval, ribbon, uncertainty, reference,
   outline, and missing-mark defaults by semantic role rather than plot family.
 - Classify family-specific constants as shared theme defaults, justified
@@ -1640,12 +2007,20 @@ Scope:
   and Raincloud styles, interval/PointInterval styles, mark/legend style
   reconstruction, and local automatic-range retries exactly as the T2h
   relationship matrix specifies.
-- Connect exact significance rendered-target/facet-panel resolution from T5d to
-  annotation geometry, and make shared KDE-support widening reject any result
+- Establish the typed annotation-geometry input for exact significance
+  rendered-target/facet-panel resolution; T5d supplies the final resolved target
+  through that same input. Make shared KDE-support widening reject any result
   that is still nonfinite or constant.
 - Integrate existing typed local APIs into the approved precedence model rather
   than adding parallel replacements.
 - Preserve exact legend glyph agreement with the final resolved mark styles.
+- Keep scale-domain expansion distinct from box overflow. Exact limits reject an
+  incompatible reserve; automatic expansion remains explicit, bounded, and
+  recorded in the frozen plan.
+- Re-adjudicate default elision, clipping, label dropping, and post-allocation fit
+  branches so automatic layout preserves semantic content unless an explicit
+  current caller policy already identified in the ledger owns a narrower
+  behavior. Do not create a new omission policy in implementation.
 
 Acceptance:
 
@@ -1654,12 +2029,17 @@ Acceptance:
 - Exact local styles override only their documented properties and scope.
 - Renderer invariants are explicit and cannot be changed indirectly through a
   theme field.
+- Mark and annotation geometry that affects fit is measured before arrangement
+  or represented as an explicit overlay/domain request; it does not enlarge the
+  scene during drawing.
 - Focused renderer-family, layer, annotation, legend, and snapshot tests pass.
 - `just verify` passes.
 
 ## Phase T5d: Categorical And Continuous Data Scales
 
 **Status**: PENDING
+
+Dependencies: T5c.
 
 Separate data-to-color mapping from non-data theme appearance.
 
@@ -1681,6 +2061,14 @@ Scope:
   its resolved `MarkTheme` role while preserving T5d ownership of categorical
   identity/domain mapping and handing one final opaque color to T5c style
   assembly.
+- Feed exact final categorical domains, legend cardinality, continuous-guide
+  labels, missing-value sections, and heatmap/beeswarm guide content into the
+  typed layout measurements established in T5a-T5c.
+- Supply final continuous shared-guide contributor descriptors and perform the
+  exact automatic-domain union or equal-exact/contained-automatic merge through
+  T5b's sole compatibility path before labels or guide measurement.
+- Supply exact significance rendered-target/facet-panel resolution to the typed
+  annotation-geometry input established in T5c.
 
 Acceptance:
 
@@ -1689,13 +2077,70 @@ Acceptance:
   Phase T1 contract.
 - Legends, marks, gradients, colorbars, facets, and Canvas share the same
   resolved mappings.
+- Data-dependent guides and labels contribute one measured size before final
+  arrangement and are not reconstructed from a different mapping during draw.
 - Focused categorical, continuous-scale, heatmap, beeswarm, facet, Canvas, and
   legend tests pass.
 - `just verify` passes.
 
-## Phase T6: Public Immutable Theme And Scale API
+## Phase T5e: Scientific Layout Closure
 
 **Status**: PENDING
+
+Dependencies: T5d.
+
+Complete private automatic layout only after every appearance, semantic,
+geometry, and scale input can participate in one measurement protocol.
+
+Scope:
+
+- Complete family-specific requirements for horizontal categorical plots,
+  waterfall, heatmap, beeswarm, marginal composition, Matrix variable grids, and
+  every other specialized self-managed layout.
+- Replace fixed marginal bands, Matrix dummy generic layout, hardcoded guide
+  reserves, and universal panel minima with typed complete composite
+  measurements.
+- Implement the lexicographic root quality objective over finite candidates,
+  including semantic completeness, hard geometry, scientific aspect, readable
+  density, compactness, and stable structural tie-breaking.
+- Implement every closed candidate producer, complete child Cartesian
+  combination, structural signature, duplicate rule, dense-rank pool, and
+  eligibility/viability filter without local pruning or discovery-order choice.
+- Implement bounded remeasurement for wrapping, ticks, legend flow, grid tracks,
+  shared alignment, domains, and overlays. Detect repeated nonfinal states and
+  budget exhaustion explicitly.
+- Resolve one private automatic root size, bounded-width root size, or exact root
+  size before backend creation. Convert the finite logical result once through
+  checked upward CSS-pixel rounding and store it in `PlotPlan` or `CanvasPlan`.
+- Enforce the T3j automatic resource envelope, checked topology arithmetic, and
+  allocation limits without clamping, content omission, fixed-size fallback, or
+  output-format-specific mutation of the canonical scene.
+- Remove remaining final-render text layout, tick selection, legend construction,
+  spacing derivation, track sizing, and domain mutation.
+- Exercise automatic and bounded-width behavior through private focused tests,
+  but retain the current public default and getters until T6 performs the one
+  public switch.
+
+Acceptance:
+
+- Every admitted Plot family and Canvas child returns one complete nonempty typed
+  candidate collection or rejects its unsupported composition shape before
+  candidate generation; only root selection chooses one complete plan tree.
+- Automatic and bounded-width private plans are finite, deterministic,
+  publishable under the approved quality objective, and complete in semantic
+  content.
+- Exact dimensions remain exact and fail rather than clip when complete content
+  cannot fit.
+- Null and concrete rendering consume the same immutable root and child plans.
+- Focused ordinary, categorical, specialized, facet, Canvas, convergence,
+  resource, output, and snapshot tests pass.
+- `just verify` passes.
+
+## Phase T6: Public Immutable Theme, Scale, And Sizing API
+
+**Status**: PENDING
+
+Dependencies: T5e.
 
 Expose the complete foundations only after every admitted consumer uses the
 private resolved model.
@@ -1714,15 +2159,26 @@ Scope:
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
 - Keep backend styles private and avoid exposing renderer implementation details.
+- Make absence of a sizing call select automatic layout for Plot and Canvas.
+- Add positive `max_width(width)` builders for bounded-width automatic height,
+  retain exact `size(width, height)`, and keep the complete constraint protocol
+  private.
+- Remove pre-render `Plot::width()` and `Plot::height()`. Add
+  `Output::width()` and `Output::height()` as exact canonical CSS-pixel scene
+  dimensions that remain stable across chained publications.
+- Do not expose a pre-render measurement API, size-request enum, public layout
+  module, constraint object, callback, or compatibility getter.
 - Close the complete RGBA carrier migration through the sole per-paint SVG alpha
   serializer, gradient stops, text/bracket paints, paint-aware geometry, and PNG
   conversion. RGB token spelling remains a serialization dependency, not an
   alpha owner.
 - Atomically update `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` to the
-  implemented theme contract, mark `03_THEME_SYSTEM.md` current, and reconcile
-  `99_DEFERRED_FEATURES.md`; no target/current specification interval remains.
+  implemented theme and layout contracts, mark `03_THEME_SYSTEM.md` and
+  `05_LAYOUT_SYSTEM.md` current, and reconcile `99_DEFERRED_FEATURES.md`; no
+  target/current specification interval remains.
 - Update examples and user documentation with standalone, Canvas inheritance,
-  Plot replacement, palette, and exact local-style examples.
+  Plot replacement, palette, exact local style, automatic sizing, bounded-width
+  wrapping, exact sizing, and rendered-dimension examples.
 
 Acceptance:
 
@@ -1733,6 +2189,8 @@ Acceptance:
 - The API has no ambiguous global default setter, generic property map, detached
   mutable palette, or alternate compatibility identity.
 - Public constructors validate every structural invariant before rendering.
+- Automatic and bounded-width output report their final dimensions only through
+  `Output`; exact sizing remains exact and has no nominal pre-render getters.
 - Compile-pass and compile-fail evidence enforces the intended visibility and
   ownership boundaries.
 - All canonical specifications describe the implemented replacement API before
@@ -1743,6 +2201,8 @@ Acceptance:
 
 **Status**: PENDING
 
+Dependencies: T6.
+
 Close the phase with exact behavioral evidence and no residual old model.
 
 Scope:
@@ -1751,14 +2211,21 @@ Scope:
   replacement, plot scale configuration, and exact element styles.
 - Prove one resolved theme is used by preflight and final rendering.
 - Cover shared legends, facets, text panels, mixed explicit Plot themes, palette
-  capacity, missing mappings, fonts, contrast behavior, SVG, and PNG.
+  capacity, missing mappings, canonical font candidate ordering/deduplication/
+  provenance, shared continuous-guide compatibility/domain merging, contrast
+  behavior, SVG, and PNG.
+- Cover automatic, bounded-width, and exact dimensions across ordinary,
+  specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
 - Retain reviewed deterministic snapshots for every built-in preset and selected
   custom themes.
 - Search for retired theme APIs, repeated hidden Publication defaults, dormant
   theme fields, unclassified hardcoded style values, and duplicate scale logic.
-- Reconcile all 1860 final ledger keys against implemented owners, current
-  public names, focused evidence, and deletion of every superseded source. A
-  historical 1836-record pre-T2h count is not an acceptance threshold.
+- Search for fixed root defaults, universal panel minima, root-scaled spacing,
+  draw-time layout decisions, silent overflow, and alternate layout routes.
+- Reconcile every key in the T3j-recalculated final ledger against implemented
+  owners, current public names, focused evidence, and deletion of every
+  superseded source. The historical 1836-record pre-T2h count and completed
+  1860-record T2 count are not post-adjudication acceptance thresholds.
 - Audit all specifications, README, guides, examples, and rustdoc for residual
   drift from the already-current implemented contract.
 
@@ -1767,8 +2234,8 @@ Acceptance:
 - Phases T1 through T7 and all admitted T5 subphases are complete with commit and
   verification evidence.
 - Every visual property has one implemented owner matching the approved
-  1860-key inventory, with every source addition, split, consumer relationship,
-  and explained exclusion re-audited.
+  T3j-recalculated inventory, with every source addition, split, consumer
+  relationship, and explained exclusion re-audited.
 - No mutable global theme, hidden Canvas default, late theme lookup, compatibility
   alias, or unclassified renderer style constant remains.
 - Snapshot changes are intentional, reviewed, and committed with their owning
@@ -1796,7 +2263,9 @@ Acceptance:
 - Transparent Canvas and panel surfaces are supported in SVG and PNG.
 - Built-in contrast is regression-tested; automatic variable-fill text selects
   the better theme candidate; general custom-theme contrast remains caller-owned.
-- Fonts use typed ordered stacks and the first installed generation-host family.
+- Fonts use typed ordered stacks and one canonical generation-host candidate list
+  per used `(stack,weight)`, with exact identity-based ordering, deduplication,
+  glyph fallback, and recorded environment provenance.
 - Themes may omit nonsemantic chrome but cannot hide caller-provided semantic
   content. Existing explicit policies own content presence and placement.
 - Shared Canvas legends use Canvas chrome and exact panel glyphs; conflicting
