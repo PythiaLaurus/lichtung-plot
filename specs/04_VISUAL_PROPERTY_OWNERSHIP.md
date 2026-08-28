@@ -2,11 +2,19 @@
 
 **Status**: Canonical T2 migration ledger; T2 COMPLETE
 
-This ledger records current production sources and approved target ownership. It
-does not make the target APIs in `03_THEME_SYSTEM.md` current, expose them early,
-or supersede the implemented contracts in `01_ARCHITECTURE.md` and
-`02_RENDERING_CONTRACT.md`. Target names below are migration assignments only
-until Phase T6 performs the atomic public migration.
+This ledger records current production sources and the T2-approved target
+ownership. It does not make the target APIs in `03_THEME_SYSTEM.md` current,
+expose them early, or supersede the implemented contracts in
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md`. Target names below are
+migration assignments only until Phase T6 performs the atomic public migration.
+
+The completed T2 ledger contains exactly 1860 current-source records. The T3j
+layout adjudication overlay at the end of this document preserves those
+historical tables, re-adjudicates 1552 existing keys, and adds 22 target-only
+layout keys. Fixed dimensions, universal panel minima, and private title-block
+spacing rows do not override that approved overlay. The historical T2 count
+remains valid evidence for the completed inventory, but it is not the T7
+acceptance count after adjudication.
 
 The ledger is append-only during T2 except for corrections and T2h
 reconciliation. Tests, examples, and snapshots are evidence consumers, never
@@ -7867,3 +7875,670 @@ schema-width, count, and table-order review found no remaining issue. The
 completion gate (`git diff --check` and `just verify`) passed on 2026-08-27. No
 production code, public API, tests, snapshots, generated output, or intended
 rendering changed.
+
+## T3j Layout Adjudication Overlay
+
+This overlay is canonical for the approved target in `05_LAYOUT_SYSTEM.md`. It
+does not rewrite current-source provenance or make the target public before T6.
+For the range declarations below, `K[first..last]` means every historical key in
+the inclusive shared T2 order. `P[first..last]` means every key in that range
+whose historical Current layout path contains an `*-L-M`, `*-L-R`, `*-L-C`, or
+`*-L-G` tag or the textual path term `measure`, `reserve`, `collision`, or
+`geometry`. Set subtraction removes the named keys, all additions below
+implicitly subtract the existing `A-*` sets, and all unions are disjoint. An
+affected historical key retains its existing source, classification,
+public-surface, and validation evidence except where an explicit override below
+replaces them. Its group supplies the additional private layout relationship,
+implementation phase, and focused evidence route.
+
+### Target-Only Keys
+
+These 22 keys append in the exact order shown after the historical 1860-key
+order. They occur in none of the three historical tables.
+`layout.resources.cumulative-accounting-limits` is one closed resource-envelope
+owner for five separately claimed counters; the common owner neither pools their
+capacity nor aliases their failure checks.
+
+| Property | Owner and exact target rule | Relationships | Phase and evidence |
+| --- | --- | --- | --- |
+| `layout.kernel.normalized-length-constraints` | Renderer invariant; normalize named finite width/height intervals before measurement | Spatial quantum and all root policies | `add`, T5a; exact/bounded/unconstrained interval boundaries |
+| `layout.kernel.constraint-dependent-measured-plan` | Renderer invariant; measurement returns either one complete nonempty candidate collection of finite typed immutable local plans or a typed recoverable unsatisfied outcome; only the root converts final unsatisfied to a fit error | Every component measurement and frozen root | `add`, T5a-T5e; candidate-collection, recoverable-fit, and plan-completeness tests |
+| `layout.kernel.parent-owned-arrangement` | Renderer invariant; every parent candidate combines named child candidates and assigns their provisional positions; only the root-selected tree is promoted to final positions | Canvas, facet, legend, marginal, and Matrix composition | `add`, T5a-T5e; Cartesian combination, candidate-local arrangement, parent/child box, and sparse-coordinate tests |
+| `layout.plan.frozen-root-draw-identity` | Renderer invariant; only one unchanged complete state becomes the `PlotPlan` or `CanvasPlan` consumed by Null and concrete rendering; it retains every used `(stack,weight)` font-provenance list and the final kind-specific shared-guide descriptor, domain, labels, and glyphs | Complete convergence state, font preflight, shared-guide preparation, and canonical Scene | `add`, T5a-T5e; Null/concrete identity, font-provenance identity, shared-guide identity, and no draw-time layout tests |
+| `layout.root.automatic-constraint-policy` | Explicit policy; no sizing call supplies zero minima and no maxima, then selects one complete finite candidate | Quality key and nonexact default-PNG viability | `add`, T5e; public connection T6; ordinary/facet/Canvas/specialized evidence |
+| `layout.root.bounded-width-constraint-policy` | Explicit policy; positive `max_width` supplies width `[0,max]` and unconstrained height without requiring width fill | Nonexact viability and canonical conversion | `add`, T5e; public connection T6; wrapping and exact-bound evidence |
+| `layout.root.exact-size-constraint-policy` | Explicit policy; `size` supplies equal positive integral bounds and fails when complete content cannot fit | Historical Plot/Canvas pixel-size keys and exact format-local viability | `add`, T5a/T5e; public connection T6; exact fit/failure evidence |
+| `layout.spatial.css-pixel-quantum` | Renderer invariant; signed 64-bit `1/1024` CSS-pixel quanta with exhaustive lower, upper, hard-extent, ink-edge, nearest-even, and exact-size conversion categories | Constraints, equality, quality, convergence, and output conversion | `add`, T5a; signed range, tie, zero, overflow, and empty-interval boundaries |
+| `layout.candidates.complete-breakpoint-enumeration` | Renderer invariant; enumerate every finite admitted alternative, breakpoint, aspect, residual, and specialized packing vector without local pruning or truncation | Text, axes, legends, grids, domains, overlays, and specialized packing | `add`, T5a/T5b/T5e; completeness, cardinality, and permutation evidence |
+| `layout.candidates.canonical-preorder-traversal` | Renderer invariant; use the closed preorder and declared structural child indices | Rank vectors, signatures, topology, and sparse coordinates | `add`, T5a/T5e; reordered-input and map-order evidence |
+| `layout.candidates.exact-structural-equality` | Renderer invariant; compare complete normalized typed structures exactly and deduplicate exact signatures | Spatial quantum, preorder, and convergence | `add`, T5a/T5e; one-quantum and duplicate evidence |
+| `layout.quality.lexicographic-total-order-key` | Renderer invariant; minimize the exact gate, aspect/alignment, local-rank, compactness, and unhashed-signature tuple in `05_LAYOUT_SYSTEM.md` | Every measured candidate | `add`, T5e; total-order, permutation, overflow, and signature evidence |
+| `layout.convergence.complete-state-identity` | Renderer invariant; compare the selected state and complete next-pass frontier, including every alternative, breakpoint, descendant, domain, topology, packing, alignment, overlay input, immutable font-provenance list, and shared-guide descriptor | Frozen root, cache identity, prepared inputs, and pass budget | `add`, T5e; exact-repeat, cache-hit, changed-font-provenance, changed-shared-guide, and changed-field evidence |
+| `layout.convergence.complete-pass-budget` | Renderer invariant; at most eight complete passes, immediate equality succeeds, non-adjacent repetition and changed pass eight fail | Replaces local axis, legend, facet, and Matrix stabilization loops | `add`, T5e; pass-two/pass-eight/cycle/exhaustion evidence |
+| `layout.resources.cumulative-accounting-limits` | Renderer invariant; five independent, non-pooling inclusive `1_000_000` counters are cumulative across all passes of one root operation: candidate evaluations including duplicates, candidate-generation slots, implementation-independent candidate-generation logical work including count-only work, measurement-call attempts including cache hits, and measurement-cache entries claimed on misses including outcomes later committed as `Unsatisfied` | Complete candidate generation and storage, measurement traversal and cache, candidate evaluation, quality, and ordered reservations | `add`, T5e; limit-minus-one/equal/plus-one for every counter, independent exhaustion, count-only-work/zero-slot, sort and loop-implementation invariance, cache-hit call charging, miss/`Unsatisfied` cache-entry charging, and exact failure-order evidence |
+| `layout.resources.grid-facet-specialized-slot-limit` | Renderer invariant; at most `1_000_000` prepared canonical structural-address slots with checked products and sums | Complete Canvas, facet, Matrix, Heatmap, category, mark, guide, annotation, and specialized topology census | `add`, T5e; exact address count and arithmetic-overflow evidence |
+| `layout.resources.checked-first-party-reservations` | Renderer invariant; five ordered stages use checked cardinality, exact byte census, and fallible exact first-party reservation before backend creation; stage 1 includes canonical font occurrence, candidate-list, provenance, and fixed measurement-cache storage, and stage 2 includes candidate-generation storage | Font preparation, measurement cache, candidate generation, topology, state, plan, text, and serialization allocation | `add`, T5a-T5e; exact font/cache/generation capacity, per-stage refusal, and no-partial-plan evidence |
+| `layout.resources.nonexact-default-png-viability` | Renderer invariant; every automatic/bounded candidate fits current source and default 300-DPI target axis/work limits plus the canonical SVG reservation | Root automatic/bounded policy and current Scene/PNG limits | `add`, T5e; exact default-PNG boundaries |
+| `layout.resources.exact-format-local-viability` | Renderer invariant; exact SVG can succeed while a later PNG terminal independently rejects without mutating the Scene | Exact root policy and current output routes | `add`, T5e; public connection T6; SVG-success/PNG-failure reuse evidence |
+| `layout.output.checked-canonical-dimension-conversion` | Renderer invariant; convert once by checked upward rounding to positive `u32` CSS-pixel dimensions | Spatial quantum, frozen plan, backend begin, and Scene storage | `add`, T5e; public connection T6; quantum-edge and identity evidence |
+| `output.canonical-scene-dimension-accessors` | Explicit policy; `Output` returns immutable canonical Scene width/height across chained terminals | Scene storage and Plot/Canvas canonical construction | `add`, T6; chained publication and raster-independence evidence |
+| `layout.failure.pre-backend-timing` | Renderer invariant; complete layout, arithmetic, resource, reservation, and convergence checks before backend creation | Every new kernel, convergence, resource, and output key | `add`, T5a-T5e; backend call-count and artifact-absence evidence |
+
+### Existing-Key Groups
+
+The following declarations expand to exactly 1552 existing keys. The 1498 keys
+without an explicit override retain their historical target disposition and gain
+the listed relationship; the 54 explicit overrides in the next subsection
+replace their old target resolution or disposition.
+
+| Group | Count | Canonical key set | Added relationship and evidence |
+| --- | ---: | --- | --- |
+| `A-root-resource` | 19 | Explicit set below | Connect to root constraints, default/exact viability, canonical conversion, and pre-backend resource evidence in T5e/T6. |
+| `A-foundation-text` | 20 | Two ranges below | Connect to normalized constraint-dependent text plans in T5a and root quality closure in T5e. |
+| `A-axis-fit` | 29 | Explicit set below | Connect finite tick/axis alternatives to T5a measurement and T5e candidate/convergence closure. |
+| `A-panel-title-axis-plan` | 85 | Ranges and explicit title-block set below | Connect panel/title/axis measurements to frozen T5a plans and T5e convergence. |
+| `A-canvas-composition` | 79 | Ranges, exclusions, and explicit set below | Connect Canvas tracks, headers, text panels, and outer composition to T5b measurement and T5e root closure. |
+| `A-legend-flow` | 114 | Two ranges with exclusions below | Connect complete legend alternatives and collision plans to T5b and T5e. |
+| `A-facets` | 44 | One range with exclusions below | Connect facet topology, tracks, strips, shared axes, and legends to T5b and T5e resource/convergence closure. |
+| `A-scientific-requirements` | 46 | Explicit set below | Connect mark, cell, category-pitch, interval, and annotation hard/preferred requirements to T5c and T5e. |
+| `A-guides-heatmap` | 51 | Explicit set below | Connect guide/Heatmap/Beeswarm content and fit to T5b-T5e complete composite plans. |
+| `A-marginal-matrix` | 78 | Two ranges with exclusions below | Connect Marginal and Matrix composite requirements to T5c inputs and T5e replacement. |
+| `A-annotations` | 109 | Ranges with exclusions below | Connect Waterfall, significance, panel-text, and bar-overlay geometry to T5c and T5e. |
+| `A-cross-structural-resource` | 17 | Explicit set below | Connect source topology/resource owners to their T5a-T5d component phases and aggregate T5e enforcement. |
+| **Existing `A-*` subtotal** | **691** | Disjoint sets below | Historical sources first identified as layout owners. |
+| `B-foundation-resolved-plan` | 48 | Ranges and exclusions below | Trace resolved typography, visibility, stroke, font, and measurement/draw identity through T4-T5e. |
+| `B-backend-ink-plan` | 37 | Ranges and explicit set below | Trace concrete style, ink, placement, clipping, and protocol inputs into immutable plans in T5a-T5e. |
+| `B-concrete-frozen-draw` | 31 | Ranges and explicit set below | Trace SVG, collision, bounds, and route decisions shared by frozen Null and concrete drawing. |
+| `B-lifecycle-output-plan` | 32 | Ranges and explicit set below | Trace lifecycle, scene, PNG sizing, and output conversion inputs through T5e/T6. |
+| `B-policy-inputs` | 128 | Filtered range plus explicit set below | Trace caller policies and semantic content consumed by generation, fit, and the frozen plan. |
+| `B-core-axis-geometry` | 38 | Filtered range below | Trace all remaining text, panel, automatic-tick, exact-tick, and axis geometry inputs. |
+| `B-composition-residual` | 43 | Filtered range below | Trace remaining Canvas, legend, facet, and composition measurement owners. |
+| `B-mark-geometry` | 152 | Filtered range with exclusions below | Trace every reachable ordinary mark extent, topology, range, order, style-width, and glyph input. |
+| `B-specialized-residual` | 242 | Filtered range below | Trace specialized family, guide, annotation, and interior-plan inputs. |
+| `B-domain-convergence` | 102 | Filtered ranges and explicit set below | Trace domain, category, label, topology, mapping, and convergence identities. |
+| `B-cross-source-residual` | 8 | One range below | Trace remaining significance, Canvas-range, and KDE-support inputs. |
+| **New `B-*` subtotal** | **861** | Disjoint after subtracting all `A-*` sets | Broad measurement-to-frozen-plan consumers omitted by the earlier narrow overlay. |
+| **Corrected existing-key total** | **1552** | `691 + 861` | Complete broad ownership trace. |
+
+`A-root-resource` is:
+
+```text
+backend.svg.document-framing
+scene.canonical-immutable-storage
+scene.source-dimensions-positive-limit
+scene.export-dimension-limit
+scene.source-pixel-work-limit
+scene.target-pixel-work-limit
+scene.conversion-byte-limit
+scene.png-target-positive-finite-limit
+lifecycle.plot.one-canvas-route-and-finalization
+output.plot.canonical-scene-render
+backend.png.preparse-target-prediction
+backend.png.integer-target-sizing
+backend.png.target-pixmap-allocation
+output.png.options.default-preset
+output.plot.pixel-size
+canvas.output.pixel-size
+validation.canvas.minimum-size
+canvas.lifecycle.preflight-plan-only
+canvas.lifecycle.canonical-scene-single-plan
+```
+
+`A-foundation-text` is
+`K[typography.text-block.maximum-width-validity..typography.text-block.unwrapped-line-height]`
+union
+`K[typography.text-width.integer-size-adapter..axes.y.left-inset-estimate]`.
+
+`A-axis-fit` is:
+
+```text
+axes.layout.current-axis-aggregate
+axes.y-title.edge-padding.current-draw-constant
+axes.y-title.tick-gap.current-draw-constant
+axes.exact-ticks.empty-label-collision-skip
+axes.x.exact-tick-label-maximum-width
+axes.y.exact-tick-label-maximum-width
+axes.x.exact-tick-collision-extent
+axes.y.exact-tick-collision-extent
+axes.exact-tick-collision-rejection
+axes.x.tick-label-vertical-placement
+axes.y.tick-label-horizontal-gap
+axes.y.tick-label-multiline-centering
+axes.x.title-measured-placement
+axes.y.title-measured-placement
+axes.x.automatic-tick-construction
+axes.y.automatic-tick-construction
+axes.ticks.automatic-target-count
+axes.range.display-spec-preservation
+axes.ticks.automatic-density-selection
+axes.ticks.automatic-midpoint-fallback
+axes.ticks.candidate-fit-and-downsampling
+axes.ticks.panel-containment-retention
+axes.x.tick-label-projected-extent
+axes.y.tick-label-projected-extent
+axes.exact-ticks.maximum-count
+axes.x.exact-ticks.replacement
+axes.x.exact-tick-collision-call
+axes.y.exact-ticks.replacement
+axes.y.exact-tick-collision-call
+```
+
+`A-panel-title-axis-plan` is
+`K[layout.panel.minimum-width..typography.panel-title.current-draw-line-pitch]`
+union:
+
+```text
+typography.title-block.title.current-fixed-orientation
+typography.title-block.title.current-wrap-width
+typography.title-block.title.measurement-to-draw-lines
+typography.title-block.title.baseline-pairing
+typography.title-block.subtitle.current-fixed-orientation
+typography.title-block.subtitle.current-wrap-width
+typography.title-block.subtitle.measurement-to-draw-lines
+typography.title-block.subtitle.baseline-pairing
+typography.title-block.caption.current-fixed-orientation
+typography.title-block.caption.current-wrap-width
+typography.title-block.caption.measurement-to-draw-lines
+typography.title-block.caption.baseline-pairing
+```
+
+union
+`K[typography.axes.x-tick.preflight-measurement..layout.axes.multiline-title.fixed-point-stabilization]`,
+union
+`K[layout.axes.multiline-y-tick.category-helper-reservation-gate..layout.axes.multiline-x-tick.category-helper-additional-bottom-reservation]`.
+
+`A-canvas-composition` is
+`K[composition.canvas-row-title.current-horizontal-padding..canvas.row-title.current-baseline-offset]`,
+union
+`K[canvas.legend.shared-measured-construction..canvas.headers.minimum-remaining-panel-fit]`
+excluding `canvas.headers.current-appearance-owner`, union
+`K[canvas.grid.provisional-unadorned-allocation..canvas.headers.row.span-placement]`,
+union
+`K[canvas.text-panel.current-horizontal-inset..canvas.panels.final-self-managed-rejection]`
+excluding `typography.canvas-text-panel-title.current-role` and
+`typography.canvas-text-panel-body.current-role`, union:
+
+```text
+canvas.legend.shared-render-reconstruction
+canvas.legend.shared-horizontal-placement
+canvas.legend.shared-vertical-placement
+canvas.legend.shared-gap-current-fallback
+canvas.text-panel.current-draw-gap
+canvas.text-panel.centered-block-placement
+canvas.root-title.current-theme-route
+```
+
+and union
+`K[canvas.panel-header.current-wrap-width..composition.outer.current-baseline-placement]`.
+
+`A-legend-flow` is
+`K[legend.glyph.current-point-only-extent..legend.text.current-fallback-to-unwrapped]`
+excluding the five appearance-only keys
+`legend.container.current-fill-alpha`, `legend.container.current-corner-radius`,
+`legend.container.current-complete-style`,
+`typography.legend-title.current-complete-style`, and
+`typography.legend-label.current-complete-style`, union
+`K[panel-text.legend-corner-conflict-planning..legend.outside.bottom.current-spacing]`.
+
+`A-facets` is
+`K[facets.lifecycle.coordinated-composition-order..facets.shared-y-title.rotated-placement]`
+excluding `typography.facet-strip.current-role` and
+`typography.facets-shared-axis.current-style`.
+
+`A-scientific-requirements` is:
+
+```text
+annotations.significance.data-gap-default
+annotations.significance.panel-padding-default
+backend.bracket.label-gap-carrier
+bars.spacing.current-bar-spacing
+guides.exact.width
+layers.point.exact-radius
+annotations.significance.gap-default
+annotations.significance.gap
+marks.bar.vertical-grouped-point-span
+marks.bar.vertical-single-stacked-width
+marks.bar.vertical-grouped-span
+marks.bar.vertical-spacing-conversion
+marks.bar.vertical-error-cap-length
+marks.bar.visible-point-data-extent
+marks.bar.horizontal-grouped-point-span
+marks.bar.horizontal-single-stacked-height
+marks.bar.horizontal-grouped-span
+marks.bar.horizontal-spacing-conversion
+marks.bar.horizontal-error-cap-length
+marks.boxplot.visible-whisker-flier-extent
+marks.boxplot.body-width
+marks.boxplot.whisker-cap-ratio
+marks.density.minimum-grid-points
+marks.density.maximum-grid-points
+marks.density.points-per-bandwidth
+marks.density.support-bandwidths
+marks.density.visible-segment-threshold
+marks.distribution.grouped-center-span
+marks.distribution.overlay-jitter-envelope
+marks.violin.kde-support-bandwidths
+marks.violin.sample-grid-count
+marks.violin.grouped-body-width
+marks.violin.ungrouped-body-width
+marks.violin.inner-box-width
+marks.raincloud.sampled-cloud-width
+marks.raincloud.sampled-summary-box-geometry
+marks.raincloud.sampled-strip-planning-radius
+marks.raincloud.sampled-strip-fit-validation
+marks.raincloud.precomputed-cloud-body-width
+marks.raincloud.precomputed-cloud-width
+marks.raincloud.precomputed-summary-box-geometry
+marks.raincloud.precomputed-strip-body-width
+marks.raincloud.precomputed-strip-planning-radius
+marks.raincloud.precomputed-strip-fit-validation
+annotations.point-layer-label-gap
+annotations.point-layer-label-coordinate-clamp
+```
+
+`A-guides-heatmap` is:
+
+```text
+guides.beeswarm.mandatory-color-guide-application
+guides.beeswarm.title-wrap-height-budget
+guides.beeswarm.endpoint-label-width-measurement
+guides.beeswarm.endpoint-column-reserve
+guides.beeswarm.title-column-reserve
+guides.beeswarm.outer-reserve-gap
+guides.beeswarm.reserve-maximum-application
+guides.beeswarm.minimum-residual-panel-width
+marks.beeswarm.horizontal-bin-resolution
+marks.beeswarm.alternating-stack-order
+marks.beeswarm.jitter-step
+marks.beeswarm.jitter-cap
+guides.beeswarm.panel-gap
+guides.beeswarm.maximum-gradient-height
+guides.beeswarm.gradient-bar-width
+guides.beeswarm.endpoint-label-placement
+guides.beeswarm.title-lane-offset
+resources.heatmap.maximum-cell-count
+guides.heatmap.title-wrap-height-budget
+guides.heatmap.endpoint-label-width-measurement
+guides.heatmap.endpoint-column-reserve
+guides.heatmap.title-column-reserve
+guides.heatmap.outer-reserve-gap
+guides.heatmap.reserve-maximum-application
+heatmap.labels.fit-route
+guides.heatmap.minimum-residual-panel-width
+layout.heatmap.minimum-panel-height
+heatmap.labels.y-elision-width-budget
+heatmap.labels.x-elision-width-budget
+guides.heatmap.missing-entry-presence
+annotations.heatmap.null-row-horizontal-padding
+annotations.heatmap.null-row-multiline-placement
+annotations.heatmap.cell-value-horizontal-fit-padding
+annotations.heatmap.cell-value-vertical-fit-padding
+annotations.heatmap.cell-value-fit-validation
+annotations.heatmap.null-row-fit-horizontal-padding
+annotations.heatmap.null-row-fit-vertical-padding
+annotations.heatmap.null-row-fit-validation
+guides.heatmap.panel-gap
+guides.heatmap.missing-swatch-reserve
+guides.heatmap.minimum-gradient-height
+guides.heatmap.maximum-gradient-heights
+guides.heatmap.endpoint-label-placement
+guides.heatmap.center-label-placement
+guides.heatmap.title-lane-offset
+guides.heatmap.missing-swatch-placement-and-size
+guides.heatmap.missing-label-placement
+heatmap.labels.ellipsis-token
+heatmap.labels.grapheme-safe-elision
+heatmap.labels.nonempty-elision-validation
+heatmap.labels.unique-elision-validation
+```
+
+`A-marginal-matrix` is
+`K[layout.marginal.raw-data-margin-fraction..layout.marginal.visible-support-kde-replanning-fallbacks]`
+union
+`K[layout.matrix.initial-canvas-and-outer-panel-route..layout.matrix.repeated-canvas-layout-reconstruction]`
+excluding the eight appearance-only Matrix keys from
+`axes.matrix.cell-frame-final-style`, `axes.matrix.cell-tick-final-style`,
+`typography.matrix.tick-label-current-appearance`,
+`typography.matrix.variable-label-current-appearance`,
+`marks.matrix.offdiagonal-point-final-style`,
+`marks.matrix.legend-point-style-reconstruction`,
+`marks.matrix.legend-fill-style-reconstruction`, and
+`legend.matrix.composite-glyph-and-resolution`.
+
+`A-annotations` is
+`K[annotations.waterfall.candidate-order..typography.waterfall-total.current-unit-line-height]`,
+union
+`K[annotations.significance.metrics-style-materialization..annotations.significance.final-style-and-draw-order]`
+excluding `annotations.significance.ceiling-validity`,
+`annotations.significance.ceiling-room-validation`,
+`annotations.significance.data-below-ceiling-range-fit`,
+`annotations.significance.data-below-ceiling-projection`, and
+`annotations.significance.final-style-and-draw-order`, union
+`K[annotations.panel-text.padding..annotations.panel-text.pairwise-overlap-rejection]`
+excluding `typography.panel-text.current-normal-weight` and
+`annotations.panel-text.final-style-assembly`, union
+`K[annotations.bar.vertical-point-radius-clearance..annotations.bar.vertical-attached-collision]`,
+union
+`K[annotations.bar.horizontal-point-radius-clearance..annotations.bar.horizontal-attached-collision]`.
+
+`A-cross-structural-resource` is:
+
+```text
+geometry.raincloud.maximum-density-points-per-group
+geometry.raincloud.maximum-density-points-total
+geometry.raincloud.maximum-raw-points-total
+geometry.histogram.maximum-kde-points
+canvas.grid.cardinality
+canvas.plot-panel.cell-range
+canvas.text-panel.cell-range
+canvas.cell.single-occupancy
+canvas.headers.column-content-range
+canvas.headers.row-content-range
+validation.matrix.minimum-variables
+facets.layout.current-policy
+marks.heatmap.grid-cardinality-overflow
+resources.histogram.explicit-bin-ceiling
+histogram.binning.requested-width-cardinality
+heatmap.labels.fit-policy
+canvas.legend.shared-gap
+```
+
+`B-foundation-resolved-plan` is:
+
+```text
+preset.routing.current-theme-enum
+
+K[typography.plot.font-stack.current-palette-field
+  ..typography.canvas-composition.font-stack.current-palette-field]
+
+K[axes.stroke-width.current-axis-width
+  ..typography.canvas-caption-size.current-field]
+excluding marks.general-line-width.current-dormant-field
+
+axes.grid-width.current-field
+
+K[typography.builtin-font-stack.current-public-constant
+  ..font-resolution.global-sans-serif-remap]
+excluding typography.title-block-font-stack.current-dormant-fallback
+```
+
+`B-backend-ink-plan` is:
+
+```text
+K[backend.coordinates.projected-point-carrier
+  ..backend.point.outline-width-resolution]
+excluding backend.point.fill-paint-carrier
+
+backend.line.stroke-width-carrier
+backend.fill.stroke-carrier
+backend.text.anchor-default
+backend.text.typography-carrier
+backend.text.placement-carrier
+backend.bracket.geometry-carrier
+backend.layer.semantic-role
+annotations.significance.tick-height-default
+annotations.significance.level-step-default
+backend.bracket.stroke-width-carrier
+backend.bracket.typography-carrier
+
+K[backend.protocol.coordinate-convention
+  ..backend.protocol.gradient-contract]
+
+K[backend.validation.clip-region
+  ..backend.protocol.scope-cleanup-precedence]
+```
+
+The dormant rounded-rectangle trait fallback is not included.
+
+`B-concrete-frozen-draw` is:
+
+```text
+backend.svg.concrete-canvas-lifecycle
+
+K[backend.svg.coordinate-conversion-and-precision
+  ..backend.svg.text-outline-conversion]
+
+K[backend.svg.layer-buffering-and-grid-order
+  ..backend.svg.significance-bracket-label-serialization]
+
+K[geometry.collision.annotation-weight
+  ..geometry.obstacle-recording-order]
+
+K[geometry.clip-stack-lifecycle
+  ..geometry.significance-bracket-label-bounds]
+
+scene.outlined-svg-routing
+scene.png-routing
+```
+
+`B-lifecycle-output-plan` is:
+
+```text
+K[lifecycle.plot.public-preflight-route
+  ..output.plot.canonical-scene-render]
+
+output.reusable-scene-handle
+output.outlined-svg.conversion-before-staging
+output.png.conversion-before-staging
+output.png.options.sizing-carrier
+output.png.options.default-preset
+output.png.sizing.closed-modes
+
+K[backend.png.option-validation
+  ..backend.png.source-target-transform]
+```
+
+`B-policy-inputs` is:
+
+```text
+P[bars.spacing.current-bar-spacing
+  ..validation.guides.segment-requires-two-numeric-axes]
+
+geometry.raincloud.maximum-groups
+geometry.histogram.maximum-bins
+geometry.histogram.maximum-rugs
+```
+
+This set includes the previously omitted `layers.point.default-radius`,
+`layers.bar-point.exact-radius`, `axes.x.exact-ticks-control`,
+`axes.y.exact-ticks-control`, `content.plot.title`, `content.plot.subtitle`,
+`content.plot.caption`, `content.axis.x-title`, and `content.axis.y-title`.
+
+`B-core-axis-geometry` is:
+
+```text
+P[typography.text-block.maximum-width-validity
+  ..layout.axes.multiline-title.fixed-point-stabilization]
+```
+
+This set includes the previously omitted `layout.panel.default-box-insets`,
+`axes.x.empty-ticks-select-automatic`, `axes.y.empty-ticks-select-automatic`,
+`axes.ticks.automatic-nice-step-set`,
+`axes.ticks.distinct-label-escalation`, `axes.ticks.numeric-formatting`,
+`axes.x.exact-tick-scale-projection`,
+`axes.exact-ticks.in-range-validation`, and
+`axes.exact-ticks.strict-order-validation`.
+
+`B-composition-residual` is:
+
+```text
+P[canvas.lifecycle.deferred-backend-finish
+  ..facets.label.current-display-format]
+```
+
+`B-mark-geometry` is:
+
+```text
+P[marks.bar.vertical-arrangement-route
+  ..marks.line-pattern.private-closed-conversion]
+```
+
+The following unreachable sampled-Raincloud branches are not included:
+
+```text
+marks.raincloud.sampled-raw-overlay-dormant-branch
+marks.raincloud.sampled-raw-overlay-dormant-application
+```
+
+`B-specialized-residual` is:
+
+```text
+P[guides.beeswarm.mandatory-color-guide-application
+  ..annotations.bar.attached-rendered-edge-selection]
+excluding annotations.significance.ceiling-validity,
+annotations.significance.ceiling-room-validation,
+annotations.significance.data-below-ceiling-range-fit, and
+annotations.significance.data-below-ceiling-projection
+```
+
+This set includes exact Heatmap and Beeswarm guide geometry, specialized mark
+extents and topology, interaction and interval geometry, and every reachable
+specialized annotation input consumed by the immutable plan.
+
+`B-domain-convergence` is:
+
+```text
+P[semantic-fields.numeric.raw-name-identity
+  ..channels.hue.precomputed-dimension-fallback]
+
+P[facets.color-domain.global-carrier-fallbacks
+  ..labels.semantic.raw-display-domain-coordination]
+
+P[domains.bar.positioned-series.resolved-order
+  ..marks.accent.scatter.unkeyed-slot-zero-black-fallback]
+
+P[categories.beeswarm.first-observed-domain
+  ..color-scales.waterfall.sign-palette-mapping]
+
+channels.series.unified-family-membership
+canvas.color-domain.rendered-level-projection
+```
+
+`B-cross-source-residual` is:
+
+```text
+K[annotations.significance.mark-content
+  ..marks.distribution.kde-constant-support-fallback]
+```
+
+The five rows removed from the earlier `A-*` overlay are
+`annotations.significance.label-gap-default-copy` and the four dormant-ceiling
+rows excluded from `A-annotations`; they reduce that subtotal from 696 to 691.
+The two unreachable sampled-Raincloud rows above are excluded from new additions
+and were never in an `A-*` group.
+
+### Existing-Key Overrides
+
+These 54 keys replace their historical target resolution or disposition. Every
+other affected key retains its prior target owner and gains only its group
+relationship above.
+
+- `output.plot.pixel-size` and `canvas.output.pixel-size`: `split-and-replace`;
+  migrate exact roots in T5a/T5b, close automatic and bounded roots in T5e, and
+  connect the public sizing surface in T6.
+- `validation.canvas.minimum-size`: `replace`, T5b/T5e; delete the universal
+  `160x120` minimum and derive complete-content and resource fit.
+- `layout.canvas.title-subtitle-top-gap` and
+  `layout.canvas.caption-extra-reserve`: `move`, T4/T5a with public connection
+  T6; resolve `CompositionTheme` relationships against adjacent final
+  typography, parallel to composed outer-title and caption ownership.
+- `font-resolution.load-system-fonts`: `move-and-replace`, T5a; discover host
+  faces before measurement, derive identity only from complete-file SHA-256 and
+  face index, and exclude path, discovery order, mtime, and database identity
+  from equality and ordering.
+- `font-resolution.named-family-probe`: `replace`, T5a; replace first-installed
+  probing with complete Unicode-16.0 NFKC-casefolded typographic-name,
+  legacy-name, and fixed style/stretch/requested-weight occurrence generation.
+- `font-resolution.global-sans-serif-remap`: `replace`, T5a; delete process-
+  global remapping and contribute every host candidate for each generic serif,
+  sans-serif, or monospace stack entry.
+- `font-resolution.current-global-family-order`: `replace`, T5a; for every used
+  `(stack,weight)`, generate all occurrence tuples, retain the lexicographically
+  least tuple for each file identity, sort by the exact canonical tuple, use the
+  first primary and first glyph-covering candidates, and record the complete
+  ordered identity list as font-environment provenance.
+- `canvas.legend.shared-entry-exact-merge`: `replace`, T5b/T5d; establish the
+  kind-discriminated shared-guide compatibility and domain merger. Reject mixed
+  kinds or independently titled sections; continuous contributors require exact
+  field, scale-kind, title, gradient, center, and missing-block equality, then
+  apply the automatic-union/equal-exact/contained-automatic domain rule.
+- `canvas.legend.shared-measured-construction`: `replace`, T4/T5b/T5d; consume
+  one final kind-specific descriptor, generate continuous labels once from its
+  merged domain with Canvas typography, and freeze the gradient, title, labels,
+  missing block, and exact discrete glyphs without per-Plot reconstruction.
+- The following 15 fixed or universal minima are `replace` in their T5a/T5b
+  component phase with complete automatic-root integration in T5e:
+
+```text
+layout.panel.minimum-width
+layout.panel.minimum-height
+layout.facets.shared-axis.minimum-panel-fit
+layout.axes.multiline-x-tick.minimum-panel-height
+layout.axes.multiline-x-tick.category-helper-minimum-panel-height
+canvas.headers.minimum-remaining-panel-fit
+composition.grid.minimum-panel-fit
+legend.outside.minimum-panel-fit
+guides.beeswarm.minimum-residual-panel-width
+guides.heatmap.minimum-residual-panel-width
+layout.heatmap.minimum-panel-height
+layout.matrix.minimum-cell-size
+annotations.waterfall.minimum-mark-panel-height
+layout.marginal.top-panel-fixed-height
+layout.marginal.right-panel-fixed-width
+```
+
+- The following nine local loop owners are `deduplicate-and-replace`, T5e; only
+  the root eight-complete-pass protocol owns feedback and stabilization:
+
+```text
+layout.axes.multiline-title.adjustment-pass-budget
+layout.axes.multiline-title.fixed-point-stabilization
+legend.clearance.current-pass-budget
+facets.shared-axis.adjustment-pass-budget
+facets.shared-axis.fixed-point-stabilization
+facets.legend-clearance.current-pass-budget
+layout.matrix.label-fit-iteration-bound
+layout.matrix.exact-convergence-test
+layout.matrix.nonconvergence-failure
+```
+
+- The following 19 heuristic or discovery-order selection owners are `replace`
+  in their component phase plus T5e total-order closure. Their semantic
+  alternatives remain candidate inputs, but greedy, first-fit, and local-order
+  selection does not choose the final result:
+
+```text
+typography.text-block.word-preserving-wrap
+typography.text-block.parenthetical-rebalance
+axes.ticks.automatic-density-selection
+axes.ticks.candidate-fit-and-downsampling
+legend.entries.current-single-column-limit
+legend.title.current-responsive-width-budget
+legend.label.current-responsive-width-budget
+legend.box.current-responsive-available-budget
+legend.clearance.current-nearest-edge-fallback
+legend.clearance.top-right-candidate-order
+legend.clearance.candidate-edge-order
+legend.clearance.top-right-first-expansion
+legend.clearance.lowest-overlap-edge-grammar
+legend.clearance.lowest-overlap-tie-break
+legend.auto.panel-text-cyclic-search
+legend.auto.default-and-overlap-selection
+facets.legend.auto-outside-right-top
+annotations.waterfall.candidate-order
+annotations.waterfall.first-fit-row-packing
+```
+
+### Count Closure
+
+The three completed T2 tables remain exactly 1860 unique keys in identical
+order. The overlay expands to exactly 1574 identities: 1552 existing historical
+keys and 22 target-only keys. No existing overlay key occurs outside the
+historical set, no target-only key occurs inside it, and no overlay identity is
+duplicated. Materialization applies existing-key overrides in historical order
+and appends the 22 target-only keys in the order above, producing exactly
+**1882** unique final target keys.
+
+T7 reconciles only that 1882-key materialized target. The historical 1836-record
+pre-T2h count and completed 1860-record T2 count remain provenance, not
+post-adjudication acceptance thresholds.
