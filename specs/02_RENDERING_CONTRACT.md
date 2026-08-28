@@ -341,6 +341,11 @@ inside an external dependency.
 
 ## Artifact Publication
 
+The current terminal methods publish to the exact caller-provided path and do
+not infer, validate, replace, or append a format extension. Phase T3k in
+`91_IMPLEMENTATION_PLAN.md` records the pending replacement behavior; it is not
+current until that phase completes.
+
 Each file output is staged at a unique sibling path and renamed only after
 rendering or conversion succeeds. Consuming output calls publish independently;
 if a later chained publication fails, an earlier successful publication remains
