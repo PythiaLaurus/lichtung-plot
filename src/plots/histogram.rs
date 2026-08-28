@@ -70,10 +70,10 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = context.theme;
+    let theme = context.theme;
     let fill = FillStyle {
-        color: palette.colors[0],
-        stroke: palette.foreground,
+        color: theme.colors[0],
+        stroke: theme.foreground,
         stroke_width: 0.8,
         opacity: 0.82,
     };
@@ -102,10 +102,10 @@ pub(crate) fn render(
                     Point2D::new(x, y)
                 })
                 .collect::<Vec<_>>();
-            backend.draw_line(&points, &LineStyle::solid(palette.foreground, 1.0))?;
+            backend.draw_line(&points, &LineStyle::solid(theme.foreground, 1.0))?;
 
             let rug_height = y_max * 0.035;
-            let rug_style = LineStyle::solid(palette.foreground, 0.7);
+            let rug_style = LineStyle::solid(theme.foreground, 0.7);
             for value in &values {
                 let (x, bottom) = layout.projection.project(*value, 0.0);
                 let (_, top) = layout.projection.project(*value, rug_height);
@@ -145,10 +145,9 @@ fn render_precomputed_composite(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = theme;
     let fill = FillStyle {
-        color: palette.colors[0],
-        stroke: palette.foreground,
+        color: theme.colors[0],
+        stroke: theme.foreground,
         stroke_width: 0.8,
         opacity: 0.82,
     };
@@ -175,9 +174,9 @@ fn render_precomputed_composite(
                 Point2D::new(x, y)
             })
             .collect::<Vec<_>>();
-        backend.draw_line(&curve, &LineStyle::solid(palette.foreground, 1.0))?;
+        backend.draw_line(&curve, &LineStyle::solid(theme.foreground, 1.0))?;
 
-        let rug_style = LineStyle::solid(palette.foreground, 0.7);
+        let rug_style = LineStyle::solid(theme.foreground, 0.7);
         for rug in &input.rugs {
             let (x, baseline) = layout.projection.project(rug.x, rug.baseline);
             let (_, top) = layout.projection.project(rug.x, rug.top);

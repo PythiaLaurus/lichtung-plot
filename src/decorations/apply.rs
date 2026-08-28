@@ -13,14 +13,14 @@ use crate::theme::ResolvedTheme;
 pub(crate) fn apply_grid(
     chart: &Plot,
     result: &PlotRenderResult,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer_role(
         backend,
         &chart.layer_name("grid"),
         LayerRole::Grid,
-        |backend| result.layout.draw_grid_below(palette, backend),
+        |backend| result.layout.draw_grid_below(theme, backend),
     )
 }
 
@@ -28,31 +28,31 @@ pub(crate) fn apply_grid(
 pub(crate) fn apply_axes(
     chart: &Plot,
     result: &PlotRenderResult,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer(backend, &chart.layer_name("axes"), |backend| {
-        result.layout.draw_decorations(palette, backend)
+        result.layout.draw_decorations(theme, backend)
     })
 }
 
 pub(crate) fn apply_canvas_text(
     chart: &Plot,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let mut title_block = TitleBlock::new().font_family(palette.font_family.clone());
-    if palette.show_title {
+    let mut title_block = TitleBlock::new().font_family(theme.font_family.clone());
+    if theme.show_title {
         if let Some(title) = chart.title_text() {
             title_block = title_block.title(title.to_owned());
         }
     }
-    if palette.show_subtitle {
+    if theme.show_subtitle {
         if let Some(subtitle) = chart.subtitle_text() {
             title_block = title_block.subtitle(subtitle.to_owned());
         }
     }
-    if palette.show_caption {
+    if theme.show_caption {
         if let Some(caption) = chart.caption_text() {
             title_block = title_block.caption(caption.to_owned());
         }
@@ -61,8 +61,8 @@ pub(crate) fn apply_canvas_text(
         title_block.draw(
             backend,
             chart.width(),
-            &chart.measured_canvas_layout(palette)?,
-            palette,
+            &chart.measured_canvas_layout(theme)?,
+            theme,
         )?;
     }
     Ok(())

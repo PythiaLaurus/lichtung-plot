@@ -169,14 +169,14 @@ impl Layout {
     /// Grid is drawn separately via `draw_grid_below()` BEFORE data.
     pub fn draw_decorations(
         &self,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        Frame::draw(&self.projection, palette, backend)?;
+        Frame::draw(&self.projection, theme, backend)?;
         self.x_axis
-            .draw(&self.projection, AxisSide::Bottom, palette, backend)?;
+            .draw(&self.projection, AxisSide::Bottom, theme, backend)?;
         self.y_axis
-            .draw(&self.projection, AxisSide::Left, palette, backend)?;
+            .draw(&self.projection, AxisSide::Left, theme, backend)?;
         Ok(())
     }
 
@@ -184,16 +184,10 @@ impl Layout {
     /// data marks so the grid appears behind the data.
     pub fn draw_grid_below(
         &self,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        Grid::draw(
-            &self.projection,
-            &self.x_axis,
-            &self.y_axis,
-            palette,
-            backend,
-        )
+        Grid::draw(&self.projection, &self.x_axis, &self.y_axis, theme, backend)
     }
 }
 

@@ -16,10 +16,7 @@ mod validation;
 
 pub(crate) use artifacts::write_atomic;
 #[cfg(test)]
-pub(crate) use artifacts::{
-    publish_staged, reserve_unique_sibling_temp_path, with_temporary_artifacts,
-    TEMP_RESERVATION_CALLS,
-};
+pub(crate) use artifacts::TEMP_RESERVATION_CALLS;
 pub(crate) use backend::DeferredBackend;
 
 #[cfg(test)]

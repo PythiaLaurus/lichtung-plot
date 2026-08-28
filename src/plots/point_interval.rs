@@ -83,8 +83,8 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = context.theme;
-    let interval_style = LineStyle::solid(palette.foreground, 1.4);
+    let theme = context.theme;
+    let interval_style = LineStyle::solid(theme.foreground, 1.4);
     let zero_line_x = (chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0)
         .then(|| layout.projection.project(0.0, 0.0).0);
 
@@ -94,7 +94,7 @@ pub(crate) fn render(
             let (_, y1) = layout.projection.project(0.0, row_count);
             backend.draw_line(
                 &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::solid(palette.foreground, 0.8),
+                &LineStyle::solid(theme.foreground, 0.8),
             )?;
         }
 
@@ -148,7 +148,7 @@ pub(crate) fn render(
                 let (estimate_x, _) = layout.projection.project(tuple.estimate, y);
                 backend.draw_scatter(
                     &[Point2D::new(estimate_x, center_y)],
-                    &chart.point_style(palette.colors[0], 4),
+                    &chart.point_style(theme.colors[0], 4),
                 )?;
             }
         }

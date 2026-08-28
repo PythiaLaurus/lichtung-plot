@@ -69,11 +69,11 @@ impl PanelRequirements {
     /// Measure decorations emitted by [`crate::layout::Axis`] around a panel.
     pub(crate) fn measure(
         layout: &Layout,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         top_text: Option<&str>,
         available_panel: PanelBox,
     ) -> Result<Self, Error> {
-        Self::measure_header(layout, palette, None, top_text, available_panel)
+        Self::measure_header(layout, theme, None, top_text, available_panel)
     }
 
     #[expect(
@@ -86,12 +86,12 @@ impl PanelRequirements {
     )]
     pub(crate) fn measure_header(
         layout: &Layout,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         top_title: Option<&str>,
         top_subtitle: Option<&str>,
         available_panel: PanelBox,
     ) -> Result<Self, Error> {
-        let tick_length = f64::from(palette.tick_length);
+        let tick_length = f64::from(theme.tick_length);
         let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;
         let x_tick_blocks = layout
             .x_axis
@@ -101,7 +101,7 @@ impl PanelRequirements {
             .map(|tick| {
                 crate::layout::TextBlock::layout(
                     &tick.label,
-                    palette.tick_font_size,
+                    theme.tick_font_size,
                     x_tick_width.max(1.0),
                     "x-axis tick label",
                 )
@@ -116,13 +116,13 @@ impl PanelRequirements {
             .map(|tick| {
                 crate::layout::TextBlock::layout(
                     &tick.label,
-                    palette.tick_font_size,
+                    theme.tick_font_size,
                     y_tick_maximum_width,
                     "y-axis tick label",
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let x_tick_half_width = if palette.show_tick_labels {
+        let x_tick_half_width = if theme.show_tick_labels {
             x_tick_blocks
                 .iter()
                 .map(|block| block.width() / 2.0)
@@ -130,7 +130,7 @@ impl PanelRequirements {
         } else {
             0.0
         };
-        let y_tick_width = if palette.show_tick_labels {
+        let y_tick_width = if theme.show_tick_labels {
             y_tick_blocks
                 .iter()
                 .map(crate::layout::TextBlock::width)
@@ -142,7 +142,7 @@ impl PanelRequirements {
             .then(|| {
                 crate::layout::TextBlock::layout(
                     &layout.x_axis.label,
-                    palette.label_font_size,
+                    theme.label_font_size,
                     available_panel.width().max(1.0),
                     "x-axis title",
                 )
@@ -152,13 +152,13 @@ impl PanelRequirements {
             .then(|| {
                 crate::layout::TextBlock::layout(
                     &layout.y_axis.label,
-                    palette.label_font_size,
+                    theme.label_font_size,
                     available_panel.height().max(1.0),
                     "y-axis title",
                 )
             })
             .transpose()?;
-        let x_label_overhang = if palette.show_x_label {
+        let x_label_overhang = if theme.show_x_label {
             ((x_label_block
                 .as_ref()
                 .map_or(0.0, crate::layout::TextBlock::width)
@@ -168,7 +168,7 @@ impl PanelRequirements {
         } else {
             0.0
         };
-        let y_label_overhang = if palette.show_y_label {
+        let y_label_overhang = if theme.show_y_label {
             ((y_label_block
                 .as_ref()
                 .map_or(0.0, crate::layout::TextBlock::width)
@@ -178,7 +178,7 @@ impl PanelRequirements {
         } else {
             0.0
         };
-        let y_tick_vertical_overhang = if palette.show_tick_labels {
+        let y_tick_vertical_overhang = if theme.show_tick_labels {
             y_tick_blocks
                 .iter()
                 .map(|block| block.height() / 2.0)
@@ -187,21 +187,21 @@ impl PanelRequirements {
             0.0
         };
 
-        let mut left = if palette.show_tick_labels {
+        let mut left = if theme.show_tick_labels {
             tick_length + 6.0 + y_tick_width
         } else {
             tick_length
         };
-        if palette.show_y_label && !layout.y_axis.label.is_empty() {
+        if theme.show_y_label && !layout.y_axis.label.is_empty() {
             left += 16.0
                 + y_label_block.as_ref().map_or(
-                    f64::from(palette.label_font_size),
+                    f64::from(theme.label_font_size),
                     crate::layout::TextBlock::height,
                 );
         }
         left = left.max(x_tick_half_width).max(x_label_overhang) + 4.0;
 
-        let x_tick_height = if palette.show_tick_labels {
+        let x_tick_height = if theme.show_tick_labels {
             x_tick_blocks
                 .iter()
                 .map(crate::layout::TextBlock::height)
@@ -214,7 +214,7 @@ impl PanelRequirements {
         } else {
             tick_length + 4.0
         };
-        if palette.show_x_label && !layout.x_axis.label.is_empty() {
+        if theme.show_x_label && !layout.x_axis.label.is_empty() {
             let title_gap = if x_tick_height > 0.0 {
                 X_AXIS_TICK_LABEL_GAP + x_tick_height + X_AXIS_TITLE_GAP
             } else {
@@ -224,7 +224,7 @@ impl PanelRequirements {
                 tick_length
                     + title_gap
                     + x_label_block.as_ref().map_or(
-                        f64::from(palette.label_font_size) * 1.2,
+                        f64::from(theme.label_font_size) * 1.2,
                         crate::layout::TextBlock::height,
                     ),
             );
@@ -234,14 +234,14 @@ impl PanelRequirements {
         let maximum_width = (available_panel.width() - 16.0).max(1.0);
         let title_lines = top_title.map_or(Ok(0), |text| {
             Ok::<_, Error>(
-                try_wrap_text(text, palette.title_font_size, maximum_width, "panel title")?.len(),
+                try_wrap_text(text, theme.title_font_size, maximum_width, "panel title")?.len(),
             )
         })?;
         let subtitle_lines = top_subtitle.map_or(Ok(0), |text| {
             Ok::<_, Error>(
                 try_wrap_text(
                     text,
-                    palette.subtitle_font_size,
+                    theme.subtitle_font_size,
                     maximum_width,
                     "panel subtitle or facet strip",
                 )?
@@ -256,8 +256,8 @@ impl PanelRequirements {
         let top = if title_lines == 0 && subtitle_lines == 0 {
             4.0
         } else {
-            title_lines as f64 * (f64::from(palette.title_font_size) + 6.0)
-                + subtitle_lines as f64 * (f64::from(palette.subtitle_font_size) + 6.0)
+            title_lines as f64 * (f64::from(theme.title_font_size) + 6.0)
+                + subtitle_lines as f64 * (f64::from(theme.subtitle_font_size) + 6.0)
                 + header_gap
                 + 8.0
         };
@@ -410,13 +410,13 @@ impl CanvasLayout {
     pub(crate) fn single_panel(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         spec: CanvasLayoutSpec,
     ) -> Self {
         Self::resolve(
             canvas_width,
             canvas_height,
-            palette,
+            theme,
             spec,
             (1, 1, 1),
             false,
@@ -428,36 +428,28 @@ impl CanvasLayout {
     pub(crate) fn measured_single_panel(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let counts = measured_line_counts(text, palette, maximum_width)?;
-        Self::resolve(
-            canvas_width,
-            canvas_height,
-            palette,
-            spec,
-            counts,
-            true,
-            true,
-        )
+        let counts = measured_line_counts(text, theme, maximum_width)?;
+        Self::resolve(canvas_width, canvas_height, theme, spec, counts, true, true)
     }
 
     pub(crate) fn measured_composed_canvas(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let counts = measured_line_counts(text, palette, maximum_width)?;
+        let counts = measured_line_counts(text, theme, maximum_width)?;
         Self::resolve(
             canvas_width,
             canvas_height,
-            palette,
+            theme,
             spec,
             counts,
             true,
@@ -473,7 +465,7 @@ impl CanvasLayout {
     fn resolve(
         canvas_width: u32,
         canvas_height: u32,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
         spec: CanvasLayoutSpec,
         line_counts: (usize, usize, usize),
         checked: bool,
@@ -487,9 +479,9 @@ impl CanvasLayout {
         } else {
             0.0
         };
-        let title_line_h = f64::from(palette.title_font_size) + 6.0;
-        let subtitle_line_h = f64::from(palette.subtitle_font_size) + 6.0;
-        let caption_line_h = f64::from(palette.caption_font_size) + 6.0;
+        let title_line_h = f64::from(theme.title_font_size) + 6.0;
+        let subtitle_line_h = f64::from(theme.subtitle_font_size) + 6.0;
+        let caption_line_h = f64::from(theme.caption_font_size) + 6.0;
         let title_h = if spec.has_title {
             title_line_h * line_counts.0.max(1) as f64
         } else {
@@ -506,34 +498,34 @@ impl CanvasLayout {
             0.0
         };
 
-        let tick_h = if reserve_axes && palette.show_tick_labels {
-            f64::from(palette.tick_length)
+        let tick_h = if reserve_axes && theme.show_tick_labels {
+            f64::from(theme.tick_length)
                 + X_AXIS_TICK_LABEL_GAP
-                + f64::from(palette.tick_font_size) * 1.2
+                + f64::from(theme.tick_font_size) * 1.2
         } else if reserve_axes {
-            f64::from(palette.tick_length) + 4.0
+            f64::from(theme.tick_length) + 4.0
         } else {
             0.0
         };
-        let x_label_h = if spec.has_x_label && palette.show_x_label {
-            let gap = if reserve_axes && palette.show_tick_labels {
+        let x_label_h = if spec.has_x_label && theme.show_x_label {
+            let gap = if reserve_axes && theme.show_tick_labels {
                 X_AXIS_TITLE_GAP
             } else {
                 X_AXIS_TITLE_WITHOUT_TICKS_GAP
             };
-            gap + f64::from(palette.label_font_size) * 1.2
+            gap + f64::from(theme.label_font_size) * 1.2
         } else {
             0.0
         };
-        let y_tick_w = if reserve_axes && palette.show_tick_labels {
-            f64::from(palette.tick_font_size) * 2.2 + f64::from(palette.tick_length) + 6.0
+        let y_tick_w = if reserve_axes && theme.show_tick_labels {
+            f64::from(theme.tick_font_size) * 2.2 + f64::from(theme.tick_length) + 6.0
         } else if reserve_axes {
-            f64::from(palette.tick_length) + 4.0
+            f64::from(theme.tick_length) + 4.0
         } else {
             0.0
         };
-        let y_label_w = if spec.has_y_label && palette.show_y_label {
-            f64::from(palette.label_font_size) + 12.0
+        let y_label_w = if spec.has_y_label && theme.show_y_label {
+            f64::from(theme.label_font_size) + 12.0
         } else {
             0.0
         };
@@ -569,7 +561,7 @@ impl CanvasLayout {
             .then_some(h - 20.0 - if spec.has_title { title_h } else { 0.0 });
         let caption_y = spec
             .has_caption
-            .then_some(f64::from(palette.caption_font_size) + 6.0);
+            .then_some(f64::from(theme.caption_font_size) + 6.0);
 
         let title_lines_y = title_y.map_or_else(Vec::new, |first| {
             (0..line_counts.0.max(1))
@@ -602,26 +594,20 @@ impl CanvasLayout {
 
 fn measured_line_counts(
     text: (Option<&str>, Option<&str>, Option<&str>),
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     maximum_width: f64,
 ) -> Result<(usize, usize, usize), Error> {
     Ok((
         text.0.map_or(Ok(0), |value| {
             Ok::<_, Error>(
-                try_wrap_text(
-                    value,
-                    palette.title_font_size,
-                    maximum_width,
-                    "canvas title",
-                )?
-                .len(),
+                try_wrap_text(value, theme.title_font_size, maximum_width, "canvas title")?.len(),
             )
         })?,
         text.1.map_or(Ok(0), |value| {
             Ok::<_, Error>(
                 try_wrap_text(
                     value,
-                    palette.subtitle_font_size,
+                    theme.subtitle_font_size,
                     maximum_width,
                     "canvas subtitle",
                 )?
@@ -632,7 +618,7 @@ fn measured_line_counts(
             Ok::<_, Error>(
                 try_wrap_text(
                     value,
-                    palette.caption_font_size,
+                    theme.caption_font_size,
                     maximum_width,
                     "canvas caption",
                 )?
@@ -664,7 +650,7 @@ mod tests {
 
     #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
-        let palette = Theme::Publication.resolve();
+        let theme = Theme::Publication.resolve();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
         let spec = CanvasLayoutSpec {
@@ -677,12 +663,12 @@ mod tests {
         let layout = CanvasLayout::measured_single_panel(
             360,
             240,
-            &palette,
+            &theme,
             spec,
             (None, None, Some(caption)),
         )
         .unwrap();
-        let lines = wrap_text(caption, palette.caption_font_size, 328.0);
+        let lines = wrap_text(caption, theme.caption_font_size, 328.0);
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
@@ -690,7 +676,7 @@ mod tests {
         assert!(CanvasLayout::measured_single_panel(
             160,
             120,
-            &palette,
+            &theme,
             spec,
             (None, None, Some(&caption.repeat(8))),
         )

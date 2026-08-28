@@ -21,13 +21,13 @@ impl Output {
     /// Publish a self-contained outlined SVG atomically to one path.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Self, Error> {
         let bytes = self.scene.svg_with_text_as_paths()?;
-        crate::orchestrator::write_atomic(path.as_ref(), "svg", &bytes)?;
+        crate::orchestrator::write_atomic(path.as_ref(), &bytes)?;
         Ok(self)
     }
 
     /// Publish SVG with selectable and searchable text atomically to one path.
     pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Self, Error> {
-        crate::orchestrator::write_atomic(path.as_ref(), "svg", self.scene.svg_bytes())?;
+        crate::orchestrator::write_atomic(path.as_ref(), self.scene.svg_bytes())?;
         Ok(self)
     }
 
@@ -54,7 +54,7 @@ impl Output {
         options: PngOptions,
     ) -> Result<Self, Error> {
         let bytes = self.scene.png_bytes(&options)?;
-        crate::orchestrator::write_atomic(path.as_ref(), "png", &bytes)?;
+        crate::orchestrator::write_atomic(path.as_ref(), &bytes)?;
         Ok(self)
     }
 }

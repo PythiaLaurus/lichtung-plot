@@ -248,6 +248,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "unicode-segmentation",
+ "windows-sys",
 ]
 
 [[package]]

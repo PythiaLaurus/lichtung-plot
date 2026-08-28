@@ -102,6 +102,39 @@ fn png_with_options_rejects_invalid_scale_without_artifact() {
 }
 
 #[test]
+fn plot_and_canvas_reject_unrepresentable_low_dpi_without_artifacts() {
+    let directory = tempdir();
+    let plot_output = directory.join("plot.png");
+    let canvas_output = directory.join("canvas.png");
+    let options = PngOptions {
+        sizing: PngSizing::Dpi(0.01),
+        compression: PngCompression::Balanced,
+    };
+    let plot = || {
+        let (x, y) = fixture_values();
+        Plot::scatter(x, y).size(10_000, 10_000)
+    };
+
+    let error = plot()
+        .png_with_options(&plot_output, options)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("too small to encode"));
+    let error = Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot())
+        .unwrap()
+        .size(10_000, 10_000)
+        .png_with_options(&canvas_output, options)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("too small to encode"));
+    assert!(!plot_output.exists());
+    assert!(!canvas_output.exists());
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn histogram_density_and_qq_share_svg_png_paths() {
     let value = NumericValues::new("value", [1.0, 2.0, 2.0, 3.0, 4.0]);
     let directory = unique_dir("distribution-png-paths");

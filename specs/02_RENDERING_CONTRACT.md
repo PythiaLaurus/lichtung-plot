@@ -309,6 +309,13 @@ if a later chained publication fails, an earlier successful publication remains
 in place. Supported POSIX and Windows hosts publish with one atomic
 same-directory replacement: success installs the complete staged bytes and every
 failure preserves the prior destination without a backup or rollback window.
+The transaction retains the staging handle for every write. On POSIX, the final
+rename and pre-commit unlink remain pathname syscalls; their exact-source claim
+assumes no external namespace mutation between the final identity check and that
+single syscall because portable POSIX exposes no rename or unlink operation by
+open file handle. Windows publication and cleanup operate through the exclusive
+staging handle. Callers remain responsible for excluding independent concurrent
+mutation of the output namespace during a publication call.
 
 ## Regression Evidence
 

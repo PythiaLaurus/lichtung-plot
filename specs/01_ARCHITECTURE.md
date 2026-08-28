@@ -90,7 +90,7 @@ display values.
   without rerunning layout. The SVG publication form and PNG publication options
   are local to each terminal call; plots, canvases, and outputs do not retain
   sticky output configuration.
-- Backends, rendered scenes, resolved palettes, projections, axes, frames,
+- Backends, rendered scenes, resolved themes, projections, axes, frames,
   grids, and renderer-facing layout values are private implementation details.
   `AxisTick` remains one root-level caller input for exact labeled numeric tick
   positions; it is not a public layout extension point.
@@ -116,7 +116,7 @@ The stable plot introspection surface is limited to `kind()`, `width()`,
 `height()`, and `preflight()`. Family configuration remains available through
 exact marker-gated builders, not broad getters that return irrelevant defaults.
 
-`Theme` is the public built-in visual selection. Resolved palette data is
+`Theme` is the public built-in visual selection. Resolved theme data is
 private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
 atomic migration tracked in `91_IMPLEMENTATION_PLAN.md`; its target types and
 inheritance behavior are not current public API until Phase T6 completes.

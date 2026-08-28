@@ -55,7 +55,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = context.theme;
+    let theme = context.theme;
 
     let sample = crate::plots::distribution_sample::prepare(chart, context.data, "boxplot")?;
     let x_levels = &sample.x_levels;
@@ -124,13 +124,13 @@ pub(crate) fn render(
         .iter()
         .enumerate()
         .map(|(idx, label)| {
-            let color = palette.colors[idx % palette.colors.len()];
+            let color = theme.colors[idx % theme.colors.len()];
             LegendEntry::line_fill(
                 chart.legend_identity(label.clone()),
-                LineStyle::solid(palette.foreground, palette.axis_width),
+                LineStyle::solid(theme.foreground, theme.axis_width),
                 FillStyle {
                     color,
-                    stroke: palette.foreground,
+                    stroke: theme.foreground,
                     stroke_width: 1.0,
                     opacity: 1.0,
                 },
@@ -174,14 +174,14 @@ pub(crate) fn render(
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for (i, stat) in stats.iter().enumerate() {
             let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
-            let color = palette.colors[color_index % palette.colors.len()];
+            let color = theme.colors[color_index % theme.colors.len()];
             let fill = FillStyle {
                 color,
-                stroke: palette.foreground,
+                stroke: theme.foreground,
                 stroke_width: 1.0,
                 opacity: 1.0,
             };
-            let style = LineStyle::solid(palette.foreground, palette.axis_width);
+            let style = LineStyle::solid(theme.foreground, theme.axis_width);
 
             let x_center_data =
                 crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());
@@ -225,7 +225,7 @@ pub(crate) fn render(
             )?;
 
             if overlay == RawOverlay::Hidden {
-                let flier_style = chart.point_style(palette.foreground, 2);
+                let flier_style = chart.point_style(theme.foreground, 2);
                 let flier_points: Vec<Point2D> = stat
                     .fliers
                     .iter()
@@ -262,7 +262,7 @@ pub(crate) fn render(
                 backend.draw_scatter(
                     &points,
                     &crate::plots::distribution_sample::overlay_style(
-                        palette.colors[color_index % palette.colors.len()],
+                        theme.colors[color_index % theme.colors.len()],
                     ),
                 )?;
             }

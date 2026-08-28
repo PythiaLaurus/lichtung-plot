@@ -1,7 +1,4 @@
-use super::{
-    assert_no_staging_files, publish_staged, reserve_unique_sibling_temp_path, test_directory,
-    with_temporary_artifacts, Error, TEMP_RESERVATION_CALLS,
-};
+use super::{assert_no_staging_files, test_directory, write_atomic, TEMP_RESERVATION_CALLS};
 
 #[test]
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
@@ -52,49 +49,6 @@ fn outlined_svg_conversion_failure_happens_before_staging_reservation() {
 }
 
 #[test]
-fn finalization_failure_removes_staging_files_without_touching_destination() {
-    let dir = test_directory("failed-finalization-cleanup");
-    let output = dir.join("canvas.svg");
-    std::fs::write(&output, "existing artifact").unwrap();
-    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
-
-    let result: Result<(), Error> = with_temporary_artifacts(vec![staged.clone()], || {
-        std::fs::write(&staged, "partial staged artifact")?;
-        Err(Error::Render("backend end failed".into()))
-    });
-
-    assert!(result.is_err());
-    assert_eq!(
-        std::fs::read_to_string(&output).unwrap(),
-        "existing artifact"
-    );
-    assert_no_staging_files(&dir);
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
-fn publication_rename_failure_removes_staging_files_and_preserves_destination() {
-    let dir = test_directory("failed-rename-cleanup");
-    let output = dir.join("canvas.svg");
-    std::fs::create_dir(&output).unwrap();
-    std::fs::write(output.join("existing"), "existing artifact").unwrap();
-    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
-
-    let result = with_temporary_artifacts(vec![staged.clone()], || {
-        std::fs::write(&staged, "complete staged artifact")?;
-        publish_staged(&staged, &output)
-    });
-
-    assert!(result.is_err());
-    assert_eq!(
-        std::fs::read_to_string(output.join("existing")).unwrap(),
-        "existing artifact"
-    );
-    assert_no_staging_files(&dir);
-    std::fs::remove_dir_all(dir).unwrap();
-}
-
-#[test]
 fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
     use crate::spec::{PngCompression, PngOptions, PngSizing};
 
@@ -125,10 +79,7 @@ fn publication_replaces_existing_file_without_backup_artifacts() {
     let dir = test_directory("successful-replacement");
     let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
-    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
-    std::fs::write(&staged, "replacement artifact").unwrap();
-
-    with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output)).unwrap();
+    write_atomic(&output, b"replacement artifact").unwrap();
 
     assert_eq!(
         std::fs::read_to_string(output).unwrap(),
@@ -153,11 +104,7 @@ fn windows_failed_atomic_replace_preserves_locked_destination_without_backup() {
         .share_mode(0)
         .open(&output)
         .unwrap();
-    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
-    std::fs::write(&staged, "replacement artifact").unwrap();
-
-    let result =
-        with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output));
+    let result = write_atomic(&output, b"replacement artifact");
 
     assert!(result.is_err());
     locked.rewind().unwrap();
@@ -177,15 +124,12 @@ fn windows_atomic_replace_supports_long_destination_paths() {
     let root = test_directory("windows-long-replacement");
     let mut dir = root.clone();
     while dir.as_os_str().encode_wide().count() < 280 {
-        dir.push("long-publication-directory");
+        dir.push("long publication 目录");
         std::fs::create_dir(&dir).unwrap();
     }
-    let output = dir.join("canvas.svg");
+    let output = dir.join("canvas report ü.svg");
     std::fs::write(&output, "existing artifact").unwrap();
-    let staged = reserve_unique_sibling_temp_path(&output, "svg").unwrap();
-    std::fs::write(&staged, "replacement artifact").unwrap();
-
-    with_temporary_artifacts(vec![staged.clone()], || publish_staged(&staged, &output)).unwrap();
+    write_atomic(&output, b"replacement artifact").unwrap();
 
     assert_eq!(
         std::fs::read_to_string(output).unwrap(),
@@ -197,17 +141,34 @@ fn windows_atomic_replace_supports_long_destination_paths() {
 
 #[cfg(windows)]
 #[test]
+fn windows_atomic_replace_supports_component_limit_destination() {
+    let dir = test_directory("windows-component-limit");
+    let output = dir.join(format!("{}.svg", "d".repeat(251)));
+    std::fs::write(&output, "existing artifact").unwrap();
+
+    write_atomic(&output, b"replacement artifact").unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output).unwrap(),
+        "replacement artifact"
+    );
+    assert_no_staging_files(&dir);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_reservation_rejects_reserved_device_name_without_retrying() {
     use std::os::windows::ffi::OsStringExt;
 
     TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
     let dir = test_directory("windows-reserved-name");
 
-    let error = reserve_unique_sibling_temp_path(&dir.join("NUL.svg"), "svg").unwrap_err();
+    let error = write_atomic(&dir.join("NUL.svg"), b"artifact").unwrap_err();
     assert!(error
         .to_string()
         .contains("invalid or reserved Windows file name"));
-    let error = reserve_unique_sibling_temp_path(&dir.join("COM1:data"), "svg").unwrap_err();
+    let error = write_atomic(&dir.join("COM1:data"), b"artifact").unwrap_err();
     assert!(error
         .to_string()
         .contains("invalid or reserved Windows file name"));
@@ -218,11 +179,17 @@ fn windows_reservation_rejects_reserved_device_name_without_retrying() {
         u16::from(b'.'),
         0xD800,
     ]);
-    let error = reserve_unique_sibling_temp_path(&dir.join(non_unicode), "svg").unwrap_err();
+    let error = write_atomic(&dir.join(non_unicode), b"artifact").unwrap_err();
     assert!(error
         .to_string()
         .contains("invalid or reserved Windows file name"));
-    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 3);
+    for leaf in ["trailing.", "trailing ", "wild*.svg", "control\u{1}.svg"] {
+        let error = write_atomic(&dir.join(leaf), b"artifact").unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("invalid or reserved Windows file name"));
+    }
+    assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 0);
     assert_no_staging_files(&dir);
     std::fs::remove_dir_all(dir).unwrap();
 }

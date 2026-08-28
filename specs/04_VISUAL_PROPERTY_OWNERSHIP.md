@@ -2233,7 +2233,7 @@ second property source.
 | `Bounds`, coordinate/value vectors, category/boolean arrays, source-row maps, bootstrap unit payloads, and exact caller numeric positions | Scientific/data payload. Presence, fixed representation, and visible policy branches remain admitted where applicable. |
 | `RaincloudDensityPoint`, `RaincloudPoint`, `HistogramBin`, `HistogramKdePoint`, and `HistogramRug` field declarations by themselves | Caller coordinate payload. Their fixed finite/order/support/topology/resource constraints are the admitted B-M8 renderer-invariant records. |
 | `PlotInput`, row counts, aligned-column contents, matrix variable numeric payload, and `validate_value_alignment` | Data transport/integrity rather than visual policy. Independent visible presence/family branches remain admitted. |
-| Private `PlotRenderContext`, `PlotRenderResult`, `CanvasPreflight`, plan structs, internal column-key constants, and accessor forwarding | Transport/plumbing; no independent visual value. |
+| Private `PlotRenderContext`, `PlotRenderResult`, `CanvasPlan`, plan structs, internal column-key constants, and accessor forwarding | Transport/plumbing; no independent visual value. |
 | Error message prose and interpolated diagnostic values | Non-visual diagnostics. Every admitted controlling failure branch has one record. |
 | Unit tests, doctest bodies, compile-fail examples, examples, snapshots, and test-only helpers/counters | Evidence only, never independent property sources. |
 | `LinePattern` backend dash literal, point-layer automatic palette lookup, guide projection, and renderer-owned widths/colors supplied after public conversion | Deferred T2e/T2f/T2g implementation sources, not duplicate public declarations. |
@@ -3045,7 +3045,7 @@ D-M23.
 
 | Property | Current source and value | Current consumers | Current behavior | Current layout path | Semantic role | Audit evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| `canvas.lifecycle.deferred-backend-finish` | D-M1 `canvas.rs:390-399`; `DeferredBackend::new(width,height)` wraps `render_open_canvas`, then `finish` | D-C-CANVAS,D-C-BACKEND | One deferred composed result is finalized with context `composed canvas` | D-L-N,D-L-G | Composed backend completion | D-M1 |
+| `canvas.lifecycle.deferred-backend-finish` | D-M1 `canvas.rs:390-399`; `DeferredBackend::new(width,height)` wraps `render_planned_canvas`, then `finish` | D-C-CANVAS,D-C-BACKEND | One deferred composed result is finalized with context `composed canvas` | D-L-N,D-L-G | Composed backend completion | D-M1 |
 | `canvas.lifecycle.preflight-plan-only` | D-M1 `canvas.rs:401-408`; `preflight_plan().map(drop)` | D-C-CANVAS | Validates the complete composition without opening a backend | D-L-M,D-L-R,D-L-C,D-L-G | Side-effect-free Canvas preflight | D-M1 |
 | `canvas.lifecycle.canonical-scene-single-plan` | D-M1 `canvas.rs:416-430`; preflight once, render once to in-memory SVG, freeze `RenderedScene` | D-C-CANVAS,D-C-BACKEND | One immutable canonical scene carries exact Canvas dimensions and bytes | D-L-G | Canonical composed-scene construction | D-M1 |
 | `composition.canvas-row-title.current-horizontal-padding` | D-M2 `canvas.rs:513`; subtract `16.0` from the spanning-cell width | D-C-CANVAS | Current row-title wrapping reserves 8 px on each horizontal side | D-L-M,D-L-R | Row-title horizontal chrome | D-M2 |
@@ -3966,7 +3966,7 @@ future T4/T5a/T5b/T6 checks already exist or pass.
 | Source match | Disposition and reason |
 | --- | --- |
 | Imports, module declarations/re-exports, derives, accessors, constructor forwarding, diagnostics, and documentation comments | Language/API plumbing or non-visual prose. Every controlling visual branch is represented by an admitted key. |
-| `CanvasPreflight`, `CanvasPanelPreflight`, `TextPanelPlan`, `CanvasHeaderPlan`, `LegendMetrics`, `LegendBox`, `ResolvedLegend`, and `PanelPlan` fields without independent behavior | Private transport. Aggregate/freeze semantics are admitted only where they establish immutable measurement/draw identity or complete geometry. |
+| `CanvasPlan`, `PlannedCanvasPanel`, `TextPanelPlan`, `CanvasHeaderPlan`, `LegendMetrics`, `LegendBox`, `ResolvedLegend`, and `PanelPlan` fields without independent behavior | Private transport. Aggregate/freeze semantics are admitted only where they establish immutable measurement/draw identity or complete geometry. |
 | Test modules, test-only backend entry points, doctests, examples, snapshots, and counters | Evidence only, never property sources. Expected corrective snapshot families are named above without changing tests. |
 | Caller content strings, exact data coordinates, facet selectors, source-row payloads, and panel dimensions | Input/scientific payload. Fixed representation, validation, generated formatting, fit, and placement rules remain admitted. |
 | Existing palette/font/size/color reads by themselves | Prior-owned appearance inputs. T2d records only a distinct current fallback, duplicated legend metric, composition-specific role use, or target ownership correction. |

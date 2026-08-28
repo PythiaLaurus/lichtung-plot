@@ -97,22 +97,22 @@ impl TitleBlock {
         backend: &mut dyn Backend,
         canvas_width: u32,
         canvas: &CanvasLayout,
-        palette: &ResolvedTheme,
+        theme: &ResolvedTheme,
     ) -> Result<(), Error> {
         let cx = f64::from(canvas_width) / 2.0;
 
         if let Some(title) = &self.title {
             let style = TextStyle {
-                color: palette.foreground,
+                color: theme.foreground,
                 font_family: self.font_family.clone(),
-                font_size: palette.title_font_size,
+                font_size: theme.title_font_size,
                 weight: crate::TextWeight::Normal,
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
             for (line, y) in crate::layout::canvas::try_wrap_text(
                 title,
-                palette.title_font_size,
+                theme.title_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
                 "canvas title",
             )?
@@ -127,14 +127,14 @@ impl TitleBlock {
             let style = TextStyle {
                 color: (80, 80, 80),
                 font_family: self.font_family.clone(),
-                font_size: palette.subtitle_font_size,
+                font_size: theme.subtitle_font_size,
                 weight: crate::TextWeight::Normal,
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
             for (line, y) in crate::layout::canvas::try_wrap_text(
                 subtitle,
-                palette.subtitle_font_size,
+                theme.subtitle_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
                 "canvas subtitle",
             )?
@@ -149,14 +149,14 @@ impl TitleBlock {
             let style = TextStyle {
                 color: (80, 80, 80),
                 font_family: self.font_family.clone(),
-                font_size: palette.caption_font_size,
+                font_size: theme.caption_font_size,
                 weight: crate::TextWeight::Normal,
                 anchor: TextAnchor::Middle,
                 rotation: 0.0,
             };
             for (line, y) in crate::layout::canvas::try_wrap_text(
                 caption,
-                palette.caption_font_size,
+                theme.caption_font_size,
                 (f64::from(canvas_width) - 32.0).max(1.0),
                 "canvas caption",
             )?

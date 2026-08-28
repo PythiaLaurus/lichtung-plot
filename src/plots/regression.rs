@@ -28,7 +28,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = context.theme;
+    let theme = context.theme;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
@@ -92,7 +92,7 @@ pub(crate) fn render(
         &y_axis_spec,
     );
     let projection = &layout.projection;
-    let point_style = chart.point_style(palette.colors[0], 3);
+    let point_style = chart.point_style(theme.colors[0], 3);
     let scatter_points = x
         .iter()
         .zip(&y)
@@ -101,7 +101,7 @@ pub(crate) fn render(
             Point2D::new(x, y)
         })
         .collect::<Vec<_>>();
-    let line_style = LineStyle::solid(palette.foreground, 1.5);
+    let line_style = LineStyle::solid(theme.foreground, 1.5);
     let (fit_x0, fit_y0) = projection.project(x_min, y_fit_lo);
     let (fit_x1, fit_y1) = projection.project(x_max, y_fit_hi);
     let fit_line = [Point2D::new(fit_x0, fit_y0), Point2D::new(fit_x1, fit_y1)];
@@ -119,8 +119,8 @@ pub(crate) fn render(
         upper
     });
     let band_fill = FillStyle {
-        color: palette.colors[0],
-        stroke: palette.colors[0],
+        color: theme.colors[0],
+        stroke: theme.colors[0],
         stroke_width: 0.0,
         opacity: 0.25,
     };

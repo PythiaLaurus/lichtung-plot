@@ -18,9 +18,10 @@ unicode-segmentation = "1.13"
 # decoders are deliberately disabled.
 png = "0.18"
 resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
+tempfile = "3.27"
 
 [target.'cfg(windows)'.dependencies]
-tempfile = "3.27"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 insta = "1.48"

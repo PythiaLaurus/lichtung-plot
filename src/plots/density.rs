@@ -58,7 +58,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = context.theme;
+    let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for curve in &prepared.curves {
@@ -67,7 +67,7 @@ pub(crate) fn render(
                 continue;
             }
             let color_index = curve.hue_index.unwrap_or(0);
-            let color = palette.colors[color_index % palette.colors.len()];
+            let color = theme.colors[color_index % theme.colors.len()];
             let mut fill = Vec::with_capacity(visible.len() + 2);
             fill.push((visible[0].0, 0.0));
             fill.extend(visible.iter().copied());
@@ -101,7 +101,7 @@ pub(crate) fn render(
         .filter(|curve| curve.identity.hue.is_some())
         .map(|curve| {
             let color_index = curve.hue_index.unwrap_or(0);
-            let color = palette.colors[color_index % palette.colors.len()];
+            let color = theme.colors[color_index % theme.colors.len()];
             Ok(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity)?,
                 LineStyle::solid(color, 1.6),

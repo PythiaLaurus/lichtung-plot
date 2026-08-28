@@ -33,7 +33,7 @@ pub(crate) fn render(
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
-    let palette = context.theme;
+    let theme = context.theme;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;
@@ -79,7 +79,7 @@ pub(crate) fn render(
             let hues = crate::data::strict_strings(df, hue_col, "scatter")?;
             let aligned = crate::data::aligned_finite_rows(df, x_col, y_col, "scatter")?;
             for (i, label) in hue_keys.into_iter().enumerate() {
-                let color = palette.colors[chart.hue_color_index(&label, i) % palette.colors.len()];
+                let color = theme.colors[chart.hue_color_index(&label, i) % theme.colors.len()];
                 let style = chart.point_style(color, 3);
                 let pts: Vec<Point2D> = aligned
                     .iter()
@@ -94,7 +94,7 @@ pub(crate) fn render(
                 legend_entries.push(LegendEntry::point(chart.legend_identity(label), style));
             }
         } else {
-            let color = palette.colors.first().copied().unwrap_or((0, 0, 0));
+            let color = theme.colors.first().copied().unwrap_or((0, 0, 0));
             let style = chart.point_style(color, 3);
             let pts: Vec<Point2D> = points_all
                 .iter()

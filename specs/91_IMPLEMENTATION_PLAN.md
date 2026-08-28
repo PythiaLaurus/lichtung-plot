@@ -108,6 +108,14 @@ Phase T1 confirmed these rules for the approved target:
 | T3f | Canvas resolved-theme handoff | COMPLETE |
 | T3g | Canonical Scene and terminal conversion routing | COMPLETE |
 | T3h | Failure-atomic artifact publication | COMPLETE |
+| T3i | Post-T3 review corrections | COMPLETE |
+| T3i1 | Unfaceted Plot-plan terminology | COMPLETE |
+| T3i2 | Resolved-theme terminology | COMPLETE |
+| T3i3 | Canvas-plan terminology | COMPLETE |
+| T3i4 | Canvas theme-handoff evidence | COMPLETE |
+| T3i5 | Canvas coordination identity coverage | COMPLETE |
+| T3i6 | PNG metadata and reuse boundaries | COMPLETE |
+| T3i7 | Owned artifact staging and commit boundary | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -1250,6 +1258,266 @@ Acceptance:
 - Supported-host Windows evidence proves successful replacement, old-destination
   preservation on failure, and absence of backup artifacts.
 - `just verify` passes and T3 can be marked complete.
+
+## Phase T3i: Post-T3 Review Corrections
+
+**Status**: COMPLETE
+
+Close private terminology and implementation issues discovered during the
+checkpoint review of completed T3 work before beginning T4 ownership changes.
+
+Dependencies: T3.
+
+Review rule:
+
+- Continue the checkpoint review through T3f, T3g, and T3h. Record each accepted
+  post-T3 finding here with an exact correction boundary and evidence before
+  implementation.
+- Add independently reviewable correction units rather than expanding an
+  existing unit with unrelated work.
+- Do not begin T3j until every recorded T3i correction unit is complete and the
+  aggregate T3i acceptance evidence passes.
+
+### T3i1: Unfaceted Plot-Plan Terminology
+
+**Status**: COMPLETE
+
+The T3e migration mechanically promoted the former `render_open_canvas` route to
+`OpenPlotPlan` and `PlotScenePlan::Open`. In this route, "open" means unfaceted;
+it does not represent backend lifecycle state. The retained word is ambiguous
+beside the concrete `Open` canvas states established in T3c.
+
+Scope:
+
+- Rename `OpenPlotPlan` to `UnfacetedPlotPlan` and `PlotScenePlan::Open` to
+  `PlotScenePlan::Unfaceted`.
+- Update focused tests and current explanatory text that describe this private
+  route, without renaming genuine backend open-state terminology.
+- Preserve the exact open-versus-faceted routing behavior and all public Plot
+  APIs.
+
+Acceptance:
+
+- The private scene-plan branch is named by the actual faceting distinction and
+  cannot be confused with backend lifecycle state.
+- Standalone unfaceted, faceted, preflight, and terminal lifecycle tests pass.
+- No SVG, snapshot, public API, or intended rendering change occurs.
+
+### T3i2: Resolved-Theme Terminology
+
+**Status**: COMPLETE
+
+T3e and T3f replaced repeated complete-palette reconstruction with owned
+`ResolvedTheme` values, but retained local `palette`, `header_palette`, and
+`row_title_palette` names for values that also carry typography, visibility,
+axis, layout, and decoration properties.
+
+Scope:
+
+- Rename every production parameter, local, and helper name that denotes a
+  complete `ResolvedTheme` from `palette` to `theme`, including Canvas header and
+  row-title owners, layout, decorations, facets, and plot renderers.
+- Update current architecture prose that calls the complete resolved appearance
+  a palette.
+- Retain `palette` terminology for actual categorical or continuous color
+  palettes, palette slots, historical T2 ledger evidence, and negative API
+  evidence for the removed `Plot::palette()` method.
+- Do not rename data-color concepts or pull T5d/T6 scale work into this private
+  terminology correction.
+
+Acceptance:
+
+- No production binding typed as `ResolvedTheme` or `&ResolvedTheme` is named
+  `palette`.
+- Every remaining source and current-contract use of `palette` denotes an actual
+  color-palette concept or deliberate historical/negative evidence.
+- Focused standalone, facet, Canvas, layout, and theme tests pass.
+- No SVG, snapshot, public API, or intended rendering change occurs.
+
+### T3i3: Canvas-Plan Terminology
+
+**Status**: COMPLETE
+
+T3f made the value currently named `CanvasPreflight` the complete frozen handoff
+from Canvas planning to final rendering. It plays the same top-level role for a
+Canvas that `PlotPlan` plays for a standalone Plot, while the current
+`CanvasPanelPreflight` is one subordinate planned child. The retained
+`render_open_canvas` name also conflicts with T3c's explicit backend open-state
+terminology because its `DeferredBackend` begins in the fresh state.
+
+Scope:
+
+- Rename `CanvasPreflight` to `CanvasPlan`.
+- Rename `CanvasPanelPreflight` to `PlannedCanvasPanel`, keeping it distinct from
+  the top-level `PlotPlan` and the contained decoration `PanelPlan`.
+- Rename `render_open_canvas` to `render_planned_canvas`.
+- Rename the subordinate `cell` and `plan` fields to `canvas_cell` and
+  `panel_plan` so the Canvas-allocated cell remains distinct from
+  `PanelPlan::panel`, the post-reservation Plot region.
+- Update focused tests and current explanatory text without changing the
+  one-shot plan ownership or rendering sequence.
+
+Acceptance:
+
+- Plot and Canvas top-level plans use parallel terminology, while child and
+  decoration plans retain unambiguous subordinate names.
+- Canvas call sites visibly distinguish the original allocated cell from the
+  locally reserved Plot panel.
+- No genuine backend open-state terminology is renamed.
+- Focused Canvas preflight, composition, and lifecycle tests pass with no SVG,
+  snapshot, public API, or intended rendering change.
+
+### T3i4: Canvas Theme-Handoff Evidence
+
+**Status**: COMPLETE
+
+The T3f pointer-identity instrumentation records the first-Plot theme as
+`header-render`, although that value is passed only to row-title rendering;
+shared headers are drawn with the Canvas-root Publication value. It also records
+header stages when no corresponding header or row-title exists, allowing tests
+to appear to cover consumers they do not exercise.
+
+Scope:
+
+- Split the current generic header evidence into exact `shared-header-plan`,
+  `shared-header-render`, `row-title-plan`, and `row-title-render` consumers.
+- Record theme evidence only when the corresponding planned or rendered content
+  exists.
+- Add fixtures with actual shared headers and row titles rather than inferring
+  those routes from an empty text-only or ordinary Plot Canvas.
+- Preserve and explicitly assert the current T4-owned split in which shared
+  headers are measured with the first configured Plot theme but drawn with the
+  Canvas-root Publication theme.
+
+Acceptance:
+
+- Every Canvas theme-identity evidence label names the consumer that actually
+  receives that value.
+- Empty header and row-title routes produce no false-positive identity evidence.
+- Tests distinguish the retained shared-header ownership divergence from the
+  valid row-title measurement/draw identity.
+- No production appearance, public API, SVG, or snapshot changes occur.
+
+### T3i5: Canvas Coordination Identity Coverage
+
+**Status**: COMPLETE
+
+T3f proves root and child theme identity for text-only, homogeneous, and
+mixed-preset ordinary Canvas paths, but its focused counters do not traverse
+several coordination branches that were migrated to stored child themes.
+
+Scope:
+
+- Add resolution-count and pointer-identity evidence for shared hue discovery
+  and shared-legend preflight.
+- Cover first-column shared category-label validation and grouped automatic
+  horizontal-range planning.
+- Cover sparse Canvas cells so the parallel `charts` and `plot_themes` ownership
+  vectors prove index alignment across empty and text-panel slots.
+- Cover actual mixed-preset shared headers and row titles in coordination with
+  the exact consumer evidence from T3i4.
+- Reuse existing integration behavior assertions where possible rather than
+  duplicating broad visual tests.
+
+Acceptance:
+
+- Each admitted T3f coordination branch resolves the Canvas root once and each
+  configured child theme once per public operation.
+- Every render or planning traversal for one child observes that child's one
+  stored `ResolvedTheme` address, including sparse cell indices.
+- Focused Canvas lifecycle and composition tests pass with no SVG, snapshot,
+  public API, or intended rendering change.
+
+### T3i6: PNG Metadata And Reuse Boundaries
+
+**Status**: COMPLETE
+
+T3g validates positive finite DPI before converting it to PNG's integer
+pixels-per-meter field. A sufficiently small positive DPI can produce a nonzero
+target image while rounding that metadata to zero, so a successful conversion no
+longer represents the caller's positive physical-resolution request. The T3g
+checkpoint also found that current chain evidence does not directly mix default,
+preview, and custom PNG policies on one rendered Plot or Canvas scene.
+
+Scope:
+
+- Reject a positive DPI when its pixels-per-meter representation rounds outside
+  the positive PNG metadata range, including the lower zero boundary as well as
+  the existing upper overflow boundary. Do not clamp or silently omit metadata.
+- Preserve target-size calculation, source/target work limits, compression, and
+  route-specific parse or dimension errors.
+- Add focused chained-publication evidence that default, preview, and custom PNG
+  options remain call-local and reuse one canonical Plot or Canvas scene without
+  rerendering.
+- Cover valid source dimensions that fail only after scaling at a target-axis or
+  target-work boundary.
+
+Acceptance:
+
+- Every successful DPI publication records positive representable
+  pixels-per-meter metadata corresponding to the validated request.
+- Lower and upper metadata boundaries reject before PNG encoding without
+  producing a file.
+- Mixed PNG chains prove non-sticky options, exact Scene reuse, and independent
+  route-specific failures for Plot and Canvas.
+- No public API, SVG, snapshot, or successful in-range PNG behavior changes.
+
+### T3i7: Owned Artifact Staging And Commit Boundary
+
+**Status**: COMPLETE
+
+T3h reserves a sibling staging path by creating a file, drops that exclusive
+handle, and later reopens the predictable path for writing. That gap permits
+pathname or symlink substitution by another actor that can modify the directory.
+The cleanup wrapper also continues to own the staging pathname after successful
+replacement, so recreation of that now-vacant path can turn an already committed
+publication into an error or be removed as if it were still Lichtung's file.
+
+Scope:
+
+- Replace path-only reservation with one private owned staging value that uses
+  an opaque collision-resistant sibling name, retains its exclusive file handle,
+  and receives first-party bytes through that handle without reopening the path.
+- Publish that exact owned staging file through one supported-host atomic
+  same-directory replacement. Preserve the Windows no-backup replacement path
+  and do not add rollback or compatibility routes.
+- Define publication success as the commit point. Disarm staging cleanup
+  immediately after successful replacement; no later cleanup of the vacant
+  staging pathname may convert success into an error or remove a new occupant.
+- Before the commit point, preserve deterministic primary-plus-cleanup error
+  aggregation and Drop as a final best-effort retry without masking the primary
+  failure.
+- Use a staging leaf independent of the full destination basename, and cover
+  valid component-limit destinations plus supported-host Windows long paths with
+  spaces or Unicode. Continue rejecting invalid or reserved Windows leaves.
+
+The supported POSIX contract excludes external namespace mutation between the
+final staging-identity check and the one rename or unlink syscall. Portable POSIX
+has no rename or unlink operation by open file handle; this correction closes the
+prior first-party drop/reopen interval rather than claiming an unavailable
+directory capability. Windows retains an exclusive handle and performs commit
+and cleanup through that handle.
+
+Acceptance:
+
+- First-party staging never drops and reopens a reserved path, and substitution
+  of a pathname cannot redirect the staged write to another file.
+- Successful publication returns success with the complete staged bytes at the
+  destination and performs no fallible post-commit cleanup.
+- Every pre-commit failure preserves an existing destination and removes only
+  the still-owned staging artifact, with deterministic cleanup diagnostics.
+- Focused POSIX and supported-host Windows evidence covers replacement,
+  substitution attempts, long and near-limit names, cleanup failures, and no
+  staging residue.
+- No public API, output bytes, or successful ordinary-path behavior changes.
+
+Aggregate acceptance:
+
+- Every finding recorded during the T3f-through-T3h checkpoint review is either
+  completed in a T3i correction unit or explicitly rejected with rationale.
+- Current architecture and implementation terminology agree before layout
+  adjudication and T4 ownership changes.
+- `just verify` passes before T3i is marked complete and T3j begins.
 
 ## Phase T4: Canvas Theme Inheritance
 

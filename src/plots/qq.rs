@@ -56,7 +56,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
     );
-    let palette = context.theme;
+    let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if let Some(line) = prepared.line {
@@ -69,11 +69,11 @@ pub(crate) fn render(
                 let (x1, y1) = layout.projection.project(line_x1, line_y1);
                 backend.draw_line(
                     &[Point2D::new(x0, y0), Point2D::new(x1, y1)],
-                    &LineStyle::solid(palette.foreground, 1.2),
+                    &LineStyle::solid(theme.foreground, 1.2),
                 )?;
             }
         }
-        let point_style = chart.point_style(palette.colors[0], 3);
+        let point_style = chart.point_style(theme.colors[0], 3);
         let points = prepared
             .theoretical
             .iter()

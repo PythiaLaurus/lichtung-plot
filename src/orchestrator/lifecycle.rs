@@ -17,11 +17,11 @@ pub(super) struct PlotPlan<'a> {
 }
 
 enum PlotScenePlan {
-    Open(Box<OpenPlotPlan>),
+    Unfaceted(Box<UnfacetedPlotPlan>),
     Faceted(Box<super::facets::FacetPlan>),
 }
 
-struct OpenPlotPlan {
+struct UnfacetedPlotPlan {
     chart: Plot,
     panel: PanelPlan,
 }
@@ -37,7 +37,7 @@ impl<'a> PlotPlan<'a> {
                 source, kind, &theme,
             )?))
         } else {
-            PlotScenePlan::Open(Box::new(OpenPlotPlan::new(source, kind, &theme)?))
+            PlotScenePlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(source, kind, &theme)?))
         };
         let plan = Self {
             source,
@@ -64,7 +64,9 @@ impl<'a> PlotPlan<'a> {
 
     fn render_scene(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         match &self.scene {
-            PlotScenePlan::Open(plan) => plan.render(self.source, self.kind, &self.theme, backend),
+            PlotScenePlan::Unfaceted(plan) => {
+                plan.render(self.source, self.kind, &self.theme, backend)
+            }
             PlotScenePlan::Faceted(plan) => {
                 plan.render(self.source, self.kind, &self.theme, backend)
             }
@@ -72,7 +74,7 @@ impl<'a> PlotPlan<'a> {
     }
 }
 
-impl OpenPlotPlan {
+impl UnfacetedPlotPlan {
     fn new(source: &Plot, kind: PlotKind, theme: &ResolvedTheme) -> Result<Self, Error> {
         if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()

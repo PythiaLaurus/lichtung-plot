@@ -32,14 +32,14 @@ fn record_canvas_theme(owner: usize, stage: &'static str, theme: &ResolvedTheme)
     });
 }
 
-struct CanvasPanelPreflight {
+struct PlannedCanvasPanel {
     index: usize,
     kind: PlotKind,
-    cell: PanelBox,
-    plan: crate::decorations::plan::PanelPlan,
+    canvas_cell: PanelBox,
+    panel_plan: crate::decorations::plan::PanelPlan,
 }
 
-struct CanvasPreflight {
+struct CanvasPlan {
     theme: Box<ResolvedTheme>,
     plot_themes: Vec<Option<Box<ResolvedTheme>>>,
     charts: Vec<Option<Plot>>,
@@ -47,7 +47,7 @@ struct CanvasPreflight {
     full_outer: PanelBox,
     outer: PanelBox,
     shared_legend: Option<(String, Vec<LegendEntry>)>,
-    panels: Vec<CanvasPanelPreflight>,
+    panels: Vec<PlannedCanvasPanel>,
     text_panels: Vec<TextPanelPlan>,
     headers: Vec<CanvasHeaderPlan>,
     row_titles: Vec<CanvasHeaderPlan>,
@@ -405,14 +405,10 @@ impl Canvas {
         self
     }
 
-    fn render_preflighted(
-        &self,
-        preflight: CanvasPreflight,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
+    fn render_preflighted(&self, plan: CanvasPlan, backend: &mut dyn Backend) -> Result<(), Error> {
         let mut backend =
             crate::orchestrator::DeferredBackend::new(backend, self.width, self.height);
-        let rendered = self.render_open_canvas(preflight, &mut backend);
+        let rendered = self.render_planned_canvas(plan, &mut backend);
         backend.finish(rendered, "composed canvas")
     }
 
@@ -522,14 +518,14 @@ impl Canvas {
         &self,
         title: &CanvasHeader,
         cells: &[PanelBox],
-        palette: &crate::theme::ResolvedTheme,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<String>, Error> {
         let first = title.start * self.columns;
         let last = first + self.columns - 1;
         let maximum_width = (cells[last].x1 - cells[first].x0 - 16.0).max(1.0);
         try_wrap_text(
             &title.text,
-            palette.title_font_size,
+            theme.title_font_size,
             maximum_width,
             "canvas row title",
         )
@@ -543,11 +539,11 @@ impl Canvas {
         &self,
         requirements: &mut Vec<(usize, usize, PanelRequirements)>,
         cells: &[PanelBox],
-        palette: &crate::theme::ResolvedTheme,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<(), Error> {
         for title in &self.row_titles {
-            let lines = self.row_title_lines(title, cells, palette)?;
-            let top = lines.len() as f64 * (f64::from(palette.title_font_size) + 6.0) + 8.0;
+            let lines = self.row_title_lines(title, cells, theme)?;
+            let top = lines.len() as f64 * (f64::from(theme.title_font_size) + 6.0) + 8.0;
             requirements.push((
                 title.start,
                 0,
@@ -567,16 +563,16 @@ impl Canvas {
     fn plan_row_titles(
         &self,
         cells: &[PanelBox],
-        palette: &crate::theme::ResolvedTheme,
+        theme: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<CanvasHeaderPlan>, Error> {
         let mut plans = Vec::new();
-        let line_height = f64::from(palette.title_font_size) + 6.0;
+        let line_height = f64::from(theme.title_font_size) + 6.0;
         for title in &self.row_titles {
             let first = title.start * self.columns;
             let last = first + self.columns - 1;
             let x = f64::midpoint(cells[first].x0, cells[last].x1);
             for (index, line) in self
-                .row_title_lines(title, cells, palette)?
+                .row_title_lines(title, cells, theme)?
                 .into_iter()
                 .rev()
                 .enumerate()
@@ -595,8 +591,8 @@ impl Canvas {
         clippy::too_many_lines,
         reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
     )]
-    fn preflight_plan(&self) -> Result<CanvasPreflight, Error> {
-        let palette = Box::new(Theme::Publication.resolve());
+    fn preflight_plan(&self) -> Result<CanvasPlan, Error> {
+        let theme = Box::new(Theme::Publication.resolve());
         let plot_themes = self
             .panels
             .iter()
@@ -608,7 +604,7 @@ impl Canvas {
             .collect::<Vec<_>>();
         #[cfg(test)]
         {
-            record_canvas_theme(usize::MAX, "resolved", &palette);
+            record_canvas_theme(usize::MAX, "resolved", &theme);
             for (index, theme) in plot_themes.iter().enumerate() {
                 if let Some(theme) = theme {
                     record_canvas_theme(index, "resolved", theme);
@@ -617,11 +613,11 @@ impl Canvas {
         }
         self.validate_structure()?;
         #[cfg(test)]
-        record_canvas_theme(usize::MAX, "layout", &palette);
+        record_canvas_theme(usize::MAX, "layout", &theme);
         let canvas_layout = CanvasLayout::measured_composed_canvas(
             self.width,
             self.height,
-            &palette,
+            &theme,
             CanvasLayoutSpec {
                 has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
                 has_subtitle: self
@@ -691,26 +687,20 @@ impl Canvas {
             outer.x1 -= legend.compute_box_width() + gap + legend.metrics.pad;
         }
         let header_theme_index = charts.iter().position(Option::is_some);
-        let header_palette = header_theme_index
+        let header_theme = header_theme_index
             .and_then(|index| plot_themes[index].as_deref())
-            .unwrap_or(palette.as_ref());
-        #[cfg(test)]
-        record_canvas_theme(
-            header_theme_index.unwrap_or(usize::MAX),
-            "header-plan",
-            header_palette,
-        );
+            .unwrap_or(theme.as_ref());
         let header_outer = outer;
         let column_header_height = if self.column_headers.is_empty() {
             0.0
         } else {
-            f64::from(header_palette.title_font_size) + 18.0
+            f64::from(header_theme.title_font_size) + 18.0
         };
         let row_header_width = self
             .row_headers
             .iter()
             .map(|header| {
-                crate::layout::estimated_text_width(&header.text, header_palette.title_font_size)
+                crate::layout::estimated_text_width(&header.text, header_theme.title_font_size)
             })
             .fold(0.0_f64, f64::max)
             + if self.row_headers.is_empty() {
@@ -738,6 +728,12 @@ impl Canvas {
                 let expected_theme = plot_themes[first_index]
                     .as_deref()
                     .expect("configured canvas panel has a resolved theme");
+                #[cfg(test)]
+                record_canvas_theme(
+                    first_index,
+                    "shared-category-label-validation",
+                    expected_theme,
+                );
                 let expected =
                     chart_category_domain(first, provisional[first_index], expected_theme)?;
                 for column in 1..self.columns {
@@ -750,6 +746,8 @@ impl Canvas {
                     let theme = plot_themes[index]
                         .as_deref()
                         .expect("configured canvas panel has a resolved theme");
+                    #[cfg(test)]
+                    record_canvas_theme(index, "shared-category-label-validation", theme);
                     if chart_category_domain(chart, provisional[index], theme)? != expected {
                         return Err(Error::Data(format!(
                             "canvas row {row} category domains differ across panels"
@@ -767,6 +765,8 @@ impl Canvas {
                 let theme = plot_themes[index]
                     .as_deref()
                     .expect("configured canvas panel has a resolved theme");
+                #[cfg(test)]
+                record_canvas_theme(index, "grouped-x-range-plan", theme);
                 let result = chart.preflight_panel(kind, provisional[index], theme)?;
                 ranges[index] = Some(result.layout.projection.x_range());
             }
@@ -795,28 +795,30 @@ impl Canvas {
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = chart.kind();
-            let palette = plot_themes[index]
+            let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
-            let result = chart.preflight_panel(kind, provisional[index], palette)?;
+            #[cfg(test)]
+            record_canvas_theme(index, "panel-measure", theme);
+            let result = chart.preflight_panel(kind, provisional[index], theme)?;
             if result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
-            let title = palette
+            let title = theme
                 .show_title
                 .then(|| chart.title_text())
                 .flatten()
                 .filter(|title| !title.is_empty());
-            let subtitle = palette
+            let subtitle = theme
                 .show_subtitle
                 .then(|| chart.subtitle_text())
                 .flatten()
                 .filter(|subtitle| !subtitle.is_empty());
             let requirement = PanelRequirements::measure_header(
                 &result.layout,
-                palette,
+                theme,
                 title,
                 subtitle,
                 provisional[index],
@@ -827,7 +829,7 @@ impl Canvas {
             .iter()
             .map(|(_, row, column, _, _, requirement)| (*row, *column, *requirement))
             .collect::<Vec<_>>();
-        self.add_row_title_requirements(&mut requirements, &provisional, header_palette)?;
+        self.add_row_title_requirements(&mut requirements, &provisional, header_theme)?;
         let first_cells = allocate_composed_grid(
             outer,
             self.rows,
@@ -841,15 +843,15 @@ impl Canvas {
                 let chart = charts[*index]
                     .as_ref()
                     .expect("measured canvas panel remains configured");
-                let palette = plot_themes[*index]
+                let theme = plot_themes[*index]
                     .as_deref()
                     .expect("configured canvas panel has a resolved theme");
-                let title = palette
+                let title = theme
                     .show_title
                     .then(|| chart.title_text())
                     .flatten()
                     .filter(|title| !title.is_empty());
-                let subtitle = palette
+                let subtitle = theme
                     .show_subtitle
                     .then(|| chart.subtitle_text())
                     .flatten()
@@ -859,7 +861,7 @@ impl Canvas {
                     *column,
                     PanelRequirements::measure_header(
                         &result.layout,
-                        palette,
+                        theme,
                         title,
                         subtitle,
                         first_cells[*index],
@@ -867,7 +869,7 @@ impl Canvas {
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        self.add_row_title_requirements(&mut requirements, &first_cells, header_palette)?;
+        self.add_row_title_requirements(&mut requirements, &first_cells, header_theme)?;
         let cells = allocate_composed_grid(
             outer,
             self.rows,
@@ -903,7 +905,24 @@ impl Canvas {
                 y: f64::midpoint(bottom, top),
             });
         }
-        let row_titles = self.plan_row_titles(&cells, header_palette)?;
+        let row_titles = self.plan_row_titles(&cells, header_theme)?;
+        #[cfg(test)]
+        {
+            if !headers.is_empty() {
+                record_canvas_theme(
+                    header_theme_index.unwrap_or(usize::MAX),
+                    "shared-header-plan",
+                    header_theme,
+                );
+            }
+            if !row_titles.is_empty() {
+                record_canvas_theme(
+                    header_theme_index.unwrap_or(usize::MAX),
+                    "row-title-plan",
+                    header_theme,
+                );
+            }
+        }
 
         let mut text_panels = Vec::new();
         for (index, text_panel) in self.text_panels.iter().enumerate() {
@@ -911,18 +930,18 @@ impl Canvas {
                 continue;
             };
             #[cfg(test)]
-            record_canvas_theme(usize::MAX, "text-plan", &palette);
+            record_canvas_theme(usize::MAX, "text-plan", &theme);
             let cell = cells[index];
             let maximum_width = (cell.width() - 32.0).max(1.0);
             let title = crate::layout::TextBlock::layout(
                 text_panel.title(),
-                palette.title_font_size,
+                theme.title_font_size,
                 maximum_width,
                 "text panel title",
             )?;
             let body = crate::layout::TextBlock::layout(
                 text_panel.body(),
-                palette.label_font_size,
+                theme.label_font_size,
                 maximum_width,
                 "text panel body",
             )?;
@@ -969,15 +988,15 @@ impl Canvas {
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
-            panels.push(CanvasPanelPreflight {
+            panels.push(PlannedCanvasPanel {
                 index,
                 kind,
-                cell,
-                plan,
+                canvas_cell: cell,
+                panel_plan: plan,
             });
         }
-        Ok(CanvasPreflight {
-            theme: palette,
+        Ok(CanvasPlan {
+            theme,
             plot_themes,
             charts,
             canvas_layout,
@@ -995,51 +1014,45 @@ impl Canvas {
         clippy::too_many_lines,
         reason = "the immutable Canvas plan keeps theme ownership and final draw ordering explicit"
     )]
-    fn render_open_canvas(
+    fn render_planned_canvas(
         &self,
-        preflight: CanvasPreflight,
+        plan: CanvasPlan,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        let palette = preflight.theme.as_ref();
+        let theme = plan.theme.as_ref();
         #[cfg(test)]
-        record_canvas_theme(usize::MAX, "render", palette);
-        let header_theme_index = preflight.charts.iter().position(Option::is_some);
-        let row_title_palette = header_theme_index
-            .and_then(|index| preflight.plot_themes[index].as_deref())
-            .unwrap_or(palette);
-        #[cfg(test)]
-        record_canvas_theme(
-            header_theme_index.unwrap_or(usize::MAX),
-            "header-render",
-            row_title_palette,
-        );
-        for panel in &preflight.panels {
-            let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
+        record_canvas_theme(usize::MAX, "render", theme);
+        let header_theme_index = plan.charts.iter().position(Option::is_some);
+        let row_title_theme = header_theme_index
+            .and_then(|index| plan.plot_themes[index].as_deref())
+            .unwrap_or(theme);
+        for panel in &plan.panels {
+            let chart = plan.charts[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
             })?;
-            let theme = preflight.plot_themes[panel.index]
+            let theme = plan.plot_themes[panel.index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "grid-render", theme);
-            crate::decorations::apply::apply_grid(chart, &panel.plan.result, theme, backend)?;
+            crate::decorations::apply::apply_grid(chart, &panel.panel_plan.result, theme, backend)?;
         }
-        for panel in preflight.panels {
-            let chart = preflight.charts[panel.index].as_ref().ok_or_else(|| {
+        for panel in plan.panels {
+            let chart = plan.charts[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
-            let theme = preflight.plot_themes[panel.index]
+            let theme = plan.plot_themes[panel.index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "panel-render", theme);
             let source_rows = chart.configured_source_rows()?;
-            let render_chart = panel.plan.chart_for_render(chart);
+            let render_chart = panel.panel_plan.chart_for_render(chart);
             let context = source_rows.map_or_else(
                 || {
                     crate::spec::PlotRenderContext::new(
                         render_chart.data(),
-                        panel.plan.panel,
+                        panel.panel_plan.panel,
                         theme,
                     )
                 },
@@ -1047,51 +1060,62 @@ impl Canvas {
                     crate::spec::PlotRenderContext::with_source_rows(
                         render_chart.data(),
                         rows,
-                        panel.plan.panel,
+                        panel.panel_plan.panel,
                         theme,
                     )
                 },
             );
             render_chart.render_panel(panel.kind, context, backend)?;
-            if !panel.plan.result.significance_brackets.is_empty() {
+            if !panel.panel_plan.result.significance_brackets.is_empty() {
                 crate::significance::render(
                     chart,
-                    &panel.plan.result.significance_brackets,
+                    &panel.panel_plan.result.significance_brackets,
                     theme,
                     backend,
                 )?;
             }
-            crate::decorations::apply::apply_axes(chart, &panel.plan.result, theme, backend)?;
+            crate::decorations::apply::apply_axes(chart, &panel.panel_plan.result, theme, backend)?;
             crate::decorations::apply::apply_planned_legend(
                 chart,
-                panel.plan.legend.as_ref(),
+                panel.panel_plan.legend.as_ref(),
                 backend,
             )?;
-            draw_panel_header(chart, panel.cell, theme, backend)?;
+            draw_panel_header(chart, panel.canvas_cell, theme, backend)?;
         }
-        for panel in &preflight.text_panels {
+        for panel in &plan.text_panels {
             #[cfg(test)]
-            record_canvas_theme(usize::MAX, "text-render", palette);
-            draw_text_panel(panel, palette, backend)?;
+            record_canvas_theme(usize::MAX, "text-render", theme);
+            draw_text_panel(panel, theme, backend)?;
         }
-        draw_canvas_row_titles(&preflight.row_titles, row_title_palette, backend)?;
-        draw_canvas_headers(&preflight.headers, palette, backend)?;
-        if let Some((title, entries)) = preflight.shared_legend {
+        if !plan.row_titles.is_empty() {
+            #[cfg(test)]
+            record_canvas_theme(
+                header_theme_index.unwrap_or(usize::MAX),
+                "row-title-render",
+                row_title_theme,
+            );
+            draw_canvas_row_titles(&plan.row_titles, row_title_theme, backend)?;
+        }
+        if !plan.headers.is_empty() {
+            #[cfg(test)]
+            record_canvas_theme(usize::MAX, "shared-header-render", theme);
+            draw_canvas_headers(&plan.headers, theme, backend)?;
+        }
+        if let Some((title, entries)) = plan.shared_legend {
             let legend = Legend::new(
                 title,
                 entries,
                 f64::from(self.width),
                 f64::from(self.height),
             );
-            let left = preflight.outer.x1 + self.resolved_shared_legend_gap(&legend);
-            let bottom = (preflight.full_outer.y1 - legend.compute_box_height())
-                .max(preflight.full_outer.y0);
+            let left = plan.outer.x1 + self.resolved_shared_legend_gap(&legend);
+            let bottom = (plan.full_outer.y1 - legend.compute_box_height()).max(plan.full_outer.y0);
             let (x, y) = legend.box_at(left, bottom).anchor();
             with_layer(backend, "canvas-shared-legend", |backend| {
                 legend.draw(backend, x, y)
             })?;
         }
-        let mut titles = TitleBlock::new().font_family(palette.font_family.clone());
+        let mut titles = TitleBlock::new().font_family(theme.font_family.clone());
         if let Some(title) = &self.title {
             titles = titles.title(title.clone());
         }
@@ -1101,7 +1125,7 @@ impl Canvas {
         if let Some(caption) = &self.caption {
             titles = titles.caption(caption.clone());
         }
-        titles.draw(backend, self.width, &preflight.canvas_layout, palette)
+        titles.draw(backend, self.width, &plan.canvas_layout, theme)
     }
 
     fn canvas_hue_groups(
@@ -1123,6 +1147,8 @@ impl Canvas {
             let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
+            #[cfg(test)]
+            record_canvas_theme(index, "shared-hue-discovery", theme);
             let observed = chart.preflight_hue_levels(kind, panel, theme)?;
             let levels =
                 if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
@@ -1157,6 +1183,8 @@ impl Canvas {
             let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
+            #[cfg(test)]
+            record_canvas_theme(index, "shared-legend-preflight", theme);
             let result = chart.preflight_panel(kind, panel, theme)?;
             entries.extend(result.legend_entries);
         }
@@ -1206,16 +1234,16 @@ fn chart_category_domain(
 
 fn draw_canvas_headers(
     headers: &[CanvasHeaderPlan],
-    palette: &crate::theme::ResolvedTheme,
+    theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if headers.is_empty() {
         return Ok(());
     }
     let style = crate::render::backend::TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.title_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
@@ -1234,16 +1262,16 @@ fn draw_canvas_headers(
 
 fn draw_canvas_row_titles(
     titles: &[CanvasHeaderPlan],
-    palette: &crate::theme::ResolvedTheme,
+    theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if titles.is_empty() {
         return Ok(());
     }
     let style = crate::render::backend::TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.title_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
@@ -1262,7 +1290,7 @@ fn draw_canvas_row_titles(
 
 fn draw_text_panel(
     panel: &TextPanelPlan,
-    palette: &crate::theme::ResolvedTheme,
+    theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let gap = 12.0;
@@ -1271,17 +1299,17 @@ fn draw_text_panel(
     let mut y = panel.cell.y0.midpoint(panel.cell.y1) + total_height / 2.0
         - panel.title.line_height() / 2.0;
     let title_style = crate::render::backend::TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.title_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
     };
     let body_style = crate::render::backend::TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.label_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.label_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
@@ -1315,15 +1343,15 @@ fn draw_text_panel(
 fn draw_panel_header(
     chart: &Plot,
     cell: PanelBox,
-    palette: &crate::theme::ResolvedTheme,
+    theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let title = palette
+    let title = theme
         .show_title
         .then(|| chart.title_text())
         .flatten()
         .filter(|title| !title.is_empty());
-    let subtitle = palette
+    let subtitle = theme
         .show_subtitle
         .then(|| chart.subtitle_text())
         .flatten()
@@ -1333,34 +1361,34 @@ fn draw_panel_header(
     }
     let maximum_width = (cell.width() - 16.0).max(1.0);
     let title_lines = title
-        .map(|text| try_wrap_text(text, palette.title_font_size, maximum_width, "panel title"))
+        .map(|text| try_wrap_text(text, theme.title_font_size, maximum_width, "panel title"))
         .transpose()?
         .unwrap_or_default();
     let subtitle_lines = subtitle
         .map(|text| {
             try_wrap_text(
                 text,
-                palette.subtitle_font_size,
+                theme.subtitle_font_size,
                 maximum_width,
                 "panel subtitle",
             )
         })
         .transpose()?
         .unwrap_or_default();
-    let subtitle_line_height = f64::from(palette.subtitle_font_size) + 6.0;
-    let title_line_height = f64::from(palette.title_font_size) + 6.0;
+    let subtitle_line_height = f64::from(theme.subtitle_font_size) + 6.0;
+    let title_line_height = f64::from(theme.title_font_size) + 6.0;
     let subtitle_style = crate::render::backend::TextStyle {
         color: (80, 80, 80),
-        font_family: palette.font_family.clone(),
-        font_size: palette.subtitle_font_size,
+        font_family: theme.font_family.clone(),
+        font_size: theme.subtitle_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Start,
         rotation: 0.0,
     };
     let title_style = crate::render::backend::TextStyle {
-        color: palette.foreground,
-        font_family: palette.font_family.clone(),
-        font_size: palette.title_font_size,
+        color: theme.foreground,
+        font_family: theme.font_family.clone(),
+        font_size: theme.title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Start,
         rotation: 0.0,

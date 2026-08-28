@@ -317,12 +317,18 @@ fn dpi_to_pixels_per_meter(dpi: f32) -> Result<u32, Error> {
             "png dpi must be positive and finite; got {dpi}"
         )));
     }
+    let pixels_per_meter = pixels_per_meter.round();
+    if pixels_per_meter < 1.0 {
+        return Err(Error::Render(format!(
+            "png dpi is too small to encode: {dpi}"
+        )));
+    }
     if pixels_per_meter > f64::from(u32::MAX) {
         return Err(Error::Render(format!(
             "png dpi is too large to encode: {dpi}"
         )));
     }
-    Ok(pixels_per_meter.round() as u32)
+    Ok(pixels_per_meter as u32)
 }
 
 /// SVG-backed `Backend` implementation.
@@ -865,11 +871,33 @@ mod tests {
                 .to_string()
                 .contains("work")
         );
+        assert!(
+            PngTargetPlan::new(source_size(16_385, 1), &options(PngSizing::Scale(2.0)))
+                .unwrap_err()
+                .to_string()
+                .contains("conversion limit")
+        );
+        assert!(
+            PngTargetPlan::new(source_size(10_000, 5_001), &options(PngSizing::Scale(2.0)))
+                .unwrap_err()
+                .to_string()
+                .contains("work")
+        );
     }
 
     #[test]
     fn png_dpi_plan_preserves_f32_sizing_and_checks_target_before_metadata() {
         assert_eq!(target_size(10_000, 10_000, PngSizing::Dpi(4.2)), (438, 438));
+
+        let error = PngTargetPlan::new(
+            source_size(10_000, 10_000),
+            &PngOptions {
+                sizing: PngSizing::Dpi(0.01),
+                compression: PngCompression::Balanced,
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("too small to encode"));
 
         let error = PngTargetPlan::new(
             source_size(1, 1),
@@ -1319,6 +1347,10 @@ mod tests {
 
     #[test]
     fn dpi_metadata_rejects_values_outside_png_range() {
+        let error = dpi_to_pixels_per_meter(0.01).unwrap_err();
+        assert!(error.to_string().contains("too small to encode"));
+        assert_eq!(dpi_to_pixels_per_meter(0.02).unwrap(), 1);
+
         let error = dpi_to_pixels_per_meter(f32::MAX).unwrap_err();
         assert!(error.to_string().contains("too large to encode"));
     }

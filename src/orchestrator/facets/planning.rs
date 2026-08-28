@@ -14,20 +14,20 @@ use crate::theme::ResolvedTheme;
 
 pub(super) fn canvas_layout(
     chart: &Plot,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
 ) -> Result<CanvasLayout, Error> {
     let mut canvas = CanvasLayout::measured_composed_canvas(
         chart.width(),
         chart.height(),
-        palette,
+        theme,
         CanvasLayoutSpec {
-            has_title: palette.show_title
+            has_title: theme.show_title
                 && chart.title_text().is_some_and(|value| !value.is_empty()),
-            has_subtitle: palette.show_subtitle
+            has_subtitle: theme.show_subtitle
                 && chart.subtitle_text().is_some_and(|value| !value.is_empty()),
-            has_caption: palette.show_caption
+            has_caption: theme.show_caption
                 && chart.caption_text().is_some_and(|value| !value.is_empty()),
             has_x_label: horizontal_axis_label.is_some(),
             has_y_label: vertical_axis_label.is_some(),
@@ -45,7 +45,7 @@ pub(super) fn canvas_layout(
     let (panel, extra_left, extra_bottom) = adjusted_shared_axis_panel(
         horizontal_axis_label,
         vertical_axis_label,
-        palette,
+        theme,
         baseline,
         canvas.panel_box,
     )?;
@@ -58,20 +58,20 @@ pub(super) fn canvas_layout(
 pub(super) fn reserve_rewrapped_shared_axis_titles(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     reserved_panel: PanelBox,
     candidate_panel: PanelBox,
 ) -> Result<PanelBox, Error> {
     let baseline = shared_axis_line_counts(
         horizontal_axis_label,
         vertical_axis_label,
-        palette,
+        theme,
         reserved_panel,
     )?;
     adjusted_shared_axis_panel(
         horizontal_axis_label,
         vertical_axis_label,
-        palette,
+        theme,
         baseline,
         candidate_panel,
     )
@@ -81,14 +81,14 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
 fn shared_axis_line_counts(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     panel: PanelBox,
 ) -> Result<(usize, usize), Error> {
     let horizontal_lines = horizontal_axis_label
         .map(|label| {
             TextBlock::layout(
                 label,
-                palette.label_font_size,
+                theme.label_font_size,
                 panel.width().max(1.0),
                 "shared facet x-axis title",
             )
@@ -100,7 +100,7 @@ fn shared_axis_line_counts(
         .map(|label| {
             TextBlock::layout(
                 label,
-                palette.label_font_size,
+                theme.label_font_size,
                 panel.height().max(1.0),
                 "shared facet y-axis title",
             )
@@ -118,15 +118,15 @@ fn shared_axis_line_counts(
 fn adjusted_shared_axis_panel(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
-    palette: &ResolvedTheme,
+    theme: &ResolvedTheme,
     baseline: (usize, usize),
     candidate: PanelBox,
 ) -> Result<(PanelBox, f64, f64), Error> {
-    let line_height = f64::from(palette.label_font_size) * 1.2;
+    let line_height = f64::from(theme.label_font_size) * 1.2;
     let mut panel = candidate;
     for _ in 0..4 {
         let lines =
-            shared_axis_line_counts(horizontal_axis_label, vertical_axis_label, palette, panel)?;
+            shared_axis_line_counts(horizontal_axis_label, vertical_axis_label, theme, panel)?;
         let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
         let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
         if candidate.width() - extra_left < 80.0 || candidate.height() - extra_bottom < 60.0 {
