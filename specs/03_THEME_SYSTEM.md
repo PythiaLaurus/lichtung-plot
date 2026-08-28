@@ -5,7 +5,9 @@
 ## Purpose
 
 This specification defines the approved replacement theme, color, and
-data-color-scale model for `lichtung-plot`. `01_ARCHITECTURE.md` and
+data-color-scale model for `lichtung-plot`. `05_LAYOUT_SYSTEM.md` defines the
+approved coordinated replacement layout model.
+`01_ARCHITECTURE.md` and
 `02_RENDERING_CONTRACT.md` remain authoritative for the implemented public API
 until Phase T6 in `91_IMPLEMENTATION_PLAN.md` performs the atomic migration. The
 target names and behaviors below are not a second current API and must not be
@@ -40,6 +42,9 @@ properties, or a second theme representation.
 - A **resolved theme** is the private complete value consumed by preflight,
   measurement, collision planning, legend construction, and rendering. It is
   not a public inspection or extension surface.
+- A **relative spacing value** is a validated dimensionless visual relationship
+  resolved against the local text, glyph, mark, or composition metrics it
+  separates. It is not a root-canvas scale factor or output-size policy.
 
 ## Target Public Model
 
@@ -51,11 +56,11 @@ The public foundations consist of these roles:
 | `ThemeBuilder` | Construction-only editor initialized from one complete theme |
 | `SurfaceTheme` | Canvas and panel paints |
 | `TypographyTheme` | Every admitted role-based text style |
-| `TextTheme` | One complete text role: font stack, color, size, weight, and line height |
-| `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, gaps, and spacing |
-| `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and spacing |
+| `TextTheme` | One complete text role: font stack, color, size, weight, and finite positive line-height multiplier |
+| `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, and role-local spacing relationships |
+| `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and role-local spacing relationships |
 | `CanvasLegendPolicy` | Per-plot, hidden, or one shared Canvas legend behavior |
-| `CompositionTheme` | Facet strips, Canvas headers, row titles, and text-panel chrome |
+| `CompositionTheme` | Plot and Canvas root title-block relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
 | `MarkTheme` | Common point, line, fill, interval, ribbon, reference, outline, missing-mark, and supplemental-accent defaults |
 | `AnnotationTheme` | Panel-text, significance, value-label, and highlight geometry plus contrast-backdrop policy |
 | `ColorScales` | Default qualitative, sequential, and diverging data-color scales |
@@ -105,8 +110,11 @@ The component taxonomy is role-based rather than plot-family-based:
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
   continuous color guides. Existing legend policies continue to own visibility
   and placement.
-- `CompositionTheme` owns Canvas and facet chrome. It does not own panel data,
-  grid occupancy, shared-range policy, or text-panel content.
+- `CompositionTheme` owns spatial relationships for Plot and Canvas root title
+  blocks and owns Canvas and facet chrome. `TypographyTheme` still owns each
+  title, subtitle, and caption text role. `CompositionTheme` does not own title
+  content, panel data, grid occupancy, shared-range policy, or text-panel
+  content.
 - `MarkTheme` owns common visual defaults by semantic mark role, including one
   supplemental accent palette for unkeyed primary and appended mark roles. A
   specialized component is justified only when a mark has genuinely distinct
@@ -120,8 +128,19 @@ The component taxonomy is role-based rather than plot-family-based:
 - `ColorScales` owns default data-color mappings. Foreground, surfaces, grid,
   text, neutral references, and missing marks are not qualitative palette slots.
 
+Visual spacing is local. Text leading comes from the owning `TextTheme`; axis
+gaps resolve against axis text and stroke metrics; legend padding resolves
+against legend text and exact key glyphs; annotation clearance resolves against
+annotation text, stroke, and mark extents; Plot and Canvas root title-block
+relationships resolve from `CompositionTheme` against adjacent title metrics;
+and other composition gaps resolve against the owning Canvas or facet
+typography. A theme never scales spacing from the root canvas width or height.
+`05_LAYOUT_SYSTEM.md` owns complete-candidate measurement direction, root-only
+candidate selection, constraints, arrangement, and output dimensions.
+
 Anchor, rotation, orientation, clipping, z-order, statistical geometry,
-collision rules, and minimum representable geometry remain renderer invariants.
+collision rules, layout quality ordering, convergence budgets, and minimum
+representable geometry remain renderer invariants.
 Bar spacing, legend policy, marker and connector visibility, category-label
 sharing, title and label content, and annotation presence remain explicit
 Plot/Canvas configuration or input.
@@ -291,10 +310,10 @@ cell-label contrast uses the light/dark `TypographyTheme` roles and the
 
 ## Shared Legends
 
-A shared Canvas legend uses Canvas `LegendTheme`, Canvas typography, and Canvas
-surface roles for its container. Its entries retain the exact final glyphs
-resolved by their owning plots, including shape, line pattern, fill, outline,
-and RGBA paint.
+A shared discrete Canvas legend uses Canvas `LegendTheme`, Canvas typography,
+and Canvas surface roles for its container. Its entries retain the exact final
+glyphs resolved by their owning plots, including shape, line pattern, fill,
+outline, and RGBA paint.
 
 Mixed explicit Plot themes are allowed. Entries with distinct semantic
 identities coexist. Entries with the same typed semantic identity merge only
@@ -314,8 +333,21 @@ Canvas legend policy owns composition behavior:
   an explicit per-plot legend position rejects under `Shared` because that
   position cannot be honored.
 
-One shared legend requires one exact typed semantic title identity and one
-resolved display title across all contributing entries. Conflicting field
+One shared Canvas guide is either discrete or continuous; mixing the two kinds,
+or combining independently titled sections, rejects during Canvas preflight. A
+continuous contributor carries its typed field identity, scale kind, resolved
+title, gradient stops, diverging center when present, automatic-domain data
+envelope or exact caller domain, and missing-value block. Contributors merge
+only when field identity, scale kind, title, complete gradient, center, and
+missing-value block are exactly equal. With only automatic domains, the shared
+domain is their finite lower/upper union. If any contributor has an exact domain,
+all exact domains must be equal and that domain must contain every automatic
+envelope; otherwise preflight rejects. The shared guide generates its labels once
+from that final domain and resolved Canvas typography. It never merges separately
+generated per-Plot guide labels or lets one Plot's gradient win.
+
+One shared discrete legend requires one exact typed semantic title identity and
+one resolved display title across all contributing entries. Conflicting field
 identities, titles, labels, or glyphs reject. Multiple independently titled
 legend sections remain deferred rather than being silently concatenated.
 
@@ -345,18 +377,54 @@ ordered list of those values. It is not an opaque caller-authored CSS expression
 Each `TextTheme` contains a complete stack. ThemeBuilder may replace all
 typography stacks together or one text role independently.
 
-Before text measurement and scene creation, the generation host resolves the
-first installed face in each used stack as the primary face. A generic family is
-resolved through the generation host's font database. If the primary face lacks
-a required glyph, resolution continues through later stack entries for that
-glyph. Measurement and drawing use the same resolved face per glyph. Rendering
-fails if any required glyph has no face in the supplied stack. No font is
-downloaded, provisioned, embedded, or read from a network or project cache.
+Before text measurement and scene creation, the generation host builds one
+canonical candidate list for each used `(stack,weight)` pair. Text style and
+stretch are fixed renderer invariants `normal`; they are not missing theme
+fields. Font metadata and host generic-family names are exactly those exposed by
+`fontdb 0.23.0` after `Database::load_system_fonts` and before any project-owned
+generic remap. A face's family occurrences are every OpenType typographic-family
+name record (name ID 16) and legacy-family record (name ID 1) that locked
+`ttf-parser 0.25.1` decodes to a string. Named-family matching compares the
+Unicode-16.0 NFKC-casefolded caller name with every such occurrence. A generic
+entry resolves exactly through `Database::family_name` and contributes every face
+having a decoded ID-16 or ID-1 occurrence that NFKC-casefolds equal to that
+resolved host name; an unmatched generic contributes none. No project-owned
+global generic remap occurs.
+
+Each font file identity is exactly
+`(sha256_complete_file_bytes,face_index_u32)`; paths, discovery order, mtimes, and
+database ids are excluded. Duplicate identities deduplicate. Candidates sort by
+`(stack_entry_index,family_match_rank,style_distance,
+stretch_distance,weight_distance,sha256_bytes,face_index)`. The exact metadata
+domains are `style_distance = 0,1,2` for face style Normal, Oblique, Italic;
+`stretch_distance = abs(face_stretch.to_number()-5)` over the OpenType width
+classes `1..=9`; and
+`weight_distance = abs(face_weight_u16-requested_weight_u16)`, where the closed
+requested Normal, Semibold, and Bold weights are `400`, `600`, and `700`.
+`family_match_rank` is zero for a named ID-16 match, one for a named ID-1 match,
+and two for a generic-family contribution.
+Generate every occurrence tuple first; for duplicate file identities retain the
+lexicographically least complete occurrence tuple, then sort surviving identities
+by that tuple. The first candidate is the primary face. Glyph fallback scans this
+same list and selects the first face containing that scalar. The operation records
+the complete ordered identity list as font-environment provenance and fails if the
+list is empty or any required glyph has no face. Measurement and drawing use the
+same selected face per glyph. No font is downloaded, provisioned, embedded, or
+read from a network or project cache.
+
+Font candidates are preflight font-resolution inputs, not layout candidates, and
+do not consume layout candidate-generation or candidate-evaluation budgets.
 
 Preserve-text SVG emits the validated ordered stack; outlined SVG and PNG use
 generation-host fonts. Text wrapping, text-derived layout geometry, outlined
 glyph paths, and PNG bytes require the same installed-font environment. The
 remaining scene structure is deterministic for identical inputs and options.
+
+`TextTheme::line_height` is a finite positive binary64 multiplier of that role's
+font size, not an absolute length. Layout resolves it from the multiplier's exact
+binary rational value times normalized font-size quanta, rounding the resulting
+nonnegative hard occupancy toward positive infinity. No percentage, CSS unit,
+root-scale factor, or backend interpretation remains after this resolution.
 
 ## Contrast
 
@@ -372,16 +440,31 @@ translucent, contrast planning composites it over the opaque backdrop stored in
 `AnnotationTheme`; that backdrop affects selection only and is not painted. The
 light and dark candidate text colors must be opaque. The renderer computes
 relative luminance deterministically and uses the candidate with the greater
-contrast ratio. Transparent root output cannot guarantee contrast against the
+contrast ratio. Convert one `u8` sRGB channel `c` to linear binary64 as `c/255 / 12.92`
+for `c <= 10`, otherwise `((c/255 + 0.055)/1.055)^2.4`, using the vendored
+CORE-MATH correctly rounded `cr_pow` routine at revision
+`e0a3599597503f2af90311c82e2ca92dc06c789a`. Composite source-over in linear
+light by starting with the opaque planning backdrop, then applying Canvas,
+panel, and variable fill from back to front. For each layer and each channel in
+`r,g,b` order, calculate `one_minus_a = 1.0 - a`, `source_term = source*a`,
+`destination_term = destination*one_minus_a`, then
+`destination = source_term + destination_term`; every named binary64 operation
+rounds to nearest-even and fused substitution is forbidden. The destination
+remains opaque, so no alternate straight/premultiplied-alpha recurrence is used.
+Calculate luminance as `0.2126*r + 0.7152*g + 0.0722*b` in that operation
+order without fused substitution and contrast as
+`(max(l1,l2)+0.05)/(min(l1,l2)+0.05)`. Greater binary64 contrast wins; exact-bit
+equality selects the dark role. Selection occurs before font resolution/layout,
+so the selected complete role alone supplies metrics. Transparent root output cannot guarantee contrast against the
 recipient's actual unknown background and remains caller-owned.
 
 ## Validation
 
 `ThemeBuilder::build` and component constructors validate all data-independent
 invariants, including nonempty font stacks and palettes, finite positive sizes
-and widths, finite nonnegative spacing, valid line heights, ordered gradient
-stops, opaque automatic contrast candidates, and structurally complete
-components.
+and widths, finite nonnegative role-local lengths and dimensionless spacing
+relationships, valid line heights, ordered gradient stops, opaque automatic
+contrast candidates, and structurally complete components.
 
 Plot or Canvas preflight validates data-dependent invariants after inheritance
 and scale selection, including fixed-palette capacity, exact-map completeness,

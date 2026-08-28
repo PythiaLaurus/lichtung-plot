@@ -186,6 +186,32 @@ histogram bins, KDE curves, quantiles, confidence geometry for explicitly
 requested descriptive summaries, and ordinary least-squares display fits. It
 does not select scientific tests or infer caller intent.
 
+## Size And Layout Boundary
+
+The current implemented Plot stores one exact output width and height, defaults
+to `640x480`, and exposes those values through `width()` and `height()`. The
+current Canvas stores one exact composed width and height and defaults to
+`960x640`. `size(width, height)` replaces the complete pair. Canvas owns the
+composed dimensions and replaces child Plot dimensions for its render context.
+
+`05_LAYOUT_SYSTEM.md` defines the approved replacement contract. After the
+atomic Phase T6 migration, absence of a sizing call selects bottom-up automatic
+layout, `max_width(width)` supplies a finite width bound with automatic height,
+and `size(width, height)` remains exact. Final canonical dimensions then belong
+to the immutable root plan and rendered `Output`, not infallible pre-render Plot
+getters. None of those target behaviors or names is current before T6.
+
+The target protocol keeps scientific layout private. Constraints flow from a
+parent to its children, complete nonempty collections of measured sizes and
+immutable local plans return to the parent, and only root selection chooses one
+complete tree before parents assign final positions. Semantic content does not
+silently clip, elide, or disappear to satisfy a bound. Exact constraints either
+fit the complete requested content or fail before backend creation.
+Automatic and bounded-width roots also pass the approved finite resource and
+default-300-DPI viability envelope before backend creation. Exact roots remain
+exact and retain format-local terminal validation, so an exact SVG scene may be
+valid even when a later PNG request rejects its raster limits.
+
 ## Scene Lifecycle
 
 `Plot::svg`, `Plot::svg_preserve_text`, `Plot::png`, `Plot::png_preview`, and
@@ -230,6 +256,14 @@ searchable, editable, or available to assistive text extraction.
 searchable, and editable `<text>` elements intact. PNG rasterizes the canonical
 SVG through `resvg` and `tiny-skia`. PNG sizing validates positive, finite DPI
 or scale, positive dimensions, and bounded pixel work before allocation.
+
+Current PNG conversion admits source and target axes through `32_768` inclusive,
+source and target products through `100_000_000` pixels inclusive, and canonical
+SVG parser input through `67_108_864` bytes inclusive. Validation orders source
+axis, source work, source SVG bytes, options, rounded-positive target, target
+axis, target work, DPI metadata, parse/dimension agreement, pixmap allocation,
+render, then encode. Preserve-text and outlined SVG routes do not apply those
+PNG-only source and target limits before the Phase T6 automatic-layout switch.
 
 Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
 JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
@@ -300,6 +334,10 @@ Public operations return `lichtung_plot::Result<T>` with these domains:
   failures.
 
 No fallback renderer or alternate output path is attempted after an error.
+Project-owned layout or serialization arithmetic overflow and first-party
+capacity reservation refusal are render errors with no reduced-quality fallback.
+The contract does not promise recovery from process-global allocation failure
+inside an external dependency.
 
 ## Artifact Publication
 

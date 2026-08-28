@@ -112,7 +112,7 @@ and private rendering path as terminal output through a null backend.
 
 ## Public Surface
 
-The stable plot introspection surface is limited to `kind()`, `width()`,
+The current stable plot introspection surface is limited to `kind()`, `width()`,
 `height()`, and `preflight()`. Family configuration remains available through
 exact marker-gated builders, not broad getters that return irrelevant defaults.
 
@@ -121,9 +121,18 @@ private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
 atomic migration tracked in `91_IMPLEMENTATION_PLAN.md`; its target types and
 inheritance behavior are not current public API until Phase T6 completes.
 
-The public layout module remains removed; `AxisTick` is exported only from the
-crate root. Public geometry uses Canvas terminology and concise geometry nouns
-rather than renderer-internal `Figure*` or redundant `*Input` names.
+`05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
+same migration. T5a through T5e implement its private complete-candidate
+measurement, arrangement, and root-selection protocol while preserving the
+current exact public sizing behavior. Automatic root sizing, the bounded-width
+builder, rendered-output dimension accessors, and removal of pre-render Plot
+dimension getters are not current behavior or public API until Phase T6
+completes.
+
+The public layout module remains removed in both the current and target
+contracts; `AxisTick` is exported only from the crate root. Public geometry uses
+Canvas terminology and concise geometry nouns rather than renderer-internal
+`Figure*` or redundant `*Input` names.
 
 `PointLayer` is an optional ordinary-line overlay with renderer-owned visual
 defaults and selective caller overrides. `NumericLabelFormat` remains a narrow

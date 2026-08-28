@@ -60,3 +60,35 @@ A future density option must define whether its value is a target, maximum, or
 exact count; how nice-number selection may deviate; how text fit and small
 panels override it; and how facets and Canvas shared dimensions coordinate it.
 No current tick-count setter or dormant field reserves this feature.
+
+## Broader Root Constraints
+
+The approved target in `05_LAYOUT_SYSTEM.md` admits automatic root layout, one
+finite maximum width with automatic height, and one exact width-height pair. It
+does not expose the private `LayoutConstraints`, `LengthConstraint`, candidate
+collection, or measurement types.
+
+A broader public surface would need demonstrated workflows for minimum width,
+minimum height, maximum height, exact single-dimension sizing, and interactions
+with scientific aspect, wrapping, legends, facets, Canvas, and exact content fit.
+No public constraint object, builder, callback, or alternate measurement API is
+reserved now, and the private complete-candidate protocol is not an extension
+surface.
+
+## Compact Composition
+
+Automatic layout preserves declared Canvas coordinates, header spans, row
+titles, range groups, Cartesian facet coordinates, and trailing wrap slots. It
+does not pack occupied cells or collapse empty rows and columns.
+
+A future compact composition policy must define coordinate remapping, shared
+axes, header spans, range groups, empty semantic combinations, and deterministic
+ordering. No implicit sparse-grid compaction or placeholder policy is reserved.
+
+## Caller-Selected Layout Objective
+
+The layout quality ordering in `05_LAYOUT_SYSTEM.md` is one deterministic
+renderer policy. A future caller-selected objective would need typed semantics
+for aspect, density, whitespace, legend flow, text measure, grid balance, and
+failure under exact constraints. No scoring callback, dynamic strategy, string
+mode, or public layout plugin is reserved.
