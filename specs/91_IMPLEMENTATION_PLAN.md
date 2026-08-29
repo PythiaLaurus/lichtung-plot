@@ -1893,11 +1893,77 @@ Acceptance:
   PNG option scope, layout, or the supported-host atomic replacement protocol.
 - `just verify` passes before T3k is marked complete and T4 begins.
 
+## Phase T3l: Private Planning-Value Terminology
+
+**Status**: PENDING
+
+Align private planning fields and their directly connected identifiers with the
+concrete values they carry. The current use of `chart` for `Plot` values does not
+represent a second type or lifecycle state and must not imply one.
+
+Dependencies: T3j.
+
+Naming rule:
+
+- Name a sole value of type `Plot` or `Plot<K>` `plot`, and name a collection of
+  those values `plots`. Do not use `chart` as an alternate technical identity for
+  the Rust `Plot` type.
+- Add a role qualifier only when one scope contains multiple `Plot` values whose
+  roles must be distinguished. Name that exact role, such as `source`,
+  `base_plot`, `planning_plot`, or `panel_plot`; do not call a sole value
+  `render_plot` or `planned_plot` merely because a plan stores it.
+- Name nested plan and geometry values by their actual role when the unqualified
+  name hides the contained type. A field name need not mechanically repeat its
+  Rust type when its existing semantic role is already unambiguous.
+- Retain "chart" as ordinary user-facing prose where it means the rendered
+  graphic. This phase changes private Rust identifiers, not the library's natural
+  language or public API.
+
+Scope:
+
+- Rename `CanvasPlan::charts` to `plots` while retaining `CanvasPlan::panels` for
+  its collection of `PlannedCanvasPanel` values and `canvas_cell` for each
+  original grid allocation.
+- Rename `UnfacetedPlotPlan::chart` to `plot` and
+  `UnfacetedPlotPlan::panel` to `panel_plan`.
+- Rename `FacetPlan::chart` to `plot` and `FacetPlan::plans` to `panel_plans` so
+  the stored Plot, facet metadata, and decoration plans remain distinct.
+- Rename `PanelPlan::panel` to `panel_box`. Replace
+  `PanelPlan::chart_for_render` with `plot_with_planned_limits`, which states the
+  exact transformation rather than inventing a render-stage Plot identity.
+- Apply the same rule to directly connected Canvas, unfaceted, facet, legend,
+  and decoration-planning parameters, locals, helpers, and tests. This includes
+  `chart_category_domain` to `plot_category_domain` and Plot-valued
+  `chart`/`charts`, `planning_chart`, `panel_chart`, and `base_chart` identifiers
+  to their corresponding Plot terminology.
+- Update current explanatory text that claims one of the replaced private names.
+  Retain explicitly historical wording and unrelated natural-language uses of
+  "chart".
+- Preserve the exact planning data, ownership, ordering, cloned-Plot
+  transformations, panel geometry, and final rendering sequence. Do not add a
+  `Chart` type, alias, wrapper, conversion, or compatibility name.
+
+Acceptance:
+
+- The private plan hierarchy reads `CanvasPlan::plots`,
+  `UnfacetedPlotPlan::{plot, panel_plan}`,
+  `FacetPlan::{plot, panel_plans}`, and `PanelPlan::panel_box` without an
+  undocumented Plot-versus-chart distinction.
+- A sole Plot-valued field at these planning boundaries is named `plot`; any
+  qualified Plot-valued binding is justified by another Plot value in the same
+  scope and names the exact distinguishing role.
+- Direct planning helpers and consumers use Plot terminology consistently, and
+  no compatibility alias or duplicate route retains the replaced identifiers.
+- Focused standalone, facet, Canvas, panel-planning, lifecycle, and terminology
+  tests pass with no SVG, PNG, snapshot, public API, or intended rendering
+  change.
+- `just verify` passes before T3l is marked complete and T4 begins.
+
 ## Phase T4: Canvas Theme Inheritance
 
 **Status**: PENDING
 
-Dependencies: T3k.
+Dependencies: T3k and T3l.
 
 Make composition ownership explicit and consistent.
 
