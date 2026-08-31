@@ -166,7 +166,7 @@ The approved theme and layout targets follow these rules:
 | T4 | Explicit Canvas-to-Plot theme inheritance | IN PROGRESS |
 | T4a | Ownership API and implementation partition | COMPLETE |
 | T4b | Owner selection and resolved provenance | COMPLETE |
-| T4c | Composition theme routing | PENDING |
+| T4c | Composition theme routing | COMPLETE |
 | T4d | Public attachment and current contract | PENDING |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -2119,7 +2119,7 @@ Acceptance:
 
 ### Phase T4c: Composition Theme Routing
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T4b.
 

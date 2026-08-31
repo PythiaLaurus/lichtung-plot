@@ -20,6 +20,7 @@ use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 #[cfg(test)]
 thread_local! {
     pub(crate) static CANVAS_THEME_EVIDENCE: std::cell::RefCell<Vec<(usize, &'static str, usize)>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static CANVAS_SHARED_LEGEND_THEME_EVIDENCE: std::cell::RefCell<Vec<(usize, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
     pub(crate) static CANVAS_SCENE_RENDER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -29,6 +30,17 @@ fn record_canvas_theme(owner: usize, stage: &'static str, theme: &ResolvedTheme)
         evidence
             .borrow_mut()
             .push((owner, stage, std::ptr::from_ref(theme).addr()));
+    });
+}
+
+#[cfg(test)]
+fn record_shared_legend_theme(owner: usize, theme: &ResolvedPlotTheme) {
+    let provenance = match theme {
+        ResolvedPlotTheme::InheritedRoot => "inherited-root",
+        ResolvedPlotTheme::ExplicitPlot(_) => "explicit-plot",
+    };
+    CANVAS_SHARED_LEGEND_THEME_EVIDENCE.with(|evidence| {
+        evidence.borrow_mut().push((owner, provenance));
     });
 }
 
@@ -85,10 +97,14 @@ impl ResolvedCanvasThemes {
     }
 
     fn plot(&self, index: usize) -> Option<&ResolvedTheme> {
-        self.plots.get(index)?.as_ref().map(|theme| match theme {
+        self.plot_selection(index).map(|theme| match theme {
             ResolvedPlotTheme::InheritedRoot => self.root(),
             ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
         })
+    }
+
+    fn plot_selection(&self, index: usize) -> Option<&ResolvedPlotTheme> {
+        self.plots.get(index)?.as_ref()
     }
 }
 
@@ -446,6 +462,12 @@ impl Canvas {
         self
     }
 
+    #[cfg(test)]
+    pub(crate) fn with_test_theme(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
     fn render_preflighted(&self, plan: CanvasPlan, backend: &mut dyn Backend) -> Result<(), Error> {
         let mut backend =
             crate::orchestrator::DeferredBackend::new(backend, self.width, self.height);
@@ -720,10 +742,7 @@ impl Canvas {
             let gap = self.resolved_shared_legend_gap(&legend);
             outer.x1 -= legend.compute_box_width() + gap + legend.metrics.pad;
         }
-        let header_theme_index = plots.iter().position(Option::is_some);
-        let header_theme = header_theme_index
-            .and_then(|index| themes.plot(index))
-            .unwrap_or_else(|| themes.root());
+        let header_theme = themes.root();
         let header_outer = outer;
         let column_header_height = if self.column_headers.is_empty() {
             0.0
@@ -943,18 +962,10 @@ impl Canvas {
         #[cfg(test)]
         {
             if !headers.is_empty() {
-                record_canvas_theme(
-                    header_theme_index.unwrap_or(usize::MAX),
-                    "shared-header-plan",
-                    header_theme,
-                );
+                record_canvas_theme(usize::MAX, "shared-header-plan", header_theme);
             }
             if !row_titles.is_empty() {
-                record_canvas_theme(
-                    header_theme_index.unwrap_or(usize::MAX),
-                    "row-title-plan",
-                    header_theme,
-                );
+                record_canvas_theme(usize::MAX, "row-title-plan", header_theme);
             }
         }
 
@@ -1055,10 +1066,6 @@ impl Canvas {
         let theme = plan.themes.root();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "render", theme);
-        let header_theme_index = plan.plots.iter().position(Option::is_some);
-        let row_title_theme = header_theme_index
-            .and_then(|index| plan.themes.plot(index))
-            .unwrap_or(theme);
         for panel in &plan.panels {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
@@ -1124,12 +1131,8 @@ impl Canvas {
         }
         if !plan.row_titles.is_empty() {
             #[cfg(test)]
-            record_canvas_theme(
-                header_theme_index.unwrap_or(usize::MAX),
-                "row-title-render",
-                row_title_theme,
-            );
-            draw_canvas_row_titles(&plan.row_titles, row_title_theme, backend)?;
+            record_canvas_theme(usize::MAX, "row-title-render", theme);
+            draw_canvas_row_titles(&plan.row_titles, theme, backend)?;
         }
         if !plan.headers.is_empty() {
             #[cfg(test)]
@@ -1215,11 +1218,18 @@ impl Canvas {
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
             let kind = plot.kind();
-            let theme = themes
-                .plot(index)
+            let selection = themes
+                .plot_selection(index)
                 .expect("configured canvas panel has a resolved theme");
+            let theme = match selection {
+                ResolvedPlotTheme::InheritedRoot => themes.root(),
+                ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
+            };
             #[cfg(test)]
-            record_canvas_theme(index, "shared-legend-preflight", theme);
+            {
+                record_canvas_theme(index, "shared-legend-preflight", theme);
+                record_shared_legend_theme(index, selection);
+            }
             let result = plot.preflight_panel(kind, panel, theme)?;
             entries.extend(result.legend_entries);
         }
