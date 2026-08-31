@@ -332,37 +332,61 @@ inside that one Plot layout.
 After complete child collections are available, each cache-miss component uses
 this exact pass-local order:
 
-1. calculate, without retaining collections, the raw base-breakpoint counts;
-2. reserve and materialize the complete base-breakpoint sets;
-3. count, reserve, and materialize every producer-independent aspect-expanded
-   width and height set exactly once;
-4. for every completed independent dimension choice, count, reserve, and
-   materialize its complete ordered discrete-alternative seeds and any declared
-   width-dependent dimension choices;
-5. count, reserve, and construct the exact-total residual-assignment descriptors;
-6. calculate the descriptor-count lower bound and exact assigned-box call-attempt
+1. calculate, without retaining collections, the preliminary base-breakpoint
+   counts with generated-tick, text-wrap, legend-flow, and other declared
+   alternative-derived transitions omitted;
+2. count every non-tick transition source's raw attempts and exact maximum result
+   cardinality without shaping or evaluating it, in this order: text-wrap,
+   legend-flow, track, then specialized-interior; calculate the exact maximum
+   tick-independent-set capacity as the checked sum of preliminary and non-tick
+   transition maxima;
+3. claim cumulative generation slots and reserve the preliminary, non-tick
+   source/transition, and tick-independent maximum capacities in that order;
+   materialize the preliminary sets, then evaluate/materialize the non-tick
+   streams in step-2 order, and form the actual sorted deduplicated tick-
+   independent sets in the reserved capacity;
+4. from those materialized tick-independent sets, count every generated-tick
+   source/raw attempt and its exact maximum fit-transition cardinality without
+   shaping or evaluating it; calculate the exact maximum final-base capacity as
+   the checked sum of the actual tick-independent length and tick-transition
+   maximum;
+5. claim slots and reserve generated-tick source/transition and final-base maximum
+   capacities in that order; evaluate/materialize the generated-tick streams and
+   form the actual sorted deduplicated final base sets exactly once;
+6. count every producer-independent aspect-expanded width and height set, claim
+   its slots, reserve exact capacity, and materialize it exactly once;
+7. for every completed independent dimension choice, count the remaining
+   ordered discrete-alternative seeds and any declared width-dependent dimension
+   choices, claim their slots, reserve exact capacity, and materialize them;
+   source streams already stored in steps 3 and 5 are referenced rather than
+   materialized again;
+8. count the exact-total residual-assignment descriptors, claim their slots,
+   reserve exact capacity, and construct them;
+9. calculate the descriptor-count lower bound and exact assigned-box call-attempt
    count; reject before calls if either exceeds its remaining cumulative budget;
-7. derive every child cell and obtain assigned-box child outcomes in descriptor
+10. derive every child cell and obtain assigned-box child outcomes in descriptor
    and canonical address order;
-8. calculate that component's complete pre-deduplication evaluation count from
+11. calculate that component's complete pre-deduplication evaluation count from
    those outcomes;
-9. reject if that count exceeds the remaining cumulative candidate budget;
-10. reserve the complete candidate collection and plan, quality, and signature
+12. reject if that count exceeds the remaining cumulative candidate budget;
+13. reserve the complete candidate collection and plan, quality, and signature
    payloads at their calculated maximum capacities;
-11. evaluate every raw alternative attempt or composite combination in mixed-
+14. evaluate every raw alternative attempt or composite combination in mixed-
    radix order, including attempts later rejected;
-12. form every admitted candidate's complete local provisional arrangement,
+15. form every admitted candidate's complete local provisional arrangement,
     ink, collision, overlay, and serialization inputs;
-13. sort admitted candidates by complete structural signature;
-14. deduplicate exact signatures.
+16. sort admitted candidates by complete structural signature;
+17. deduplicate exact signatures.
 
-Counting and materialization apply the same closed producer twice and must yield
-the counted cardinality exactly. The pass-local generation reservation stage
-orders breakpoint reservation before width/height-dependent seed reservation.
-Before each materialization in steps 2 through 5, compare its count with the
-remaining cumulative candidate-generation-slot budget and fail before reservation
-when it would exceed that budget. Generation work is therefore bounded even
-though the candidate-evaluation count is known only after assigned-child outcomes.
+Each raw-source count and maximum-capacity formula is closed and must equal the
+materializer's raw cardinality and maximum exactly; the actual post-filter/post-
+deduplication length may be smaller and must not exceed that reserved maximum.
+Count-only transition stages do no shaping, collision, or source evaluation and
+retain no hidden collection. For every storage class in steps 3 through 8, the
+exact order is cumulative slot claim, fallible exact reservation, then
+materialization. A failed claim performs no reservation, and a failed reservation
+performs no materialization. Generation work is therefore bounded even though the
+candidate-evaluation count is known only after assigned-child outcomes.
 Every materialized descriptor has evaluation cardinality at least one, so its
 count is a valid candidate-budget lower bound. The assigned-call count is the
 checked sum of canonical children over descriptors whose boxes can be formed;
@@ -390,6 +414,25 @@ Breakpoints outside the constraint interval are discarded. Remaining values
 sort numerically and deduplicate before Cartesian combination. Components do not
 sample continuous intervals, enlarge until a check passes, stop after finding a
 passing candidate, or retain a best partial result.
+
+For each panel dimension, its **tick-independent source set** is the completed
+base breakpoint set obtained from the list above with generated-tick fit
+transitions omitted. Its inputs are the normalized call constraints and the
+non-tick hard minima, preferred lengths, text, legend, track, and specialized
+source inputs derivable from prepared content plus the consumed frontier. The
+producer derives, sorts, and deduplicates this finite set during pass-local steps
+1 through 3; the frontier carries those typed derivation inputs and never a
+materialized breakpoint or transition set.
+
+Initial axis generation is a one-way stage: enumerate that source set in
+ascending order, generate the complete no-interval axis stream once for each
+span, count and reserve all resulting fit transitions, then union the transitions
+into the owning panel's final base breakpoint set. The union is not fed back into
+the source set during that pass. A caller-interval stream is span-independent,
+but its measured label fit transitions go through the same one-way union. An
+assigned-box axis call instead uses only its exact assigned parallel span and
+regenerates its complete source stream for that span. Thus every producer and
+cache identity has a finite input source, and no axis calls itself recursively.
 
 A Leaf uses only the dimension radix declared by its producer below. A composite
 uses one ordered `DimensionDescriptor` radix:
@@ -490,20 +533,23 @@ The natural unwrapped width is the maximum outward ink span of one complete
 paragraph, also zero for no nonempty paragraph. These ink spans, not summed glyph
 advances or `66ch`, supply the text hard/natural breakpoint inputs.
 
-Before shaping transition runs, calculate the checked boundary-pair count and
-claim one candidate-generation slot per pair; fail before shaping when the count
-exceeds the remaining generation budget. Store each pair's rounded transition in
-its claimed slot, then sort and deduplicate the widths. Form the text Leaf's
-completed width set from the generic normalized minimum, finite maximum, hard
-minimum, and these transitions; text defines no preferred-length breakpoint and
-the later `66ch` quality target does not add one. Apply interval
+Pass-local count-only step 2 calculates the checked boundary-pair count as the
+exact maximum transition cardinality but performs no shaping and claims no slot.
+In materialization step 3, claim one candidate-generation slot per pair and
+reserve that exact maximum capacity before shaping; fail before shaping when the
+count exceeds the remaining generation budget or reservation fails. Store each
+pair's rounded transition in its claimed slot, then sort and deduplicate the
+widths. Form the text Leaf's completed width set from the generic normalized
+minimum, finite maximum, hard minimum, and these transitions; text defines no
+preferred-length breakpoint and the later `66ch` quality target does not add one. Apply interval
 filtering, then process every distinct completed width in ascending numeric order
 as one raw greedy attempt. Thus a finite constraint endpoint is evaluated even
 when it is not a wrap transition. Process one explicit unwrapped-vector attempt last. The latter
 counts even when it duplicates the result at the largest transition; present
 empty text has zero boundary-pair transitions but still evaluates every generic
-completed constraint/preference width before its final unwrapped attempt. This stream is the complete text alternative stream. Every attempt
-counts even when an unbreakable sequence rejects it. Admitted alternatives deduplicate by ending-
+completed constraint/preference width before its final unwrapped attempt. This
+stream is the complete text alternative stream. Every attempt counts even when
+an unbreakable sequence rejects it. Admitted alternatives deduplicate by ending-
 grapheme vector and sort by line count then ending-grapheme vector. Quality
 widths shape each complete selected line as one run and outward-round that total.
 Nongreedy partitions are not admitted.
@@ -567,10 +613,19 @@ The text role's closed alignment discriminant is `start,center,end`; every line
 uses that one role alignment. These translations place each line's ink inside
 `[0,block_width]` and define the final per-line anchor consumed by serialization.
 
-Text-role alignment is a renderer-owned mapping, never a `TextTheme` input:
+Text-role alignment is normally a renderer-owned mapping and is never a
+`TextTheme` input. The sole theme-owned exception is
+`CompositionTheme::root_title_block_alignment`. Every present Plot/Canvas root
+title, subtitle, and caption consumes the same owner-local resolved
+`Start,Center,End` value. It controls both each line's stored translation and
+the horizontal cross-axis placement of each nonfill root text child within the
+root's post-inset content span. All built-in themes resolve it to `center`.
+`Start` and `End` are physical local left and right, not bidi-logical directions.
 
-- Plot/Canvas root title, subtitle, caption, TextPanel title/body, legend title/
-  label, guide title, and generic standalone text use `start`;
+The remaining renderer-owned mappings are:
+
+- TextPanel title/body, legend title/label, guide title, and generic standalone
+  text use `start`;
 - Canvas/facet composition headers and row titles, axis titles, tick labels, and
   continuous-guide numeric labels use `center`;
 - panel/annotation text at a left-edge or left-corner anchor uses `start`, at a
@@ -579,7 +634,7 @@ Text-role alignment is a renderer-owned mapping, never a `TextTheme` input:
 
 This resolved role value is an immutable frontier/plan/signature input and is
 identical for measurement and serialization. No current producer enumerates text
-alignment alternatives.
+alignment alternatives; resolved alignment is never a candidate radix.
 
 Mandatory breaks add no spacing beyond one line pitch. Every empty paragraph
 uses one empty line with these vertical metrics. A semantically absent text
@@ -624,19 +679,93 @@ ticks, stroke, gaps, and title determine the gutter by the axis rule below. Thes
 label products, hard-span transitions, and final interval checks are the complete
 categorical-axis producer and accounting order.
 
-An empty caller tick vector selects automatic generation before candidate
-construction under the retained empty-ticks policy. A nonempty exact caller tick
-list contributes exactly one indivisible alternative. Its positions must be
-finite, strictly ascending, and inside the final finite, strictly ascending
-display domain. Its labels remain verbatim and need not be unique. No empty exact
-alternative reaches fit-transition calculation.
+A present caller exact-tick list must contain `1..=10_000` entries; an empty or
+larger present list rejects during semantic preflight and never selects automatic
+generation. Absence selects automatic generation. One valid exact list
+contributes exactly one indivisible alternative and takes precedence over an
+optional automatic `TickInterval` regardless of setter order. Its positions must
+be finite, strictly ascending, and inside the final finite, strictly ascending
+display domain. Its labels remain verbatim and need not be unique. An empty exact
+label is an intentionally unlabeled tick: its tick and grid position remain, but
+it creates no text attempt, text plan, baseline, extent, collision interval,
+gutter, or paint. No empty exact-label alternative reaches fit-transition
+calculation.
 
-For a generated linear axis with display domain `(lo,hi)`, each target count
-`k` in `5,4,3,2,1` contributes one raw seed attempt. Calculate `span = hi-lo`;
-when that overflows, calculate
-`span = ((hi/scale)-(lo/scale))*scale`, where
-`scale=max(abs(lo),abs(hi))`. The seed rejects unless `span` is finite and
-positive. Let `raw_step=span/k`.
+Automatic range broadening is independent of generated-tick density. In the
+absence of exact limits, the canonical continuous/anchored nice-range producer
+retains the private renderer invariant
+`automatic_range_nice_seed_count=5` together with its separately owned five-
+percent margin and nice-step grammar. That value affects only display-domain
+snapping; it is not a generated-tick target, ceiling, candidate count, quality
+input, or public control.
+
+Automatic numeric generation has two policy modes. With no `TickInterval`, it
+uses typography- and span-dependent renderer policy. With an interval, it uses
+the caller's preferred data-space interval, tries deterministic coarser
+intervals only when a complete requested-interval axis candidate cannot survive,
+and retains one documented midpoint source after every interval vector as the
+terminal one-tick fallback. `TickInterval::additive(step)` requires a finite
+positive `step` and a linear numeric axis. `TickInterval::log10_decades(n)`
+requires a positive integer `n` and a Log10 axis. A kind/scale mismatch rejects during semantic
+preflight. Categorical axes do not admit this policy. Repeating one axis setter
+replaces its previous interval; an exact `AxisTick` list suppresses that axis's
+interval regardless of builder-call order.
+
+All generated linear-step sources use these private bounds:
+
+```text
+MAX_GENERATED_TICKS  = 10_000
+MAX_EXACT_TICK_INDEX = 2^53
+```
+
+For one finite positive `step` and closed finite display domain `[lo,hi]`, first
+calculate `first_f=ceil(lo/step)` and `last_f=floor(hi/step)` by prescribed
+binary64 operations. The source rejects unless both results are finite,
+integral, and inside `[-MAX_EXACT_TICK_INDEX,MAX_EXACT_TICK_INDEX]`. Convert them
+exactly to signed integers, calculate `count=last-first+1` in checked signed
+wide-integer arithmetic, and reject unless `count` is in
+`1..=MAX_GENERATED_TICKS`. Emit each position by prescribed binary64
+`(index as f64)*step`; reject the source if any result is nonfinite, outside the
+closed domain except for an exact endpoint, or not strictly greater than its
+predecessor. Rejecting an unrepresentable fine step does not reject its later
+coarser sources.
+
+With no caller interval, let `S` be the source's finite provisional
+axis-parallel panel span and define with checked integer arithmetic:
+
+```text
+automatic_seed_pitch = max(1 quantum, 6ch)
+upper_seed_count =
+    1 + min(9_999, max(1, S / automatic_seed_pitch))
+```
+
+An assigned-box axis call uses its exact assigned `S`. An initial call processes
+each finite span in the owning panel producer's tick-independent source set in
+ascending order; that set and its one-way use are defined under **Axis
+Planning**. For each `k` from `upper_seed_count` through `1` in descending order,
+emit one raw nice-step source. If `hi-lo` is finite, use
+`raw_step=(hi-lo)/k`. Otherwise let `scale=max(abs(lo),abs(hi))` and use the
+prescribed operation order
+`raw_step=((hi/scale)-(lo/scale))*(scale/k)`. Reject that raw source unless its
+result is finite and positive.
+
+With `TickInterval::additive(step)`, emit one raw source for each coarsening step
+in the sequence `step * (1,2,3,5)`, then ten times those four values, and so on.
+Calculate each new decade base by prescribed binary64 multiplication by ten;
+within a decade use multiplier order `1,2,3,5`, omit exact duplicate steps, and
+stop after processing the first finite decade base greater than
+`max(abs(lo),abs(hi))` or when the next base cannot be finite. Multiplier one
+therefore tries the caller's requested interval exactly; later sources are
+deterministic coarser integer multiples. Apply the common linear-step source
+rule above. A too-dense or unrepresentable source rejects before materializing
+its vector; later coarser sources are still processed. These are complete
+interval vectors: they never contribute evenly indexed subsequences or an
+adaptive nice-step source. After all coarsening sources, this mode contributes
+one final singleton at `f64::midpoint(lo,hi)` so a domain containing no
+representable aligned multiple still has a bounded candidate. That singleton's
+interval-source ordinal follows every coarsened interval source.
+
+For a no-interval nice-step source, calculate the candidate step as follows.
 
 `decimal_power(e)` is the correctly rounded ties-to-even binary64 value of the
 mathematical rational `10^e`, calculated by exact integer arithmetic for
@@ -650,27 +779,20 @@ let `magnitude=decimal_power(e)` and use candidate steps in this order:
 ```
 
 If no table exponent qualifies, the sole candidate step is `raw_step`. Every
-listed multiplication uses prescribed binary64 arithmetic. For each finite
-positive step:
+listed multiplication uses prescribed binary64 arithmetic. Evaluate each finite
+positive step by the common linear-step source rule. Select the admitted step
+minimizing `abs_diff(count,k)`; a tie keeps the earlier, larger listed step. If
+`lo.next_up() >= hi`, no step is evaluated and the seed emits `[lo,hi]`. A seed
+with fewer than two emitted positions instead emits `[lo,hi]`. Reject when no
+step is admitted or the endpoint replacement is not finite, closed-domain,
+strictly ascending, and inside `1..=MAX_GENERATED_TICKS`.
 
-```text
-first = ceil(lo / step)
-last  = floor(hi / step)
-count = last - first + 1
-```
-
-The candidate step rejects when these values are nonfinite, `last < first`, or
-`count` is outside `0..=10_000`. Select the step minimizing
-`abs_diff(count,k)`; a tie keeps the earlier, larger listed step. Emit
-`(first+i)*step` for `i=0..count`, rejecting the seed if any emitted value is
-nonfinite, outside `(lo,hi)` except for exact endpoints, or not strictly greater
-than its predecessor. If `lo.next_up() >= hi`, no step is evaluated and the seed
-emits `[lo,hi]`. A seed with fewer than two emitted positions instead emits
-`[lo,hi]`. A resulting list outside `1..=5` rejects.
-
-One additional raw seed is the singleton `f64::midpoint(lo,hi)`. The midpoint
-must be finite and inside the domain. The six linear seeds are all evaluated;
-the previous first- or largest-fitting selection branch is not run.
+One additional ordinary-linear no-interval raw seed is the singleton
+`f64::midpoint(lo,hi)`. The midpoint must be finite and inside the domain. It is
+always the final ordinary-linear no-interval source, not a conditional fallback.
+Forest replaces it with the sole expression-labeled midpoint below. Every source
+is evaluated; no first-, nearest-, or largest-fitting local selection branch is
+run.
 
 Generated labels first use this locale-free grammar after normalizing negative
 zero:
@@ -696,38 +818,74 @@ in scientific notation at precisions `2..=17` in ascending order and retain the
 first unique result. Failure to produce unique generated labels rejects the raw
 seed.
 
-Forest is the sole family-owned preliminary-list producer. Clamp its finite
-base-10 logarithmic position domain to `[-323,308]`, then prepare every integral
-exponent from the ascending inclusive ceiling through floor when at least two
+Forest is the sole family-owned preliminary-list producer. For its finite
+strictly ascending base-10 logarithmic position domain `[log_lo,log_hi]`, define
+the intersection with the exact decimal-power table by prescribed binary64
+min/max comparisons:
+
+```text
+clamped_lo = max(log_lo, -323.0)
+clamped_hi = min(log_hi, 308.0)
+```
+
+The representable intersection exists exactly when `clamped_lo <= clamped_hi`;
+otherwise no integral-power source exists. When it exists, prepare every integral
+exponent from `ceil(clamped_lo)` through `floor(clamped_hi)` when at least two
 exist. The position is that integer converted exactly to binary64. Its label is
 the result of applying the generated-label grammar to the exact decimal value
-`10^exponent`, without a transcendental conversion. When that log-power source
-exists, emit its complete list first and then its subsequences. Otherwise process
-the six linear source seeds in their raw order: target counts `5,4,3,2,1`, then
-the linear midpoint. A rejected source contributes its singleton rejection block;
-an admitted source emits its complete list then its subsequences before the next
-source. Each prepared source list of `n >= 2` contributes every evenly indexed subsequence of size
-`2..=min(5,n)`, in descending requested-size order. For requested size `d`,
-source count `n`, and destination index `i`:
+`10^exponent`, without a transcendental conversion.
+
+With `TickInterval::log10_decades(d)`, replace that preliminary source with one
+source for each positive checked integer exponent step
+`d * (1,2,3,5)`, followed by ten times those multipliers and so on. Multiplier
+one tries the requested number of decades exactly. Each source contains the
+ascending integral exponents divisible by that step in the clamped position
+domain and uses exact decimal-power labels. Calculate steps in checked unsigned
+wide-integer arithmetic and stop after processing the first decade base greater
+than the maximum absolute clamped exponent or when the next base cannot be
+represented. A source with no exponent positions rejects. Every admitted source
+contains at most `632` positions. These are complete interval vectors: they
+never contribute evenly indexed subsequences or adaptive linear sources. After
+all coarsening sources, this mode contributes one final singleton at
+`f64::midpoint(log_lo,log_hi)` of the original logarithmic position domain, with
+an interval-source ordinal after every coarsened interval source. When the
+representable intersection is empty, charge the requested source as one rejected
+source block, emit no coarsening vectors, and proceed to that midpoint.
+
+Without a caller interval, emit the complete integral-power source first and then
+its subsequences when it exists. Otherwise process the adaptive no-interval
+linear nice-step sources in their raw span/count order but omit their ordinary-
+linear midpoint. A
+rejected source contributes its singleton rejection block; an admitted source
+emits its complete list then its subsequences before the next source. Each
+prepared no-interval source list of `n >= 2` contributes every evenly indexed
+subsequence of size `2..=min(upper_seed_count,n)`, in descending requested-size
+order. For requested size `d`, source count `n`, and destination index `i`:
 
 ```text
 source_index(i, d, n) =
     ((i * (n - 1)) + ((d - 1) / 2)) / (d - 1)
 ```
 
-After those source blocks, Forest contributes one singleton at the finite
-midpoint of the clamped logarithmic position domain.
-Its label is the ASCII expression `10^` followed by that exponent position under
-the generated fixed/scientific grammar. No `powf`, `log10`, platform libm, or
-debug-format result participates. No other family contributes a preliminary
-tick list.
+After those no-interval source blocks, Forest contributes one singleton at
+`f64::midpoint(log_lo,log_hi)` of the original logarithmic position domain.
+For either policy mode, a Forest midpoint source's label is the ASCII expression
+`10^` followed by that exponent position under the generated fixed/scientific
+grammar. No `powf`, `log10`, platform libm, or debug-format result participates.
+Adaptive Forest linear-source positions use that same expression grammar; only
+the admitted integral-power source uses exact decimal-power value labels.
+No other family contributes a preliminary tick list.
 
 Every raw tick seed or subsequence attempt counts before validation. A rejected
 source is its singleton rejection block. Every admitted raw list retains its
 source block and evaluates its complete label-alternative and fit suffix even
 when an earlier source emitted an equal position/label list. Raw lists do not
-deduplicate or reorder before those suffixes. Only complete axis candidates later
-sort by structural signature and deduplicate under the universal rule.
+deduplicate or reorder before those suffixes. The raw source kind and ordinal are
+part of every complete axis signature and frozen axis plan, so equal
+position/label vectors from distinct requested, coarsened, adaptive, or midpoint
+sources remain distinct through root quality. Only complete axis candidates with
+equal source identity and every other signature field later deduplicate under the
+universal rule.
 
 Tick fit uses one monotone conservative projection, not search over rounded
 centers. Let `D=2^64-1`. For tick value `v`, calculate the final binary64
@@ -756,12 +914,13 @@ ascending. At panel span `S`, the final category-6 center is
 `round_ties_even(S*k/D)`.
 
 For each exact or generated numeric tick vector, enumerate the complete text
-alternatives for every resolved label, then their Cartesian product in ascending
-tick order. Exact label text remains verbatim, including mandatory breaks and
-present empty labels; generated decimal labels normally have one unwrapped
-alternative. Tick-label records are candidate-local axis payloads, so this
-Cartesian product is their complete seed and count rather than a separate text-
-component traversal.
+alternatives for every resolved nonempty label, then their Cartesian product in
+ascending tick order. Exact nonempty label text remains verbatim, including
+mandatory breaks. An exact empty label contributes no text record and retains
+only its tick/grid position. Generated decimal labels normally have one
+unwrapped alternative. Tick-label records are candidate-local axis payloads, so
+this Cartesian product is their complete seed and count rather than a separate
+text-component traversal.
 
 For both categorical and numeric inline labels, retain each label's raw text-
 attempt stream before text deduplication. Within one tick-vector source block,
@@ -776,8 +935,9 @@ sum(rejected_raw_text_attempts_per_label)
     + product(admitted_raw_text_attempts_per_label)
 ```
 
-The empty-label product is one. If any present label has no admitted alternative,
-the product is zero and its rejected singleton blocks provide the diagnostic.
+The product over zero nonempty label records is one. If any present nonempty
+label has no admitted alternative, the product is zero and its rejected
+singleton blocks provide the diagnostic.
 This inline substream is charged only as axis evaluations; it creates no text
 cache entry or structural address.
 
@@ -1496,7 +1656,7 @@ The component mapping is exact:
 | Text panel | `Overlay`: one inline fill surface record, then one nonfill text-panel-content child |
 | Text-panel content | `VerticalSequence`: required title text then required body text |
 | Text | `Leaf`; the complete text producer |
-| Axis | Side-selected perpendicular `Grid`; tick and label layers are projected `Overlay`s and its total thickness is the required gutter |
+| Axis | Size-dependent side-selected perpendicular `Grid`; exact assigned panel span regenerates tick sources, tick and label layers are projected `Overlay`s, and total thickness is the required gutter |
 | Data panel | `Overlay`: standard or specialized panel interior first, then ordered mark layers, inside guides, annotations, and other overlays |
 | Outside-guide track set | Top/bottom `VerticalSequence` or left/right `HorizontalSequence` of explicitly placed guide children plus routed references to Plot-frame-owned automatic guides; component type is `track_set` |
 | Standard interior | `Leaf` under the exact standard-panel producer |
@@ -1518,9 +1678,11 @@ type `plot_body`. Its unfaceted child uses role `data_panel` and type `data_pane
 its faceted child uses role and type `facet_grid`. Canvas body uses role and type
 `canvas_grid` for its Grid and `canvas_shared_legend` for its optional shared
 legend/guide. Present Plot/Canvas root title, subtitle, and caption children at
-their named roles have type `text`; an absent role has type `empty_slot`. Each
-present axis title has role `axis_title` and type `text`, while tick marks and
-labels remain the candidate-local axis payload defined above. The four
+their named roles have type `text`; an absent role has type `empty_slot`. Every
+present root text plan carries the same owner-local
+`root_title_block_alignment`. Each present axis title has role `axis_title` and
+type `text`, while tick marks and labels remain the candidate-local axis payload
+defined above. The four
 `outside_guide_top,right,bottom,left` children have type `track_set` in that
 order. A discrete legend's optional `legend_title` is a measured
 `text` child and each `legend_entry` is a measured `legend_entry` child whose
@@ -1676,15 +1838,18 @@ common baseline is exactly `t+BA` and its declared box contains every aligned
 child. A negative geometric residual rejects the candidate; checked
 arithmetic overflow aborts the root operation under the numeric contract.
 
-Child alignment is a fixed renderer invariant, not a candidate radix or theme
-field. A `composition_text` header, row title, or facet strip centers in both axes
-of its spanned Grid cell. A legend-entry `HorizontalSequence` baseline-aligns its
-key and label; any other horizontal sequence baseline-aligns exactly the children
-that expose a baseline and start-aligns children without one. Axis titles and
-projected labels use their explicit axis-centering rule, and typed overlays use
-their anchor rule. Every remaining nonfill sequence/Grid child uses `start` on
-each nonfill axis. Fill axes normalize their stored alignment decision to
-`start`. No current normal-flow component selects `center` or `end` by search.
+Child alignment is a fixed renderer invariant except for the one resolved
+`CompositionTheme` root title-block alignment. Neither fixed nor themed
+alignment is a candidate radix. Present root title, subtitle, and caption
+children use that value on the horizontal cross axis. A `composition_text`
+header, row title, or facet strip centers in both axes of its spanned Grid cell.
+A legend-entry `HorizontalSequence` baseline-aligns its key and label; any other
+horizontal sequence baseline-aligns exactly the children that expose a baseline
+and start-aligns children without one. Axis titles and projected labels use their
+explicit axis-centering rule, and typed overlays use their anchor rule. Every
+remaining nonfill sequence/Grid child uses `start` on each nonfill axis. Fill
+axes normalize their stored alignment decision to `start`. No normal-flow
+component selects alignment by search.
 
 For an exact sequence main axis, treat every nonfill child extent and every gap
 as `G`, and every fill child as one flexible track under "Exact-Total Residuals".
@@ -1701,7 +1866,10 @@ ticks, labels, then title from the panel toward the outer edge. The axis's
 orientation selects vertical versus horizontal perpendicular tracks; its side
 selects this direction, so no backend reversal is inferred. The axis-parallel
 track is exactly the assigned data-panel span. The axis stroke occupies that
-span. Each tick center is the final category-6 center from the tick-projection
+span. Assigned measurement regenerates every no-interval or caller-interval
+source for that exact span and returns every fitting alternative; it does not
+select a tick list or alter the containing panel. Each tick center is the final
+category-6 center from the tick-projection
 formula; its tick glyph and shaped label are positioned in separate Overlay
 layers at that center, with traced tick length and tick-to-label gap in the
 perpendicular direction. Axis title placement is centered over the assigned
@@ -1914,13 +2082,15 @@ ordered decision tiers; non-root parents preserve every admitted combination:
    clipping, elision, substitution, or omission.
 2. Satisfy hard text, glyph, mark, annotation, cell, category-pitch, and
    representable-geometry requirements.
-3. Honor exact scientific aspect requirements, then preferred data aspect and
-   shared alignment requirements.
-4. Prefer readable line lengths, tick density, legend shape, mark density, and
+3. Honor exact scientific aspect requirements.
+4. Among otherwise eligible candidates, retain the closest surviving caller
+   tick intervals before evaluating any soft visual quality.
+5. Honor preferred data aspect and shared alignment requirements.
+6. Prefer readable line lengths, tick density, legend shape, mark density, and
    data-panel proportions.
-5. Minimize excess output area and whitespace after the preceding requirements
+7. Minimize excess output area and whitespace after the preceding requirements
    are satisfied.
-6. Apply stable structural tie-breaking independent of iteration order, pointer
+8. Apply stable structural tie-breaking independent of iteration order, pointer
    identity, hash-map order, backend, or output format.
 
 The root evaluator first applies eligibility and nonexact viability filters,
@@ -1932,6 +2102,7 @@ then minimizes this exact lexicographic tuple among surviving candidates:
   hard_fit_gate,
   exact_aspect_gate,
   exact_aspect_error_vector,
+  tick_interval_rank(maximum, sum, preorder_vector),
   preferred_aspect_error_vector,
   alignment_error_vector,
   line_rank(maximum, sum, preorder_vector),
@@ -2000,6 +2171,18 @@ Alignment entries are the exact member-to-group extent differences defined by
 the shared-alignment producer above. Empty aspect or alignment vectors are `[]`.
 All vectors follow canonical preorder.
 
+For each generated numeric axis carrying a `TickInterval`, its selected complete
+source contributes its zero-based source ordinal in canonical axis preorder:
+requested interval first, deterministic coarsenings next, terminal midpoint
+last. `tick_interval_rank` is the raw
+`(maximum,checked_u128_sum,preorder_vector)` of those ordinals, normalized to
+`(0,0,[])` when no axis carries the policy. It is not densely reranked with soft
+quality suppliers. Consequently, if any eligible root candidate retains every
+requested interval, no candidate with a coarsened interval can beat it through
+line, spacing, legend, density, panel, or area ranks. If no all-requested root
+candidate survives, maximum then sum then canonical preorder selects the closest
+joint coarsening before soft quality is considered.
+
 For each rank family and canonical quality-supplier key, collect the raw local
 tuples appearing among root candidates that survived gates and nonexact
 viability. Sort and deduplicate those tuples lexicographically. The zero-based
@@ -2058,27 +2241,39 @@ height for a vertical axis.
 ```text
 spacing_target =
     max(6ch, widest_label + 1em)
-
-desired_count =
-    1 + max(1, panel_span / spacing_target)
 ```
 
-The division is integer floor division. For sorted projected label intervals:
+For sorted projected centers and label intervals:
 
 ```text
+center_gap[i] = center[i + 1] - center[i]
 gap[i] =
     interval_start[i + 1] - interval_end[i]
+
+spacing_error[i] = abs_diff(center_gap[i], spacing_target)
 ```
 
 Overlap has already failed the hard gate. `gap_spread` is zero for fewer than
-two gaps; otherwise it is `max(gap)-min(gap)`. The tuple is:
+two gaps; otherwise it is `max(gap)-min(gap)`. For automatic generation without
+a caller interval, `single_tick_gate` is one for a singleton and zero otherwise.
+The raw tuple is:
 
 ```text
-(abs_diff(actual_count, desired_count), gap_spread)
+(
+  single_tick_gate,
+  maximum_spacing_error,
+  sum_spacing_error,
+  gap_spread
+)
 ```
 
-An exact caller tick list has the sole tuple `(0,0)` and is never compared with
-generated alternatives.
+For no-interval generation, maximum and sum use the spacing errors above and
+normalize to zero for fewer than two centers. For a caller `TickInterval`, the
+first three fields are zero; its `gap_spread` stabilizes label alternatives from
+one already-selected interval source, while source precedence is the earlier
+root-level `tick_interval_rank`. An exact caller tick list has the sole tuple
+`(0,0,0,0)` and is never compared with generated alternatives. Thus neither the
+public policy nor the default renderer policy contains a target tick count.
 
 ### Legend Flow
 
@@ -2171,6 +2366,7 @@ Every measured-component record compares fields in exactly this order:
   baselines,
   ink_edges,
   text_breaks_and_line_translations,
+  tick_policy_discriminant_source_kind_and_raw_source_ordinal,
   tick_position_order_keys_and_label_bytes,
   legend_or_guide_edge_shape_and_slots,
   domain_order_keys,
@@ -2247,15 +2443,18 @@ not a theme field, public callback, pluggable scorer, or backend-selected mode.
 One public preflight or terminal operation performs these ordered stages:
 
 1. Normalize every numeric input and root constraint.
-2. Resolve Canvas and Plot theme ownership, fonts, and scales.
+2. Resolve Canvas and Plot theme ownership, text-role requirements, and scales;
+   do not enumerate required scalars or host fonts yet.
 3. Validate semantic content, data, exact caller policies, scientific
    requirements, domains, categories, facet membership, legend identities, and
    annotations; resolve every traced measurement input and calculate the
-   canonical topology and initial-frontier payload censuses without retaining
-   either collection.
-4. After the topology limit and first reservation stage, materialize
-   `MeasurementFrontier[1]` with empty prior-pass feedback, then measure leaves
-   and composites under explicit `LayoutConstraints`; every
+   canonical prepared-text/first-use-pair, topology, and initial-frontier payload
+   censuses without retaining those collections.
+4. After the topology limit, perform the work-charged required-scalar census,
+   bounded font discovery, stage-1 reservations, and complete font/face/glyph
+   resolution; materialize `MeasurementFrontier[1]` with empty prior-pass
+   feedback, then measure leaves and composites under explicit
+   `LayoutConstraints`; every
    successful call returns its complete `MeasuredCandidates` collection, with
    each candidate's local provisional arrangement and plan complete.
 5. For every root candidate, complete root-level provisional arrangement,
@@ -2303,7 +2502,8 @@ The exhaustive source categories are:
 
 ```text
 caller semantic content and exact policies;
-resolved theme typography, spacing, stroke, and glyph geometry;
+resolved theme typography, root-title-block alignment, spacing, stroke, and
+glyph geometry;
 font stack/weight pairs, canonical candidate identities, provenance, selected
 faces, glyphs, advances, baselines, and ink metrics;
 scale domains, categories, ticks, labels, and guide identities;
@@ -2510,7 +2710,11 @@ For every canonical component address, the next frontier contains:
 - complete breakpoint-generation source inputs;
 - preferred and exact aspect inputs;
 - residual policy, gaps, receiver order, and immutable track limits;
-- domains and generated-tick inputs;
+- domains, exact ticks, optional `TickInterval`, the normalized constraints and
+  typed hard/preferred/transition inputs from which tick-independent panel source
+  sets are derived, resolved `em`/`ch`, and generated-tick inputs; materialized
+  source spans, calculated `upper_seed_count`, and coarsening vectors remain
+  pass-local;
 - legend entries, placements, orientations, and fill inputs;
 - topology, packing, track-sharing, and alignment inputs;
 - every overlay reserve, collision result, and admitted domain consequence that
@@ -2639,8 +2843,11 @@ Residual receiver and balanced vectors are not leaf evaluations. Each is one
 radix of its enclosing composite descriptor and is charged once through that
 composite combination; an invalid residual vector still charges that one parent
 descriptor and is not charged separately. The closed raw counts for text
-transitions, six linear tick seeds, Forest subsequences, residual vectors, and
-Beeswarm branch products are defined in their producer sections. All sums and
+transitions, adaptive span/count tick sources, caller-interval coarsening
+sources, their final midpoint sources, Forest subsequences, residual vectors,
+and Beeswarm branch products are defined in their producer sections. Every raw
+tick source, including a source rejected by the `10_000`-position ceiling and a
+source duplicating an earlier vector, is counted before evaluation. All sums and
 products use checked `u128`. If one cache miss's complete count exceeds the
 remaining cumulative budget, that miss fails before evaluating any of its
 attempts. Earlier cache misses in the pass remain charged and their temporary
@@ -2702,6 +2909,9 @@ One root operation has this finite resource envelope:
 | Cumulative measurement-call attempts | `1_000_000` |
 | Measurement-cache entries | `1_000_000` |
 | Prepared structural topology slots | `1_000_000` |
+| Canonical system-font discovery entries | `1_000_000` |
+| Cumulative system-font bytes inspected or hashed | `536_870_912` |
+| Cumulative font-preflight logical work units | `1_000_000` |
 | Canonical SVG bytes admitted for automatic or bounded layout | `67_108_864` |
 | PNG source or target axis | `32_768` |
 | PNG source or target pixels | `100_000_000` |
@@ -2720,6 +2930,82 @@ Selected copies inside evaluated candidate plans are instead part of the exact
 candidate/local-plan payload census reserved in stage 3 and do not claim
 generation slots.
 Existing stricter semantic family limits remain.
+
+The font magnitudes reuse adjudicated resource classes rather than introduce
+unrelated caps. Discovery entries are prepared pre-render records and therefore
+reuse the inclusive `1_000_000` topology-record magnitude. Font-preflight logical
+operations reuse the inclusive `1_000_000` generation-work magnitude. The byte
+limit is the least power of two not below the current maximum admitted RGBA source
+or target backing store, `4 * 100_000_000` bytes: `536_870_912`. These derivations
+and their limit-minus-one/equal/plus-one evidence are part of the resource
+contract; they do not imply pooling between the independent counters.
+
+Semantic stage 3 count-only enumerates the exhaustive `PreparedTextRequirement`
+census before font work; reservation stage 1 materializes that same census. In
+canonical component preorder and each producer's declared text-role
+order, it contains every present caller string, resolved semantic/display string,
+exact label, generated literal, annotation/status string, legend/guide string,
+header, and other text-bearing prepared record that any candidate may measure or
+paint, paired with its effective `(stack,weight)`. Within a record, scalars retain
+UTF-8 source order. An intentionally empty exact tick label contributes the record
+identity but zero scalars. Font-family names, SVG syntax, metadata names, and
+content suppressed by an explicit caller policy are not rendered text and do not
+contribute.
+
+A closed formatter whose exact output depends on later candidate geometry instead
+contributes its complete finite scalar alphabet under the effective text role,
+in ascending scalar-value order after the source records. The automatic numeric
+and Forest grammars contribute exactly ASCII `0123456789-.ekM^`; a producer with
+another generated formatter or token must declare its literal scalars or finite
+alphabet in its producer section, and no unlisted draw-time text source is
+admitted. This alphabet is intentionally a preflight superset: when automatic
+numeric generation is active, every listed scalar must have a fallback face even
+if the selected candidate's final labels use only a subset. Records then sort by
+canonical component preorder, declared text-role order, and local index to assign
+each structurally equal `(stack,weight)` pair its zero-based first-use ordinal;
+`FontStack` entry order remains its declared order and the pair is not separately
+ordered by family-name bytes. The scalar census traverses pair ordinal first,
+then `(component_address,text_role,local_index)`, source scalars in UTF-8 order,
+and finally that record's generated alphabet in scalar-value order. Duplicate
+scalar values deduplicate only in the fixed per-pair presence map, while every
+consumed occurrence still charges font-preflight work. This is the complete
+required-scalar membership and traversal rule.
+
+Font preflight is bounded before any font-sized collection grows. The source
+grammar is exactly the platform location, regular-file, and extension rules used
+by locked `fontdb 0.23.0` system discovery, executed by a project-owned bounded
+walker rather than `Database::load_system_fonts`. At reservation stage 1,
+fallibly reserve exactly `1_000_000` fixed discovery slots before walking. Every
+encountered directory or file claims one slot; directory symlinks are not
+followed, and claim `1_000_001` fails before processing that entry. Duplicate
+canonical file paths deduplicate; admitted files sort by platform source-location
+ordinal and then lossless platform-native path-unit order. Reserve the exact
+metadata-slot count for those files, then open each in canonical order, obtain its
+file-handle length, and reject before reading it when checked cumulative bytes
+would exceed `536_870_912`.
+Actual bytes read are charged against the same bound and cannot exceed the
+admitted handle length. Hashing and metadata decoding stream through fixed
+scratch into the already-reserved source-byte storage and metadata slot; no
+complete unreserved file buffer is created. Every admitted file's exact bytes are
+retained in that stage-1 storage through scene construction so the explicit
+`fontdb` load, identity hash, glyph resolution, outlined SVG, and PNG all consume
+the same bytes. There is no selected-files-only re-read or second retention rule.
+
+Font-preflight logical work charges one unit for each Unicode scalar consumed by
+the required-scalar census, claimed discovery entry, decoded face, decoded ID-16
+or ID-1 name occurrence, candidate occurrence counted or materialized, identity
+record sorted or deduplicated, and candidate/scalar glyph coverage probe. Every
+sort and deduplication bulk-claims its input length as in candidate generation.
+Reservation stage 1 first reserves one fixed `0x110000`-bit Unicode-scalar
+presence map; the charged census marks that map without growing a collection,
+then reserves the exact ordered required-scalar payload from its population
+count. Count candidate occurrences, provenance entries, selected-face records,
+and required scalar probes by checked arithmetic; claim work and reserve their
+exact stage-1 capacities before materialization. The
+entry, byte, and work limits are independent and cumulative for one root
+operation. A changing file, short read, parser failure, arithmetic overflow,
+limit failure, or reservation refusal aborts before measurement and backend
+creation; there is no next-font, built-in-font, or path-order fallback.
 
 One candidate-generation slot is one fixed-size stored breakpoint, seed header,
 alternative index, line/break index, packing offset, track value, residual value,
@@ -2754,11 +3040,12 @@ event is fixed work. A claim above `1_000_000` fails immediately; count-only
 passes claim work even though they claim no storage slot. Transition shaping
 streams glyph outputs through fixed scratch and stores only its claimed
 transition scalar; selected-line glyph arrays belong to the later exact
-candidate-plan census. Font-file hashing and font occurrence preparation are
-preflight font resolution, not candidate-generation work. Candidate-generation work,
-candidate-generation slots, measurement-call attempts, measurement-cache-entry
-claims, and candidate evaluations use independent, non-pooling counters
-cumulative across every pass of the root operation.
+candidate-plan census. Font-file discovery, hashing, occurrence preparation, and
+glyph probing consume the separate bounded font-preflight resources above rather
+than candidate-generation work. Candidate-generation work, candidate-generation
+slots, measurement-call attempts, measurement-cache-entry claims, and candidate
+evaluations use independent, non-pooling counters cumulative across every pass of
+the root operation.
 
 Every root, initial-sizing, and assigned-box component call claims one cumulative
 measurement-call attempt immediately before cache lookup; cache hits still claim
@@ -2788,13 +3075,19 @@ fatal root error discards every claimed or committed slot with the operation.
 
 First-party allocation occurs in these exact stages:
 
-1. after topology counting, reserve complete prepared semantic and topology
-   storage, canonical font occurrence, candidate-list, and provenance payloads,
-   the initial-frontier payload, and exactly `1_000_000` fixed-size measurement-
-   cache entry slots;
-2. in the pass-local order, reserve base and aspect-expanded breakpoint storage,
-   then width/height-dependent alternative-seed storage, then residual-descriptor
-   storage;
+1. after topology counting, reserve the fixed Unicode-scalar presence map and
+   exactly `1_000_000` fixed font-discovery slots, perform the work-charged
+   required-scalar census and bounded font walk, reserve exact canonical font-
+   file metadata slots and admitted source-byte storage, materialize and parse
+   those files under the byte/work gates, count the resulting font occurrence,
+   candidate-list, selected-face, glyph-probe, and provenance payloads, reserve
+   and materialize those exact capacities, then reserve complete prepared
+   semantic/topology and initial-frontier payloads plus exactly `1_000_000` fixed-
+   size measurement-cache entry slots;
+2. in the pass-local order and only after each cumulative slot claim, reserve
+   preliminary breakpoint, non-tick source/transition, tick-independent,
+   generated-tick source/transition, final-base, aspect-expanded, remaining
+   alternative-seed, and residual-descriptor storage;
 3. after candidate cardinality calculation and the cumulative budget check,
    reserve every cache-miss candidate collection, immutable local-plan payload,
    quality payload, structural signature, and cached outcome payload;
@@ -2884,20 +3177,25 @@ descriptor. Stages 14 through 21 resume once the root collection exists. The
 exact order is:
 
 1. numeric and constraint normalization;
-2. theme, font-metadata, and scale resolution, including a count-only canonical
-   font occurrence, candidate-list, and provenance census;
+2. theme and scale resolution plus effective text-role style resolution;
 3. semantic, data, exact-policy, and scientific-requirement validation, then
-   topology and initial-frontier count-only resolution;
+   count-only canonical `PreparedTextRequirement`/first-use `(stack,weight)` pair,
+   topology, and initial-frontier censuses;
 4. checked topology arithmetic;
 5. topology-slot limit;
-6. prepared semantic, topology, canonical font candidate/provenance,
-   initial-frontier, and measurement-cache reservation and materialization,
-   followed by complete face and glyph resolution;
+6. reservation-stage-1 scalar-presence-map reservation, work-charged required-
+   scalar census and exact payload reservation, bounded font discovery and
+   metadata/source-byte reservation, streaming metadata/hash materialization,
+   font-preflight-work-gated occurrence/candidate/glyph/provenance census and
+   exact reservation, then prepared semantic/topology, initial-frontier, and
+   measurement-cache reservation/materialization followed by complete bounded
+   face/glyph resolution;
 7. measurement-call limit, cache-entry capacity claim on a miss, then initial
    sizing-child outcomes through this same protocol;
-8. local base-breakpoint/alternative count arithmetic, cumulative generation-work
-   and generation-slot limits, ordered reservation and materialization, aspect expansion, and
-   residual descriptor construction;
+8. local preliminary/non-tick/tick-independent/generated-tick/final-base and
+   remaining alternative count arithmetic, cumulative generation-work and per-
+   collection slot claims before ordered reservation/materialization, aspect
+   expansion, and residual descriptor construction;
 9. descriptor candidate-count lower-bound and assigned-call-attempt limit, then
    assigned-box child outcomes through this same protocol;
 10. local complete candidate-count arithmetic, counting an unsatisfied-child
@@ -2936,6 +3234,34 @@ Phase T6 atomically establishes this public sizing surface:
 - `Output::width()` and `Output::height()` expose final canonical dimensions;
 - pre-render `Plot::width()` and `Plot::height()` are removed.
 
+Phase T6 also exposes one optional per-axis automatic interval policy:
+
+- `TickInterval` is an opaque immutable crate-root value with
+  `Clone + Copy + Debug + PartialEq`;
+- `pub fn TickInterval::additive(step: f64) -> Result<Self>` constructs a
+  finite positive linear data-space interval and rejects nonfinite or nonpositive
+  input;
+- `pub fn TickInterval::log10_decades(n: u32) -> Result<Self>` constructs a
+  positive integral Log10-decade interval and rejects zero;
+- `pub fn Plot<K>::x_tick_interval(self, interval: TickInterval) -> Self where
+  K: kind::NumericX` and
+  `pub fn Plot<K>::y_tick_interval(self, interval: TickInterval) -> Self where
+  K: kind::NumericY` attach that policy to the named axis; repeating the setter
+  replaces the prior value;
+- an exact `x_ticks` or `y_ticks` list takes precedence for that axis regardless
+  of setter order; a present exact list outside `1..=10_000` rejects rather than
+  revealing the stored interval;
+- absence selects typography- and panel-span-aware automatic generation;
+- no public target count, maximum count, visual-density scalar, or generated-tick
+  callback is admitted.
+
+The interval is a preference rather than exact tick positions. The renderer
+tries it first, then deterministic coarser intervals when no complete candidate
+using the closer source survives. A terminal one-tick midpoint source is admitted
+only after all interval sources and is ranked after them; it prevents an
+otherwise valid finite domain with no representable aligned multiple from making
+the plot unrenderable. Exact `AxisTick` remains the strict position/label control.
+
 No public pre-render measurement operation, `SizeRequest` enum, layout trait,
 constraint object, plan object, callback, or plugin is admitted. A broader public
 constraint surface requires a demonstrated caller need and a separate contract.
@@ -2953,16 +3279,34 @@ Focused evidence must cover:
   combination, one selected root tree, and no local quality pruning;
 - complete text, tick, legend, aspect, residual, track, packing, and specialized
   candidate generation;
+- no-interval numeric axes producing more than five ticks on sufficiently wide
+  panels, typography/span seed-count boundaries, exact `10_000` generated
+  positions, and `10_001` rejection;
+- additive interval exact-source success, deterministic `1,2,3,5` decimal
+  coarsening, zero alignment, `2^53` index boundaries, source-vector
+  nonemptiness, no interval subsequence, terminal midpoint order, Log10-decade
+  coarsening, scale mismatch, exact-tick precedence, setter replacement, and
+  categorical rejection;
+- present exact-list `0`, `1`, `10_000`, and `10_001` boundaries plus absence-
+  selects-automatic behavior;
+- unlabeled exact ticks retaining tick/grid positions with no text plan, gutter,
+  collision, or paint;
+- `Start`, `Center`, and `End` root title-block alignment with all built-ins
+  centered and title/subtitle/caption owner consistency;
 - canonical font matching, occurrence generation, identity deduplication,
   generic-family resolution, style/stretch/weight distances, ordering, primary
-  and per-scalar fallback selection, exact provenance, and invariance under path,
-  nonidentity metadata, and discovery-order permutations;
+  and per-scalar fallback selection, exact provenance, discovery-entry/byte/work
+  boundaries, changing and short files, reservation refusal, and invariance under
+  path, nonidentity metadata, and discovery-order permutations;
 - shared-guide automatic-domain union, equal and unequal exact domains, exact
   domains containing or excluding automatic envelopes, kind and descriptor
   conflicts, contributor-order invariance, and one Canvas-typography label pass;
-- dense-rank equality and gaps, text raggedness, tick gap spread, legend line
+- interval-source precedence over every soft rank, joint-axis interval ordering,
+  dense-rank equality and gaps, text raggedness, tick gap spread, legend line
   imbalance, density shortfall, panel shortfall, area, whitespace, and exact
   structural-signature formulas;
+- equal tick position/label vectors from unequal source kinds or ordinals
+  remaining distinct through quality and frozen-plan identity;
 - exact-aspect gate rejection and preferred-aspect ordering;
 - ordinary Plot, facet, sparse Canvas, Heatmap, Beeswarm, Marginal, Matrix,
   horizontal-categorical, and Waterfall traversal and type order;
@@ -2989,8 +3333,9 @@ Focused evidence must cover:
 Numeric evidence includes limit-minus-one, exact-limit, and limit-plus-one for
 eight passes; each `1_000_000` candidate-evaluation, candidate-generation-slot,
 candidate-generation-work, measurement-call, measurement-cache-entry, and
-prepared-topology-slot boundary; `32_768` axes; `100_000_000` pixels; and
-`67_108_864` nonexact SVG bytes. Default-PNG evidence
+prepared-topology-slot boundary; `1_000_000` font-discovery entries;
+`536_870_912` font bytes; `1_000_000` font-preflight work units; `32_768` axes;
+`100_000_000` pixels; and `67_108_864` nonexact SVG bytes. Default-PNG evidence
 includes source axis `10_485` succeeding and `10_486` failing target prediction,
 and source `3_200 x 3_200` succeeding while `3_200 x 3_201` fails target work.
 

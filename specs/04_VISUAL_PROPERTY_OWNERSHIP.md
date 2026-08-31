@@ -8,12 +8,12 @@ expose them early, or supersede the implemented contracts in
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md`. Target names below are
 migration assignments only until their owning phase makes them current. T4 owns
 the built-in Canvas/Plot attachment and inheritance subset; T6 owns the complete
-replacement theme, color, typography, and scale value model.
+replacement theme, color, typography, scale, and tick-interval value model.
 
 The completed T2 ledger contains exactly 1860 current-source records. The T3j
 layout adjudication overlay at the end of this document preserves those
-historical tables, re-adjudicates 1552 existing keys, and adds 22 target-only
-layout keys. Fixed dimensions, universal panel minima, and private title-block
+historical tables, re-adjudicates 1552 existing keys, and adds 24 target-only
+keys. Fixed dimensions, universal panel minima, and private title-block
 spacing rows do not override that approved overlay. The historical T2 count
 remains valid evidence for the completed inventory, but it is not the T7
 acceptance count after adjudication.
@@ -7895,7 +7895,7 @@ implementation phase, and focused evidence route.
 
 ### Target-Only Keys
 
-These 22 keys append in the exact order shown after the historical 1860-key
+These 24 keys append in the exact order shown after the historical 1860-key
 order. They occur in none of the three historical tables.
 `layout.resources.cumulative-accounting-limits` is one closed resource-envelope
 owner for five separately claimed counters; the common owner neither pools their
@@ -7907,6 +7907,8 @@ capacity nor aliases their failure checks.
 | `layout.kernel.constraint-dependent-measured-plan` | Renderer invariant; measurement returns either one complete nonempty candidate collection of finite typed immutable local plans or a typed recoverable unsatisfied outcome; only the root converts final unsatisfied to a fit error | Every component measurement and frozen root | `add`, T5a-T5e; candidate-collection, recoverable-fit, and plan-completeness tests |
 | `layout.kernel.parent-owned-arrangement` | Renderer invariant; every parent candidate combines named child candidates and assigns their provisional positions; only the root-selected tree is promoted to final positions | Canvas, facet, legend, marginal, and Matrix composition | `add`, T5a-T5e; Cartesian combination, candidate-local arrangement, parent/child box, and sparse-coordinate tests |
 | `layout.plan.frozen-root-draw-identity` | Renderer invariant; only one unchanged complete state becomes the `PlotPlan` or `CanvasPlan` consumed by Null and concrete rendering; it retains every used `(stack,weight)` font-provenance list and the final kind-specific shared-guide descriptor, domain, labels, and glyphs | Complete convergence state, font preflight, shared-guide preparation, and canonical Scene | `add`, T5a-T5e; Null/concrete identity, font-provenance identity, shared-guide identity, and no draw-time layout tests |
+| `composition.root-title-block.horizontal-alignment` | Theme component; one `CompositionTheme::root_title_block_alignment` in closed `TitleBlockAlignment::{Start,Center,End}` applies jointly to every Plot/Canvas root title, subtitle, and caption; every built-in uses `Center` | Replaces the anchor arms of the three `typography.title-block.*.current-fixed-orientation` keys; zero rotation remains invariant; immutable text/root plan, frontier, and signature input | `add`, T5a; public connection T6; centered preservation, all-variant, role-consistency, inheritance, and plan/draw identity evidence |
+| `axes.ticks.preferred-data-interval` | Explicit policy; optional per-axis opaque immutable `TickInterval::additive` for linear axes or `TickInterval::log10_decades` for Log10 axes; exact ticks take precedence regardless of setter order, repeated interval setters replace, absence selects automatic generation, and categorical axes reject | Complete interval vectors, terminal midpoint source, automatic generation, exact-tick controls, Forest Log10 route, axis plan, pre-soft-quality source precedence, and public policy | `add`, T5a; public connection T6; constructor validation, exact requested source, deterministic coarsening, nonempty/no-subsequence vectors, midpoint order, mismatch, precedence, replacement, and no-count-control evidence |
 | `layout.root.automatic-constraint-policy` | Explicit policy; no sizing call supplies zero minima and no maxima, then selects one complete finite candidate | Quality key and nonexact default-PNG viability | `add`, T5e; public connection T6; ordinary/facet/Canvas/specialized evidence |
 | `layout.root.bounded-width-constraint-policy` | Explicit policy; positive `max_width` supplies width `[0,max]` and unconstrained height without requiring width fill | Nonexact viability and canonical conversion | `add`, T5e; public connection T6; wrapping and exact-bound evidence |
 | `layout.root.exact-size-constraint-policy` | Explicit policy; `size` supplies equal positive integral bounds and fails when complete content cannot fit | Historical Plot/Canvas pixel-size keys and exact format-local viability | `add`, T5a/T5e; public connection T6; exact fit/failure evidence |
@@ -7914,12 +7916,12 @@ capacity nor aliases their failure checks.
 | `layout.candidates.complete-breakpoint-enumeration` | Renderer invariant; enumerate every finite admitted alternative, breakpoint, aspect, residual, and specialized packing vector without local pruning or truncation | Text, axes, legends, grids, domains, overlays, and specialized packing | `add`, T5a/T5b/T5e; completeness, cardinality, and permutation evidence |
 | `layout.candidates.canonical-preorder-traversal` | Renderer invariant; use the closed preorder and declared structural child indices | Rank vectors, signatures, topology, and sparse coordinates | `add`, T5a/T5e; reordered-input and map-order evidence |
 | `layout.candidates.exact-structural-equality` | Renderer invariant; compare complete normalized typed structures exactly and deduplicate exact signatures | Spatial quantum, preorder, and convergence | `add`, T5a/T5e; one-quantum and duplicate evidence |
-| `layout.quality.lexicographic-total-order-key` | Renderer invariant; minimize the exact gate, aspect/alignment, local-rank, compactness, and unhashed-signature tuple in `05_LAYOUT_SYSTEM.md` | Every measured candidate | `add`, T5e; total-order, permutation, overflow, and signature evidence |
-| `layout.convergence.complete-state-identity` | Renderer invariant; compare the selected state and complete next-pass frontier, including every alternative, breakpoint, descendant, domain, topology, packing, alignment, overlay input, immutable font-provenance list, and shared-guide descriptor | Frozen root, cache identity, prepared inputs, and pass budget | `add`, T5e; exact-repeat, cache-hit, changed-font-provenance, changed-shared-guide, and changed-field evidence |
-| `layout.convergence.complete-pass-budget` | Renderer invariant; at most eight complete passes, immediate equality succeeds, non-adjacent repetition and changed pass eight fail | Replaces local axis, legend, facet, and Matrix stabilization loops | `add`, T5e; pass-two/pass-eight/cycle/exhaustion evidence |
-| `layout.resources.cumulative-accounting-limits` | Renderer invariant; five independent, non-pooling inclusive `1_000_000` counters are cumulative across all passes of one root operation: candidate evaluations including duplicates, candidate-generation slots, implementation-independent candidate-generation logical work including count-only work, measurement-call attempts including cache hits, and measurement-cache entries claimed on misses including outcomes later committed as `Unsatisfied` | Complete candidate generation and storage, measurement traversal and cache, candidate evaluation, quality, and ordered reservations | `add`, T5e; limit-minus-one/equal/plus-one for every counter, independent exhaustion, count-only-work/zero-slot, sort and loop-implementation invariance, cache-hit call charging, miss/`Unsatisfied` cache-entry charging, and exact failure-order evidence |
-| `layout.resources.grid-facet-specialized-slot-limit` | Renderer invariant; at most `1_000_000` prepared canonical structural-address slots with checked products and sums | Complete Canvas, facet, Matrix, Heatmap, category, mark, guide, annotation, and specialized topology census | `add`, T5e; exact address count and arithmetic-overflow evidence |
-| `layout.resources.checked-first-party-reservations` | Renderer invariant; five ordered stages use checked cardinality, exact byte census, and fallible exact first-party reservation before backend creation; stage 1 includes canonical font occurrence, candidate-list, provenance, and fixed measurement-cache storage, and stage 2 includes candidate-generation storage | Font preparation, measurement cache, candidate generation, topology, state, plan, text, and serialization allocation | `add`, T5a-T5e; exact font/cache/generation capacity, per-stage refusal, and no-partial-plan evidence |
+| `layout.quality.lexicographic-total-order-key` | Renderer invariant; minimize the exact gate, aspect/alignment, local-rank, compactness, and unhashed-signature tuple in `05_LAYOUT_SYSTEM.md` | Every measured candidate | `add`, T5a-T5e; exact-root foundation first, then complete supplier, permutation, overflow, and signature evidence |
+| `layout.convergence.complete-state-identity` | Renderer invariant; compare the selected state and complete next-pass frontier, including every alternative, breakpoint, descendant, domain, topology, packing, alignment, overlay input, immutable font-provenance list, and shared-guide descriptor | Frozen root, cache identity, prepared inputs, and pass budget | `add`, T5a-T5e; exact-root state foundation, exact-repeat, cache-hit, changed-font-provenance, changed-shared-guide, and changed-field evidence |
+| `layout.convergence.complete-pass-budget` | Renderer invariant; at most eight complete passes, immediate equality succeeds, non-adjacent repetition and changed pass eight fail | Replaces local axis, legend, facet, and Matrix stabilization loops | `add`, T5a-T5e; ordinary axis/title pass foundation and final pass-two/pass-eight/cycle/exhaustion evidence |
+| `layout.resources.cumulative-accounting-limits` | Renderer invariant; five independent, non-pooling inclusive `1_000_000` counters are cumulative across all passes of one root operation: candidate evaluations including duplicates, candidate-generation slots, implementation-independent candidate-generation logical work including count-only work, measurement-call attempts including cache hits, and measurement-cache entries claimed on misses including outcomes later committed as `Unsatisfied` | Complete candidate generation and storage, measurement traversal and cache, candidate evaluation, quality, and ordered reservations | `add`, T5a-T5e; T5a installs the shared counters/gates for every active producer and T5e completes the all-producer census; limit-minus-one/equal/plus-one for every counter, independent exhaustion, count-only-work/zero-slot, sort and loop-implementation invariance, cache-hit call charging, miss/`Unsatisfied` cache-entry charging, and exact failure-order evidence |
+| `layout.resources.grid-facet-specialized-slot-limit` | Renderer invariant; at most `1_000_000` prepared canonical structural-address slots with checked products and sums | Complete Canvas, facet, Matrix, Heatmap, category, mark, guide, annotation, and specialized topology census | `add`, T5a-T5e; T5a installs and enforces the gate for active ordinary topology and T5e completes the all-producer census; exact address count and arithmetic-overflow evidence |
+| `layout.resources.checked-first-party-reservations` | Renderer invariant; five ordered stages use checked cardinality, exact byte census, and fallible exact first-party reservation before backend creation; stage 1 includes a fixed scalar-presence map, bounded font-discovery slots, canonical font-file metadata/source bytes, occurrence, candidate-list, selected-face, glyph-probe, provenance, and fixed measurement-cache storage, and stage 2 includes candidate-generation storage; font preflight separately limits `1_000_000` discovery entries, `536_870_912` inspected/hashed bytes, and `1_000_000` logical work units, reusing the T3j record/work magnitudes and the least power of two covering the admitted `4 * 100_000_000` RGBA backing store | Font preparation, measurement cache, candidate generation, topology, state, plan, text, and serialization allocation | `add`, T5a-T5e; exact required-scalar/discovery/byte/work and cache/generation boundaries, per-stage refusal, and no-partial-plan evidence |
 | `layout.resources.nonexact-default-png-viability` | Renderer invariant; every automatic/bounded candidate fits current source and default 300-DPI target axis/work limits plus the canonical SVG reservation | Root automatic/bounded policy and current Scene/PNG limits | `add`, T5e; exact default-PNG boundaries |
 | `layout.resources.exact-format-local-viability` | Renderer invariant; exact SVG can succeed while a later PNG terminal independently rejects without mutating the Scene | Exact root policy and current output routes | `add`, T5e; public connection T6; SVG-success/PNG-failure reuse evidence |
 | `layout.output.checked-canonical-dimension-conversion` | Renderer invariant; convert once by checked upward rounding to positive `u32` CSS-pixel dimensions | Spatial quantum, frozen plan, backend begin, and Scene storage | `add`, T5e; public connection T6; quantum-edge and identity evidence |
@@ -7928,9 +7930,9 @@ capacity nor aliases their failure checks.
 
 ### Existing-Key Groups
 
-The following declarations expand to exactly 1552 existing keys. The 1498 keys
+The following declarations expand to exactly 1552 existing keys. The 1490 keys
 without an explicit override retain their historical target disposition and gain
-the listed relationship; the 54 explicit overrides in the next subsection
+the listed relationship; the 62 explicit overrides in the next subsection
 replace their old target resolution or disposition.
 
 | Group | Count | Canonical key set | Added relationship and evidence |
@@ -8431,7 +8433,7 @@ and were never in an `A-*` group.
 
 ### Existing-Key Overrides
 
-These 54 keys replace their historical target resolution or disposition. Every
+These 62 keys replace their historical target resolution or disposition. Every
 other affected key retains its prior target owner and gains only its group
 relationship above.
 
@@ -8444,10 +8446,19 @@ relationship above.
   `layout.canvas.caption-extra-reserve`: `move`, T4/T5a with public connection
   T6; resolve `CompositionTheme` relationships against adjacent final
   typography, parallel to composed outer-title and caption ownership.
+- `typography.title-block.title.current-fixed-orientation`,
+  `typography.title-block.subtitle.current-fixed-orientation`, and
+  `typography.title-block.caption.current-fixed-orientation`:
+  `split-and-replace`, T5a with public connection T6; deduplicate their hardcoded
+  `Middle` anchor arms into
+  `composition.root-title-block.horizontal-alignment`, while their zero-rotation
+  and horizontal-orientation arms remain private renderer invariants.
 - `font-resolution.load-system-fonts`: `move-and-replace`, T5a; discover host
-  faces before measurement, derive identity only from complete-file SHA-256 and
-  face index, and exclude path, discovery order, mtime, and database identity
-  from equality and ordering.
+  faces before measurement through the bounded project-owned discovery and
+  stage-1 reservation path, load admitted files explicitly rather than calling
+  unbounded `Database::load_system_fonts`, derive identity only from complete-file
+  SHA-256 and face index, and exclude path, discovery order, mtime, and database
+  identity from equality and ordering.
 - `font-resolution.named-family-probe`: `replace`, T5a; replace first-installed
   probing with complete Unicode-16.0 NFKC-casefolded typographic-name,
   legacy-name, and fixed style/stretch/requested-weight occurrence generation.
@@ -8459,6 +8470,22 @@ relationship above.
   least tuple for each file identity, sort by the exact canonical tuple, use the
   first primary and first glyph-covering candidates, and record the complete
   ordered identity list as font-environment provenance.
+- `axes.ticks.automatic-target-count`: `split-and-replace`, T5a; fixed `5`
+  remains only the current automatic-range nice-snapping source until that range
+  implementation is replaced. Generated tick density has no fixed count target:
+  source counts derive privately from provisional panel span and resolved
+  typography, and the public T6 control is a preferred data interval rather than
+  a count.
+- `axes.ticks.automatic-midpoint-fallback`: `replace`, T5a; the midpoint is one
+  always-enumerated final singleton source, never a conditional local fallback.
+- `axes.ticks.panel-containment-retention`: `replace`, T5a; complete raw axis
+  alternatives fail their fit gate when glyphs leave the panel. No local branch
+  drops labels, substitutes a midpoint, or selects another list.
+- `axes.forest.log-tick-candidate-route` and
+  `axes.forest.log-tick-midpoint-fallback`: `replace`, T5a/T5c; Forest emits its
+  complete integral-power source and no-interval subsequences, or its complete
+  requested/coarsened-decade vectors without subsequences, followed by the
+  applicable final midpoint source; no local preferred/fallback selection runs.
 - `canvas.legend.shared-entry-exact-merge`: `replace`, T5b/T5d; establish the
   kind-discriminated shared-guide compatibility and domain merger. Reject mixed
   kinds or independently titled sections; continuous contributors require exact
@@ -8489,8 +8516,10 @@ layout.marginal.top-panel-fixed-height
 layout.marginal.right-panel-fixed-width
 ```
 
-- The following nine local loop owners are `deduplicate-and-replace`, T5e; only
-  the root eight-complete-pass protocol owns feedback and stabilization:
+- The following nine local loop owners are `deduplicate-and-replace` by the one
+  root eight-complete-pass protocol. T5a establishes that protocol and replaces
+  the first two ordinary axis/title loops; T5e completes the remaining seven
+  composition and specialized replacements:
 
 ```text
 layout.axes.multiline-title.adjustment-pass-budget
@@ -8534,13 +8563,14 @@ annotations.waterfall.first-fit-row-packing
 ### Count Closure
 
 The three completed T2 tables remain exactly 1860 unique keys in identical
-order. The overlay expands to exactly 1574 identities: 1552 existing historical
-keys and 22 target-only keys. No existing overlay key occurs outside the
+order. The overlay expands to exactly 1576 identities: 1552 existing historical
+keys partitioned into 62 explicit overrides and 1490 retained dispositions, plus
+24 target-only keys. No existing overlay key occurs outside the
 historical set, no target-only key occurs inside it, and no overlay identity is
 duplicated. Materialization applies existing-key overrides in historical order
-and appends the 22 target-only keys in the order above, producing exactly
-**1882** unique final target keys.
+and appends the 24 target-only keys in the order above, producing exactly
+**1884** unique final target keys.
 
-T7 reconciles only that 1882-key materialized target. The historical 1836-record
+T7 reconciles only that 1884-key materialized target. The historical 1836-record
 pre-T2h count and completed 1860-record T2 count remain provenance, not
 post-adjudication acceptance thresholds.

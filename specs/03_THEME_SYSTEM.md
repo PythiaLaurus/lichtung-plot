@@ -39,8 +39,9 @@ properties, or a second theme representation.
   visibility, marker visibility, category-label sharing, or content supplied by
   the caller. A theme does not replace a policy.
 - A **renderer invariant** is fixed behavior such as clipping, draw order,
-  geometry validity, text anchoring, semantic orientation, or backend protocol.
-  It is not themeable.
+  geometry validity, semantic orientation, or backend protocol. Text anchoring
+  is invariant except for the one root title-block alignment owned by
+  `CompositionTheme` below.
 - A **resolved theme** is the private complete value consumed by preflight,
   measurement, collision planning, legend construction, and rendering. It is
   not a public inspection or extension surface.
@@ -62,7 +63,8 @@ The public foundations consist of these roles:
 | `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, and role-local spacing relationships |
 | `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and role-local spacing relationships |
 | `CanvasLegendPolicy` | Per-plot, hidden, or one shared Canvas legend behavior |
-| `CompositionTheme` | Plot and Canvas root title-block relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
+| `TitleBlockAlignment` | Closed `Start`, `Center`, or `End` horizontal alignment for one Plot or Canvas root title block |
+| `CompositionTheme` | Plot and Canvas root title-block alignment and spacing relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
 | `MarkTheme` | Common point, line, fill, interval, ribbon, reference, outline, missing-mark, and supplemental-accent defaults |
 | `AnnotationTheme` | Panel-text, significance, value-label, and highlight geometry plus contrast-backdrop policy |
 | `ColorScales` | Default qualitative, sequential, and diverging data-color scales |
@@ -90,6 +92,14 @@ source theme. The builder may replace components or use typed convenience
 setters, but `build()` returns one complete validated `Theme`. A builder is never
 stored by `Plot`, `Canvas`, or the renderer and is not a sparse runtime override.
 
+`TitleBlockAlignment` is the closed `Start`, `Center`, and `End` discriminant.
+`CompositionTheme` owns one `root_title_block_alignment` value applied jointly
+to every present title, subtitle, and caption in a Plot or Canvas root title
+block. Those roles cannot select independent alignment values. `Start` and
+`End` mean the physical left and right edges of the root's post-inset local
+content span; they are not bidi-logical directions or backend anchor spellings.
+All four built-in themes use `Center`.
+
 Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
 `HeatmapScale`, RGB tuple inputs, and multiplicative opacity naming atomically
 with the target types that own those responsibilities. It migrates every
@@ -112,11 +122,11 @@ The component taxonomy is role-based rather than plot-family-based:
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
   continuous color guides. Existing legend policies continue to own visibility
   and placement.
-- `CompositionTheme` owns spatial relationships for Plot and Canvas root title
-  blocks and owns Canvas and facet chrome. `TypographyTheme` still owns each
-  title, subtitle, and caption text role. `CompositionTheme` does not own title
-  content, panel data, grid occupancy, shared-range policy, or text-panel
-  content.
+- `CompositionTheme` owns one horizontal alignment and the spatial relationships
+  for Plot and Canvas root title blocks and owns Canvas and facet chrome.
+  `TypographyTheme` still owns each title, subtitle, and caption text role.
+  `CompositionTheme` does not own title content, panel data, grid occupancy,
+  shared-range policy, or text-panel content.
 - `MarkTheme` owns common visual defaults by semantic mark role, including one
   supplemental accent palette for unkeyed primary and appended mark roles. A
   specialized component is justified only when a mark has genuinely distinct
@@ -140,9 +150,11 @@ typography. A theme never scales spacing from the root canvas width or height.
 `05_LAYOUT_SYSTEM.md` owns complete-candidate measurement direction, root-only
 candidate selection, constraints, arrangement, and output dimensions.
 
-Anchor, rotation, orientation, clipping, z-order, statistical geometry,
-collision rules, layout quality ordering, convergence budgets, and minimum
-representable geometry remain renderer invariants.
+Except for the one admitted `CompositionTheme` root title-block horizontal
+alignment, anchor, rotation, orientation, clipping, z-order, statistical
+geometry, collision rules, layout quality ordering, convergence budgets, and
+minimum representable geometry remain renderer invariants. Root title,
+subtitle, and caption rotation remains fixed.
 Bar spacing, legend policy, marker and connector visibility, category-label
 sharing, title and label content, and annotation presence remain explicit
 Plot/Canvas configuration or input.
@@ -181,6 +193,11 @@ titles, plot subtitles, axes, marks, annotations, and panel chrome use the
 resolved Plot theme. A composed Plot's panel surface comes from its Plot theme;
 it never repaints the Canvas root surface. The current T4 subset is limited to
 the existing theme-aware consumers stated above.
+
+A Canvas root title block consumes the Canvas root theme's title-block
+alignment. A standalone Plot, faceted Plot outer root, or Matrix Plot root title
+block consumes the resolved Plot theme's alignment. The owner-local value is
+identical for that block's title, subtitle, and caption.
 
 Theme state is immutable and owner-local. There is no process-global,
 thread-local, environment-selected, backend-selected, or asynchronously scoped
@@ -398,11 +415,15 @@ Each `TextTheme` contains a complete stack. ThemeBuilder may replace all
 typography stacks together or one text role independently.
 
 Before text measurement and scene creation, the generation host builds one
-canonical candidate list for each used `(stack,weight)` pair. Text style and
+canonical candidate list for each used `(stack,weight)` pair, in the zero-based
+canonical first-use pair order defined by `05_LAYOUT_SYSTEM.md`. Text style and
 stretch are fixed renderer invariants `normal`; they are not missing theme
-fields. Font metadata and host generic-family names are exactly those exposed by
-`fontdb 0.23.0` after `Database::load_system_fonts` and before any project-owned
-generic remap. A face's family occurrences are every OpenType typographic-family
+fields. The renderer performs the bounded canonical system-font source
+enumeration and reservation required by `05_LAYOUT_SYSTEM.md`, then loads each
+admitted file into `fontdb 0.23.0` explicitly; it does not call the library's
+unbounded `Database::load_system_fonts`. Font metadata and host generic-family
+names are exactly those exposed by that resulting database before any project-
+owned generic remap. A face's family occurrences are every OpenType typographic-family
 name record (name ID 16) and legacy-family record (name ID 1) that locked
 `ttf-parser 0.25.1` decodes to a string. Named-family matching compares the
 Unicode-16.0 NFKC-casefolded caller name with every such occurrence. A generic
@@ -433,7 +454,10 @@ same selected face per glyph. No font is downloaded, provisioned, embedded, or
 read from a network or project cache.
 
 Font candidates are preflight font-resolution inputs, not layout candidates, and
-do not consume layout candidate-generation or candidate-evaluation budgets.
+do not consume layout candidate-generation or candidate-evaluation budgets. File
+enumeration, inspected/hashed bytes, decoded metadata/occurrences, identity work,
+and glyph probes consume the separate font-preflight limits and stage-1
+reservations in `05_LAYOUT_SYSTEM.md` before measurement or backend creation.
 
 Preserve-text SVG emits the validated ordered stack; outlined SVG and PNG use
 generation-host fonts. Text wrapping, text-derived layout geometry, outlined

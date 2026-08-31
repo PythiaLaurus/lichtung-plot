@@ -56,6 +56,12 @@ discussion:
 - Exact `.size(width,height)` remains exact. Automatic and bounded candidates
   pass default-PNG and canonical-SVG viability before ranking; exact roots retain
   format-local SVG behavior and apply PNG limits only on a PNG terminal.
+- Plot/Canvas root title-block alignment is one `CompositionTheme` property;
+  built-ins are centered and T6 exposes Start/Center/End customization.
+- Automatic numeric ticks have no fixed five-tick ceiling or public count target.
+  T6 exposes one optional additive or Log10-decade preferred data interval per
+  axis; the renderer tries it first, then deterministic coarsenings for fit, and
+  keeps one terminal midpoint source after every interval vector.
 
 Phase T1 settled the exact replacement theme and scale public types, replacement
 semantics, component boundaries, validation, and scope of local overrides in
@@ -169,11 +175,28 @@ The approved theme and layout targets follow these rules:
 | T4c | Composition theme routing | COMPLETE |
 | T4d | Public attachment and current contract | COMPLETE |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
+| T5a0 | T5a contract adjudication and execution partition | COMPLETE |
+| T5a1 | Active exact-root candidate kernel | PENDING |
+| T5a2 | Foundational resolved appearance and surfaces | PENDING |
+| T5a3 | Canonical fonts and immutable text plans | PENDING |
+| T5a4 | Root title-block plans | PENDING |
+| T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
+| T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
+| T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
+| T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
+| T5a6b1 | Standard point and path families | PENDING |
+| T5a6b2 | Standard distribution and reference families | PENDING |
+| T5a6c | One-categorical-axis ordinary Plot migration | PENDING |
+| T5a6c1 | Estimate-display families | PENDING |
+| T5a6c2 | Bar families | PENDING |
+| T5a6c3 | Categorical distribution families | PENDING |
+| T5a6c4 | Interaction family | PENDING |
+| T5a6d | Ordinary exact-root closure audit | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
 | T5d | Categorical and continuous data scales | PENDING |
 | T5e | Scientific layout closure | PENDING |
-| T6 | Public immutable theme, scale, and sizing API | PENDING |
+| T6 | Public immutable theme, scale, tick-interval, and sizing API | PENDING |
 | T7 | Contract evidence, documentation, and final audit | PENDING |
 
 ## Phase T1: Approved Theme Architecture
@@ -1663,6 +1686,9 @@ Scope:
 - Reconcile Plot and Canvas root title/subtitle gaps and caption-to-content
   clearance as `CompositionTheme` relationships resolved against adjacent
   typography, rather than retaining parallel private fixed spacing owners.
+- Reconcile the three current root title/subtitle/caption anchor sources into one
+  target-only `CompositionTheme` root title-block alignment while retaining zero
+  rotation as a renderer invariant.
 - Trace each measurement input to the exact immutable plan value consumed by
   drawing. Draw-time reconstruction is a defect, not an admitted duplicate.
 - Remove from the overlay every dormant or overwritten source with no reachable
@@ -1673,17 +1699,17 @@ Acceptance:
 - The three completed T2 keyed tables remain historical evidence containing
   exactly 1860 unique keys in identical order. Future-only target policies are
   not inserted into those historical Current, Target, or Migration tables.
-- One canonical post-adjudication overlay expands to exactly 1574 unique rows:
-  1552 rows re-adjudicate existing historical keys and 22 rows introduce
+- One canonical post-adjudication overlay expands to exactly 1576 unique rows:
+  1552 rows re-adjudicate existing historical keys and 24 rows introduce
   target-only keys. The existing-key set consists of 691 corrected `A-*` keys
   and 861 broad-trace `B-*` additions. Existing overlay keys occur in the
   historical inventory; target-only keys do not; no overlay key occurs twice.
-- Exactly 54 existing keys replace their historical target disposition. The
-  other 1498 existing keys retain that disposition and gain the broad immutable-
+- Exactly 62 existing keys replace their historical target disposition. The
+  other 1490 existing keys retain that disposition and gain the broad immutable-
   plan relationship and focused evidence route.
 - Materializing the target inventory applies existing-key overlay rows in the
-  historical 1860-key order and then appends the 22 target-only keys in their
-  recorded canonical order, producing exactly 1882 unique final keys.
+  historical 1860-key order and then appends the 24 target-only keys in their
+  recorded canonical order, producing exactly 1884 unique final keys.
 - Every source consumed by measurement, generation, quality, convergence,
   accounting, arrangement, the frozen plan, or drawing retains its historical
   source evidence and has one final target owner, migration phase, exact
@@ -1691,7 +1717,7 @@ Acceptance:
 - The former 696-key narrow overlay is not an acceptance threshold. Its five
   no-effect removals and 861 broad additions are mechanically reproducible from
   the historical key order and Current layout-path fields.
-- T7 refers only to the recalculated 1882-key final inventory. The historical
+- T7 refers only to the recalculated 1884-key final inventory. The historical
   1836-record pre-T2h count and completed 1860-record T2 count remain provenance
   and are not post-adjudication thresholds.
 
@@ -1741,15 +1767,22 @@ Scope:
 Migration partition:
 
 - T5a introduces the sole normalized constraint/complete-candidate/arrangement
-  kernel, immutable text plans, ordinary Plot measurement, and exact-root
-  preservation. Every not-yet-migrated family enters through one typed private
-  measurement adapter that produces the same complete collection of candidate-
-  local plans; root selection later promotes one to the sole root-plan
-  representation, with no second backend or root-plan route.
+  kernel, the complete total-key representation and exact-root selector, the
+  reusable two-through-eight-pass convergence foundation, immutable text plans,
+  ordinary Plot measurement, and exact-root preservation. Every not-yet-migrated
+  family enters through one typed private measurement adapter that produces the
+  same complete collection of candidate-local plans; root selection promotes one
+  to the sole root-plan representation, with no second backend or root-plan
+  route.
 - T5a builds and reserves every canonical generation-host font list before text
   measurement, enforcing the exact matching, occurrence, identity,
   deduplication, ordering, primary-face, glyph-fallback, and provenance contract
   from `03_THEME_SYSTEM.md` without treating font faces as layout candidates.
+- T5a resolves one private root title-block alignment, initializes every built-in
+  to `Center`, and carries it unchanged through title/subtitle/caption text plans,
+  root arrangement, signatures, Null geometry, and concrete rendering. It also
+  establishes optional additive and Log10-decade automatic tick intervals and
+  removes the fixed five-tick ceiling without exposing either public API early.
 - T5b migrates legends, facets, Canvas tracks, shared chrome, headers, row
   titles, and text panels onto complete measured candidate collections. It
   establishes the sole kind-discriminated shared-guide representation and
@@ -1761,10 +1794,11 @@ Migration partition:
   final continuous contributor descriptors and performs the exact automatic-
   union/equal-exact/contained-automatic merge through T5b's shared-guide path
   before label generation or guide measurement.
-- T5e removes the last adapter, implements complete finite generation, the one
-  total-order key, root convergence and cache identity, automatic/bounded roots,
+- T5e removes the last adapter and completes finite generation, every remaining
+  total-order supplier, root frontier/cache identity, automatic/bounded roots,
   specialized composite measurement, the five-stage resource census, and the
-  pre-backend failure boundary.
+  pre-backend failure boundary by extending T5a's one selector and convergence
+  implementation.
 - T6 alone switches the public defaults and sizing/accessor surface. T7 audits
   the completed owners and does not add missing foundational behavior.
 
@@ -2215,63 +2249,684 @@ Acceptance:
 Dependencies: T4.
 
 Establish the private layout kernel while moving foundational non-data
-appearance into the resolved theme.
+appearance into the resolved theme. T5a is complete only through T5a0-T5a6d in
+dependency order; no subphase may leave a dormant replacement kernel, temporary
+selector, compatibility fallback, or second root-plan representation.
+
+Parent acceptance:
+
+- Every T5a measurement call returns one complete nonempty candidate collection
+  or a typed recoverable `Unsatisfied` outcome.
+- Ordinary Plot plans contain the selected root size, title text, ticks, axis
+  gutters, data panel, and final arrangement before Null or concrete rendering.
+- Layout, collision, geometry, and paint use identical resolved typography,
+  spacing, glyphs, ticks, and axis geometry.
+- Theme appearance cannot remove caller-provided semantic text.
+- No public constraint, automatic-size, bounded-width, Output-dimension, theme-
+  component, title-alignment, or tick-interval API is exposed early.
+- Every intentional built-in output change names its final-ledger owner and has
+  focused evidence plus an inspected snapshot committed with the source change.
+- Focused layout, axes, typography, output, and visual-regression tests pass.
+- `just verify` passes before T5a6d, T5a6, and parent T5a are marked complete.
+
+### T5a0: Contract Adjudication And Execution Partition
+
+**Status**: COMPLETE
+
+Dependencies: T4.
 
 Scope:
 
-- Add the private normalized `LengthConstraint`, `LayoutConstraints`,
-  `LayoutSize`, measurement context, `MeasuredLayout<LayoutPlan>`, and complete
-  nonempty `MeasuredCandidates<LayoutPlan>` kernel. Keep generic parameter and
-  field names explicit in definitions and signatures.
-- Separate measurement, candidate-local provisional arrangement, root selection,
-  and final promotion. Parents combine and provisionally position every admitted
-  child candidate without local quality pruning; only the root-selected
-  rectangles become final, and rectangles are not incoming constraints.
-- Resolve generation-host faces and glyphs before text measurement. Produce
-  immutable text plans containing exact lines, metrics, and baselines, and delete
-  draw-time wrapping or unwrapped fallback routes.
-- Build and census one canonical font candidate list for every used
-  `(stack,weight)` before text measurement. Enforce exact Unicode matching,
-  occurrence generation, file identity, deduplication, ordering, primary-face,
-  per-scalar fallback, provenance, and checked-reservation rules from
-  `03_THEME_SYSTEM.md`.
-- Centralize canvas and panel surfaces, foreground and muted text roles,
-  typography roles, title/subtitle/caption styles, axis lines, ticks, labels,
-  frame sides, and grid appearance.
-- Remove backend-owned background color and title-block hardcoded grays.
-- Separate title or label content presence from theme appearance.
-- Wire or remove dormant frame, label, and background properties according to
-  the approved inventory. The dormant general line-width field belongs to T5c,
-  where its mark-role consumers can be migrated together.
-- Replace the horizontal categorical-axis helper duplicates with canonical
-  raw/display resolution, logical-box measurement, line height, reserves, and
-  final panel-fit checks; replace Canvas shared-x replay with a validated
-  automatic continuous-range union that rejects exact-limit conflicts.
-- Ensure every font and spacing value used for measurement is the value used for
-  drawing.
-- Resolve line leading and axis/title spacing from local final typography and
-  stroke metrics instead of root-canvas scaling or disconnected pixel copies.
-- Define the standard-panel measurement carrier and populate its T5a-owned tick,
-  typography, axis, and renderer-owned aspect requirements. T5a remains an exact
-  root migration and does not claim the final mark-extent or data-density inputs
-  assigned to T5c, or automatic root selection assigned to T5e.
-- Migrate standalone ordinary Plot measurement, arrangement, and immutable plan
-  construction onto the private protocol while supplying the current exact root
-  dimensions until the T6 switch. Its measurement calls return complete
-  candidate collections even when exact constraints leave one survivor.
+- Resolve the T5a/T5e selector boundary: T5a establishes the one complete
+  total-key representation, exact-root selector, and reusable two-through-eight-
+  pass convergence foundation plus generic cumulative accounting and reservation
+  gates. T5e completes remaining suppliers, specialized frontier/cache inputs,
+  the all-producer resource census, specialized producers, and automatic/bounded
+  roots by extending that implementation.
+- Make an empty exact tick label intentionally unlabeled while retaining its
+  tick/grid position.
+- Replace the fixed five-generated-tick ceiling with private span- and
+  typography-dependent source generation.
+- Admit one optional per-axis preferred data interval: additive linear units or
+  integral Log10 decades. It tries the requested interval first, then only
+  deterministic coarsenings, with a documented terminal midpoint source after
+  every interval vector; exact ticks take precedence. Public connection belongs
+  to T6, and no target-count or visual-density control is admitted.
+- Make one Plot/Canvas root title-block alignment a `CompositionTheme` property,
+  with `Start`, `Center`, and `End`; every built-in uses `Center`. Preserve all
+  non-root anchors and root text rotation as renderer invariants.
+- Bound canonical system-font discovery, retained source bytes, required-scalar
+  census, occurrence construction, and glyph probing before measurement. Reuse
+  the adjudicated `1_000_000` record/work magnitudes and derive the byte ceiling
+  as the least power of two covering the admitted maximum RGBA backing store;
+  add no unrelated resource magnitude.
+- Reconcile the target-only and existing-key overlay counts and partition
+  T5a1-T5a6d with exact scope, exclusions, deletions, evidence, and commits.
+
+Exclusions:
+
+- No production code, public API, test, fixture, or snapshot changes.
 
 Acceptance:
 
-- These components contain no unclassified visual constants.
-- Theme changes cannot silently remove caller-provided semantic text.
-- Layout and paint use identical typography and spacing.
-- Ordinary Plot plans contain the selected root size, text lines, ticks, axis
-  gutters, data panel, and final arrangement before Null or concrete rendering.
-- No public constraint, automatic-size, bounded-width, or Output-dimension API is
-  exposed early.
-- Built-in preset changes, if any, have reviewed snapshot evidence.
-- Focused layout, axes, typography, output, and visual-regression tests pass.
+- `03_THEME_SYSTEM.md`, `04_VISUAL_PROPERTY_OWNERSHIP.md`,
+  `05_LAYOUT_SYSTEM.md`, `91_IMPLEMENTATION_PLAN.md`, and
+  `99_DEFERRED_FEATURES.md` state one consistent target.
+- The materialized ledger contains 1860 historical plus 24 target-only keys,
+  exactly 1884 final keys, with 1552 existing overlay keys partitioned into 62
+  overrides and 1490 retained dispositions.
+- Outside historical rows superseded by the canonical overlay, search audits
+  confirm adaptive generated-tick density, centered built-in root titles,
+  geometry-free empty exact labels, the sole selector beginning in T5a, and no
+  public tick-count target.
+- `git diff --check` and focused independent specification review pass. This
+  documentation-only subphase does not run the test suite.
+
+Commit: `docs(layout): adjudicate T5a implementation partition`.
+
+### T5a1: Active Exact-Root Candidate Kernel
+
+**Status**: PENDING
+
+Dependencies: T5a0.
+
+Objective: establish the sole private measurement, arrangement, selection, and
+exact-root pass driver before component migrations.
+
+Scope:
+
+- Add private `LayoutScalar`, normalized `LengthConstraint`,
+  `LayoutConstraints`, `LayoutSize`, measurement and assigned-geometry contexts,
+  `MeasuredLayout<LayoutPlan>`, structurally nonempty
+  `MeasuredCandidates<LayoutPlan>`, `MeasurementOutcome`, and typed `FitReason`.
+- Add canonical component addresses, candidate-local provisional boxes, complete
+  structural signatures, candidate sorting/deduplication, and final promotion.
+- Add the complete `RootQualityKey` representation and one generic selector.
+  Rank families not yet supplied use their specified empty normalization, never
+  a temporary key or first-fit branch.
+- Add the reusable convergence driver: two through eight complete passes,
+  immediate-predecessor equality success, non-adjacent repetition failure, and
+  changed-pass-eight exhaustion.
+- Add the one root-operation resource state, checked cumulative counters, and
+  reservation driver for candidate evaluations, generation work/slots,
+  measurement calls/cache entries, topology slots, and the five ordered
+  reservation stages. Every producer activated in T5a must count and reserve
+  through these gates before materialization; later phases add producers rather
+  than a second accounting route.
+- Add the operation-scoped measurement cache keyed by normalized constraints,
+  optional assigned context, and the complete frontier subset active in T5a;
+  cache `Unsatisfied` outcomes and their fixed accounting tuple. T5b-T5e extend
+  the typed frontier key as they activate new inputs rather than replacing the
+  cache protocol.
+- Route the current standalone Plot lifecycle through one typed exact-root
+  adapter and size-owning root envelope while preserving current `640x480` or
+  explicit exact dimensions. The adapter must return the same candidate and root
+  plan representations used by native components.
+- Make the promoted root size the sole source for Null, SVG backend, and Scene
+  construction; no post-selection path rereads Plot dimensions.
+
+Exclusions:
+
+- Public automatic or bounded sizing; specialized and all-producer
+  frontier/cache identities; native Canvas/facet measurement; complete quality
+  suppliers; fonts, text, axes, and specialized producers.
+
+Deletion targets:
+
+- Direct root finalization outside the selector, source-dimension rereads after
+  promotion, and any alternate root-plan/backend route replaced by the active
+  envelope.
+
+Evidence:
+
+- Quantum conversion, normalized interval, overflow, `Unsatisfied`, nonempty
+  collection, complete child Cartesian product, no-local-pruning, structural
+  equality, deterministic selection, pass-two/pass-eight, cycle, exhaustion,
+  promotion identity, cumulative limit-minus-one/exact-limit/limit-plus-one, each
+  active reservation refusal, and zero-backend-call failure tests.
+- Current omitted-size and explicit-size SVG dimensions and bytes remain exact.
 - `just verify` passes.
+
+Commit: `feat(layout): add exact-root planning kernel`.
+
+### T5a2: Foundational Resolved Appearance And Surfaces
+
+**Status**: PENDING
+
+Dependencies: T5a1.
+
+Objective: give every T5a appearance input one private resolved owner before it
+participates in measurement.
+
+Scope:
+
+- Extend the existing `ResolvedTheme`; do not create a parallel private theme.
+  Add private foundation records for Canvas/panel surfaces, title/axis text roles,
+  axis/frame/tick/grid chrome, root title-block relationships and alignment, and
+  role-local spacing. Include one effective significance-label text carrier that
+  combines the current resolved stack/paint, the ledger-assigned T5a font-size
+  and weight defaults, and the retained exact caller size/weight precedence.
+  T5c later rewires annotation-theme stack/paint ownership into this same carrier
+  before planning; it does not replace typography after measurement.
+- Map the current four built-ins into complete private records. Every built-in
+  root title-block alignment is `Center`.
+- Normalize T5a-owned paints into one private RGBA carrier and install the sole
+  SVG paint/alpha serializer. Connect Canvas root and Plot panel surfaces without
+  exposing T6 `Color` or component types.
+- Separate title, subtitle, caption, axis-title, and tick-label content presence
+  from appearance. Preserve exact caller content independently of theme values.
+- Preserve T4 owner selection: Canvas root appearance is Canvas-owned, composed
+  panel appearance is Plot-owned, and a Plot never repaints the Canvas root.
+
+Exclusions:
+
+- Legend, mark, annotation gap/geometry or general annotation appearance,
+  gradient, scale, and public RGBA completion; custom public themes; public
+  alignment. The effective T5a significance-text carrier above is the sole
+  annotation exception and does not expose a new style surface.
+
+Deletion targets:
+
+- Backend hardcoded white, dormant flat background routing, hardcoded title
+  grays, semantic-presence theme flags, and duplicate RGB/opacity serialization
+  for migrated paints.
+
+Evidence:
+
+- All-preset preservation; transparent Canvas and panel SVG/PNG; panel-over-
+  Canvas compositing; one alpha emission; inherited/explicit owner routing;
+  semantic-content presence; and private Start/Center/End resolution tests.
+- `just verify` passes.
+
+Commit: `refactor(theme): centralize foundational appearance`.
+
+### T5a3: Canonical Fonts And Immutable Text Plans
+
+**Status**: PENDING
+
+Dependencies: T5a2.
+
+Objective: make measurement, collision, preserve-text SVG, outlined SVG, PNG,
+and drawing consume the same generation-host faces, glyphs, lines, and metrics.
+
+Scope:
+
+- Census every used `(stack,weight)` in canonical topology order before text
+  measurement. Build, count, reserve, and materialize canonical font occurrence,
+  candidate, identity, primary-face, glyph-fallback, and provenance records under
+  the exact `03_THEME_SYSTEM.md` contract.
+- Install the bounded project-owned system-font discovery path and enforce the
+  `1_000_000` discovery-entry, `536_870_912` inspected/hashed-byte, and
+  `1_000_000` font-preflight-work limits before font-sized collections
+  materialize. The record/work limits reuse the T3j magnitudes; the byte limit is
+  the least power of two covering the admitted `4 * 100_000_000` RGBA backing
+  store. Through the T5a1 resource driver, reserve all stage-1 font metadata,
+  source-byte, occurrence, candidate, selected-face, glyph-probe, and provenance
+  payloads.
+- Resolve every scalar face before measurement and replace estimated `TextBlock`
+  geometry with immutable text plans containing exact source spans, shaped runs,
+  face identities, glyph IDs, clusters, offsets, advances, logical widths, ink,
+  line translations, line pitch, and first/last baselines.
+- Implement the pinned Unicode segmentation, line-break, bidi, whitespace,
+  mandatory-break, wrapping-alternative, and shaping rules. An intact overwide
+  sequence returns a typed fit miss rather than an unwrapped fallback.
+- Retain the prepared font environment needed by outlined SVG and PNG so a
+  terminal never rediscovers different host faces after Scene construction.
+- Convert every T5a foundational one-line or multiline text producer to the same
+  plan representation; no raw foundational text bypass remains.
+- Introduce a typed `DeferredAnnotationTextPlan` and freeze significance-label
+  glyphs, metrics, current effective style, and exact-override provenance through
+  it. T5c supplies final semantic appearance and geometry inputs before this same
+  planner runs; no later phase may remeasure or replace typography after plan
+  selection.
+
+Exclusions:
+
+- Public fonts or typography components, downloaded or provisioned assets,
+  legend/facet/body roles owned by T5b, and annotation appearance or geometry
+  owned by T5c.
+
+Deletion targets:
+
+- Fixed character-width tables, `estimated_text_width`, integer font adapters,
+  arbitrary first-face fallback, process-global generic-family remapping, late
+  output-only font discovery, `TextBlock::unwrapped`, draw-time wrapping, and raw
+  foundational text geometry.
+
+Evidence:
+
+- Font name/occurrence/identity/order/deduplication, primary and per-scalar
+  fallback, discovery-order invariance, discovery-entry/byte/work boundaries,
+  complete prepared/generated scalar census and traversal, changing/short file
+  failures, missing family/glyph failures, exact reservation, whitespace, blank
+  lines, bidi, non-Latin, weight, baseline, ink, overwide sequence, significance-
+  label effective/exact carrier identity, immutable replay, and
+  preserve/outline/PNG parity tests.
+- Host-dependent smoke evidence asserts provenance and consistency rather than
+  universal glyph bytes; no network or asset provisioning is added.
+- `just verify` passes.
+
+Commit: `feat(typography): freeze resolved text plans`.
+
+### T5a4: Root Title-Block Plans
+
+**Status**: PENDING
+
+Dependencies: T5a3.
+
+Objective: establish the reusable root title-block producer and migrate the
+standalone Plot root without requiring composition adapters early.
+
+Scope:
+
+- Build immutable title-block candidates from resolved text roles,
+  `CompositionTheme` spacing, and one root `TitleBlockAlignment` value.
+- Apply alignment consistently to per-line translation and horizontal child
+  placement for title, subtitle, and caption. Retain zero rotation.
+- Migrate the standalone Plot root. T5a6a connects the same producer to faceted
+  Plot, Matrix, and Canvas outer-root adapters after those boundaries exist.
+- Store exact lines, widths, baselines, paints, spacing, boxes, and serialization
+  inputs before Null validation.
+
+Exclusions:
+
+- Faceted Plot, Matrix, and Canvas outer-root integration before T5a6a; panel
+  headers, Canvas headers, row titles, text panels, facet track placement, and the
+  public T6 alignment type/setter.
+
+Deletion targets:
+
+- Standalone-root `TitleBlock::draw` wrapping, line/baseline `zip`, hidden font
+  fallback, hardcoded muted paints, duplicate root gaps/reserves, and draw-time
+  title style reconstruction. T5a6d removes the corresponding deferred outer-root
+  route after every adapter consumes this producer.
+
+Evidence:
+
+- Title-only, subtitle-only, caption-only, all-role, unequal multiline,
+  Start/Center/End, all-built-ins-centered, standalone owner selection, presence,
+  baseline cardinality, Null/SVG identity, and explicit-size snapshot tests.
+- `just verify` passes.
+
+Commit: `feat(layout): plan root title blocks`.
+
+### T5a5: Axis, Range, Tick, Frame, And Grid Plans
+
+**Status**: PENDING
+
+Dependencies: T5a4.
+
+Objective: replace local axis selection/retry behavior with complete immutable
+alternatives consumed only by the root selector.
+
+Scope:
+
+- Add immutable range, projection, tick, axis-title, axis, frame, and grid plans
+  using the resolved T5a appearance and text plans.
+- Validate a present exact-tick list as one indivisible `1..=10_000` alternative;
+  reject a present empty list rather than selecting automatic generation.
+  Preserve intentionally empty labels as unlabeled tick/grid positions with no
+  text geometry.
+- Implement private span/typography adaptive numeric sources with no fixed five-
+  tick ceiling and one always-enumerated midpoint source.
+- Implement optional additive data intervals and Log10-decade intervals. Try the
+  requested source first, enumerate deterministic `1,2,3,5` decimal coarsening,
+  retain complete nonempty interval vectors without subsequences, order the
+  terminal midpoint after every interval vector, and rank source precedence
+  before all soft quality only at the root. Retain tick policy/source kind/raw
+  ordinal in structural signatures and frozen axis plans so equal vectors from
+  distinct sources do not deduplicate. Keep caller count/density controls absent.
+- Implement exact formatting/uniqueness, projection, categorical one-label-per-
+  slot behavior, Forest logarithmic sources, fit transitions, gutters, rotations,
+  frame-side topology, tick reserve/draw synchronization, and grid ordering.
+- Preserve automatic-range broadening's current private five-sample nice-range
+  seed under its range owner; remove only the shared tick-count meaning and use
+  no count target in generated-tick selection.
+- Populate the standard-panel carrier with T5a typography, tick, axis,
+  projection, and preferred `4:3` inputs while leaving mark/density/annotation
+  inputs open for T5c.
+- Count and reserve every raw tick source, text-product block, fit transition,
+  axis candidate, and plan payload through the T5a1 operation resource state
+  before materializing it.
+- Replace horizontal categorical helper duplicates with canonical raw/display
+  labels and the common text/axis path.
+- Add the Canvas shared-x semantic validator: configured continuous automatic
+  members only, finite strict union, categorical or exact-limit rejection. T5b
+  owns child-plan/track integration.
+- Replace ordinary axis/title local stabilization with the T5a1 root pass
+  protocol; do not introduce another loop.
+
+Exclusions:
+
+- Legend clearance, Canvas/facet track measurement, mark ink/density/category
+  pitch/annotations, complete Matrix/Marginal packing, full domain feedback,
+  automatic roots, and public interval/alignment APIs.
+
+Deletion targets:
+
+- The shared `AUTOMATIC_TICK_TARGET` identity, five-only tick downsampling, and
+  conditional midpoint fallback branches; retain its range-only value under a
+  range-specific private owner.
+- Draw-time axis text measurement, local axis/title retry loops, duplicate
+  spacing/line-height estimates, measured-state booleans, horizontal categorical
+  helpers, and Canvas shared-x clone/replay.
+
+Evidence:
+
+- Wide panels with more than five generated ticks; small panels; source-span,
+  `6ch`, `10_000/10_001`, representable-index boundaries, interval
+  exact/coarsened/nonempty/no-subsequence/midpoint order, exact precedence,
+  source precedence over soft ranks, Log10, formatting, uniqueness, finite
+  extremes, exact-list `0/1/10_000/10_001`, empty exact labels, category order,
+  collision, projection endpoints, frame sides, Science duplicate removal,
+  tick/grid reserve-draw parity, horizontal categorical fit, shared-x validation,
+  accounting refusal, pass stabilization, and permutation tests.
+- `just verify` passes.
+
+Commit: `feat(axes): freeze axis and grid plans`.
+
+### T5a6: Ordinary Plot Exact-Root Migration And Closure
+
+**Status**: PENDING
+
+Dependencies: T5a5.
+
+Objective: complete the native ordinary standalone Plot path and close every
+T5a-owned source without absorbing later component phases. This umbrella is
+complete only after T5a6a-T5a6d in dependency order and has no separate commit.
+
+Exclusions across T5a6:
+
+- T5b legends/facets/Canvas tracks and chrome; T5c final mark and annotation
+  appearance/measurement/geometry; T5d scales/guides; T5e specialized native
+  producers and automatic/bounded roots; T6 public APIs/default switch.
+
+#### T5a6a: Ordinary Interior Carriers And Deferred-Family Adapters
+
+**Status**: PENDING
+
+Dependencies: T5a5.
+
+Objective: establish closed native/deferred interior boundaries before migrating
+any family route.
+
+Scope:
+
+- Add the standard-coordinate and one-categorical-axis panel producer inputs and
+  integrate the T5a standard-panel carrier into the Plot frame candidate tree.
+- Add exactly one typed `DeferredMarkAdapter` producing `DeferredMarkPlan` and
+  one typed `DeferredAnnotationAdapter` producing `DeferredAnnotationPlan` from
+  T5a3's `DeferredAnnotationTextPlan`. Before root selection they emit candidate-
+  local current hard-panel minima, automatic-domain envelopes, reserve requests,
+  obstacle/outward-ink extents, and frozen semantic/style/draw payloads. Their
+  consequences feed the canonical range, axis, collision, and parent candidate
+  routes; they cannot select a tick/root candidate, mutate an assigned panel,
+  perform work during drawing, or call a layout backend.
+- Name the current generic panel floor, where still required for parity, as the
+  sole `DeferredLegacyPanelMinimum` consequence. It remains only until T5c
+  replaces it with exact mark density, category pitch, interval, and annotation
+  requirements; no producer may consult an unnamed generic floor.
+- Add closed standard-coordinate and one-categorical-axis legacy interior
+  adapters covering all 20 ordinary PlotKinds. T5a6b1-T5a6c4 replace those
+  exhaustive variants cluster by cluster; no ordinary route is temporarily
+  unclassified.
+- Add one typed interior adapter each for Heatmap, Marginal, Matrix, Beeswarm, and
+  Waterfall until T5e. Add one typed parent-composition adapter each for facet and
+  Canvas until T5b, regardless of child PlotKind. Connect faceted Plot, Matrix,
+  and Canvas outer roots to the T5a4 title-block producer through these adapters.
+  No generic fallback adapter or runtime downcast is admitted.
+- Make every carrier and adapter use the T5a1 candidate, accounting, reservation,
+  convergence, selected-plan, Null, and concrete lifecycle representations.
+
+Deletion targets:
+
+- Unclassified interior dispatch, adapter-specific root selection, outer-root
+  title reconstruction, and any carrier that can invoke `GeometryBackend` for
+  measurement.
+
+Evidence:
+
+- Compile-time exhaustiveness over native and deferred route kinds; all 20
+  ordinary legacy variants; five specialized/two composition adapters; effective
+  significance text reuse; legacy hard-minimum/domain/reserve/obstacle parity;
+  frozen deferred payloads; accounting/refusal; selected-panel and clip identity;
+  no-layout-backend-call; and pre-backend failure tests.
+- `just verify` passes.
+
+Commit: `feat(layout): add ordinary interior carriers`.
+
+#### T5a6b: Standard-Coordinate Ordinary Plot Migration
+
+**Status**: PENDING
+
+Dependencies: T5a6a.
+
+Objective: migrate the ordinary two-numeric-axis family in T5a6b1-T5a6b2. This
+umbrella has no separate commit and completes only after both clusters.
+
+Requirements shared by both clusters:
+
+- Split semantic preparation from final replay so each renderer consumes the
+  selected root, title, axes, ticks, projection, data panel, clips, and immutable
+  draw payload rather than discovering foundational layout during drawing.
+- Replace its closed legacy interior variant with the native standard-coordinate
+  producer. Retain only the named `DeferredLegacyPanelMinimum` and typed
+  mark/annotation consequences needed for current parity until T5c; no family-
+  local or unnamed generic minimum remains.
+- Preserve current exact default dimensions and `.size`; validate one selected
+  `PlotPlan` through one Null lifecycle and replay the same plan through one
+  concrete lifecycle.
+
+##### T5a6b1: Standard Point And Path Families
+
+**Status**: PENDING
+
+Dependencies: T5a6a.
+
+Scope:
+
+- Natively migrate Scatter, Line, Trajectory, and LinePath through the standard-
+  coordinate panel producer and remove exactly their four legacy variants.
+
+Deletion targets:
+
+- These families' fixed single-panel constructors, `GeometryBackend` layout
+  discovery, duplicate panel/tick selection, and draw-time foundational
+  layout/style/tick reconstruction.
+
+Evidence:
+
+- One route assertion and focused exact-size, range, projection, axis, deferred-
+  consequence, frozen-plan, Null/concrete identity, pre-backend failure, and
+  snapshot test per family.
+- `just verify` passes.
+
+Commit: `refactor(layout): migrate point and path plans`.
+
+##### T5a6b2: Standard Distribution And Reference Families
+
+**Status**: PENDING
+
+Dependencies: T5a6b1.
+
+Scope:
+
+- Natively migrate Histogram, Density, Qq, and Regression through the standard-
+  coordinate panel producer and remove exactly their four legacy variants.
+
+Deletion targets:
+
+- These families' fixed single-panel constructors, local range/tick retries,
+  `GeometryBackend` layout discovery, duplicate panel selection, and draw-time
+  foundational reconstruction.
+
+Evidence:
+
+- One route assertion and focused exact-size, scientific-range, projection, axis,
+  deferred-consequence, frozen-plan, Null/concrete identity, pre-backend failure,
+  and snapshot test per family; all eight standard routes are then native.
+- `just verify` passes.
+
+Commit: `refactor(layout): migrate distribution reference plans`.
+
+#### T5a6c: One-Categorical-Axis Ordinary Plot Migration
+
+**Status**: PENDING
+
+Dependencies: T5a6b2.
+
+Objective: migrate the ordinary categorical family through one orientation-aware
+producer in T5a6c1-T5a6c4. This umbrella has no separate commit and completes only
+after all four clusters.
+
+Requirements shared by all four clusters:
+
+- Preserve resolved category order, horizontal/vertical orientation, canonical
+  raw/display labels, categorical midpoint identity, and Forest's sole family-
+  owned Log10 preliminary source while using the common axis plans.
+- Replace each closed legacy variant with the native one-categorical-axis
+  producer. Retain only the named `DeferredLegacyPanelMinimum` and typed current
+  mark/annotation range, reserve, collision, and draw consequences until T5c.
+- Freeze selected projections, categorical positions, clips, and deferred mark
+  and annotation plans before Null validation.
+
+##### T5a6c1: Estimate-Display Families
+
+**Status**: PENDING
+
+Dependencies: T5a6b2.
+
+Scope:
+
+- Natively migrate PointInterval, Coefficient, Forest, and Dumbbell and remove
+  exactly their four legacy variants.
+
+Deletion targets:
+
+- Their family-local categorical axis measurement, exact/automatic range/tick
+  retries, `GeometryBackend` layout discovery, and duplicate panel selection.
+
+Evidence:
+
+- Per-family route, orientation, unavailable-row, exact-size, Forest Log10,
+  deferred annotation/domain consequence, frozen-plan, lifecycle, and snapshot
+  evidence; `just verify` passes.
+
+Commit: `refactor(layout): migrate estimate display plans`.
+
+##### T5a6c2: Bar Families
+
+**Status**: PENDING
+
+Dependencies: T5a6c1.
+
+Scope:
+
+- Natively migrate Bar, HorizontalBar, StackedBar, and StackedHorizontalBar and
+  remove exactly their four legacy variants.
+
+Deletion targets:
+
+- Their orientation-local categorical axes, horizontal label helpers, local
+  range/tick retries, `GeometryBackend` layout discovery, and duplicate panels.
+
+Evidence:
+
+- Per-family route, orientation, sign/stack, exact-size, attached-annotation
+  range/reserve consequence, frozen-plan, lifecycle, and snapshot evidence;
+  `just verify` passes.
+
+Commit: `refactor(layout): migrate bar family plans`.
+
+##### T5a6c3: Categorical Distribution Families
+
+**Status**: PENDING
+
+Dependencies: T5a6c2.
+
+Scope:
+
+- Natively migrate Boxplot, Violin, and Raincloud and remove exactly their three
+  legacy variants.
+
+Deletion targets:
+
+- Their family-local categorical axis measurement, local range/tick retries,
+  `GeometryBackend` layout discovery, and duplicate panel selection.
+
+Evidence:
+
+- Per-family route, orientation, group/category order, exact-size, deferred mark
+  extent, frozen-plan, lifecycle, and snapshot evidence; `just verify` passes.
+
+Commit: `refactor(layout): migrate categorical distribution plans`.
+
+##### T5a6c4: Interaction Family
+
+**Status**: PENDING
+
+Dependencies: T5a6c3.
+
+Scope:
+
+- Natively migrate Interaction and remove its final ordinary legacy variant.
+
+Deletion targets:
+
+- Interaction-local categorical axis/tick measurement, local range retry,
+  `GeometryBackend` layout discovery, and duplicate panel selection.
+
+Evidence:
+
+- Condition order, sparse connector, interval, exact-size, deferred consequence,
+  frozen-plan, lifecycle, route-exhaustiveness, and snapshot evidence proves all
+  12 categorical and all 20 ordinary routes are native; `just verify` passes.
+
+Commit: `refactor(layout): migrate interaction plans`.
+
+#### T5a6d: Ordinary Exact-Root Closure Audit
+
+**Status**: PENDING
+
+Dependencies: T5a6c4.
+
+Objective: close all T5a materialization and prove that later phases can only
+extend the active route.
+
+Scope:
+
+- Route T5a-owned Canvas root surfaces/title inputs and foundational specialized
+  axis consumers through the same plans without migrating T5b tracks or T5e
+  interiors.
+- Audit every materialized T5a ledger key from source through measurement,
+  candidate generation, accounting/reservation, arrangement, frozen plan, and
+  draw; remove every superseded T5a path.
+- Prove the five specialized interior adapters, two composition adapters, and
+  mark/annotation deferred adapters plus their named legacy-panel-minimum
+  consequence are the only remaining nonnative boundaries.
+- Preserve explicit `640x480` Plot and `960x640` Canvas behavior while leaving
+  public automatic and bounded sizing dormant until their atomic T6 switch.
+
+Deletion targets:
+
+- Remaining ordinary `CanvasLayout::measured_single_panel`, unchecked/clamping
+  foundational fallback, source-dimension rereads after promotion, hidden
+  Publication/background/font fallback, deferred outer-root title wrapping,
+  local ordinary retry loops, and every alternate ordinary exact-root route.
+
+Evidence:
+
+- Exhaustive native/adapted PlotKind route census; explicit default fixtures;
+  multiple exact sizes; complete T5a-content fit/failure; frozen-plan fields;
+  no draw-time foundational layout; Null/concrete identity; inherited
+  theme/surface/title behavior; resource/accounting boundaries; focused output,
+  family, and snapshot tests.
+- Search evidence proves no fixed five-tick ceiling, ordinary generic panel floor
+  outside a named deferred adapter, draw-time foundational wrapping, local
+  ordinary retry loop, or second root route remains.
+- `just verify` passes; T5a0-T5a6d, T5a6, and parent T5a are then marked complete.
+
+Commit: `refactor(layout): close ordinary exact-root planning`.
 
 ## Phase T5b: Legends, Facets, And Canvas Composition Chrome
 
@@ -2341,6 +2996,10 @@ Scope:
 - Complete the T5a measurement carrier with exact mark ink extents, data-density
   requirements, category and cell pitch, interval clearance, annotation reserve,
   and family-specific hard or preferred panel requirements.
+- Replace `DeferredMarkAdapter`, `DeferredAnnotationAdapter`, and
+  `DeferredLegacyPanelMinimum` atomically with those native measured
+  consequences while retaining the same T5a candidate, range, collision,
+  convergence, accounting, and frozen-plan route.
 - Separate normal-flow measurement from inside-legend, significance, value-label,
   panel-text, and supplemental-layer overlay planning.
 - Define common point, line, fill, interval, ribbon, uncertainty, reference,
@@ -2447,21 +3106,23 @@ Scope:
 - Replace fixed marginal bands, Matrix dummy generic layout, hardcoded guide
   reserves, and universal panel minima with typed complete composite
   measurements.
-- Implement the lexicographic root quality objective over finite candidates,
-  including semantic completeness, hard geometry, scientific aspect, readable
-  density, compactness, and stable structural tie-breaking.
-- Implement every closed candidate producer, complete child Cartesian
-  combination, structural signature, duplicate rule, dense-rank pool, and
-  eligibility/viability filter without local pruning or discovery-order choice.
-- Implement bounded remeasurement for wrapping, ticks, legend flow, grid tracks,
-  shared alignment, domains, and overlays. Detect repeated nonfinal states and
-  budget exhaustion explicitly.
+- Complete the T5a root quality implementation with every remaining supplier for
+  semantic completeness, hard geometry, scientific aspect, readable density,
+  compactness, and stable structural tie-breaking.
+- Complete every closed candidate producer, dense-rank pool, and nonexact
+  eligibility/viability filter on the existing Cartesian-combination, signature,
+  duplicate, and selector route without local pruning or discovery-order choice.
+- Complete specialized and all-producer frontier/cache identity and bounded
+  remeasurement for wrapping, ticks, legend flow, grid tracks, shared alignment,
+  domains, and overlays on the existing T5a convergence driver. Detect repeated
+  nonfinal states and budget exhaustion explicitly.
 - Resolve one private automatic root size, bounded-width root size, or exact root
   size before backend creation. Convert the finite logical result once through
   checked upward CSS-pixel rounding and store it in `PlotPlan` or `CanvasPlan`.
-- Enforce the T3j automatic resource envelope, checked topology arithmetic, and
-  allocation limits without clamping, content omission, fixed-size fallback, or
-  output-format-specific mutation of the canonical scene.
+- Complete the T5a resource state's producer census and enforce the T3j automatic
+  resource envelope over every T5b-T5e producer, checked topology arithmetic,
+  and allocation limit without clamping, content omission, fixed-size fallback,
+  or output-format-specific mutation of the canonical scene.
 - Remove remaining final-render text layout, tick selection, legend construction,
   spacing derivation, track sizing, and domain mutation.
 - Exercise automatic and bounded-width behavior through private focused tests,
@@ -2483,7 +3144,7 @@ Acceptance:
   resource, output, and snapshot tests pass.
 - `just verify` passes.
 
-## Phase T6: Public Immutable Theme, Scale, And Sizing API
+## Phase T6: Public Immutable Theme, Scale, Tick-Interval, And Sizing API
 
 **Status**: PENDING
 
@@ -2498,6 +3159,11 @@ Scope:
   `Theme` API and built-in constructors or presets.
 - Expose only validated component theme, color, typography, and scale types
   required by the full-foundations milestone.
+- Expose `TitleBlockAlignment::{Start,Center,End}` and one
+  `CompositionTheme::root_title_block_alignment` property. Every built-in
+  constructor returns `Center`; do not expose general `TextTheme` alignment,
+  independent title/subtitle/caption alignment, backend anchors, or separate
+  Plot/Canvas alignment setters.
 - Retain `Canvas::theme(Theme)` and `Plot::theme(Theme)` as the sole owner
   attachments established by T4 while replacing the closed selector arguments
   with the approved complete immutable `Theme` values. Migrate repository
@@ -2506,6 +3172,14 @@ Scope:
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
 - Keep backend styles private and avoid exposing renderer implementation details.
+- Expose opaque crate-root `TickInterval: Clone + Copy + Debug + PartialEq` with
+  validated `additive(f64) -> Result<Self>` and
+  `log10_decades(u32) -> Result<Self>`, plus consuming
+  `Plot<K>::x_tick_interval(TickInterval) -> Self where K: kind::NumericX` and the
+  corresponding `NumericY` y setter. Repeated setters replace; a present exact
+  list takes precedence regardless of order and validates `1..=10_000`; absence
+  retains automatic span/typography policy. Do not expose a target count, maximum
+  count, visual-density scalar, categorical stride, or tick-generation callback.
 - Make absence of a sizing call select automatic layout for Plot and Canvas.
 - Add positive `max_width(width)` builders for bounded-width automatic height,
   retain exact `size(width, height)`, and keep the complete constraint protocol
@@ -2531,6 +3205,13 @@ Acceptance:
 
 - Callers can construct one complete custom theme covering the admitted full
   foundations without editing private renderer state.
+- A caller can derive a complete theme with Start, Center, or End root title-
+  block alignment; Canvas/Plot ownership and inheritance select the expected
+  value, and every built-in remains centered.
+- A caller can request an additive linear or Log10-decade preferred tick interval
+  independently on x and y; focused evidence proves exact-source preference,
+  deterministic coarsening, terminal midpoint order, scale mismatch, exact-tick
+  precedence, setter replacement, and absent-interval automatic behavior.
 - Built-in Publication, Nature, Science, and CHI behavior remains available
   through the single current API.
 - The API has no ambiguous global default setter, generic property map, detached
@@ -2563,6 +3244,9 @@ Scope:
   behavior, SVG, and PNG.
 - Cover automatic, bounded-width, and exact dimensions across ordinary,
   specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
+- Cover root title-block alignment defaults/customization and inheritance, plus
+  automatic/additive/Log10-decade/exact tick-policy precedence across standalone,
+  facet, Canvas-child, SVG, and PNG routes.
 - Retain reviewed deterministic snapshots for every built-in preset and selected
   custom themes.
 - Search for retired theme APIs, repeated hidden Publication defaults, dormant
@@ -2598,6 +3282,10 @@ Acceptance:
   replace it completely; facets add no scope.
 - Components are surfaces, typography, axes, legend, composition, marks,
   annotations, and color scales. Plot-family theme blocks are not admitted.
+- `CompositionTheme` owns one Plot/Canvas root title-block alignment applied
+  jointly to title, subtitle, and caption. Built-ins use `Center`; Start and End
+  are available through complete-theme customization; other anchors remain
+  renderer invariants.
 - `OpaqueColor` owns RGB data-scale color. `Color` owns final RGBA paint with
   `u8` alpha. Alpha replacement is exact and never multiplicative.
 - Built-in qualitative palettes preserve curated colors and extend them through
@@ -2616,5 +3304,8 @@ Acceptance:
   glyph fallback, and recorded environment provenance.
 - Themes may omit nonsemantic chrome but cannot hide caller-provided semantic
   content. Existing explicit policies own content presence and placement.
+- Automatic numeric ticks have no fixed five-tick or public count target. An
+  optional per-axis additive or Log10-decade data interval is the sole public
+  automatic-tick preference; exact ticks remain the strict override.
 - Shared Canvas legends use Canvas chrome and exact panel glyphs; conflicting
   glyphs for one semantic identity reject.

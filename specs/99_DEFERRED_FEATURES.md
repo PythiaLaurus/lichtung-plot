@@ -49,17 +49,39 @@ range, legend representation, interaction with RGBA exact styles, missing
 values, accessibility, facets, Canvas coordination, and precedence. No current
 alpha-scale enum, callback, or placeholder reserves that feature.
 
-## Caller-Selected Automatic Tick Density
+## Broader Automatic Tick Control
 
-The current renderer chooses automatic numeric tick density deterministically
-from range, panel dimensions, and measured labels. Callers may replace an axis's
-complete generated tick list with exact `AxisTick` values, but cannot request an
-automatic target count.
+The approved T6 target in `05_LAYOUT_SYSTEM.md` admits one optional per-axis
+preferred data interval. `TickInterval::additive` applies to linear numeric axes;
+`TickInterval::log10_decades` applies to Log10 axes. The renderer tries the
+requested complete interval vector first, then deterministic coarser complete
+vectors when no closer source survives, and finally one terminal midpoint source.
+Interval vectors never use evenly indexed subsequences, and source precedence is
+resolved before soft visual quality. Exact `AxisTick` values remain the strict
+position/label control and take precedence regardless of setter order.
 
-A future density option must define whether its value is a target, maximum, or
-exact count; how nice-number selection may deviate; how text fit and small
-panels override it; and how facets and Canvas shared dimensions coordinate it.
-No current tick-count setter or dormant field reserves this feature.
+Target counts, maximum counts, exact generated counts, visual-density scalars,
+arbitrary multiplicative ratios, categorical stride/drop policies, and tick
+generation callbacks remain deferred. A broader design must define precedence,
+nice-step deviation, small-panel behavior, facets, Canvas shared dimensions,
+and resource limits without introducing local pruning or a second axis-planning
+route. No count, density, callback, or generic tick-generator placeholder is
+reserved.
+
+## Broader Text Alignment And Anchoring
+
+The approved T6 target admits exactly one closed `CompositionTheme` root
+title-block alignment with `Start`, `Center`, and `End`. It applies jointly to
+Plot and Canvas root title, subtitle, and caption text, and every built-in theme
+uses `Center`.
+
+Independent title/subtitle/caption alignment, general `TextTheme` alignment,
+panel-header, composition-header, row-title, TextPanel, legend, guide, axis,
+tick, or annotation alignment, arbitrary text rotation, and backend text-anchor
+access remain unavailable. A broader design must define physical versus
+bidi-logical direction, per-role precedence, multiline and rotated behavior,
+collision planning, and SVG/PNG agreement. No generic alignment field, anchor
+setter, callback, or placeholder is reserved.
 
 ## Broader Root Constraints
 
