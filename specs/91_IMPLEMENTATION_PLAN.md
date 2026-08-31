@@ -165,7 +165,7 @@ The approved theme and layout targets follow these rules:
 | T3l | Private planning-value terminology | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | IN PROGRESS |
 | T4a | Ownership API and implementation partition | COMPLETE |
-| T4b | Owner selection and resolved provenance | PENDING |
+| T4b | Owner selection and resolved provenance | COMPLETE |
 | T4c | Composition theme routing | PENDING |
 | T4d | Public attachment and current contract | PENDING |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
@@ -2078,7 +2078,7 @@ Acceptance:
 
 ### Phase T4b: Owner Selection And Resolved Provenance
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T4a.
 

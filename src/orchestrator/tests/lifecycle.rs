@@ -113,6 +113,21 @@ fn assert_canvas_theme_identities_differ(left_owner: usize, right_owner: usize) 
     });
 }
 
+fn assert_canvas_theme_identities_match(left_owner: usize, right_owner: usize) {
+    crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| {
+        let evidence = evidence.borrow();
+        let left = evidence
+            .iter()
+            .find(|(owner, _, _)| *owner == left_owner)
+            .expect("left Canvas theme owner has evidence");
+        let right = evidence
+            .iter()
+            .find(|(owner, _, _)| *owner == right_owner)
+            .expect("right Canvas theme owner has evidence");
+        assert_eq!(left.2, right.2);
+    });
+}
+
 fn assert_canvas_theme_owners(expected: &[usize]) {
     crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| {
         let mut owners = evidence
@@ -297,6 +312,26 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
 }
 
 #[test]
+fn unthemed_standalone_selects_publication_once() {
+    reset_theme_evidence();
+    PLOT_PLAN_CALLS.with(|calls| calls.set(0));
+    FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
+    let plot = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
+    let mut backend = RecordingBackend::default();
+
+    plot.render_with_backend(&mut backend).unwrap();
+
+    assert_eq!(resolved_theme_count(), 1);
+    assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(rendered_theme_identity_count(), 1);
+    assert_eq!((backend.begins, backend.ends), (1, 1));
+}
+
+#[test]
 fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
     crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));
@@ -321,6 +356,47 @@ fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
         assert!(!addresses.is_empty());
         assert!(addresses.iter().all(|address| *address == addresses[0]));
     });
+}
+
+#[test]
+fn canvas_inherited_children_share_the_root_and_explicit_publication_does_not() {
+    let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
+    let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
+    let canvas = crate::Canvas::grid(1, 3)
+        .unwrap()
+        .panel(0, 0, Plot::scatter(x.clone(), y.clone()))
+        .unwrap()
+        .panel(0, 1, Plot::scatter(x.clone(), y.clone()))
+        .unwrap()
+        .panel(0, 2, Plot::scatter(x, y).theme(crate::Theme::Publication))
+        .unwrap();
+    reset_theme_evidence();
+    let mut backend = RecordingBackend::default();
+
+    canvas.render_with_backend(&mut backend).unwrap();
+
+    assert_eq!(
+        (resolved_theme_count(), rendered_theme_identity_count()),
+        (2, 2)
+    );
+    assert_canvas_theme_owners(&[usize::MAX, 0, 1, 2]);
+    assert_canvas_theme_identities_match(usize::MAX, 0);
+    assert_canvas_theme_identities_match(usize::MAX, 1);
+    assert_canvas_theme_identities_differ(usize::MAX, 2);
+    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render"]);
+    for owner in [0, 1, 2] {
+        assert_canvas_theme_identity(
+            owner,
+            &[
+                "resolved",
+                "panel-measure",
+                "panel-plan",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+    }
+    assert_rendered_themes_match_canvas_owners(&[usize::MAX, 2]);
 }
 
 #[test]

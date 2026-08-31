@@ -30,7 +30,12 @@ impl<'a> PlotPlan<'a> {
     pub(super) fn new(source: &'a Plot, kind: PlotKind) -> Result<Self, Error> {
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let theme = Box::new(source.theme_spec().resolve());
+        let theme = Box::new(
+            source
+                .theme_spec()
+                .unwrap_or(crate::Theme::Publication)
+                .resolve(),
+        );
         source.validate_configuration(kind)?;
         let scene = if source.has_facets() {
             PlotScenePlan::Faceted(Box::new(super::facets::FacetPlan::new(

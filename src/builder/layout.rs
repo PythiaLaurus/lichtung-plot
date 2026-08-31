@@ -10,7 +10,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> CanvasLayout {
-        let theme = self.theme.resolve();
+        let theme = self.theme.unwrap_or(crate::Theme::Publication).resolve();
         crate::kind::into_erased(self.clone()).canvas_layout_erased(&theme)
     }
 }

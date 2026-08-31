@@ -321,7 +321,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     /// Set the visual theme.
     #[must_use]
     pub fn theme(mut self, theme: Theme) -> Self {
-        self.theme = theme;
+        self.theme = Some(theme);
         self
     }
 

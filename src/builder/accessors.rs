@@ -28,7 +28,7 @@ impl Plot {
 }
 
 impl<K: crate::kind::Marker> Plot<K> {
-    pub(crate) const fn theme_spec(&self) -> crate::Theme {
+    pub(crate) const fn theme_spec(&self) -> Option<crate::Theme> {
         self.theme
     }
 

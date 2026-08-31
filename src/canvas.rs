@@ -40,8 +40,7 @@ struct PlannedCanvasPanel {
 }
 
 struct CanvasPlan {
-    theme: Box<ResolvedTheme>,
-    plot_themes: Vec<Option<Box<ResolvedTheme>>>,
+    themes: ResolvedCanvasThemes,
     plots: Vec<Option<Plot>>,
     canvas_layout: CanvasLayout,
     full_outer: PanelBox,
@@ -51,6 +50,46 @@ struct CanvasPlan {
     text_panels: Vec<TextPanelPlan>,
     headers: Vec<CanvasHeaderPlan>,
     row_titles: Vec<CanvasHeaderPlan>,
+}
+
+struct ResolvedCanvasThemes {
+    root: Box<ResolvedTheme>,
+    plots: Vec<Option<ResolvedPlotTheme>>,
+}
+
+enum ResolvedPlotTheme {
+    InheritedRoot,
+    ExplicitPlot(Box<ResolvedTheme>),
+}
+
+impl ResolvedCanvasThemes {
+    fn new(root: Theme, plots: &[Option<Plot>]) -> Self {
+        Self {
+            root: Box::new(root.resolve()),
+            plots: plots
+                .iter()
+                .map(|plot| {
+                    plot.as_ref().map(|plot| {
+                        plot.theme_spec()
+                            .map_or(ResolvedPlotTheme::InheritedRoot, |theme| {
+                                ResolvedPlotTheme::ExplicitPlot(Box::new(theme.resolve()))
+                            })
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    fn root(&self) -> &ResolvedTheme {
+        self.root.as_ref()
+    }
+
+    fn plot(&self, index: usize) -> Option<&ResolvedTheme> {
+        self.plots.get(index)?.as_ref().map(|theme| match theme {
+            ResolvedPlotTheme::InheritedRoot => self.root(),
+            ResolvedPlotTheme::ExplicitPlot(theme) => theme.as_ref(),
+        })
+    }
 }
 
 struct CanvasHeaderPlan {
@@ -171,6 +210,7 @@ pub struct Canvas {
     columns: usize,
     panels: Vec<Option<Plot>>,
     text_panels: Vec<Option<TextPanel>>,
+    theme: Theme,
     legend_policy: CanvasLegendPolicy,
     shared_legend_gap: Option<f64>,
     width: u32,
@@ -202,6 +242,7 @@ impl Canvas {
             columns,
             panels: (0..panel_count).map(|_| None).collect(),
             text_panels: (0..panel_count).map(|_| None).collect(),
+            theme: Theme::Publication,
             legend_policy: CanvasLegendPolicy::PerPlot,
             shared_legend_gap: None,
             width: 960,
@@ -597,31 +638,23 @@ impl Canvas {
         reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
     )]
     fn preflight_plan(&self) -> Result<CanvasPlan, Error> {
-        let theme = Box::new(Theme::Publication.resolve());
-        let plot_themes = self
-            .panels
-            .iter()
-            .map(|plot| {
-                plot.as_ref()
-                    .map(|plot| Box::new(plot.theme_spec().resolve()))
-            })
-            .collect::<Vec<_>>();
+        let themes = ResolvedCanvasThemes::new(self.theme, &self.panels);
         #[cfg(test)]
         {
-            record_canvas_theme(usize::MAX, "resolved", &theme);
-            for (index, theme) in plot_themes.iter().enumerate() {
-                if let Some(theme) = theme {
+            record_canvas_theme(usize::MAX, "resolved", themes.root());
+            for index in 0..themes.plots.len() {
+                if let Some(theme) = themes.plot(index) {
                     record_canvas_theme(index, "resolved", theme);
                 }
             }
         }
         self.validate_structure()?;
         #[cfg(test)]
-        record_canvas_theme(usize::MAX, "layout", &theme);
+        record_canvas_theme(usize::MAX, "layout", themes.root());
         let canvas_layout = CanvasLayout::measured_composed_canvas(
             self.width,
             self.height,
-            &theme,
+            themes.root(),
             CanvasLayoutSpec {
                 has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
                 has_subtitle: self
@@ -640,7 +673,7 @@ impl Canvas {
         )?;
         let full_outer = canvas_layout.panel_box;
         let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            self.canvas_hue_groups(full_outer, &plot_themes)?
+            self.canvas_hue_groups(full_outer, &themes)?
         } else {
             Vec::new()
         };
@@ -667,7 +700,7 @@ impl Canvas {
             })
             .collect::<Vec<_>>();
         let shared_legend = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::preflight_shared_legend(&plots, &plot_themes, full_outer)?
+            Self::preflight_shared_legend(&plots, &themes, full_outer)?
         } else {
             None
         };
@@ -689,8 +722,8 @@ impl Canvas {
         }
         let header_theme_index = plots.iter().position(Option::is_some);
         let header_theme = header_theme_index
-            .and_then(|index| plot_themes[index].as_deref())
-            .unwrap_or(theme.as_ref());
+            .and_then(|index| themes.plot(index))
+            .unwrap_or_else(|| themes.root());
         let header_outer = outer;
         let column_header_height = if self.column_headers.is_empty() {
             0.0
@@ -726,8 +759,8 @@ impl Canvas {
                         "canvas row {row} requires a configured first-column panel for shared category labels"
                     ))
                 })?;
-                let expected_theme = plot_themes[first_index]
-                    .as_deref()
+                let expected_theme = themes
+                    .plot(first_index)
                     .expect("configured canvas panel has a resolved theme");
                 #[cfg(test)]
                 record_canvas_theme(
@@ -744,8 +777,8 @@ impl Canvas {
                             "canvas row {row} requires panel ({row}, {column}) for shared category labels"
                         ))
                     })?;
-                    let theme = plot_themes[index]
-                        .as_deref()
+                    let theme = themes
+                        .plot(index)
                         .expect("configured canvas panel has a resolved theme");
                     #[cfg(test)]
                     record_canvas_theme(index, "shared-category-label-validation", theme);
@@ -763,8 +796,8 @@ impl Canvas {
             for (index, plot) in plots.iter().enumerate() {
                 let Some(plot) = plot else { continue };
                 let kind = plot.kind();
-                let theme = plot_themes[index]
-                    .as_deref()
+                let theme = themes
+                    .plot(index)
                     .expect("configured canvas panel has a resolved theme");
                 #[cfg(test)]
                 record_canvas_theme(index, "grouped-x-range-plan", theme);
@@ -796,8 +829,8 @@ impl Canvas {
             let row = index / self.columns;
             let column = index % self.columns;
             let kind = plot.kind();
-            let theme = plot_themes[index]
-                .as_deref()
+            let theme = themes
+                .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "panel-measure", theme);
@@ -844,8 +877,8 @@ impl Canvas {
                 let plot = plots[*index]
                     .as_ref()
                     .expect("measured canvas panel remains configured");
-                let theme = plot_themes[*index]
-                    .as_deref()
+                let theme = themes
+                    .plot(*index)
                     .expect("configured canvas panel has a resolved theme");
                 let title = theme
                     .show_title
@@ -931,18 +964,18 @@ impl Canvas {
                 continue;
             };
             #[cfg(test)]
-            record_canvas_theme(usize::MAX, "text-plan", &theme);
+            record_canvas_theme(usize::MAX, "text-plan", themes.root());
             let cell = cells[index];
             let maximum_width = (cell.width() - 32.0).max(1.0);
             let title = crate::layout::TextBlock::layout(
                 text_panel.title(),
-                theme.title_font_size,
+                themes.root().title_font_size,
                 maximum_width,
                 "text panel title",
             )?;
             let body = crate::layout::TextBlock::layout(
                 text_panel.body(),
-                theme.label_font_size,
+                themes.root().label_font_size,
                 maximum_width,
                 "text panel body",
             )?;
@@ -978,8 +1011,8 @@ impl Canvas {
             } else {
                 crate::decorations::plan::LegendRole::Suppressed
             };
-            let theme = plot_themes[index]
-                .as_deref()
+            let theme = themes
+                .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "panel-plan", theme);
@@ -997,8 +1030,7 @@ impl Canvas {
             });
         }
         Ok(CanvasPlan {
-            theme,
-            plot_themes,
+            themes,
             plots,
             canvas_layout,
             full_outer,
@@ -1020,19 +1052,20 @@ impl Canvas {
         plan: CanvasPlan,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        let theme = plan.theme.as_ref();
+        let theme = plan.themes.root();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "render", theme);
         let header_theme_index = plan.plots.iter().position(Option::is_some);
         let row_title_theme = header_theme_index
-            .and_then(|index| plan.plot_themes[index].as_deref())
+            .and_then(|index| plan.themes.plot(index))
             .unwrap_or(theme);
         for panel in &plan.panels {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
             })?;
-            let theme = plan.plot_themes[panel.index]
-                .as_deref()
+            let theme = plan
+                .themes
+                .plot(panel.index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "grid-render", theme);
@@ -1042,8 +1075,9 @@ impl Canvas {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
-            let theme = plan.plot_themes[panel.index]
-                .as_deref()
+            let theme = plan
+                .themes
+                .plot(panel.index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "panel-render", theme);
@@ -1132,7 +1166,7 @@ impl Canvas {
     fn canvas_hue_groups(
         &self,
         panel: PanelBox,
-        plot_themes: &[Option<Box<ResolvedTheme>>],
+        themes: &ResolvedCanvasThemes,
     ) -> Result<Vec<(String, Vec<String>)>, Error> {
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
         for (index, plot) in self.panels.iter().enumerate() {
@@ -1145,8 +1179,8 @@ impl Canvas {
                 continue;
             };
             let kind = plot.kind();
-            let theme = plot_themes[index]
-                .as_deref()
+            let theme = themes
+                .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-hue-discovery", theme);
@@ -1174,15 +1208,15 @@ impl Canvas {
 
     fn preflight_shared_legend(
         plots: &[Option<Plot>],
-        plot_themes: &[Option<Box<ResolvedTheme>>],
+        themes: &ResolvedCanvasThemes,
         panel: PanelBox,
     ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
         let mut entries = Vec::new();
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
             let kind = plot.kind();
-            let theme = plot_themes[index]
-                .as_deref()
+            let theme = themes
+                .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-legend-preflight", theme);

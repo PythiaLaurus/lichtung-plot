@@ -38,6 +38,27 @@ fn erased_plot_retains_common_operations_and_exact_output() {
 }
 
 #[test]
+fn omitted_and_explicit_publication_themes_render_identically() {
+    let (x, y) = fixture_values();
+    let omitted = render(
+        Plot::scatter(x, y)
+            .size(321, 234)
+            .title("Publication default"),
+        "omitted-publication-theme",
+    );
+    let (x, y) = fixture_values();
+    let explicit = render(
+        Plot::scatter(x, y)
+            .theme(lichtung_plot::Theme::Publication)
+            .size(321, 234)
+            .title("Publication default"),
+        "explicit-publication-theme",
+    );
+
+    assert_eq!(omitted, explicit);
+}
+
+#[test]
 fn contextual_builders_preserve_exact_plot_markers() {
     use lichtung_plot::{
         kind, AxisScale, BarPointLayer, BarSpacing, Bounds, CategoryValues, CoefficientInput,

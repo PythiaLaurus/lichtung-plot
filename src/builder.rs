@@ -452,7 +452,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
     y_ticks: Option<Vec<AxisTick>>,
-    theme: Theme,
+    theme: Option<Theme>,
     significance: Vec<crate::significance::SignificanceAnnotation>,
     width: u32,
     height: u32,
@@ -539,7 +539,7 @@ impl Plot<crate::kind::Any> {
             y_axis_spec: AxisSpec::default(),
             y_limits_user_explicit: false,
             y_ticks: None,
-            theme: Theme::Publication,
+            theme: None,
             significance: Vec::new(),
             width: 640,
             height: 480,
@@ -1094,7 +1094,10 @@ mod tests {
 
     fn assert_constructor<K: crate::kind::ExactFamily>(plot: Plot<K>, expected_kind: PlotKind) {
         assert_eq!(plot.kind(), expected_kind);
-        assert_eq!(plot.erase().kind(), expected_kind);
+        assert_eq!(plot.theme_spec(), None);
+        let erased = plot.erase();
+        assert_eq!(erased.kind(), expected_kind);
+        assert_eq!(erased.theme_spec(), None);
     }
 
     #[test]
@@ -1251,6 +1254,12 @@ mod tests {
         assert_eq!(erased.kind(), PlotKind::Scatter);
         assert_eq!(erased.title.as_deref(), Some("Configured"));
         assert_eq!((erased.width, erased.height), (320, 240));
+        assert_eq!(erased.theme_spec(), None);
+
+        let explicitly_themed: Plot<crate::kind::Any> = Plot::scatter(numeric("x"), numeric("y"))
+            .theme(Theme::Publication)
+            .erase();
+        assert_eq!(explicitly_themed.theme_spec(), Some(Theme::Publication));
     }
 
     #[test]
