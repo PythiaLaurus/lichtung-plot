@@ -14,24 +14,24 @@ use crate::theme::ResolvedTheme;
 
 pub(super) fn preflight_coordinated_panels(
     source: &Plot,
-    chart: Plot,
+    base_plot: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(Plot, Vec<PlotRenderResult>), Error> {
     let facet_scales = source.facet_scales_spec();
-    let preflight = preflight_panels(&chart, kind, panels, facet_scales, theme, backend)?;
+    let preflight = preflight_panels(&base_plot, kind, panels, facet_scales, theme, backend)?;
     if source.hue_dimension_key().is_none() {
-        return Ok((chart, preflight));
+        return Ok((base_plot, preflight));
     }
-    let chart = coordinate_hue_levels(source, chart, &preflight)?;
-    let preflight = preflight_panels(&chart, kind, panels, facet_scales, theme, backend)?;
-    Ok((chart, preflight))
+    let base_plot = coordinate_hue_levels(source, base_plot, &preflight)?;
+    let preflight = preflight_panels(&base_plot, kind, panels, facet_scales, theme, backend)?;
+    Ok((base_plot, preflight))
 }
 
 fn preflight_panels(
-    chart: &Plot,
+    base_plot: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
     facet_scales: crate::FacetScales,
@@ -40,15 +40,15 @@ fn preflight_panels(
 ) -> Result<Vec<PlotRenderResult>, Error> {
     let mut preflight = Vec::with_capacity(panels.len());
     for facet in panels {
-        let panel_chart = chart
+        let panel_plot = base_plot
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
         preflight.push(
-            panel_chart.render_panel(
+            panel_plot.render_panel(
                 kind,
                 PlotRenderContext::new(
-                    crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                    crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
                     facet.panel,
                     theme,
                 )
@@ -62,7 +62,7 @@ fn preflight_panels(
 
 fn coordinate_hue_levels(
     source: &Plot,
-    mut chart: Plot,
+    mut base_plot: Plot,
     preflight: &[PlotRenderResult],
 ) -> Result<Plot, Error> {
     if let Some(hue_field) = source.hue_dimension_key() {
@@ -86,15 +86,15 @@ fn coordinate_hue_levels(
         .filter(|level| rendered_levels.contains(level))
         .collect::<Vec<_>>();
         if !levels.is_empty() {
-            chart = chart.with_global_hue_levels(levels);
+            base_plot = base_plot.with_global_hue_levels(levels);
         }
     }
-    Ok(chart)
+    Ok(base_plot)
 }
 
 pub(super) fn reserve_shared_legend(
     source: &Plot,
-    shared: &Plot,
+    shared_plot: &Plot,
     preflight: &[PlotRenderResult],
     mut outer: PanelBox,
 ) -> Result<
@@ -125,19 +125,21 @@ pub(super) fn reserve_shared_legend(
         )?
     };
     if !entries.is_empty() {
-        let identity_order = if let Some(pairs) = shared.global_collective_pairs() {
+        let identity_order = if let Some(pairs) = shared_plot.global_collective_pairs() {
             pairs
                 .iter()
                 .filter(|pair| pair.group.is_some() || pair.hue.is_some())
-                .map(|pair| shared.collective_legend_identity(pair))
+                .map(|pair| shared_plot.collective_legend_identity(pair))
                 .collect::<Result<Vec<_>, Error>>()?
         } else {
-            shared.global_hue_levels().map_or_else(Vec::new, |levels| {
-                levels
-                    .iter()
-                    .map(|level| shared.legend_identity(level.clone()))
-                    .collect()
-            })
+            shared_plot
+                .global_hue_levels()
+                .map_or_else(Vec::new, |levels| {
+                    levels
+                        .iter()
+                        .map(|level| shared_plot.legend_identity(level.clone()))
+                        .collect()
+                })
         };
         entries.sort_by_key(|entry| {
             identity_order
@@ -146,9 +148,11 @@ pub(super) fn reserve_shared_legend(
                 .unwrap_or(usize::MAX)
         });
         if let Some(facet_legend_position) = facet_legend_position {
-            let legend_chart = shared.clone().with_legend_position(facet_legend_position);
+            let legend_plot = shared_plot
+                .clone()
+                .with_legend_position(facet_legend_position);
             let (reserved, legend) =
-                crate::decorations::plan::plan_outside_legend(&legend_chart, &entries, outer)?;
+                crate::decorations::plan::plan_outside_legend(&legend_plot, &entries, outer)?;
             outer = reserved;
             outside_legend = Some(legend);
         }

@@ -18,16 +18,16 @@ struct PanelTextPlan<'a> {
 }
 
 pub(crate) fn draw(
-    chart: &Plot,
+    plot: &Plot,
     layout: &Layout,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    if chart.panel_text_annotations().is_empty() {
+    if plot.panel_text_annotations().is_empty() {
         return Ok(());
     }
-    let plans = plans(chart, layout, theme)?;
-    with_layer(backend, &chart.layer_name("panel-text"), |backend| {
+    let plans = plans(plot, layout, theme)?;
+    with_layer(backend, &plot.layer_name("panel-text"), |backend| {
         with_clip(backend, layout.projection.panel_box(), |backend| {
             for plan in plans {
                 backend.draw_text(
@@ -49,12 +49,12 @@ pub(crate) fn draw(
 }
 
 pub(crate) fn conflicting_legend_corner(
-    chart: &Plot,
+    plot: &Plot,
     layout: &Layout,
     legend: crate::decorations::legend::LegendBox,
     theme: &ResolvedTheme,
 ) -> Result<Option<PanelCorner>, Error> {
-    Ok(plans(chart, layout, theme)?.into_iter().find_map(|plan| {
+    Ok(plans(plot, layout, theme)?.into_iter().find_map(|plan| {
         rectangles_overlap(
             plan.bounds,
             PanelBox::new(legend.left, legend.right, legend.bottom, legend.top),
@@ -64,7 +64,7 @@ pub(crate) fn conflicting_legend_corner(
 }
 
 fn plans<'a>(
-    chart: &'a Plot,
+    plot: &'a Plot,
     layout: &Layout,
     theme: &ResolvedTheme,
 ) -> Result<Vec<PanelTextPlan<'a>>, Error> {
@@ -78,7 +78,7 @@ fn plans<'a>(
         ));
     }
 
-    let plans = chart
+    let plans = plot
         .panel_text_annotations()
         .iter()
         .map(|annotation| {

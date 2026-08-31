@@ -214,7 +214,7 @@ fn valid_grouped_bar_values() -> BarValues {
     }
 }
 
-fn configured_bar_chart(data: &BarValues, kind: PlotKind) -> Plot {
+fn configured_bar_plot(data: &BarValues, kind: PlotKind) -> Plot {
     match kind {
         PlotKind::Bar => Plot::bar(
             data.category.clone(),
@@ -242,9 +242,9 @@ fn configured_bar_chart(data: &BarValues, kind: PlotKind) -> Plot {
     }
 }
 
-fn assert_rejected_before_begin<K: crate::kind::Marker>(chart: &Plot<K>, kind: PlotKind) -> String {
+fn assert_rejected_before_begin<K: crate::kind::Marker>(plot: &Plot<K>, kind: PlotKind) -> String {
     let mut backend = RecordingBackend::default();
-    let error = chart.render_kind(kind, &mut backend).unwrap_err();
+    let error = plot.render_kind(kind, &mut backend).unwrap_err();
     assert_eq!((backend.begins, backend.ends), (0, 0), "{kind:?}");
     error.to_string()
 }

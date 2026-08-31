@@ -156,6 +156,7 @@ The approved theme and layout targets follow these rules:
 | T3j2 | Layout ownership-ledger reconciliation | COMPLETE |
 | T3j3 | Migration, evidence, and resource-boundary map | COMPLETE |
 | T3k | Terminal output suffix completion | PENDING |
+| T3l | Private planning-value terminology | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -1199,7 +1200,7 @@ Scope:
 - Resolve the selected built-in once before canonical Plot validation and backend
   begin.
 - Pass the same borrowed resolved value through layout, Null preflight, geometry
-  discovery, facet planning, legend planning, planned-chart substitutions,
+  discovery, facet planning, legend planning, planned-limit Plot substitutions,
   post-panel validation, decorations, and final rendering.
 - Remove `Plot::palette()` and every renderer call that reconstructs appearance.
 - Produce one immutable private preflight plan that the final render consumes;
@@ -1394,7 +1395,7 @@ Scope:
 - Rename `render_open_canvas` to `render_planned_canvas`.
 - Rename the subordinate `cell` and `plan` fields to `canvas_cell` and
   `panel_plan` so the Canvas-allocated cell remains distinct from
-  `PanelPlan::panel`, the post-reservation Plot region.
+  `PanelPlan::panel_box`, the post-reservation Plot region.
 - Update focused tests and current explanatory text without changing the
   one-shot plan ownership or rendering sequence.
 
@@ -1453,7 +1454,7 @@ Scope:
   and shared-legend preflight.
 - Cover first-column shared category-label validation and grouped automatic
   horizontal-range planning.
-- Cover sparse Canvas cells so the parallel `charts` and `plot_themes` ownership
+- Cover sparse Canvas cells so the parallel `plots` and `plot_themes` ownership
   vectors prove index alignment across empty and text-panel slots.
 - Cover actual mixed-preset shared headers and row titles in coordination with
   the exact consumer evidence from T3i4.
@@ -1895,7 +1896,7 @@ Acceptance:
 
 ## Phase T3l: Private Planning-Value Terminology
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Align private planning fields and their directly connected identifiers with the
 concrete values they carry. The current use of `chart` for `Plot` values does not

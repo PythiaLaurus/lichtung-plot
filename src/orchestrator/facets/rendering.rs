@@ -17,10 +17,10 @@ use crate::theme::ResolvedTheme;
 )]
 pub(super) fn render_scene(
     source: &Plot,
-    chart: &Plot,
+    shared_plot: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
-    plans: &[PanelPlan],
+    panel_plans: &[PanelPlan],
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
     outer: PanelBox,
@@ -28,42 +28,43 @@ pub(super) fn render_scene(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    for (facet, plan) in panels.iter().zip(plans) {
-        let panel_chart = chart
+    for (facet, panel_plan) in panels.iter().zip(panel_plans) {
+        let panel_plot = shared_plot
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
-        crate::decorations::apply::apply_grid(&panel_chart, &plan.result, theme, backend)?;
+        crate::decorations::apply::apply_grid(&panel_plot, &panel_plan.result, theme, backend)?;
     }
 
-    for (facet, plan) in panels.iter().zip(plans) {
-        let panel_chart = chart
+    for (facet, panel_plan) in panels.iter().zip(panel_plans) {
+        let panel_plot = shared_plot
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
-            plan.panel,
+            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            panel_plan.panel_box,
             theme,
         )
         .with_facet_scales(source.facet_scales_spec());
-        plan.chart_for_render(&panel_chart)
+        panel_plan
+            .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;
-        if !plan.result.significance_brackets.is_empty() {
+        if !panel_plan.result.significance_brackets.is_empty() {
             crate::significance::render(
-                &panel_chart,
-                &plan.result.significance_brackets,
+                &panel_plot,
+                &panel_plan.result.significance_brackets,
                 theme,
                 backend,
             )?;
         }
-        crate::decorations::apply::apply_axes(&panel_chart, &plan.result, theme, backend)?;
+        crate::decorations::apply::apply_axes(&panel_plot, &panel_plan.result, theme, backend)?;
         crate::decorations::apply::apply_planned_legend(
-            &panel_chart,
-            plan.legend.as_ref(),
+            &panel_plot,
+            panel_plan.legend.as_ref(),
             backend,
         )?;
-        draw_facet_strip(&panel_chart, facet, theme, backend)?;
+        draw_facet_strip(&panel_plot, facet, theme, backend)?;
     }
     draw_shared_facet_axis_labels(
         horizontal_axis_label,
@@ -81,12 +82,12 @@ pub(super) fn render_scene(
     reason = "small facet-line indexes are projected into backend coordinates"
 )]
 fn draw_facet_strip(
-    chart: &Plot,
+    plot: &Plot,
     facet: &FacetPanel,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let label = facet_label(chart, &facet.cell);
+    let label = facet_label(plot, &facet.cell);
     let lines = try_wrap_text(
         &label,
         theme.subtitle_font_size,
@@ -190,13 +191,13 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(chart: &Plot, cell: &FacetCell) -> String {
+pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> String {
     cell.iter()
         .map(|selector| {
             format!(
                 "{} = {}",
-                chart.resolve_label(&selector.variable),
-                chart.resolve_label(&selector.level)
+                plot.resolve_label(&selector.variable),
+                plot.resolve_label(&selector.level)
             )
         })
         .collect::<Vec<_>>()

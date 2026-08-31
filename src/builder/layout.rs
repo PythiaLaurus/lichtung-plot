@@ -36,11 +36,11 @@ impl Plot {
             crate::decorations::plan::LegendRole::Panel,
             theme,
         ) {
-            canvas.insets.left += plan.panel.x0 - cell.x0;
-            canvas.insets.right += cell.x1 - plan.panel.x1;
-            canvas.insets.bottom += plan.panel.y0 - cell.y0;
-            canvas.insets.top += cell.y1 - plan.panel.y1;
-            canvas.panel_box = plan.panel;
+            canvas.insets.left += plan.panel_box.x0 - cell.x0;
+            canvas.insets.right += cell.x1 - plan.panel_box.x1;
+            canvas.insets.bottom += plan.panel_box.y0 - cell.y0;
+            canvas.insets.top += cell.y1 - plan.panel_box.y1;
+            canvas.panel_box = plan.panel_box;
         }
         canvas
     }

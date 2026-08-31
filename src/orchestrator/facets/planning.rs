@@ -13,30 +13,25 @@ use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
 pub(super) fn canvas_layout(
-    chart: &Plot,
+    plot: &Plot,
     theme: &ResolvedTheme,
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
 ) -> Result<CanvasLayout, Error> {
     let mut canvas = CanvasLayout::measured_composed_canvas(
-        chart.width(),
-        chart.height(),
+        plot.width(),
+        plot.height(),
         theme,
         CanvasLayoutSpec {
-            has_title: theme.show_title
-                && chart.title_text().is_some_and(|value| !value.is_empty()),
+            has_title: theme.show_title && plot.title_text().is_some_and(|value| !value.is_empty()),
             has_subtitle: theme.show_subtitle
-                && chart.subtitle_text().is_some_and(|value| !value.is_empty()),
+                && plot.subtitle_text().is_some_and(|value| !value.is_empty()),
             has_caption: theme.show_caption
-                && chart.caption_text().is_some_and(|value| !value.is_empty()),
+                && plot.caption_text().is_some_and(|value| !value.is_empty()),
             has_x_label: horizontal_axis_label.is_some(),
             has_y_label: vertical_axis_label.is_some(),
         },
-        (
-            chart.title_text(),
-            chart.subtitle_text(),
-            chart.caption_text(),
-        ),
+        (plot.title_text(), plot.subtitle_text(), plot.caption_text()),
     )?;
     let baseline = (
         usize::from(horizontal_axis_label.is_some()),
@@ -157,7 +152,7 @@ fn adjusted_shared_axis_panel(
     reason = "facet measurement keeps the immutable grid, scale, theme, and backend inputs explicit"
 )]
 pub(super) fn layout_panels(
-    chart: &Plot,
+    plot: &Plot,
     kind: PlotKind,
     panels: &mut [FacetPanel],
     outer: PanelBox,
@@ -170,21 +165,21 @@ pub(super) fn layout_panels(
     let provisional = allocate_composed_grid(outer, rows, columns, &[], "facet layout")?;
     let mut measured = Vec::with_capacity(panels.len());
     for facet in panels.iter() {
-        let panel_chart = chart
+        let panel_plot = plot
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
-        let result = panel_chart.render_panel(
+        let result = panel_plot.render_panel(
             kind,
             PlotRenderContext::new(
-                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
                 provisional[facet.row * columns + facet.column],
                 theme,
             )
             .with_facet_scales(facet_scales),
             backend,
         )?;
-        let label = facet_label(&panel_chart, &facet.cell);
+        let label = facet_label(&panel_plot, &facet.cell);
         let cell = provisional[facet.row * columns + facet.column];
         let requirement = PanelRequirements::measure(&result.layout, theme, Some(&label), cell)?;
         measured.push((facet.row, facet.column, result, label, requirement));
@@ -217,7 +212,7 @@ pub(super) fn layout_panels(
 }
 
 pub(super) fn plan_panels(
-    mut chart: Plot,
+    mut plot: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
     outside_legend: Option<ResolvedLegend>,
@@ -227,12 +222,12 @@ pub(super) fn plan_panels(
 ) -> Result<(Plot, Vec<PanelPlan>), Error> {
     let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
     let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
-    let mut final_plans = Vec::new();
+    let mut panel_plans = Vec::new();
     for _ in 0..2 {
-        final_plans = Vec::with_capacity(panels.len());
+        panel_plans = Vec::with_capacity(panels.len());
         let mut legend_owner = outside_legend.is_none();
         for facet in panels {
-            let panel_chart = chart
+            let panel_plot = plot
                 .clone()
                 .with_render_scope(facet.render_scope())
                 .with_significance_subset(facet.significance_selectors());
@@ -242,13 +237,13 @@ pub(super) fn plan_panels(
                 LegendRole::Suppressed
             };
             let context = PlotRenderContext::new(
-                crate::data::PlotData::with_rows(&panel_chart, &facet.rows, &facet.source_rows),
+                crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
                 facet.panel,
                 theme,
             )
             .with_facet_scales(facet_scales);
             let plan = crate::decorations::plan::plan_panel_with_context(
-                &panel_chart,
+                &panel_plot,
                 kind,
                 role,
                 context,
@@ -262,26 +257,26 @@ pub(super) fn plan_panels(
             if plan.legend.is_some() {
                 legend_owner = false;
             }
-            final_plans.push(plan);
+            panel_plans.push(plan);
         }
         let planned_x = fix_x
-            .then(|| final_plans.iter().find_map(PanelPlan::planned_x_limits))
+            .then(|| panel_plans.iter().find_map(PanelPlan::planned_x_limits))
             .flatten();
         let planned_y = fix_y
-            .then(|| final_plans.iter().find_map(PanelPlan::planned_y_limits))
+            .then(|| panel_plans.iter().find_map(PanelPlan::planned_y_limits))
             .flatten();
         if planned_x.is_none() && planned_y.is_none() {
             break;
         }
         if let Some(limits) = planned_x {
-            chart = chart.with_planned_x_limits(limits);
+            plot = plot.with_planned_x_limits(limits);
         }
         if let Some(limits) = planned_y {
-            chart = chart.with_planned_y_limits(limits);
+            plot = plot.with_planned_y_limits(limits);
         }
     }
-    if let (Some(legend), Some(plan)) = (outside_legend, final_plans.first_mut()) {
+    if let (Some(legend), Some(plan)) = (outside_legend, panel_plans.first_mut()) {
         plan.legend = Some(legend);
     }
-    Ok((chart, final_plans))
+    Ok((plot, panel_plans))
 }

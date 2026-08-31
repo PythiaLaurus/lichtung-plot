@@ -106,14 +106,14 @@ fn grid_facet_cell_owns_exactly_one_significance_panel() {
     )
     .unwrap();
     let estimate = NumericValues::new("estimate", [1.0, 2.0, 1.5, 2.5, 3.0, 4.0, 3.5, 4.5]);
-    let chart = Plot::bar(factor, BarInput::estimates(estimate))
+    let plot = Plot::bar(factor, BarInput::estimates(estimate))
         .facet(FacetSpec::grid(row, column).unwrap())
         .significance([
             Significance::between("before", "after", SignificanceMark::OneStar)
                 .facet(FacetCell::grid("top", "right")),
         ]);
 
-    let svg = render_svg(chart, "grid-facet-cell").unwrap();
+    let svg = render_svg(plot, "grid-facet-cell").unwrap();
 
     assert_eq!(svg.matches("class=\"significance-bracket\"").count(), 1);
     let panels = clip_rects(&svg);

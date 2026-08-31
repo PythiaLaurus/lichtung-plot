@@ -253,7 +253,7 @@ fn deferred_backend_reports_cleanup_only_failure() {
 
 #[test]
 fn impossible_wrapped_caption_fails_before_backend_begin() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
@@ -261,7 +261,7 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
     .size(160, 120);
     let mut backend = RecordingBackend::default();
 
-    let error = chart.render_with_backend(&mut backend).unwrap_err();
+    let error = plot.render_with_backend(&mut backend).unwrap_err();
 
     assert!(error.to_string().contains("measured canvas text"));
     assert_eq!(backend.begins, 0);
@@ -273,14 +273,14 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));
     FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
     RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .theme(crate::Theme::Nature);
     let mut backend = RecordingBackend::default();
 
-    chart.render_with_backend(&mut backend).unwrap();
+    plot.render_with_backend(&mut backend).unwrap();
 
     assert_eq!(
         crate::theme::THEME_RESOLUTION_CALLS.with(std::cell::Cell::get),
@@ -302,13 +302,13 @@ fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));
     FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
     RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .theme(crate::Theme::CHI);
 
-    chart.preflight().unwrap();
+    plot.preflight().unwrap();
 
     assert_eq!(
         crate::theme::THEME_RESOLUTION_CALLS.with(std::cell::Cell::get),
@@ -910,8 +910,8 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
 }
 
 #[test]
-fn invalid_chart_preflights_before_output_path_access() {
-    let chart = Plot::scatter(
+fn invalid_plot_preflights_before_output_path_access() {
+    let plot = Plot::scatter(
         crate::NumericValues::new("x", [1.0, 2.0]),
         crate::NumericValues::new("y", [1.0]),
     );
@@ -922,7 +922,7 @@ fn invalid_chart_preflights_before_output_path_access() {
     ));
     let output = parent.join("missing").join("chart.svg");
 
-    let error = chart.svg(&output).err().unwrap();
+    let error = plot.svg(&output).err().unwrap();
 
     assert!(error
         .to_string()
@@ -932,13 +932,13 @@ fn invalid_chart_preflights_before_output_path_access() {
 
 #[test]
 fn invalid_canvas_alignment_fails_before_backend_begin() {
-    let chart = Plot::line(
+    let plot = Plot::line(
         crate::NumericValues::new("x", [1.0, 2.0]),
         crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
     );
     let canvas = crate::Canvas::grid(1, 1)
         .unwrap()
-        .panel(0, 0, chart)
+        .panel(0, 0, plot)
         .unwrap();
     let mut backend = RecordingBackend::default();
 
@@ -952,14 +952,14 @@ fn invalid_canvas_alignment_fails_before_backend_begin() {
 
 #[test]
 fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
-    let expected_panel = chart.canvas_layout().panel_box;
+    let expected_panel = plot.canvas_layout().panel_box;
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Scatter, &mut backend).unwrap();
+    plot.render_kind(PlotKind::Scatter, &mut backend).unwrap();
 
     assert_eq!((backend.begins, backend.ends), (1, 1));
     assert_eq!(
@@ -978,12 +978,11 @@ fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
 fn orchestration_runs_measurement_planning_and_render_passes() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
-    let chart = Plot::scatter(x.clone(), y.clone());
+    let plot = Plot::scatter(x.clone(), y.clone());
     RENDER_PANEL_CALLS.with(|calls| calls.set(0));
-    chart
-        .render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
+    plot.render_kind(PlotKind::Scatter, &mut RecordingBackend::default())
         .unwrap();
-    let chart_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
+    let plot_calls = RENDER_PANEL_CALLS.with(std::cell::Cell::get);
 
     let faceted = Plot::scatter(x.clone(), y.clone()).facet(crate::FacetSpec::column(
         CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
@@ -1029,7 +1028,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
 
     assert_eq!(
         (
-            chart_calls,
+            plot_calls,
             facet_calls,
             canvas_calls,
             preflight_calls,
@@ -1055,7 +1054,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
     let upper = NumericValues::new("upper", [1.5, 3.0, 4.0, 5.0]);
     let delta = NumericValues::new("delta", [1.0, -1.0, 2.0, 0.0]);
     let bounds = || crate::Bounds::new(lower.clone(), upper.clone());
-    let charts = vec![
+    let plots = vec![
         (
             PlotKind::Scatter,
             Plot::scatter(x.clone(), y.clone()).erase(),
@@ -1162,11 +1161,10 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             Plot::waterfall(group, delta, 10.0).erase(),
         ),
     ];
-    for (kind, chart) in charts {
+    for (kind, plot) in plots {
         let mut backend = RecordingBackend::default();
 
-        chart
-            .render_kind(kind, &mut backend)
+        plot.render_kind(kind, &mut backend)
             .unwrap_or_else(|error| panic!("{kind:?} failed: {error}"));
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
     }
@@ -1174,7 +1172,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
 
 #[test]
 fn heatmap_validation_failure_happens_before_canvas_begin() {
-    let chart = Plot::heatmap(
+    let plot = Plot::heatmap(
         CategoryValues::new("interval_group", ["a", "b", "c", "d"]).unwrap(),
         CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
         NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]),
@@ -1182,7 +1180,7 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
     .x_category_order(ValueSort::Ascending);
     let mut backend = RecordingBackend::default();
 
-    let error = chart
+    let error = plot
         .render_kind(PlotKind::Heatmap, &mut backend)
         .unwrap_err()
         .to_string();
@@ -1193,7 +1191,7 @@ fn heatmap_validation_failure_happens_before_canvas_begin() {
 
 #[test]
 fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
@@ -1202,7 +1200,7 @@ fn orchestration_does_not_end_a_canvas_that_failed_to_begin() {
         ..RecordingBackend::default()
     };
 
-    assert!(chart.render_kind(PlotKind::Scatter, &mut backend).is_err());
+    assert!(plot.render_kind(PlotKind::Scatter, &mut backend).is_err());
     assert_eq!((backend.begins, backend.ends), (1, 0));
 }
 
@@ -1222,15 +1220,15 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
     ];
     for limits in invalid_ranges {
         for x_axis in [true, false] {
-            let mut chart = Plot::scatter(x.clone(), y.clone());
-            chart = if x_axis {
-                chart.x_limits(limits.0, limits.1)
+            let mut plot = Plot::scatter(x.clone(), y.clone());
+            plot = if x_axis {
+                plot.x_limits(limits.0, limits.1)
             } else {
-                chart.y_limits(limits.0, limits.1)
+                plot.y_limits(limits.0, limits.1)
             };
             let mut backend = RecordingBackend::default();
 
-            assert!(chart.render_with_backend(&mut backend).is_err());
+            assert!(plot.render_with_backend(&mut backend).is_err());
             assert_eq!(backend.begins, 0, "limits={limits:?}, x_axis={x_axis}");
         }
     }
@@ -1239,7 +1237,7 @@ fn orchestration_rejects_every_invalid_axis_endpoint_before_begin() {
 #[test]
 fn orchestration_renders_valid_adjacent_subnormal_limits() {
     let upper = f64::from_bits(1);
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [0.0, upper]),
         NumericValues::new("y", [0.0, upper]),
     )
@@ -1247,7 +1245,7 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
     .y_limits(0.0, upper);
     let mut backend = RecordingBackend::default();
 
-    chart.render_with_backend(&mut backend).unwrap();
+    plot.render_with_backend(&mut backend).unwrap();
 
     assert_eq!((backend.begins, backend.ends), (1, 1));
     assert!(backend
@@ -1258,7 +1256,7 @@ fn orchestration_renders_valid_adjacent_subnormal_limits() {
 
 #[test]
 fn significance_annotations_are_drawn_after_marks_clip_closes() {
-    let chart = Plot::boxplot(
+    let plot = Plot::boxplot(
         CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap(),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
@@ -1269,14 +1267,14 @@ fn significance_annotations_are_drawn_after_marks_clip_closes() {
     )]);
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
+    plot.render_kind(PlotKind::Boxplot, &mut backend).unwrap();
 
     assert_eq!(backend.bracket_clip_depths, [0]);
 }
 
 #[test]
 fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [-1.0, 0.5, 2.0]),
         NumericValues::new("y", [0.5, 0.5, 0.5]),
     )
@@ -1284,7 +1282,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
     .y_limits(0.0, 1.0);
     let mut backend = RecordingBackend::default();
 
-    chart.render_kind(PlotKind::Scatter, &mut backend).unwrap();
+    plot.render_kind(PlotKind::Scatter, &mut backend).unwrap();
 
     let panel = backend.clips[0];
     assert!(backend.scatter_points[0].x < panel.x0);
@@ -1293,7 +1291,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
     let dir = test_directory("out-of-range-svg");
     let output = dir.join("canvas.svg");
-    chart.clone().svg_preserve_text(&output).unwrap();
+    plot.clone().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[0].x)));
     assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[2].x)));
@@ -1303,7 +1301,7 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
 
 #[test]
 fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
@@ -1316,7 +1314,7 @@ fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
         ..RecordingBackend::default()
     };
 
-    let error = chart
+    let error = plot
         .render_kind(PlotKind::Scatter, &mut backend)
         .unwrap_err()
         .to_string();
@@ -1329,7 +1327,7 @@ fn scope_and_canvas_cleanup_errors_preserve_primary_context() {
 
 #[test]
 fn decoration_layer_closes_after_inner_draw_error() {
-    let chart = Plot::scatter(
+    let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
@@ -1338,7 +1336,7 @@ fn decoration_layer_closes_after_inner_draw_error() {
         ..RecordingBackend::default()
     };
 
-    let error = chart
+    let error = plot
         .render_kind(PlotKind::Scatter, &mut backend)
         .unwrap_err()
         .to_string();
@@ -1352,7 +1350,7 @@ fn decoration_layer_closes_after_inner_draw_error() {
 #[test]
 fn matrix_legend_layer_closes_after_inner_draw_error() {
     let hue = CategoryValues::new("hue", ["h1", "h2", "h1", "h2"]).unwrap();
-    let chart = Plot::matrix(vec![
+    let plot = Plot::matrix(vec![
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     ])
@@ -1363,7 +1361,7 @@ fn matrix_legend_layer_closes_after_inner_draw_error() {
         ..RecordingBackend::default()
     };
 
-    let error = chart
+    let error = plot
         .render_kind(PlotKind::Matrix, &mut backend)
         .unwrap_err()
         .to_string();

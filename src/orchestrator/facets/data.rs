@@ -54,10 +54,10 @@ impl FacetPanel {
     }
 }
 
-pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
-    let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
-    let (row_column, column_column, wrap_column, wrap_columns) = chart.facet_columns();
+pub(super) fn facet_selectors(plot: &Plot) -> Result<FacetSelectors, Error> {
+    let source_rows = plot.configured_source_rows()?;
+    let data = source_rows.map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows));
+    let (row_column, column_column, wrap_column, wrap_columns) = plot.facet_columns();
     let variables = [row_column, column_column, wrap_column]
         .into_iter()
         .flatten()
@@ -66,10 +66,10 @@ pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
         .iter()
         .map(|column| data.column(column).map(crate::data::DataColumn::name))
         .collect::<Result<Vec<_>, _>>()?;
-    chart.resolve_label_domain("facet variables", variable_names.iter().copied())?;
+    plot.resolve_label_domain("facet variables", variable_names.iter().copied())?;
     let cells = if let Some(wrap) = wrap_column {
         let levels = stable_levels(crate::data::strict_strings(data, wrap, "facet")?);
-        chart.resolve_label_domain("facet levels", levels.iter().map(String::as_str))?;
+        plot.resolve_label_domain("facet levels", levels.iter().map(String::as_str))?;
         let columns = wrap_columns.unwrap_or(1);
         let variable = data.column(wrap)?.name().to_owned();
         levels
@@ -97,13 +97,13 @@ pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
             |column| crate::data::strict_strings(data, column, "facet").map(stable_levels),
         )?;
         if let Some(column) = row_column {
-            chart.resolve_label_domain(
+            plot.resolve_label_domain(
                 &format!("facet levels for {column:?}"),
                 row_levels.iter().map(String::as_str),
             )?;
         }
         if let Some(column) = column_column {
-            chart.resolve_label_domain(
+            plot.resolve_label_domain(
                 &format!("facet levels for {column:?}"),
                 column_levels.iter().map(String::as_str),
             )?;
@@ -150,82 +150,83 @@ pub(super) fn facet_selectors(chart: &Plot) -> Result<FacetSelectors, Error> {
     })
 }
 
-pub(super) fn base_chart(
-    chart: &Plot,
+pub(super) fn base_plot(
+    source: &Plot,
     kind: PlotKind,
     has_horizontal_axis_label: bool,
     has_vertical_axis_label: bool,
 ) -> Result<Plot, Error> {
-    let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
-    let mut base = chart.clone().without_facets();
+    let source_rows = source.configured_source_rows()?;
+    let data =
+        source_rows.map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows));
+    let mut base_plot = source.clone().without_facets();
     if has_horizontal_axis_label {
-        base = base.x_label("");
+        base_plot = base_plot.x_label("");
     }
     if has_vertical_axis_label {
-        base = base.y_label("");
+        base_plot = base_plot.y_label("");
     }
     let independent_collectives = matches!(
         kind,
         PlotKind::Density | PlotKind::Line | PlotKind::Interaction
     ) || kind == PlotKind::LinePath
-        && chart.line_path_style_spec() == crate::LinePathStyle::Hue;
+        && source.line_path_style_spec() == crate::LinePathStyle::Hue;
     if independent_collectives {
         let channels = crate::data::observed_collectives(
             data,
-            chart.group_col(),
-            chart.group_name(),
-            chart.hue_col(),
-            chart.hue_name(),
+            source.group_col(),
+            source.group_name(),
+            source.hue_col(),
+            source.hue_name(),
             None,
             "facet collective channels",
         )?;
-        base = base
+        base_plot = base_plot
             .with_global_group_levels(channels.group_levels)
             .with_global_hue_levels(channels.hue_levels)
             .with_global_collective_pairs(channels.identities);
-    } else if let Some(group_column) = chart.group_col() {
+    } else if let Some(group_column) = source.group_col() {
         let levels = stable_levels(crate::data::strict_strings(
             data,
             group_column,
             "facet graphical group",
         )?);
-        base = base.with_global_group_levels(levels);
+        base_plot = base_plot.with_global_group_levels(levels);
     }
     if kind == PlotKind::Trajectory {
-        if let Some(x_column) = chart.x_col() {
-            let source = chart.data().column(x_column).map_err(|error| {
+        if let Some(x_column) = source.x_col() {
+            let column = source.data().column(x_column).map_err(|error| {
                 Error::Data(format!("trajectory: column {x_column:?}: {error}"))
             })?;
-            if !source.is_numeric() {
+            if !column.is_numeric() {
                 let levels = stable_levels(crate::data::strict_normalized_strings(
                     data,
                     x_column,
                     "trajectory",
                     "condition",
                 )?);
-                base = base.with_global_line_condition_levels(levels);
+                base_plot = base_plot.with_global_line_condition_levels(levels);
             }
         }
     }
-    Ok(base)
+    Ok(base_plot)
 }
 
 pub(super) fn extract_panels(
-    chart: &Plot,
+    plot: &Plot,
     selectors: &FacetSelectors,
     provisional: &[PanelBox],
 ) -> Result<Vec<FacetPanel>, Error> {
-    let configured_source_rows = chart.configured_source_rows()?;
+    let configured_source_rows = plot.configured_source_rows()?;
     let mapped_data = configured_source_rows
-        .map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
+        .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows));
     let mut panels = Vec::new();
     for (panel_index, (row, column, cell)) in selectors.cells.iter().enumerate() {
         let columns_data = cell
             .iter()
             .map(|selector| crate::data::strict_strings(mapped_data, selector.column, "facet"))
             .collect::<Result<Vec<_>, _>>()?;
-        let source_indices = (0..chart.row_count())
+        let source_indices = (0..plot.row_count())
             .filter(|index| {
                 cell.iter().enumerate().all(|(selector_index, selector)| {
                     columns_data[selector_index][*index] == selector.level
@@ -258,11 +259,11 @@ pub(super) fn extract_panels(
 }
 
 pub(super) fn validate_significance_facet_anchors(
-    chart: &Plot,
+    plot: &Plot,
     panels: &[FacetPanel],
 ) -> Result<(), Error> {
     let dimensions = panels.first().map_or(0, |panel| panel.cell.len());
-    for annotation in chart.significance_annotations() {
+    for annotation in plot.significance_annotations() {
         let Some(cell) = annotation.facet_cell() else {
             return Err(Error::Render(
                 "faceted significance annotation must identify one FacetCell; annotations are never replicated across facets".into(),

@@ -155,7 +155,7 @@ impl Plot {
 }
 
 fn resolve_rendered_labels(
-    chart: &Plot,
+    plot: &Plot,
     result: &mut PlotRenderResult,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(), Error> {
@@ -168,7 +168,7 @@ fn resolve_rendered_labels(
             .map(|tick| tick.label.clone())
             .collect::<Vec<_>>();
         let display =
-            chart.resolve_label_domain("x-axis categories", raw.iter().map(String::as_str))?;
+            plot.resolve_label_domain("x-axis categories", raw.iter().map(String::as_str))?;
         for (tick, label) in result.layout.x_axis.ticks.iter_mut().zip(display) {
             tick.label = label;
         }
@@ -183,14 +183,14 @@ fn resolve_rendered_labels(
             .map(|tick| tick.label.clone())
             .collect::<Vec<_>>();
         let display =
-            chart.resolve_label_domain("y-axis categories", raw.iter().map(String::as_str))?;
+            plot.resolve_label_domain("y-axis categories", raw.iter().map(String::as_str))?;
         for (tick, label) in result.layout.y_axis.ticks.iter_mut().zip(display) {
             tick.label = label;
         }
         result.y_tick_keys = Some(raw);
     }
     if !result.legend_entries.is_empty() {
-        crate::decorations::legend::resolve_entries(chart, &mut result.legend_entries)?;
+        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
     }
     validate_axis_text(&result.layout, theme)?;
     Ok(())

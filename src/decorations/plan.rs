@@ -28,7 +28,7 @@ pub(crate) struct ResolvedLegend {
 }
 
 pub(crate) struct PanelPlan {
-    pub(crate) panel: PanelBox,
+    pub(crate) panel_box: PanelBox,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
     planned_x_limits: Option<(f64, f64)>,
@@ -36,27 +36,27 @@ pub(crate) struct PanelPlan {
 }
 
 pub(crate) fn plan_outside_legend(
-    chart: &Plot,
+    plot: &Plot,
     entries: &[crate::decorations::legend::LegendEntry],
     cell: PanelBox,
 ) -> Result<(PanelBox, ResolvedLegend), Error> {
     let legend = Legend::new(
         crate::decorations::legend::resolved_title(entries)?,
         entries.to_vec(),
-        f64::from(chart.width()),
-        f64::from(chart.height()),
+        f64::from(plot.width()),
+        f64::from(plot.height()),
     );
-    let panel = reserve_outside_panel(cell, &legend, chart.legend_position_spec())?;
+    let panel_box = reserve_outside_panel(cell, &legend, plot.legend_position_spec())?;
     let bounds = resolve_box(
         &legend,
-        chart.legend_position_spec(),
+        plot.legend_position_spec(),
         LegendDefault::LowestOverlap,
-        panel,
-        panel,
+        panel_box,
+        panel_box,
         cell,
         &[],
     );
-    Ok((panel, ResolvedLegend { legend, bounds }))
+    Ok((panel_box, ResolvedLegend { legend, bounds }))
 }
 
 pub(crate) const fn is_outside(position: LegendPosition) -> bool {
@@ -82,14 +82,14 @@ const fn is_inside(position: LegendPosition) -> bool {
 }
 
 impl PanelPlan {
-    pub(crate) fn chart_for_render<K: crate::kind::Marker>(&self, chart: &Plot<K>) -> Plot {
-        let chart = crate::kind::into_erased(chart.clone());
-        let chart = self.planned_x_limits.map_or_else(
-            || chart.clone(),
-            |limits| chart.clone().with_planned_x_limits(limits),
+    pub(crate) fn plot_with_planned_limits<K: crate::kind::Marker>(&self, plot: &Plot<K>) -> Plot {
+        let plot = crate::kind::into_erased(plot.clone());
+        let plot = self.planned_x_limits.map_or_else(
+            || plot.clone(),
+            |limits| plot.clone().with_planned_x_limits(limits),
         );
         self.planned_y_limits
-            .map_or(chart.clone(), |limits| chart.with_planned_y_limits(limits))
+            .map_or(plot.clone(), |limits| plot.with_planned_y_limits(limits))
     }
 
     pub(crate) const fn planned_x_limits(&self) -> Option<(f64, f64)> {
@@ -102,19 +102,19 @@ impl PanelPlan {
 }
 
 pub(crate) fn plan_panel<K: crate::kind::Marker>(
-    chart: &Plot<K>,
+    plot: &Plot<K>,
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<PanelPlan, Error> {
-    let chart = crate::kind::into_erased(chart.clone());
-    let source_rows = chart.configured_source_rows()?;
+    let plot = crate::kind::into_erased(plot.clone());
+    let source_rows = plot.configured_source_rows()?;
     let context = source_rows.map_or_else(
-        || PlotRenderContext::new(chart.data(), cell, theme),
-        |rows| PlotRenderContext::with_source_rows(chart.data(), rows, cell, theme),
+        || PlotRenderContext::new(plot.data(), cell, theme),
+        |rows| PlotRenderContext::with_source_rows(plot.data(), rows, cell, theme),
     );
-    plan_panel_with_context(&chart, kind, role, context, None)
+    plan_panel_with_context(&plot, kind, role, context, None)
 }
 
 #[expect(
@@ -123,54 +123,54 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
     reason = "the two-pass panel lifecycle keeps discovery, reservation, collision resolution, and frozen output together"
 )]
 pub(crate) fn plan_panel_with_context(
-    chart: &Plot,
+    plot: &Plot,
     kind: PlotKind,
     role: LegendRole,
     context: PlotRenderContext<'_>,
     legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
 ) -> Result<PanelPlan, Error> {
     let cell = context.panel;
-    let legend_default = kind.legend_default(chart.user_y_limits().is_some());
-    let mut planning_chart = match role {
-        LegendRole::Panel => chart.clone(),
-        LegendRole::Suppressed => chart.clone().with_suppressed_legend(),
+    let legend_default = kind.legend_default(plot.user_y_limits().is_some());
+    let mut planning_plot = match role {
+        LegendRole::Panel => plot.clone(),
+        LegendRole::Suppressed => plot.clone().with_suppressed_legend(),
     };
-    let (mut discovered, discovery) = discover_geometry(&planning_chart, kind, context)?;
+    let (mut discovered, discovery) = discover_geometry(&planning_plot, kind, context)?;
     if let Some(entries) = legend_entries {
         discovered.legend_entries = entries.to_vec();
     }
     let visible = role == LegendRole::Panel
-        && planning_chart.legend_policy_spec() != LegendPolicy::Hidden
+        && planning_plot.legend_policy_spec() != LegendPolicy::Hidden
         && !discovered.legend_entries.is_empty();
     let legend = if visible {
         Some(Legend::new(
             crate::decorations::legend::resolved_title(&discovered.legend_entries)?,
             discovered.legend_entries.clone(),
-            f64::from(planning_chart.width()),
-            f64::from(planning_chart.height()),
+            f64::from(planning_plot.width()),
+            f64::from(planning_plot.height()),
         ))
     } else {
         None
     };
-    let panel = legend.as_ref().map_or(Ok(cell), |legend| {
-        reserve_outside_panel(cell, legend, planning_chart.legend_position_spec())
+    let panel_box = legend.as_ref().map_or(Ok(cell), |legend| {
+        reserve_outside_panel(cell, legend, planning_plot.legend_position_spec())
     })?;
-    let panel = planning_chart.reserve_rewrapped_axis_titles(
+    let panel_box = planning_plot.reserve_rewrapped_axis_titles(
         kind,
         cell,
-        panel,
+        panel_box,
         &discovered.layout,
         context.theme,
     )?;
 
-    let (mut result, mut geometry) = if panel == cell {
+    let (mut result, mut geometry) = if panel_box == cell {
         (discovered, discovery)
     } else {
-        discover_geometry(&planning_chart, kind, context.with_panel(panel))?
+        discover_geometry(&planning_plot, kind, context.with_panel(panel_box))?
     };
     let mut planned_x_limits = None;
     let mut planned_y_limits = None;
-    let position = planning_chart.legend_position_spec();
+    let position = planning_plot.legend_position_spec();
     let mut auto_candidate_index = None;
     let mut resolved = legend
         .map(|legend| {
@@ -182,7 +182,7 @@ pub(crate) fn plan_panel_with_context(
                     legend_default,
                 );
                 let index = auto_candidate_avoiding_panel_text(
-                    &planning_chart,
+                    &planning_plot,
                     &result,
                     &legend,
                     preferred,
@@ -196,7 +196,7 @@ pub(crate) fn plan_panel_with_context(
                     position,
                     legend_default,
                     result.layout.projection.panel_box(),
-                    panel,
+                    panel_box,
                     cell,
                     geometry.bounds(),
                 )
@@ -207,7 +207,7 @@ pub(crate) fn plan_panel_with_context(
     if is_inside(position) {
         if let Some(legend) = &resolved {
             if let Some(corner) = crate::decorations::panel_text::conflicting_legend_corner(
-                &planning_chart,
+                &planning_plot,
                 &result.layout,
                 legend.bounds,
                 context.theme,
@@ -233,7 +233,7 @@ pub(crate) fn plan_panel_with_context(
         let expansion = if position == LegendPosition::Auto {
             let Some(clearance) = automatic_clearance(
                 kind,
-                chart,
+                plot,
                 &result,
                 &legend.legend,
                 geometry.bounds(),
@@ -253,13 +253,13 @@ pub(crate) fn plan_panel_with_context(
             clearance.expansion
         } else {
             let preferred_edge = clearance_edge(
-                planning_chart.legend_position_spec(),
+                planning_plot.legend_position_spec(),
                 legend.bounds,
                 result.layout.projection.panel_box(),
             );
             explicit_clearance(
                 kind,
-                chart,
+                plot,
                 &result,
                 &legend.legend,
                 legend.bounds,
@@ -278,15 +278,16 @@ pub(crate) fn plan_panel_with_context(
         };
         match axis {
             ClearanceAxis::X => {
-                planning_chart = planning_chart.with_planned_x_limits(limits);
+                planning_plot = planning_plot.with_planned_x_limits(limits);
                 planned_x_limits = Some(limits);
             }
             ClearanceAxis::Y => {
-                planning_chart = planning_chart.with_planned_y_limits(limits);
+                planning_plot = planning_plot.with_planned_y_limits(limits);
                 planned_y_limits = Some(limits);
             }
         }
-        (result, geometry) = discover_geometry(&planning_chart, kind, context.with_panel(panel))?;
+        (result, geometry) =
+            discover_geometry(&planning_plot, kind, context.with_panel(panel_box))?;
         let legend = resolved.take().expect("resolved legend exists").legend;
         let bounds = if position == LegendPosition::Auto {
             legend.inside_candidates(result.layout.projection.pixel_box())
@@ -297,7 +298,7 @@ pub(crate) fn plan_panel_with_context(
                 position,
                 legend_default,
                 result.layout.projection.panel_box(),
-                panel,
+                panel_box,
                 cell,
                 geometry.bounds(),
             )
@@ -324,7 +325,7 @@ pub(crate) fn plan_panel_with_context(
         }
     }
     Ok(PanelPlan {
-        panel,
+        panel_box,
         result,
         legend: resolved,
         planned_x_limits,
@@ -333,26 +334,26 @@ pub(crate) fn plan_panel_with_context(
 }
 
 fn record_brackets(
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     theme: &crate::theme::ResolvedTheme,
     geometry: &mut GeometryBackend,
 ) -> Result<(), Error> {
     if !result.significance_brackets.is_empty() {
-        crate::significance::render(chart, &result.significance_brackets, theme, geometry)?;
+        crate::significance::render(plot, &result.significance_brackets, theme, geometry)?;
     }
     Ok(())
 }
 
 fn discover_geometry(
-    chart: &Plot,
+    plot: &Plot,
     kind: PlotKind,
     context: PlotRenderContext<'_>,
 ) -> Result<(PlotRenderResult, GeometryBackend), Error> {
     let mut geometry = GeometryBackend::default();
-    geometry.begin(chart.width(), chart.height())?;
-    let result = render(chart, kind, context, &mut geometry).and_then(|result| {
-        record_brackets(chart, &result, context.theme, &mut geometry)?;
+    geometry.begin(plot.width(), plot.height())?;
+    let result = render(plot, kind, context, &mut geometry).and_then(|result| {
+        record_brackets(plot, &result, context.theme, &mut geometry)?;
         Ok(result)
     });
     let result = backend::finish_scope(result, geometry.end(), "geometry discovery")?;
@@ -415,7 +416,7 @@ fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) 
 )]
 fn automatic_clearance(
     kind: PlotKind,
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -426,7 +427,7 @@ fn automatic_clearance(
     match default {
         LegendDefault::TopRight(clearance) => top_right_clearance(
             kind,
-            chart,
+            plot,
             result,
             legend,
             geometry,
@@ -435,7 +436,7 @@ fn automatic_clearance(
             theme,
         ),
         LegendDefault::LowestOverlap | LegendDefault::SelfManaged => {
-            lowest_overlap_clearance(kind, chart, result, legend, geometry, theme)
+            lowest_overlap_clearance(kind, plot, result, legend, geometry, theme)
         }
     }
 }
@@ -446,7 +447,7 @@ fn automatic_clearance(
 )]
 fn top_right_clearance(
     kind: PlotKind,
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -463,7 +464,7 @@ fn top_right_clearance(
         .skip(current_candidate)
     {
         if crate::decorations::panel_text::conflicting_legend_corner(
-            chart,
+            plot,
             &result.layout,
             bounds,
             theme,
@@ -488,7 +489,7 @@ fn top_right_clearance(
             });
         }
         for edge in candidate_edges(candidate_index, clearance) {
-            if let Some(expansion) = expanded_axis_limits(kind, chart, result, legend, bounds, edge)
+            if let Some(expansion) = expanded_axis_limits(kind, plot, result, legend, bounds, edge)
             {
                 return Some(AutomaticClearance {
                     candidate_index,
@@ -517,7 +518,7 @@ fn candidate_edges(index: usize, clearance: LegendClearance) -> [ClearanceEdge; 
 
 fn lowest_overlap_clearance(
     kind: PlotKind,
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     geometry: &[crate::render::geometry::GeometryBox],
@@ -536,7 +537,7 @@ fn lowest_overlap_clearance(
     for (candidate_index, bounds) in candidates.into_iter().enumerate() {
         if !legend_fits_panel(bounds, result.layout.projection.panel_box())
             || crate::decorations::panel_text::conflicting_legend_corner(
-                chart,
+                plot,
                 &result.layout,
                 bounds,
                 theme,
@@ -547,7 +548,7 @@ fn lowest_overlap_clearance(
         }
         for (edge_index, edge) in edges[candidate_index].into_iter().enumerate() {
             let Some((axis, limits)) =
-                expanded_axis_limits(kind, chart, result, legend, bounds, edge)
+                expanded_axis_limits(kind, plot, result, legend, bounds, edge)
             else {
                 continue;
             };
@@ -594,7 +595,7 @@ fn lowest_overlap_clearance(
 
 fn explicit_clearance(
     kind: PlotKind,
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -610,7 +611,7 @@ fn explicit_clearance(
     .into_iter()
     .enumerate()
     .filter_map(|(index, edge)| {
-        let (axis, limits) = expanded_axis_limits(kind, chart, result, legend, bounds, edge)?;
+        let (axis, limits) = expanded_axis_limits(kind, plot, result, legend, bounds, edge)?;
         let range = match axis {
             ClearanceAxis::X => result.layout.projection.x_range(),
             ClearanceAxis::Y => result.layout.projection.y_range(),
@@ -665,7 +666,7 @@ fn overlap_score_within_panel(
 
 fn expanded_axis_limits(
     kind: PlotKind,
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     bounds: LegendBox,
@@ -700,8 +701,8 @@ fn expanded_axis_limits(
         ),
         _ => return None,
     };
-    if matches!(axis, ClearanceAxis::X) && chart.user_x_limits().is_some()
-        || matches!(axis, ClearanceAxis::Y) && chart.user_y_limits().is_some()
+    if matches!(axis, ClearanceAxis::X) && plot.user_x_limits().is_some()
+        || matches!(axis, ClearanceAxis::Y) && plot.user_y_limits().is_some()
     {
         return None;
     }
@@ -740,16 +741,16 @@ fn bar_expansion_moves_zero_anchor(
 }
 
 fn render(
-    chart: &Plot,
+    plot: &Plot,
     kind: PlotKind,
     context: PlotRenderContext<'_>,
     backend: &mut GeometryBackend,
 ) -> Result<PlotRenderResult, Error> {
-    chart.render_panel(kind, context, backend)
+    plot.render_panel(kind, context, backend)
 }
 
 fn auto_candidate_avoiding_panel_text(
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     legend: &Legend,
     preferred: usize,
@@ -759,7 +760,7 @@ fn auto_candidate_avoiding_panel_text(
     for offset in 0..candidates.len() {
         let index = (preferred + offset) % candidates.len();
         if crate::decorations::panel_text::conflicting_legend_corner(
-            chart,
+            plot,
             &result.layout,
             candidates[index],
             theme,

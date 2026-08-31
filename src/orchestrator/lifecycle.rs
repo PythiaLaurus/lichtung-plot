@@ -22,8 +22,8 @@ enum PlotScenePlan {
 }
 
 struct UnfacetedPlotPlan {
-    chart: Plot,
-    panel: PanelPlan,
+    plot: Plot,
+    panel_plan: PanelPlan,
 }
 
 impl<'a> PlotPlan<'a> {
@@ -87,15 +87,15 @@ impl UnfacetedPlotPlan {
             PlotKind::Matrix => crate::plots::matrix::panel_box(source, theme)?,
             _ => source.measured_canvas_layout(theme)?.panel_box,
         };
-        let panel = crate::decorations::plan::plan_panel(
+        let panel_plan = crate::decorations::plan::plan_panel(
             source,
             kind,
             cell,
             crate::decorations::plan::LegendRole::Panel,
             theme,
         )?;
-        let chart = panel.chart_for_render(source);
-        Ok(Self { chart, panel })
+        let plot = panel_plan.plot_with_planned_limits(source);
+        Ok(Self { plot, panel_plan })
     }
 
     fn render(
@@ -105,45 +105,53 @@ impl UnfacetedPlotPlan {
         theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        if self.panel.result.decoration_mode == DecorationMode::Standard {
-            crate::decorations::apply::apply_grid(source, &self.panel.result, theme, backend)?;
+        if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
+            crate::decorations::apply::apply_grid(source, &self.panel_plan.result, theme, backend)?;
         }
-        let source_rows = self.chart.configured_source_rows()?;
+        let source_rows = self.plot.configured_source_rows()?;
         let context = source_rows.map_or_else(
-            || PlotRenderContext::new(self.chart.data(), self.panel.panel, theme),
+            || PlotRenderContext::new(self.plot.data(), self.panel_plan.panel_box, theme),
             |rows| {
                 PlotRenderContext::with_source_rows(
-                    self.chart.data(),
+                    self.plot.data(),
                     rows,
-                    self.panel.panel,
+                    self.panel_plan.panel_box,
                     theme,
                 )
             },
         );
-        let rendered = self.chart.render_panel(kind, context, backend)?;
+        let rendered = self.plot.render_panel(kind, context, backend)?;
 
-        if !self.panel.result.significance_brackets.is_empty() {
+        if !self.panel_plan.result.significance_brackets.is_empty() {
             crate::significance::render(
                 source,
-                &self.panel.result.significance_brackets,
+                &self.panel_plan.result.significance_brackets,
                 theme,
                 backend,
             )?;
         }
 
-        match self.panel.result.decoration_mode {
+        match self.panel_plan.result.decoration_mode {
             DecorationMode::Standard => {
-                crate::decorations::apply::apply_axes(source, &self.panel.result, theme, backend)?;
+                crate::decorations::apply::apply_axes(
+                    source,
+                    &self.panel_plan.result,
+                    theme,
+                    backend,
+                )?;
                 crate::decorations::apply::apply_planned_legend(
                     source,
-                    self.panel.legend.as_ref(),
+                    self.panel_plan.legend.as_ref(),
                     backend,
                 )?;
                 crate::decorations::apply::apply_canvas_text(source, theme, backend)?;
             }
             DecorationMode::SelfManaged => {}
         }
-        debug_assert_eq!(rendered.decoration_mode, self.panel.result.decoration_mode);
+        debug_assert_eq!(
+            rendered.decoration_mode,
+            self.panel_plan.result.decoration_mode
+        );
         Ok(())
     }
 }

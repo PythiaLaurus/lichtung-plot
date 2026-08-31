@@ -1,5 +1,5 @@
 use super::{
-    configured_bar_chart, Backend, BarValues, Error, FillStyle, LegendPolicy, LegendPosition,
+    configured_bar_plot, Backend, BarValues, Error, FillStyle, LegendPolicy, LegendPosition,
     LineStyle, NullBackend, PanelBox, Plot, PlotKind, Point2D, RecordingBackend,
 };
 use crate::{CategoryValues, NumericValues};
@@ -393,10 +393,10 @@ fn bar_mean_of_repeated_maximum_values_remains_renderable() {
         series: None,
     };
     for kind in [PlotKind::Bar, PlotKind::HorizontalBar] {
-        let chart = configured_bar_chart(&data, kind);
+        let plot = configured_bar_plot(&data, kind);
         let mut backend = RecordingBackend::default();
 
-        chart.render_kind(kind, &mut backend).unwrap();
+        plot.render_kind(kind, &mut backend).unwrap();
 
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
     }
@@ -431,10 +431,10 @@ fn stacked_bars_reject_unrepresentable_offsets_before_begin() {
         series: Some(CategoryValues::new("hue", ["first", "second"]).unwrap()),
     };
     for kind in [PlotKind::StackedBar, PlotKind::StackedHorizontalBar] {
-        let chart = configured_bar_chart(&data, kind);
+        let plot = configured_bar_plot(&data, kind);
         let mut backend = RecordingBackend::default();
 
-        let error = chart.render_kind(kind, &mut backend).unwrap_err();
+        let error = plot.render_kind(kind, &mut backend).unwrap_err();
 
         assert!(error.to_string().contains("stack geometry"));
         assert_eq!(backend.begins, 0, "{kind:?}");
@@ -501,10 +501,10 @@ fn every_bar_family_rejects_missing_and_non_finite_values_before_begin() {
             PlotKind::StackedBar,
             PlotKind::StackedHorizontalBar,
         ] {
-            let chart = configured_bar_chart(&data, kind);
+            let plot = configured_bar_plot(&data, kind);
             let mut backend = RecordingBackend::default();
 
-            let error = chart.render_kind(kind, &mut backend).unwrap_err();
+            let error = plot.render_kind(kind, &mut backend).unwrap_err();
 
             assert!(error.to_string().contains("source row 1"), "{kind:?}");
             assert_eq!(backend.begins, 0, "{kind:?}");

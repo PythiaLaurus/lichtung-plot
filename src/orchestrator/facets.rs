@@ -16,9 +16,9 @@ mod planning;
 mod rendering;
 
 pub(super) struct FacetPlan {
-    chart: Plot,
+    plot: Plot,
     panels: Vec<data::FacetPanel>,
-    plans: Vec<crate::decorations::plan::PanelPlan>,
+    panel_plans: Vec<crate::decorations::plan::PanelPlan>,
     horizontal_axis_label: Option<String>,
     vertical_axis_label: Option<String>,
     outer: crate::layout::PanelBox,
@@ -59,7 +59,7 @@ impl FacetPlan {
             &[],
             "facet layout",
         )?;
-        let base = data::base_chart(
+        let base_plot = data::base_plot(
             source,
             kind,
             horizontal_axis_label.is_some(),
@@ -69,21 +69,24 @@ impl FacetPlan {
         data::validate_significance_facet_anchors(source, &panels)?;
         let facet_scales = source.facet_scales_spec();
 
-        let (base, preflight) = validate_with_null_backend(
+        let (base_plot, preflight) = validate_with_null_backend(
             source.width(),
             source.height(),
             "facet panel preflight",
             |backend| {
-                legend::preflight_coordinated_panels(source, base, kind, &panels, theme, backend)
+                legend::preflight_coordinated_panels(
+                    source, base_plot, kind, &panels, theme, backend,
+                )
             },
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
         let horizontal_domain = legend::resolve_shared_facet_axis(&preflight, fix_x, true)?;
         let vertical_domain = legend::resolve_shared_facet_axis(&preflight, fix_y, false)?;
-        let shared = base.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
+        let shared_plot =
+            base_plot.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
         let (reserved_outer, mut outside_legend, legend_entries) =
-            legend::reserve_shared_legend(source, &shared, &preflight, outer)?;
+            legend::reserve_shared_legend(source, &shared_plot, &preflight, outer)?;
         outer = planning::reserve_rewrapped_shared_axis_titles(
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
@@ -105,7 +108,7 @@ impl FacetPlan {
             "facet layout preflight",
             |backend| {
                 planning::layout_panels(
-                    &shared,
+                    &shared_plot,
                     kind,
                     &mut panels,
                     outer,
@@ -116,9 +119,9 @@ impl FacetPlan {
                 )
             },
         )?;
-        let shared = shared.with_measured_axis_text();
-        let (shared, plans) = planning::plan_panels(
-            shared,
+        let shared_plot = shared_plot.with_measured_axis_text();
+        let (shared_plot, panel_plans) = planning::plan_panels(
+            shared_plot,
             kind,
             &panels,
             outside_legend,
@@ -127,9 +130,9 @@ impl FacetPlan {
             theme,
         )?;
         Ok(Self {
-            chart: shared,
+            plot: shared_plot,
             panels,
-            plans,
+            panel_plans,
             horizontal_axis_label,
             vertical_axis_label,
             outer,
@@ -146,10 +149,10 @@ impl FacetPlan {
     ) -> Result<(), Error> {
         rendering::render_scene(
             source,
-            &self.chart,
+            &self.plot,
             kind,
             &self.panels,
-            &self.plans,
+            &self.panel_plans,
             self.horizontal_axis_label.as_deref(),
             self.vertical_axis_label.as_deref(),
             self.outer,

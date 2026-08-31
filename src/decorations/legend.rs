@@ -92,11 +92,9 @@ impl LegendIdentity {
         }
     }
 
-    fn resolve(&self, chart: &crate::Plot) -> (String, String) {
+    fn resolve(&self, plot: &crate::Plot) -> (String, String) {
         match self {
-            Self::Single { field, value } => {
-                (chart.resolve_label(field), chart.resolve_label(value))
-            }
+            Self::Single { field, value } => (plot.resolve_label(field), plot.resolve_label(value)),
             Self::Pair {
                 group_field,
                 group_value,
@@ -105,13 +103,13 @@ impl LegendIdentity {
             } => (
                 format!(
                     "{} × {}",
-                    chart.resolve_label(group_field),
-                    chart.resolve_label(hue_field)
+                    plot.resolve_label(group_field),
+                    plot.resolve_label(hue_field)
                 ),
                 format!(
                     "{}, {}",
-                    chart.resolve_label(group_value),
-                    chart.resolve_label(hue_value)
+                    plot.resolve_label(group_value),
+                    plot.resolve_label(hue_value)
                 ),
             ),
             Self::Literal { title, value } => (title.clone(), value.clone()),
@@ -250,8 +248,8 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn resolve(&mut self, chart: &crate::Plot) {
-        (self.title, self.label) = self.identity.resolve(chart);
+    pub(crate) fn resolve(&mut self, plot: &crate::Plot) {
+        (self.title, self.label) = self.identity.resolve(plot);
     }
 
     pub(crate) fn identity(&self) -> &LegendIdentity {
@@ -285,11 +283,11 @@ impl LegendEntry {
 }
 
 pub(crate) fn resolve_entries(
-    chart: &crate::Plot,
+    plot: &crate::Plot,
     entries: &mut Vec<LegendEntry>,
 ) -> Result<(), Error> {
     for entry in entries.iter_mut() {
-        entry.resolve(chart);
+        entry.resolve(plot);
     }
     *entries = merge_exact_entries(std::mem::take(entries), "plot legend")?;
     Ok(())

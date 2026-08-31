@@ -11,14 +11,14 @@ use crate::theme::ResolvedTheme;
 
 /// Draw one panel's grid before its marks.
 pub(crate) fn apply_grid(
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer_role(
         backend,
-        &chart.layer_name("grid"),
+        &plot.layer_name("grid"),
         LayerRole::Grid,
         |backend| result.layout.draw_grid_below(theme, backend),
     )
@@ -26,42 +26,42 @@ pub(crate) fn apply_grid(
 
 /// Draw one panel's axes after its marks.
 pub(crate) fn apply_axes(
-    chart: &Plot,
+    plot: &Plot,
     result: &PlotRenderResult,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    with_layer(backend, &chart.layer_name("axes"), |backend| {
+    with_layer(backend, &plot.layer_name("axes"), |backend| {
         result.layout.draw_decorations(theme, backend)
     })
 }
 
 pub(crate) fn apply_canvas_text(
-    chart: &Plot,
+    plot: &Plot,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let mut title_block = TitleBlock::new().font_family(theme.font_family.clone());
     if theme.show_title {
-        if let Some(title) = chart.title_text() {
+        if let Some(title) = plot.title_text() {
             title_block = title_block.title(title.to_owned());
         }
     }
     if theme.show_subtitle {
-        if let Some(subtitle) = chart.subtitle_text() {
+        if let Some(subtitle) = plot.subtitle_text() {
             title_block = title_block.subtitle(subtitle.to_owned());
         }
     }
     if theme.show_caption {
-        if let Some(caption) = chart.caption_text() {
+        if let Some(caption) = plot.caption_text() {
             title_block = title_block.caption(caption.to_owned());
         }
     }
     if title_block.has_content() {
         title_block.draw(
             backend,
-            chart.width(),
-            &chart.measured_canvas_layout(theme)?,
+            plot.width(),
+            &plot.measured_canvas_layout(theme)?,
             theme,
         )?;
     }
@@ -70,7 +70,7 @@ pub(crate) fn apply_canvas_text(
 
 /// Draw a legend whose dimensions and position were frozen during preflight.
 pub(crate) fn apply_planned_legend(
-    chart: &Plot,
+    plot: &Plot,
     legend: Option<&PlannedLegend>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -78,7 +78,7 @@ pub(crate) fn apply_planned_legend(
         return Ok(());
     };
     let (x, y) = resolved.bounds.anchor();
-    with_layer(backend, &chart.layer_name("legend"), |backend| {
+    with_layer(backend, &plot.layer_name("legend"), |backend| {
         resolved.legend.draw(backend, x, y)
     })
 }

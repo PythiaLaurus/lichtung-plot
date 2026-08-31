@@ -42,7 +42,7 @@ struct PlannedCanvasPanel {
 struct CanvasPlan {
     theme: Box<ResolvedTheme>,
     plot_themes: Vec<Option<Box<ResolvedTheme>>>,
-    charts: Vec<Option<Plot>>,
+    plots: Vec<Option<Plot>>,
     canvas_layout: CanvasLayout,
     full_outer: PanelBox,
     outer: PanelBox,
@@ -234,7 +234,7 @@ impl Canvas {
         mut self,
         row: usize,
         column: usize,
-        chart: Plot<K>,
+        plot: Plot<K>,
     ) -> Result<Self, Error> {
         if row >= self.rows || column >= self.columns {
             return Err(Error::Data(format!(
@@ -248,7 +248,7 @@ impl Canvas {
                 "canvas panel ({row}, {column}) is already occupied"
             )));
         }
-        self.panels[index] = Some(chart.erase());
+        self.panels[index] = Some(plot.erase());
         Ok(self)
     }
 
@@ -489,10 +489,10 @@ impl Canvas {
                 "canvas shared legend gap requires CanvasLegendPolicy::Shared".into(),
             ));
         }
-        for chart in self.panels.iter().flatten() {
-            let kind = chart.kind();
-            chart.validate_configuration(kind)?;
-            if chart.has_facets() {
+        for plot in self.panels.iter().flatten() {
+            let kind = plot.kind();
+            plot.validate_configuration(kind)?;
+            if plot.has_facets() {
                 return Err(Error::Render(
                     "a faceted chart cannot be nested inside a composed canvas".into(),
                 ));
@@ -501,9 +501,9 @@ impl Canvas {
         for title in &self.row_titles {
             let start = title.start * self.columns;
             let end = start + self.columns;
-            if self.panels[start..end].iter().flatten().any(|chart| {
-                chart.title_text().is_some_and(|text| !text.is_empty())
-                    || chart.subtitle_text().is_some_and(|text| !text.is_empty())
+            if self.panels[start..end].iter().flatten().any(|plot| {
+                plot.title_text().is_some_and(|text| !text.is_empty())
+                    || plot.subtitle_text().is_some_and(|text| !text.is_empty())
             }) {
                 return Err(Error::Data(format!(
                     "canvas row title cannot coexist with a panel title or subtitle in row {}",
@@ -596,10 +596,9 @@ impl Canvas {
         let plot_themes = self
             .panels
             .iter()
-            .map(|chart| {
-                chart
-                    .as_ref()
-                    .map(|chart| Box::new(chart.theme_spec().resolve()))
+            .map(|plot| {
+                plot.as_ref()
+                    .map(|plot| Box::new(plot.theme_spec().resolve()))
             })
             .collect::<Vec<_>>();
         #[cfg(test)]
@@ -640,33 +639,30 @@ impl Canvas {
         } else {
             Vec::new()
         };
-        let mut charts = self
+        let mut plots = self
             .panels
             .iter()
             .enumerate()
-            .map(|(index, chart)| {
-                chart.as_ref().map(|chart| {
-                    let chart = self.labels.as_ref().map_or_else(
-                        || chart.clone(),
-                        |labels| chart.clone().labels(labels.clone()),
+            .map(|(index, plot)| {
+                plot.as_ref().map(|plot| {
+                    let plot = self.labels.as_ref().map_or_else(
+                        || plot.clone(),
+                        |labels| plot.clone().labels(labels.clone()),
                     );
-                    let chart = hue_groups
+                    let plot = hue_groups
                         .iter()
-                        .find(|(dimension, _)| {
-                            Some(dimension.as_str()) == chart.hue_dimension_key()
-                        })
+                        .find(|(dimension, _)| Some(dimension.as_str()) == plot.hue_dimension_key())
                         .map_or_else(
-                            || chart.clone(),
-                            |(_, levels)| chart.clone().with_global_hue_levels(levels.clone()),
+                            || plot.clone(),
+                            |(_, levels)| plot.clone().with_global_hue_levels(levels.clone()),
                         );
-                    chart
-                        .with_canvas_size(self.width, self.height)
+                    plot.with_canvas_size(self.width, self.height)
                         .with_render_scope(format!("panel-{index}"))
                 })
             })
             .collect::<Vec<_>>();
         let shared_legend = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::preflight_shared_legend(&charts, &plot_themes, full_outer)?
+            Self::preflight_shared_legend(&plots, &plot_themes, full_outer)?
         } else {
             None
         };
@@ -686,7 +682,7 @@ impl Canvas {
             let gap = self.resolved_shared_legend_gap(&legend);
             outer.x1 -= legend.compute_box_width() + gap + legend.metrics.pad;
         }
-        let header_theme_index = charts.iter().position(Option::is_some);
+        let header_theme_index = plots.iter().position(Option::is_some);
         let header_theme = header_theme_index
             .and_then(|index| plot_themes[index].as_deref())
             .unwrap_or(theme.as_ref());
@@ -720,7 +716,7 @@ impl Canvas {
         if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
             for row in 0..self.rows {
                 let first_index = row * self.columns;
-                let first = charts[first_index].as_ref().ok_or_else(|| {
+                let first = plots[first_index].as_ref().ok_or_else(|| {
                     Error::Data(format!(
                         "canvas row {row} requires a configured first-column panel for shared category labels"
                     ))
@@ -735,10 +731,10 @@ impl Canvas {
                     expected_theme,
                 );
                 let expected =
-                    chart_category_domain(first, provisional[first_index], expected_theme)?;
+                    plot_category_domain(first, provisional[first_index], expected_theme)?;
                 for column in 1..self.columns {
                     let index = first_index + column;
-                    let chart = charts[index].as_ref().ok_or_else(|| {
+                    let plot = plots[index].as_ref().ok_or_else(|| {
                         Error::Data(format!(
                             "canvas row {row} requires panel ({row}, {column}) for shared category labels"
                         ))
@@ -748,26 +744,26 @@ impl Canvas {
                         .expect("configured canvas panel has a resolved theme");
                     #[cfg(test)]
                     record_canvas_theme(index, "shared-category-label-validation", theme);
-                    if chart_category_domain(chart, provisional[index], theme)? != expected {
+                    if plot_category_domain(plot, provisional[index], theme)? != expected {
                         return Err(Error::Data(format!(
                             "canvas row {row} category domains differ across panels"
                         )));
                     }
-                    charts[index] = Some(chart.clone().with_y_tick_labels_visible(false));
+                    plots[index] = Some(plot.clone().with_y_tick_labels_visible(false));
                 }
             }
         }
         if !self.x_range_groups.is_empty() {
-            let mut ranges = vec![None; charts.len()];
-            for (index, chart) in charts.iter().enumerate() {
-                let Some(chart) = chart else { continue };
-                let kind = chart.kind();
+            let mut ranges = vec![None; plots.len()];
+            for (index, plot) in plots.iter().enumerate() {
+                let Some(plot) = plot else { continue };
+                let kind = plot.kind();
                 let theme = plot_themes[index]
                     .as_deref()
                     .expect("configured canvas panel has a resolved theme");
                 #[cfg(test)]
                 record_canvas_theme(index, "grouped-x-range-plan", theme);
-                let result = chart.preflight_panel(kind, provisional[index], theme)?;
+                let result = plot.preflight_panel(kind, provisional[index], theme)?;
                 ranges[index] = Some(result.layout.projection.x_range());
             }
             for group in &self.x_range_groups {
@@ -784,23 +780,23 @@ impl Canvas {
                 }
                 let shared = shared.expect("validated nonempty x-range group");
                 for &index in group {
-                    let chart = charts[index].as_ref().expect("validated grouped panel");
-                    charts[index] = Some(chart.clone().with_planned_x_limits(shared));
+                    let plot = plots[index].as_ref().expect("validated grouped panel");
+                    plots[index] = Some(plot.clone().with_planned_x_limits(shared));
                 }
             }
         }
         let mut measured = Vec::new();
-        for (index, chart) in charts.iter().enumerate() {
-            let Some(chart) = chart else { continue };
+        for (index, plot) in plots.iter().enumerate() {
+            let Some(plot) = plot else { continue };
             let row = index / self.columns;
             let column = index % self.columns;
-            let kind = chart.kind();
+            let kind = plot.kind();
             let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "panel-measure", theme);
-            let result = chart.preflight_panel(kind, provisional[index], theme)?;
+            let result = plot.preflight_panel(kind, provisional[index], theme)?;
             if result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
@@ -808,12 +804,12 @@ impl Canvas {
             }
             let title = theme
                 .show_title
-                .then(|| chart.title_text())
+                .then(|| plot.title_text())
                 .flatten()
                 .filter(|title| !title.is_empty());
             let subtitle = theme
                 .show_subtitle
-                .then(|| chart.subtitle_text())
+                .then(|| plot.subtitle_text())
                 .flatten()
                 .filter(|subtitle| !subtitle.is_empty());
             let requirement = PanelRequirements::measure_header(
@@ -840,7 +836,7 @@ impl Canvas {
         let mut requirements = measured
             .iter()
             .map(|(index, row, column, _, result, _)| {
-                let chart = charts[*index]
+                let plot = plots[*index]
                     .as_ref()
                     .expect("measured canvas panel remains configured");
                 let theme = plot_themes[*index]
@@ -848,12 +844,12 @@ impl Canvas {
                     .expect("configured canvas panel has a resolved theme");
                 let title = theme
                     .show_title
-                    .then(|| chart.title_text())
+                    .then(|| plot.title_text())
                     .flatten()
                     .filter(|title| !title.is_empty());
                 let subtitle = theme
                     .show_subtitle
-                    .then(|| chart.subtitle_text())
+                    .then(|| plot.subtitle_text())
                     .flatten()
                     .filter(|subtitle| !subtitle.is_empty());
                 Ok::<_, Error>((
@@ -962,13 +958,13 @@ impl Canvas {
             });
         }
 
-        for chart in charts.iter_mut().flatten() {
-            *chart = chart.clone().with_measured_composed_axis_text();
+        for plot in plots.iter_mut().flatten() {
+            *plot = plot.clone().with_measured_composed_axis_text();
         }
 
         let mut panels = Vec::with_capacity(measured.len());
         for (index, _, _, kind, _, _) in measured {
-            let chart = charts[index]
+            let plot = plots[index]
                 .as_ref()
                 .expect("measured canvas panel remains configured");
             let cell = cells[index];
@@ -982,8 +978,8 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "panel-plan", theme);
-            let plan = crate::decorations::plan::plan_panel(chart, kind, cell, role, theme)?;
-            if plan.result.decoration_mode == DecorationMode::SelfManaged {
+            let panel_plan = crate::decorations::plan::plan_panel(plot, kind, cell, role, theme)?;
+            if panel_plan.result.decoration_mode == DecorationMode::SelfManaged {
                 return Err(Error::Render(format!(
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
@@ -992,13 +988,13 @@ impl Canvas {
                 index,
                 kind,
                 canvas_cell: cell,
-                panel_plan: plan,
+                panel_plan,
             });
         }
         Ok(CanvasPlan {
             theme,
             plot_themes,
-            charts,
+            plots,
             canvas_layout,
             full_outer,
             outer,
@@ -1022,12 +1018,12 @@ impl Canvas {
         let theme = plan.theme.as_ref();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "render", theme);
-        let header_theme_index = plan.charts.iter().position(Option::is_some);
+        let header_theme_index = plan.plots.iter().position(Option::is_some);
         let row_title_theme = header_theme_index
             .and_then(|index| plan.plot_themes[index].as_deref())
             .unwrap_or(theme);
         for panel in &plan.panels {
-            let chart = plan.charts[panel.index].as_ref().ok_or_else(|| {
+            let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
             })?;
             let theme = plan.plot_themes[panel.index]
@@ -1035,10 +1031,10 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "grid-render", theme);
-            crate::decorations::apply::apply_grid(chart, &panel.panel_plan.result, theme, backend)?;
+            crate::decorations::apply::apply_grid(plot, &panel.panel_plan.result, theme, backend)?;
         }
         for panel in plan.panels {
-            let chart = plan.charts[panel.index].as_ref().ok_or_else(|| {
+            let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during render".into())
             })?;
             let theme = plan.plot_themes[panel.index]
@@ -1046,41 +1042,41 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "panel-render", theme);
-            let source_rows = chart.configured_source_rows()?;
-            let render_chart = panel.panel_plan.chart_for_render(chart);
+            let source_rows = plot.configured_source_rows()?;
+            let plot_with_planned_limits = panel.panel_plan.plot_with_planned_limits(plot);
             let context = source_rows.map_or_else(
                 || {
                     crate::spec::PlotRenderContext::new(
-                        render_chart.data(),
-                        panel.panel_plan.panel,
+                        plot_with_planned_limits.data(),
+                        panel.panel_plan.panel_box,
                         theme,
                     )
                 },
                 |rows| {
                     crate::spec::PlotRenderContext::with_source_rows(
-                        render_chart.data(),
+                        plot_with_planned_limits.data(),
                         rows,
-                        panel.panel_plan.panel,
+                        panel.panel_plan.panel_box,
                         theme,
                     )
                 },
             );
-            render_chart.render_panel(panel.kind, context, backend)?;
+            plot_with_planned_limits.render_panel(panel.kind, context, backend)?;
             if !panel.panel_plan.result.significance_brackets.is_empty() {
                 crate::significance::render(
-                    chart,
+                    plot,
                     &panel.panel_plan.result.significance_brackets,
                     theme,
                     backend,
                 )?;
             }
-            crate::decorations::apply::apply_axes(chart, &panel.panel_plan.result, theme, backend)?;
+            crate::decorations::apply::apply_axes(plot, &panel.panel_plan.result, theme, backend)?;
             crate::decorations::apply::apply_planned_legend(
-                chart,
+                plot,
                 panel.panel_plan.legend.as_ref(),
                 backend,
             )?;
-            draw_panel_header(chart, panel.canvas_cell, theme, backend)?;
+            draw_panel_header(plot, panel.canvas_cell, theme, backend)?;
         }
         for panel in &plan.text_panels {
             #[cfg(test)]
@@ -1134,22 +1130,22 @@ impl Canvas {
         plot_themes: &[Option<Box<ResolvedTheme>>],
     ) -> Result<Vec<(String, Vec<String>)>, Error> {
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-        for (index, chart) in self.panels.iter().enumerate() {
-            let Some(chart) = chart else { continue };
-            let chart = self.labels.as_ref().map_or_else(
-                || chart.clone(),
-                |labels| chart.clone().labels(labels.clone()),
+        for (index, plot) in self.panels.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            let plot = self.labels.as_ref().map_or_else(
+                || plot.clone(),
+                |labels| plot.clone().labels(labels.clone()),
             );
-            let Some(dimension) = chart.hue_dimension_key() else {
+            let Some(dimension) = plot.hue_dimension_key() else {
                 continue;
             };
-            let kind = chart.kind();
+            let kind = plot.kind();
             let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-hue-discovery", theme);
-            let observed = chart.preflight_hue_levels(kind, panel, theme)?;
+            let observed = plot.preflight_hue_levels(kind, panel, theme)?;
             let levels =
                 if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
                     levels
@@ -1172,20 +1168,20 @@ impl Canvas {
     }
 
     fn preflight_shared_legend(
-        charts: &[Option<Plot>],
+        plots: &[Option<Plot>],
         plot_themes: &[Option<Box<ResolvedTheme>>],
         panel: PanelBox,
     ) -> Result<Option<(String, Vec<LegendEntry>)>, Error> {
         let mut entries = Vec::new();
-        for (index, chart) in charts.iter().enumerate() {
-            let Some(chart) = chart else { continue };
-            let kind = chart.kind();
+        for (index, plot) in plots.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            let kind = plot.kind();
             let theme = plot_themes[index]
                 .as_deref()
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-legend-preflight", theme);
-            let result = chart.preflight_panel(kind, panel, theme)?;
+            let result = plot.preflight_panel(kind, panel, theme)?;
             entries.extend(result.legend_entries);
         }
         let entries =
@@ -1201,12 +1197,12 @@ impl Canvas {
     }
 }
 
-fn chart_category_domain(
-    chart: &Plot,
+fn plot_category_domain(
+    plot: &Plot,
     panel: PanelBox,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<Vec<String>, Error> {
-    let kind = chart.kind();
+    let kind = plot.kind();
     if !matches!(
         kind,
         PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
@@ -1215,7 +1211,7 @@ fn chart_category_domain(
             "shared category labels are supported only by horizontal bar families".into(),
         ));
     }
-    let result = chart.preflight_panel(kind, panel, theme)?;
+    let result = plot.preflight_panel(kind, panel, theme)?;
     if result.y_domain != AxisDomain::Categorical {
         return Err(Error::Data(
             "shared category labels require a categorical y-axis".into(),
@@ -1341,19 +1337,19 @@ fn draw_text_panel(
     reason = "small text-line indexes are projected into backend coordinates"
 )]
 fn draw_panel_header(
-    chart: &Plot,
+    plot: &Plot,
     cell: PanelBox,
     theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let title = theme
         .show_title
-        .then(|| chart.title_text())
+        .then(|| plot.title_text())
         .flatten()
         .filter(|title| !title.is_empty());
     let subtitle = theme
         .show_subtitle
-        .then(|| chart.subtitle_text())
+        .then(|| plot.subtitle_text())
         .flatten()
         .filter(|subtitle| !subtitle.is_empty());
     if title.is_none() && subtitle.is_none() {
@@ -1393,7 +1389,7 @@ fn draw_panel_header(
         anchor: crate::render::backend::TextAnchor::Start,
         rotation: 0.0,
     };
-    with_layer(backend, &chart.layer_name("title"), |backend| {
+    with_layer(backend, &plot.layer_name("title"), |backend| {
         for (index, line) in subtitle_lines.iter().rev().enumerate() {
             backend.draw_text(
                 Point2D::new(
