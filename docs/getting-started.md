@@ -25,7 +25,7 @@ Plot::scatter(
     NumericValues::new("response", [1.5, 2.5, 2.0]),
 )
     .theme(Theme::Publication)
-    .svg("response.svg")?;
+    .svg("response")?; // Publishes response.svg.
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -41,14 +41,17 @@ Plot::scatter(
     NumericValues::new("x", [1.0, 2.0, 3.0]),
     NumericValues::new("y", [1.5, 2.5, 2.0]),
 )
-    .svg("response.svg")?
-    .svg_preserve_text("response-editable.svg")?;
+    .svg("response")?
+    .svg_preserve_text("response-editable")?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-No runtime initialization or asset provisioning is required. The destination
-parent must already exist. Outlined SVG and PNG generation use installed system
-fonts.
+Terminal paths are base file destinations. SVG methods append `.svg` and PNG
+methods append `.png` unless the final filename already ends in that complete
+suffix under ASCII case-insensitive comparison. Existing filename text is kept,
+so `response.v1` becomes `response.v1.svg`. No runtime initialization or asset
+provisioning is required. The destination parent must already exist. Outlined
+SVG and PNG generation use installed system fonts.
 
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from

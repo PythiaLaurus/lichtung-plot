@@ -8,4 +8,5 @@ mod support;
 use support::*;
 
 mod multiformat;
+mod paths;
 mod png;

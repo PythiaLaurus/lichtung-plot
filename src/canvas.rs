@@ -442,30 +442,35 @@ impl Canvas {
     }
 
     /// Render once, publish an outlined SVG, and return a reusable output.
+    /// The output filename is completed with `.svg` after conversion.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.svg(path)
     }
 
     /// Render once, publish SVG with selectable text, and return a reusable output.
+    /// The output filename is completed with `.svg` after rendering.
     pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.svg_preserve_text(path)
     }
 
     /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.png(path)
     }
 
     /// Render once, publish a balanced source-sized PNG without density metadata.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let output = Output::new(self.render_scene()?);
         output.png_preview(path)
     }
 
     /// Render once and publish a PNG using the exact caller-provided options.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png_with_options(
         self,
         path: impl AsRef<Path>,

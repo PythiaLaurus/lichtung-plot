@@ -305,10 +305,10 @@ mod windows_owned {
 
 fn publication_destination(path: &Path) -> Result<PathBuf, Error> {
     let file_name = path.file_name().ok_or_else(|| {
-        Error::Data(format!(
-            "render output path {} has no file name",
-            path.display()
-        ))
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("render output path {} has no file name", path.display()),
+        )
     })?;
     #[cfg(windows)]
     if windows_invalid_or_reserved_file_name(file_name) {

@@ -18,6 +18,7 @@ impl Plot {
 
 impl<K: crate::kind::Marker> Plot<K> {
     /// Render once, publish an outlined SVG, and return a reusable output.
+    /// The output filename is completed with `.svg` after conversion.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
         let output = Output::new(plot.render_scene()?);
@@ -25,6 +26,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Render once, publish SVG with selectable text, and return a reusable output.
+    /// The output filename is completed with `.svg` after rendering.
     pub fn svg_preserve_text(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
         let output = Output::new(plot.render_scene()?);
@@ -32,6 +34,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Render once, publish a balanced 300-DPI PNG, and return a reusable output.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
         let output = Output::new(plot.render_scene()?);
@@ -39,6 +42,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Render once, publish a balanced source-sized PNG without density metadata.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png_preview(self, path: impl AsRef<Path>) -> Result<Output, Error> {
         let plot = crate::kind::into_erased(self);
         let output = Output::new(plot.render_scene()?);
@@ -46,6 +50,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     /// Render once and publish a PNG using the exact caller-provided options.
+    /// The output filename is completed with `.png` after rasterization.
     pub fn png_with_options(
         self,
         path: impl AsRef<Path>,

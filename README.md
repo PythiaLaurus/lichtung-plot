@@ -18,7 +18,7 @@ Plot::scatter(
     NumericValues::new("x", [1.0, 2.0, 3.0]),
     NumericValues::new("y", [1.5, 2.5, 2.0]),
 )
-.svg("scatter.svg")?;
+.svg("scatter")?; // Publishes scatter.svg.
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -42,7 +42,12 @@ viewer.
 ## Output Formats
 
 Publication SVG with outlined text, preserve-text SVG, and PNG are unconditional
-crate capabilities. PDF output is deliberately outside this crate.
+crate capabilities. Terminal paths are base destinations: SVG methods append
+`.svg` and PNG methods append `.png` unless the final filename already has the
+complete expected suffix under ASCII case-insensitive comparison. Existing
+filename text is never replaced, so `report.v1` becomes `report.v1.svg` and
+`report.png` passed to `.svg` becomes `report.png.svg`. PDF output is deliberately
+outside this crate.
 
 ## Development
 

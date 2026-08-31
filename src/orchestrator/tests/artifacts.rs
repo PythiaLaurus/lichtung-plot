@@ -4,6 +4,7 @@ use super::{assert_no_staging_files, test_directory, write_atomic, TEMP_RESERVAT
 fn render_failure_preserves_existing_svg_and_removes_staging_files() {
     TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
     let dir = test_directory("failed-svg-publication");
+    let base = dir.join("canvas");
     let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
     let chart = crate::Plot::scatter(
@@ -11,7 +12,7 @@ fn render_failure_preserves_existing_svg_and_removes_staging_files() {
         crate::NumericValues::new("y", [1.0]),
     );
 
-    assert!(chart.svg(&output).is_err());
+    assert!(chart.svg(&base).is_err());
     assert_eq!(
         std::fs::read_to_string(&output).unwrap(),
         "existing artifact"
@@ -25,6 +26,7 @@ fn render_failure_preserves_existing_svg_and_removes_staging_files() {
 fn outlined_svg_conversion_failure_happens_before_staging_reservation() {
     TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
     let dir = test_directory("failed-outlined-conversion");
+    let base = dir.join("canvas");
     let output = dir.join("canvas.svg");
     std::fs::write(&output, "existing artifact").unwrap();
     let scene = crate::scene::RenderedScene::new(
@@ -34,7 +36,7 @@ fn outlined_svg_conversion_failure_happens_before_staging_reservation() {
     )
     .unwrap();
 
-    let Err(error) = crate::Output::new(scene).svg(&output) else {
+    let Err(error) = crate::Output::new(scene).svg(&base) else {
         panic!("malformed canonical bytes unexpectedly converted")
     };
 
@@ -54,6 +56,7 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
 
     let dir = test_directory("failed-png-publication");
     TEMP_RESERVATION_CALLS.with(|calls| calls.set(0));
+    let base = dir.join("canvas");
     let output = dir.join("canvas.png");
     std::fs::write(&output, b"existing png artifact").unwrap();
     let options = PngOptions {
@@ -66,7 +69,7 @@ fn rasterization_failure_preserves_existing_png_and_removes_staging_files() {
         crate::NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
     .erase()
-    .png_with_options(&output, options)
+    .png_with_options(&base, options)
     .is_err());
     assert_eq!(std::fs::read(&output).unwrap(), b"existing png artifact");
     assert_eq!(TEMP_RESERVATION_CALLS.with(std::cell::Cell::get), 0);

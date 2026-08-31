@@ -2,7 +2,8 @@
 //!
 //! Run with:  cargo run --example 01_quick_start -p lichtung-plot
 //!
-//! Writes a Nature-themed SVG to the system temporary directory.
+//! Writes `quick_start.svg` to the system temporary directory from an
+//! extensionless base destination.
 
 use lichtung_plot::{NumericValues, Plot, Theme};
 
@@ -12,12 +13,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ys: Vec<f64> = (0..30)
         .map(|i| (f64::from(i) * 0.4).sin() * 5.0 + 10.0)
         .collect();
-    let path = std::env::temp_dir().join("quick_start.svg");
+    let directory = std::env::temp_dir();
+    let base_path = directory.join("quick_start");
     Plot::scatter(NumericValues::new("x", xs), NumericValues::new("y", ys))
         .theme(Theme::Nature)
         .size(640, 480)
-        .svg(&path)?;
+        .svg(&base_path)?;
 
-    println!("wrote {}", path.display());
+    println!("wrote {}", directory.join("quick_start.svg").display());
     Ok(())
 }

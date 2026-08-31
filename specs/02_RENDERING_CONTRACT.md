@@ -341,10 +341,30 @@ inside an external dependency.
 
 ## Artifact Publication
 
-The current terminal methods publish to the exact caller-provided path and do
-not infer, validate, replace, or append a format extension. Phase T3k in
-`91_IMPLEMENTATION_PLAN.md` records the pending replacement behavior; it is not
-current until that phase completes.
+Terminal path arguments are base file destinations. After deriving the complete
+output bytes successfully, `svg` and `svg_preserve_text` complete the final
+filename with `.svg`; `png`, `png_preview`, and `png_with_options` complete it
+with `.png`. Plot and Canvas terminals delegate this operation to the same
+`Output` boundary and do not apply a separate suffix rule.
+
+If the final native filename already ends in the complete expected ASCII suffix
+under ASCII case-insensitive comparison, the complete caller path is preserved
+exactly. Otherwise the lowercase suffix is appended to that filename only.
+This rule is literal: it does not interpret an extension or infer a format,
+and it never removes, replaces, normalizes, or rejects contradictory filename
+text. Thus `chart.v1` becomes `chart.v1.svg`, `chart.png` passed to `svg`
+becomes `chart.png.svg`, `chart.SVG` remains `chart.SVG`, `.chart` becomes
+`.chart.svg`, and `.svg` remains `.svg`.
+
+Suffix completion uses native filename units without requiring UTF-8. It first
+rejects a caller path that currently identifies a directory, following symlinks
+according to `Path::is_dir`, and then requires a file-name component. These path
+errors are `Error::Io` values with `InvalidInput`. Format conversion and byte
+derivation precede all caller-path access. The completed path then undergoes the
+ordinary parent canonicalization, Windows leaf validation, sibling staging,
+replacement, and cleanup sequence. Parent directories are not created. An
+existing unsuffixed non-directory base is neither read nor replaced when its
+suffixed sibling is the completed destination.
 
 Each file output is staged at a unique sibling path and renamed only after
 rendering or conversion succeeds. Consuming output calls publish independently;

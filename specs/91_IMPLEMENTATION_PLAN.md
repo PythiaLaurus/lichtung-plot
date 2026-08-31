@@ -155,7 +155,7 @@ The approved theme and layout targets follow these rules:
 | T3j1 | Normative layout contract and private terminology | COMPLETE |
 | T3j2 | Layout ownership-ledger reconciliation | COMPLETE |
 | T3j3 | Migration, evidence, and resource-boundary map | COMPLETE |
-| T3k | Terminal output suffix completion | PENDING |
+| T3k | Terminal output suffix completion | COMPLETE |
 | T3l | Private planning-value terminology | COMPLETE |
 | T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
@@ -1824,7 +1824,7 @@ Acceptance:
 
 ## Phase T3k: Terminal Output Suffix Completion
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Complete every successful output destination with the terminal's conventional
 format suffix without interpreting or removing caller-provided filename text.

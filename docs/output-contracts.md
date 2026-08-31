@@ -28,8 +28,8 @@ fn publish_svg() -> Result<(), lichtung_plot::Error> {
         NumericValues::new("x", [1.0]),
         NumericValues::new("y", [2.0]),
     )
-    .svg("publication.svg")?
-    .svg_preserve_text("editable.svg")?;
+    .svg("publication")? // Publishes publication.svg.
+    .svg_preserve_text("editable")?; // Publishes editable.svg.
     Ok(())
 }
 ```
@@ -55,15 +55,15 @@ fn publish() -> Result<(), lichtung_plot::Error> {
         NumericValues::new("x", [1.0]),
         NumericValues::new("y", [2.0]),
     )
-    .png_preview("preview.png")?
+    .png_preview("preview")?
     .png_with_options(
-        "custom.png",
+        "custom",
         PngOptions {
             sizing: PngSizing::Width(1600),
             compression: PngCompression::High,
         },
     )?
-    .png("publication.png")?;
+    .png("publication")?;
     Ok(())
 }
 ```
@@ -72,10 +72,26 @@ Callers chain any needed formats as independent same-scene publications, for
 example:
 
 ```rust,ignore
-.svg("plot.svg")?
-.svg_preserve_text("plot-editable.svg")?
-.png_preview("plot.png")
+.svg("plot")?
+.svg_preserve_text("plot-editable")?
+.png_preview("plot-preview")
 ```
+
+## Destination Completion
+
+Terminal arguments are base file destinations. SVG terminals append `.svg` and
+PNG terminals append `.png` to the final native filename unless it already ends
+in the complete expected suffix under ASCII case-insensitive comparison. A
+matching filename is preserved exactly, including suffix case. Other filename
+text is not interpreted: `plot.v1` becomes `plot.v1.svg`, `plot.png` passed to
+`.svg` becomes `plot.png.svg`, and `.plot` becomes `.plot.svg`.
+
+Completion preserves native filename units and does not require UTF-8. It occurs
+after format conversion succeeds and before atomic publication. A destination
+that currently identifies a directory, including through a symlink, or has no
+filename is rejected. The parent directory must already exist. An existing
+unsuffixed base file is left untouched when publication targets its completed
+sibling.
 
 Outlined SVG and PNG generation require at least one installed system font. The
 preferred order is Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans,
