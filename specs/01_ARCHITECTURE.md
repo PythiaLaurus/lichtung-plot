@@ -118,8 +118,11 @@ exact marker-gated builders, not broad getters that return irrelevant defaults.
 
 `Theme` is the public built-in visual selection. Resolved theme data is
 private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
-atomic migration tracked in `91_IMPLEMENTATION_PLAN.md`; its target types and
-inheritance behavior are not current public API until Phase T6 completes.
+staged migration tracked in `91_IMPLEMENTATION_PLAN.md`. `Plot::theme(Theme)` is
+the current built-in Plot attachment. The matching Canvas attachment and
+inheritance behavior are not current public API until Phase T4d completes; the
+replacement Theme values, components, colors, and scales remain non-current
+until Phase T6 completes.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
 same migration. T5a through T5e implement its private complete-candidate

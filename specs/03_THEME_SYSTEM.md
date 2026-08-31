@@ -1,17 +1,20 @@
 # Theme System
 
-**Status**: Approved implementation target; non-current until Phase T6
+**Status**: Approved staged target; built-in ownership assigned to T4 and the
+replacement value model assigned to T6
 
 ## Purpose
 
 This specification defines the approved replacement theme, color, and
 data-color-scale model for `lichtung-plot`. `05_LAYOUT_SYSTEM.md` defines the
 approved coordinated replacement layout model.
-`01_ARCHITECTURE.md` and
-`02_RENDERING_CONTRACT.md` remain authoritative for the implemented public API
-until Phase T6 in `91_IMPLEMENTATION_PLAN.md` performs the atomic migration. The
-target names and behaviors below are not a second current API and must not be
-introduced as aliases or dormant placeholders before their owning phase.
+`01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
+implemented public API. Phase T4 in `91_IMPLEMENTATION_PLAN.md` makes the
+Canvas/Plot ownership and complete built-in inheritance subset current using the
+closed `Theme` selector. Phase T6 performs the atomic replacement-value
+migration. Other target names and behaviors below are not a second current API
+and must not be introduced as aliases or dormant placeholders before their
+owning phase.
 
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
@@ -146,6 +149,15 @@ sharing, title and label content, and annotation presence remain explicit
 Plot/Canvas configuration or input.
 
 ## Ownership And Inheritance
+
+Phase T4 establishes `Canvas::theme(Theme)` and retains `Plot::theme(Theme)` as
+the sole owner attachments using the current closed built-in selector. The
+Canvas call is optional because Canvas selects Publication as its default root.
+Omission of the Plot call represents inheritance when composed and owner-local
+Publication default selection when standalone. Phase T6 retains these attachment
+names while replacing the closed selector with the complete immutable value
+defined by this specification. The constructor spelling below is the T6 target;
+T4 uses the current built-in Publication variant.
 
 `Plot` stores an optional complete explicit theme. Absence has two meanings
 selected only by the render owner:

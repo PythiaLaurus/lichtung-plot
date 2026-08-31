@@ -11,12 +11,15 @@ plan.
 
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
 implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement theme
-architecture. `05_LAYOUT_SYSTEM.md` is the approved replacement layout
-architecture. Neither is a second current API. Their
-custom themes, colors, scales, inheritance, automatic layout, bounded-width
-sizing, and rendered-dimension behavior remain non-current until Phase T6
-performs the atomic public migration. Later implementation phases do not begin
-merely because they are listed here.
+architecture. Phase T4 establishes its built-in Canvas/Plot ownership and
+inheritance subset using the current closed `Theme` selector and updates the
+current contracts atomically when that public behavior lands. Its replacement
+theme values, components, colors, and scales remain non-current until Phase T6.
+`05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture; its
+automatic layout, bounded-width sizing, and rendered-dimension behavior remain
+non-current until Phase T6. Neither target specification is a second current
+API, and later implementation phases do not begin merely because they are
+listed here.
 
 Status values are `COMPLETE`, `IN PROGRESS`, `PENDING`, and `BLOCKED`. Update a
 phase when it starts, completes, changes scope, or discovers a blocker. Complete
@@ -29,8 +32,9 @@ rather than combining unrelated migrations in one commit.
 The following decisions are accepted starting points for the architecture
 discussion:
 
-- Publication is the replaceable library default for a standalone plot. It must
-  not be forced or repeated as hidden renderer or Canvas state.
+- Publication is the replaceable library default for a standalone Plot and a
+  Canvas root. Owners select it once; renderers and child planning must not force
+  or repeat it as hidden fallback state.
 - Canvas supplies the root theme for composed output. A plot without an explicit
   theme inherits that Canvas theme; an explicitly themed plot may replace it.
 - The first public customization milestone targets coherent full foundations,
@@ -53,11 +57,13 @@ discussion:
   pass default-PNG and canonical-SVG viability before ranking; exact roots retain
   format-local SVG behavior and apply PNG limits only on a PNG terminal.
 
-Phase T1 settled the exact theme and scale public types, replacement semantics,
-component boundaries, validation, and scope of local overrides in
-`03_THEME_SYSTEM.md`. Phase T3j settles the private layout terminology, public
-sizing boundary, migration partition, and final ledger impact. Phase T3k closes
-terminal destination naming before T4 begins.
+Phase T1 settled the exact replacement theme and scale public types, replacement
+semantics, component boundaries, validation, and scope of local overrides in
+`03_THEME_SYSTEM.md`. Phase T4 first makes complete built-in Canvas/Plot theme
+attachment and inheritance current without introducing the replacement value
+model early. Phase T3j settled the private layout terminology, public sizing
+boundary, migration partition, and final ledger impact. Phase T3k closed
+terminal destination naming before T4 began.
 
 ## Reference Philosophy
 
@@ -157,7 +163,11 @@ The approved theme and layout targets follow these rules:
 | T3j3 | Migration, evidence, and resource-boundary map | COMPLETE |
 | T3k | Terminal output suffix completion | COMPLETE |
 | T3l | Private planning-value terminology | COMPLETE |
-| T4 | Explicit Canvas-to-Plot theme inheritance | PENDING |
+| T4 | Explicit Canvas-to-Plot theme inheritance | IN PROGRESS |
+| T4a | Ownership API and implementation partition | COMPLETE |
+| T4b | Owner selection and resolved provenance | PENDING |
+| T4c | Composition theme routing | PENDING |
+| T4d | Public attachment and current contract | PENDING |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
@@ -1962,23 +1972,35 @@ Acceptance:
 
 ## Phase T4: Canvas Theme Inheritance
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: T3k and T3l.
 
-Make composition ownership explicit and consistent.
+Make composition ownership explicit and consistent, then expose the completed
+built-in inheritance behavior through one deliberate public attachment on each
+owner.
 
 Scope:
 
-- Give Canvas one replaceable root theme whose default is the same library
-  Publication theme used by standalone plots.
-- Represent the absence of an explicit Plot theme so a composed plot can inherit
-  the Canvas theme without guessing whether Publication was caller-selected.
-- Make an explicit Plot theme replace the inherited Canvas theme for that plot.
-- Apply the resolved Canvas theme consistently to canvas title blocks, text
-  panels, shared headers, row titles, spacing, and other Canvas-owned chrome.
-- Resolve Canvas and Plot provenance before constructing the future measurement
-  context so every child receives the exact owner used by its final plan.
+- Store one root `Theme` selector on Canvas. Construction assigns
+  `Theme::Publication`; callers are not required to make an explicit theme call.
+- Retain one optional explicit `Theme` selector on Plot. Absence is meaningful
+  and must not be collapsed into `Theme::Publication`, compared by value, or
+  inferred after erasure.
+- Approve `Canvas::theme(Theme)` as the sole Canvas-root attachment and retain
+  `Plot::theme(Theme)` as the sole Plot-replacement attachment. T4d exposes the
+  Canvas method only after the private owner and routing model is complete.
+- Make an unthemed standalone Plot select Publication, an unthemed composed Plot
+  inherit its Canvas root, and an explicitly themed Plot completely replace the
+  inherited root for that Plot.
+- Apply the resolved Canvas theme consistently at every existing theme-aware
+  Canvas title-block, text-panel, shared-header, row-title, and spacing consumer.
+  T4 does not migrate surfaces or hardcoded chrome properties assigned to T5.
+- Resolve the Canvas root once per lifecycle. Represent each occupied Plot slot
+  as exact inherited-root versus explicit-Plot provenance before current
+  preflight and measurement consumers run. Retain that provenance for the future
+  T5 measurement context so every child receives the exact owner used by its
+  final plan.
 - Make header and text measurement use the same resolved values as rendering.
 - Carry exact Canvas/Plot theme provenance into shared-legend planning. T4 does
   not claim final compatibility: T5b establishes legend/chrome comparison, T5c
@@ -1988,19 +2010,203 @@ Scope:
   theme state.
 - Preserve current exact dimensions and public sizing behavior; T4 establishes
   ownership inputs and does not implement the T5 layout protocol early.
+- Keep the current closed built-in `Theme` selector throughout T4. T6 replaces
+  its value model while retaining the one `.theme(Theme)` attachment on each
+  owner; no alias, fallback attachment, or second theme representation is
+  admitted.
+
+Implementation partition:
+
+1. T4a approves the owner representation, sole public attachment names,
+   sequencing, and specification boundary without changing production code.
+2. T4b changes the private owner selection and resolved-provenance model while
+   preserving current public behavior and output.
+3. T4c completes existing Canvas/Plot/facet theme-aware consumer routing and
+   shared-legend provenance while the non-default Canvas root remains private.
+4. T4d exposes the already-complete Canvas root attachment and atomically makes
+   built-in inheritance current in the public contracts and documentation.
 
 Acceptance:
 
 - Standalone and composed defaults are visually identical when no explicit theme
   is supplied.
-- Canvas-owned chrome never falls back to hidden `Theme::Publication` calls.
+- Existing theme-aware Canvas consumers never perform hidden
+  `Theme::Publication` selection.
 - Unthemed plots inherit; explicitly themed plots replace; neither behavior is
   sticky outside its owner.
 - Measurement and rendering agree for headers, titles, text panels, and the
   inherited inputs supplied to facets/shared legends.
+- `Canvas::theme(Theme)` and `Plot::theme(Theme)` are the only public owner
+  attachments; omitting the Canvas call selects Publication and omitting the
+  Plot call selects inheritance or the standalone Publication default.
 - Focused standalone, Canvas, facet, and inheritance-input tests pass; the final
   mixed-theme shared-legend acceptance gate remains in T5b/T5c/T5d/T6.
 - `just verify` passes.
+
+### Phase T4a: Ownership API And Implementation Partition
+
+**Status**: COMPLETE
+
+Dependencies: T3k and T3l.
+
+Approve one implementation-ready ownership migration before changing runtime
+behavior.
+
+Scope:
+
+- Record mandatory Canvas-root and optional explicit Plot selection as the sole
+  source representation for T4.
+- Approve `Canvas::theme(Theme)` and retain `Plot::theme(Theme)` without
+  requiring an explicit Canvas call or adding clear/inherit/optional aliases.
+- Reserve public exposure for T4d so callers never observe a partially routed
+  root theme.
+- Assign the replacement immutable `Theme` value model to T6 while fixing the
+  two owner attachment names in T4.
+- Partition T4b through T4d with explicit code, evidence, specification, and
+  commit boundaries.
+- Reconcile target/current staging language without claiming that the pending
+  T4 runtime behavior is already implemented.
+
+Acceptance:
+
+- The T4 representation, default-selection semantics, public boundary, and
+  subphase dependencies are unambiguous.
+- No compatibility alias, temporary public API, production code, snapshot, or
+  rendered output changes.
+- Documentation review is sufficient; the code verification suite is not run
+  for this documentation-only phase.
+
+### Phase T4b: Owner Selection And Resolved Provenance
+
+**Status**: PENDING
+
+Dependencies: T4a.
+
+Replace implicit Publication ownership with exact private selection and
+provenance while preserving the current public contract.
+
+Scope:
+
+- Change Plot's stored theme selection from mandatory `Theme` to
+  `Option<Theme>`. Constructors store `None`; `Plot::theme(Theme)` stores
+  `Some(theme)`; type erasure preserves the option without defaulting it.
+- Make standalone planning resolve `None` to one Publication value before
+  validation or measurement. Explicit standalone selections resolve once
+  through the same lifecycle boundary.
+- Add one mandatory private Canvas-root `Theme` initialized to Publication, but
+  do not expose `Canvas::theme(Theme)` in this phase.
+- Resolve the Canvas root once. For each occupied Plot slot, retain an explicit
+  inherited-root or explicit-Plot provenance variant rather than cloning the
+  root, comparing presets, or storing an indistinguishable resolved value.
+- Give planning consumers one immutable accessor that returns the selected
+  `&ResolvedTheme`; inherited slots borrow the exact Canvas root and explicit
+  slots borrow their separately resolved replacement.
+- Keep resolution owner-local and lifecycle-local with no global, thread-local,
+  backend-selected, or late preset lookup.
+- Delete the replaced mandatory-Plot-theme and per-child Publication-selection
+  routes rather than retaining late defaults outside the owning boundary.
+
+Acceptance:
+
+- Tests distinguish unthemed Plot selection from explicit Publication before
+  resolution and prove the two standalone paths render equivalently.
+- Canvas tests prove inherited children use the exact root identity, explicit
+  children use a distinct resolved identity even for Publication, and erased
+  plots preserve their original selection.
+- Default standalone and Canvas snapshots remain unchanged.
+- Focused builder, lifecycle, erasure, Canvas, and facet tests pass.
+- `just verify` passes before T4b is committed.
+
+### Phase T4c: Composition Theme Routing
+
+**Status**: PENDING
+
+Dependencies: T4b.
+
+Complete every existing theme-aware Canvas-versus-Plot ownership route before
+exposing a non-default root to callers.
+
+Scope:
+
+- Route existing Canvas title/subtitle/caption blocks, text panels, shared
+  headers, row titles, and root-spacing consumers from the one resolved root.
+- Remove first-Plot or hidden Publication ownership from shared-header and
+  row-title measurement, arrangement, and rendering.
+- Route existing theme-aware Plot title, subtitle, axis, panel, mark, annotation,
+  and facet consumers from the selected Plot value; facets add no theme scope.
+- Ensure every measurement helper receives the same selected resolved reference
+  later used by arrangement and rendering.
+- Carry inherited-root versus explicit-Plot provenance into shared-legend entry
+  planning without routing hardcoded legend chrome through the current theme or
+  claiming final T5b/T5c/T5d/T6 compatibility.
+- Leave backend surfaces, new component properties, legend typography and
+  chrome, and hardcoded style centralization with their assigned T5 phases. T4
+  establishes ownership and provenance only where no final target property
+  carrier exists yet.
+- Exercise a private non-Publication Canvas root in focused module tests to prove
+  existing theme-aware Canvas ownership, child inheritance, explicit
+  replacement, and measurement/rendering identity before public exposure.
+- Delete first-child, repeated Publication, and late-resolution routes made
+  obsolete by the owner plan.
+
+Acceptance:
+
+- A private non-Publication root reaches every existing theme-aware Canvas owner
+  consumer and every unthemed child, while an explicit child replacement affects
+  only that Plot.
+- Reordering explicitly themed children cannot change Canvas-owned header or row
+  title appearance or measurements.
+- Shared-legend planning retains exact source provenance for every contributing
+  Plot without value comparison.
+- Existing public default behavior and exact dimensions remain unchanged; any
+  unexpected snapshot change blocks the phase.
+- Focused Canvas, facet, shared-header, row-title, text-panel, and legend-input
+  tests pass.
+- `just verify` passes before T4c is committed.
+
+### Phase T4d: Public Attachment And Current Contract
+
+**Status**: PENDING
+
+Dependencies: T4c.
+
+Expose the completed built-in Canvas inheritance feature and make its current
+contract atomic.
+
+Scope:
+
+- Add `Canvas::theme(Theme) -> Self` as the sole public Canvas-root builder. It
+  replaces the stored default root; it is optional and does not introduce a
+  missing-root state.
+- Retain `Plot::theme(Theme) -> Self` as complete Plot replacement. Omission is
+  the only inheritance request; do not add clear, inherit, optional, root, or
+  compatibility attachment variants.
+- Add public integration evidence for omitted Canvas selection, explicit Canvas
+  selection, inherited Plot selection, explicit Plot replacement, standalone
+  default selection, facets, mixed children, and owner isolation across render
+  calls.
+- Atomically update `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` with the
+  implemented built-in owner and inheritance contract. Mark only the T4-owned
+  subset of `03_THEME_SYSTEM.md` current. T5 privately migrates component and
+  scale consumers; T6 exposes the replacement values, components, colors,
+  scales, and custom construction.
+- Update examples and user documentation with default Canvas, inherited child,
+  and explicit child-replacement examples using only the current built-in
+  selector.
+- Inspect and commit any intentional SVG snapshot changes with their source; T4
+  does not otherwise authorize visual-default or dimension changes.
+
+Acceptance:
+
+- A caller can omit all theme calls, replace the Canvas root once, and replace
+  any individual Plot without private access or an alternate attachment API.
+- Public tests prove every T4-routed theme-aware Canvas consumer is root-owned
+  and unthemed Plot/facet content inherits, while explicit Plot selection is a
+  complete local replacement.
+- Current and target specifications have no interval in which the public T4
+  behavior is implemented but undocumented.
+- Examples compile and focused public API, rendering, and snapshot tests pass.
+- `just verify` passes before T4d and parent T4 are marked complete.
 
 ## Phase T5a: Layout Foundation, Surfaces, Typography, Titles, Axes, And Grid
 
@@ -2292,10 +2498,10 @@ Scope:
   `Theme` API and built-in constructors or presets.
 - Expose only validated component theme, color, typography, and scale types
   required by the full-foundations milestone.
-- Add or migrate explicit Canvas-root and Plot-replacement theme ownership using
-  the exact public attachment names approved during T6; this plan does not
-  pre-authorize `Canvas::theme(...)`, `Plot::theme(...)`, aliases, or a second
-  attachment surface.
+- Retain `Canvas::theme(Theme)` and `Plot::theme(Theme)` as the sole owner
+  attachments established by T4 while replacing the closed selector arguments
+  with the approved complete immutable `Theme` values. Migrate repository
+  callers atomically; do not add aliases or a second attachment surface.
 - Provide a typed way to derive a modified complete theme from a built-in base.
 - Migrate current local style and categorical color callers to the one approved
   precedence model; delete replaced public and private representations.
@@ -2377,8 +2583,9 @@ Acceptance:
 - Every visual property has one implemented owner matching the approved
   T3j-recalculated inventory, with every source addition, split, consumer
   relationship, and explained exclusion re-audited.
-- No mutable global theme, hidden Canvas default, late theme lookup, compatibility
-  alias, or unclassified renderer style constant remains.
+- No mutable global theme, repeated hidden Publication default outside its
+  owning boundary, late theme lookup, compatibility alias, or unclassified
+  renderer style constant remains.
 - Snapshot changes are intentional, reviewed, and committed with their owning
   behavior change.
 - `just verify` passes from the completed worktree.

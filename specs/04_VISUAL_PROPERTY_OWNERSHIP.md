@@ -6,7 +6,9 @@ This ledger records current production sources and the T2-approved target
 ownership. It does not make the target APIs in `03_THEME_SYSTEM.md` current,
 expose them early, or supersede the implemented contracts in
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md`. Target names below are
-migration assignments only until Phase T6 performs the atomic public migration.
+migration assignments only until their owning phase makes them current. T4 owns
+the built-in Canvas/Plot attachment and inheritance subset; T6 owns the complete
+replacement theme, color, typography, and scale value model.
 
 The completed T2 ledger contains exactly 1860 current-source records. The T3j
 layout adjudication overlay at the end of this document preserves those
