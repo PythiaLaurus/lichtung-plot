@@ -5,6 +5,25 @@
 //! let _ = lichtung_plot::Theme::Publication;
 //! ```
 //!
+//! Canvas owns one optional-to-call root selection. Unthemed child Plots inherit
+//! it, while an explicit Plot theme replaces it locally:
+//! ```
+//! use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
+//!
+//! let canvas = Canvas::grid(1, 2)?
+//!     .theme(Theme::Nature)
+//!     .panel(0, 0, Plot::scatter(
+//!         NumericValues::new("x", [1.0, 2.0]),
+//!         NumericValues::new("y", [1.0, 2.0]),
+//!     ))?
+//!     .panel(0, 1, Plot::scatter(
+//!         NumericValues::new("x", [1.0, 2.0]),
+//!         NumericValues::new("y", [2.0, 1.0]),
+//!     ).theme(Theme::Science))?;
+//! # let _ = canvas;
+//! # Ok::<(), lichtung_plot::Error>(())
+//! ```
+//!
 //! Its implementation module is private:
 //! ```compile_fail
 //! use lichtung_plot::theme::Theme;

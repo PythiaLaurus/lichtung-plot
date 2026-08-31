@@ -221,6 +221,9 @@ fn validate_header_overlap(
 }
 
 /// A typed grid of independently configured charts rendered on one canvas.
+///
+/// Canvas owns one root theme, which defaults to [`Theme::Publication`]. Plots
+/// without an explicit theme inherit that root.
 pub struct Canvas {
     rows: usize,
     columns: usize,
@@ -462,8 +465,13 @@ impl Canvas {
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_test_theme(mut self, theme: Theme) -> Self {
+    /// Set the Canvas root theme.
+    ///
+    /// Plots without an explicit theme inherit this theme. A theme selected with
+    /// [`Plot::theme`] completely replaces it for that Plot. If this method is
+    /// omitted, the Canvas root uses [`Theme::Publication`].
+    #[must_use]
+    pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = theme;
         self
     }

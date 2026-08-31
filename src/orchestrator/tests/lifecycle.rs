@@ -406,7 +406,7 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
     let text_canvas = || {
         crate::Canvas::grid(1, 1)
             .unwrap()
-            .with_test_theme(crate::Theme::Nature)
+            .theme(crate::Theme::Nature)
             .text_panel(0, 0, crate::TextPanel::new("Title", "Body").unwrap())
             .unwrap()
     };
@@ -516,7 +516,7 @@ fn mixed_theme_canvas(themes: [crate::Theme; 2]) -> crate::Canvas {
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);
     crate::Canvas::grid(1, 2)
         .unwrap()
-        .with_test_theme(crate::Theme::CHI)
+        .theme(crate::Theme::CHI)
         .panel(0, 0, Plot::scatter(x.clone(), y.clone()).theme(themes[0]))
         .unwrap()
         .panel(0, 1, Plot::scatter(x, y).theme(themes[1]))
@@ -706,7 +706,7 @@ fn sparse_shared_legend_canvas() -> crate::Canvas {
     let second_hue = CategoryValues::new("trace", ["control", "control"]).unwrap();
     crate::Canvas::grid(1, 4)
         .unwrap()
-        .with_test_theme(crate::Theme::Nature)
+        .theme(crate::Theme::Nature)
         .panel(0, 0, Plot::line(first_x, first_y).hue(first_hue))
         .unwrap()
         .text_panel(
@@ -800,7 +800,7 @@ fn coordinated_horizontal_bar_canvas() -> crate::Canvas {
     let right = NumericValues::new("value", [8.0, -6.0]);
     crate::Canvas::grid(1, 2)
         .unwrap()
-        .with_test_theme(crate::Theme::CHI)
+        .theme(crate::Theme::CHI)
         .panel(
             0,
             0,

@@ -22,6 +22,30 @@ Plot::scatter(
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
+## Themes And Composition
+
+Omitting a theme selects Publication for a standalone Plot and for the Canvas
+root. `Canvas::theme` replaces that root; child Plots without their own theme
+inherit it. `Plot::theme` completely replaces the inherited theme for only that
+Plot.
+
+```rust
+use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
+
+let canvas = Canvas::grid(1, 2)?
+    .theme(Theme::Nature)
+    .panel(0, 0, Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("inherited", [1.0, 2.0]),
+    ))?
+    .panel(0, 1, Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("replacement", [2.0, 1.0]),
+    ).theme(Theme::Science))?;
+# let _ = canvas;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
 ## Fonts
 
 Outlined SVG and PNG generation resolve installed system fonts from this

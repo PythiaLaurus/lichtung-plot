@@ -18,16 +18,17 @@ lichtung-plot = { path = "../lichtung-plot" }
 ```
 
 ```rust
-use lichtung_plot::{NumericValues, Plot, Theme};
+use lichtung_plot::{NumericValues, Plot};
 
 Plot::scatter(
     NumericValues::new("dose", [1.0, 2.0, 3.0]),
     NumericValues::new("response", [1.5, 2.5, 2.0]),
 )
-    .theme(Theme::Publication)
     .svg("response")?; // Publishes response.svg.
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
+
+Omitting `Plot::theme` selects the Publication theme for a standalone Plot.
 
 `.svg(path)` is the normal publication method and converts all text to vector
 paths. When an accessible, selectable, searchable, and editable SVG is also
@@ -52,6 +53,33 @@ suffix under ASCII case-insensitive comparison. Existing filename text is kept,
 so `response.v1` becomes `response.v1.svg`. No runtime initialization or asset
 provisioning is required. The destination parent must already exist. Outlined
 SVG and PNG generation use installed system fonts.
+
+## Themes And Canvases
+
+Canvas owns one root theme and defaults it to Publication, so callers do not
+need to make an explicit theme call. An unthemed child Plot inherits that root.
+An explicit Plot theme completely replaces the inherited theme for only that
+Plot.
+
+```rust
+use lichtung_plot::{Canvas, NumericValues, Plot, Theme};
+
+let canvas = Canvas::grid(1, 2)?
+    .theme(Theme::Nature)
+    .panel(0, 0, Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("inherited", [1.0, 2.0]),
+    ))?
+    .panel(0, 1, Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("replacement", [2.0, 1.0]),
+    ).theme(Theme::Science))?;
+# let _ = canvas;
+# Ok::<(), lichtung_plot::Error>(())
+```
+
+The Canvas call remains optional: omitting it selects Publication for the root.
+Theme state is owner-local and never global or sticky across render calls.
 
 To attach caller-computed pairwise results, construct plot-owned
 `Significance<Pairwise>` display data. The placement marker is inferred from
@@ -198,4 +226,7 @@ let plot = Plot::trajectory(
 ```
 
 Use `FacetSpec::row`, `FacetSpec::grid`, or `FacetSpec::wrap` for the other
-supported layouts. Wrap construction rejects a zero column count.
+supported layouts. Wrap construction rejects a zero column count. Facets add no
+theme scope: every facet panel uses its owning Plot's selected theme, and an
+unthemed standalone faceted Plot uses Publication. Generic faceted Plots remain
+non-nestable in Canvas.

@@ -18,6 +18,9 @@ macro_rules! define_themes {
     ($($variant:ident => ($documentation:literal, $resolver:ident)),+ $(,)?) => {
         /// Predefined publication themes with hardcoded journal/venue palettes.
         ///
+        /// Attach one complete selection with [`crate::Plot::theme`] or
+        /// [`crate::Canvas::theme`].
+        ///
         /// ```compile_fail
         /// let _ = lichtung_plot::Theme::Publication.resolve();
         /// ```

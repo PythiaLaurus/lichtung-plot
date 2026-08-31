@@ -181,6 +181,33 @@ values happen to be equal. The multiplication sign and comma are display
 separators only; raw pair identity remains typed and is never encoded by joining
 strings.
 
+## Built-In Theme Ownership
+
+`Theme` is the closed current selection of Publication, Nature, Science, or CHI.
+`Canvas::theme(Theme)` and `Plot::theme(Theme)` are the only theme-owner
+attachments. A Canvas always owns one root selection and initializes it to
+Publication, so callers are not required to call `Canvas::theme`.
+
+A Plot records whether the caller made an explicit selection. An unthemed
+standalone Plot selects Publication at its lifecycle boundary. An unthemed Plot
+inside a Canvas inherits that Canvas's root selection. An explicit Plot selection
+completely replaces the inherited root for that Plot; values are not merged.
+Facets use their owning Plot's one selected theme and introduce no additional
+scope.
+
+Theme state is immutable and owner-local. There is no global, thread-local,
+environment-selected, backend-selected, or sticky theme state. The render owner
+resolves each selected built-in before canonical validation and measurement. The
+same private resolved value is reused through preflight, planning, null-backend
+validation, and final rendering; renderers do not reconstruct a preset late.
+
+Canvas root ownership currently covers existing theme-aware title blocks, shared
+headers, row titles, text panels, and spacing consumers. Plot and facet consumers
+use their selected Plot value. Backend surfaces, replacement component
+properties, legend typography and chrome, and custom immutable theme construction
+remain assigned to the staged T5/T6 migration and are not implied by this current
+contract.
+
 The crate computes display statistics needed to draw a requested plot, such as
 histogram bins, KDE curves, quantiles, confidence geometry for explicitly
 requested descriptive summaries, and ordinary least-squares display fits. It

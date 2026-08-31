@@ -11,9 +11,9 @@ plan.
 
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
 implemented renderer. `03_THEME_SYSTEM.md` is the approved replacement theme
-architecture. Phase T4 establishes its built-in Canvas/Plot ownership and
-inheritance subset using the current closed `Theme` selector and updates the
-current contracts atomically when that public behavior lands. Its replacement
+architecture. Phase T4 established its built-in Canvas/Plot ownership and
+inheritance subset using the current closed `Theme` selector and updated the
+current contracts atomically when that public behavior landed. Its replacement
 theme values, components, colors, and scales remain non-current until Phase T6.
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture; its
 automatic layout, bounded-width sizing, and rendered-dimension behavior remain
@@ -59,7 +59,7 @@ discussion:
 
 Phase T1 settled the exact replacement theme and scale public types, replacement
 semantics, component boundaries, validation, and scope of local overrides in
-`03_THEME_SYSTEM.md`. Phase T4 first makes complete built-in Canvas/Plot theme
+`03_THEME_SYSTEM.md`. Phase T4 made complete built-in Canvas/Plot theme
 attachment and inheritance current without introducing the replacement value
 model early. Phase T3j settled the private layout terminology, public sizing
 boundary, migration partition, and final ledger impact. Phase T3k closed
@@ -163,11 +163,11 @@ The approved theme and layout targets follow these rules:
 | T3j3 | Migration, evidence, and resource-boundary map | COMPLETE |
 | T3k | Terminal output suffix completion | COMPLETE |
 | T3l | Private planning-value terminology | COMPLETE |
-| T4 | Explicit Canvas-to-Plot theme inheritance | IN PROGRESS |
+| T4 | Explicit Canvas-to-Plot theme inheritance | COMPLETE |
 | T4a | Ownership API and implementation partition | COMPLETE |
 | T4b | Owner selection and resolved provenance | COMPLETE |
 | T4c | Composition theme routing | COMPLETE |
-| T4d | Public attachment and current contract | PENDING |
+| T4d | Public attachment and current contract | COMPLETE |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
@@ -1972,7 +1972,7 @@ Acceptance:
 
 ## Phase T4: Canvas Theme Inheritance
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: T3k and T3l.
 
@@ -2166,7 +2166,7 @@ Acceptance:
 
 ### Phase T4d: Public Attachment And Current Contract
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T4c.
 

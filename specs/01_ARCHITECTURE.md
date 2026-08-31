@@ -75,13 +75,17 @@ display values.
   family marker `K`; sealed capability traits expose only configuration
   supported by that family. A publicly constructible plot never has an
   unselected family state.
+- `Plot` also owns an optional explicit built-in theme selection. The standalone
+  owner selects Publication when it is absent; a Canvas owner instead supplies
+  its root selection.
 - `Plot::erase` is the sole public transition from an exact family marker to
   `Plot<kind::Any>`. Omitting `K` denotes this erased form, which retains common,
   introspection, preflight, and terminal-output operations but no family-specific
   configuration.
 - `Canvas` owns a heterogeneous grid of internally erased plots and `TextPanel`
   values. `Canvas::panel` accepts any exact `Plot<K>` and erases it at the storage
-  boundary.
+  boundary. Canvas also owns one root built-in theme selection, initialized to
+  Publication and replaceable through `Canvas::theme`.
 - `Significance<Attached>` and `Significance<Pairwise>` own placement-typed
   display annotations. Plots erase admitted annotations only at their private
   storage boundary.
@@ -118,10 +122,12 @@ exact marker-gated builders, not broad getters that return irrelevant defaults.
 
 `Theme` is the public built-in visual selection. Resolved theme data is
 private. `03_THEME_SYSTEM.md` is the approved replacement architecture for the
-staged migration tracked in `91_IMPLEMENTATION_PLAN.md`. `Plot::theme(Theme)` is
-the current built-in Plot attachment. The matching Canvas attachment and
-inheritance behavior are not current public API until Phase T4d completes; the
-replacement Theme values, components, colors, and scales remain non-current
+staged migration tracked in `91_IMPLEMENTATION_PLAN.md`. `Canvas::theme(Theme)`
+and `Plot::theme(Theme)` are the sole current owner attachments. The Canvas call
+is optional and Publication is its default root. An unthemed composed Plot
+inherits that root; an explicit Plot selection completely replaces it locally.
+An unthemed standalone Plot selects Publication, and facets add no theme scope.
+The replacement Theme values, components, colors, and scales remain non-current
 until Phase T6 completes.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that

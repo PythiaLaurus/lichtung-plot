@@ -318,7 +318,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    /// Set the visual theme.
+    /// Set a complete explicit Plot theme.
+    ///
+    /// If omitted, a standalone Plot uses [`Theme::Publication`] and a Plot in
+    /// a [`crate::Canvas`] inherits the Canvas root theme.
     #[must_use]
     pub fn theme(mut self, theme: Theme) -> Self {
         self.theme = Some(theme);

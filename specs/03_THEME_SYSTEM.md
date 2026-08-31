@@ -1,7 +1,6 @@
 # Theme System
 
-**Status**: Approved staged target; built-in ownership assigned to T4 and the
-replacement value model assigned to T6
+**Status**: Built-in ownership current; replacement value model approved for T6
 
 ## Purpose
 
@@ -9,7 +8,7 @@ This specification defines the approved replacement theme, color, and
 data-color-scale model for `lichtung-plot`. `05_LAYOUT_SYSTEM.md` defines the
 approved coordinated replacement layout model.
 `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` remain authoritative for the
-implemented public API. Phase T4 in `91_IMPLEMENTATION_PLAN.md` makes the
+implemented public API. Phase T4 in `91_IMPLEMENTATION_PLAN.md` made the
 Canvas/Plot ownership and complete built-in inheritance subset current using the
 closed `Theme` selector. Phase T6 performs the atomic replacement-value
 migration. Other target names and behaviors below are not a second current API
@@ -150,14 +149,18 @@ Plot/Canvas configuration or input.
 
 ## Ownership And Inheritance
 
-Phase T4 establishes `Canvas::theme(Theme)` and retains `Plot::theme(Theme)` as
-the sole owner attachments using the current closed built-in selector. The
-Canvas call is optional because Canvas selects Publication as its default root.
-Omission of the Plot call represents inheritance when composed and owner-local
-Publication default selection when standalone. Phase T6 retains these attachment
-names while replacing the closed selector with the complete immutable value
-defined by this specification. The constructor spelling below is the T6 target;
-T4 uses the current built-in Publication variant.
+`Canvas::theme(Theme)` and `Plot::theme(Theme)` are the sole current owner
+attachments using the closed built-in selector. The Canvas call is optional
+because Canvas selects `Theme::Publication` as its default root. Omission of the
+Plot call represents inheritance when composed and owner-local Publication
+default selection when standalone. T4 routes existing theme-aware Canvas and
+Plot consumers; backend surfaces, legend chrome, and replacement component
+properties remain assigned to T5.
+
+Phase T6 retains these attachment names while replacing the closed selector with
+the complete immutable value defined by this specification. The constructor
+spelling below is the T6 target; the current built-in spelling is
+`Theme::Publication`.
 
 `Plot` stores an optional complete explicit theme. Absence has two meanings
 selected only by the render owner:
@@ -172,17 +175,22 @@ An explicit Plot theme completely replaces the inherited theme for that plot;
 components are not merged. Facets inherit their owning Plot's one resolved
 theme and introduce no additional theme scope.
 
-Canvas-owned title blocks, shared headers, row titles, text panels, surfaces,
-and shared-legend chrome always use the Canvas root theme. Plot titles, plot
-subtitles, axes, marks, annotations, and panel chrome use the resolved Plot
-theme. A composed Plot's panel surface comes from its Plot theme; it never
-repaints the Canvas root surface.
+In the complete target, Canvas-owned title blocks, shared headers, row titles,
+text panels, surfaces, and shared-legend chrome use the Canvas root theme. Plot
+titles, plot subtitles, axes, marks, annotations, and panel chrome use the
+resolved Plot theme. A composed Plot's panel surface comes from its Plot theme;
+it never repaints the Canvas root surface. The current T4 subset is limited to
+the existing theme-aware consumers stated above.
 
 Theme state is immutable and owner-local. There is no process-global,
 thread-local, environment-selected, backend-selected, or asynchronously scoped
 theme.
 
 ## Resolution And Precedence
+
+The current T4 owner precedence is explicit Plot selection, inherited Canvas
+selection, then owner-local Publication default selection. The broader component
+and scale precedence below is the T6 target.
 
 For a property admitted at multiple scopes, precedence from highest to lowest is:
 
