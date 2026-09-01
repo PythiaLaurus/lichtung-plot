@@ -68,6 +68,33 @@ fn output_reuses_one_plot_render_for_exact_svg_bytes() {
 }
 
 #[test]
+fn omitted_plot_size_preserves_exact_default_svg_bytes() {
+    let data = scatter_data();
+    let directory = temp_dir("plot-default-size");
+    let first = directory.join("first.svg");
+    let second = directory.join("second.svg");
+    let explicit = directory.join("explicit.svg");
+    Plot::scatter(data.x.clone(), data.y.clone())
+        .svg_preserve_text(&first)
+        .unwrap();
+    Plot::scatter(data.x.clone(), data.y.clone())
+        .svg_preserve_text(&second)
+        .unwrap();
+    Plot::scatter(data.x, data.y)
+        .size(640, 480)
+        .svg_preserve_text(&explicit)
+        .unwrap();
+
+    let first_bytes = std::fs::read(&first).unwrap();
+    assert_eq!(first_bytes, std::fs::read(&second).unwrap());
+    assert_eq!(first_bytes, std::fs::read(&explicit).unwrap());
+    assert!(String::from_utf8(first_bytes)
+        .unwrap()
+        .contains("width=\"640\" height=\"480\""));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn output_reuses_one_canvas_render_for_exact_svg_bytes() {
     let data = scatter_data();
     let directory = temp_dir("canvas-output-reuse");

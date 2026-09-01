@@ -10,9 +10,10 @@ use crate::{Error, Output};
 impl Plot {
     fn render_scene(&self) -> Result<RenderedScene, Error> {
         let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
-        let mut backend = SvgBackend::in_memory(self.width(), self.height());
+        let (width, height) = plan.dimensions();
+        let mut backend = SvgBackend::in_memory(width, height);
         plan.render(&mut backend)?;
-        RenderedScene::new(self.width(), self.height(), backend.into_output())
+        RenderedScene::new(width, height, backend.into_output())
     }
 }
 

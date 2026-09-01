@@ -1,10 +1,14 @@
 //! Private plot and canvas layout modules.
 
 pub(crate) mod canvas;
+mod kernel;
 mod panel;
 mod text;
 
 pub(crate) use canvas::{CanvasLayout, CanvasLayoutSpec, PanelBox};
+#[cfg(test)]
+pub(crate) use kernel::force_reservation_failure;
+pub(crate) use kernel::{plan_exact_root, SelectedRoot};
 pub use panel::AxisTick;
 pub(crate) use panel::{
     anchored_auto_range, automatic_numeric_ticks, continuous_auto_range, display_axis_spec,

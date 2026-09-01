@@ -176,7 +176,7 @@ The approved theme and layout targets follow these rules:
 | T4d | Public attachment and current contract | COMPLETE |
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
-| T5a1 | Active exact-root candidate kernel | PENDING |
+| T5a1 | Active exact-root candidate kernel | COMPLETE |
 | T5a2 | Foundational resolved appearance and surfaces | PENDING |
 | T5a3 | Canonical fonts and immutable text plans | PENDING |
 | T5a4 | Root title-block plans | PENDING |
@@ -2326,7 +2326,7 @@ Commit: `docs(layout): adjudicate T5a implementation partition`.
 
 ### T5a1: Active Exact-Root Candidate Kernel
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a0.
 

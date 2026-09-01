@@ -285,6 +285,26 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 }
 
 #[test]
+fn exact_root_reservation_failures_precede_concrete_backend_begin() {
+    let plot = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0]),
+        NumericValues::new("y", [3.0, 1.0, 2.0]),
+    );
+    for stage in 1..=5 {
+        crate::layout::force_reservation_failure(stage);
+        let mut backend = RecordingBackend::default();
+
+        let error = plot
+            .render_with_backend(&mut backend)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains(&format!("reservation stage {stage}")));
+        assert_eq!((backend.begins, backend.ends), (0, 0));
+    }
+}
+
+#[test]
 fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));

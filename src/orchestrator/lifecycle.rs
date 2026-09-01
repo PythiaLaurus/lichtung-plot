@@ -13,7 +13,7 @@ pub(super) struct PlotPlan<'a> {
     source: &'a Plot,
     kind: PlotKind,
     theme: Box<ResolvedTheme>,
-    scene: PlotScenePlan,
+    root: crate::layout::SelectedRoot<PlotScenePlan>,
 }
 
 enum PlotScenePlan {
@@ -37,38 +37,45 @@ impl<'a> PlotPlan<'a> {
                 .resolve(),
         );
         source.validate_configuration(kind)?;
-        let scene = if source.has_facets() {
-            PlotScenePlan::Faceted(Box::new(super::facets::FacetPlan::new(
-                source, kind, &theme,
-            )?))
-        } else {
-            PlotScenePlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(source, kind, &theme)?))
-        };
+        let root = crate::layout::plan_exact_root(source.width(), source.height(), kind, || {
+            if source.has_facets() {
+                Ok(PlotScenePlan::Faceted(Box::new(
+                    super::facets::FacetPlan::new(source, kind, &theme)?,
+                )))
+            } else {
+                Ok(PlotScenePlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
+                    source, kind, &theme,
+                )?)))
+            }
+        })?;
         let plan = Self {
             source,
             kind,
             theme,
-            scene,
+            root,
         };
-        validate_with_null_backend(
-            source.width(),
-            source.height(),
-            "prepared plot preflight",
-            |backend| plan.render_scene(backend),
-        )?;
+        let (width, height) = plan.dimensions();
+        validate_with_null_backend(width, height, "prepared plot preflight", |backend| {
+            plan.render_scene(backend)
+        })?;
         Ok(plan)
     }
 
     pub(super) fn render(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         #[cfg(test)]
         super::FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let mut backend = DeferredBackend::new(backend, self.source.width(), self.source.height());
+        let (width, height) = self.dimensions();
+        let mut backend = DeferredBackend::new(backend, width, height);
         let rendered = self.render_scene(&mut backend);
         backend.finish(rendered, "backend canvas")
     }
 
+    pub(super) fn dimensions(&self) -> (u32, u32) {
+        self.root.dimensions()
+    }
+
     fn render_scene(&self, backend: &mut dyn Backend) -> Result<(), Error> {
-        match &self.scene {
+        match self.root.plan() {
             PlotScenePlan::Unfaceted(plan) => {
                 plan.render(self.source, self.kind, &self.theme, backend)
             }
