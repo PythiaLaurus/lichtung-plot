@@ -127,7 +127,7 @@ pub(crate) fn render(
             let color = theme.colors[idx % theme.colors.len()];
             LegendEntry::line_fill(
                 chart.legend_identity(label.clone()),
-                LineStyle::solid(theme.foreground, theme.axis_width),
+                LineStyle::solid(theme.foreground, theme.interval_width),
                 FillStyle {
                     color,
                     stroke: theme.foreground,
@@ -138,7 +138,14 @@ pub(crate) fn render(
         })
         .collect();
     let significance = if group_levels.is_empty() {
-        crate::significance::plan(chart, x_levels, &rendered_maxima, base_y_range, panel)?
+        crate::significance::plan(
+            chart,
+            x_levels,
+            &rendered_maxima,
+            base_y_range,
+            panel,
+            theme,
+        )?
     } else {
         crate::significance::plan_grouped(
             chart,
@@ -149,6 +156,7 @@ pub(crate) fn render(
             base_y_range,
             panel,
             false,
+            theme,
         )?
     };
     let y_range = significance.y_range;
@@ -163,6 +171,7 @@ pub(crate) fn render(
         Vec::new(),
         chart.x_axis_spec(),
         &y_axis_spec,
+        theme,
     );
     let proj = &layout.projection;
     let box_w_data = if group_active {
@@ -181,7 +190,7 @@ pub(crate) fn render(
                 stroke_width: 1.0,
                 opacity: 1.0,
             };
-            let style = LineStyle::solid(theme.foreground, theme.axis_width);
+            let style = LineStyle::solid(theme.foreground, theme.interval_width);
 
             let x_center_data =
                 crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());
@@ -271,11 +280,9 @@ pub(crate) fn render(
     })?;
 
     if hue_levels.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new())
-            .with_significance_brackets(significance.brackets))
+        Ok(PlotRenderResult::new(layout, Vec::new()).with_significance_plan(significance))
     } else {
-        Ok(PlotRenderResult::new(layout, legend_entries)
-            .with_significance_brackets(significance.brackets))
+        Ok(PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance))
     }
 }
 

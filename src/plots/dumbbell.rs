@@ -68,6 +68,7 @@ pub(crate) fn render(
         y_ticks,
         &x_axis,
         &y_axis,
+        context.theme,
     );
     let connector = LineStyle::solid(context.theme.foreground, 1.2);
     with_clip(backend, layout.projection.panel_box(), |backend| {

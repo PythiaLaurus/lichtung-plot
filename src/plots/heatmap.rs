@@ -136,7 +136,7 @@ pub(crate) fn render(
         fitted_unique_labels(
             &y_labels,
             (panel.x0 - 38.0).max(20.0),
-            theme.tick_font_size,
+            theme.typography.tick_label.font_size,
             "y",
         )?
     };
@@ -157,6 +157,7 @@ pub(crate) fn render(
         y_ticks,
         &x_spec,
         &y_spec,
+        theme,
     );
     validate_annotation_fit(chart, &prepared, &layout)?;
     let x_labels = if wrap_labels {
@@ -165,7 +166,7 @@ pub(crate) fn render(
         fitted_unique_labels(
             &x_labels,
             panel.width() / x_count as f64 * 0.9,
-            theme.tick_font_size,
+            theme.typography.tick_label.font_size,
             "x",
         )?
     };
@@ -670,7 +671,7 @@ fn draw_cells(
             if let Some(value) = value {
                 if let Some(format) = annotation_format {
                     let style = TextStyle {
-                        color: contrasting_text(color),
+                        color: contrasting_text(color).into(),
                         font_family: theme.font_family.clone(),
                         font_size: ANNOTATION_FONT_SIZE,
                         weight: crate::TextWeight::Normal,
@@ -725,7 +726,7 @@ fn draw_null_row_annotation(
         "heatmap fully-null row annotation",
     )?;
     let style = TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
         font_size: ANNOTATION_FONT_SIZE,
         weight: crate::TextWeight::Normal,
@@ -820,7 +821,7 @@ fn draw_colorbar(
         &stops,
     )?;
     let value_style = TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
         font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,

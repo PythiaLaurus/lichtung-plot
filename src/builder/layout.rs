@@ -59,13 +59,14 @@ impl Plot {
             self.height,
             theme,
             CanvasLayoutSpec {
-                has_title: theme.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
-                has_subtitle: theme.show_subtitle
-                    && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
-                has_caption: theme.show_caption
-                    && self.caption.as_ref().is_some_and(|s| !s.is_empty()),
-                has_x_label: theme.show_x_label && labels_present.0,
-                has_y_label: theme.show_y_label && labels_present.1,
+                has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
+                has_subtitle: self
+                    .subtitle
+                    .as_ref()
+                    .is_some_and(|value| !value.is_empty()),
+                has_caption: self.caption.as_ref().is_some_and(|value| !value.is_empty()),
+                has_x_label: labels_present.0,
+                has_y_label: labels_present.1,
             },
             (
                 self.title.as_deref(),
@@ -89,13 +90,14 @@ impl Plot {
             self.height,
             theme,
             CanvasLayoutSpec {
-                has_title: theme.show_title && self.title.as_ref().is_some_and(|s| !s.is_empty()),
-                has_subtitle: theme.show_subtitle
-                    && self.subtitle.as_ref().is_some_and(|s| !s.is_empty()),
-                has_caption: theme.show_caption
-                    && self.caption.as_ref().is_some_and(|s| !s.is_empty()),
-                has_x_label: theme.show_x_label && labels_present.0,
-                has_y_label: theme.show_y_label && labels_present.1,
+                has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
+                has_subtitle: self
+                    .subtitle
+                    .as_ref()
+                    .is_some_and(|value| !value.is_empty()),
+                has_caption: self.caption.as_ref().is_some_and(|value| !value.is_empty()),
+                has_x_label: labels_present.0,
+                has_y_label: labels_present.1,
             },
         );
         let _ = self.reserve_multiline_axis_titles(&mut canvas, false, theme);
@@ -145,7 +147,7 @@ impl Plot {
                 .map(|tick| {
                     TextBlock::layout(
                         &tick.label,
-                        theme.tick_font_size,
+                        theme.typography.tick_label.font_size,
                         tick_width.max(1.0),
                         "x-axis tick label",
                     )
@@ -154,7 +156,7 @@ impl Plot {
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
                 .fold(0.0_f64, f64::max);
-            let extra = (maximum_height - f64::from(theme.tick_font_size) * 1.2).max(0.0);
+            let extra = (maximum_height - theme.typography.tick_label.line_height()).max(0.0);
             if candidate_panel.height() - extra < 60.0 {
                 return Err(Error::Render(
                     "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or shorten the tick labels"
@@ -174,29 +176,29 @@ impl Plot {
         theme: &ResolvedTheme,
     ) -> Result<(usize, usize), Error> {
         let (x_label, y_label) = self.resolved_axis_labels(kind);
-        let x_lines = if theme.show_x_label && !x_label.is_empty() {
+        let x_lines = if x_label.is_empty() {
+            0
+        } else {
             TextBlock::layout(
                 &x_label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 panel.width().max(1.0),
                 "x-axis title",
             )?
             .lines()
             .len()
-        } else {
-            0
         };
-        let y_lines = if theme.show_y_label && !y_label.is_empty() {
+        let y_lines = if y_label.is_empty() {
+            0
+        } else {
             TextBlock::layout(
                 &y_label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 panel.height().max(1.0),
                 "y-axis title",
             )?
             .lines()
             .len()
-        } else {
-            0
         };
         Ok((x_lines, y_lines))
     }
@@ -213,7 +215,7 @@ impl Plot {
         checked: bool,
         theme: &ResolvedTheme,
     ) -> Result<(PanelBox, f64, f64), Error> {
-        let line_height = f64::from(theme.label_font_size) * 1.2;
+        let line_height = theme.typography.axis_title.line_height();
         let mut panel = candidate;
         for _ in 0..4 {
             let lines = self.axis_title_line_counts(kind, panel, theme)?;

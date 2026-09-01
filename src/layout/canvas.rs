@@ -13,9 +13,6 @@ const MIN_PANEL_WIDTH: f64 = 80.0;
 const MIN_PANEL_HEIGHT: f64 = 60.0;
 const COMPOSED_PANEL_GAP: f64 = 12.0;
 pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
-pub(crate) const X_AXIS_TICK_LABEL_GAP: f64 = 8.0;
-pub(crate) const X_AXIS_TITLE_GAP: f64 = 8.0;
-pub(crate) const X_AXIS_TITLE_WITHOUT_TICKS_GAP: f64 = 16.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -73,7 +70,19 @@ impl PanelRequirements {
         top_text: Option<&str>,
         available_panel: PanelBox,
     ) -> Result<Self, Error> {
-        Self::measure_header(layout, theme, None, top_text, available_panel)
+        let mut requirements = Self::measure_header(layout, theme, None, None, available_panel)?;
+        if let Some(text) = top_text {
+            let lines = try_wrap_text(
+                text,
+                theme.facet_header_font_size,
+                (available_panel.width() - 16.0).max(1.0),
+                "facet strip",
+            )?;
+            let line_height = f64::from(theme.facet_header_font_size) + 6.0;
+            let facet_top = lines.iter().fold(8.0, |height, _| height + line_height);
+            requirements.top = requirements.top.max(facet_top);
+        }
+        Ok(requirements)
     }
 
     #[expect(
@@ -91,7 +100,14 @@ impl PanelRequirements {
         top_subtitle: Option<&str>,
         available_panel: PanelBox,
     ) -> Result<Self, Error> {
-        let tick_length = f64::from(theme.tick_length);
+        let tick_length = theme
+            .axes
+            .ticks
+            .as_ref()
+            .map_or(0.0, |ticks| f64::from(ticks.length));
+        let tick_role = &theme.typography.tick_label;
+        let axis_title_role = &theme.typography.axis_title;
+        let spacing = &theme.axes.spacing;
         let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;
         let x_tick_blocks = layout
             .x_axis
@@ -101,7 +117,7 @@ impl PanelRequirements {
             .map(|tick| {
                 crate::layout::TextBlock::layout(
                     &tick.label,
-                    theme.tick_font_size,
+                    tick_role.font_size,
                     x_tick_width.max(1.0),
                     "x-axis tick label",
                 )
@@ -116,33 +132,25 @@ impl PanelRequirements {
             .map(|tick| {
                 crate::layout::TextBlock::layout(
                     &tick.label,
-                    theme.tick_font_size,
+                    tick_role.font_size,
                     y_tick_maximum_width,
                     "y-axis tick label",
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let x_tick_half_width = if theme.show_tick_labels {
-            x_tick_blocks
-                .iter()
-                .map(|block| block.width() / 2.0)
-                .fold(0.0_f64, f64::max)
-        } else {
-            0.0
-        };
-        let y_tick_width = if theme.show_tick_labels {
-            y_tick_blocks
-                .iter()
-                .map(crate::layout::TextBlock::width)
-                .fold(0.0_f64, f64::max)
-        } else {
-            0.0
-        };
+        let x_tick_half_width = x_tick_blocks
+            .iter()
+            .map(|block| block.width() / 2.0)
+            .fold(0.0_f64, f64::max);
+        let y_tick_width = y_tick_blocks
+            .iter()
+            .map(crate::layout::TextBlock::width)
+            .fold(0.0_f64, f64::max);
         let x_label_block = (!layout.x_axis.label.is_empty())
             .then(|| {
                 crate::layout::TextBlock::layout(
                     &layout.x_axis.label,
-                    theme.label_font_size,
+                    axis_title_role.font_size,
                     available_panel.width().max(1.0),
                     "x-axis title",
                 )
@@ -152,79 +160,59 @@ impl PanelRequirements {
             .then(|| {
                 crate::layout::TextBlock::layout(
                     &layout.y_axis.label,
-                    theme.label_font_size,
+                    axis_title_role.font_size,
                     available_panel.height().max(1.0),
                     "y-axis title",
                 )
             })
             .transpose()?;
-        let x_label_overhang = if theme.show_x_label {
-            ((x_label_block
-                .as_ref()
-                .map_or(0.0, crate::layout::TextBlock::width)
-                - available_panel.width())
-                / 2.0)
-                .max(0.0)
-        } else {
-            0.0
-        };
-        let y_label_overhang = if theme.show_y_label {
-            ((y_label_block
-                .as_ref()
-                .map_or(0.0, crate::layout::TextBlock::width)
-                - available_panel.height())
-                / 2.0)
-                .max(0.0)
-        } else {
-            0.0
-        };
-        let y_tick_vertical_overhang = if theme.show_tick_labels {
-            y_tick_blocks
-                .iter()
-                .map(|block| block.height() / 2.0)
-                .fold(0.0_f64, f64::max)
-        } else {
-            0.0
-        };
+        let x_label_overhang = ((x_label_block
+            .as_ref()
+            .map_or(0.0, crate::layout::TextBlock::width)
+            - available_panel.width())
+            / 2.0)
+            .max(0.0);
+        let y_label_overhang = ((y_label_block
+            .as_ref()
+            .map_or(0.0, crate::layout::TextBlock::width)
+            - available_panel.height())
+            / 2.0)
+            .max(0.0);
+        let y_tick_vertical_overhang = y_tick_blocks
+            .iter()
+            .map(|block| block.height() / 2.0)
+            .fold(0.0_f64, f64::max);
 
-        let mut left = if theme.show_tick_labels {
-            tick_length + 6.0 + y_tick_width
-        } else {
-            tick_length
-        };
-        if theme.show_y_label && !layout.y_axis.label.is_empty() {
-            left += 16.0
+        let mut left = tick_length + spacing.y_tick_label_gap + y_tick_width;
+        if !layout.y_axis.label.is_empty() {
+            left += spacing.y_title_tick_label_gap
                 + y_label_block.as_ref().map_or(
-                    f64::from(theme.label_font_size),
+                    f64::from(axis_title_role.font_size),
                     crate::layout::TextBlock::height,
                 );
         }
         left = left.max(x_tick_half_width).max(x_label_overhang) + 4.0;
 
-        let x_tick_height = if theme.show_tick_labels {
-            x_tick_blocks
-                .iter()
-                .map(crate::layout::TextBlock::height)
-                .fold(0.0_f64, f64::max)
-        } else {
-            0.0
-        };
+        let x_tick_height = x_tick_blocks
+            .iter()
+            .map(crate::layout::TextBlock::height)
+            .fold(0.0_f64, f64::max);
         let mut bottom = if x_tick_height > 0.0 {
-            tick_length + X_AXIS_TICK_LABEL_GAP + x_tick_height
+            tick_length + spacing.x_tick_label_gap + x_tick_height
         } else {
             tick_length + 4.0
         };
-        if theme.show_x_label && !layout.x_axis.label.is_empty() {
+        if !layout.x_axis.label.is_empty() {
             let title_gap = if x_tick_height > 0.0 {
-                X_AXIS_TICK_LABEL_GAP + x_tick_height + X_AXIS_TITLE_GAP
+                spacing.x_tick_label_gap + x_tick_height + spacing.x_title_tick_label_gap
             } else {
-                X_AXIS_TITLE_WITHOUT_TICKS_GAP
+                spacing.x_title_without_tick_labels_gap
             };
             bottom = bottom.max(
                 tick_length
                     + title_gap
                     + x_label_block.as_ref().map_or(
-                        f64::from(theme.label_font_size) * 1.2,
+                        axis_title_role.line_height(),
                         crate::layout::TextBlock::height,
                     ),
             );
@@ -234,16 +222,22 @@ impl PanelRequirements {
         let maximum_width = (available_panel.width() - 16.0).max(1.0);
         let title_lines = top_title.map_or(Ok(0), |text| {
             Ok::<_, Error>(
-                try_wrap_text(text, theme.title_font_size, maximum_width, "panel title")?.len(),
+                try_wrap_text(
+                    text,
+                    theme.typography.title.font_size,
+                    maximum_width,
+                    "panel title",
+                )?
+                .len(),
             )
         })?;
         let subtitle_lines = top_subtitle.map_or(Ok(0), |text| {
             Ok::<_, Error>(
                 try_wrap_text(
                     text,
-                    theme.subtitle_font_size,
+                    theme.typography.subtitle.font_size,
                     maximum_width,
-                    "panel subtitle or facet strip",
+                    "panel subtitle",
                 )?
                 .len(),
             )
@@ -256,8 +250,8 @@ impl PanelRequirements {
         let top = if title_lines == 0 && subtitle_lines == 0 {
             4.0
         } else {
-            title_lines as f64 * (f64::from(theme.title_font_size) + 6.0)
-                + subtitle_lines as f64 * (f64::from(theme.subtitle_font_size) + 6.0)
+            title_lines as f64 * theme.typography.title.line_height()
+                + subtitle_lines as f64 * theme.typography.subtitle.line_height()
                 + header_gap
                 + 8.0
         };
@@ -475,13 +469,16 @@ impl CanvasLayout {
         let h = f64::from(canvas_height);
 
         let title_gap = if spec.has_title || spec.has_subtitle {
-            14.0
+            theme
+                .composition
+                .root_title_block
+                .title_block_to_content_clearance
         } else {
             0.0
         };
-        let title_line_h = f64::from(theme.title_font_size) + 6.0;
-        let subtitle_line_h = f64::from(theme.subtitle_font_size) + 6.0;
-        let caption_line_h = f64::from(theme.caption_font_size) + 6.0;
+        let title_line_h = theme.typography.title.line_height();
+        let subtitle_line_h = theme.typography.subtitle.line_height();
+        let caption_line_h = theme.typography.caption.line_height();
         let title_h = if spec.has_title {
             title_line_h * line_counts.0.max(1) as f64
         } else {
@@ -492,40 +489,53 @@ impl CanvasLayout {
         } else {
             0.0
         };
+        let title_subtitle_gap = if spec.has_title && spec.has_subtitle {
+            theme.composition.root_title_block.title_subtitle_gap
+        } else {
+            0.0
+        };
         let caption_h = if spec.has_caption {
-            caption_line_h * line_counts.2.max(1) as f64 + 12.0
+            caption_line_h * line_counts.2.max(1) as f64
+                + theme
+                    .composition
+                    .root_title_block
+                    .caption_to_content_clearance
         } else {
             0.0
         };
 
-        let tick_h = if reserve_axes && theme.show_tick_labels {
-            f64::from(theme.tick_length)
-                + X_AXIS_TICK_LABEL_GAP
-                + f64::from(theme.tick_font_size) * 1.2
-        } else if reserve_axes {
-            f64::from(theme.tick_length) + 4.0
+        let tick_length = theme
+            .axes
+            .ticks
+            .as_ref()
+            .map_or(0.0, |ticks| f64::from(ticks.length));
+        let tick_h = if reserve_axes {
+            tick_length
+                + theme.axes.spacing.x_tick_label_gap
+                + theme.typography.tick_label.line_height()
         } else {
             0.0
         };
-        let x_label_h = if spec.has_x_label && theme.show_x_label {
-            let gap = if reserve_axes && theme.show_tick_labels {
-                X_AXIS_TITLE_GAP
+        let x_label_h = if spec.has_x_label {
+            let gap = if reserve_axes {
+                theme.axes.spacing.x_title_tick_label_gap
             } else {
-                X_AXIS_TITLE_WITHOUT_TICKS_GAP
+                theme.axes.spacing.x_title_without_tick_labels_gap
             };
-            gap + f64::from(theme.label_font_size) * 1.2
+            gap + theme.typography.axis_title.line_height()
         } else {
             0.0
         };
-        let y_tick_w = if reserve_axes && theme.show_tick_labels {
-            f64::from(theme.tick_font_size) * 2.2 + f64::from(theme.tick_length) + 6.0
-        } else if reserve_axes {
-            f64::from(theme.tick_length) + 4.0
+        let y_tick_w = if reserve_axes {
+            f64::from(theme.typography.tick_label.font_size) * 2.2
+                + tick_length
+                + theme.axes.spacing.y_tick_label_gap
         } else {
             0.0
         };
-        let y_label_w = if spec.has_y_label && theme.show_y_label {
-            f64::from(theme.label_font_size) + 12.0
+        let y_label_w = if spec.has_y_label {
+            f64::from(theme.typography.axis_title.font_size)
+                + theme.axes.spacing.y_title_edge_padding
         } else {
             0.0
         };
@@ -538,7 +548,7 @@ impl CanvasLayout {
             },
             right: if reserve_axes { 30.0 } else { 16.0 },
             bottom: tick_h + x_label_h + caption_h + 8.0,
-            top: (title_gap + title_h + subtitle_h + 12.0).max(30.0),
+            top: (title_gap + title_h + title_subtitle_gap + subtitle_h + 12.0).max(30.0),
         };
 
         if checked
@@ -556,12 +566,17 @@ impl CanvasLayout {
         let panel_box = PanelBox::new(x0, x1, y0, y1);
 
         let title_y = spec.has_title.then_some(h - 20.0);
-        let subtitle_y = spec
-            .has_subtitle
-            .then_some(h - 20.0 - if spec.has_title { title_h } else { 0.0 });
+        let subtitle_y = spec.has_subtitle.then_some(
+            h - 20.0
+                - if spec.has_title {
+                    title_h + title_subtitle_gap
+                } else {
+                    0.0
+                },
+        );
         let caption_y = spec
             .has_caption
-            .then_some(f64::from(theme.caption_font_size) + 6.0);
+            .then_some(theme.typography.caption.line_height());
 
         let title_lines_y = title_y.map_or_else(Vec::new, |first| {
             (0..line_counts.0.max(1))
@@ -600,14 +615,20 @@ fn measured_line_counts(
     Ok((
         text.0.map_or(Ok(0), |value| {
             Ok::<_, Error>(
-                try_wrap_text(value, theme.title_font_size, maximum_width, "canvas title")?.len(),
+                try_wrap_text(
+                    value,
+                    theme.typography.title.font_size,
+                    maximum_width,
+                    "canvas title",
+                )?
+                .len(),
             )
         })?,
         text.1.map_or(Ok(0), |value| {
             Ok::<_, Error>(
                 try_wrap_text(
                     value,
-                    theme.subtitle_font_size,
+                    theme.typography.subtitle.font_size,
                     maximum_width,
                     "canvas subtitle",
                 )?
@@ -618,7 +639,7 @@ fn measured_line_counts(
             Ok::<_, Error>(
                 try_wrap_text(
                     value,
-                    theme.caption_font_size,
+                    theme.typography.caption.font_size,
                     maximum_width,
                     "canvas caption",
                 )?
@@ -668,7 +689,7 @@ mod tests {
             (None, None, Some(caption)),
         )
         .unwrap();
-        let lines = wrap_text(caption, theme.caption_font_size, 328.0);
+        let lines = wrap_text(caption, theme.typography.caption.font_size, 328.0);
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
@@ -698,6 +719,58 @@ mod tests {
             (cells[1].x0 - cells[0].x1, cells[0].y0 - cells[2].y1),
             (COMPOSED_PANEL_GAP, COMPOSED_PANEL_GAP)
         );
+    }
+
+    #[test]
+    fn root_title_subtitle_gap_affects_reservation_and_position() {
+        let base = Theme::Publication.resolve();
+        let mut spaced = base.clone();
+        spaced.composition.root_title_block.title_subtitle_gap = 9.0;
+        let spec = CanvasLayoutSpec {
+            has_title: true,
+            has_subtitle: true,
+            has_caption: false,
+            has_x_label: false,
+            has_y_label: false,
+        };
+        let content = (Some("title"), Some("subtitle"), None);
+        let base_layout = CanvasLayout::measured_single_panel(640, 480, &base, spec, content)
+            .expect("base title block fits");
+        let spaced_layout = CanvasLayout::measured_single_panel(640, 480, &spaced, spec, content)
+            .expect("spaced title block fits");
+
+        assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);
+        assert!(
+            (base_layout.subtitle_y.expect("subtitle")
+                - spaced_layout.subtitle_y.expect("subtitle")
+                - 9.0)
+                .abs()
+                < f64::EPSILON
+        );
+    }
+
+    #[test]
+    fn facet_measurement_uses_the_same_legacy_metrics_as_facet_drawing() {
+        let mut theme = Theme::Publication.resolve();
+        theme.typography.subtitle.font_size = 7;
+        theme.facet_header_font_size = 32;
+        let panel = PanelBox::new(20.0, 420.0, 20.0, 320.0);
+        let layout = Layout {
+            projection: crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), panel.as_tuple()),
+            x_axis: crate::layout::Axis {
+                label: String::new(),
+                ticks: Vec::new(),
+            },
+            y_axis: crate::layout::Axis {
+                label: String::new(),
+                ticks: Vec::new(),
+            },
+        };
+
+        let requirements =
+            PanelRequirements::measure(&layout, &theme, Some("facet"), panel).unwrap();
+
+        assert!((requirements.top - 46.0).abs() < f64::EPSILON);
     }
 
     #[test]

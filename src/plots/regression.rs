@@ -90,6 +90,7 @@ pub(crate) fn render(
         chart.y_label_text().unwrap_or("").to_string(),
         &x_axis_spec,
         &y_axis_spec,
+        theme,
     );
     let projection = &layout.projection;
     let point_style = chart.point_style(theme.colors[0], 3);

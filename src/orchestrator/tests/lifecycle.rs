@@ -6,7 +6,9 @@ use super::{
     RENDER_THEME_ADDRESSES, TEMP_FILE_COUNTER,
 };
 use crate::orchestrator::DeferredBackend;
-use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
+use crate::render::backend::{
+    Backend, LineStyle, Point2D, Rgba, SurfaceRole, TextAnchor, TextStyle,
+};
 use crate::{AxisValues, CategoryValues, NumericValues};
 
 fn valid_line() -> ([Point2D; 2], LineStyle) {
@@ -210,7 +212,7 @@ fn deferred_backend_forwards_signed_text_positions_unchanged() {
                 Point2D::new(-7.0, 225.0),
                 "outside",
                 &TextStyle {
-                    color: (0, 0, 0),
+                    color: (0, 0, 0).into(),
                     font_family: "sans-serif".into(),
                     font_size: 12,
                     weight: crate::TextWeight::Normal,
@@ -326,11 +328,73 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
     assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
     assert_eq!((backend.begins, backend.ends), (1, 1));
+    assert_eq!(
+        backend
+            .surfaces
+            .iter()
+            .map(|surface| surface.role)
+            .collect::<Vec<_>>(),
+        [SurfaceRole::CanvasRoot, SurfaceRole::PlotPanel]
+    );
+    assert_eq!(
+        backend.surfaces[0].bounds,
+        crate::layout::PanelBox::new(0.0, 640.0, 0.0, 480.0)
+    );
+    assert_eq!(backend.surfaces[1].bounds, backend.clips[0]);
+    assert!(backend
+        .surfaces
+        .iter()
+        .all(|surface| surface.paint == Rgba::rgb(255, 255, 255)));
     RENDER_THEME_ADDRESSES.with(|addresses| {
         let addresses = addresses.borrow();
         assert!(!addresses.is_empty());
         assert!(addresses.iter().all(|address| *address == addresses[0]));
     });
+}
+
+#[test]
+fn standalone_lifecycle_preserves_distinct_transparent_root_and_panel_surfaces() {
+    let plot = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    )
+    .erase();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.surfaces.canvas_root = Rgba::new(17, 34, 51, 128);
+    theme.surfaces.plot_panel = Rgba::new(68, 85, 102, 64);
+    let plan = crate::orchestrator::lifecycle::PlotPlan::new_with_resolved_theme(
+        &plot,
+        PlotKind::Scatter,
+        theme,
+    )
+    .unwrap();
+    let mut recorded = RecordingBackend::default();
+
+    plan.render(&mut recorded).unwrap();
+
+    assert_eq!(recorded.surfaces.len(), 2);
+    assert_eq!(
+        (recorded.surfaces[0].role, recorded.surfaces[0].paint),
+        (SurfaceRole::CanvasRoot, Rgba::new(17, 34, 51, 128))
+    );
+    assert_eq!(
+        (recorded.surfaces[1].role, recorded.surfaces[1].paint),
+        (SurfaceRole::PlotPanel, Rgba::new(68, 85, 102, 64))
+    );
+
+    let (width, height) = plan.dimensions();
+    let mut backend = crate::render::svg_backend::SvgBackend::in_memory(width, height);
+    plan.render(&mut backend).unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    let surfaces = svg
+        .lines()
+        .filter(|line| line.starts_with("<rect "))
+        .collect::<Vec<_>>();
+
+    assert!(surfaces[0].contains("fill=\"#112233\" fill-opacity="));
+    assert!(surfaces[1].contains("fill=\"#445566\" fill-opacity="));
+    assert_eq!(surfaces[0].matches("fill-opacity=").count(), 1);
+    assert_eq!(surfaces[1].matches("fill-opacity=").count(), 1);
 }
 
 #[test]
@@ -406,6 +470,15 @@ fn canvas_inherited_children_share_the_root_and_explicit_publication_does_not() 
     assert_canvas_theme_identities_match(usize::MAX, 1);
     assert_canvas_theme_identities_differ(usize::MAX, 2);
     assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render"]);
+    assert_eq!(backend.surfaces.len(), 4);
+    assert_eq!(backend.surfaces[0].role, SurfaceRole::CanvasRoot);
+    assert_eq!(
+        backend.surfaces[0].bounds,
+        crate::layout::PanelBox::new(0.0, 960.0, 0.0, 640.0)
+    );
+    assert!(backend.surfaces[1..]
+        .iter()
+        .all(|surface| surface.role == SurfaceRole::PlotPanel));
     for owner in [0, 1, 2] {
         assert_canvas_theme_identity(
             owner,
@@ -445,6 +518,8 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
         (1, 0)
     );
     assert_eq!((backend.begins, backend.ends), (1, 1));
+    assert_eq!(backend.surfaces.len(), 1);
+    assert_eq!(backend.surfaces[0].role, SurfaceRole::CanvasRoot);
     assert_canvas_theme_identity(
         usize::MAX,
         &["resolved", "layout", "text-plan", "render", "text-render"],
@@ -456,8 +531,66 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
             .find(|(_, _, candidate, _)| candidate == text)
             .expect("private Nature root text is rendered")
             .3;
-        assert_eq!((style.color, style.font_size), ((40, 40, 40), size));
+        assert_eq!(style.color, (40, 40, 40));
+        assert_eq!(style.font_size, size);
     }
+}
+
+#[test]
+fn caller_content_presence_is_independent_from_foundational_appearance() {
+    let plot = || {
+        Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+        )
+        .theme(crate::Theme::Nature)
+    };
+    let mut populated = RecordingBackend::default();
+    plot()
+        .title("Caller title")
+        .subtitle("Caller subtitle")
+        .caption("Caller caption")
+        .x_label("Caller x")
+        .y_label("Caller y")
+        .render_with_backend(&mut populated)
+        .unwrap();
+
+    for expected in [
+        "Caller title",
+        "Caller subtitle",
+        "Caller caption",
+        "Caller x",
+        "Caller y",
+    ] {
+        assert!(populated
+            .text_draws
+            .iter()
+            .any(|(_, _, text, _)| text == expected));
+    }
+
+    let mut bare = RecordingBackend::default();
+    plot()
+        .x_label("")
+        .y_label("")
+        .render_with_backend(&mut bare)
+        .unwrap();
+    let mut empty = RecordingBackend::default();
+    plot()
+        .title("")
+        .subtitle("")
+        .caption("")
+        .x_label("")
+        .y_label("")
+        .render_with_backend(&mut empty)
+        .unwrap();
+
+    assert!(!empty
+        .text_draws
+        .iter()
+        .any(|(_, _, text, _)| text.is_empty()));
+    assert_eq!(empty.surfaces, bare.surfaces);
+    assert_eq!(empty.clips, bare.clips);
+    assert_eq!(empty.scatter_points, bare.scatter_points);
 }
 
 #[test]
@@ -610,7 +743,8 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
             .find(|(_, _, candidate, _)| candidate == text)
             .expect("shared Canvas header is rendered")
             .3;
-        assert_eq!((style.color, style.font_size), ((60, 60, 60), 19));
+        assert_eq!(style.color, (60, 60, 60));
+        assert_eq!(style.font_size, 19);
     }
 
     let mut reversed = RecordingBackend::default();
@@ -698,7 +832,8 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
         .find(|(_, _, text, _)| text == "Shared outcome")
         .expect("Canvas row title is rendered")
         .3;
-    assert_eq!((style.color, style.font_size), ((60, 60, 60), 19));
+    assert_eq!(style.color, (60, 60, 60));
+    assert_eq!(style.font_size, 19);
 
     let mut reversed = RecordingBackend::default();
     mixed_theme_canvas([crate::Theme::Science, crate::Theme::Nature])

@@ -82,6 +82,7 @@ pub(crate) fn render(
         y_ticks.clone(),
         &x_axis_spec,
         chart.y_axis_spec(),
+        theme,
     );
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
@@ -117,6 +118,7 @@ pub(crate) fn render(
         y_ticks,
         &x_axis_spec,
         chart.y_axis_spec(),
+        theme,
     );
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for (index, ((start, end), delta)) in spans.iter().zip(&deltas).enumerate() {
@@ -163,7 +165,7 @@ pub(crate) fn render(
         Ok(())
     })?;
     let total_style = TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
         font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,

@@ -5,7 +5,8 @@ use crate::Error;
 use super::backend::{validate_with_null_backend, DeferredBackend};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::render::backend::Backend;
+use crate::layout::PanelBox;
+use crate::render::backend::{Backend, SurfaceRole};
 use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 
@@ -28,14 +29,31 @@ struct UnfacetedPlotPlan {
 
 impl<'a> PlotPlan<'a> {
     pub(super) fn new(source: &'a Plot, kind: PlotKind) -> Result<Self, Error> {
-        #[cfg(test)]
-        super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         let theme = Box::new(
             source
                 .theme_spec()
                 .unwrap_or(crate::Theme::Publication)
                 .resolve(),
         );
+        Self::new_with_theme(source, kind, theme)
+    }
+
+    #[cfg(test)]
+    pub(super) fn new_with_resolved_theme(
+        source: &'a Plot,
+        kind: PlotKind,
+        theme: ResolvedTheme,
+    ) -> Result<Self, Error> {
+        Self::new_with_theme(source, kind, Box::new(theme))
+    }
+
+    fn new_with_theme(
+        source: &'a Plot,
+        kind: PlotKind,
+        theme: Box<ResolvedTheme>,
+    ) -> Result<Self, Error> {
+        #[cfg(test)]
+        super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         source.validate_configuration(kind)?;
         let root = crate::layout::plan_exact_root(source.width(), source.height(), kind, || {
             if source.has_facets() {
@@ -75,6 +93,12 @@ impl<'a> PlotPlan<'a> {
     }
 
     fn render_scene(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        let (width, height) = self.dimensions();
+        backend.draw_surface(
+            PanelBox::new(0.0, f64::from(width), 0.0, f64::from(height)),
+            self.theme.surfaces.canvas_root,
+            SurfaceRole::CanvasRoot,
+        )?;
         match self.root.plan() {
             PlotScenePlan::Unfaceted(plan) => {
                 plan.render(self.source, self.kind, &self.theme, backend)
@@ -117,6 +141,11 @@ impl UnfacetedPlotPlan {
         theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
+        backend.draw_surface(
+            self.panel_plan.panel_box,
+            theme.surfaces.plot_panel,
+            SurfaceRole::PlotPanel,
+        )?;
         if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
             crate::decorations::apply::apply_grid(source, &self.panel_plan.result, theme, backend)?;
         }
@@ -134,13 +163,8 @@ impl UnfacetedPlotPlan {
         );
         let rendered = self.plot.render_panel(kind, context, backend)?;
 
-        if !self.panel_plan.result.significance_brackets.is_empty() {
-            crate::significance::render(
-                source,
-                &self.panel_plan.result.significance_brackets,
-                theme,
-                backend,
-            )?;
+        if let Some(significance) = &self.panel_plan.result.significance {
+            crate::significance::render(source, significance, theme, backend)?;
         }
 
         match self.panel_plan.result.decoration_mode {

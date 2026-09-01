@@ -524,7 +524,14 @@ fn circle_top(svg: &str) -> f64 {
 }
 
 fn legend_rect(svg: &str) -> (f64, f64, f64, f64) {
-    let line = svg
+    let legend = svg
+        .split_once("<g id=\"legend\">")
+        .expect("legend layer")
+        .1
+        .split_once("</g>")
+        .expect("legend layer end")
+        .0;
+    let line = legend
         .lines()
         .find(|line| line.starts_with("<rect x="))
         .unwrap();

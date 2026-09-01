@@ -125,7 +125,7 @@ pub(crate) fn render(
                 (x_low, x_high),
                 &projection,
                 crate::layout::AxisSide::Bottom,
-                theme.tick_font_size,
+                theme.typography.tick_label.font_size,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,
@@ -136,7 +136,7 @@ pub(crate) fn render(
                 (y_low, y_high),
                 &projection,
                 crate::layout::AxisSide::Left,
-                theme.tick_font_size,
+                theme.typography.tick_label.font_size,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,
@@ -156,36 +156,46 @@ pub(crate) fn render(
     let proj = &layout.projection;
 
     // --- Tick marks on marginal panels (no labels, matching seaborn) ---
-    let tick_len = f64::from(theme.tick_length);
-    let tick_style = crate::render::backend::LineStyle::solid(theme.foreground, theme.axis_width);
+    let tick_len = theme
+        .axes
+        .ticks
+        .as_ref()
+        .map_or(0.0, |appearance| f64::from(appearance.length));
+    let tick_style = theme
+        .axes
+        .ticks
+        .as_ref()
+        .map(|appearance| appearance.stroke.backend_style());
 
     // Top KDE panel: x-axis ticks along the bottom edge (y = top_y0).
     // Positions match the central scatter's x-axis ticks.
-    for tick in &layout.x_axis.ticks {
-        let (x_px, _) = proj.project(tick.position, y_low);
-        if x_px >= central_x0 && x_px <= central_x1 {
-            backend.draw_line(
-                &[
-                    Point2D::new(x_px, top_y0),
-                    Point2D::new(x_px, top_y0 - tick_len),
-                ],
-                &tick_style,
-            )?;
+    if let Some(tick_style) = &tick_style {
+        for tick in &layout.x_axis.ticks {
+            let (x_px, _) = proj.project(tick.position, y_low);
+            if x_px >= central_x0 && x_px <= central_x1 {
+                backend.draw_line(
+                    &[
+                        Point2D::new(x_px, top_y0),
+                        Point2D::new(x_px, top_y0 - tick_len),
+                    ],
+                    tick_style,
+                )?;
+            }
         }
-    }
 
-    // Right KDE panel: y-axis ticks along the left edge (x = right_x0).
-    // Positions match the central scatter's y-axis ticks.
-    for tick in &layout.y_axis.ticks {
-        let (_, y_px) = proj.project(x_low, tick.position);
-        if y_px >= central_y0 && y_px <= central_y1 {
-            backend.draw_line(
-                &[
-                    Point2D::new(right_x0, y_px),
-                    Point2D::new(right_x0 - tick_len, y_px),
-                ],
-                &tick_style,
-            )?;
+        // Right KDE panel: y-axis ticks along the left edge (x = right_x0).
+        // Positions match the central scatter's y-axis ticks.
+        for tick in &layout.y_axis.ticks {
+            let (_, y_px) = proj.project(x_low, tick.position);
+            if y_px >= central_y0 && y_px <= central_y1 {
+                backend.draw_line(
+                    &[
+                        Point2D::new(right_x0, y_px),
+                        Point2D::new(right_x0 - tick_len, y_px),
+                    ],
+                    tick_style,
+                )?;
+            }
         }
     }
 

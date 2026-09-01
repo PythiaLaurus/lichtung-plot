@@ -110,6 +110,7 @@ pub(crate) fn render(
         y_ticks,
         &x_axis_spec,
         chart.y_axis_spec(),
+        theme,
     );
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
@@ -200,7 +201,7 @@ fn draw_colorbar(
         &stops,
     )?;
     let value_style = TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
         font_size: theme.detail_font_size,
         weight: crate::TextWeight::Normal,

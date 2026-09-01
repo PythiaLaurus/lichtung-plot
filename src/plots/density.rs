@@ -57,6 +57,7 @@ pub(crate) fn render(
         chart.y_label_text().unwrap_or("Density").to_string(),
         &x_axis_spec,
         &y_axis_spec,
+        context.theme,
     );
     let theme = context.theme;
 

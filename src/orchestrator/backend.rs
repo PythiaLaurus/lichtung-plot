@@ -5,7 +5,7 @@ use crate::Error;
 use crate::layout::PanelBox;
 use crate::render::backend::{
     self, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle, Point2D,
-    PointStyle, SignificanceBracket, TextStyle,
+    PointStyle, Rgba, SignificanceBracket, SurfaceRole, TextStyle,
 };
 
 pub(crate) struct DeferredBackend<'a> {
@@ -108,6 +108,16 @@ impl Backend for DeferredBackend<'_> {
     fn end_clip(&mut self) -> Result<(), Error> {
         self.ensure_started()?;
         self.backend.end_clip()
+    }
+
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_started()?;
+        self.backend.draw_surface(bounds, paint, role)
     }
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
@@ -277,6 +287,17 @@ impl Backend for NullBackend {
         }
     }
 
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        _paint: Rgba,
+        _role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_surface")?;
+        backend::validate_surface_bounds(bounds)?;
+        Ok(())
+    }
+
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
         backend::validate_points(points, "scatter")?;
@@ -364,7 +385,7 @@ impl Backend for NullBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::backend::BracketOrientation;
+    use crate::render::backend::{BracketOrientation, Rgba, SurfaceRole};
     use crate::render::svg_backend::SvgBackend;
 
     fn paired_draw_result(
@@ -499,6 +520,27 @@ mod tests {
     }
 
     #[test]
+    fn null_and_svg_share_surface_geometry_validation() {
+        assert_paired_success(|backend| {
+            backend.draw_surface(
+                PanelBox::new(1.0, 99.0, 2.0, 98.0),
+                Rgba::new(1, 2, 3, 0),
+                SurfaceRole::PlotPanel,
+            )
+        });
+        for bounds in [
+            PanelBox::new(f64::NAN, 10.0, 0.0, 10.0),
+            PanelBox::new(10.0, 10.0, 0.0, 10.0),
+            PanelBox::new(0.0, 0.0004, 0.0, 10.0),
+            PanelBox::new(-f64::MAX, f64::MAX, 0.0, 10.0),
+        ] {
+            assert_paired_rejection(|backend| {
+                backend.draw_surface(bounds, Rgba::rgb(1, 2, 3), SurfaceRole::CanvasRoot)
+            });
+        }
+    }
+
+    #[test]
     fn null_and_svg_share_rounded_rect_geometry_style_and_order() {
         let valid_fill = FillStyle {
             color: (0, 0, 0),
@@ -546,10 +588,12 @@ mod tests {
             orientation: BracketOrientation::Vertical,
         };
         let bracket_style = BracketStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             width: 1.0,
+            label_color: (0, 0, 0).into(),
             font_family: "sans-serif".into(),
             font_size: 12,
+            line_height: 14.4,
             weight: crate::TextWeight::Normal,
             label_gap: 4.0,
         };

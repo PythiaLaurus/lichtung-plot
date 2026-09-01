@@ -129,6 +129,7 @@ fn render_series(
         chart.y_label_text().unwrap_or("").to_owned(),
         &x_axis,
         &y_axis,
+        theme,
     );
     draw_series(chart, &layout, &series, theme, backend)?;
     draw_point_layers(&layout, &point_layers, backend)?;
@@ -244,7 +245,7 @@ fn draw_point_layers(
                         ),
                         label,
                         &TextStyle {
-                            color: layer.style.color,
+                            color: layer.style.color.into(),
                             font_family: crate::DEFAULT_FONT_FAMILY.to_owned(),
                             font_size: 10,
                             weight: crate::TextWeight::Normal,
@@ -337,6 +338,7 @@ fn render_grouped(
         Vec::new(),
         &x_axis,
         &y_axis,
+        theme,
     );
     let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
     with_clip(backend, layout.projection.panel_box(), |backend| {

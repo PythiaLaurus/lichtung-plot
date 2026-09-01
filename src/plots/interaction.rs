@@ -116,6 +116,7 @@ pub(crate) fn render(
         Vec::new(),
         chart.x_axis_spec(),
         &y_axis,
+        context.theme,
     );
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for identity in &identities {

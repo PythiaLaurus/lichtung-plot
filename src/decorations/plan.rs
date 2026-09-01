@@ -339,8 +339,8 @@ fn record_brackets(
     theme: &crate::theme::ResolvedTheme,
     geometry: &mut GeometryBackend,
 ) -> Result<(), Error> {
-    if !result.significance_brackets.is_empty() {
-        crate::significance::render(plot, &result.significance_brackets, theme, geometry)?;
+    if let Some(significance) = &result.significance {
+        crate::significance::render(plot, significance, theme, geometry)?;
     }
     Ok(())
 }

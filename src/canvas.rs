@@ -10,7 +10,7 @@ use crate::layout::canvas::{
     allocate_composed_grid, try_wrap_text, PanelRequirements, PANEL_HEADER_GAP,
 };
 use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox};
-use crate::render::backend::{with_layer, Backend, Point2D};
+use crate::render::backend::{with_layer, Backend, Point2D, SurfaceRole};
 use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
@@ -601,7 +601,7 @@ impl Canvas {
         let maximum_width = (cells[last].x1 - cells[first].x0 - 16.0).max(1.0);
         try_wrap_text(
             &title.text,
-            theme.title_font_size,
+            theme.composition_title_font_size,
             maximum_width,
             "canvas row title",
         )
@@ -619,7 +619,8 @@ impl Canvas {
     ) -> Result<(), Error> {
         for title in &self.row_titles {
             let lines = self.row_title_lines(title, cells, theme)?;
-            let top = lines.len() as f64 * (f64::from(theme.title_font_size) + 6.0) + 8.0;
+            let top =
+                lines.len() as f64 * (f64::from(theme.composition_title_font_size) + 6.0) + 8.0;
             requirements.push((
                 title.start,
                 0,
@@ -642,7 +643,7 @@ impl Canvas {
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<Vec<CanvasHeaderPlan>, Error> {
         let mut plans = Vec::new();
-        let line_height = f64::from(theme.title_font_size) + 6.0;
+        let line_height = f64::from(theme.composition_title_font_size) + 6.0;
         for title in &self.row_titles {
             let first = title.start * self.columns;
             let last = first + self.columns - 1;
@@ -755,13 +756,16 @@ impl Canvas {
         let column_header_height = if self.column_headers.is_empty() {
             0.0
         } else {
-            f64::from(header_theme.title_font_size) + 18.0
+            f64::from(header_theme.composition_title_font_size) + 18.0
         };
         let row_header_width = self
             .row_headers
             .iter()
             .map(|header| {
-                crate::layout::estimated_text_width(&header.text, header_theme.title_font_size)
+                crate::layout::estimated_text_width(
+                    &header.text,
+                    header_theme.composition_title_font_size,
+                )
             })
             .fold(0.0_f64, f64::max)
             + if self.row_headers.is_empty() {
@@ -867,16 +871,8 @@ impl Canvas {
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
-            let title = theme
-                .show_title
-                .then(|| plot.title_text())
-                .flatten()
-                .filter(|title| !title.is_empty());
-            let subtitle = theme
-                .show_subtitle
-                .then(|| plot.subtitle_text())
-                .flatten()
-                .filter(|subtitle| !subtitle.is_empty());
+            let title = plot.title_text().filter(|title| !title.is_empty());
+            let subtitle = plot.subtitle_text().filter(|subtitle| !subtitle.is_empty());
             let requirement = PanelRequirements::measure_header(
                 &result.layout,
                 theme,
@@ -907,16 +903,8 @@ impl Canvas {
                 let theme = themes
                     .plot(*index)
                     .expect("configured canvas panel has a resolved theme");
-                let title = theme
-                    .show_title
-                    .then(|| plot.title_text())
-                    .flatten()
-                    .filter(|title| !title.is_empty());
-                let subtitle = theme
-                    .show_subtitle
-                    .then(|| plot.subtitle_text())
-                    .flatten()
-                    .filter(|subtitle| !subtitle.is_empty());
+                let title = plot.title_text().filter(|title| !title.is_empty());
+                let subtitle = plot.subtitle_text().filter(|subtitle| !subtitle.is_empty());
                 Ok::<_, Error>((
                     *row,
                     *column,
@@ -988,7 +976,7 @@ impl Canvas {
             let maximum_width = (cell.width() - 32.0).max(1.0);
             let title = crate::layout::TextBlock::layout(
                 text_panel.title(),
-                themes.root().title_font_size,
+                themes.root().composition_title_font_size,
                 maximum_width,
                 "text panel title",
             )?;
@@ -1074,6 +1062,22 @@ impl Canvas {
         let theme = plan.themes.root();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "render", theme);
+        backend.draw_surface(
+            PanelBox::new(0.0, f64::from(self.width), 0.0, f64::from(self.height)),
+            theme.surfaces.canvas_root,
+            SurfaceRole::CanvasRoot,
+        )?;
+        for panel in &plan.panels {
+            let theme = plan
+                .themes
+                .plot(panel.index)
+                .expect("configured canvas panel has a resolved theme");
+            backend.draw_surface(
+                panel.panel_plan.panel_box,
+                theme.surfaces.plot_panel,
+                SurfaceRole::PlotPanel,
+            )?;
+        }
         for panel in &plan.panels {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
@@ -1116,13 +1120,8 @@ impl Canvas {
                 },
             );
             plot_with_planned_limits.render_panel(panel.kind, context, backend)?;
-            if !panel.panel_plan.result.significance_brackets.is_empty() {
-                crate::significance::render(
-                    plot,
-                    &panel.panel_plan.result.significance_brackets,
-                    theme,
-                    backend,
-                )?;
+            if let Some(significance) = &panel.panel_plan.result.significance {
+                crate::significance::render(plot, significance, theme, backend)?;
             }
             crate::decorations::apply::apply_axes(plot, &panel.panel_plan.result, theme, backend)?;
             crate::decorations::apply::apply_planned_legend(
@@ -1161,7 +1160,7 @@ impl Canvas {
                 legend.draw(backend, x, y)
             })?;
         }
-        let mut titles = TitleBlock::new().font_family(theme.font_family.clone());
+        let mut titles = TitleBlock::new();
         if let Some(title) = &self.title {
             titles = titles.title(title.clone());
         }
@@ -1294,9 +1293,9 @@ fn draw_canvas_headers(
         return Ok(());
     }
     let style = crate::render::backend::TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
-        font_size: theme.title_font_size,
+        font_size: theme.composition_title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
@@ -1322,9 +1321,9 @@ fn draw_canvas_row_titles(
         return Ok(());
     }
     let style = crate::render::backend::TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
-        font_size: theme.title_font_size,
+        font_size: theme.composition_title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
@@ -1352,15 +1351,15 @@ fn draw_text_panel(
     let mut y = panel.cell.y0.midpoint(panel.cell.y1) + total_height / 2.0
         - panel.title.line_height() / 2.0;
     let title_style = crate::render::backend::TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
-        font_size: theme.title_font_size,
+        font_size: theme.composition_title_font_size,
         weight: crate::TextWeight::Normal,
         anchor: crate::render::backend::TextAnchor::Middle,
         rotation: 0.0,
     };
     let body_style = crate::render::backend::TextStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         font_family: theme.font_family.clone(),
         font_size: theme.label_font_size,
         weight: crate::TextWeight::Normal,
@@ -1399,53 +1398,44 @@ fn draw_panel_header(
     theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let title = theme
-        .show_title
-        .then(|| plot.title_text())
-        .flatten()
-        .filter(|title| !title.is_empty());
-    let subtitle = theme
-        .show_subtitle
-        .then(|| plot.subtitle_text())
-        .flatten()
-        .filter(|subtitle| !subtitle.is_empty());
+    let title = plot.title_text().filter(|title| !title.is_empty());
+    let subtitle = plot.subtitle_text().filter(|subtitle| !subtitle.is_empty());
     if title.is_none() && subtitle.is_none() {
         return Ok(());
     }
     let maximum_width = (cell.width() - 16.0).max(1.0);
     let title_lines = title
-        .map(|text| try_wrap_text(text, theme.title_font_size, maximum_width, "panel title"))
+        .map(|text| {
+            try_wrap_text(
+                text,
+                theme.typography.title.font_size,
+                maximum_width,
+                "panel title",
+            )
+        })
         .transpose()?
         .unwrap_or_default();
     let subtitle_lines = subtitle
         .map(|text| {
             try_wrap_text(
                 text,
-                theme.subtitle_font_size,
+                theme.typography.subtitle.font_size,
                 maximum_width,
                 "panel subtitle",
             )
         })
         .transpose()?
         .unwrap_or_default();
-    let subtitle_line_height = f64::from(theme.subtitle_font_size) + 6.0;
-    let title_line_height = f64::from(theme.title_font_size) + 6.0;
-    let subtitle_style = crate::render::backend::TextStyle {
-        color: (80, 80, 80),
-        font_family: theme.font_family.clone(),
-        font_size: theme.subtitle_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: crate::render::backend::TextAnchor::Start,
-        rotation: 0.0,
-    };
-    let title_style = crate::render::backend::TextStyle {
-        color: theme.foreground,
-        font_family: theme.font_family.clone(),
-        font_size: theme.title_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: crate::render::backend::TextAnchor::Start,
-        rotation: 0.0,
-    };
+    let subtitle_line_height = theme.typography.subtitle.line_height();
+    let title_line_height = theme.typography.title.line_height();
+    let subtitle_style = theme
+        .typography
+        .subtitle
+        .backend_style(crate::render::backend::TextAnchor::Start, 0.0);
+    let title_style = theme
+        .typography
+        .title
+        .backend_style(crate::render::backend::TextAnchor::Start, 0.0);
     with_layer(backend, &plot.layer_name("title"), |backend| {
         for (index, line) in subtitle_lines.iter().rev().enumerate() {
             backend.draw_text(

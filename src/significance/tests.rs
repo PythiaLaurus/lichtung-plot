@@ -12,6 +12,11 @@ fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceA
     SignificanceAnnotation::pairwise(endpoint_a, endpoint_b, SignificanceMark::PValue(p_value))
 }
 
+fn default_metrics() -> BracketMetrics {
+    let style = SignificanceMarkStyle::default();
+    bracket_metrics(style, &test_significance_label(style))
+}
+
 #[test]
 fn planner_packs_disjoint_spans_into_minimal_deterministic_levels() {
     let comparisons = vec![
@@ -57,16 +62,12 @@ fn horizontal_levels_clear_the_full_previous_significance_label() {
         SignificanceMarkStyle::default(),
     )
     .unwrap();
-    let label_width = deterministic_text_width(
-        "****",
-        f64::from(SIGNIFICANCE_BRACKET_METRICS.label_font_size),
-    );
+    let metrics = default_metrics();
+    let label_width = deterministic_text_width("****", f64::from(metrics.label_font_size));
 
     assert!(
         plan.brackets[1].y - plan.brackets[0].y
-            >= SIGNIFICANCE_BRACKET_METRICS.label_gap
-                + label_width
-                + SIGNIFICANCE_BRACKET_METRICS.panel_padding
+            >= metrics.label_gap + label_width + metrics.panel_padding
     );
 }
 
@@ -214,22 +215,60 @@ fn planner_level_maximum_covers_every_category_under_each_span() {
         &comparisons,
         &categories(),
         &[1.0, 8.0, 2.0, 3.0],
-        (0.0, 10.0),
+        (0.0, 11.0),
         None,
-        Some((0.0, 10.0)),
+        Some((0.0, 11.0)),
         panel(),
         LegendAnnotationConstraint::NoObstacle,
         SignificanceMarkStyle::default(),
     )
     .unwrap();
-    let data_y = panel().y0 + 0.8 * panel().height();
+    let data_y = panel().y0 + (8.0 / 11.0) * panel().height();
 
     assert!(
-        plan.brackets[0].y
-            >= data_y
-                + SIGNIFICANCE_BRACKET_METRICS.tick_height
-                + SIGNIFICANCE_BRACKET_METRICS.data_gap
+        plan.brackets[0].y >= data_y + default_metrics().tick_height + default_metrics().data_gap
     );
+}
+
+#[test]
+fn planner_retains_the_exact_effective_significance_label() {
+    let style = SignificanceMarkStyle::new(23, crate::TextWeight::Bold, 9.0).unwrap();
+    let label = crate::Theme::Nature
+        .resolve()
+        .typography
+        .effective_significance_label(Some(style));
+    let plan = plan_comparisons_with_label(
+        &[comparison("a", "b", 0.01)],
+        &categories(),
+        &[1.0, 2.0, 3.0, 4.0],
+        (0.0, 10.0),
+        None,
+        None,
+        panel(),
+        LegendAnnotationConstraint::NoObstacle,
+        style,
+        label.clone(),
+    )
+    .unwrap();
+
+    assert_eq!(plan.label, label);
+
+    let chart = Plot::bar(
+        crate::CategoryValues::new("category", ["a", "b"]).unwrap(),
+        crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0])),
+    )
+    .significance_mark_style(style)
+    .erase();
+    let render_theme = crate::Theme::Publication.resolve();
+    let mut backend = crate::render::svg_backend::SvgBackend::in_memory(400, 300);
+    backend.begin(400, 300).unwrap();
+    render(&chart, &plan, &render_theme, &mut backend).unwrap();
+    backend.end().unwrap();
+    let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+    let label = svg.lines().find(|line| line.starts_with("<text ")).unwrap();
+
+    assert!(label.contains("fill=\"#282828\""));
+    assert!(label.contains("font-size=\"23\"") && label.contains("font-weight=\"700\""));
 }
 
 #[test]

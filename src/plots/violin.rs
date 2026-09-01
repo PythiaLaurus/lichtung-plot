@@ -177,7 +177,14 @@ fn render_samples(
         })
         .collect::<Result<Vec<_>, Error>>()?;
     let significance = if group_levels.is_empty() {
-        crate::significance::plan(chart, x_levels, &rendered_maxima, base_display_range, panel)?
+        crate::significance::plan(
+            chart,
+            x_levels,
+            &rendered_maxima,
+            base_display_range,
+            panel,
+            theme,
+        )?
     } else {
         let mut grouped_maxima = vec![vec![f64::NEG_INFINITY; group_levels.len()]; x_levels.len()];
         for group in &sample.groups {
@@ -192,6 +199,7 @@ fn render_samples(
             base_display_range,
             panel,
             false,
+            theme,
         )?
     };
     let display_range = significance.y_range;
@@ -214,6 +222,7 @@ fn render_samples(
         Vec::new(),
         chart.x_axis_spec(),
         &y_axis_spec,
+        theme,
     );
     let proj = &layout.projection;
 
@@ -281,7 +290,7 @@ fn render_samples(
                     let (_, q3_px) = proj.project(center_x_data, summary.q3);
                     let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
                     let (_, median_px) = proj.project(center_x_data, summary.median);
-                    let whisker_line = LineStyle::solid(theme.foreground, theme.axis_width);
+                    let whisker_line = LineStyle::solid(theme.foreground, theme.interval_width);
                     backend.draw_line(
                         &[
                             Point2D::new(cx_px, lo_whisker_px),
@@ -443,11 +452,9 @@ fn render_samples(
     })?;
 
     if hue_levels.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new())
-            .with_significance_brackets(significance.brackets))
+        Ok(PlotRenderResult::new(layout, Vec::new()).with_significance_plan(significance))
     } else {
-        Ok(PlotRenderResult::new(layout, legend_entries)
-            .with_significance_brackets(significance.brackets))
+        Ok(PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance))
     }
 }
 

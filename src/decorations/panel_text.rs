@@ -34,7 +34,7 @@ pub(crate) fn draw(
                     plan.position,
                     plan.text,
                     &TextStyle {
-                        color: theme.foreground,
+                        color: theme.foreground.into(),
                         font_family: theme.font_family.clone(),
                         font_size: theme.detail_font_size,
                         weight: crate::TextWeight::Normal,

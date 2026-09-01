@@ -9,15 +9,27 @@ use crate::Error;
 
 use crate::layout::{deterministic_text_width, PanelBox};
 use crate::render::backend::{
-    Backend, BracketMetrics, BracketOrientation, BracketStyle, SignificanceBracket,
-    SIGNIFICANCE_BRACKET_METRICS,
+    Backend, BracketOrientation, BracketStyle, SignificanceBracket, SIGNIFICANCE_BRACKET_GEOMETRY,
 };
+use crate::theme::TextAppearance;
 use crate::{Plot, SignificanceMarkStyle};
 
 #[derive(Debug)]
 pub(crate) struct SignificancePlan {
     pub(crate) y_range: (f64, f64),
     pub(crate) brackets: Vec<SignificanceBracket>,
+    label: TextAppearance,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BracketMetrics {
+    tick_height: f64,
+    label_gap: f64,
+    label_font_size: u32,
+    label_line_height: f64,
+    data_gap: f64,
+    level_step: f64,
+    panel_padding: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -48,8 +60,12 @@ pub(crate) fn plan(
     rendered_maxima: &[f64],
     y_range: (f64, f64),
     panel: PanelBox,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<SignificancePlan, Error> {
-    plan_comparisons(
+    let label = theme
+        .typography
+        .effective_significance_label(chart.significance_mark_style_override());
+    plan_comparisons_with_label(
         chart.significance_annotations(),
         categories,
         rendered_maxima,
@@ -59,6 +75,7 @@ pub(crate) fn plan(
         panel,
         LegendAnnotationConstraint::NoObstacle,
         chart.significance_mark_style_spec(),
+        label,
     )
 }
 
@@ -66,6 +83,7 @@ pub(crate) fn plan(
     clippy::too_many_arguments,
     reason = "the wrapper preserves the existing validated significance planner inputs"
 )]
+#[cfg(test)]
 fn plan_comparisons(
     annotations: &[SignificanceAnnotation],
     categories: &[String],
@@ -77,7 +95,37 @@ fn plan_comparisons(
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    plan_comparisons_at(
+    plan_comparisons_with_label(
+        annotations,
+        categories,
+        rendered_maxima,
+        y_range,
+        categorical_x_override,
+        y_limits,
+        panel,
+        legend_constraint,
+        mark_style,
+        test_significance_label(mark_style),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the wrapper preserves the existing validated significance planner inputs"
+)]
+fn plan_comparisons_with_label(
+    annotations: &[SignificanceAnnotation],
+    categories: &[String],
+    rendered_maxima: &[f64],
+    y_range: (f64, f64),
+    categorical_x_override: Option<(f64, f64)>,
+    y_limits: Option<(f64, f64)>,
+    panel: PanelBox,
+    legend_constraint: LegendAnnotationConstraint,
+    mark_style: SignificanceMarkStyle,
+    label: TextAppearance,
+) -> Result<SignificancePlan, Error> {
+    plan_comparisons_at_with_label(
         annotations,
         categories,
         rendered_maxima,
@@ -89,14 +137,14 @@ fn plan_comparisons(
         legend_constraint,
         false,
         mark_style,
+        label,
     )
 }
 
+#[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
-    clippy::cast_precision_loss,
-    reason = "the private planner keeps validated anchors, ranges, and panel geometry together"
+    reason = "direct planner tests preserve exact anchor and orientation inputs"
 )]
 fn plan_comparisons_at(
     annotations: &[SignificanceAnnotation],
@@ -111,7 +159,43 @@ fn plan_comparisons_at(
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
-    let metrics = bracket_metrics(mark_style);
+    plan_comparisons_at_with_label(
+        annotations,
+        categories,
+        rendered_maxima,
+        anchor_positions,
+        y_range,
+        categorical_x_override,
+        y_limits,
+        panel,
+        legend_constraint,
+        horizontal,
+        mark_style,
+        test_significance_label(mark_style),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    reason = "the private planner keeps validated anchors, ranges, and panel geometry together"
+)]
+fn plan_comparisons_at_with_label(
+    annotations: &[SignificanceAnnotation],
+    categories: &[String],
+    rendered_maxima: &[f64],
+    anchor_positions: Option<&[f64]>,
+    y_range: (f64, f64),
+    categorical_x_override: Option<(f64, f64)>,
+    y_limits: Option<(f64, f64)>,
+    panel: PanelBox,
+    legend_constraint: LegendAnnotationConstraint,
+    horizontal: bool,
+    mark_style: SignificanceMarkStyle,
+    label: TextAppearance,
+) -> Result<SignificancePlan, Error> {
+    let metrics = bracket_metrics(mark_style, &label);
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
@@ -208,6 +292,7 @@ fn plan_comparisons_at(
         return Ok(SignificancePlan {
             y_range: planned_range,
             brackets: Vec::new(),
+            label,
         });
     }
 
@@ -262,7 +347,7 @@ fn plan_comparisons_at(
         let label_extent = if horizontal {
             deterministic_text_width(&comparison.label, f64::from(metrics.label_font_size))
         } else {
-            f64::from(metrics.label_font_size)
+            metrics.label_line_height
         };
         level_label_extents[comparison.level] =
             level_label_extents[comparison.level].max(label_extent);
@@ -364,7 +449,7 @@ fn plan_comparisons_at(
             let x_right = anchor(comparison.right);
             let label_center = f64::midpoint(x_left, x_right);
             let label_half_extent = if horizontal {
-                f64::from(metrics.label_font_size) / 2.0
+                metrics.label_line_height / 2.0
             } else {
                 deterministic_text_width(
                     &comparison.label,
@@ -391,6 +476,7 @@ fn plan_comparisons_at(
     Ok(SignificancePlan {
         y_range: planned_range,
         brackets,
+        label,
     })
 }
 
@@ -408,6 +494,7 @@ pub(crate) fn plan_grouped(
     y_range: (f64, f64),
     panel: PanelBox,
     stacked: bool,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<SignificancePlan, Error> {
     plan_grouped_oriented(
         chart,
@@ -420,6 +507,7 @@ pub(crate) fn plan_grouped(
         LegendAnnotationConstraint::NoObstacle,
         stacked,
         false,
+        theme,
     )
 }
 
@@ -437,6 +525,7 @@ pub(crate) fn plan_horizontal(
     x_range: (f64, f64),
     panel: PanelBox,
     stacked: bool,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<SignificancePlan, Error> {
     plan_grouped_oriented(
         chart,
@@ -449,6 +538,7 @@ pub(crate) fn plan_horizontal(
         LegendAnnotationConstraint::NoObstacle,
         stacked,
         true,
+        theme,
     )
     .map_err(|error| match error {
         Error::Render(message) => Error::Render(
@@ -466,6 +556,7 @@ pub(crate) fn plan_horizontal(
 
 #[expect(
     clippy::too_many_arguments,
+    clippy::too_many_lines,
     clippy::cast_precision_loss,
     reason = "grouped vertical and horizontal planners share one exact-anchor implementation"
 )]
@@ -480,6 +571,7 @@ fn plan_grouped_oriented(
     legend_constraint: LegendAnnotationConstraint,
     stacked: bool,
     horizontal: bool,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<SignificancePlan, Error> {
     if categories.is_empty()
         || rendered_maxima.len() != categories.len()
@@ -553,7 +645,10 @@ fn plan_grouped_oriented(
             ))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let mut result = plan_comparisons_at(
+    let label = theme
+        .typography
+        .effective_significance_label(chart.significance_mark_style_override());
+    let mut result = plan_comparisons_at_with_label(
         &transformed,
         &labels,
         &maxima,
@@ -573,6 +668,7 @@ fn plan_grouped_oriented(
         legend_constraint,
         horizontal,
         chart.significance_mark_style_spec(),
+        label,
     )?;
     if horizontal {
         for bracket in &mut result.brackets {
@@ -847,33 +943,51 @@ fn data_fits_below_ceiling(
     data_top + metrics.data_gap <= ceiling - metrics.panel_padding
 }
 
-fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
+fn bracket_metrics(style: SignificanceMarkStyle, label: &TextAppearance) -> BracketMetrics {
     BracketMetrics {
+        tick_height: SIGNIFICANCE_BRACKET_GEOMETRY.tick_height,
         label_gap: style.gap_spec(),
-        label_font_size: style.font_size_spec(),
-        ..SIGNIFICANCE_BRACKET_METRICS
+        label_font_size: label.font_size,
+        label_line_height: label.line_height(),
+        data_gap: SIGNIFICANCE_BRACKET_GEOMETRY.data_gap,
+        level_step: SIGNIFICANCE_BRACKET_GEOMETRY.level_step,
+        panel_padding: SIGNIFICANCE_BRACKET_GEOMETRY.panel_padding,
     }
 }
 
 pub(crate) fn render(
     chart: &Plot,
-    brackets: &[SignificanceBracket],
+    plan: &SignificancePlan,
     theme: &crate::theme::ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let mark_style = chart.significance_mark_style_spec();
+    let label = &plan.label;
     let style = BracketStyle {
-        color: theme.foreground,
+        color: theme.foreground.into(),
         width: theme.bracket_width,
-        font_family: theme.font_family.clone(),
-        font_size: mark_style.font_size_spec(),
-        weight: mark_style.weight_spec(),
+        label_color: label.paint,
+        font_family: label.stack.clone(),
+        font_size: label.font_size,
+        line_height: label.line_height(),
+        weight: label.weight,
         label_gap: mark_style.gap_spec(),
     };
-    for bracket in brackets {
+    for bracket in &plan.brackets {
         backend.draw_bracket(bracket, &style)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn test_significance_label(mark_style: SignificanceMarkStyle) -> TextAppearance {
+    let mut label = crate::Theme::Publication
+        .resolve()
+        .typography
+        .significance_label;
+    label.font_size = mark_style.font_size_spec();
+    label.weight = mark_style.weight_spec();
+    label
 }
 
 fn render_error(message: impl Into<String>) -> Error {

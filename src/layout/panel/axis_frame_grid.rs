@@ -2,15 +2,9 @@ use crate::Error;
 
 use super::geometry::y_axis_label_half_width;
 use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection};
-use crate::layout::canvas::{
-    X_AXIS_TICK_LABEL_GAP, X_AXIS_TITLE_GAP, X_AXIS_TITLE_WITHOUT_TICKS_GAP,
-};
 use crate::layout::TextBlock;
-use crate::render::backend::{Backend, LineStyle, Point2D, TextAnchor, TextStyle};
+use crate::render::backend::{Backend, Point2D, TextAnchor, TextStyle};
 use crate::theme::ResolvedTheme;
-
-const Y_AXIS_LABEL_EDGE_PADDING: f64 = 12.0;
-const Y_AXIS_LABEL_TICK_GAP: f64 = 16.0;
 
 impl AxisSpec {
     /// Return a copy of this spec with explicit limits.
@@ -53,9 +47,6 @@ impl Axis {
         theme: &ResolvedTheme,
         axis: &str,
     ) -> Result<(), Error> {
-        if !theme.show_tick_labels {
-            return Ok(());
-        }
         let maximum_width = self.tick_label_maximum_width(projection, side);
         let role = format!("{axis} explicit tick label");
         let mut previous = None;
@@ -65,7 +56,12 @@ impl Axis {
             .enumerate()
             .filter(|(_, tick)| !tick.label.is_empty())
         {
-            let block = TextBlock::layout(&tick.label, theme.tick_font_size, maximum_width, &role)?;
+            let block = TextBlock::layout(
+                &tick.label,
+                theme.typography.tick_label.font_size,
+                maximum_width,
+                &role,
+            )?;
             let center = match side {
                 AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
                 AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
@@ -122,34 +118,32 @@ impl Axis {
         let (x0, x1, y0, y1) = projection.pixel_box();
         // y0 = bottom of plot area (math), y1 = top (math).
 
-        let tick_style = LineStyle::solid(theme.foreground, theme.axis_width);
-        let label_style = TextStyle {
-            color: theme.foreground,
-            font_family: theme.font_family.clone(),
-            font_size: theme.label_font_size,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Middle,
-            rotation: 0.0,
-        };
-        let tick_text_style = TextStyle {
-            color: theme.foreground,
-            font_family: theme.font_family.clone(),
-            font_size: theme.tick_font_size,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Middle,
-            rotation: 0.0,
-        };
+        let frame = theme.axes.frame.as_ref();
+        let ticks = theme.axes.ticks.as_ref();
+        let frame_style = frame.map(|appearance| appearance.stroke.backend_style());
+        let tick_style = ticks.map(|appearance| appearance.stroke.backend_style());
+        let tick_length = ticks.map_or(0.0, |appearance| f64::from(appearance.length));
+        let label_style = theme
+            .typography
+            .axis_title
+            .backend_style(TextAnchor::Middle, 0.0);
+        let tick_text_style = theme
+            .typography
+            .tick_label
+            .backend_style(TextAnchor::Middle, 0.0);
         let tick_width = self.tick_label_maximum_width(projection, side);
 
         // Spine (only the two visible edges for open-frame
         // styles; the Frame renderer decides whether the full
         // box is drawn).
-        if theme.show_top_right_spines {
-            let spine = match side {
-                AxisSide::Bottom => vec![Point2D::new(x0, y0), Point2D::new(x1, y0)],
-                AxisSide::Left => vec![Point2D::new(x0, y0), Point2D::new(x0, y1)],
-            };
-            backend.draw_line(&spine, &tick_style)?;
+        if frame.is_some_and(|appearance| appearance.source_show_top_right_spines) {
+            if let Some(frame_style) = &frame_style {
+                let spine = match side {
+                    AxisSide::Bottom => vec![Point2D::new(x0, y0), Point2D::new(x1, y0)],
+                    AxisSide::Left => vec![Point2D::new(x0, y0), Point2D::new(x0, y1)],
+                };
+                backend.draw_line(&spine, frame_style)?;
+            }
         }
 
         // Tick marks + tick labels.
@@ -157,23 +151,22 @@ impl Axis {
             match side {
                 AxisSide::Bottom => {
                     let (x_px, _) = projection.project(tick.position, projection.y_range().0);
-                    if theme.show_ticks {
-                        let tick_len = f64::from(theme.tick_length);
+                    if let Some(tick_style) = &tick_style {
                         backend.draw_line(
-                            &[Point2D::new(x_px, y0), Point2D::new(x_px, y0 - tick_len)],
-                            &tick_style,
+                            &[Point2D::new(x_px, y0), Point2D::new(x_px, y0 - tick_length)],
+                            tick_style,
                         )?;
                     }
-                    if theme.show_tick_labels && !tick.label.is_empty() {
+                    if !tick.label.is_empty() {
                         let block = TextBlock::layout(
                             &tick.label,
-                            theme.tick_font_size,
+                            theme.typography.tick_label.font_size,
                             tick_width,
                             "x-axis tick label",
                         )?;
                         let first_y = y0
-                            - f64::from(theme.tick_length)
-                            - X_AXIS_TICK_LABEL_GAP
+                            - tick_length
+                            - theme.axes.spacing.x_tick_label_gap
                             - block.line_height() / 2.0;
                         for (index, line) in block.lines().iter().enumerate() {
                             backend.draw_text(
@@ -189,21 +182,20 @@ impl Axis {
                 }
                 AxisSide::Left => {
                     let (_, y_px) = projection.project(projection.x_range().0, tick.position);
-                    if theme.show_ticks {
-                        let tick_len = f64::from(theme.tick_length);
+                    if let Some(tick_style) = &tick_style {
                         backend.draw_line(
-                            &[Point2D::new(x0, y_px), Point2D::new(x0 - tick_len, y_px)],
-                            &tick_style,
+                            &[Point2D::new(x0, y_px), Point2D::new(x0 - tick_length, y_px)],
+                            tick_style,
                         )?;
                     }
-                    if theme.show_tick_labels && !tick.label.is_empty() {
+                    if !tick.label.is_empty() {
                         let y_tick_style = TextStyle {
                             anchor: TextAnchor::End,
                             ..tick_text_style.clone()
                         };
                         let block = TextBlock::layout(
                             &tick.label,
-                            theme.tick_font_size,
+                            theme.typography.tick_label.font_size,
                             tick_width,
                             "y-axis tick label",
                         )?;
@@ -213,7 +205,9 @@ impl Axis {
                         for (index, line) in block.lines().iter().enumerate() {
                             backend.draw_text(
                                 Point2D::new(
-                                    ((x0 - f64::from(theme.tick_length)) - 6.0).max(0.0).round(),
+                                    (x0 - tick_length - theme.axes.spacing.y_tick_label_gap)
+                                        .max(0.0)
+                                        .round(),
                                     (first_y - index as f64 * block.line_height()).round(),
                                 ),
                                 line,
@@ -230,38 +224,36 @@ impl Axis {
             match side {
                 AxisSide::Bottom => {
                     let cx = f64::midpoint(x0, x1);
-                    let tick_label_height = if theme.show_tick_labels {
-                        self.ticks
-                            .iter()
-                            .filter(|tick| !tick.label.is_empty())
-                            .map(|tick| {
-                                TextBlock::layout(
-                                    &tick.label,
-                                    theme.tick_font_size,
-                                    tick_width,
-                                    "x-axis tick label",
-                                )
-                                .map(|block| block.height())
-                            })
-                            .collect::<Result<Vec<_>, _>>()?
-                            .into_iter()
-                            .fold(0.0_f64, f64::max)
-                    } else {
-                        0.0
-                    };
+                    let tick_label_height = self
+                        .ticks
+                        .iter()
+                        .filter(|tick| !tick.label.is_empty())
+                        .map(|tick| {
+                            TextBlock::layout(
+                                &tick.label,
+                                theme.typography.tick_label.font_size,
+                                tick_width,
+                                "x-axis tick label",
+                            )
+                            .map(|block| block.height())
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .fold(0.0_f64, f64::max);
                     let block = TextBlock::layout(
                         &self.label,
-                        theme.label_font_size,
+                        theme.typography.axis_title.font_size,
                         (x1 - x0).max(1.0),
                         "x-axis title",
                     )?;
                     let tick_offset = if tick_label_height > 0.0 {
-                        X_AXIS_TICK_LABEL_GAP + tick_label_height + X_AXIS_TITLE_GAP
+                        theme.axes.spacing.x_tick_label_gap
+                            + tick_label_height
+                            + theme.axes.spacing.x_title_tick_label_gap
                     } else {
-                        X_AXIS_TITLE_WITHOUT_TICKS_GAP
+                        theme.axes.spacing.x_title_without_tick_labels_gap
                     };
-                    let first_y =
-                        y0 - f64::from(theme.tick_length) - tick_offset - block.line_height() / 2.0;
+                    let first_y = y0 - tick_length - tick_offset - block.line_height() / 2.0;
                     for (index, line) in block.lines().iter().enumerate() {
                         backend.draw_text(
                             Point2D::new(
@@ -275,43 +267,42 @@ impl Axis {
                 }
                 AxisSide::Left => {
                     let cy = f64::midpoint(y0, y1);
-                    let tick_label_width = if theme.show_tick_labels {
-                        self.ticks
-                            .iter()
-                            .filter(|tick| !tick.label.is_empty())
-                            .map(|tick| {
-                                TextBlock::layout(
-                                    &tick.label,
-                                    theme.tick_font_size,
-                                    tick_width,
-                                    "y-axis tick label",
-                                )
-                                .map(|block| block.width())
-                            })
-                            .collect::<Result<Vec<_>, _>>()?
-                            .into_iter()
-                            .fold(0.0_f64, f64::max)
-                    } else {
-                        0.0
-                    };
+                    let tick_label_width = self
+                        .ticks
+                        .iter()
+                        .filter(|tick| !tick.label.is_empty())
+                        .map(|tick| {
+                            TextBlock::layout(
+                                &tick.label,
+                                theme.typography.tick_label.font_size,
+                                tick_width,
+                                "y-axis tick label",
+                            )
+                            .map(|block| block.width())
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .fold(0.0_f64, f64::max);
                     let block = TextBlock::layout(
                         &self.label,
-                        theme.label_font_size,
+                        theme.typography.axis_title.font_size,
                         (y1 - y0).max(1.0),
                         "y-axis title",
                     )?;
-                    let tick_label_anchor_x = x0 - f64::from(theme.tick_length) - 6.0;
-                    let label_half_width = y_axis_label_half_width(theme.label_font_size);
-                    let min_lx = Y_AXIS_LABEL_EDGE_PADDING
+                    let tick_label_anchor_x =
+                        x0 - tick_length - theme.axes.spacing.y_tick_label_gap;
+                    let label_half_width =
+                        y_axis_label_half_width(theme.typography.axis_title.font_size);
+                    let min_lx = theme.axes.spacing.y_title_edge_padding
                         + label_half_width
                         + block.lines().len().saturating_sub(1) as f64 * block.line_height();
                     let lx = if tick_label_width > 0.0 {
                         tick_label_anchor_x
                             - tick_label_width
-                            - Y_AXIS_LABEL_TICK_GAP
+                            - theme.axes.spacing.y_title_tick_label_gap
                             - label_half_width
                     } else {
-                        x0 - f64::from(theme.tick_length) - 48.0
+                        x0 - tick_length - 48.0
                     }
                     .max(min_lx);
                     let y_label_style = TextStyle {
@@ -338,21 +329,17 @@ impl Axis {
 }
 
 impl Frame {
-    /// Draw the four-spine frame using `theme` styles. If
-    /// `theme.show_frame` is `false`, this is a no-op. The
-    /// `theme.show_top_right_spines` flag decides whether the
-    /// top and right spines are drawn in addition to the bottom
-    /// and left ones.
+    /// Draw the current structurally present four-spine frame.
     pub fn draw(
         projection: &Projection,
         theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        if !theme.show_frame {
+        let Some(frame) = &theme.axes.frame else {
             return Ok(());
-        }
+        };
         let (x0, x1, y0, y1) = projection.pixel_box();
-        let line_style = LineStyle::solid(theme.foreground, theme.axis_width);
+        let line_style = frame.stroke.backend_style();
         backend.draw_line(&[Point2D::new(x0, y0), Point2D::new(x1, y0)], &line_style)?;
         backend.draw_line(&[Point2D::new(x1, y0), Point2D::new(x1, y1)], &line_style)?;
         backend.draw_line(&[Point2D::new(x1, y1), Point2D::new(x0, y1)], &line_style)?;
@@ -361,9 +348,7 @@ impl Frame {
 }
 
 impl Grid {
-    /// Draw the grid lines using `theme` styles. If either
-    /// `theme.show_grid` is `false` or `theme.grid_width == 0`,
-    /// this is a no-op.
+    /// Draw the structurally present grid style.
     pub fn draw(
         projection: &Projection,
         x_axis: &Axis,
@@ -371,10 +356,10 @@ impl Grid {
         theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        if !theme.show_grid || theme.grid_width == 0.0 {
+        let Some(grid) = &theme.axes.grid else {
             return Ok(());
-        }
-        let line_style = LineStyle::medium_dashed(theme.grid_color, theme.grid_width);
+        };
+        let line_style = grid.backend_style();
         for tick in &x_axis.ticks {
             let (x_px, _) = projection.project(tick.position, 0.0);
             let (_, y_min) = projection.project(tick.position, projection.y_range().0);

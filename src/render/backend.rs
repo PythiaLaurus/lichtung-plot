@@ -38,6 +38,62 @@ impl Point2D {
     }
 }
 
+/// Complete RGBA paint at the private backend boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Rgba {
+    red: u8,
+    green: u8,
+    blue: u8,
+    alpha: u8,
+}
+
+impl Rgba {
+    /// Construct an opaque RGB paint.
+    #[must_use]
+    pub(crate) const fn rgb(red: u8, green: u8, blue: u8) -> Self {
+        Self::new(red, green, blue, 255)
+    }
+
+    /// Construct a complete RGBA paint.
+    #[must_use]
+    pub(crate) const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+        Self {
+            red,
+            green,
+            blue,
+            alpha,
+        }
+    }
+
+    pub(crate) const fn red(self) -> u8 {
+        self.red
+    }
+
+    pub(crate) const fn green(self) -> u8 {
+        self.green
+    }
+
+    pub(crate) const fn blue(self) -> u8 {
+        self.blue
+    }
+
+    pub(crate) const fn alpha(self) -> u8 {
+        self.alpha
+    }
+}
+
+impl From<(u8, u8, u8)> for Rgba {
+    fn from((red, green, blue): (u8, u8, u8)) -> Self {
+        Self::rgb(red, green, blue)
+    }
+}
+
+impl PartialEq<(u8, u8, u8)> for Rgba {
+    fn eq(&self, other: &(u8, u8, u8)) -> bool {
+        (self.red, self.green, self.blue) == *other && self.alpha == 255
+    }
+}
+
 /// Visual style for a scatter point.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PointStyle {
@@ -134,8 +190,8 @@ impl Default for PointOutline {
 /// Visual style for a line (used by regression fits, axis lines).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineStyle {
-    /// Stroke color (R, G, B).
-    pub color: (u8, u8, u8),
+    /// Complete stroke paint.
+    pub(crate) color: Rgba,
     /// Stroke width in pixels (supports sub-pixel, e.g. 0.8).
     pub width: f32,
     /// Closed stroke pattern.
@@ -145,9 +201,9 @@ pub struct LineStyle {
 impl LineStyle {
     /// Create a solid line style.
     #[must_use]
-    pub fn solid(color: (u8, u8, u8), width: f32) -> Self {
+    pub fn solid(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
-            color,
+            color: color.into(),
             width,
             pattern: StrokePattern::Solid,
         }
@@ -155,9 +211,9 @@ impl LineStyle {
 
     /// Create a line using the fixed `3 2` dash pattern.
     #[must_use]
-    pub(crate) fn short_dashed(color: (u8, u8, u8), width: f32) -> Self {
+    pub(crate) fn short_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
-            color,
+            color: color.into(),
             width,
             pattern: StrokePattern::ShortDash,
         }
@@ -165,9 +221,9 @@ impl LineStyle {
 
     /// Create a line using the fixed `4 3` dash pattern.
     #[must_use]
-    pub(crate) fn medium_dashed(color: (u8, u8, u8), width: f32) -> Self {
+    pub(crate) fn medium_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
-            color,
+            color: color.into(),
             width,
             pattern: StrokePattern::MediumDash,
         }
@@ -175,9 +231,9 @@ impl LineStyle {
 
     /// Create a line using the fixed `5 3` dash pattern.
     #[must_use]
-    pub(crate) fn long_dashed(color: (u8, u8, u8), width: f32) -> Self {
+    pub(crate) fn long_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
-            color,
+            color: color.into(),
             width,
             pattern: StrokePattern::LongDash,
         }
@@ -251,10 +307,10 @@ pub enum TextAnchor {
 }
 
 /// Visual style for a text label.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextStyle {
-    /// Color (R, G, B).
-    pub color: (u8, u8, u8),
+    /// Complete text paint.
+    pub(crate) color: Rgba,
     /// Font family.
     pub font_family: String,
     /// Font size in points.
@@ -294,6 +350,15 @@ pub enum LayerRole {
     Grid,
 }
 
+/// Ownership role for an ordered painted surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SurfaceRole {
+    /// Canvas-owned root surface.
+    CanvasRoot,
+    /// Plot-owned panel surface.
+    PlotPanel,
+}
+
 /// Orientation of a pairwise significance bracket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BracketOrientation {
@@ -305,19 +370,15 @@ pub enum BracketOrientation {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct BracketMetrics {
+pub(crate) struct BracketGeometryMetrics {
     pub(crate) tick_height: f64,
-    pub(crate) label_gap: f64,
-    pub(crate) label_font_size: u32,
     pub(crate) data_gap: f64,
     pub(crate) level_step: f64,
     pub(crate) panel_padding: f64,
 }
 
-pub(crate) const SIGNIFICANCE_BRACKET_METRICS: BracketMetrics = BracketMetrics {
+pub(crate) const SIGNIFICANCE_BRACKET_GEOMETRY: BracketGeometryMetrics = BracketGeometryMetrics {
     tick_height: 7.0,
-    label_gap: 5.0,
-    label_font_size: 12,
     data_gap: 6.0,
     level_step: 26.0,
     panel_padding: 2.0,
@@ -328,14 +389,18 @@ pub(crate) const POLYGON_MITER_LIMIT: f64 = 4.0;
 /// Visual style for a significance bracket.
 #[derive(Debug, Clone)]
 pub struct BracketStyle {
-    /// Color (R, G, B).
-    pub color: (u8, u8, u8),
+    /// Complete bracket-path stroke paint.
+    pub(crate) color: Rgba,
+    /// Complete bracket-label text paint.
+    pub(crate) label_color: Rgba,
     /// Stroke width in pixels.
     pub width: f32,
     /// Label font family.
     pub font_family: String,
     /// Label font size in pixels.
     pub font_size: u32,
+    /// Label line height in pixels.
+    pub(crate) line_height: f64,
     /// Label font weight.
     pub weight: crate::TextWeight,
     /// Gap between the bracket line and its label.
@@ -385,6 +450,15 @@ pub trait Backend {
 
     /// End the current clip scope.
     fn end_clip(&mut self) -> Result<(), Error>;
+
+    /// Paint a validated math-style rectangular surface in semantic surface
+    /// order rather than ordinary draw-call order.
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error>;
 
     /// Draw a scatter cloud.
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error>;
@@ -439,6 +513,10 @@ pub trait Backend {
 
 pub(crate) fn validate_clip_region(region: PanelBox) -> Result<CanonicalRect, Error> {
     coordinates::canonical_clip(region)
+}
+
+pub(crate) fn validate_surface_bounds(bounds: PanelBox) -> Result<CanonicalRect, Error> {
+    coordinates::canonical_clip(bounds)
 }
 
 pub(crate) fn validate_points(
@@ -563,14 +641,20 @@ pub(crate) fn validate_bracket(
             style.width
         )));
     }
-    if style.font_size == 0 || !style.label_gap.is_finite() || style.label_gap < 0.0 {
+    if style.font_size == 0
+        || !style.line_height.is_finite()
+        || style.line_height <= 0.0
+        || !style.label_gap.is_finite()
+        || style.label_gap < 0.0
+    {
         return Err(Error::Render(
-            "bracket label style requires positive font size and finite nonnegative gap".into(),
+            "bracket label style requires positive font size and line height and finite nonnegative gap"
+                .into(),
         ));
     }
     coordinates::canonical_bracket(
         bracket,
-        SIGNIFICANCE_BRACKET_METRICS.tick_height,
+        SIGNIFICANCE_BRACKET_GEOMETRY.tick_height,
         style.label_gap,
     )
 }
@@ -640,10 +724,12 @@ mod tests {
                 orientation: BracketOrientation::Vertical,
             },
             BracketStyle {
-                color: (0, 0, 0),
+                color: (0, 0, 0).into(),
                 width: 1.0,
+                label_color: (0, 0, 0).into(),
                 font_family: "sans-serif".into(),
                 font_size: 12,
+                line_height: 14.4,
                 weight: crate::TextWeight::Normal,
                 label_gap: 5.0,
             },
@@ -664,7 +750,7 @@ mod tests {
 
     fn valid_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             font_family: "sans-serif".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -691,6 +777,38 @@ mod tests {
                 (StrokePattern::LongDash, Some("5 3")),
             ]
         );
+    }
+
+    #[test]
+    fn rgba_construction_and_rgb_conversion_preserve_channels() {
+        let opaque = Rgba::rgb(1, 2, 3);
+        let converted = Rgba::from((1, 2, 3));
+        let transparent = Rgba::new(4, 5, 6, 0);
+
+        assert_eq!(opaque, converted);
+        assert_eq!(
+            (opaque.red(), opaque.green(), opaque.blue(), opaque.alpha()),
+            (1, 2, 3, 255)
+        );
+        assert_eq!(
+            (
+                transparent.red(),
+                transparent.green(),
+                transparent.blue(),
+                transparent.alpha()
+            ),
+            (4, 5, 6, 0)
+        );
+    }
+
+    #[test]
+    fn surface_bounds_require_positive_canonical_geometry() {
+        assert!(validate_surface_bounds(PanelBox::new(1.0, 2.0, 3.0, 4.0)).is_ok());
+        assert!(validate_surface_bounds(PanelBox::new(f64::NAN, 2.0, 3.0, 4.0)).is_err());
+        assert!(validate_surface_bounds(PanelBox::new(1.0, 1.0, 3.0, 4.0)).is_err());
+
+        let error = validate_surface_bounds(PanelBox::new(0.0, 0.0004, 0.0, 1.0)).unwrap_err();
+        assert!(error.to_string().contains("positive extent collapses"));
     }
 
     #[test]
@@ -958,6 +1076,14 @@ mod tests {
 
         let mut invalid_style = style.clone();
         invalid_style.font_size = 0;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.line_height = 0.0;
+        assert!(validate_bracket(&bracket, &invalid_style).is_err());
+
+        let mut invalid_style = style.clone();
+        invalid_style.line_height = f64::NAN;
         assert!(validate_bracket(&bracket, &invalid_style).is_err());
 
         let mut invalid_style = style.clone();

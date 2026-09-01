@@ -671,7 +671,7 @@ impl Legend {
         // ─── Title ───
         let title_font_size = self.title_font_size() as u32;
         let title_style = TextStyle {
-            color: (60, 60, 60),
+            color: (60, 60, 60).into(),
             font_family: crate::DEFAULT_FONT_FAMILY_STACK.to_string(),
             font_size: title_font_size,
             weight: crate::TextWeight::Normal,
@@ -690,7 +690,7 @@ impl Legend {
         }
         // ─── Entries (top to bottom = decreasing y) ───
         let entry_style = TextStyle {
-            color: (40, 40, 40),
+            color: (40, 40, 40).into(),
             font_family: crate::DEFAULT_FONT_FAMILY_STACK.to_string(),
             font_size: self.entry_font_size() as u32,
             weight: crate::TextWeight::Normal,

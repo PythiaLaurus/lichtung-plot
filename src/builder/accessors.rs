@@ -479,6 +479,15 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) const fn significance_mark_style_spec(&self) -> crate::SignificanceMarkStyle {
+        match self.significance_mark_style {
+            Some(style) => style,
+            None => crate::SignificanceMarkStyle::DEFAULT,
+        }
+    }
+
+    pub(crate) const fn significance_mark_style_override(
+        &self,
+    ) -> Option<crate::SignificanceMarkStyle> {
         self.significance_mark_style
     }
 

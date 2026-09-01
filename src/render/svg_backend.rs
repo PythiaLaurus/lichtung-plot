@@ -1,20 +1,20 @@
 //! Native SVG backend for deterministic publication-oriented output.
 
-use std::fmt::Write as _;
+use std::fmt::{self, Write as _};
 
 use crate::Error;
 
 use super::backend::{
     validate_bracket, validate_clip_region, validate_fill_style, validate_line_points,
     validate_line_style, validate_linear_gradient, validate_point_style, validate_points,
-    validate_polygon_points, validate_rounded_rect, validate_text, validate_triangle_points,
-    Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle, Point2D, PointStyle,
-    SignificanceBracket, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+    validate_polygon_points, validate_rounded_rect, validate_surface_bounds, validate_text,
+    validate_triangle_points, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
+    Point2D, PointStyle, Rgba, SignificanceBracket, SurfaceRole, TextAnchor, TextStyle,
+    POLYGON_MITER_LIMIT,
 };
 use super::coordinates::CanonicalPoint;
 use crate::layout::PanelBox;
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
-use crate::theme::rgb_to_hex;
 use crate::PointShape;
 
 #[cfg(test)]
@@ -29,6 +29,8 @@ impl SvgBackend {
             width,
             height,
             body: String::new(),
+            root_surfaces: String::new(),
+            panel_surfaces: String::new(),
             grid_buf: String::new(),
             clip_defs: String::new(),
             gradient_defs: String::new(),
@@ -132,6 +134,44 @@ enum SvgCanvasState {
     Fresh,
     Open,
     Closed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SvgPaint(Rgba);
+
+impl SvgPaint {
+    fn attributes(self, property: &str) -> String {
+        let mut attributes = format!("{property}=\"{self}\"");
+        if self.0.alpha() != 255 {
+            let opacity = f64::from(self.0.alpha()) / 255.0;
+            let _ = write!(attributes, " {property}-opacity=\"{opacity}\"");
+        }
+        attributes
+    }
+}
+
+impl From<(u8, u8, u8)> for SvgPaint {
+    fn from(color: (u8, u8, u8)) -> Self {
+        Self(color.into())
+    }
+}
+
+impl From<Rgba> for SvgPaint {
+    fn from(color: Rgba) -> Self {
+        Self(color)
+    }
+}
+
+impl fmt::Display for SvgPaint {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "#{:02X}{:02X}{:02X}",
+            self.0.red(),
+            self.0.green(),
+            self.0.blue()
+        )
+    }
 }
 
 /// Convert canonical SVG scene text to vector paths using installed fonts.
@@ -341,13 +381,18 @@ fn dpi_to_pixels_per_meter(dpi: f32) -> Result<u32, Error> {
 ///
 /// Supports balanced nested layer and clip scopes which emit `<g>` groups.
 /// Top-level layers carrying [`LayerRole::Grid`] are buffered separately and
-/// emitted before all other content at `end()` time, ensuring grid lines
-/// always appear behind data marks without constraining their unique IDs.
+/// emitted after semantic surfaces but before ordinary content at `end()` time,
+/// ensuring grid lines always appear behind data marks without constraining
+/// their unique IDs.
 pub struct SvgBackend {
     output: Option<FinalizedSvgOutput>,
     width: u32,
     height: u32,
     body: String,
+    /// Buffered Canvas root surfaces (emitted before panel surfaces).
+    root_surfaces: String,
+    /// Buffered Plot panel surfaces (emitted before grid and body content).
+    panel_surfaces: String,
     /// Buffered grid layer content (emitted before body at end).
     grid_buf: String,
     clip_defs: String,
@@ -374,6 +419,8 @@ impl Backend for SvgBackend {
         self.width = width;
         self.height = height;
         self.body.clear();
+        self.root_surfaces.clear();
+        self.panel_surfaces.clear();
         self.grid_buf.clear();
         self.clip_defs.clear();
         self.gradient_defs.clear();
@@ -465,14 +512,49 @@ impl Backend for SvgBackend {
         }
     }
 
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_surface")?;
+        let bounds = validate_surface_bounds(bounds)?;
+        let paint = SvgPaint(paint).attributes("fill");
+        let canvas_bounds = validate_surface_bounds(PanelBox::new(
+            0.0,
+            f64::from(self.width),
+            0.0,
+            f64::from(self.height),
+        ))?;
+        if role == SurfaceRole::CanvasRoot && bounds == canvas_bounds {
+            let _ = writeln!(
+                self.root_surfaces,
+                "<rect width=\"100%\" height=\"100%\" {paint}/>"
+            );
+        } else {
+            let svg_y = bounds.top.inverted(self.height)?;
+            let buffer = match role {
+                SurfaceRole::CanvasRoot => &mut self.root_surfaces,
+                SurfaceRole::PlotPanel => &mut self.panel_surfaces,
+            };
+            let _ = writeln!(
+                buffer,
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" {paint}/>",
+                bounds.left, svg_y, bounds.width, bounds.height,
+            );
+        }
+        Ok(())
+    }
+
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
         let canonical_points = validate_points(points, "scatter")?;
         validate_point_style(style)?;
-        let color = rgb_to_hex(style.color);
+        let color = SvgPaint::from(style.color);
         let outline = style.outline.map(|outline| {
             (
-                rgb_to_hex(outline.color),
+                SvgPaint::from(outline.color),
                 outline.width_for_radius(style.radius),
             )
         });
@@ -530,19 +612,19 @@ impl Backend for SvgBackend {
         }
         let points = validate_line_points(points)?;
         validate_line_style(style)?;
-        let color = rgb_to_hex(style.color);
+        let stroke = SvgPaint::from(style.color).attributes("stroke");
         let pts_str = self.fmt_points(&points)?;
         let buf = self.buf();
         if let Some(dasharray) = style.pattern.svg_dasharray() {
             let _ = writeln!(
                 buf,
-                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"{dasharray}\"/>",
+                "<polyline points=\"{pts_str}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"{dasharray}\"/>",
                 style.width,
             );
         } else {
             let _ = writeln!(
                 buf,
-                "<polyline points=\"{pts_str}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+                "<polyline points=\"{pts_str}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
                 style.width
             );
         }
@@ -556,8 +638,8 @@ impl Backend for SvgBackend {
         }
         let points = validate_polygon_points(points)?;
         validate_fill_style(style)?;
-        let fill = rgb_to_hex(style.color);
-        let stroke = rgb_to_hex(style.stroke);
+        let fill = SvgPaint::from(style.color);
+        let stroke = SvgPaint::from(style.stroke);
         let pts_str = self.fmt_points(&points)?;
         let buf = self.buf();
         let _ = writeln!(
@@ -587,7 +669,7 @@ impl Backend for SvgBackend {
             gradient.start.x, start_y, gradient.end.x, end_y,
         );
         for stop in gradient.stops {
-            let color = rgb_to_hex(stop.color);
+            let color = SvgPaint::from(stop.color);
             let _ = writeln!(
                 self.gradient_defs,
                 "<stop offset=\"{}\" stop-color=\"{color}\"/>",
@@ -619,8 +701,8 @@ impl Backend for SvgBackend {
         self.ensure_begun("draw_rounded_rect")?;
         let rounded = validate_rounded_rect(rect_x, rect_y, rect_w, rect_h, radius)?;
         validate_fill_style(style)?;
-        let fill = rgb_to_hex(style.color);
-        let stroke = rgb_to_hex(style.stroke);
+        let fill = SvgPaint::from(style.color);
+        let stroke = SvgPaint::from(style.stroke);
         let svg_y = rounded.rect.top.inverted(self.height)?;
         let buf = self.buf();
         let _ = writeln!(
@@ -641,7 +723,7 @@ impl Backend for SvgBackend {
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.ensure_begun("draw_text")?;
         let canonical = validate_text(position, style)?;
-        let color = rgb_to_hex(style.color);
+        let fill = SvgPaint::from(style.color).attributes("fill");
         let escaped = Self::escape_text(text);
         let x = canonical.position.x;
         let y = canonical.position.y.inverted(self.height)?;
@@ -664,7 +746,7 @@ impl Backend for SvgBackend {
         if canonical.rotation.units() != 0 {
             let _ = writeln!(
                 buf,
-                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} fill=\"{color}\" text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
+                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
                 x, y,
                 Self::escape_text(&style.font_family),
                 style.font_size,
@@ -674,7 +756,7 @@ impl Backend for SvgBackend {
         } else {
             let _ = writeln!(
                 buf,
-                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} fill=\"{color}\" text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{escaped}</text>",
+                "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{escaped}</text>",
                 x, y,
                 Self::escape_text(&style.font_family),
                 style.font_size
@@ -690,7 +772,8 @@ impl Backend for SvgBackend {
     ) -> Result<(), Error> {
         self.ensure_begun("draw_bracket")?;
         let canonical = validate_bracket(bracket, style)?;
-        let color = rgb_to_hex(style.color);
+        let stroke = SvgPaint::from(style.color).attributes("stroke");
+        let fill = SvgPaint::from(style.label_color).attributes("fill");
         let label = Self::escape_text(&bracket.label);
         let font_family = Self::escape_text(&style.font_family);
         let weight = if style.weight == crate::TextWeight::Normal {
@@ -709,7 +792,7 @@ impl Backend for SvgBackend {
             super::backend::BracketOrientation::Vertical => {
                 let _ = writeln!(
                     buf,
-                    "<path class=\"significance-bracket\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+                    "<path class=\"significance-bracket\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\"/>",
                     canonical.line_start.x,
                     line_start_y,
                     canonical.line_end.x,
@@ -726,7 +809,7 @@ impl Backend for SvgBackend {
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} {fill}>{label}</text>",
                     canonical.label_position.x,
                     label_y,
                     style.font_size,
@@ -735,7 +818,7 @@ impl Backend for SvgBackend {
             super::backend::BracketOrientation::Horizontal => {
                 let _ = writeln!(
                     buf,
-                    "<path class=\"significance-bracket horizontal\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" stroke=\"{color}\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+                    "<path class=\"significance-bracket horizontal\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\"/>",
                     canonical.line_start.x,
                     line_start_y,
                     canonical.line_end.x,
@@ -752,7 +835,7 @@ impl Backend for SvgBackend {
                 );
                 let _ = writeln!(
                     buf,
-                    "<text x=\"{}\" y=\"{}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} fill=\"{color}\">{label}</text>",
+                    "<text x=\"{}\" y=\"{}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} {fill}>{label}</text>",
                     canonical.label_position.x,
                     label_y,
                     style.font_size,
@@ -774,7 +857,8 @@ impl Backend for SvgBackend {
         }
         let mut svg = String::new();
         let mut content = String::new();
-        content.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n");
+        content.push_str(&self.root_surfaces);
+        content.push_str(&self.panel_surfaces);
         if !self.grid_buf.is_empty() {
             content.push_str(&self.grid_buf);
         }
@@ -921,7 +1005,7 @@ mod tests {
 
     fn test_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             font_family: "sans-serif".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -1167,10 +1251,12 @@ mod tests {
         let mut text_style = test_text_style();
         text_style.font_family = special.into();
         let bracket_style = BracketStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             width: 1.0,
+            label_color: (0, 0, 0).into(),
             font_family: special.into(),
             font_size: 12,
+            line_height: 14.4,
             weight: crate::TextWeight::Normal,
             label_gap: 5.0,
         };
@@ -1214,8 +1300,171 @@ mod tests {
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert_eq!(
             svg,
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\" viewBox=\"0 0 2 3\" role=\"img\">\n<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>\n<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n</svg>\n"
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\" viewBox=\"0 0 2 3\" role=\"img\">\n<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>\n</svg>\n"
         );
+    }
+
+    #[test]
+    fn opaque_and_transparent_surfaces_have_exact_role_geometry_and_paint() {
+        let mut backend = SvgBackend::in_memory(100, 80);
+        backend.begin(100, 80).unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(10.0, 30.0, 20.0, 40.0),
+                Rgba::rgb(7, 8, 9),
+                SurfaceRole::PlotPanel,
+            )
+            .unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 100.0, 0.0, 80.0),
+                Rgba::rgb(1, 2, 3),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(12.0, 32.0, 22.0, 42.0),
+                Rgba::new(10, 11, 12, 0),
+                SurfaceRole::PlotPanel,
+            )
+            .unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 100.0, 0.0, 80.0),
+                Rgba::new(4, 5, 6, 0),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let surfaces = svg
+            .lines()
+            .filter(|line| line.starts_with("<rect "))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            surfaces,
+            [
+                "<rect width=\"100%\" height=\"100%\" fill=\"#010203\"/>",
+                "<rect width=\"100%\" height=\"100%\" fill=\"#040506\" fill-opacity=\"0\"/>",
+                "<rect x=\"10.000\" y=\"40.000\" width=\"20.000\" height=\"20.000\" fill=\"#070809\"/>",
+                "<rect x=\"12.000\" y=\"38.000\" width=\"20.000\" height=\"20.000\" fill=\"#0A0B0C\" fill-opacity=\"0\"/>",
+            ]
+        );
+    }
+
+    #[test]
+    fn rgba_surface_alpha_is_emitted_once_on_the_fill_property() {
+        let mut backend = SvgBackend::in_memory(10, 10);
+        backend.begin(10, 10).unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 10.0, 0.0, 10.0),
+                Rgba::new(17, 34, 51, 128),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let surface = svg.lines().find(|line| line.starts_with("<rect ")).unwrap();
+        assert_eq!(surface.matches("fill-opacity=").count(), 1);
+        assert_eq!(surface.matches("opacity=").count(), 1);
+        assert!(!surface.contains(" opacity="));
+        assert!(surface.contains("fill=\"#112233\""));
+    }
+
+    #[test]
+    fn migrated_rgba_paints_share_property_specific_alpha_serialization() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        backend
+            .draw_line(
+                &[Point2D::new(1.0, 1.0), Point2D::new(20.0, 20.0)],
+                &LineStyle {
+                    color: Rgba::new(17, 34, 51, 128),
+                    width: 1.0,
+                    pattern: super::super::backend::StrokePattern::Solid,
+                },
+            )
+            .unwrap();
+        backend
+            .draw_text(
+                Point2D::new(10.0, 10.0),
+                "label",
+                &TextStyle {
+                    color: Rgba::new(68, 85, 102, 64),
+                    ..test_text_style()
+                },
+            )
+            .unwrap();
+        backend
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 20.0,
+                    x_right: 40.0,
+                    y: 40.0,
+                    label: "*".into(),
+                    orientation: super::super::backend::BracketOrientation::Vertical,
+                },
+                &BracketStyle {
+                    color: Rgba::new(119, 136, 153, 32),
+                    width: 1.0,
+                    label_color: Rgba::new(170, 187, 204, 16),
+                    font_family: "sans-serif".into(),
+                    font_size: 12,
+                    line_height: 14.4,
+                    weight: crate::TextWeight::Normal,
+                    label_gap: 5.0,
+                },
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        assert!(svg.contains("stroke=\"#112233\" stroke-opacity=\"0.5019607843137255\""));
+        assert!(svg.contains("fill=\"#445566\" fill-opacity=\"0.25098039215686274\""));
+        assert!(svg.contains("stroke=\"#778899\" stroke-opacity=\"0.12549019607843137\""));
+        assert!(svg.contains("fill=\"#AABBCC\" fill-opacity=\"0.06274509803921569\""));
+        assert!(!svg.contains(" opacity=\""));
+    }
+
+    #[test]
+    fn png_preserves_surface_alpha_and_panel_over_root_compositing() {
+        let mut backend = SvgBackend::in_memory(1, 1);
+        backend.begin(1, 1).unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 1.0, 0.0, 1.0),
+                Rgba::new(255, 0, 0, 128),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 1.0, 0.0, 1.0),
+                Rgba::new(0, 0, 255, 128),
+                SurfaceRole::PlotPanel,
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let svg = backend.into_bytes().unwrap();
+
+        let png =
+            rasterize_svg_bytes_to_png(&svg, source_size(1, 1), &PngOptions::default()).unwrap();
+        let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+            .read_info()
+            .unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut pixels).unwrap();
+
+        assert_eq!(info.color_type, png::ColorType::Rgba);
+        assert_eq!(info.bit_depth, png::BitDepth::Eight);
+        assert_eq!((info.width, info.height), (3, 3));
+        assert!(pixels[..info.buffer_size()]
+            .chunks_exact(4)
+            .all(|pixel| pixel == [85, 0, 170, 192]));
     }
 
     #[test]
@@ -1270,10 +1519,12 @@ mod tests {
                     orientation: super::super::backend::BracketOrientation::Vertical,
                 },
                 &BracketStyle {
-                    color: (0, 0, 0),
+                    color: (0, 0, 0).into(),
                     width: 1.0,
+                    label_color: (0, 0, 0).into(),
                     font_family: "sans-serif".into(),
                     font_size: 12,
+                    line_height: 14.4,
                     weight: crate::TextWeight::Normal,
                     label_gap: 5.0,
                 },
@@ -1317,6 +1568,53 @@ mod tests {
 
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert!(svg.find("<g id=\"grid\">").unwrap() < svg.find("<g id=\"marks\">").unwrap());
+    }
+
+    #[test]
+    fn defs_style_surfaces_grid_and_body_have_fixed_role_order() {
+        let mut backend = SvgBackend::in_memory(200, 100);
+        backend.begin(200, 100).unwrap();
+        backend.begin_layer("marks").unwrap();
+        draw_test_line(&mut backend);
+        backend.end_layer().unwrap();
+        backend
+            .begin_layer_with_role("grid", LayerRole::Grid)
+            .unwrap();
+        draw_test_line(&mut backend);
+        backend.end_layer().unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(10.0, 190.0, 20.0, 80.0),
+                Rgba::rgb(4, 5, 6),
+                SurfaceRole::PlotPanel,
+            )
+            .unwrap();
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 200.0, 0.0, 100.0),
+                Rgba::rgb(1, 2, 3),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        backend
+            .begin_clip(PanelBox::new(10.0, 190.0, 20.0, 80.0))
+            .unwrap();
+        backend.end_clip().unwrap();
+        backend.end().unwrap();
+
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        let style = svg.find("<style>").unwrap();
+        let defs = svg.find("<defs>").unwrap();
+        let root = svg.find("fill=\"#010203\"").unwrap();
+        let panel = svg.find("fill=\"#040506\"").unwrap();
+        let grid = svg.find("<g id=\"grid\">").unwrap();
+        let body = svg.find("<g id=\"marks\">").unwrap();
+
+        assert!(style < root);
+        assert!(defs < root);
+        assert!(root < panel);
+        assert!(panel < grid);
+        assert!(grid < body);
     }
 
     #[test]
@@ -1480,12 +1778,10 @@ mod tests {
         ));
         let first_gradient = first.find("id=\"linear-gradient-0\"").unwrap();
         let second_gradient = first.find("id=\"linear-gradient-1\"").unwrap();
-        let background = first.find("<rect width=\"100%\"").unwrap();
         let first_fill = first.find("fill=\"url(#linear-gradient-0)\"").unwrap();
         let second_fill = first.find("fill=\"url(#linear-gradient-1)\"").unwrap();
         assert!(first_gradient < second_gradient);
-        assert!(second_gradient < background);
-        assert!(background < first_fill);
+        assert!(second_gradient < first_fill);
         assert!(first_fill < second_fill);
     }
 }

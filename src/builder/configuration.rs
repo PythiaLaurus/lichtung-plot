@@ -109,7 +109,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::SignificanceStyle,
     {
-        self.significance_mark_style = style;
+        self.significance_mark_style = Some(style);
         self
     }
 

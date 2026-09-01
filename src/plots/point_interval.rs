@@ -82,6 +82,7 @@ pub(crate) fn render(
         y_ticks,
         &x_axis_spec,
         &y_axis_spec,
+        context.theme,
     );
     let theme = context.theme;
     let interval_style = LineStyle::solid(theme.foreground, 1.4);

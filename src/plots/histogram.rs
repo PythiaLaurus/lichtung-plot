@@ -69,6 +69,7 @@ pub(crate) fn render(
             .to_string(),
         &x_axis_spec,
         &y_axis_spec,
+        context.theme,
     );
     let theme = context.theme;
     let fill = FillStyle {
@@ -144,6 +145,7 @@ fn render_precomputed_composite(
         chart.y_label_text().unwrap_or("Density").to_string(),
         &x_axis_spec,
         &y_axis_spec,
+        theme,
     );
     let fill = FillStyle {
         color: theme.colors[0],

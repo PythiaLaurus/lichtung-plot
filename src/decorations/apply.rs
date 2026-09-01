@@ -41,21 +41,15 @@ pub(crate) fn apply_canvas_text(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let mut title_block = TitleBlock::new().font_family(theme.font_family.clone());
-    if theme.show_title {
-        if let Some(title) = plot.title_text() {
-            title_block = title_block.title(title.to_owned());
-        }
+    let mut title_block = TitleBlock::new();
+    if let Some(title) = plot.title_text() {
+        title_block = title_block.title(title.to_owned());
     }
-    if theme.show_subtitle {
-        if let Some(subtitle) = plot.subtitle_text() {
-            title_block = title_block.subtitle(subtitle.to_owned());
-        }
+    if let Some(subtitle) = plot.subtitle_text() {
+        title_block = title_block.subtitle(subtitle.to_owned());
     }
-    if theme.show_caption {
-        if let Some(caption) = plot.caption_text() {
-            title_block = title_block.caption(caption.to_owned());
-        }
+    if let Some(caption) = plot.caption_text() {
+        title_block = title_block.caption(caption.to_owned());
     }
     if title_block.has_content() {
         title_block.draw(

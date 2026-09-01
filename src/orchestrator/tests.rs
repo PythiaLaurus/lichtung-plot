@@ -6,8 +6,8 @@ use super::backend::NullBackend;
 use super::*;
 use crate::layout::PanelBox;
 use crate::render::backend::{
-    BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, SignificanceBracket,
-    TextStyle,
+    BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, Rgba,
+    SignificanceBracket, SurfaceRole, TextStyle,
 };
 use crate::{
     CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues, Significance,
@@ -50,6 +50,7 @@ struct RecordingBackend {
     active_clips: usize,
     layer_ends: usize,
     active_layers: usize,
+    surfaces: Vec<SurfaceCall>,
     scatter_points: Vec<Point2D>,
     scatter_draws: Vec<(Vec<Point2D>, PointStyle, usize)>,
     line_draws: Vec<(Vec<Point2D>, LineStyle, usize)>,
@@ -59,6 +60,13 @@ struct RecordingBackend {
     rounded_rects: Vec<PanelBox>,
     bracket_clip_depths: Vec<usize>,
     failures: Vec<BackendFailure>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SurfaceCall {
+    bounds: PanelBox,
+    paint: Rgba,
+    role: SurfaceRole,
 }
 
 impl RecordingBackend {
@@ -98,6 +106,21 @@ impl Backend for RecordingBackend {
         } else {
             Ok(())
         }
+    }
+
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error> {
+        crate::render::backend::validate_surface_bounds(bounds)?;
+        self.surfaces.push(SurfaceCall {
+            bounds,
+            paint,
+            role,
+        });
+        Ok(())
     }
 
     fn end_layer(&mut self) -> Result<(), Error> {
@@ -275,4 +298,26 @@ fn assert_no_staging_files(directory: &Path) {
         .filter(|name| name.contains(".lichtung-tmp-"))
         .collect::<Vec<_>>();
     assert!(leaked.is_empty(), "leaked staging files: {leaked:?}");
+}
+
+#[test]
+fn deferred_backend_lazily_begins_and_forwards_complete_surface_calls() {
+    let mut recorded = RecordingBackend::default();
+    let surface = SurfaceCall {
+        bounds: PanelBox::new(0.0, 320.0, 0.0, 200.0),
+        paint: Rgba::new(1, 2, 3, 4),
+        role: SurfaceRole::CanvasRoot,
+    };
+
+    {
+        let mut backend = DeferredBackend::new(&mut recorded, 320, 200);
+        backend
+            .draw_surface(surface.bounds, surface.paint, surface.role)
+            .unwrap();
+        backend.finish(Ok(()), "test canvas").unwrap();
+    }
+
+    assert_eq!(recorded.begin_sizes, [(320, 200)]);
+    assert_eq!((recorded.begins, recorded.ends), (1, 1));
+    assert_eq!(recorded.surfaces, [surface]);
 }

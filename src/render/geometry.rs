@@ -7,7 +7,7 @@ use crate::Error;
 use crate::layout::{estimated_text_width, PanelBox};
 use crate::render::backend::{
     self, Backend, BracketOrientation, BracketStyle, FillStyle, GradientStop, LineStyle, Point2D,
-    PointStyle, SignificanceBracket, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+    PointStyle, Rgba, SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
 };
 use crate::render::coordinates::CanonicalPoint;
 use crate::PointShape;
@@ -351,6 +351,17 @@ impl Backend for GeometryBackend {
         }
     }
 
+    fn draw_surface(
+        &mut self,
+        bounds: PanelBox,
+        _paint: Rgba,
+        _role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_surface")?;
+        backend::validate_surface_bounds(bounds)?;
+        Ok(())
+    }
+
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
         let canonical_points = backend::validate_points(points, "scatter")?;
@@ -534,11 +545,11 @@ impl Backend for GeometryBackend {
                     .max(line_end.x)
                     .max(label_position.x + label_width / 2.0),
                 bottom: first_tick_end.y.min(second_tick_end.y),
-                top: label_position.y + f64::from(style.font_size),
+                top: label_position.y + style.line_height,
                 weight: ANNOTATION_COLLISION_WEIGHT,
             },
             BracketOrientation::Horizontal => {
-                let label_half_height = f64::from(style.font_size) / 2.0;
+                let label_half_height = style.line_height / 2.0;
                 GeometryBox {
                     left: first_tick_end.x.min(second_tick_end.x),
                     right: label_position.x + label_width,
@@ -577,7 +588,7 @@ mod tests {
 
     fn test_text_style() -> TextStyle {
         TextStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             font_family: "sans-serif".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
@@ -655,6 +666,29 @@ mod tests {
         backend.end_clip().unwrap();
         backend.end_layer().unwrap();
         backend.end().unwrap();
+    }
+
+    #[test]
+    fn surfaces_validate_without_becoming_collision_obstacles() {
+        let mut backend = begun_backend();
+
+        backend
+            .draw_surface(
+                PanelBox::new(0.0, 100.0, 0.0, 100.0),
+                Rgba::new(1, 2, 3, 128),
+                SurfaceRole::CanvasRoot,
+            )
+            .unwrap();
+        assert!(backend
+            .draw_surface(
+                PanelBox::new(1.0, 1.0, 2.0, 3.0),
+                Rgba::rgb(4, 5, 6),
+                SurfaceRole::PlotPanel,
+            )
+            .is_err());
+        backend.end().unwrap();
+
+        assert!(backend.bounds().is_empty());
     }
 
     #[test]
@@ -1072,10 +1106,12 @@ mod tests {
     #[test]
     fn brackets_record_label_overhang_in_both_orientations() {
         let style = BracketStyle {
-            color: (0, 0, 0),
+            color: (0, 0, 0).into(),
             width: 1.0,
+            label_color: (0, 0, 0).into(),
             font_family: "sans-serif".into(),
             font_size: 20,
+            line_height: 24.0,
             weight: crate::TextWeight::Normal,
             label_gap: 5.0,
         };
@@ -1107,6 +1143,8 @@ mod tests {
         backend.end().unwrap();
 
         assert!(backend.bounds[0].left < 49.0 && backend.bounds[0].right > 51.0);
-        assert!(backend.bounds[1].bottom < 49.0 && backend.bounds[1].top > 51.0);
+        assert!((backend.bounds[0].top - 109.0).abs() < f64::EPSILON);
+        assert!((backend.bounds[1].bottom - 38.0).abs() < f64::EPSILON);
+        assert!((backend.bounds[1].top - 62.0).abs() < f64::EPSILON);
     }
 }

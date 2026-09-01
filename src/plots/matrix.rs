@@ -82,7 +82,7 @@ pub(crate) fn render(
     let provisional_grid_height = (outer.y1 - outer.y0 - gap * n.saturating_sub(1) as f64).max(1.0);
     let mut candidate_cell_width = provisional_grid_width / n as f64;
     let mut candidate_cell_height = provisional_grid_height / n as f64;
-    let label_line_height = f64::from(theme.label_font_size) * 1.2;
+    let label_line_height = theme.typography.axis_title.line_height();
     let mut resolved_layout = None;
     for _ in 0..8 {
         let column_blocks = display_cols
@@ -90,7 +90,7 @@ pub(crate) fn render(
             .map(|label| {
                 crate::layout::TextBlock::layout(
                     label,
-                    theme.label_font_size,
+                    theme.typography.axis_title.font_size,
                     candidate_cell_width.max(1.0),
                     "matrix column label",
                 )
@@ -101,7 +101,7 @@ pub(crate) fn render(
             .map(|label| {
                 crate::layout::TextBlock::layout(
                     label,
-                    theme.label_font_size,
+                    theme.typography.axis_title.font_size,
                     candidate_cell_height.max(1.0),
                     "matrix row label",
                 )
@@ -172,25 +172,29 @@ pub(crate) fn render(
         .collect::<Result<_, _>>()?;
 
     // --- Styles ---
-    let frame_style = LineStyle::solid(theme.foreground, theme.axis_width);
-    let tick_style = LineStyle::solid(theme.foreground, theme.axis_width);
-    let tick_text_style = TextStyle {
-        color: theme.foreground,
-        font_family: theme.font_family.clone(),
-        font_size: theme.tick_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Middle,
-        rotation: 0.0,
-    };
-    let label_style = TextStyle {
-        color: theme.foreground,
-        font_family: theme.font_family.clone(),
-        font_size: theme.label_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Middle,
-        rotation: 0.0,
-    };
-    let tick_len = f64::from(theme.tick_length);
+    let frame_style = theme
+        .axes
+        .frame
+        .as_ref()
+        .map(|appearance| appearance.stroke.backend_style());
+    let tick_style = theme
+        .axes
+        .ticks
+        .as_ref()
+        .map(|appearance| appearance.stroke.backend_style());
+    let tick_text_style = theme
+        .typography
+        .tick_label
+        .backend_style(TextAnchor::Middle, 0.0);
+    let label_style = theme
+        .typography
+        .axis_title
+        .backend_style(TextAnchor::Middle, 0.0);
+    let tick_len = theme
+        .axes
+        .ticks
+        .as_ref()
+        .map_or(0.0, |appearance| f64::from(appearance.length));
 
     draw_title_block(chart, theme, backend)?;
 
@@ -206,8 +210,8 @@ pub(crate) fn render(
 
             if row == col {
                 // --- Diagonal: KDE density curves + open frame ---
-                if theme.show_frame {
-                    draw_frame(backend, x0, x1, y0, y1, &frame_style)?;
+                if let Some(frame_style) = &frame_style {
+                    draw_frame(backend, x0, x1, y0, y1, frame_style)?;
                 }
                 with_clip(backend, cell_panel, |backend| {
                     draw_diagonal_kde(
@@ -226,8 +230,8 @@ pub(crate) fn render(
                 })?;
             } else {
                 // --- Off-diagonal: scatter + open frame ---
-                if theme.show_frame {
-                    draw_frame(backend, x0, x1, y0, y1, &frame_style)?;
+                if let Some(frame_style) = &frame_style {
+                    draw_frame(backend, x0, x1, y0, y1, frame_style)?;
                 }
                 let (x_lo, x_hi) = variable_ranges[col];
                 let (y_lo, y_hi) = variable_ranges[row];
@@ -263,14 +267,14 @@ pub(crate) fn render(
                     (x_lo, x_hi),
                     &projection,
                     crate::layout::AxisSide::Bottom,
-                    theme.tick_font_size,
+                    theme.typography.tick_label.font_size,
                 );
                 let ticks = if row == n - 1 {
                     layout::retain_automatic_ticks_inside_panel(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Bottom,
-                        theme.tick_font_size,
+                        theme.typography.tick_label.font_size,
                     )
                 } else {
                     ticks
@@ -286,14 +290,14 @@ pub(crate) fn render(
                     let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
                     let px = x0 + t * cell_w;
                     // Tick mark on every cell
-                    if theme.show_ticks {
+                    if let Some(tick_style) = &tick_style {
                         backend.draw_line(
                             &[Point2D::new(px, y0), Point2D::new(px, y0 - tick_len)],
-                            &tick_style,
+                            tick_style,
                         )?;
                     }
                     // Tick label only on bottom row
-                    if row == n - 1 && theme.show_tick_labels {
+                    if row == n - 1 {
                         backend.draw_text(
                             Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
                             &tick.label,
@@ -302,7 +306,7 @@ pub(crate) fn render(
                     }
                 }
                 // Column label below ticks (bottom row only)
-                if row == n - 1 && theme.show_x_label {
+                if row == n - 1 {
                     let cx = f64::midpoint(x0, x1);
                     let first_y = y0 - tick_len - 28.0;
                     for (index, line) in column_blocks[col].lines().iter().enumerate() {
@@ -329,14 +333,14 @@ pub(crate) fn render(
                     (y_lo, y_hi),
                     &projection,
                     crate::layout::AxisSide::Left,
-                    theme.tick_font_size,
+                    theme.typography.tick_label.font_size,
                 );
                 let ticks = if col == 0 {
                     layout::retain_automatic_ticks_inside_panel(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Left,
-                        theme.tick_font_size,
+                        theme.typography.tick_label.font_size,
                     )
                 } else {
                     ticks
@@ -356,14 +360,14 @@ pub(crate) fn render(
                     let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
                     let py = y0 + t * cell_h;
                     // Tick mark on every cell
-                    if theme.show_ticks {
+                    if let Some(tick_style) = &tick_style {
                         backend.draw_line(
                             &[Point2D::new(x0, py), Point2D::new(x0 - tick_len, py)],
-                            &tick_style,
+                            tick_style,
                         )?;
                     }
                     // Tick label only on left column
-                    if col == 0 && theme.show_tick_labels {
+                    if col == 0 {
                         backend.draw_text(
                             Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
                             &tick.label,
@@ -372,7 +376,7 @@ pub(crate) fn render(
                     }
                 }
                 // Row label to the left of ticks (left column only)
-                if col == 0 && theme.show_y_label {
+                if col == 0 {
                     let cy = f64::midpoint(y0, y1);
                     let row_label_style = TextStyle {
                         anchor: TextAnchor::Middle,
@@ -422,6 +426,7 @@ pub(crate) fn render(
         chart.height(),
         String::new(),
         String::new(),
+        theme,
     );
 
     Ok(PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations())
@@ -474,21 +479,15 @@ fn draw_title_block(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let mut title_block = TitleBlock::new().font_family(theme.font_family.clone());
-    if theme.show_title {
-        if let Some(title) = chart.title_text() {
-            title_block = title_block.title(title.to_string());
-        }
+    let mut title_block = TitleBlock::new();
+    if let Some(title) = chart.title_text() {
+        title_block = title_block.title(title.to_string());
     }
-    if theme.show_subtitle {
-        if let Some(subtitle) = chart.subtitle_text() {
-            title_block = title_block.subtitle(subtitle.to_string());
-        }
+    if let Some(subtitle) = chart.subtitle_text() {
+        title_block = title_block.subtitle(subtitle.to_string());
     }
-    if theme.show_caption {
-        if let Some(caption) = chart.caption_text() {
-            title_block = title_block.caption(caption.to_string());
-        }
+    if let Some(caption) = chart.caption_text() {
+        title_block = title_block.caption(caption.to_string());
     }
     if title_block.has_content() {
         let canvas = matrix_canvas_layout(chart, theme)?;
@@ -503,12 +502,11 @@ fn matrix_canvas_layout(chart: &Plot, theme: &ResolvedTheme) -> Result<CanvasLay
         chart.height(),
         theme,
         CanvasLayoutSpec {
-            has_title: theme.show_title && chart.title_text().is_some_and(|s| !s.is_empty()),
-            has_subtitle: theme.show_subtitle
-                && chart.subtitle_text().is_some_and(|s| !s.is_empty()),
-            has_caption: theme.show_caption && chart.caption_text().is_some_and(|s| !s.is_empty()),
-            has_x_label: theme.show_x_label,
-            has_y_label: theme.show_y_label,
+            has_title: chart.title_text().is_some_and(|s| !s.is_empty()),
+            has_subtitle: chart.subtitle_text().is_some_and(|s| !s.is_empty()),
+            has_caption: chart.caption_text().is_some_and(|s| !s.is_empty()),
+            has_x_label: true,
+            has_y_label: true,
         },
         (
             chart.title_text(),

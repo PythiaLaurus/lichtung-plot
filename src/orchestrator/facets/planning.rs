@@ -23,11 +23,9 @@ pub(super) fn canvas_layout(
         plot.height(),
         theme,
         CanvasLayoutSpec {
-            has_title: theme.show_title && plot.title_text().is_some_and(|value| !value.is_empty()),
-            has_subtitle: theme.show_subtitle
-                && plot.subtitle_text().is_some_and(|value| !value.is_empty()),
-            has_caption: theme.show_caption
-                && plot.caption_text().is_some_and(|value| !value.is_empty()),
+            has_title: plot.title_text().is_some_and(|value| !value.is_empty()),
+            has_subtitle: plot.subtitle_text().is_some_and(|value| !value.is_empty()),
+            has_caption: plot.caption_text().is_some_and(|value| !value.is_empty()),
             has_x_label: horizontal_axis_label.is_some(),
             has_y_label: vertical_axis_label.is_some(),
         },
@@ -83,7 +81,7 @@ fn shared_axis_line_counts(
         .map(|label| {
             TextBlock::layout(
                 label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 panel.width().max(1.0),
                 "shared facet x-axis title",
             )
@@ -95,7 +93,7 @@ fn shared_axis_line_counts(
         .map(|label| {
             TextBlock::layout(
                 label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 panel.height().max(1.0),
                 "shared facet y-axis title",
             )
@@ -117,7 +115,7 @@ fn adjusted_shared_axis_panel(
     baseline: (usize, usize),
     candidate: PanelBox,
 ) -> Result<(PanelBox, f64, f64), Error> {
-    let line_height = f64::from(theme.label_font_size) * 1.2;
+    let line_height = theme.typography.axis_title.line_height();
     let mut panel = candidate;
     for _ in 0..4 {
         let lines =

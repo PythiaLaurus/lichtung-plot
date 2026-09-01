@@ -92,6 +92,14 @@ fn facets_reserve_one_complete_outside_legend_band() {
 
     plot.render_with_backend(&mut backend).unwrap();
 
+    assert_eq!(backend.surfaces.len(), 3);
+    assert_eq!(
+        backend.surfaces[0].role,
+        crate::render::backend::SurfaceRole::CanvasRoot
+    );
+    assert!(backend.surfaces[1..]
+        .iter()
+        .all(|surface| surface.role == crate::render::backend::SurfaceRole::PlotPanel));
     assert_eq!(backend.rounded_rects.len(), 1);
     assert!(backend.rounded_rects[0].x1 <= 760.0);
     assert_eq!(
@@ -110,6 +118,40 @@ fn facets_reserve_one_complete_outside_legend_band() {
             .count(),
         1
     );
+}
+
+#[test]
+fn facet_strips_preserve_each_preset_foreground_and_header_size() {
+    for theme in [
+        crate::Theme::Publication,
+        crate::Theme::Nature,
+        crate::Theme::Science,
+        crate::Theme::CHI,
+    ] {
+        let expected = theme.resolve();
+        let facet = CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap();
+        let plot = Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0, 1.0, 2.0]),
+            NumericValues::new("y", [1.0, 2.0, 4.0, 5.0]),
+        )
+        .facet(crate::FacetSpec::column(facet))
+        .theme(theme)
+        .size(760, 420);
+        let mut backend = RecordingBackend::default();
+
+        plot.render_with_backend(&mut backend).unwrap();
+
+        let strip_styles = backend
+            .text_draws
+            .iter()
+            .filter(|(_, _, text, _)| text.contains(" = "))
+            .map(|(_, _, _, style)| style)
+            .collect::<Vec<_>>();
+        assert_eq!(strip_styles.len(), 2, "{theme:?}");
+        assert!(strip_styles.iter().all(|style| {
+            style.color == expected.foreground && style.font_size == expected.facet_header_font_size
+        }));
+    }
 }
 
 #[test]

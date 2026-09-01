@@ -177,7 +177,7 @@ The approved theme and layout targets follow these rules:
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a1 | Active exact-root candidate kernel | COMPLETE |
-| T5a2 | Foundational resolved appearance and surfaces | PENDING |
+| T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
 | T5a3 | Canonical fonts and immutable text plans | PENDING |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
@@ -2391,7 +2391,7 @@ Commit: `feat(layout): add exact-root planning kernel`.
 
 ### T5a2: Foundational Resolved Appearance And Surfaces
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1.
 

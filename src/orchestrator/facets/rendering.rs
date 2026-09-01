@@ -7,7 +7,7 @@ use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::canvas::try_wrap_text;
 use crate::layout::{PanelBox, TextBlock};
-use crate::render::backend::{Backend, Point2D, TextAnchor, TextStyle};
+use crate::render::backend::{Backend, Point2D, SurfaceRole, TextAnchor, TextStyle};
 use crate::spec::{PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -28,6 +28,13 @@ pub(super) fn render_scene(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
+    for panel_plan in panel_plans {
+        backend.draw_surface(
+            panel_plan.panel_box,
+            theme.surfaces.plot_panel,
+            SurfaceRole::PlotPanel,
+        )?;
+    }
     for (facet, panel_plan) in panels.iter().zip(panel_plans) {
         let panel_plot = shared_plot
             .clone()
@@ -50,13 +57,8 @@ pub(super) fn render_scene(
         panel_plan
             .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;
-        if !panel_plan.result.significance_brackets.is_empty() {
-            crate::significance::render(
-                &panel_plot,
-                &panel_plan.result.significance_brackets,
-                theme,
-                backend,
-            )?;
+        if let Some(significance) = &panel_plan.result.significance {
+            crate::significance::render(&panel_plot, significance, theme, backend)?;
         }
         crate::decorations::apply::apply_axes(&panel_plot, &panel_plan.result, theme, backend)?;
         crate::decorations::apply::apply_planned_legend(
@@ -90,11 +92,19 @@ fn draw_facet_strip(
     let label = facet_label(plot, &facet.cell);
     let lines = try_wrap_text(
         &label,
-        theme.subtitle_font_size,
+        theme.facet_header_font_size,
         (facet.panel.width() - 16.0).max(1.0),
         "facet strip",
     )?;
-    let line_height = f64::from(theme.subtitle_font_size) + 6.0;
+    let line_height = f64::from(theme.facet_header_font_size) + 6.0;
+    let style = TextStyle {
+        color: theme.foreground.into(),
+        font_family: theme.font_family.clone(),
+        font_size: theme.facet_header_font_size,
+        weight: crate::TextWeight::Normal,
+        anchor: TextAnchor::Middle,
+        rotation: 0.0,
+    };
     crate::render::backend::with_layer(
         backend,
         &format!("facet-strip-{}", facet.panel_index),
@@ -106,14 +116,7 @@ fn draw_facet_strip(
                         (facet.panel.y1 + 14.0 + index as f64 * line_height).round(),
                     ),
                     line,
-                    &TextStyle {
-                        color: theme.foreground,
-                        font_family: theme.font_family.clone(),
-                        font_size: theme.subtitle_font_size,
-                        weight: crate::TextWeight::Normal,
-                        anchor: TextAnchor::Middle,
-                        rotation: 0.0,
-                    },
+                    &style,
                 )?;
             }
             Ok(())
@@ -137,22 +140,18 @@ fn draw_shared_facet_axis_labels(
         return Ok(());
     }
     crate::render::backend::with_layer(backend, "facet-shared-axis-labels", |backend| {
-        let base_style = TextStyle {
-            color: theme.foreground,
-            font_family: theme.font_family.clone(),
-            font_size: theme.label_font_size,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Middle,
-            rotation: 0.0,
-        };
+        let base_style = theme
+            .typography
+            .axis_title
+            .backend_style(TextAnchor::Middle, 0.0);
         if let Some(label) = horizontal_label {
             let block = TextBlock::layout(
                 label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 grid.width().max(1.0),
                 "shared facet x-axis title",
             )?;
-            let first_y = axis_origin.1 - f64::from(theme.label_font_size);
+            let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
             for (index, line) in block.lines().iter().enumerate() {
                 backend.draw_text(
                     Point2D::new(
@@ -167,11 +166,11 @@ fn draw_shared_facet_axis_labels(
         if let Some(label) = vertical_label {
             let block = TextBlock::layout(
                 label,
-                theme.label_font_size,
+                theme.typography.axis_title.font_size,
                 grid.height().max(1.0),
                 "shared facet y-axis title",
             )?;
-            let first_x = axis_origin.0 - f64::from(theme.label_font_size) - 8.0;
+            let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
             let style = TextStyle {
                 rotation: -90.0,
                 ..base_style

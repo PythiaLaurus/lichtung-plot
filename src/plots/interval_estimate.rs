@@ -191,7 +191,7 @@ pub(crate) fn draw_not_estimable(
         Point2D::new(x.round(), y.round()),
         NOT_ESTIMABLE_TEXT,
         &TextStyle {
-            color: theme.foreground,
+            color: theme.foreground.into(),
             font_family: theme.font_family.clone(),
             font_size: theme.detail_font_size,
             weight: crate::TextWeight::Normal,
@@ -445,7 +445,7 @@ pub(crate) fn render(
         theme,
     )?;
     let x_ticks = if scale == AxisScale::Log10 {
-        log_ticks(x_range, panel, theme.tick_font_size)
+        log_ticks(x_range, panel, theme.typography.tick_label.font_size)
     } else {
         Vec::new()
     };
@@ -460,6 +460,7 @@ pub(crate) fn render(
             y_ticks,
             &x_axis,
             &y_axis,
+            theme,
         )
     } else {
         Layout::new_with_ticks_and_axis_specs_in_panel_box(
@@ -472,11 +473,15 @@ pub(crate) fn render(
             y_ticks,
             &x_axis,
             &y_axis,
+            theme,
         )
     };
     let reference_line_x = (transformed_reference >= x_range.0
         && transformed_reference <= x_range.1)
         .then(|| layout.projection.project(transformed_reference, 0.0).0);
+    let significance_label = theme
+        .typography
+        .effective_significance_label(chart.significance_mark_style_override());
     with_clip(backend, layout.projection.panel_box(), |backend| {
         let (reference_x, y0) = layout.projection.project(transformed_reference, 0.0);
         let (_, y1) = layout.projection.project(transformed_reference, row_count);
@@ -521,12 +526,12 @@ pub(crate) fn render(
             if let Some((label, is_significance)) = adjacent_label {
                 let significance_style = chart.significance_mark_style_spec();
                 let font_size = if is_significance {
-                    significance_style.font_size_spec()
+                    significance_label.font_size
                 } else {
                     theme.detail_font_size
                 };
                 let weight = if is_significance {
-                    significance_style.weight_spec()
+                    significance_label.weight
                 } else {
                     crate::TextWeight::Normal
                 };
@@ -553,17 +558,22 @@ pub(crate) fn render(
                     };
                     return Err(Error::Render(message));
                 };
-                backend.draw_text(
-                    Point2D::new(label_x.round(), y.round()),
-                    &label,
-                    &TextStyle {
-                        color: theme.foreground,
+                let text_style = if is_significance {
+                    significance_label.backend_style(anchor, 0.0)
+                } else {
+                    TextStyle {
+                        color: theme.foreground.into(),
                         font_family: theme.font_family.clone(),
                         font_size,
                         weight,
                         anchor,
                         rotation: 0.0,
-                    },
+                    }
+                };
+                backend.draw_text(
+                    Point2D::new(label_x.round(), y.round()),
+                    &label,
+                    &text_style,
                 )?;
             }
         }
@@ -680,6 +690,14 @@ fn log_labels_are_unique_and_finite(labels: &[String]) -> bool {
 mod tests {
     use super::*;
 
+    fn tick_font_size() -> u32 {
+        crate::Theme::Publication
+            .resolve()
+            .typography
+            .tick_label
+            .font_size
+    }
+
     #[test]
     fn not_estimable_text_clears_vertical_guide_by_measured_half_width() {
         let panel = crate::layout::PanelBox::new(0.0, 200.0, 0.0, 100.0);
@@ -695,7 +713,7 @@ mod tests {
         let ticks = log_ticks(
             (-100.0, 100.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            crate::theme::TICK_FONT_SIZE,
+            tick_font_size(),
         );
 
         assert!(ticks.len() <= crate::layout::AUTOMATIC_TICK_TARGET);
@@ -708,7 +726,7 @@ mod tests {
         let ticks = log_ticks(
             (-400.0, 400.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            crate::theme::TICK_FONT_SIZE,
+            tick_font_size(),
         );
 
         assert!(ticks.iter().all(|tick| {
@@ -723,7 +741,7 @@ mod tests {
         let ticks = log_ticks(
             (308.0, f64::MAX.log10()),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            crate::theme::TICK_FONT_SIZE,
+            tick_font_size(),
         );
 
         assert!(ticks.iter().enumerate().all(|(index, tick)| {
@@ -740,7 +758,7 @@ mod tests {
         let ticks = log_ticks(
             (lower, -323.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            crate::theme::TICK_FONT_SIZE,
+            tick_font_size(),
         );
 
         assert!(ticks.iter().enumerate().all(|(index, tick)| {

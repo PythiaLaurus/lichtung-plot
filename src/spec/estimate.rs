@@ -95,6 +95,13 @@ pub struct SignificanceMarkStyle {
 }
 
 impl SignificanceMarkStyle {
+    /// Default significance mark style used without an exact caller override.
+    pub(crate) const DEFAULT: Self = Self {
+        font_size: 16,
+        weight: TextWeight::Normal,
+        gap: 8.0,
+    };
+
     /// Construct a validated mark style.
     pub fn new(font_size: u32, weight: TextWeight, gap: f64) -> Result<Self, Error> {
         Self {
@@ -149,11 +156,7 @@ impl SignificanceMarkStyle {
 
 impl Default for SignificanceMarkStyle {
     fn default() -> Self {
-        Self {
-            font_size: 16,
-            weight: TextWeight::Normal,
-            gap: 8.0,
-        }
+        Self::DEFAULT
     }
 }
 

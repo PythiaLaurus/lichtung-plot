@@ -214,7 +214,7 @@ fn validate_axis_text(
     {
         crate::layout::TextBlock::layout(
             &tick.label,
-            theme.tick_font_size,
+            theme.typography.tick_label.font_size,
             x_tick_width.max(1.0),
             "x-axis tick label",
         )?;
@@ -222,7 +222,7 @@ fn validate_axis_text(
     if !layout.x_axis.label.is_empty() {
         crate::layout::TextBlock::layout(
             &layout.x_axis.label,
-            theme.label_font_size,
+            theme.typography.axis_title.font_size,
             panel.width().max(1.0),
             "x-axis title",
         )?;
@@ -231,7 +231,7 @@ fn validate_axis_text(
     if !layout.y_axis.label.is_empty() {
         crate::layout::TextBlock::layout(
             &layout.y_axis.label,
-            theme.label_font_size,
+            theme.typography.axis_title.font_size,
             panel.height().max(1.0),
             "y-axis title",
         )?;
@@ -245,7 +245,7 @@ fn validate_axis_text(
     {
         crate::layout::TextBlock::layout(
             &tick.label,
-            theme.tick_font_size,
+            theme.typography.tick_label.font_size,
             y_tick_width,
             "y-axis tick label",
         )?;

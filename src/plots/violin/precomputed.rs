@@ -55,6 +55,7 @@ pub(super) fn render(
         Vec::new(),
         chart.x_axis_spec(),
         &y_axis_spec,
+        theme,
     );
     let legend_entries = hue_levels
         .iter()

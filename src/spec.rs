@@ -2,7 +2,7 @@
 
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{Layout, PanelBox};
-use crate::render::backend::SignificanceBracket;
+use crate::significance::SignificancePlan;
 use crate::HistogramKdePoint;
 
 mod bar;
@@ -710,7 +710,7 @@ pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
     pub(crate) x_domain: AxisDomain,
     pub(crate) y_domain: AxisDomain,
-    pub(crate) significance_brackets: Vec<SignificanceBracket>,
+    pub(crate) significance: Option<SignificancePlan>,
     pub(crate) legend_entries: Vec<LegendEntry>,
     pub(crate) decoration_mode: DecorationMode,
     pub(crate) x_tick_keys: Option<Vec<String>>,
@@ -736,7 +736,7 @@ impl PlotRenderResult {
             layout,
             x_domain: AxisDomain::Continuous,
             y_domain: AxisDomain::Continuous,
-            significance_brackets: Vec::new(),
+            significance: None,
             legend_entries,
             decoration_mode: DecorationMode::Standard,
             x_tick_keys: None,
@@ -750,8 +750,8 @@ impl PlotRenderResult {
         self
     }
 
-    pub(crate) fn with_significance_brackets(mut self, brackets: Vec<SignificanceBracket>) -> Self {
-        self.significance_brackets = brackets;
+    pub(crate) fn with_significance_plan(mut self, significance: SignificancePlan) -> Self {
+        self.significance = Some(significance);
         self
     }
 

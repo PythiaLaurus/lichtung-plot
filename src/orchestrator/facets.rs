@@ -41,10 +41,9 @@ impl FacetPlan {
 
         let selectors = data::facet_selectors(source)?;
         let (horizontal_axis_label, vertical_axis_label) = source.resolved_axis_labels(kind);
-        let horizontal_axis_label = (theme.show_x_label && !horizontal_axis_label.is_empty())
-            .then_some(horizontal_axis_label);
-        let vertical_axis_label =
-            (theme.show_y_label && !vertical_axis_label.is_empty()).then_some(vertical_axis_label);
+        let horizontal_axis_label =
+            (!horizontal_axis_label.is_empty()).then_some(horizontal_axis_label);
+        let vertical_axis_label = (!vertical_axis_label.is_empty()).then_some(vertical_axis_label);
         let canvas_layout = planning::canvas_layout(
             source,
             theme,
