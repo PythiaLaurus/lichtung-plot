@@ -40,7 +40,7 @@ fn matrix_clip_structure_snapshot() {
 
 #[test]
 fn beeswarm_clip_structure_snapshot() {
-    let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
+    let category = CategoryValues::new("category", ["one", "one", "two", "two"]).unwrap();
     let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);
     let color = NumericValues::new("color", [0.1, 0.3, 0.7, 1.0]);
     let dir = tempdir();
@@ -58,8 +58,7 @@ fn beeswarm_clip_structure_snapshot() {
 
 #[test]
 fn horizontal_bar_clip_structure_snapshot() {
-    let category =
-        CategoryValues::new("category", ["a deliberately long category", "short"]).unwrap();
+    let category = CategoryValues::new("category", ["a notably long category", "short"]).unwrap();
     let value = NumericValues::new("value", [2.0, 4.0]);
     let dir = tempdir();
     let out = dir.join("horizontal-structure.svg");
@@ -72,10 +71,7 @@ fn horizontal_bar_clip_structure_snapshot() {
 
     insta::assert_snapshot!(specialized_svg_structure(
         &svg,
-        &[
-            "Horizontal structural title",
-            "A deliberately long category"
-        ]
+        &["Horizontal structural title", "A notably long category"]
     ));
 }
 

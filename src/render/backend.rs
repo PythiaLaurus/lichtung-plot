@@ -11,7 +11,9 @@
 
 use crate::Error;
 
-use crate::layout::PanelBox;
+use crate::layout::{
+    DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment, ResolvedTextPlan,
+};
 use crate::render::coordinates::{
     self, CanonicalBracket, CanonicalGradient, CanonicalPoint, CanonicalRect, CanonicalRoundedRect,
     CanonicalText,
@@ -407,6 +409,47 @@ pub struct BracketStyle {
     pub label_gap: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlannedTextOrigin {
+    Middle,
+    Baseline,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct PlannedTextPlacement {
+    pub(crate) position: Point2D,
+    pub(crate) anchor: TextAnchor,
+    pub(crate) rotation: f64,
+    pub(crate) origin: PlannedTextOrigin,
+}
+
+impl PlannedTextPlacement {
+    pub(crate) const fn middle(position: Point2D, anchor: TextAnchor, rotation: f64) -> Self {
+        Self {
+            position,
+            anchor,
+            rotation,
+            origin: PlannedTextOrigin::Middle,
+        }
+    }
+
+    pub(crate) const fn baseline(position: Point2D, anchor: TextAnchor, rotation: f64) -> Self {
+        Self {
+            position,
+            anchor,
+            rotation,
+            origin: PlannedTextOrigin::Baseline,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PlannedSignificanceCall<'a> {
+    pub(crate) bracket: &'a SignificanceBracket,
+    pub(crate) style: &'a BracketStyle,
+    pub(crate) label: &'a DeferredAnnotationTextPlan,
+}
+
 /// The `Backend` trait. Every concrete renderer (Plotters,
 /// future Skia, future Vello) implements this.
 ///
@@ -485,6 +528,24 @@ pub trait Backend {
     /// alignment and optional rotation.
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error>;
 
+    /// Draw one immutable operation-owned text plan.
+    #[doc(hidden)]
+    #[allow(
+        private_interfaces,
+        reason = "immutable text plans are a crate-private renderer transition"
+    )]
+    fn draw_planned_text(
+        &mut self,
+        placement: PlannedTextPlacement,
+        plan: &ResolvedTextPlan,
+    ) -> Result<(), Error> {
+        self.draw_text(
+            placement.position,
+            &plan.source,
+            &planned_text_style(placement, plan),
+        )
+    }
+
     /// Draw a rounded rectangle. Coordinates are in math-coordinate space
     /// (y increases upward). `x` and `y` are the bottom-left corner,
     /// `w` and `h` are width and height, `r` is the corner radius.
@@ -505,6 +566,16 @@ pub trait Backend {
         bracket: &SignificanceBracket,
         style: &BracketStyle,
     ) -> Result<(), Error>;
+
+    /// Draw one significance bracket with its immutable planned label.
+    #[doc(hidden)]
+    #[allow(
+        private_interfaces,
+        reason = "immutable significance plans are a crate-private renderer transition"
+    )]
+    fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
+        self.draw_bracket(call.bracket, call.style)
+    }
 
     /// End the chart. Flushes any buffered output. After `end()`,
     /// no more draw methods may be called until the next `begin()`.
@@ -621,6 +692,135 @@ pub(crate) fn validate_text(position: Point2D, style: &TextStyle) -> Result<Cano
     coordinates::canonical_text(position, style.rotation)
 }
 
+pub(crate) fn planned_text_style(
+    placement: PlannedTextPlacement,
+    plan: &ResolvedTextPlan,
+) -> TextStyle {
+    TextStyle {
+        color: plan.style.paint,
+        font_family: plan.style.stack_source.clone(),
+        font_size: plan.style.font_size,
+        weight: plan.style.weight,
+        anchor: placement.anchor,
+        rotation: placement.rotation,
+    }
+}
+
+pub(crate) const fn nearest_even_text_half(value: i64) -> Option<i64> {
+    if value < 0 {
+        return None;
+    }
+    let quotient = value / 2;
+    if value % 2 == 0 || quotient % 2 == 0 {
+        Some(quotient)
+    } else {
+        quotient.checked_add(1)
+    }
+}
+
+pub(crate) fn validate_planned_text(
+    placement: PlannedTextPlacement,
+    plan: &ResolvedTextPlan,
+) -> Result<CanonicalText, Error> {
+    let canonical = validate_text(placement.position, &planned_text_style(placement, plan))?;
+    let expected_alignment = match placement.anchor {
+        TextAnchor::Start => PhysicalTextAlignment::Start,
+        TextAnchor::Middle => PhysicalTextAlignment::Center,
+        TextAnchor::End => PhysicalTextAlignment::End,
+    };
+    if plan.style.alignment != expected_alignment {
+        return Err(Error::Render(
+            "planned text alignment does not match its backend placement".into(),
+        ));
+    }
+    if plan.style.font_size == 0
+        || plan.style.stack_source.is_empty()
+        || plan.style.stack.is_empty()
+        || plan.style.line_height_quanta <= 0
+        || plan.line_pitch_quanta <= 0
+        || plan.width_quanta < 0
+        || plan.height_quanta < 0
+    {
+        return Err(Error::Render(
+            "planned text has invalid resolved style or dimensions".into(),
+        ));
+    }
+    let valid_span = |start: u32, end: u32| {
+        let start = start as usize;
+        let end = end as usize;
+        start <= end
+            && end <= plan.source.len()
+            && plan.source.is_char_boundary(start)
+            && plan.source.is_char_boundary(end)
+    };
+    let valid_ink = |left: i64, bottom: i64, right: i64, top: i64| left <= right && bottom <= top;
+    match (plan.lines.first(), plan.lines.last()) {
+        (Some(first), Some(last)) => {
+            if plan.first_baseline_quanta != Some(first.translation_y_quanta)
+                || plan.last_baseline_quanta != Some(last.translation_y_quanta)
+                || plan.height_quanta == 0
+            {
+                return Err(Error::Render(
+                    "planned text baselines do not match its stored lines".into(),
+                ));
+            }
+        }
+        (None, None) => {
+            if plan.first_baseline_quanta.is_some()
+                || plan.last_baseline_quanta.is_some()
+                || plan.width_quanta != 0
+                || plan.height_quanta != 0
+            {
+                return Err(Error::Render(
+                    "empty planned text has nonempty metrics".into(),
+                ));
+            }
+        }
+        _ => unreachable!("a slice cannot have only one of first/last"),
+    }
+    for (index, line) in plan.lines.iter().enumerate() {
+        let expected_y = plan
+            .first_baseline_quanta
+            .and_then(|first| {
+                i64::try_from(index)
+                    .ok()
+                    .and_then(|index| plan.line_pitch_quanta.checked_mul(index))
+                    .and_then(|offset| first.checked_add(offset))
+            })
+            .ok_or_else(|| Error::Render("planned text line offset overflow".into()))?;
+        if line.translation_y_quanta != expected_y
+            || !valid_span(line.source_span.start_byte, line.source_span.end_byte)
+            || line
+                .ink_quanta
+                .is_some_and(|ink| !valid_ink(ink.left, ink.bottom, ink.right, ink.top))
+        {
+            return Err(Error::Render(
+                "planned text has an invalid line span, translation, or ink box".into(),
+            ));
+        }
+        for run in &line.runs {
+            if !valid_span(run.source_span.start_byte, run.source_span.end_byte)
+                || run.source_span.start_byte < line.source_span.start_byte
+                || run.source_span.end_byte > line.source_span.end_byte
+                || run.units_per_em == 0
+                || run
+                    .ink_quanta
+                    .is_some_and(|ink| !valid_ink(ink.left, ink.bottom, ink.right, ink.top))
+                || run.glyphs.iter().any(|glyph| {
+                    glyph
+                        .ink_quanta
+                        .is_some_and(|ink| !valid_ink(ink.left, ink.bottom, ink.right, ink.top))
+                })
+            {
+                return Err(Error::Render(
+                    "planned text has an invalid shaped run or glyph ink box".into(),
+                ));
+            }
+        }
+    }
+    Ok(canonical)
+}
+
 pub(crate) fn validate_rounded_rect(
     x: f64,
     y: f64,
@@ -657,6 +857,39 @@ pub(crate) fn validate_bracket(
         SIGNIFICANCE_BRACKET_GEOMETRY.tick_height,
         style.label_gap,
     )
+}
+
+pub(crate) fn planned_bracket_placement(canonical: CanonicalBracket) -> PlannedTextPlacement {
+    match canonical.orientation {
+        BracketOrientation::Vertical => PlannedTextPlacement::baseline(
+            canonical.label_position.value(),
+            TextAnchor::Middle,
+            0.0,
+        ),
+        BracketOrientation::Horizontal => {
+            PlannedTextPlacement::middle(canonical.label_position.value(), TextAnchor::Start, 0.0)
+        }
+    }
+}
+
+pub(crate) fn validate_planned_bracket(
+    call: PlannedSignificanceCall<'_>,
+) -> Result<CanonicalBracket, Error> {
+    let canonical = validate_bracket(call.bracket, call.style)?;
+    let plan = &call.label.plan;
+    validate_planned_text(planned_bracket_placement(canonical), plan)?;
+    if call.label.exact_override != plan.style.exact_override
+        || call.bracket.label != plan.source
+        || call.style.label_color != plan.style.paint
+        || call.style.font_family != plan.style.stack_source
+        || call.style.font_size != plan.style.font_size
+        || call.style.weight != plan.style.weight
+    {
+        return Err(Error::Render(
+            "planned significance label does not match its frozen source and style".into(),
+        ));
+    }
+    Ok(canonical)
 }
 
 pub(crate) fn with_clip<T>(
@@ -777,6 +1010,17 @@ mod tests {
                 (StrokePattern::LongDash, Some("5 3")),
             ]
         );
+    }
+
+    #[test]
+    fn planned_text_half_quanta_use_nearest_even() {
+        assert_eq!(nearest_even_text_half(-1), None);
+        assert_eq!(nearest_even_text_half(0), Some(0));
+        assert_eq!(nearest_even_text_half(1), Some(0));
+        assert_eq!(nearest_even_text_half(2), Some(1));
+        assert_eq!(nearest_even_text_half(3), Some(2));
+        assert_eq!(nearest_even_text_half(5), Some(2));
+        assert_eq!(nearest_even_text_half(7), Some(4));
     }
 
     #[test]

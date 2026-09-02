@@ -4,13 +4,22 @@ use std::collections::HashSet;
 
 use crate::Error;
 
-use crate::layout::{AxisSpec, AxisTick, Layout};
-use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor, TextStyle};
+use crate::layout::{AxisSpec, AxisTick, Layout, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::render::backend::{
+    with_clip, Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
+};
 use crate::spec::{AxisScale, EstimateStatus, FacetScales, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
+
+struct AdjacentTextPlan {
+    plan: ResolvedTextPlan,
+    position: Point2D,
+    anchor: TextAnchor,
+    deferred_annotation: bool,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct EstimateTuple {
@@ -183,21 +192,28 @@ pub(crate) fn draw_not_estimable(
     vertical_guide_x: Option<f64>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    let panel = layout.projection.panel_box();
-    let width = crate::layout::estimated_text_width(NOT_ESTIMABLE_TEXT, theme.detail_font_size);
-    let x = not_estimable_text_x(panel, width, vertical_guide_x)?;
-    let (_, y) = layout.projection.project(layout.projection.x_range().0, y);
-    backend.draw_text(
-        Point2D::new(x.round(), y.round()),
+    let text_plan = theme.measure_legacy_text(
         NOT_ESTIMABLE_TEXT,
-        &TextStyle {
-            color: theme.foreground.into(),
-            font_family: theme.font_family.clone(),
-            font_size: theme.detail_font_size,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Middle,
-            rotation: 0.0,
-        },
+        theme.detail_font_size,
+        PhysicalTextAlignment::Center,
+        "not estimable status",
+    )?;
+    draw_planned_not_estimable(&text_plan, layout, y, vertical_guide_x, backend)
+}
+
+fn draw_planned_not_estimable(
+    text_plan: &ResolvedTextPlan,
+    layout: &Layout,
+    y: f64,
+    vertical_guide_x: Option<f64>,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    let panel = layout.projection.panel_box();
+    let x = not_estimable_text_x(panel, text_plan.width(), vertical_guide_x)?;
+    let (_, y) = layout.projection.project(layout.projection.x_range().0, y);
+    backend.draw_planned_text(
+        PlannedTextPlacement::middle(Point2D::new(x.round(), y.round()), TextAnchor::Middle, 0.0),
+        text_plan,
     )
 }
 
@@ -445,7 +461,7 @@ pub(crate) fn render(
         theme,
     )?;
     let x_ticks = if scale == AxisScale::Log10 {
-        log_ticks(x_range, panel, theme.typography.tick_label.font_size)
+        log_ticks(x_range, panel, theme)
     } else {
         Vec::new()
     };
@@ -482,32 +498,27 @@ pub(crate) fn render(
     let significance_label = theme
         .typography
         .effective_significance_label(chart.significance_mark_style_override());
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        let (reference_x, y0) = layout.projection.project(transformed_reference, 0.0);
-        let (_, y1) = layout.projection.project(transformed_reference, row_count);
-        backend.draw_line(
-            &[Point2D::new(reference_x, y0), Point2D::new(reference_x, y1)],
-            &LineStyle::medium_dashed(theme.foreground, 1.0),
-        )?;
-        for index in 0..labels.len() {
-            let y = row_count - index as f64 - 0.5;
+    let not_estimable_plan = estimates
+        .iter()
+        .any(Option::is_none)
+        .then(|| {
+            theme.measure_legacy_text(
+                NOT_ESTIMABLE_TEXT,
+                theme.detail_font_size,
+                PhysicalTextAlignment::Center,
+                "not estimable status",
+            )
+        })
+        .transpose()?;
+    let detail_label =
+        theme.legacy_text_appearance(theme.detail_font_size, crate::TextWeight::Normal);
+    let frozen_significance = context.deferred_annotation_text();
+    let mut frozen_significance_index = 0_usize;
+    let adjacent_label_plans = (0..labels.len())
+        .map(|index| {
             let Some(tuple) = transformed_estimates[index] else {
-                draw_not_estimable(theme, &layout, y, reference_line_x, backend)?;
-                continue;
+                return Ok(None);
             };
-            if let Some((lower, upper)) = tuple.lower.zip(tuple.upper) {
-                let (left, py) = layout.projection.project(lower, y);
-                let (right, _) = layout.projection.project(upper, y);
-                backend.draw_line(
-                    &[Point2D::new(left, py), Point2D::new(right, py)],
-                    &LineStyle::solid(theme.foreground, 1.4),
-                )?;
-            }
-            let (x, y) = layout.projection.project(tuple.estimate, y);
-            backend.draw_scatter(
-                &[Point2D::new(x, y)],
-                &chart.point_style(theme.colors[0], 4),
-            )?;
             let original_estimate = estimates[index]
                 .ok_or_else(|| {
                     Error::Render(format!(
@@ -523,63 +534,180 @@ pub(crate) fn render(
                         .clone()
                         .map(|mark| (mark, true))
                 });
-            if let Some((label, is_significance)) = adjacent_label {
-                let significance_style = chart.significance_mark_style_spec();
-                let font_size = if is_significance {
-                    significance_label.font_size
-                } else {
-                    theme.detail_font_size
+            let Some((source, is_significance)) = adjacent_label else {
+                return Ok(None);
+            };
+            let (x, y) = layout
+                .projection
+                .project(tuple.estimate, row_count - index as f64 - 0.5);
+            let (appearance, gap, owner, exact_override) = if is_significance {
+                (
+                    &significance_label,
+                    chart.significance_mark_style_spec().gap_spec(),
+                    "coefficient attached significance label",
+                    chart.significance_mark_style_override().is_some(),
+                )
+            } else {
+                (&detail_label, 7.0, "coefficient estimate label", false)
+            };
+            let panel = layout.projection.panel_box();
+            let frozen = if is_significance {
+                frozen_significance
+                    .map(|plans| {
+                        let plan = plans.get(frozen_significance_index).ok_or_else(|| {
+                            Error::Render(format!(
+                                "{family}: frozen attached significance plan count is too short"
+                            ))
+                        })?;
+                        frozen_significance_index += 1;
+                        if plan.plan.source != source
+                            || plan.plan.style.stack_source != appearance.stack
+                            || plan.plan.style.paint != appearance.paint
+                            || plan.plan.style.font_size != appearance.font_size
+                            || plan.plan.style.weight != appearance.weight
+                            || plan.plan.style.exact_override != exact_override
+                            || plan.exact_override != exact_override
+                        {
+                            return Err(Error::Render(format!(
+                                "{family}: frozen attached significance plan does not match its source and style"
+                            )));
+                        }
+                        Ok(plan.plan.clone())
+                    })
+                    .transpose()?
+            } else {
+                None
+            };
+            let (position, anchor, plan) = if let Some(plan) = frozen {
+                let (position, anchor, fits) = match plan.style.alignment {
+                    PhysicalTextAlignment::Start => (
+                        Point2D::new((x + gap).round(), y.round()),
+                        TextAnchor::Start,
+                        x + gap + plan.width() <= panel.x1,
+                    ),
+                    PhysicalTextAlignment::End => (
+                        Point2D::new((x - gap).round(), y.round()),
+                        TextAnchor::End,
+                        x - gap - plan.width() >= panel.x0,
+                    ),
+                    PhysicalTextAlignment::Center => {
+                        return Err(Error::Render(format!(
+                            "{family}: frozen attached significance plan has invalid alignment"
+                        )));
+                    }
                 };
-                let weight = if is_significance {
-                    significance_label.weight
-                } else {
-                    crate::TextWeight::Normal
+                if !fits {
+                    return Err(Error::Render(format!(
+                        "{family}: frozen attached significance plan no longer fits beside its point"
+                    )));
+                }
+                (position, anchor, plan)
+            } else {
+                let measure = |alignment| {
+                    if is_significance {
+                        theme.measure_text(&source, appearance, alignment, owner, exact_override)
+                    } else {
+                        theme.measure_legacy_appearance_text(
+                            &source,
+                            appearance,
+                            alignment,
+                            owner,
+                            exact_override,
+                        )
+                    }
                 };
-                let gap = if is_significance {
-                    significance_style.gap_spec()
-                } else {
-                    7.0
-                };
-                let width = crate::layout::estimated_text_width(&label, font_size);
-                let panel = layout.projection.panel_box();
-                let (label_x, anchor) = if x + gap + width <= panel.x1 {
-                    (x + gap, TextAnchor::Start)
+                let start_plan = measure(PhysicalTextAlignment::Start)?;
+                let width = start_plan.width();
+                if x + gap + width <= panel.x1 {
+                    (
+                        Point2D::new((x + gap).round(), y.round()),
+                        TextAnchor::Start,
+                        start_plan,
+                    )
                 } else if x - gap - width >= panel.x0 {
-                    (x - gap, TextAnchor::End)
+                    let end_plan = measure(PhysicalTextAlignment::End)?;
+                    (
+                        Point2D::new((x - gap).round(), y.round()),
+                        TextAnchor::End,
+                        end_plan,
+                    )
                 } else {
                     let message = if is_significance {
                         format!(
-                            "{family}: significance mark {label:?} does not fit beside its point; increase chart width or widen the x-axis range"
+                            "{family}: significance mark {source:?} does not fit beside its point; increase chart width or widen the x-axis range"
                         )
                     } else {
                         format!(
-                            "{family}: formatted estimate label {label:?} does not fit beside its point; increase chart width, shorten the suffix, or reduce precision"
+                            "{family}: formatted estimate label {source:?} does not fit beside its point; increase chart width, shorten the suffix, or reduce precision"
                         )
                     };
                     return Err(Error::Render(message));
-                };
-                let text_style = if is_significance {
-                    significance_label.backend_style(anchor, 0.0)
-                } else {
-                    TextStyle {
-                        color: theme.foreground.into(),
-                        font_family: theme.font_family.clone(),
-                        font_size,
-                        weight,
-                        anchor,
-                        rotation: 0.0,
-                    }
-                };
-                backend.draw_text(
-                    Point2D::new(label_x.round(), y.round()),
-                    &label,
-                    &text_style,
+                }
+            };
+            Ok(Some(AdjacentTextPlan {
+                plan,
+                position,
+                anchor,
+                deferred_annotation: is_significance,
+            }))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    if frozen_significance.is_some_and(|plans| plans.len() != frozen_significance_index) {
+        return Err(Error::Render(format!(
+            "{family}: frozen attached significance plan count is too long"
+        )));
+    }
+    with_clip(backend, layout.projection.panel_box(), |backend| {
+        let (reference_x, y0) = layout.projection.project(transformed_reference, 0.0);
+        let (_, y1) = layout.projection.project(transformed_reference, row_count);
+        backend.draw_line(
+            &[Point2D::new(reference_x, y0), Point2D::new(reference_x, y1)],
+            &LineStyle::medium_dashed(theme.foreground, 1.0),
+        )?;
+        for index in 0..labels.len() {
+            let y = row_count - index as f64 - 0.5;
+            let Some(tuple) = transformed_estimates[index] else {
+                draw_planned_not_estimable(
+                    not_estimable_plan.as_ref().ok_or_else(|| {
+                        Error::Render("not estimable text plan is missing".into())
+                    })?,
+                    &layout,
+                    y,
+                    reference_line_x,
+                    backend,
+                )?;
+                continue;
+            };
+            if let Some((lower, upper)) = tuple.lower.zip(tuple.upper) {
+                let (left, py) = layout.projection.project(lower, y);
+                let (right, _) = layout.projection.project(upper, y);
+                backend.draw_line(
+                    &[Point2D::new(left, py), Point2D::new(right, py)],
+                    &LineStyle::solid(theme.foreground, 1.4),
+                )?;
+            }
+            let (x, y) = layout.projection.project(tuple.estimate, y);
+            backend.draw_scatter(
+                &[Point2D::new(x, y)],
+                &chart.point_style(theme.colors[0], 4),
+            )?;
+            if let Some(adjacent) = &adjacent_label_plans[index] {
+                backend.draw_planned_text(
+                    PlannedTextPlacement::middle(adjacent.position, adjacent.anchor, 0.0),
+                    &adjacent.plan,
                 )?;
             }
         }
         Ok(())
     })?;
-    Ok(PlotRenderResult::new(layout, Vec::new()))
+    let deferred_annotation_text = adjacent_label_plans
+        .into_iter()
+        .flatten()
+        .filter(|plan| plan.deferred_annotation)
+        .map(|plan| crate::layout::DeferredAnnotationTextPlan::from_resolved(plan.plan))
+        .collect();
+    Ok(PlotRenderResult::new(layout, Vec::new())
+        .with_deferred_annotation_text(deferred_annotation_text))
 }
 
 #[expect(
@@ -589,7 +717,7 @@ pub(crate) fn render(
 fn log_ticks(
     range: (f64, f64),
     panel: crate::layout::PanelBox,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
 ) -> Vec<AxisTick> {
     let representable_range = (
         range.0.max(f64::from_bits(1).log10()),
@@ -606,7 +734,7 @@ fn log_ticks(
             representable_range,
             &projection,
             crate::layout::AxisSide::Bottom,
-            tick_font_size,
+            theme,
         )
         .into_iter()
         .map(|tick| tick.position)
@@ -636,7 +764,7 @@ fn log_ticks(
         ticks,
         &projection,
         crate::layout::AxisSide::Bottom,
-        tick_font_size,
+        theme,
         AxisTick::new(midpoint, fallback_label),
     )
 }
@@ -690,12 +818,8 @@ fn log_labels_are_unique_and_finite(labels: &[String]) -> bool {
 mod tests {
     use super::*;
 
-    fn tick_font_size() -> u32 {
-        crate::Theme::Publication
-            .resolve()
-            .typography
-            .tick_label
-            .font_size
+    fn tick_theme() -> ResolvedTheme {
+        crate::Theme::Publication.resolve()
     }
 
     #[test]
@@ -710,10 +834,11 @@ mod tests {
 
     #[test]
     fn wide_log_ticks_cover_the_full_domain_without_exceeding_the_maximum() {
+        let theme = tick_theme();
         let ticks = log_ticks(
             (-100.0, 100.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            tick_font_size(),
+            &theme,
         );
 
         assert!(ticks.len() <= crate::layout::AUTOMATIC_TICK_TARGET);
@@ -723,10 +848,11 @@ mod tests {
 
     #[test]
     fn extreme_log_ticks_keep_every_label_finite_and_nonzero() {
+        let theme = tick_theme();
         let ticks = log_ticks(
             (-400.0, 400.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            tick_font_size(),
+            &theme,
         );
 
         assert!(ticks.iter().all(|tick| {
@@ -738,10 +864,11 @@ mod tests {
 
     #[test]
     fn upper_extreme_log_ticks_have_unique_round_trippable_labels() {
+        let theme = tick_theme();
         let ticks = log_ticks(
             (308.0, f64::MAX.log10()),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            tick_font_size(),
+            &theme,
         );
 
         assert!(ticks.iter().enumerate().all(|(index, tick)| {
@@ -755,10 +882,11 @@ mod tests {
     #[test]
     fn lower_subnormal_log_ticks_omit_duplicate_rounded_values() {
         let lower = f64::from_bits(1).log10();
+        let theme = tick_theme();
         let ticks = log_ticks(
             (lower, -323.0),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
-            tick_font_size(),
+            &theme,
         );
 
         assert!(ticks.iter().enumerate().all(|(index, tick)| {

@@ -7,9 +7,10 @@ pub use spec::{Attached, FacetCell, Pairwise, Significance, SignificanceMark, Si
 
 use crate::Error;
 
-use crate::layout::{deterministic_text_width, PanelBox};
+use crate::layout::{DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment};
 use crate::render::backend::{
-    Backend, BracketOrientation, BracketStyle, SignificanceBracket, SIGNIFICANCE_BRACKET_GEOMETRY,
+    Backend, BracketOrientation, BracketStyle, PlannedSignificanceCall, SignificanceBracket,
+    SIGNIFICANCE_BRACKET_GEOMETRY,
 };
 use crate::theme::TextAppearance;
 use crate::{Plot, SignificanceMarkStyle};
@@ -17,16 +18,19 @@ use crate::{Plot, SignificanceMarkStyle};
 #[derive(Debug)]
 pub(crate) struct SignificancePlan {
     pub(crate) y_range: (f64, f64),
-    pub(crate) brackets: Vec<SignificanceBracket>,
-    label: TextAppearance,
+    pub(crate) brackets: Vec<PlannedSignificanceBracket>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PlannedSignificanceBracket {
+    pub(crate) geometry: SignificanceBracket,
+    pub(crate) label: DeferredAnnotationTextPlan,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct BracketMetrics {
     tick_height: f64,
     label_gap: f64,
-    label_font_size: u32,
-    label_line_height: f64,
     data_gap: f64,
     level_step: f64,
     panel_padding: f64,
@@ -51,7 +55,7 @@ struct ResolvedComparison {
     left: usize,
     right: usize,
     level: usize,
-    label: String,
+    label: DeferredAnnotationTextPlan,
 }
 
 pub(crate) fn plan(
@@ -75,7 +79,9 @@ pub(crate) fn plan(
         panel,
         LegendAnnotationConstraint::NoObstacle,
         chart.significance_mark_style_spec(),
-        label,
+        &label,
+        theme,
+        chart.significance_mark_style_override().is_some(),
     )
 }
 
@@ -95,6 +101,10 @@ fn plan_comparisons(
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
+    let theme = crate::Theme::Publication.resolve();
+    let label = theme
+        .typography
+        .effective_significance_label(Some(mark_style));
     plan_comparisons_with_label(
         annotations,
         categories,
@@ -105,7 +115,9 @@ fn plan_comparisons(
         panel,
         legend_constraint,
         mark_style,
-        test_significance_label(mark_style),
+        &label,
+        &theme,
+        false,
     )
 }
 
@@ -123,7 +135,9 @@ fn plan_comparisons_with_label(
     panel: PanelBox,
     legend_constraint: LegendAnnotationConstraint,
     mark_style: SignificanceMarkStyle,
-    label: TextAppearance,
+    label: &TextAppearance,
+    theme: &crate::theme::ResolvedTheme,
+    exact_override: bool,
 ) -> Result<SignificancePlan, Error> {
     plan_comparisons_at_with_label(
         annotations,
@@ -138,6 +152,8 @@ fn plan_comparisons_with_label(
         false,
         mark_style,
         label,
+        theme,
+        exact_override,
     )
 }
 
@@ -159,6 +175,10 @@ fn plan_comparisons_at(
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
 ) -> Result<SignificancePlan, Error> {
+    let theme = crate::Theme::Publication.resolve();
+    let label = theme
+        .typography
+        .effective_significance_label(Some(mark_style));
     plan_comparisons_at_with_label(
         annotations,
         categories,
@@ -171,7 +191,9 @@ fn plan_comparisons_at(
         legend_constraint,
         horizontal,
         mark_style,
-        test_significance_label(mark_style),
+        &label,
+        &theme,
+        false,
     )
 }
 
@@ -193,9 +215,11 @@ fn plan_comparisons_at_with_label(
     legend_constraint: LegendAnnotationConstraint,
     horizontal: bool,
     mark_style: SignificanceMarkStyle,
-    label: TextAppearance,
+    label: &TextAppearance,
+    theme: &crate::theme::ResolvedTheme,
+    exact_override: bool,
 ) -> Result<SignificancePlan, Error> {
-    let metrics = bracket_metrics(mark_style, &label);
+    let metrics = bracket_metrics(mark_style);
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
         || anchor_positions.is_some_and(|positions| positions.len() != categories.len())
@@ -274,11 +298,23 @@ fn plan_comparisons_at_with_label(
             )));
         }
         comparison_pairs.push(pair);
+        let source = annotation.mark().glyph()?.to_owned();
+        let text_plan = theme.measure_text(
+            &source,
+            label,
+            if horizontal {
+                PhysicalTextAlignment::Start
+            } else {
+                PhysicalTextAlignment::Center
+            },
+            "significance bracket label",
+            exact_override,
+        )?;
         resolved.push(ResolvedComparison {
             left: pair.0,
             right: pair.1,
             level: 0,
-            label: annotation.mark().glyph()?.to_owned(),
+            label: DeferredAnnotationTextPlan::from_resolved(text_plan),
         });
     }
 
@@ -292,7 +328,6 @@ fn plan_comparisons_at_with_label(
         return Ok(SignificancePlan {
             y_range: planned_range,
             brackets: Vec::new(),
-            label,
         });
     }
 
@@ -319,7 +354,7 @@ fn plan_comparisons_at_with_label(
         left.left
             .cmp(&right.left)
             .then_with(|| left.right.cmp(&right.right))
-            .then_with(|| left.label.cmp(&right.label))
+            .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
     let mut level_ends = Vec::<usize>::new();
     for comparison in &mut resolved {
@@ -345,9 +380,9 @@ fn plan_comparisons_at_with_label(
             .fold(f64::NEG_INFINITY, f64::max);
         level_maxima[comparison.level] = level_maxima[comparison.level].max(span_maximum);
         let label_extent = if horizontal {
-            deterministic_text_width(&comparison.label, f64::from(metrics.label_font_size))
+            comparison.label.plan.width()
         } else {
-            metrics.label_line_height
+            comparison.label.plan.height()
         };
         level_label_extents[comparison.level] =
             level_label_extents[comparison.level].max(label_extent);
@@ -433,7 +468,7 @@ fn plan_comparisons_at_with_label(
             .cmp(&right.level)
             .then_with(|| left.left.cmp(&right.left))
             .then_with(|| left.right.cmp(&right.right))
-            .then_with(|| left.label.cmp(&right.label))
+            .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
     let category_width = panel.width() / categories.len() as f64;
     let brackets = resolved
@@ -449,12 +484,9 @@ fn plan_comparisons_at_with_label(
             let x_right = anchor(comparison.right);
             let label_center = f64::midpoint(x_left, x_right);
             let label_half_extent = if horizontal {
-                metrics.label_line_height / 2.0
+                comparison.label.plan.height() / 2.0
             } else {
-                deterministic_text_width(
-                    &comparison.label,
-                    f64::from(metrics.label_font_size),
-                ) / 2.0
+                comparison.label.plan.width() / 2.0
             };
             if label_center - label_half_extent < panel.x0
                 || label_center + label_half_extent > panel.x1
@@ -463,12 +495,15 @@ fn plan_comparisons_at_with_label(
                     "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
                 ));
             }
-            Ok(SignificanceBracket {
-                x_left,
-                x_right,
-                y: line_positions[comparison.level],
+            Ok(PlannedSignificanceBracket {
+                geometry: SignificanceBracket {
+                    x_left,
+                    x_right,
+                    y: line_positions[comparison.level],
+                    label: comparison.label.plan.source.clone(),
+                    orientation: BracketOrientation::Vertical,
+                },
                 label: comparison.label,
-                orientation: BracketOrientation::Vertical,
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -476,7 +511,6 @@ fn plan_comparisons_at_with_label(
     Ok(SignificancePlan {
         y_range: planned_range,
         brackets,
-        label,
     })
 }
 
@@ -668,11 +702,13 @@ fn plan_grouped_oriented(
         legend_constraint,
         horizontal,
         chart.significance_mark_style_spec(),
-        label,
+        &label,
+        theme,
+        chart.significance_mark_style_override().is_some(),
     )?;
     if horizontal {
         for bracket in &mut result.brackets {
-            bracket.orientation = BracketOrientation::Horizontal;
+            bracket.geometry.orientation = BracketOrientation::Horizontal;
         }
     }
     Ok(result)
@@ -943,12 +979,10 @@ fn data_fits_below_ceiling(
     data_top + metrics.data_gap <= ceiling - metrics.panel_padding
 }
 
-fn bracket_metrics(style: SignificanceMarkStyle, label: &TextAppearance) -> BracketMetrics {
+fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
     BracketMetrics {
         tick_height: SIGNIFICANCE_BRACKET_GEOMETRY.tick_height,
         label_gap: style.gap_spec(),
-        label_font_size: label.font_size,
-        label_line_height: label.line_height(),
         data_gap: SIGNIFICANCE_BRACKET_GEOMETRY.data_gap,
         level_step: SIGNIFICANCE_BRACKET_GEOMETRY.level_step,
         panel_padding: SIGNIFICANCE_BRACKET_GEOMETRY.panel_padding,
@@ -962,32 +996,25 @@ pub(crate) fn render(
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let mark_style = chart.significance_mark_style_spec();
-    let label = &plan.label;
-    let style = BracketStyle {
-        color: theme.foreground.into(),
-        width: theme.bracket_width,
-        label_color: label.paint,
-        font_family: label.stack.clone(),
-        font_size: label.font_size,
-        line_height: label.line_height(),
-        weight: label.weight,
-        label_gap: mark_style.gap_spec(),
-    };
     for bracket in &plan.brackets {
-        backend.draw_bracket(bracket, &style)?;
+        let label = &bracket.label.plan;
+        let style = BracketStyle {
+            color: theme.foreground.into(),
+            width: theme.bracket_width,
+            label_color: label.style.paint,
+            font_family: label.style.stack_source.clone(),
+            font_size: label.style.font_size,
+            line_height: label.line_height(),
+            weight: label.style.weight,
+            label_gap: mark_style.gap_spec(),
+        };
+        backend.draw_planned_bracket(PlannedSignificanceCall {
+            bracket: &bracket.geometry,
+            style: &style,
+            label: &bracket.label,
+        })?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-fn test_significance_label(mark_style: SignificanceMarkStyle) -> TextAppearance {
-    let mut label = crate::Theme::Publication
-        .resolve()
-        .typography
-        .significance_label;
-    label.font_size = mark_style.font_size_spec();
-    label.weight = mark_style.weight_spec();
-    label
 }
 
 fn render_error(message: impl Into<String>) -> Error {

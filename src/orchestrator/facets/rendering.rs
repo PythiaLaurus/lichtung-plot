@@ -5,8 +5,8 @@ use crate::Error;
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::layout::canvas::try_wrap_text;
-use crate::layout::{PanelBox, TextBlock};
+use crate::layout::canvas::try_wrap_legacy_text;
+use crate::layout::{PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{Backend, Point2D, SurfaceRole, TextAnchor, TextStyle};
 use crate::spec::{PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
@@ -23,6 +23,7 @@ pub(super) fn render_scene(
     panel_plans: &[PanelPlan],
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
+    canvas_layout: &crate::layout::CanvasLayout,
     outer: PanelBox,
     shared_axis_origin: (f64, f64),
     theme: &ResolvedTheme,
@@ -53,14 +54,15 @@ pub(super) fn render_scene(
             panel_plan.panel_box,
             theme,
         )
-        .with_facet_scales(source.facet_scales_spec());
+        .with_facet_scales(source.facet_scales_spec())
+        .with_deferred_annotation_text(&panel_plan.result.deferred_annotation_text);
         panel_plan
             .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;
         if let Some(significance) = &panel_plan.result.significance {
             crate::significance::render(&panel_plot, significance, theme, backend)?;
         }
-        crate::decorations::apply::apply_axes(&panel_plot, &panel_plan.result, theme, backend)?;
+        crate::decorations::apply::apply_axes(&panel_plot, panel_plan, theme, backend)?;
         crate::decorations::apply::apply_planned_legend(
             &panel_plot,
             panel_plan.legend.as_ref(),
@@ -76,7 +78,7 @@ pub(super) fn render_scene(
         theme,
         backend,
     )?;
-    crate::decorations::apply::apply_canvas_text(source, theme, backend)
+    crate::decorations::apply::apply_canvas_text(source, canvas_layout, backend)
 }
 
 #[expect(
@@ -90,10 +92,12 @@ fn draw_facet_strip(
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let label = facet_label(plot, &facet.cell);
-    let lines = try_wrap_text(
+    let lines = try_wrap_legacy_text(
+        theme,
         &label,
         theme.facet_header_font_size,
         (facet.panel.width() - 16.0).max(1.0),
+        PhysicalTextAlignment::Center,
         "facet strip",
     )?;
     let line_height = f64::from(theme.facet_header_font_size) + 6.0;
@@ -145,12 +149,14 @@ fn draw_shared_facet_axis_labels(
             .axis_title
             .backend_style(TextAnchor::Middle, 0.0);
         if let Some(label) = horizontal_label {
-            let block = TextBlock::layout(
+            let block = TextBlock::from_resolved(theme.plan_text(
                 label,
-                theme.typography.axis_title.font_size,
+                &theme.typography.axis_title,
                 grid.width().max(1.0),
+                PhysicalTextAlignment::Center,
                 "shared facet x-axis title",
-            )?;
+                false,
+            )?);
             let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
             for (index, line) in block.lines().iter().enumerate() {
                 backend.draw_text(
@@ -164,12 +170,14 @@ fn draw_shared_facet_axis_labels(
             }
         }
         if let Some(label) = vertical_label {
-            let block = TextBlock::layout(
+            let block = TextBlock::from_resolved(theme.plan_text(
                 label,
-                theme.typography.axis_title.font_size,
+                &theme.typography.axis_title,
                 grid.height().max(1.0),
+                PhysicalTextAlignment::Center,
                 "shared facet y-axis title",
-            )?;
+                false,
+            )?);
             let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
             let style = TextStyle {
                 rotation: -90.0,

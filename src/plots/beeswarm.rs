@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::layout::{AxisTick, Layout, PanelBox};
+use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     with_clip, Backend, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
 };
@@ -67,12 +67,13 @@ pub(crate) fn render(
     let high_label = format_colorbar_value(color_range.1);
     let low_label = format_colorbar_value(color_range.0);
     let color_label = chart.resolved_color_label();
-    let color_label_block = crate::layout::TextBlock::layout(
+    let color_label_block = TextBlock::from_resolved(theme.plan_legacy_text(
         &color_label,
         detail_font_size,
         (context.panel.height().min(150.0) * 0.9).max(1.0),
+        PhysicalTextAlignment::Center,
         "beeswarm colorbar title",
-    )?;
+    )?);
     let mut panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
         chart,
         context.panel,
@@ -81,7 +82,18 @@ pub(crate) fn render(
     )?;
     let value_width = [&high_label, &low_label]
         .into_iter()
-        .map(|label| crate::layout::estimated_text_width(label, detail_font_size))
+        .map(|label| {
+            theme
+                .measure_legacy_text(
+                    label,
+                    detail_font_size,
+                    PhysicalTextAlignment::Start,
+                    "beeswarm colorbar value",
+                )
+                .map(|plan| plan.width())
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .fold(0.0_f64, f64::max);
     let colorbar_reserve = (34.0 + value_width).max(
         65.0 + color_label_block.lines().len().saturating_sub(1) as f64
@@ -175,6 +187,24 @@ pub(crate) fn render(
         theme,
     )?;
     Ok(PlotRenderResult::new(layout, Vec::new()))
+}
+
+pub(crate) fn text_census_colorbar_values<'a>(
+    chart: &Plot,
+    data: impl Into<crate::data::PlotData<'a>>,
+) -> Result<[String; 2], Error> {
+    let color_col = chart
+        .color_col()
+        .ok_or_else(|| Error::Data("beeswarm: continuous color column not set".into()))?;
+    let colors = crate::data::strict_finite_f64(data, color_col, "beeswarm")?;
+    let range = match chart.beeswarm_color_limits_spec() {
+        Some((minimum, maximum)) => (minimum, maximum),
+        None => crate::data::min_max(colors, "beeswarm")?,
+    };
+    Ok([
+        format_colorbar_value(range.0),
+        format_colorbar_value(range.1),
+    ])
 }
 
 fn draw_colorbar(

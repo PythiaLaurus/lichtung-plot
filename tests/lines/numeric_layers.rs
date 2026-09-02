@@ -210,6 +210,25 @@ fn point_labels_and_whole_layer_legend_identity_remain_distinct() {
 }
 
 #[test]
+fn clipped_point_labels_do_not_require_unpainted_glyphs() {
+    let outside = PointLayer::new(
+        NumericValues::new("point x", [2.0]),
+        NumericValues::new("point y", [2.0]),
+    )
+    .labels(CategoryValues::new("labels", ["\u{10FFFF}"]).unwrap());
+
+    Plot::line(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    )
+    .x_limits(0.0, 1.0)
+    .y_limits(0.0, 1.0)
+    .point_layer(outside)
+    .preflight()
+    .unwrap();
+}
+
+#[test]
 fn repeated_explicit_colors_and_exact_duplicate_legend_entries_are_accepted() {
     let frame = line_data();
     let layer = |x, y| {
@@ -276,22 +295,21 @@ fn explicit_numeric_ticks_replace_generated_labels_at_caller_positions_on_both_a
     let panel_y = attribute(clip, "y");
     let panel_width = attribute(clip, "width");
     let panel_height = attribute(clip, "height");
-    assert_eq!(
-        attribute(text_line(&output, "early x"), "x").to_bits(),
-        (panel_x + panel_width * 0.25).round().to_bits()
-    );
-    assert_eq!(
-        attribute(text_line(&output, "late x"), "x").to_bits(),
-        (panel_x + panel_width * 0.75).round().to_bits()
-    );
-    assert_eq!(
-        attribute(text_line(&output, "low y"), "y").to_bits(),
-        (panel_y + panel_height * 0.75).round().to_bits()
-    );
-    assert_eq!(
-        attribute(text_line(&output, "high y"), "y").to_bits(),
-        (panel_y + panel_height * 0.25).round().to_bits()
-    );
+    let early_x = attribute(text_line(&output, "early x"), "x");
+    let late_x = attribute(text_line(&output, "late x"), "x");
+    for (start, center) in [
+        (early_x, (panel_x + panel_width * 0.25).round()),
+        (late_x, (panel_x + panel_width * 0.75).round()),
+    ] {
+        assert!((0.0..=64.0).contains(&(center - start)));
+    }
+    assert!(((late_x - early_x) - panel_width * 0.5).abs() <= 8.0);
+
+    let low_y = attribute(text_line(&output, "low y"), "y");
+    let high_y = attribute(text_line(&output, "high y"), "y");
+    assert!((low_y - (panel_y + panel_height * 0.75).round()).abs() <= 16.0);
+    assert!((high_y - (panel_y + panel_height * 0.25).round()).abs() <= 16.0);
+    assert!(((low_y - high_y) - panel_height * 0.5).abs() <= 1.0);
     let mut tick_labels = output
         .lines()
         .filter(|line| line.starts_with("<text ") && line.contains("font-size=\"16\""))

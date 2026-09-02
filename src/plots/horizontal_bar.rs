@@ -10,9 +10,13 @@
 
 use crate::Error;
 
-use crate::layout::{AxisTick, Layout, PanelBox, Projection};
+use crate::layout::{
+    AxisTick, Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan, TextBlock,
+};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor};
+use crate::render::backend::{
+    with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
+};
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::Plot;
@@ -63,12 +67,26 @@ pub(crate) fn render(
     let significance_label = theme
         .typography
         .effective_significance_label(chart.significance_mark_style_override());
+    let attached_label_plans = bar_data::attached_significance_text_plans(
+        context,
+        &prepared.significance,
+        &significance_label,
+        |mark| {
+            if mark.positive {
+                PhysicalTextAlignment::Start
+            } else {
+                PhysicalTextAlignment::End
+            }
+        },
+        "horizontal bar attached significance label",
+        chart.significance_mark_style_override().is_some(),
+    )?;
     base_x_range = range_for_bar_marks(
         chart,
         &prepared,
         panel_box,
         base_x_range,
-        &significance_label,
+        &attached_label_plans,
     );
     let anchor_count = prepared.series.len().max(1);
     let mut rendered_maxima =
@@ -91,8 +109,13 @@ pub(crate) fn render(
         rendered_maxima[point.category_index][point.series_index.unwrap_or(0)] =
             rendered_maxima[point.category_index][point.series_index.unwrap_or(0)].max(clearance);
     }
-    for mark in prepared.significance.iter().filter(|mark| mark.positive) {
-        let width = crate::layout::estimated_text_width(&mark.label, significance_label.font_size);
+    for (mark, text_plan) in prepared
+        .significance
+        .iter()
+        .zip(&attached_label_plans)
+        .filter(|(mark, _)| mark.positive)
+    {
+        let width = text_plan.width();
         let clearance = mark.edge + (mark_style.gap_spec() + width + 2.0) * value_per_pixel;
         if let Some(series_index) = mark.series_index {
             rendered_maxima[mark.category_index][series_index] =
@@ -136,7 +159,7 @@ pub(crate) fn render(
         chart.y_axis_spec(),
         theme,
     );
-    validate_bar_significance_collisions(chart, &prepared, mode, &layout, &significance_label)?;
+    validate_bar_significance_collisions(chart, &prepared, mode, &layout, &attached_label_plans)?;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
@@ -192,16 +215,8 @@ pub(crate) fn render(
                 )?;
             }
         }
-        for mark in &prepared.significance {
-            draw_bar_significance(
-                chart,
-                mark,
-                &prepared,
-                mode,
-                &layout,
-                &significance_label,
-                backend,
-            )?;
+        for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
+            draw_bar_significance(chart, mark, text_plan, &prepared, mode, &layout, backend)?;
         }
         for point in &prepared.points {
             let y_center = point_center(point.category_index, point.series_index, &prepared, mode);
@@ -211,10 +226,24 @@ pub(crate) fn render(
         Ok(())
     })?;
     if legend_entries.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new()).with_significance_plan(significance))
+        Ok(PlotRenderResult::new(layout, Vec::new())
+            .with_significance_plan(significance)
+            .with_deferred_annotation_text(deferred_annotation_text(&attached_label_plans)))
     } else {
-        Ok(PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance))
+        Ok(PlotRenderResult::new(layout, legend_entries)
+            .with_significance_plan(significance)
+            .with_deferred_annotation_text(deferred_annotation_text(&attached_label_plans)))
     }
+}
+
+fn deferred_annotation_text(
+    plans: &[ResolvedTextPlan],
+) -> Vec<crate::layout::DeferredAnnotationTextPlan> {
+    plans
+        .iter()
+        .cloned()
+        .map(crate::layout::DeferredAnnotationTextPlan::from_resolved)
+        .collect()
 }
 
 fn range_for_bar_marks(
@@ -222,7 +251,7 @@ fn range_for_bar_marks(
     prepared: &PreparedBars,
     panel: PanelBox,
     range: (f64, f64),
-    label: &crate::theme::TextAppearance,
+    text_plans: &[ResolvedTextPlan],
 ) -> (f64, f64) {
     if prepared.significance.is_empty() || chart.user_x_limits().is_some() {
         return range;
@@ -230,8 +259,8 @@ fn range_for_bar_marks(
     let style = chart.significance_mark_style_spec();
     let units_per_pixel = (range.1 - range.0) / panel.width();
     let mut extent = prepared.value_range;
-    for mark in &prepared.significance {
-        let width = crate::layout::estimated_text_width(&mark.label, label.font_size);
+    for (mark, text_plan) in prepared.significance.iter().zip(text_plans) {
+        let width = text_plan.width();
         let clearance = (style.gap_spec() + width + 2.0) * units_per_pixel;
         if mark.positive {
             extent.1 = extent.1.max(mark.edge + clearance);
@@ -245,16 +274,16 @@ fn range_for_bar_marks(
 fn draw_bar_significance(
     chart: &Plot,
     mark: &PreparedBarSignificance,
+    text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
-    label: &crate::theme::TextAppearance,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let style = chart.significance_mark_style_spec();
     let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
     let (edge_x, y) = layout.projection.project(mark.edge, y);
-    let width = crate::layout::estimated_text_width(&mark.label, label.font_size);
+    let width = text_plan.width();
     let panel = layout.projection.panel_box();
     let (x, anchor, fits) = if mark.positive {
         let x = edge_x + style.gap_spec();
@@ -269,10 +298,9 @@ fn draw_bar_significance(
             mark.label
         )));
     }
-    backend.draw_text(
-        Point2D::new(x.round(), y.round()),
-        &mark.label,
-        &label.backend_style(anchor, 0.0),
+    backend.draw_planned_text(
+        PlannedTextPlacement::middle(Point2D::new(x.round(), y.round()), anchor, 0.0),
+        text_plan,
     )
 }
 
@@ -281,15 +309,15 @@ fn validate_bar_significance_collisions(
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
-    label: &crate::theme::TextAppearance,
+    text_plans: &[ResolvedTextPlan],
 ) -> Result<(), Error> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
-    for mark in &prepared.significance {
+    for (mark, text_plan) in prepared.significance.iter().zip(text_plans) {
         let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (edge_x, y) = layout.projection.project(mark.edge, y);
-        let width = crate::layout::estimated_text_width(&mark.label, label.font_size);
-        let height = label.line_height();
+        let width = text_plan.width();
+        let height = text_plan.height();
         let (x0, x1) = if mark.positive {
             (edge_x + style.gap_spec(), edge_x + style.gap_spec() + width)
         } else {
@@ -496,16 +524,21 @@ fn y_tick_label_blocks(
         .map_or(0.0, |appearance| f64::from(appearance.length));
     let maximum_width =
         (panel.x1 - 80.0 - tick_length - f64::from(theme.typography.axis_title.font_size) - 20.0)
+            .min(panel.width() * 0.4)
             .max(1.0);
     labels
         .iter()
         .map(|label| {
-            crate::layout::TextBlock::layout(
-                label,
-                theme.typography.tick_label.font_size,
-                maximum_width,
-                "y-axis category label",
-            )
+            theme
+                .plan_text(
+                    label,
+                    &theme.typography.tick_label,
+                    maximum_width,
+                    PhysicalTextAlignment::End,
+                    "y-axis category label",
+                    false,
+                )
+                .map(TextBlock::from_resolved)
         })
         .collect()
 }
@@ -536,17 +569,21 @@ pub(crate) fn panel_box_for_x_tick_labels(
     }
     let display =
         chart.resolve_label_domain("x-axis categories", labels.iter().map(String::as_str))?;
-    let maximum_width = panel.width() / labels.len() as f64 * 0.9;
+    let maximum_width = panel.width() / labels.len() as f64;
     let maximum_height = display
         .iter()
         .map(|label| {
-            crate::layout::TextBlock::layout(
-                label,
-                theme.typography.tick_label.font_size,
-                maximum_width.max(1.0),
-                "x-axis category label",
-            )
-            .map(|block| block.height())
+            theme
+                .plan_text(
+                    label,
+                    &theme.typography.tick_label,
+                    maximum_width.max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "x-axis category label",
+                    false,
+                )
+                .map(TextBlock::from_resolved)
+                .map(|block| block.height())
         })
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()

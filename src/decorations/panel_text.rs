@@ -2,15 +2,17 @@
 
 use crate::Error;
 
-use crate::layout::{Layout, PanelBox};
-use crate::render::backend::{with_clip, with_layer, Backend, Point2D, TextAnchor, TextStyle};
+use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::render::backend::{
+    with_clip, with_layer, Backend, PlannedTextPlacement, Point2D, TextAnchor,
+};
 use crate::theme::ResolvedTheme;
 use crate::{PanelCorner, Plot};
 
 const PANEL_TEXT_PADDING: f64 = 8.0;
 
-struct PanelTextPlan<'a> {
-    text: &'a str,
+struct PanelTextPlan {
+    text_plan: ResolvedTextPlan,
     position: Point2D,
     anchor: TextAnchor,
     bounds: PanelBox,
@@ -30,17 +32,10 @@ pub(crate) fn draw(
     with_layer(backend, &plot.layer_name("panel-text"), |backend| {
         with_clip(backend, layout.projection.panel_box(), |backend| {
             for plan in plans {
-                backend.draw_text(
-                    plan.position,
-                    plan.text,
-                    &TextStyle {
-                        color: theme.foreground.into(),
-                        font_family: theme.font_family.clone(),
-                        font_size: theme.detail_font_size,
-                        weight: crate::TextWeight::Normal,
-                        anchor: plan.anchor,
-                        rotation: 0.0,
-                    },
+                let text_plan = plan.text_plan;
+                backend.draw_planned_text(
+                    PlannedTextPlacement::middle(plan.position, plan.anchor, 0.0),
+                    &text_plan,
                 )?;
             }
             Ok(())
@@ -63,15 +58,10 @@ pub(crate) fn conflicting_legend_corner(
     }))
 }
 
-fn plans<'a>(
-    plot: &'a Plot,
-    layout: &Layout,
-    theme: &ResolvedTheme,
-) -> Result<Vec<PanelTextPlan<'a>>, Error> {
+fn plans(plot: &Plot, layout: &Layout, theme: &ResolvedTheme) -> Result<Vec<PanelTextPlan>, Error> {
     let panel = layout.projection.panel_box();
     let available_width = panel.width() - PANEL_TEXT_PADDING * 2.0;
-    let text_height = f64::from(theme.detail_font_size) * 1.2;
-    if available_width <= 0.0 || text_height + PANEL_TEXT_PADDING * 2.0 > panel.height() {
+    if available_width <= 0.0 {
         return Err(Error::Render(
             "panel text has no usable space inside the resolved chart panel; increase the canvas"
                 .into(),
@@ -82,13 +72,29 @@ fn plans<'a>(
         .panel_text_annotations()
         .iter()
         .map(|annotation| {
-            let width =
-                crate::layout::estimated_text_width(annotation.text(), theme.detail_font_size);
+            let alignment = match annotation.corner() {
+                PanelCorner::TopLeft | PanelCorner::BottomLeft => PhysicalTextAlignment::Start,
+                PanelCorner::TopRight | PanelCorner::BottomRight => PhysicalTextAlignment::End,
+            };
+            let text_plan = theme.measure_legacy_text(
+                annotation.text(),
+                theme.detail_font_size,
+                alignment,
+                "panel text annotation",
+            )?;
+            let width = text_plan.width();
+            let text_height = text_plan.height();
             if width > available_width {
                 return Err(Error::Render(format!(
                     "panel text {:?} requires {width:.1}px but only {available_width:.1}px is available; increase chart width or shorten the annotation",
                     annotation.text()
                 )));
+            }
+            if text_height + PANEL_TEXT_PADDING * 2.0 > panel.height() {
+                return Err(Error::Render(
+                    "panel text has no usable space inside the resolved chart panel; increase the canvas"
+                        .into(),
+                ));
             }
             let (x, anchor) = match annotation.corner() {
                 PanelCorner::TopLeft | PanelCorner::BottomLeft => {
@@ -116,7 +122,7 @@ fn plans<'a>(
                 TextAnchor::Middle => (x - width / 2.0, x + width / 2.0),
             };
             Ok(PanelTextPlan {
-                text: annotation.text(),
+                text_plan,
                 position: Point2D::new(x, y),
                 anchor,
                 bounds: PanelBox::new(

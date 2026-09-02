@@ -1,8 +1,9 @@
 //! Immutable canonical SVG scenes and optional format conversion.
 
 use std::fmt;
+use std::sync::OnceLock;
 
-use crate::render::svg_backend::FinalizedSvgOutput;
+use crate::render::svg_backend::{FinalizedSvgOutput, SvgOutlinePlan};
 use crate::{Error, PngOptions};
 
 const MAX_EXPORT_DIMENSION: u32 = 32_768;
@@ -21,6 +22,8 @@ thread_local! {
 pub(crate) struct RenderedScene {
     size: CanonicalSceneSize,
     svg: Box<[u8]>,
+    outline_plan: SvgOutlinePlan,
+    outlined_svg: OnceLock<Result<Box<[u8]>, String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +38,11 @@ impl fmt::Debug for RenderedScene {
             .field("width_css_px", &self.size.dimensions.width())
             .field("height_css_px", &self.size.dimensions.height())
             .field("svg_bytes", &self.svg.len())
+            .field(
+                "outline_replacements",
+                &self.outline_plan.replacement_count(),
+            )
+            .field("outlined_svg_cached", &self.outlined_svg.get().is_some())
             .finish()
     }
 }
@@ -56,13 +64,18 @@ impl RenderedScene {
         let output = output.ok_or_else(|| {
             Error::Render("in-memory SVG backend did not finish rendering".into())
         })?;
-        let (output_width, output_height, svg) = output.into_parts();
+        let (output_width, output_height, svg, outline_plan) = output.into_parts();
         if (output_width, output_height) != (width_css_px, height_css_px) {
             return Err(Error::Render(format!(
                 "finalized SVG dimensions {output_width}x{output_height} do not match canonical scene dimensions {width_css_px}x{height_css_px}"
             )));
         }
-        Ok(Self { size, svg })
+        Ok(Self {
+            size,
+            svg,
+            outline_plan,
+            outlined_svg: OnceLock::new(),
+        })
     }
 
     /// Borrow the exact canonical SVG bytes.
@@ -79,45 +92,41 @@ impl RenderedScene {
 
     /// Return SVG bytes with every text element converted to vector paths.
     ///
-    /// The conversion uses the first available family from the renderer's
-    /// system-font policy. The returned SVG is self-contained but no longer
-    /// contains selectable or searchable text.
+    /// The returned bytes are derived from immutable planned glyphs and the
+    /// scene's retained font faces and contain no selectable text.
     ///
     /// # Errors
     ///
-    /// Returns an error when no system font is available, the canonical SVG
-    /// cannot be parsed, its dimensions change, or any text remains after
-    /// conversion.
+    /// Returns a render failure if immutable planned glyph outlining cannot be
+    /// completed from the retained scene state.
     pub(crate) fn svg_with_text_as_paths(&self) -> Result<Vec<u8>, Error> {
+        let outlined = self.outlined_svg_bytes()?;
         #[cfg(test)]
         SCENE_ROUTE_EVIDENCE.with(|evidence| {
             evidence
                 .borrow_mut()
-                .push(("outline", self.svg.as_ptr().addr(), self.svg.len()));
+                .push(("outline", outlined.as_ptr().addr(), outlined.len()));
         });
-        crate::render::svg_backend::convert_svg_text_to_paths(
-            &self.svg,
-            self.size.dimensions.width(),
-            self.size.dimensions.height(),
-        )
+        Ok(outlined.to_vec())
     }
 
     /// Rasterize the scene to deterministic PNG bytes with explicit options.
     ///
     /// # Errors
     ///
-    /// Returns an error for invalid or excessive sizing, unavailable rendering
-    /// fonts, SVG parsing failures, allocation failure, or PNG encoding failure.
+    /// Returns an error for invalid or excessive sizing, planned-glyph failures,
+    /// SVG parsing failures, allocation failure, or PNG encoding failure.
     pub(crate) fn png_bytes(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
+        self.validate_png_source_limits()?;
+        let outlined = self.outlined_svg_bytes()?;
         #[cfg(test)]
         SCENE_ROUTE_EVIDENCE.with(|evidence| {
             evidence
                 .borrow_mut()
-                .push(("png", self.svg.as_ptr().addr(), self.svg.len()));
+                .push(("png", outlined.as_ptr().addr(), outlined.len()));
         });
-        self.validate_png_source_limits()?;
         crate::render::svg_backend::rasterize_svg_bytes_to_png(
-            &self.svg,
+            outlined,
             self.size.dimensions,
             options,
         )
@@ -137,12 +146,23 @@ impl RenderedScene {
                 "PNG scene work of {pixels} CSS pixels exceeds the {MAX_EXPORT_PIXELS}-pixel conversion limit"
             )));
         }
-        if self.svg.len() > MAX_CONVERSION_SCENE_BYTES {
+        let conversion_bytes = self.svg.len();
+        if conversion_bytes > MAX_CONVERSION_SCENE_BYTES {
             return Err(Error::Render(format!(
                 "PNG SVG scene size exceeds the {MAX_CONVERSION_SCENE_BYTES}-byte conversion limit"
             )));
         }
         Ok(())
+    }
+
+    fn outlined_svg_bytes(&self) -> Result<&[u8], Error> {
+        self.outlined_svg
+            .get_or_init(|| {
+                self.outline_plan
+                    .derive(self.size.dimensions.width(), self.size.dimensions.height())
+            })
+            .as_deref()
+            .map_err(|error| Error::Render(error.clone()))
     }
 }
 
@@ -186,6 +206,8 @@ mod tests {
                 dimensions: resvg::tiny_skia::IntSize::from_wh(width, height).unwrap(),
             },
             svg: vec![0; byte_count].into_boxed_slice(),
+            outline_plan: SvgOutlinePlan::Failed("not used by source-limit tests".into()),
+            outlined_svg: OnceLock::new(),
         }
     }
 
@@ -211,7 +233,7 @@ mod tests {
 
     #[test]
     fn canonical_scene_owns_exact_finalized_bytes() {
-        let (_, _, expected) = finalized(320, 240).into_parts();
+        let (_, _, expected, _) = finalized(320, 240).into_parts();
         let scene = RenderedScene::new(320, 240, Some(finalized(320, 240))).unwrap();
 
         assert_eq!(scene.svg_bytes(), &*expected);

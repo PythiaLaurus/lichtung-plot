@@ -15,12 +15,72 @@ mod legend;
 mod planning;
 mod rendering;
 
+pub(crate) fn text_census_labels(source: &Plot) -> Result<Vec<String>, Error> {
+    let selectors = data::facet_selectors(source)?;
+    let slots = selectors
+        .rows
+        .checked_mul(selectors.columns)
+        .ok_or_else(|| Error::Render("facet text census grid size overflowed".into()))?;
+    let provisional = vec![crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0); slots];
+    data::extract_panels(source, &selectors, &provisional).map(|panels| {
+        panels
+            .iter()
+            .map(|panel| rendering::facet_label(source, &panel.cell))
+            .collect()
+    })
+}
+
+pub(crate) struct FacetTextCensusPanel {
+    plot: Plot,
+    rows: Vec<usize>,
+    source_rows: Vec<usize>,
+}
+
+impl FacetTextCensusPanel {
+    pub(crate) fn plot(&self) -> &Plot {
+        &self.plot
+    }
+
+    pub(crate) fn data(&self) -> crate::data::PlotData<'_> {
+        crate::data::PlotData::with_rows(&self.plot, &self.rows, &self.source_rows)
+    }
+}
+
+pub(crate) fn text_census_panels(
+    source: &Plot,
+    kind: PlotKind,
+) -> Result<Vec<FacetTextCensusPanel>, Error> {
+    let selectors = data::facet_selectors(source)?;
+    let slots = selectors
+        .rows
+        .checked_mul(selectors.columns)
+        .ok_or_else(|| Error::Render("facet text census grid size overflowed".into()))?;
+    let provisional = vec![crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0); slots];
+    let panels = data::extract_panels(source, &selectors, &provisional)?;
+    let (x_label, y_label) = source.resolved_axis_labels(kind);
+    let base = data::base_plot(source, kind, !x_label.is_empty(), !y_label.is_empty())?;
+    panels
+        .into_iter()
+        .map(|panel| {
+            Ok(FacetTextCensusPanel {
+                plot: base
+                    .clone()
+                    .with_render_scope(panel.render_scope())
+                    .with_significance_subset(panel.significance_selectors()),
+                rows: panel.rows,
+                source_rows: panel.source_rows,
+            })
+        })
+        .collect()
+}
+
 pub(super) struct FacetPlan {
     plot: Plot,
     panels: Vec<data::FacetPanel>,
     panel_plans: Vec<crate::decorations::plan::PanelPlan>,
     horizontal_axis_label: Option<String>,
     vertical_axis_label: Option<String>,
+    canvas_layout: crate::layout::CanvasLayout,
     outer: crate::layout::PanelBox,
     shared_axis_origin: (f64, f64),
 }
@@ -85,7 +145,7 @@ impl FacetPlan {
         let shared_plot =
             base_plot.with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain);
         let (reserved_outer, mut outside_legend, legend_entries) =
-            legend::reserve_shared_legend(source, &shared_plot, &preflight, outer)?;
+            legend::reserve_shared_legend(source, &shared_plot, &preflight, outer, theme)?;
         outer = planning::reserve_rewrapped_shared_axis_titles(
             horizontal_axis_label.as_deref(),
             vertical_axis_label.as_deref(),
@@ -134,6 +194,7 @@ impl FacetPlan {
             panel_plans,
             horizontal_axis_label,
             vertical_axis_label,
+            canvas_layout,
             outer,
             shared_axis_origin,
         })
@@ -154,12 +215,33 @@ impl FacetPlan {
             &self.panel_plans,
             self.horizontal_axis_label.as_deref(),
             self.vertical_axis_label.as_deref(),
+            &self.canvas_layout,
             self.outer,
             self.shared_axis_origin,
             theme,
             backend,
         )
     }
+}
+
+pub(super) fn validate_before_font_preparation(source: &Plot, kind: PlotKind) -> Result<(), Error> {
+    if !source.significance_annotations().is_empty() && !kind.supports_significance_annotations() {
+        return Err(Error::Data(format!(
+            "significance annotations are not supported for {kind:?}"
+        )));
+    }
+    let selectors = data::facet_selectors(source)?;
+    let cell_count = selectors
+        .rows
+        .checked_mul(selectors.columns)
+        .ok_or_else(|| Error::Render("facet semantic grid size overflowed".into()))?;
+    let mut provisional = Vec::new();
+    provisional
+        .try_reserve_exact(cell_count)
+        .map_err(|_| Error::Render("facet semantic grid allocation failed".into()))?;
+    provisional.resize(cell_count, crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0));
+    let panels = data::extract_panels(source, &selectors, &provisional)?;
+    data::validate_significance_facet_anchors(source, &panels)
 }
 
 fn position_shared_axis_guides(

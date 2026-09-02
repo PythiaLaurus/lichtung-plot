@@ -11,14 +11,24 @@ publish = false
 autotests = false
 
 [dependencies]
+fontdb = "=0.23.0"
+rustybuzz = "=0.20.1"
+sha2 = "=0.10.9"
 statrs = "0.18"
 thiserror = "2"
-unicode-segmentation = "1.13"
+ttf-parser = "=0.25.1"
+unicode-bidi = "=0.3.18"
+unicode-script = "=0.5.7"
+unicode-segmentation = "=1.12.0"
 # Lichtung SVGs contain no raster images, so resvg's JPEG, GIF, and WebP
 # decoders are deliberately disabled.
 png = "0.18"
 resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 tempfile = "3.27"
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
+fontconfig-parser = "=0.5.8"
+roxmltree = "=0.20.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

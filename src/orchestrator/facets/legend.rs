@@ -97,6 +97,7 @@ pub(super) fn reserve_shared_legend(
     shared_plot: &Plot,
     preflight: &[PlotRenderResult],
     mut outer: PanelBox,
+    theme: &ResolvedTheme,
 ) -> Result<
     (
         PanelBox,
@@ -151,8 +152,12 @@ pub(super) fn reserve_shared_legend(
             let legend_plot = shared_plot
                 .clone()
                 .with_legend_position(facet_legend_position);
-            let (reserved, legend) =
-                crate::decorations::plan::plan_outside_legend(&legend_plot, &entries, outer)?;
+            let (reserved, legend) = crate::decorations::plan::plan_outside_legend(
+                &legend_plot,
+                &entries,
+                outer,
+                theme,
+            )?;
             outer = reserved;
             outside_legend = Some(legend);
         }

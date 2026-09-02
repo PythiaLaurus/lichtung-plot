@@ -178,7 +178,7 @@ The approved theme and layout targets follow these rules:
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a1 | Active exact-root candidate kernel | COMPLETE |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
-| T5a3 | Canonical fonts and immutable text plans | PENDING |
+| T5a3 | Canonical fonts and immutable text plans | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -2244,7 +2244,7 @@ Acceptance:
 
 ## Phase T5a: Layout Foundation, Surfaces, Typography, Titles, Axes, And Grid
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: T4.
 
@@ -2442,7 +2442,7 @@ Commit: `refactor(theme): centralize foundational appearance`.
 
 ### T5a3: Canonical Fonts And Immutable Text Plans
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a2.
 

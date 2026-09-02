@@ -1,41 +1,34 @@
-use crate::Error;
-use unicode_segmentation::UnicodeSegmentation;
-
 use super::range_ticks::resolve_range;
 use super::{
-    automatic_numeric_ticks, Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Layout, Projection,
+    automatic_numeric_ticks, Axis, AxisSide, AxisSpec, AxisTick, Grid, Layout, Projection,
 };
-use crate::layout::{PanelBox, TextBlock};
+use crate::layout::PanelBox;
 use crate::render::backend::Backend;
 use crate::theme::ResolvedTheme;
+use crate::Error;
 
 impl Layout {
-    /// Create a new layout for the given numeric data ranges
-    /// and canvas area. Numeric tick density is selected automatically from the
-    /// resolved ranges, available panel space, and measured labels.
-    pub fn new(
-        x_range: (f64, f64),
-        y_range: (f64, f64),
-        canvas_width: u32,
-        canvas_height: u32,
-        x_label: String,
-        y_label: String,
-        theme: &ResolvedTheme,
-    ) -> Self {
-        Self::new_with_axis_specs(
-            x_range,
-            y_range,
-            canvas_width,
-            canvas_height,
-            x_label,
-            y_label,
-            &AxisSpec::default(),
-            &AxisSpec::default(),
-            theme,
-        )
+    /// Build the non-rendered carrier returned by a self-decorating plot.
+    pub(crate) fn self_managed(canvas_width: u32, canvas_height: u32) -> Self {
+        Self {
+            x_axis: Axis {
+                label: String::new(),
+                ticks: Vec::new(),
+            },
+            y_axis: Axis {
+                label: String::new(),
+                ticks: Vec::new(),
+            },
+            projection: Projection {
+                x_range: (0.0, 1.0),
+                y_range: (0.0, 1.0),
+                pixel_box: default_panel_box(canvas_width, canvas_height).as_tuple(),
+            },
+        }
     }
 
     /// Create a new layout using explicit axis specs for limits.
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn new_with_axis_specs(
@@ -83,21 +76,11 @@ impl Layout {
         Self {
             x_axis: Axis {
                 label: x_label,
-                ticks: automatic_numeric_ticks(
-                    x_range,
-                    &projection,
-                    AxisSide::Bottom,
-                    theme.typography.tick_label.font_size,
-                ),
+                ticks: automatic_numeric_ticks(x_range, &projection, AxisSide::Bottom, theme),
             },
             y_axis: Axis {
                 label: y_label,
-                ticks: automatic_numeric_ticks(
-                    y_range,
-                    &projection,
-                    AxisSide::Left,
-                    theme.typography.tick_label.font_size,
-                ),
+                ticks: automatic_numeric_ticks(y_range, &projection, AxisSide::Left, theme),
             },
             projection,
         }
@@ -144,22 +127,12 @@ impl Layout {
 
         // Auto-generate numeric ticks when none were provided.
         let x_ticks = if x_ticks.is_empty() {
-            automatic_numeric_ticks(
-                x_range,
-                &projection,
-                AxisSide::Bottom,
-                theme.typography.tick_label.font_size,
-            )
+            automatic_numeric_ticks(x_range, &projection, AxisSide::Bottom, theme)
         } else {
             x_ticks
         };
         let y_ticks = if y_ticks.is_empty() {
-            automatic_numeric_ticks(
-                y_range,
-                &projection,
-                AxisSide::Left,
-                theme.typography.tick_label.font_size,
-            )
+            automatic_numeric_ticks(y_range, &projection, AxisSide::Left, theme)
         } else {
             y_ticks
         };
@@ -179,17 +152,14 @@ impl Layout {
 
     /// Draw frame and axes ON TOP of data (called after data rendering).
     /// Grid is drawn separately via `draw_grid_below()` BEFORE data.
+    #[cfg(test)]
     pub fn draw_decorations(
         &self,
         theme: &ResolvedTheme,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
-        Frame::draw(&self.projection, theme, backend)?;
-        self.x_axis
-            .draw(&self.projection, AxisSide::Bottom, theme, backend)?;
-        self.y_axis
-            .draw(&self.projection, AxisSide::Left, theme, backend)?;
-        Ok(())
+        let text = self.plan_axis_text(theme)?;
+        self.draw_decorations_with_text(theme, &text, backend)
     }
 
     /// Draw the grid lines BELOW data. Call this before rendering
@@ -212,72 +182,11 @@ fn default_panel_box(canvas_width: u32, canvas_height: u32) -> PanelBox {
     )
 }
 
-pub(crate) fn estimated_text_width(text: &str, font_size: u32) -> f64 {
-    deterministic_text_width(text, f64::from(font_size))
-}
-
 /// Estimate the rendered width of text with the deterministic layout model.
 ///
 /// Wide glyphs and combining marks are handled consistently with canvas,
 /// legend, geometry, and axis-inset planning.
 #[must_use]
-pub fn deterministic_text_width(text: &str, font_size: f64) -> f64 {
-    text.graphemes(true)
-        .map(|grapheme| {
-            grapheme
-                .chars()
-                .map(character_width_em)
-                .fold(0.0_f64, f64::max)
-        })
-        .sum::<f64>()
-        * font_size
-}
-
-fn character_width_em(character: char) -> f64 {
-    let code = u32::from(character);
-    if matches!(character, '\n' | '\r') || code == 0x200d {
-        return 0.0;
-    }
-    if matches!(
-        code,
-        0x0300..=0x036f
-            | 0x1ab0..=0x1aff
-            | 0x1dc0..=0x1dff
-            | 0x20d0..=0x20ff
-            | 0xfe20..=0xfe2f
-            | 0xfe00..=0xfe0f
-    ) {
-        return 0.0;
-    }
-    if matches!(
-        code,
-        0x1100..=0x115f
-            | 0x2329..=0x232a
-            | 0x2e80..=0xa4cf
-            | 0xac00..=0xd7a3
-            | 0xf900..=0xfaff
-            | 0xfe10..=0xfe19
-            | 0xfe30..=0xfe6f
-            | 0xff00..=0xff60
-            | 0xffe0..=0xffe6
-            | 0x1f300..=0x1faff
-            | 0x20000..=0x3fffd
-    ) {
-        return 1.0;
-    }
-    match character {
-        '\t' => 2.4,
-        ' ' => 0.33,
-        'i' | 'l' | 'I' | '!' | '|' | '.' | ',' | ':' | ';' | '\'' | '`' => 0.35,
-        'm' | 'w' | 'M' | 'W' | '@' | '%' => 0.85,
-        _ => 0.60,
-    }
-}
-
-pub(super) fn measured_text_line_height(font_size: u32) -> f64 {
-    TextBlock::unwrapped("", font_size).line_height()
-}
-
 pub(super) fn y_axis_label_half_width(font_size: u32) -> f64 {
     f64::from(font_size) / 2.0
 }

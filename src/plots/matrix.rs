@@ -22,8 +22,9 @@
 )]
 
 use crate::decorations::legend::{Legend, LegendEntry};
-use crate::decorations::title_block::TitleBlock;
-use crate::layout::{self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox};
+use crate::layout::{
+    self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, PhysicalTextAlignment, TextBlock,
+};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
     TextAnchor, TextStyle,
@@ -67,7 +68,7 @@ pub(crate) fn render(
 
     // --- Build graphical groups ---
     let (groups, _hue_levels) = build_groups(chart, &cols, df, theme)?;
-    let legend = matrix_legend(chart, &groups)?;
+    let legend = matrix_legend(chart, &groups, theme)?;
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
@@ -88,23 +89,31 @@ pub(crate) fn render(
         let column_blocks = display_cols
             .iter()
             .map(|label| {
-                crate::layout::TextBlock::layout(
-                    label,
-                    theme.typography.axis_title.font_size,
-                    candidate_cell_width.max(1.0),
-                    "matrix column label",
-                )
+                theme
+                    .plan_legacy_appearance_text(
+                        label,
+                        &theme.typography.axis_title,
+                        candidate_cell_width.max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "matrix column label",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let row_blocks = display_cols
             .iter()
             .map(|label| {
-                crate::layout::TextBlock::layout(
-                    label,
-                    theme.typography.axis_title.font_size,
-                    candidate_cell_height.max(1.0),
-                    "matrix row label",
-                )
+                theme
+                    .plan_legacy_appearance_text(
+                        label,
+                        &theme.typography.axis_title,
+                        candidate_cell_height.max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "matrix row label",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let extra_bottom = column_blocks
@@ -196,8 +205,6 @@ pub(crate) fn render(
         .as_ref()
         .map_or(0.0, |appearance| f64::from(appearance.length));
 
-    draw_title_block(chart, theme, backend)?;
-
     // --- Render cells ---
     for row in 0..n {
         for col in 0..n {
@@ -263,18 +270,18 @@ pub(crate) fn render(
                     variable_ranges[row],
                     (x0, x1, y0, y1),
                 );
-                let ticks = layout::automatic_numeric_ticks(
+                let ticks = layout::automatic_numeric_ticks_legacy(
                     (x_lo, x_hi),
                     &projection,
                     crate::layout::AxisSide::Bottom,
-                    theme.typography.tick_label.font_size,
+                    theme,
                 );
                 let ticks = if row == n - 1 {
-                    layout::retain_automatic_ticks_inside_panel(
+                    layout::retain_automatic_ticks_inside_panel_legacy(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Bottom,
-                        theme.typography.tick_label.font_size,
+                        theme,
                     )
                 } else {
                     ticks
@@ -329,18 +336,18 @@ pub(crate) fn render(
                     (y_lo, y_hi),
                     (x0, x1, y0, y1),
                 );
-                let ticks = layout::automatic_numeric_ticks(
+                let ticks = layout::automatic_numeric_ticks_legacy(
                     (y_lo, y_hi),
                     &projection,
                     crate::layout::AxisSide::Left,
-                    theme.typography.tick_label.font_size,
+                    theme,
                 );
                 let ticks = if col == 0 {
-                    layout::retain_automatic_ticks_inside_panel(
+                    layout::retain_automatic_ticks_inside_panel_legacy(
                         ticks,
                         &projection,
                         crate::layout::AxisSide::Left,
-                        theme.typography.tick_label.font_size,
+                        theme,
                     )
                 } else {
                     ticks
@@ -419,15 +426,7 @@ pub(crate) fn render(
     }
 
     // Return a dummy layout — matrix is self-decorated.
-    let layout = Layout::new(
-        (0.0, 1.0),
-        (0.0, 1.0),
-        chart.width(),
-        chart.height(),
-        String::new(),
-        String::new(),
-        theme,
-    );
+    let layout = Layout::self_managed(chart.width(), chart.height());
 
     Ok(PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations())
 }
@@ -439,7 +438,11 @@ pub(crate) fn panel_box(
     Ok(matrix_canvas_layout(chart, theme)?.panel_box)
 }
 
-fn matrix_legend(chart: &Plot, groups: &[HueGroup]) -> Result<Option<Legend>, Error> {
+fn matrix_legend(
+    chart: &Plot,
+    groups: &[HueGroup],
+    theme: &ResolvedTheme,
+) -> Result<Option<Legend>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
@@ -463,37 +466,16 @@ fn matrix_legend(chart: &Plot, groups: &[HueGroup]) -> Result<Option<Legend>, Er
         .collect::<Result<Vec<_>, Error>>()?;
     crate::decorations::legend::resolve_entries(chart, &mut entries)?;
     Ok(Some(Legend::new(
-        crate::decorations::legend::resolved_title(&entries)?,
+        &crate::decorations::legend::resolved_title(&entries)?,
         entries,
         f64::from(chart.width()),
         f64::from(chart.height()),
-    )))
+        theme,
+    )?))
 }
 
 fn legend_total_width(legend: &Legend) -> f64 {
     legend.compute_box_width()
-}
-
-fn draw_title_block(
-    chart: &Plot,
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    let mut title_block = TitleBlock::new();
-    if let Some(title) = chart.title_text() {
-        title_block = title_block.title(title.to_string());
-    }
-    if let Some(subtitle) = chart.subtitle_text() {
-        title_block = title_block.subtitle(subtitle.to_string());
-    }
-    if let Some(caption) = chart.caption_text() {
-        title_block = title_block.caption(caption.to_string());
-    }
-    if title_block.has_content() {
-        let canvas = matrix_canvas_layout(chart, theme)?;
-        title_block.draw(backend, chart.width(), &canvas, theme)?;
-    }
-    Ok(())
 }
 
 fn matrix_canvas_layout(chart: &Plot, theme: &ResolvedTheme) -> Result<CanvasLayout, Error> {

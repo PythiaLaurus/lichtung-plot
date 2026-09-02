@@ -143,11 +143,13 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     )
     .unwrap();
     let legend = Legend::new(
-        "hue".into(),
+        "hue",
         result.legend_entries,
         f64::from(plot.width()),
         f64::from(plot.height()),
-    );
+        &theme(),
+    )
+    .unwrap();
     let panel = result.layout.projection.panel_box();
     let top_right = legend.inside_candidates(result.layout.projection.pixel_box())[0];
     let line = [
@@ -160,13 +162,14 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
             f64::midpoint(top_right.bottom, top_right.top),
         ),
     ];
-    let mut zero_width = GeometryBackend::default();
+    let resolved_theme = theme();
+    let mut zero_width = GeometryBackend::new(&resolved_theme).unwrap();
     zero_width.begin(plot.width(), plot.height()).unwrap();
     zero_width
         .draw_line(&line, &LineStyle::solid((0, 0, 0), 0.0))
         .unwrap();
     zero_width.end().unwrap();
-    let mut painted = GeometryBackend::default();
+    let mut painted = GeometryBackend::new(&resolved_theme).unwrap();
     painted.begin(plot.width(), plot.height()).unwrap();
     painted
         .draw_line(&line, &LineStyle::solid((0, 0, 0), 4.0))
@@ -226,22 +229,37 @@ fn outside_legend_remeasures_and_reserves_newly_wrapped_axis_title() {
     let cell = PanelBox::new(40.0, 700.0, 50.0, 390.0);
     let initial = line_plot(&data).legend(LegendPolicy::Visible(LegendPosition::OutsideRight));
     let initial = plan_panel(&initial, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
-    let font_size = theme().label_font_size;
+    let resolved = theme();
     let label = (1..=200)
         .map(|length| vec!["x"; length].join(" "))
         .find(|label| {
-            crate::layout::TextBlock::layout(label, font_size, cell.width(), "x-axis title")
-                .unwrap()
-                .lines()
-                .len()
+            crate::layout::TextBlock::from_resolved(
+                resolved
+                    .plan_text(
+                        label,
+                        &resolved.typography.axis_title,
+                        cell.width(),
+                        crate::layout::PhysicalTextAlignment::Center,
+                        "x-axis title",
+                        false,
+                    )
+                    .unwrap(),
+            )
+            .lines()
+            .len()
                 == 1
-                && crate::layout::TextBlock::layout(
-                    label,
-                    font_size,
-                    initial.panel_box.width(),
-                    "x-axis title",
+                && crate::layout::TextBlock::from_resolved(
+                    resolved
+                        .plan_text(
+                            label,
+                            &resolved.typography.axis_title,
+                            initial.panel_box.width(),
+                            crate::layout::PhysicalTextAlignment::Center,
+                            "x-axis title",
+                            false,
+                        )
+                        .unwrap(),
                 )
-                .unwrap()
                 .lines()
                 .len()
                     > 1
@@ -265,9 +283,9 @@ fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
     )
     .x_limits(0.0, 2.0)
     .x_ticks(vec![
-        crate::layout::AxisTick::new(0.0, "first wide tick"),
-        crate::layout::AxisTick::new(1.0, "second broad mark"),
-        crate::layout::AxisTick::new(2.0, "third long label"),
+        crate::layout::AxisTick::new(0.0, "one two"),
+        crate::layout::AxisTick::new(1.0, "red blue"),
+        crate::layout::AxisTick::new(2.0, "six ten"),
     ]);
     let cell = PanelBox::new(60.0, 220.0, 30.0, 180.0);
 
@@ -388,11 +406,13 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     )
     .unwrap();
     let initial_legend = Legend::new(
-        "hue".to_string(),
+        "hue",
         initial.legend_entries,
         f64::from(plot.width()),
         f64::from(plot.height()),
-    );
+        &theme(),
+    )
+    .unwrap();
     let margin = initial_legend.metrics.font_size.max(6.0);
     assert!(
         initial_legend
@@ -546,11 +566,13 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.y_domain = crate::spec::AxisDomain::Categorical;
     let legend = Legend::new(
-        "hue".to_string(),
+        "hue",
         result.legend_entries.clone(),
         f64::from(plot.width()),
         f64::from(plot.height()),
-    );
+        &theme(),
+    )
+    .unwrap();
 
     assert!(automatic_clearance(
         PlotKind::HorizontalBar,

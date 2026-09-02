@@ -2983,6 +2983,30 @@ ordinal and then lossless platform-native path-unit order. Reserve the exact
 metadata-slot count for those files, then open each in canonical order, obtain its
 file-handle length, and reject before reading it when checked cumulative bytes
 would exceed `536_870_912`.
+
+On fontconfig hosts, the initial configuration file, included configuration
+files and directories, and retained include-directory entries consume this same
+cumulative discovery-entry envelope before the resulting font roots are walked.
+Configuration bytes consume the same cumulative byte envelope: obtain length
+from one admitted regular-file handle, reject the cumulative length before
+reservation, read at most that admitted length into exactly reserved temporary
+stage-1 storage, reject short or changing files, and only then parse. Includes
+are iterative, canonical-file deduplication and lexicographic directory order
+match locked `fontdb 0.23.0`, and a resource or reservation failure is fatal
+rather than an ignorable fontconfig result. Missing optional paths and bounded
+fontconfig syntax or relevant-directive failures remain ignorable exactly as in
+locked `fontdb 0.23.0`; an admitted file's I/O failure, mutation, or resource
+failure is fatal. Internal XML entity declarations are rejected as a bounded
+fontconfig syntax failure. Before XML parsing, count
+`2 * less-than-sign bytes + equals-sign bytes + 1` as the deterministic parser-
+capacity work claim and set the third-party parser node limit to
+`2 * less-than-sign bytes + 1`. Each relevant `dir`, `include`, `reset-dirs`, or
+generic-alias directive also claims one discovery entry before retained
+directive storage grows.
+Temporary configuration bytes are discarded after root and generic-family
+extraction; only admitted font bytes require retention through scene
+construction.
+
 Actual bytes read are charged against the same bound and cannot exceed the
 admitted handle length. Hashing and metadata decoding stream through fixed
 scratch into the already-reserved source-byte storage and metadata slot; no
@@ -2992,10 +3016,14 @@ retained in that stage-1 storage through scene construction so the explicit
 the same bytes. There is no selected-files-only re-read or second retention rule.
 
 Font-preflight logical work charges one unit for each Unicode scalar consumed by
-the required-scalar census, claimed discovery entry, decoded face, decoded ID-16
-or ID-1 name occurrence, candidate occurrence counted or materialized, identity
-record sorted or deduplicated, and candidate/scalar glyph coverage probe. Every
-sort and deduplication bulk-claims its input length as in candidate generation.
+the required-scalar census, claimed fontconfig or font-tree discovery entry,
+decoded face, decoded ID-16 or ID-1 name occurrence, candidate occurrence counted
+or materialized, identity record sorted or deduplicated, and candidate/scalar
+glyph coverage probe. Every sort and deduplication, including a fontconfig
+include-directory path sort, bulk-claims its input length as in candidate
+generation. Fontconfig additionally charges its declared node-capacity work
+before parsing and one path comparison for every previously admitted canonical
+configuration path examined during first-use deduplication.
 Reservation stage 1 first reserves one fixed `0x110000`-bit Unicode-scalar
 presence map; the charged census marks that map without growing a collection,
 then reserves the exact ordered required-scalar payload from its population

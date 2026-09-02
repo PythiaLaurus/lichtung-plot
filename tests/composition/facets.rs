@@ -272,7 +272,7 @@ fn sparse_cartesian_facets_draw_global_legend_on_first_rendered_panel() {
 #[test]
 fn long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells() {
     let category = "categorical level requiring measured gutter";
-    let other = "another deliberately wide category label";
+    let other = "another very wide category label requiring gutter";
     let left = "first panel with a deliberately long descriptive facet value";
     let right = "second panel with another deliberately long descriptive facet value";
     let facet =

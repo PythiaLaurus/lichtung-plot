@@ -4,6 +4,17 @@ use lichtung_plot::{BarInput, Canvas, CategoryValues, Labels, NumericValues, Plo
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn scatter_legend_omits_hues_from_discarded_nonfinite_rows() {
+    Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0, f64::NAN]),
+        NumericValues::new("y", [0.0, 1.0, 2.0]),
+    )
+    .hue(CategoryValues::new("cohort", ["kept", "kept", "\u{10FFFF}"]).unwrap())
+    .preflight()
+    .unwrap();
+}
+
 fn render<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     let directory = std::env::temp_dir().join(format!(
         "lichtung-labels-{}-{}",

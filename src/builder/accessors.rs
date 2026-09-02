@@ -280,6 +280,45 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
+    pub(crate) fn automatic_axis_category_values(
+        &self,
+        kind: PlotKind,
+        x_axis: bool,
+    ) -> Option<&crate::CategoryValues> {
+        let column = if x_axis {
+            match kind {
+                PlotKind::Interaction
+                | PlotKind::Heatmap
+                | PlotKind::Bar
+                | PlotKind::StackedBar
+                | PlotKind::Boxplot
+                | PlotKind::Violin
+                | PlotKind::Raincloud
+                | PlotKind::Line
+                | PlotKind::Trajectory
+                | PlotKind::LinePath => self.x_data_column(),
+                _ => None,
+            }
+        } else {
+            match kind {
+                PlotKind::PointInterval
+                | PlotKind::Coefficient
+                | PlotKind::Forest
+                | PlotKind::Beeswarm
+                | PlotKind::Heatmap => self.y_data_column(),
+                PlotKind::Dumbbell
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedHorizontalBar
+                | PlotKind::Waterfall => self.x_data_column(),
+                _ => None,
+            }
+        };
+        match column {
+            Some(DataColumn::Category(values)) => Some(values),
+            Some(DataColumn::Numeric(_) | DataColumn::Boolean(_)) | None => None,
+        }
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "one exhaustive closed-input match keeps every family's aligned channels auditable"

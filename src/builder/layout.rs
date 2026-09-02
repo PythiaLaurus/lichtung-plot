@@ -1,7 +1,9 @@
 use crate::Error;
 
 use super::Plot;
-use crate::layout::{CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, TextBlock};
+use crate::layout::{
+    CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, PhysicalTextAlignment, TextBlock,
+};
 use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
 
@@ -138,20 +140,24 @@ impl Plot {
             && discovered_layout.projection.panel_box().y0 <= reserved_panel.y0 + f64::EPSILON
         {
             let tick_width =
-                candidate_panel.width() / discovered_layout.x_axis.ticks.len().max(1) as f64 * 0.9;
+                candidate_panel.width() / discovered_layout.x_axis.ticks.len().max(1) as f64;
             let maximum_height = discovered_layout
                 .x_axis
                 .ticks
                 .iter()
                 .filter(|tick| !tick.label.is_empty())
                 .map(|tick| {
-                    TextBlock::layout(
-                        &tick.label,
-                        theme.typography.tick_label.font_size,
-                        tick_width.max(1.0),
-                        "x-axis tick label",
-                    )
-                    .map(|block| block.height())
+                    theme
+                        .plan_text(
+                            &tick.label,
+                            &theme.typography.tick_label,
+                            tick_width.max(1.0),
+                            PhysicalTextAlignment::Center,
+                            "x-axis tick label",
+                            false,
+                        )
+                        .map(TextBlock::from_resolved)
+                        .map(|block| block.height())
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
@@ -179,24 +185,28 @@ impl Plot {
         let x_lines = if x_label.is_empty() {
             0
         } else {
-            TextBlock::layout(
+            TextBlock::from_resolved(theme.plan_text(
                 &x_label,
-                theme.typography.axis_title.font_size,
+                &theme.typography.axis_title,
                 panel.width().max(1.0),
+                PhysicalTextAlignment::Center,
                 "x-axis title",
-            )?
+                false,
+            )?)
             .lines()
             .len()
         };
         let y_lines = if y_label.is_empty() {
             0
         } else {
-            TextBlock::layout(
+            TextBlock::from_resolved(theme.plan_text(
                 &y_label,
-                theme.typography.axis_title.font_size,
+                &theme.typography.axis_title,
                 panel.height().max(1.0),
+                PhysicalTextAlignment::Center,
                 "y-axis title",
-            )?
+                false,
+            )?)
             .lines()
             .len()
         };

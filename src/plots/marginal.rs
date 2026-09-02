@@ -125,7 +125,7 @@ pub(crate) fn render(
                 (x_low, x_high),
                 &projection,
                 crate::layout::AxisSide::Bottom,
-                theme.typography.tick_label.font_size,
+                theme,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,
@@ -136,7 +136,7 @@ pub(crate) fn render(
                 (y_low, y_high),
                 &projection,
                 crate::layout::AxisSide::Left,
-                theme.typography.tick_label.font_size,
+                theme,
             )
         },
         <[crate::layout::AxisTick]>::to_vec,

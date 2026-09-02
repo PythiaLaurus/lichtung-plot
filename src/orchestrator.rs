@@ -17,7 +17,11 @@ mod validation;
 pub(crate) use artifacts::write_atomic;
 #[cfg(test)]
 pub(crate) use artifacts::TEMP_RESERVATION_CALLS;
-pub(crate) use backend::DeferredBackend;
+pub(crate) use backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
+#[cfg(test)]
+pub(crate) use backend::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
+pub(crate) use facets::text_census_labels as facet_text_census_labels;
+pub(crate) use facets::text_census_panels as facet_text_census_panels;
 
 #[cfg(test)]
 thread_local! {
@@ -159,6 +163,9 @@ fn resolve_rendered_labels(
     result: &mut PlotRenderResult,
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(), Error> {
+    if result.decoration_mode == crate::spec::DecorationMode::SelfManaged {
+        return Ok(());
+    }
     if result.x_domain == AxisDomain::Categorical && result.x_tick_keys.is_none() {
         let raw = result
             .layout
@@ -205,49 +212,57 @@ fn validate_axis_text(
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<(), Error> {
     let panel = layout.projection.panel_box();
-    let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;
+    let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64;
+    let y_tick_width = (panel.width() * 0.4).max(1.0);
     for tick in layout
         .x_axis
         .ticks
         .iter()
         .filter(|tick| !tick.label.is_empty())
     {
-        crate::layout::TextBlock::layout(
+        theme.plan_text(
             &tick.label,
-            theme.typography.tick_label.font_size,
+            &theme.typography.tick_label,
             x_tick_width.max(1.0),
+            crate::layout::PhysicalTextAlignment::Center,
             "x-axis tick label",
+            false,
         )?;
     }
     if !layout.x_axis.label.is_empty() {
-        crate::layout::TextBlock::layout(
+        theme.plan_text(
             &layout.x_axis.label,
-            theme.typography.axis_title.font_size,
+            &theme.typography.axis_title,
             panel.width().max(1.0),
+            crate::layout::PhysicalTextAlignment::Center,
             "x-axis title",
+            false,
         )?;
     }
 
     if !layout.y_axis.label.is_empty() {
-        crate::layout::TextBlock::layout(
+        theme.plan_text(
             &layout.y_axis.label,
-            theme.typography.axis_title.font_size,
+            &theme.typography.axis_title,
             panel.height().max(1.0),
+            crate::layout::PhysicalTextAlignment::Center,
             "y-axis title",
+            false,
         )?;
     }
-    let y_tick_width = (panel.width() * 0.4).max(1.0);
     for tick in layout
         .y_axis
         .ticks
         .iter()
         .filter(|tick| !tick.label.is_empty())
     {
-        crate::layout::TextBlock::layout(
+        theme.plan_text(
             &tick.label,
-            theme.typography.tick_label.font_size,
+            &theme.typography.tick_label,
             y_tick_width,
+            crate::layout::PhysicalTextAlignment::End,
             "y-axis tick label",
+            false,
         )?;
     }
     Ok(())

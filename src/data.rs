@@ -131,7 +131,7 @@ impl<'a> PlotData<'a> {
             .map(Some)
     }
 
-    fn row_index(self, local_row: usize) -> usize {
+    pub(crate) fn row_index(self, local_row: usize) -> usize {
         self.rows
             .and_then(|rows| rows.get(local_row))
             .copied()
@@ -643,6 +643,45 @@ pub(crate) fn observed_levels_for_finite_pairs<'a>(
     for ((x, y), value) in x.into_iter().zip(y).zip(hue) {
         if x.is_some() && y.is_some() && !levels.contains(&value) {
             levels.push(value);
+        }
+    }
+    Ok(levels)
+}
+
+pub(crate) fn observed_levels_for_retained_finite_pairs<'a>(
+    data: impl Into<PlotData<'a>>,
+    x_column: &str,
+    y_column: &str,
+    hue_column: &str,
+    plot: &str,
+) -> Result<Vec<String>, Error> {
+    let data = data.into();
+    let x = optional_finite_f64(data, x_column, plot)?;
+    let y = optional_finite_f64(data, y_column, plot)?;
+    let DataColumn::Category(hue) = data.column(hue_column)? else {
+        return Err(Error::Data(format!(
+            "{plot}: value {:?} must be categorical",
+            data.column(hue_column)?.name()
+        )));
+    };
+    let mut levels = Vec::new();
+    for row in 0..data.height() {
+        if x[row].is_none() || y[row].is_none() {
+            continue;
+        }
+        let value = match hue.get(data.row_index(row)) {
+            Some(Some(value)) => value,
+            Some(None) => {
+                return Err(Error::Data(format!(
+                    "{plot}: value {:?} contains null at source row {}",
+                    hue.name(),
+                    data.source_row(row)
+                )));
+            }
+            None => return Err(length_error(plot, hue.name(), row)),
+        };
+        if !levels.iter().any(|level| level == value) {
+            levels.push(value.to_owned());
         }
     }
     Ok(levels)

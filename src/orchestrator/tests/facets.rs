@@ -41,6 +41,22 @@ fn positioned_series_bar_plot(
 }
 
 #[test]
+fn faceted_heatmap_census_uses_panel_rows_before_duplicate_validation() {
+    let plot = Plot::heatmap(
+        CategoryValues::new("x", ["a", "a"]).unwrap(),
+        CategoryValues::new("y", ["b", "b"]).unwrap(),
+        NumericValues::new("color", [1.0, 2.0]),
+    )
+    .facet(crate::FacetSpec::column(
+        CategoryValues::new("facet", ["left", "right"]).unwrap(),
+    ))
+    .size(760, 420);
+
+    plot.render_with_backend(&mut RecordingBackend::default())
+        .unwrap();
+}
+
+#[test]
 fn composed_per_panel_outside_legends_remain_in_their_cells() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]);

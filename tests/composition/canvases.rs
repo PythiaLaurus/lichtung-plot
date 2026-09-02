@@ -193,6 +193,119 @@ fn per_plot_legends_keep_locally_observed_hue_levels() {
 }
 
 #[test]
+fn hidden_canvas_legends_do_not_preflight_suppressed_glyphs() {
+    let absent = "\u{10FFFF}";
+    let plot = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    )
+    .hue(CategoryValues::new("cohort", [absent, absent]).unwrap());
+
+    Canvas::grid(1, 1)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .legend_policy(CanvasLegendPolicy::Hidden)
+        .preflight()
+        .unwrap();
+}
+
+#[test]
+fn shared_canvas_legend_skips_plot_local_hidden_entries() {
+    let absent = "\u{10FFFF}";
+    let hidden = Plot::bar(
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+    )
+    .series(CategoryValues::new("cohort", [absent, absent]).unwrap())
+    .legend(LegendPolicy::Hidden);
+    let visible = Plot::bar(
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [2.0, 3.0])),
+    )
+    .series(CategoryValues::new("cohort", ["visible", "visible"]).unwrap());
+
+    Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, hidden)
+        .unwrap()
+        .panel(0, 1, visible)
+        .unwrap()
+        .legend_policy(CanvasLegendPolicy::Shared)
+        .preflight()
+        .unwrap();
+}
+
+#[test]
+fn canvas_filters_point_labels_outside_an_exact_y_range() {
+    let outside = lichtung_plot::PointLayer::new(
+        NumericValues::new("point x", [2.0]),
+        NumericValues::new("point y", [2.0]),
+    )
+    .labels(CategoryValues::new("labels", ["\u{10FFFF}"]).unwrap());
+    let plot = Plot::line(
+        NumericValues::new("x", [0.0, 1.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    )
+    .y_limits(0.0, 1.0)
+    .point_layer(outside);
+    let range_peer = Plot::line(
+        NumericValues::new("x", [0.0, 3.0]),
+        NumericValues::new("y", [0.0, 1.0]),
+    );
+
+    Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, plot)
+        .unwrap()
+        .panel(0, 1, range_peer)
+        .unwrap()
+        .x_range_group([(0, 0), (0, 1)])
+        .unwrap()
+        .preflight()
+        .unwrap();
+}
+
+#[test]
+fn canvas_x_range_groups_reject_explicit_and_categorical_axes() {
+    let continuous = || {
+        Plot::line(
+            NumericValues::new("x", [0.0, 1.0]),
+            NumericValues::new("y", [0.0, 1.0]),
+        )
+    };
+    let explicit_error = Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, continuous().x_limits(0.0, 1.0))
+        .unwrap()
+        .panel(0, 1, continuous())
+        .unwrap()
+        .x_range_group([(0, 0), (0, 1)])
+        .unwrap()
+        .preflight()
+        .unwrap_err()
+        .to_string();
+    assert!(explicit_error.contains("explicit x limits"));
+
+    let categorical = Plot::bar(
+        CategoryValues::new("category", ["a", "b"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+    );
+    let categorical_error = Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, categorical)
+        .unwrap()
+        .panel(0, 1, continuous())
+        .unwrap()
+        .x_range_group([(0, 0), (0, 1)])
+        .unwrap()
+        .preflight()
+        .unwrap_err()
+        .to_string();
+    assert!(categorical_error.contains("categorical x axis"));
+}
+
+#[test]
 fn composed_offset_panel_reserves_long_y_tick_labels_locally() {
     let line_data = estimate_data();
     let category = CategoryValues::new(
@@ -260,7 +373,15 @@ fn multiline_y_axis_title_keeps_every_line_inside_the_canvas() {
             .lines()
             .find(|line| line.contains(&format!(">{text}</text>")))
             .unwrap();
-        assert!(attribute(line, "x").parse::<f64>().unwrap() >= 12.0);
+        let pivot_x = attribute(line, "transform")
+            .strip_prefix("rotate(-90.0,")
+            .unwrap()
+            .split_once(',')
+            .unwrap()
+            .0
+            .parse::<f64>()
+            .unwrap();
+        assert!(pivot_x >= 12.0);
     }
 }
 

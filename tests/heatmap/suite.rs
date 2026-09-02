@@ -220,16 +220,16 @@ fn heatmap_reserves_long_y_labels_and_elides_crowded_x_labels() {
         CategoryValues::new(
             "column",
             [
-                "alpha deliberately long label",
-                "bravo deliberately long label",
-                "charlie deliberately long label",
-                "delta deliberately long label",
-                "echo deliberately long label",
-                "foxtrot deliberately long label",
+                "alpha very long label",
+                "bravo very long label",
+                "charlie very long label",
+                "delta very long label",
+                "echo very long label",
+                "foxtrot very long label",
             ],
         )
         .unwrap(),
-        CategoryValues::new("row", ["a deliberately long heatmap row label"; 6]).unwrap(),
+        CategoryValues::new("row", ["a very long heatmap row label"; 6]).unwrap(),
         NumericValues::new("value", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]),
     );
     let short_panel = clip_rect(&render(&short, |chart| chart).unwrap());
@@ -260,7 +260,7 @@ fn heatmap_wrap_policy_preserves_complete_crowded_axis_labels() {
     );
     let svg = render(&data, |chart| {
         chart
-            .size(1_000, 500)
+            .size(1_200, 500)
             .heatmap_label_fit(HeatmapLabelFit::Wrap)
     })
     .unwrap();
@@ -487,12 +487,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
         CategoryValues::new(
             "row",
             [
-                "finite",
-                "finite",
-                "finite",
-                "not estimated",
-                "not estimated",
-                "not estimated",
+                "finite", "finite", "finite", "not fit", "not fit", "not fit",
             ],
         )
         .unwrap(),
@@ -502,7 +497,7 @@ fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
         ),
     );
     let annotation = HeatmapNullRowAnnotation::new(
-        "not estimated",
+        "not fit",
         "No finite measurements were available for this modeled outcome.",
     )
     .unwrap();

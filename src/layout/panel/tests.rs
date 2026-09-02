@@ -1,12 +1,4 @@
 use super::*;
-
-fn tick_font_size() -> u32 {
-    crate::Theme::Publication
-        .resolve()
-        .typography
-        .tick_label
-        .font_size
-}
 use crate::render::backend::Backend;
 
 #[test]
@@ -130,30 +122,45 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
 fn wider_numeric_labels_reduce_automatic_x_tick_density() {
     let theme = crate::Theme::Publication.resolve();
     let panel_box = crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0);
-    let integer_spec = AxisSpec::default().limits(0.0, 100.0);
-    let decimal_spec = AxisSpec::default().limits(0.0, 1.0);
-    let integer_labels = Layout::new_with_axis_specs_in_panel_box(
+    let wider_label_spec = AxisSpec::default().limits(0.0, 100.0);
+    let shorter_label_spec = AxisSpec::default().limits(0.0, 1.0);
+    let wider_labels = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
         (0.0, 1.0),
         panel_box,
         "x".into(),
         "y".into(),
-        &integer_spec,
-        &decimal_spec,
+        &wider_label_spec,
+        &shorter_label_spec,
         &theme,
     );
-    let decimal_labels = Layout::new_with_axis_specs_in_panel_box(
+    let shorter_labels = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 1.0),
         (0.0, 1.0),
         panel_box,
         "x".into(),
         "y".into(),
-        &decimal_spec,
-        &decimal_spec,
+        &shorter_label_spec,
+        &shorter_label_spec,
         &theme,
     );
 
-    assert!(decimal_labels.x_axis.ticks.len() < integer_labels.x_axis.ticks.len());
+    assert!(
+        wider_labels.x_axis.ticks.len() < shorter_labels.x_axis.ticks.len(),
+        "wider ticks: {:?}, shorter ticks: {:?}",
+        wider_labels
+            .x_axis
+            .ticks
+            .iter()
+            .map(|tick| tick.label.as_str())
+            .collect::<Vec<_>>(),
+        shorter_labels
+            .x_axis
+            .ticks
+            .iter()
+            .map(|tick| tick.label.as_str())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -296,10 +303,10 @@ fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
 
 #[test]
 fn automatic_ticks_fall_back_to_one_finite_midpoint_when_no_labels_fit() {
+    let theme = crate::Theme::Publication.resolve();
     let projection = Projection::new((0.0, 10.0), (0.0, 10.0), (0.0, 0.0, 0.0, 0.0));
 
-    let ticks =
-        automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, tick_font_size());
+    let ticks = automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme);
 
     assert_eq!(
         ticks
@@ -312,6 +319,7 @@ fn automatic_ticks_fall_back_to_one_finite_midpoint_when_no_labels_fit() {
 
 #[test]
 fn fitted_automatic_candidates_never_exceed_the_internal_maximum() {
+    let theme = crate::Theme::Publication.resolve();
     let projection = Projection::new((0.0, 9.0), (0.0, 1.0), (0.0, 1_000.0, 0.0, 100.0));
     let ticks = (0..10)
         .map(|position| AxisTick::new(f64::from(position), position.to_string()))
@@ -321,7 +329,7 @@ fn fitted_automatic_candidates_never_exceed_the_internal_maximum() {
         ticks,
         &projection,
         AxisSide::Bottom,
-        tick_font_size(),
+        &theme,
         AxisTick::new(4.5, "4.5"),
     );
 
@@ -348,6 +356,7 @@ fn automatic_ticks_never_exceed_the_internal_maximum() {
 
 #[test]
 fn panel_lane_filter_removes_automatic_labels_that_cross_its_edges() {
+    let theme = crate::Theme::Publication.resolve();
     let projection = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
     let ticks = vec![
         AxisTick::new(0.0, "0"),
@@ -356,7 +365,7 @@ fn panel_lane_filter_removes_automatic_labels_that_cross_its_edges() {
     ];
 
     let retained =
-        retain_automatic_ticks_inside_panel(ticks, &projection, AxisSide::Bottom, tick_font_size());
+        retain_automatic_ticks_inside_panel(ticks, &projection, AxisSide::Bottom, &theme);
 
     assert_eq!(
         retained
@@ -369,8 +378,17 @@ fn panel_lane_filter_removes_automatic_labels_that_cross_its_edges() {
 
 #[test]
 fn y_axis_inset_preserves_measured_tick_width_and_label_gap() {
-    let tick_width = deterministic_text_width("locus_0 aa", 16.0);
     let mut theme = crate::Theme::Publication.resolve();
+    let tick_width = theme
+        .measure_text(
+            "locus_0 aa",
+            &theme.typography.tick_label,
+            crate::layout::PhysicalTextAlignment::End,
+            "y-axis tick label",
+            false,
+        )
+        .unwrap()
+        .width();
     theme.axes.spacing.y_title_edge_padding = 9.0;
     theme.axes.spacing.y_title_tick_label_gap = 13.0;
     theme.axes.spacing.y_tick_label_gap = 4.0;

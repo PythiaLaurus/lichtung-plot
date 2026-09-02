@@ -247,6 +247,10 @@ impl CategoryValues {
                 .map(String::as_str)
         })
     }
+
+    pub(crate) fn levels(&self) -> &[String] {
+        &self.levels
+    }
 }
 
 /// Named nullable Boolean values.

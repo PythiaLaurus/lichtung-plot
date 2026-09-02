@@ -1,5 +1,6 @@
-use super::geometry::{deterministic_text_width, measured_text_line_height};
 use super::{AxisSide, AxisSpec, AxisTick, Projection};
+use crate::layout::PhysicalTextAlignment;
+use crate::theme::ResolvedTheme;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
@@ -135,7 +136,26 @@ pub(crate) fn automatic_numeric_ticks(
     range: (f64, f64),
     projection: &Projection,
     side: AxisSide,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
+) -> Vec<AxisTick> {
+    automatic_numeric_ticks_with_policy(range, projection, side, theme, false)
+}
+
+pub(crate) fn automatic_numeric_ticks_legacy(
+    range: (f64, f64),
+    projection: &Projection,
+    side: AxisSide,
+    theme: &ResolvedTheme,
+) -> Vec<AxisTick> {
+    automatic_numeric_ticks_with_policy(range, projection, side, theme, true)
+}
+
+fn automatic_numeric_ticks_with_policy(
+    range: (f64, f64),
+    projection: &Projection,
+    side: AxisSide,
+    theme: &ResolvedTheme,
+    legacy: bool,
 ) -> Vec<AxisTick> {
     let mut best: Option<Vec<AxisTick>> = None;
 
@@ -153,7 +173,7 @@ pub(crate) fn automatic_numeric_ticks(
         if ticks.len() > AUTOMATIC_TICK_TARGET {
             continue;
         }
-        if !automatic_tick_labels_fit(&ticks, projection, side, tick_font_size) {
+        if !automatic_tick_labels_fit(&ticks, projection, side, theme, legacy) {
             continue;
         }
         if best
@@ -174,12 +194,12 @@ pub(crate) fn fit_automatic_tick_candidates(
     ticks: Vec<AxisTick>,
     projection: &Projection,
     side: AxisSide,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
     fallback: AxisTick,
 ) -> Vec<AxisTick> {
     if !ticks.is_empty()
         && ticks.len() <= AUTOMATIC_TICK_TARGET
-        && automatic_tick_labels_fit(&ticks, projection, side, tick_font_size)
+        && automatic_tick_labels_fit(&ticks, projection, side, theme, false)
     {
         return ticks;
     }
@@ -194,7 +214,7 @@ pub(crate) fn fit_automatic_tick_candidates(
                 ticks[source].clone()
             })
             .collect::<Vec<_>>();
-        if automatic_tick_labels_fit(&candidate, projection, side, tick_font_size) {
+        if automatic_tick_labels_fit(&candidate, projection, side, theme, false) {
             return candidate;
         }
     }
@@ -202,11 +222,31 @@ pub(crate) fn fit_automatic_tick_candidates(
     vec![fallback]
 }
 
+#[cfg(test)]
 pub(crate) fn retain_automatic_ticks_inside_panel(
     ticks: Vec<AxisTick>,
     projection: &Projection,
     side: AxisSide,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
+) -> Vec<AxisTick> {
+    retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, false)
+}
+
+pub(crate) fn retain_automatic_ticks_inside_panel_legacy(
+    ticks: Vec<AxisTick>,
+    projection: &Projection,
+    side: AxisSide,
+    theme: &ResolvedTheme,
+) -> Vec<AxisTick> {
+    retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, true)
+}
+
+fn retain_automatic_ticks_inside_panel_with_policy(
+    ticks: Vec<AxisTick>,
+    projection: &Projection,
+    side: AxisSide,
+    theme: &ResolvedTheme,
+    legacy: bool,
 ) -> Vec<AxisTick> {
     let (x0, x1, y0, y1) = projection.pixel_box();
     let bounds = match side {
@@ -216,7 +256,7 @@ pub(crate) fn retain_automatic_ticks_inside_panel(
     let retained = ticks
         .into_iter()
         .filter(|tick| {
-            projected_tick_extent(tick, projection, side, tick_font_size)
+            projected_tick_extent(tick, projection, side, theme, legacy)
                 .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
         })
         .collect::<Vec<_>>();
@@ -230,7 +270,7 @@ pub(crate) fn retain_automatic_ticks_inside_panel(
     };
     let midpoint = finite_midpoint(range);
     let fallback = AxisTick::new(midpoint, format_tick(midpoint));
-    projected_tick_extent(&fallback, projection, side, tick_font_size)
+    projected_tick_extent(&fallback, projection, side, theme, legacy)
         .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
         .then_some(fallback)
         .into_iter()
@@ -241,12 +281,23 @@ fn automatic_tick_labels_fit(
     ticks: &[AxisTick],
     projection: &Projection,
     side: AxisSide,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
+    legacy: bool,
 ) -> bool {
     let mut previous_end = None;
+    let (x0, x1, _, _) = projection.pixel_box();
+    let maximum_width = match side {
+        AxisSide::Bottom => (x1 - x0) / ticks.len().max(1) as f64 * 0.9,
+        AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
+    };
 
     ticks.iter().all(|tick| {
-        let Some((start, end)) = projected_tick_extent(tick, projection, side, tick_font_size)
+        if tick_text_size(theme, &tick.label, legacy)
+            .is_none_or(|(_, _, fit_width)| fit_width > maximum_width)
+        {
+            return false;
+        }
+        let Some((start, end)) = projected_tick_extent(tick, projection, side, theme, legacy)
         else {
             return false;
         };
@@ -260,19 +311,43 @@ fn projected_tick_extent(
     tick: &AxisTick,
     projection: &Projection,
     side: AxisSide,
-    tick_font_size: u32,
+    theme: &ResolvedTheme,
+    legacy: bool,
 ) -> Option<(f64, f64)> {
     let center = match side {
         AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
         AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
     }
     .round();
+    let (width, height, _) = tick_text_size(theme, &tick.label, legacy)?;
     let half_extent = match side {
-        AxisSide::Bottom => deterministic_text_width(&tick.label, f64::from(tick_font_size)) / 2.0,
-        AxisSide::Left => measured_text_line_height(tick_font_size) / 2.0,
+        AxisSide::Bottom => width / 2.0,
+        AxisSide::Left => height / 2.0,
     };
     (center.is_finite() && half_extent.is_finite())
         .then_some((center - half_extent, center + half_extent))
+}
+
+fn tick_text_size(theme: &ResolvedTheme, label: &str, legacy: bool) -> Option<(f64, f64, f64)> {
+    let plan = if legacy {
+        theme.measure_legacy_appearance_text(
+            label,
+            &theme.typography.tick_label,
+            PhysicalTextAlignment::Center,
+            "legacy automatic tick label",
+            false,
+        )
+    } else {
+        theme.measure_text(
+            label,
+            &theme.typography.tick_label,
+            PhysicalTextAlignment::Center,
+            "automatic tick label",
+            false,
+        )
+    }
+    .ok()?;
+    Some((plan.width(), plan.height(), plan.fit_width()))
 }
 
 fn finite_midpoint(range: (f64, f64)) -> f64 {

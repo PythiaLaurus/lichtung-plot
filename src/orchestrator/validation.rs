@@ -14,6 +14,12 @@ impl Plot {
     pub(crate) fn validate_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         self.x_axis_spec().validate("x-axis")?;
         self.y_axis_spec().validate("y-axis")?;
+        if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
+        {
+            return Err(Error::Data(format!(
+                "significance annotations are not supported for {kind:?}; use a supported categorical family or remove the annotations"
+            )));
+        }
         if kind != PlotKind::Heatmap && self.heatmap_layout_spec() != HeatmapLayout::Cartesian {
             return Err(Error::Data(format!(
                 "{kind:?}: non-Cartesian HeatmapLayout is supported only by PlotKind::Heatmap"
@@ -36,6 +42,18 @@ impl Plot {
             ));
         }
         self.validate_value_alignment()?;
+        if kind == PlotKind::Trajectory && self.automatic_axis_category_values(kind, true).is_some()
+        {
+            let condition = self
+                .x_col()
+                .ok_or_else(|| Error::Data("trajectory: condition column not set".into()))?;
+            crate::data::strict_normalized_strings(
+                self.data(),
+                condition,
+                "trajectory",
+                "condition",
+            )?;
+        }
         self.validate_category_order_configuration(kind)?;
         self.validate_channel_configuration(kind)?;
         self.validate_interval_configuration(kind)?;

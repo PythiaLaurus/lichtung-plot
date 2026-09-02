@@ -286,7 +286,7 @@ fn canvas_text_cells_enforce_occupancy_and_fitting() {
         .text_panel(0, 0, panel)
         .err()
         .unwrap();
-    let too_long = TextPanel::new("Title", "word ".repeat(500).trim().to_owned()).unwrap();
+    let too_long = TextPanel::new("Title", "word ".repeat(20).trim().to_owned()).unwrap();
     let fitting = Canvas::grid(1, 1)
         .unwrap()
         .text_panel(0, 0, too_long)

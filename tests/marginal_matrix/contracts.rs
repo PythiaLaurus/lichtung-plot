@@ -50,6 +50,17 @@ fn marginal_hue_smoke() {
 }
 
 #[test]
+fn marginal_legend_omits_hues_from_discarded_nonfinite_rows() {
+    Plot::marginal(
+        NumericValues::new("x", [1.0, 1.2, 1.4, f64::NAN]),
+        NumericValues::new("y", [2.0, 2.1, 2.3, 4.0]),
+    )
+    .hue(CategoryValues::new("group", ["kept", "kept", "kept", "\u{10FFFF}"]).unwrap())
+    .preflight()
+    .unwrap();
+}
+
+#[test]
 fn hue_only_marginal_and_matrix_split_multiple_hues() {
     let hue = CategoryValues::new("hue", ["h1", "h1", "h1", "h2", "h2", "h2"]).unwrap();
     let marginal_data = MarginalData {

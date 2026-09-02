@@ -661,6 +661,7 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) panel: PanelBox,
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
+    deferred_annotation_text: Option<&'a [crate::layout::DeferredAnnotationTextPlan]>,
 }
 
 impl<'a> PlotRenderContext<'a> {
@@ -674,6 +675,7 @@ impl<'a> PlotRenderContext<'a> {
             panel,
             theme,
             facet_scales: None,
+            deferred_annotation_text: None,
         }
     }
 
@@ -688,6 +690,7 @@ impl<'a> PlotRenderContext<'a> {
             panel,
             theme,
             facet_scales: None,
+            deferred_annotation_text: None,
         }
     }
 
@@ -704,6 +707,20 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
         self.facet_scales
     }
+
+    pub(crate) const fn with_deferred_annotation_text(
+        mut self,
+        plans: &'a [crate::layout::DeferredAnnotationTextPlan],
+    ) -> Self {
+        self.deferred_annotation_text = Some(plans);
+        self
+    }
+
+    pub(crate) const fn deferred_annotation_text(
+        self,
+    ) -> Option<&'a [crate::layout::DeferredAnnotationTextPlan]> {
+        self.deferred_annotation_text
+    }
 }
 
 pub(crate) struct PlotRenderResult {
@@ -715,6 +732,7 @@ pub(crate) struct PlotRenderResult {
     pub(crate) decoration_mode: DecorationMode,
     pub(crate) x_tick_keys: Option<Vec<String>>,
     pub(crate) y_tick_keys: Option<Vec<String>>,
+    pub(crate) deferred_annotation_text: Vec<crate::layout::DeferredAnnotationTextPlan>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -741,6 +759,7 @@ impl PlotRenderResult {
             decoration_mode: DecorationMode::Standard,
             x_tick_keys: None,
             y_tick_keys: None,
+            deferred_annotation_text: Vec::new(),
         }
     }
 
@@ -752,6 +771,14 @@ impl PlotRenderResult {
 
     pub(crate) fn with_significance_plan(mut self, significance: SignificancePlan) -> Self {
         self.significance = Some(significance);
+        self
+    }
+
+    pub(crate) fn with_deferred_annotation_text(
+        mut self,
+        plans: Vec<crate::layout::DeferredAnnotationTextPlan>,
+    ) -> Self {
+        self.deferred_annotation_text = plans;
         self
     }
 

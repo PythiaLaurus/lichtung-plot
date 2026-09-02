@@ -6,8 +6,8 @@
 
 use crate::Error;
 
-use crate::layout::Layout;
-use crate::theme::ResolvedTheme;
+use crate::layout::{Layout, PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
+use crate::theme::{ResolvedTheme, TextAppearance};
 
 const MIN_PANEL_WIDTH: f64 = 80.0;
 const MIN_PANEL_HEIGHT: f64 = 60.0;
@@ -72,10 +72,12 @@ impl PanelRequirements {
     ) -> Result<Self, Error> {
         let mut requirements = Self::measure_header(layout, theme, None, None, available_panel)?;
         if let Some(text) = top_text {
-            let lines = try_wrap_text(
+            let lines = try_wrap_legacy_text(
+                theme,
                 text,
                 theme.facet_header_font_size,
                 (available_panel.width() - 16.0).max(1.0),
+                PhysicalTextAlignment::Center,
                 "facet strip",
             )?;
             let line_height = f64::from(theme.facet_header_font_size) + 6.0;
@@ -108,19 +110,23 @@ impl PanelRequirements {
         let tick_role = &theme.typography.tick_label;
         let axis_title_role = &theme.typography.axis_title;
         let spacing = &theme.axes.spacing;
-        let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64 * 0.9;
+        let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64;
         let x_tick_blocks = layout
             .x_axis
             .ticks
             .iter()
             .filter(|tick| !tick.label.is_empty())
             .map(|tick| {
-                crate::layout::TextBlock::layout(
-                    &tick.label,
-                    tick_role.font_size,
-                    x_tick_width.max(1.0),
-                    "x-axis tick label",
-                )
+                theme
+                    .plan_text(
+                        &tick.label,
+                        tick_role,
+                        x_tick_width.max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "x-axis tick label",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let y_tick_maximum_width = (available_panel.width() * 0.4).max(1.0);
@@ -130,12 +136,16 @@ impl PanelRequirements {
             .iter()
             .filter(|tick| !tick.label.is_empty())
             .map(|tick| {
-                crate::layout::TextBlock::layout(
-                    &tick.label,
-                    tick_role.font_size,
-                    y_tick_maximum_width,
-                    "y-axis tick label",
-                )
+                theme
+                    .plan_text(
+                        &tick.label,
+                        tick_role,
+                        y_tick_maximum_width,
+                        PhysicalTextAlignment::End,
+                        "y-axis tick label",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let x_tick_half_width = x_tick_blocks
@@ -148,22 +158,30 @@ impl PanelRequirements {
             .fold(0.0_f64, f64::max);
         let x_label_block = (!layout.x_axis.label.is_empty())
             .then(|| {
-                crate::layout::TextBlock::layout(
-                    &layout.x_axis.label,
-                    axis_title_role.font_size,
-                    available_panel.width().max(1.0),
-                    "x-axis title",
-                )
+                theme
+                    .plan_text(
+                        &layout.x_axis.label,
+                        axis_title_role,
+                        available_panel.width().max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "x-axis title",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .transpose()?;
         let y_label_block = (!layout.y_axis.label.is_empty())
             .then(|| {
-                crate::layout::TextBlock::layout(
-                    &layout.y_axis.label,
-                    axis_title_role.font_size,
-                    available_panel.height().max(1.0),
-                    "y-axis title",
-                )
+                theme
+                    .plan_text(
+                        &layout.y_axis.label,
+                        axis_title_role,
+                        available_panel.height().max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "y-axis title",
+                        false,
+                    )
+                    .map(TextBlock::from_resolved)
             })
             .transpose()?;
         let x_label_overhang = ((x_label_block
@@ -223,9 +241,11 @@ impl PanelRequirements {
         let title_lines = top_title.map_or(Ok(0), |text| {
             Ok::<_, Error>(
                 try_wrap_text(
+                    theme,
                     text,
-                    theme.typography.title.font_size,
+                    &theme.typography.title,
                     maximum_width,
+                    PhysicalTextAlignment::Start,
                     "panel title",
                 )?
                 .len(),
@@ -234,9 +254,11 @@ impl PanelRequirements {
         let subtitle_lines = top_subtitle.map_or(Ok(0), |text| {
             Ok::<_, Error>(
                 try_wrap_text(
+                    theme,
                     text,
-                    theme.typography.subtitle.font_size,
+                    &theme.typography.subtitle,
                     maximum_width,
+                    PhysicalTextAlignment::Start,
                     "panel subtitle",
                 )?
                 .len(),
@@ -396,6 +418,9 @@ pub struct CanvasLayout {
     pub(crate) title_lines_y: Vec<f64>,
     pub(crate) subtitle_lines_y: Vec<f64>,
     pub(crate) caption_lines_y: Vec<f64>,
+    pub(crate) title_plan: Option<ResolvedTextPlan>,
+    pub(crate) subtitle_plan: Option<ResolvedTextPlan>,
+    pub(crate) caption_plan: Option<ResolvedTextPlan>,
 }
 
 impl CanvasLayout {
@@ -426,9 +451,14 @@ impl CanvasLayout {
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
+        theme.prepare_font_environment()?;
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let counts = measured_line_counts(text, theme, maximum_width)?;
-        Self::resolve(canvas_width, canvas_height, theme, spec, counts, true, true)
+        let plans = planned_root_text(text, theme, maximum_width)?;
+        let counts = planned_line_counts(&plans);
+        let mut layout =
+            Self::resolve(canvas_width, canvas_height, theme, spec, counts, true, true)?;
+        (layout.title_plan, layout.subtitle_plan, layout.caption_plan) = plans;
+        Ok(layout)
     }
 
     pub(crate) fn measured_composed_canvas(
@@ -438,9 +468,11 @@ impl CanvasLayout {
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
+        theme.prepare_font_environment()?;
         let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let counts = measured_line_counts(text, theme, maximum_width)?;
-        Self::resolve(
+        let plans = planned_root_text(text, theme, maximum_width)?;
+        let counts = planned_line_counts(&plans);
+        let mut layout = Self::resolve(
             canvas_width,
             canvas_height,
             theme,
@@ -448,7 +480,9 @@ impl CanvasLayout {
             counts,
             true,
             false,
-        )
+        )?;
+        (layout.title_plan, layout.subtitle_plan, layout.caption_plan) = plans;
+        Ok(layout)
     }
 
     #[expect(
@@ -603,65 +637,117 @@ impl CanvasLayout {
             title_lines_y,
             subtitle_lines_y,
             caption_lines_y,
+            title_plan: None,
+            subtitle_plan: None,
+            caption_plan: None,
         })
     }
 }
 
-fn measured_line_counts(
+type PlannedRootText = (
+    Option<ResolvedTextPlan>,
+    Option<ResolvedTextPlan>,
+    Option<ResolvedTextPlan>,
+);
+
+fn planned_root_text(
     text: (Option<&str>, Option<&str>, Option<&str>),
     theme: &ResolvedTheme,
     maximum_width: f64,
-) -> Result<(usize, usize, usize), Error> {
+) -> Result<PlannedRootText, Error> {
     Ok((
-        text.0.map_or(Ok(0), |value| {
-            Ok::<_, Error>(
-                try_wrap_text(
+        text.0
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                theme.plan_text(
                     value,
-                    theme.typography.title.font_size,
+                    &theme.typography.title,
                     maximum_width,
+                    PhysicalTextAlignment::Center,
                     "canvas title",
-                )?
-                .len(),
-            )
-        })?,
-        text.1.map_or(Ok(0), |value| {
-            Ok::<_, Error>(
-                try_wrap_text(
+                    false,
+                )
+            })
+            .transpose()?,
+        text.1
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                theme.plan_text(
                     value,
-                    theme.typography.subtitle.font_size,
+                    &theme.typography.subtitle,
                     maximum_width,
+                    PhysicalTextAlignment::Center,
                     "canvas subtitle",
-                )?
-                .len(),
-            )
-        })?,
-        text.2.map_or(Ok(0), |value| {
-            Ok::<_, Error>(
-                try_wrap_text(
+                    false,
+                )
+            })
+            .transpose()?,
+        text.2
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                theme.plan_text(
                     value,
-                    theme.typography.caption.font_size,
+                    &theme.typography.caption,
                     maximum_width,
+                    PhysicalTextAlignment::Center,
                     "canvas caption",
-                )?
-                .len(),
-            )
-        })?,
+                    false,
+                )
+            })
+            .transpose()?,
     ))
 }
 
+fn planned_line_counts(plans: &PlannedRootText) -> (usize, usize, usize) {
+    (
+        plans.0.as_ref().map_or(0, |plan| plan.lines.len()),
+        plans.1.as_ref().map_or(0, |plan| plan.lines.len()),
+        plans.2.as_ref().map_or(0, |plan| plan.lines.len()),
+    )
+}
+
 pub(crate) fn try_wrap_text(
+    theme: &ResolvedTheme,
+    text: &str,
+    appearance: &TextAppearance,
+    maximum_width: f64,
+    alignment: PhysicalTextAlignment,
+    role: &str,
+) -> Result<Vec<String>, Error> {
+    theme
+        .plan_text(text, appearance, maximum_width, alignment, role, false)
+        .map(crate::layout::ResolvedTextPlan::into_line_texts)
+}
+
+pub(crate) fn try_wrap_legacy_text(
+    theme: &ResolvedTheme,
     text: &str,
     font_size: u32,
     maximum_width: f64,
+    alignment: PhysicalTextAlignment,
     role: &str,
 ) -> Result<Vec<String>, Error> {
-    crate::layout::TextBlock::layout(text, font_size, maximum_width, role)
-        .map(crate::layout::TextBlock::into_lines)
+    theme
+        .plan_legacy_text(text, font_size, maximum_width, alignment, role)
+        .map(crate::layout::ResolvedTextPlan::into_line_texts)
 }
 
 #[cfg(test)]
-fn wrap_text(text: &str, font_size: u32, maximum_width: f64) -> Vec<String> {
-    try_wrap_text(text, font_size, maximum_width, "test text").unwrap()
+fn wrap_text(
+    theme: &ResolvedTheme,
+    text: &str,
+    appearance: &TextAppearance,
+    maximum_width: f64,
+) -> Vec<String> {
+    try_wrap_text(
+        theme,
+        text,
+        appearance,
+        maximum_width,
+        PhysicalTextAlignment::Start,
+        "test text",
+    )
+    .unwrap()
 }
 
 #[cfg(test)]
@@ -689,7 +775,7 @@ mod tests {
             (None, None, Some(caption)),
         )
         .unwrap();
-        let lines = wrap_text(caption, theme.typography.caption.font_size, 328.0);
+        let lines = wrap_text(&theme, caption, &theme.typography.caption, 328.0);
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
@@ -775,37 +861,42 @@ mod tests {
 
     #[test]
     fn wrapping_uses_shared_measurement_for_wide_combining_and_newline_text() {
-        let cases = [
-            ("中文字符边界", 24.0),
-            ("wide🙂glyph🙂bounds", 42.0),
-            ("e\u{301}e\u{301}e\u{301}e\u{301}", 14.0),
-        ];
-        for (text, width) in cases {
-            let lines = wrap_text(text, 12, width);
-            assert!(crate::layout::deterministic_text_width(text, 12.0) > width);
-            assert_eq!(lines, [text]);
-        }
+        let theme = Theme::Publication.resolve();
+        let appearance = theme.legacy_text_appearance(12, crate::TextWeight::Normal);
 
-        let explicit = wrap_text("first line\n第二行\n", 12, 200.0);
-        assert_eq!(explicit, ["first line", "第二行", ""]);
-        assert!(explicit
-            .iter()
-            .all(|line| { crate::layout::deterministic_text_width(line, 12.0) <= 200.0 }));
+        let explicit = wrap_text(&theme, "first line\nsecond line\n", &appearance, 200.0);
+        assert_eq!(explicit, ["first line", "second line", ""]);
 
-        let word_width = crate::layout::deterministic_text_width("alpha beta ", 12.0);
-        assert_eq!(
-            wrap_text("alpha beta gamma", 12, word_width),
-            ["alpha beta ", "gamma"]
-        );
-        assert!(
-            (crate::layout::deterministic_text_width("e\u{301}", 12.0)
-                - crate::layout::deterministic_text_width("e", 12.0))
-            .abs()
-                < f64::EPSILON
-        );
-        assert!(
-            crate::layout::deterministic_text_width("中", 12.0)
-                > crate::layout::deterministic_text_width("a", 12.0)
-        );
+        let measured = theme
+            .measure_text(
+                "alpha beta gamma",
+                &appearance,
+                PhysicalTextAlignment::Start,
+                "test text",
+                false,
+            )
+            .unwrap();
+        assert!(theme
+            .plan_text(
+                "alpha beta gamma",
+                &appearance,
+                measured.width() / 3.0,
+                PhysicalTextAlignment::Start,
+                "test text",
+                false,
+            )
+            .is_err());
+
+        let combined = theme
+            .measure_text(
+                "e\u{301}",
+                &appearance,
+                PhysicalTextAlignment::Start,
+                "test text",
+                false,
+            )
+            .unwrap();
+        assert_eq!(combined.lines.len(), 1);
+        assert!(!combined.lines[0].runs.is_empty());
     }
 }

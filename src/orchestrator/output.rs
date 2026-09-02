@@ -11,7 +11,8 @@ impl Plot {
     fn render_scene(&self) -> Result<RenderedScene, Error> {
         let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
         let (width, height) = plan.dimensions();
-        let mut backend = SvgBackend::in_memory(width, height);
+        let mut backend =
+            SvgBackend::in_memory_with_fonts(width, height, plan.font_environment()?.clone());
         plan.render(&mut backend)?;
         RenderedScene::new(width, height, backend.into_output())
     }

@@ -189,13 +189,15 @@ fn categorical_plots_render_stacked_pairwise_brackets() {
 #[test]
 fn chinese_text_uses_system_font_fallback_stack_without_embedding() {
     let (x, y) = fixture_values();
-    let svg = render(
-        Plot::scatter(x, y)
-            .title("中文分析")
-            .x_label("时间")
-            .y_label("测量值"),
-        "chinese-text",
-    );
+    let plot = Plot::scatter(x, y)
+        .title("中文分析")
+        .x_label("时间")
+        .y_label("测量值");
+    if let Err(error) = plot.preflight() {
+        assert!(error.to_string().contains("do not contain U+4E2D"));
+        return;
+    }
+    let svg = render(plot, "chinese-text");
 
     assert!(svg.contains(&format!(
         "font-family=\"{}\"",

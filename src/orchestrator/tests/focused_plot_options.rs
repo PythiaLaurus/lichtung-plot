@@ -499,9 +499,20 @@ fn text_bounds(backend: &RecordingBackend, text: &str) -> PanelBox {
         .find(|(_, _, candidate, _)| candidate == text)
         .unwrap_or_else(|| panic!("text draw {text:?} should exist"));
     assert_eq!(style.anchor, TextAnchor::Middle);
-    let half_width =
-        crate::layout::deterministic_text_width(text, f64::from(style.font_size)) / 2.0;
-    let half_height = f64::from(style.font_size) / 2.0;
+    let theme = crate::Theme::Publication.resolve();
+    let mut appearance = theme.legacy_text_appearance(style.font_size, style.weight);
+    appearance.stack.clone_from(&style.font_family);
+    let plan = theme
+        .measure_text(
+            text,
+            &appearance,
+            crate::layout::PhysicalTextAlignment::Center,
+            "focused plot option text bounds",
+            false,
+        )
+        .unwrap();
+    let half_width = plan.width() / 2.0;
+    let half_height = plan.height() / 2.0;
     PanelBox::new(
         *x - half_width,
         *x + half_width,

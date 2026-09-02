@@ -1,9 +1,9 @@
 use crate::Error;
 
 use super::geometry::y_axis_label_half_width;
-use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Projection};
-use crate::layout::TextBlock;
-use crate::render::backend::{Backend, Point2D, TextAnchor, TextStyle};
+use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Layout, Projection};
+use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
+use crate::render::backend::{Backend, PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::ResolvedTheme;
 
 impl AxisSpec {
@@ -39,6 +39,54 @@ impl AxisTick {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct PanelAxisTextPlan {
+    x_axis: AxisTextPlan,
+    y_axis: AxisTextPlan,
+}
+
+#[derive(Debug, Clone)]
+struct AxisTextPlan {
+    tick_labels: Vec<Option<ResolvedTextPlan>>,
+    title: Option<ResolvedTextPlan>,
+}
+
+impl Layout {
+    pub(crate) fn plan_axis_text(&self, theme: &ResolvedTheme) -> Result<PanelAxisTextPlan, Error> {
+        Ok(PanelAxisTextPlan {
+            x_axis: self
+                .x_axis
+                .plan_text(&self.projection, AxisSide::Bottom, theme)?,
+            y_axis: self
+                .y_axis
+                .plan_text(&self.projection, AxisSide::Left, theme)?,
+        })
+    }
+
+    pub(crate) fn draw_decorations_with_text(
+        &self,
+        theme: &ResolvedTheme,
+        text: &PanelAxisTextPlan,
+        backend: &mut dyn Backend,
+    ) -> Result<(), Error> {
+        Frame::draw(&self.projection, theme, backend)?;
+        self.x_axis.draw_planned(
+            &self.projection,
+            AxisSide::Bottom,
+            theme,
+            &text.x_axis,
+            backend,
+        )?;
+        self.y_axis.draw_planned(
+            &self.projection,
+            AxisSide::Left,
+            theme,
+            &text.y_axis,
+            backend,
+        )
+    }
+}
+
 impl Axis {
     pub(crate) fn validate_explicit_tick_collisions(
         &self,
@@ -56,10 +104,15 @@ impl Axis {
             .enumerate()
             .filter(|(_, tick)| !tick.label.is_empty())
         {
-            let block = TextBlock::layout(
+            let block = text_block(
+                theme,
                 &tick.label,
-                theme.typography.tick_label.font_size,
+                &theme.typography.tick_label,
                 maximum_width,
+                match side {
+                    AxisSide::Bottom => PhysicalTextAlignment::Center,
+                    AxisSide::Left => PhysicalTextAlignment::End,
+                },
                 &role,
             )?;
             let center = match side {
@@ -94,25 +147,72 @@ impl Axis {
     fn tick_label_maximum_width(&self, projection: &Projection, side: AxisSide) -> f64 {
         let (x0, x1, _, _) = projection.pixel_box();
         match side {
-            AxisSide::Bottom => (x1 - x0) / self.ticks.len().max(1) as f64 * 0.9,
+            AxisSide::Bottom => (x1 - x0) / self.ticks.len().max(1) as f64,
             AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
         }
     }
 
-    /// Draw this axis's spine, ticks, tick labels, and axis label.
-    ///
-    /// `side` selects which side the ticks are drawn on:
-    /// - `AxisSide::Bottom` → x-axis: ticks point down (math
-    ///   convention; the SVG backend applies the y-flip), labels
-    ///   below, axis label centered below the tick labels.
-    /// - `AxisSide::Left` → y-axis: ticks point left, labels to
-    ///   the left, axis label centered vertically to the far left.
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-    pub fn draw(
+    fn plan_text(
         &self,
         projection: &Projection,
         side: AxisSide,
         theme: &ResolvedTheme,
+    ) -> Result<AxisTextPlan, Error> {
+        let maximum_width = self.tick_label_maximum_width(projection, side);
+        let (alignment, tick_role, title_role, title_width) = match side {
+            AxisSide::Bottom => (
+                PhysicalTextAlignment::Center,
+                "x-axis tick label",
+                "x-axis title",
+                (projection.pixel_box().1 - projection.pixel_box().0).max(1.0),
+            ),
+            AxisSide::Left => (
+                PhysicalTextAlignment::End,
+                "y-axis tick label",
+                "y-axis title",
+                (projection.pixel_box().3 - projection.pixel_box().2).max(1.0),
+            ),
+        };
+        let tick_labels = self
+            .ticks
+            .iter()
+            .map(|tick| {
+                (!tick.label.is_empty())
+                    .then(|| {
+                        theme.plan_text(
+                            &tick.label,
+                            &theme.typography.tick_label,
+                            maximum_width,
+                            alignment,
+                            tick_role,
+                            false,
+                        )
+                    })
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let title = (!self.label.is_empty())
+            .then(|| {
+                theme.plan_text(
+                    &self.label,
+                    &theme.typography.axis_title,
+                    title_width,
+                    PhysicalTextAlignment::Center,
+                    title_role,
+                    false,
+                )
+            })
+            .transpose()?;
+        Ok(AxisTextPlan { tick_labels, title })
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn draw_planned(
+        &self,
+        projection: &Projection,
+        side: AxisSide,
+        theme: &ResolvedTheme,
+        text: &AxisTextPlan,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let (x0, x1, y0, y1) = projection.pixel_box();
@@ -123,15 +223,11 @@ impl Axis {
         let frame_style = frame.map(|appearance| appearance.stroke.backend_style());
         let tick_style = ticks.map(|appearance| appearance.stroke.backend_style());
         let tick_length = ticks.map_or(0.0, |appearance| f64::from(appearance.length));
-        let label_style = theme
-            .typography
-            .axis_title
-            .backend_style(TextAnchor::Middle, 0.0);
-        let tick_text_style = theme
-            .typography
-            .tick_label
-            .backend_style(TextAnchor::Middle, 0.0);
-        let tick_width = self.tick_label_maximum_width(projection, side);
+        if text.tick_labels.len() != self.ticks.len() {
+            return Err(Error::Render(
+                "planned axis tick-label count does not match its axis".into(),
+            ));
+        }
 
         // Spine (only the two visible edges for open-frame
         // styles; the Frame renderer decides whether the full
@@ -147,7 +243,7 @@ impl Axis {
         }
 
         // Tick marks + tick labels.
-        for tick in &self.ticks {
+        for (tick, tick_plan) in self.ticks.iter().zip(&text.tick_labels) {
             match side {
                 AxisSide::Bottom => {
                     let (x_px, _) = projection.project(tick.position, projection.y_range().0);
@@ -157,27 +253,21 @@ impl Axis {
                             tick_style,
                         )?;
                     }
-                    if !tick.label.is_empty() {
-                        let block = TextBlock::layout(
-                            &tick.label,
-                            theme.typography.tick_label.font_size,
-                            tick_width,
-                            "x-axis tick label",
-                        )?;
+                    if let Some(plan) = tick_plan {
                         let first_y = y0
                             - tick_length
                             - theme.axes.spacing.x_tick_label_gap
-                            - block.line_height() / 2.0;
-                        for (index, line) in block.lines().iter().enumerate() {
-                            backend.draw_text(
-                                Point2D::new(
-                                    x_px.round(),
-                                    (first_y - index as f64 * block.line_height()).round(),
-                                ),
-                                line,
-                                &tick_text_style,
-                            )?;
-                        }
+                            - plan.line_height() / 2.0;
+                        let center_y = first_y
+                            - plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::middle(
+                                Point2D::new(x_px.round(), center_y.round()),
+                                TextAnchor::Middle,
+                                0.0,
+                            ),
+                            plan,
+                        )?;
                     }
                 }
                 AxisSide::Left => {
@@ -188,64 +278,45 @@ impl Axis {
                             tick_style,
                         )?;
                     }
-                    if !tick.label.is_empty() {
-                        let y_tick_style = TextStyle {
-                            anchor: TextAnchor::End,
-                            ..tick_text_style.clone()
-                        };
-                        let block = TextBlock::layout(
-                            &tick.label,
-                            theme.typography.tick_label.font_size,
-                            tick_width,
-                            "y-axis tick label",
-                        )?;
+                    if let Some(plan) = tick_plan {
                         let first_y = y_px
-                            + block.lines().len().saturating_sub(1) as f64 * block.line_height()
-                                / 2.0;
-                        for (index, line) in block.lines().iter().enumerate() {
-                            backend.draw_text(
+                            + plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
+                        let center_y = first_y
+                            - plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
+                        backend.draw_planned_text(
+                            PlannedTextPlacement::middle(
                                 Point2D::new(
                                     (x0 - tick_length - theme.axes.spacing.y_tick_label_gap)
                                         .max(0.0)
                                         .round(),
-                                    (first_y - index as f64 * block.line_height()).round(),
+                                    center_y.round(),
                                 ),
-                                line,
-                                &y_tick_style,
-                            )?;
-                        }
+                                TextAnchor::End,
+                                0.0,
+                            ),
+                            plan,
+                        )?;
                     }
                 }
             }
         }
 
         // Axis label.
-        if !self.label.is_empty() {
+        if let Some(block) = &text.title {
             match side {
                 AxisSide::Bottom => {
                     let cx = f64::midpoint(x0, x1);
                     let tick_label_height = self
                         .ticks
                         .iter()
-                        .filter(|tick| !tick.label.is_empty())
-                        .map(|tick| {
-                            TextBlock::layout(
-                                &tick.label,
-                                theme.typography.tick_label.font_size,
-                                tick_width,
-                                "x-axis tick label",
-                            )
-                            .map(|block| block.height())
+                        .enumerate()
+                        .filter_map(|(index, _)| {
+                            text.tick_labels
+                                .get(index)
+                                .and_then(Option::as_ref)
+                                .map(ResolvedTextPlan::height)
                         })
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
                         .fold(0.0_f64, f64::max);
-                    let block = TextBlock::layout(
-                        &self.label,
-                        theme.typography.axis_title.font_size,
-                        (x1 - x0).max(1.0),
-                        "x-axis title",
-                    )?;
                     let tick_offset = if tick_label_height > 0.0 {
                         theme.axes.spacing.x_tick_label_gap
                             + tick_label_height
@@ -254,48 +325,37 @@ impl Axis {
                         theme.axes.spacing.x_title_without_tick_labels_gap
                     };
                     let first_y = y0 - tick_length - tick_offset - block.line_height() / 2.0;
-                    for (index, line) in block.lines().iter().enumerate() {
-                        backend.draw_text(
-                            Point2D::new(
-                                cx.round(),
-                                (first_y - index as f64 * block.line_height()).round(),
-                            ),
-                            line,
-                            &label_style,
-                        )?;
-                    }
+                    let center_y = first_y
+                        - block.lines.len().saturating_sub(1) as f64 * block.line_height() / 2.0;
+                    backend.draw_planned_text(
+                        PlannedTextPlacement::middle(
+                            Point2D::new(cx.round(), center_y.round()),
+                            TextAnchor::Middle,
+                            0.0,
+                        ),
+                        block,
+                    )?;
                 }
                 AxisSide::Left => {
                     let cy = f64::midpoint(y0, y1);
                     let tick_label_width = self
                         .ticks
                         .iter()
-                        .filter(|tick| !tick.label.is_empty())
-                        .map(|tick| {
-                            TextBlock::layout(
-                                &tick.label,
-                                theme.typography.tick_label.font_size,
-                                tick_width,
-                                "y-axis tick label",
-                            )
-                            .map(|block| block.width())
+                        .enumerate()
+                        .filter_map(|(index, _)| {
+                            text.tick_labels
+                                .get(index)
+                                .and_then(Option::as_ref)
+                                .map(ResolvedTextPlan::width)
                         })
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
                         .fold(0.0_f64, f64::max);
-                    let block = TextBlock::layout(
-                        &self.label,
-                        theme.typography.axis_title.font_size,
-                        (y1 - y0).max(1.0),
-                        "y-axis title",
-                    )?;
                     let tick_label_anchor_x =
                         x0 - tick_length - theme.axes.spacing.y_tick_label_gap;
                     let label_half_width =
                         y_axis_label_half_width(theme.typography.axis_title.font_size);
                     let min_lx = theme.axes.spacing.y_title_edge_padding
                         + label_half_width
-                        + block.lines().len().saturating_sub(1) as f64 * block.line_height();
+                        + block.lines.len().saturating_sub(1) as f64 * block.line_height();
                     let lx = if tick_label_width > 0.0 {
                         tick_label_anchor_x
                             - tick_label_width
@@ -305,27 +365,35 @@ impl Axis {
                         x0 - tick_length - 48.0
                     }
                     .max(min_lx);
-                    let y_label_style = TextStyle {
-                        anchor: TextAnchor::Middle,
-                        rotation: -90.0,
-                        ..label_style.clone()
-                    };
-                    for (index, line) in block.lines().iter().enumerate() {
-                        backend.draw_text(
-                            Point2D::new(
-                                (lx - index as f64 * block.line_height()).max(0.0).round(),
-                                cy.round(),
-                            ),
-                            line,
-                            &y_label_style,
-                        )?;
-                    }
+                    let center_x =
+                        lx - block.lines.len().saturating_sub(1) as f64 * block.line_height() / 2.0;
+                    backend.draw_planned_text(
+                        PlannedTextPlacement::middle(
+                            Point2D::new(center_x.max(0.0).round(), cy.round()),
+                            TextAnchor::Middle,
+                            -90.0,
+                        ),
+                        block,
+                    )?;
                 }
             }
         }
 
         Ok(())
     }
+}
+
+fn text_block(
+    theme: &ResolvedTheme,
+    source: &str,
+    appearance: &crate::theme::TextAppearance,
+    maximum_width: f64,
+    alignment: PhysicalTextAlignment,
+    owner: &str,
+) -> Result<TextBlock, Error> {
+    theme
+        .plan_text(source, appearance, maximum_width, alignment, owner, false)
+        .map(TextBlock::from_resolved)
 }
 
 impl Frame {

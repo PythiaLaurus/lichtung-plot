@@ -3,8 +3,9 @@
 use crate::Error;
 
 use crate::builder::Plot;
-use crate::decorations::plan::ResolvedLegend as PlannedLegend;
+use crate::decorations::plan::{PanelPlan, ResolvedLegend as PlannedLegend};
 use crate::decorations::title_block::TitleBlock;
+use crate::layout::CanvasLayout;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
 use crate::spec::PlotRenderResult;
 use crate::theme::ResolvedTheme;
@@ -27,18 +28,23 @@ pub(crate) fn apply_grid(
 /// Draw one panel's axes after its marks.
 pub(crate) fn apply_axes(
     plot: &Plot,
-    result: &PlotRenderResult,
+    plan: &PanelPlan,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer(backend, &plot.layer_name("axes"), |backend| {
-        result.layout.draw_decorations(theme, backend)
+        let text = plan.axis_text.as_ref().ok_or_else(|| {
+            Error::Render("standard panel plan is missing immutable axis text".into())
+        })?;
+        plan.result
+            .layout
+            .draw_decorations_with_text(theme, text, backend)
     })
 }
 
 pub(crate) fn apply_canvas_text(
     plot: &Plot,
-    theme: &ResolvedTheme,
+    canvas: &CanvasLayout,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let mut title_block = TitleBlock::new();
@@ -52,12 +58,7 @@ pub(crate) fn apply_canvas_text(
         title_block = title_block.caption(caption.to_owned());
     }
     if title_block.has_content() {
-        title_block.draw(
-            backend,
-            plot.width(),
-            &plot.measured_canvas_layout(theme)?,
-            theme,
-        )?;
+        title_block.draw(backend, plot.width(), canvas)?;
     }
     Ok(())
 }

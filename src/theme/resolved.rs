@@ -6,8 +6,14 @@
 
 #![deny(missing_docs)]
 
+use std::sync::{Arc, OnceLock};
+
+use crate::font::canonical::PreparedFontEnvironment;
+use crate::layout::{
+    PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
+};
 use crate::render::backend::{LineStyle, Rgba, StrokePattern, TextAnchor, TextStyle};
-use crate::{SignificanceMarkStyle, TextWeight};
+use crate::{Error, SignificanceMarkStyle, TextWeight};
 
 /// Built-in axis tick-label font size in points.
 const TICK_FONT_SIZE: u32 = 16;
@@ -18,6 +24,7 @@ const SIGNIFICANCE_FONT_SIZE: u32 = 16;
 #[cfg(test)]
 thread_local! {
     pub(crate) static THEME_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FONT_ENVIRONMENT_DISCOVERIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 macro_rules! define_themes {
@@ -57,7 +64,7 @@ define_themes! {
 
 /// A theme's full resolved visual specification. Layout and renderers consume
 /// this value to produce concrete backend styles and layout decisions.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct ResolvedTheme {
     /// Series colors in draw order. Index 0 is the first series.
     pub(crate) colors: Vec<(u8, u8, u8)>,
@@ -87,6 +94,288 @@ pub(crate) struct ResolvedTheme {
     pub(crate) axes: AxisAppearance,
     /// Root and panel composition relationships.
     pub(crate) composition: CompositionAppearance,
+    font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
+}
+
+impl PartialEq for ResolvedTheme {
+    fn eq(&self, other: &Self) -> bool {
+        self.colors == other.colors
+            && self.font_family == other.font_family
+            && self.foreground == other.foreground
+            && self.interval_width == other.interval_width
+            && self.line_width == other.line_width
+            && self.bracket_width == other.bracket_width
+            && self.detail_font_size == other.detail_font_size
+            && self.label_font_size == other.label_font_size
+            && self.composition_title_font_size == other.composition_title_font_size
+            && self.facet_header_font_size == other.facet_header_font_size
+            && self.surfaces == other.surfaces
+            && self.typography == other.typography
+            && self.axes == other.axes
+            && self.composition == other.composition
+    }
+}
+
+impl ResolvedTheme {
+    /// Initialize this operation's canonical system-font environment.
+    pub(crate) fn prepare_font_environment(&self) -> Result<(), Error> {
+        self.prepared_font_environment().map(|_| ())
+    }
+
+    pub(crate) fn prepare_font_environment_from_census(
+        &self,
+        census: &mut crate::layout::PreparedTextCensus,
+        presence: Vec<u64>,
+        prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<(), Error> {
+        self.font_environment
+            .get_or_init(|| {
+                #[cfg(test)]
+                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
+                census
+                    .prepare_system_fonts(presence, prepared_stage)
+                    .map_err(|error| error.to_string())
+            })
+            .as_ref()
+            .map(|_| ())
+            .map_err(|error| Error::Render(format!("font preflight: {error}")))
+    }
+
+    /// Make this separately resolved theme use the root operation's environment.
+    pub(crate) fn share_font_environment_from(&mut self, root: &Self) {
+        self.font_environment = Arc::clone(&root.font_environment);
+    }
+
+    /// Plan one foundational appearance within an exact finite pixel width.
+    pub(crate) fn plan_text(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        maximum_width: f64,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        if !maximum_width.is_finite() || maximum_width <= 0.0 {
+            return Err(Error::Render(format!(
+                "{owner} has no positive finite width available for text layout"
+            )));
+        }
+        let maximum_width_quanta = crate::layout::maximum_width_quanta(maximum_width)
+            .map_err(|error| Error::Render(format!("{owner} text planning: {error}")))?;
+        self.plan_text_quanta(
+            source,
+            appearance,
+            maximum_width_quanta,
+            alignment,
+            owner,
+            exact_override,
+        )
+    }
+
+    /// Measure one foundational appearance without introducing a wrap boundary.
+    pub(crate) fn measure_text(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        self.plan_text_quanta(
+            source,
+            appearance,
+            i64::MAX,
+            alignment,
+            owner,
+            exact_override,
+        )
+    }
+
+    /// Build the current private appearance for a legacy T5b body-text role.
+    pub(crate) fn legacy_text_appearance(
+        &self,
+        font_size: u32,
+        weight: TextWeight,
+    ) -> TextAppearance {
+        TextAppearance {
+            stack: self.font_family.clone(),
+            paint: self.foreground.into(),
+            font_size,
+            weight,
+            line_height_multiplier: 1.2,
+        }
+    }
+
+    /// Plan current legacy T5b body text within an exact finite pixel width.
+    pub(crate) fn plan_legacy_text(
+        &self,
+        source: &str,
+        font_size: u32,
+        maximum_width: f64,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<ResolvedTextPlan, Error> {
+        self.plan_legacy_appearance_text(
+            source,
+            &self.legacy_text_appearance(font_size, TextWeight::Normal),
+            maximum_width,
+            alignment,
+            owner,
+            false,
+        )
+    }
+
+    /// Measure current legacy T5b body text without introducing a wrap boundary.
+    pub(crate) fn measure_legacy_text(
+        &self,
+        source: &str,
+        font_size: u32,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<ResolvedTextPlan, Error> {
+        self.measure_legacy_appearance_text(
+            source,
+            &self.legacy_text_appearance(font_size, TextWeight::Normal),
+            alignment,
+            owner,
+            false,
+        )
+    }
+
+    pub(crate) fn plan_legacy_appearance_text(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        maximum_width: f64,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        if !maximum_width.is_finite() || maximum_width <= 0.0 {
+            return Err(Error::Render(format!(
+                "{owner} has no positive finite width available for text layout"
+            )));
+        }
+        let maximum_width_quanta = crate::layout::maximum_width_quanta(maximum_width)
+            .map_err(|error| Error::Render(format!("{owner} text planning: {error}")))?;
+        self.plan_text_quanta_with_policy(
+            source,
+            appearance,
+            maximum_width_quanta,
+            alignment,
+            owner,
+            exact_override,
+            true,
+        )
+    }
+
+    pub(crate) fn measure_legacy_appearance_text(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        self.plan_text_quanta_with_policy(
+            source,
+            appearance,
+            i64::MAX,
+            alignment,
+            owner,
+            exact_override,
+            true,
+        )
+    }
+
+    fn plan_text_quanta(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        maximum_width_quanta: i64,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        self.plan_text_quanta_with_policy(
+            source,
+            appearance,
+            maximum_width_quanta,
+            alignment,
+            owner,
+            exact_override,
+            true,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the shared adapter preserves every immutable text-plan input while selecting the phase-owned preparation policy"
+    )]
+    fn plan_text_quanta_with_policy(
+        &self,
+        source: &str,
+        appearance: &TextAppearance,
+        maximum_width_quanta: i64,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+        exact_override: bool,
+        prepared_only: bool,
+    ) -> Result<ResolvedTextPlan, Error> {
+        let input = TextPlanInput {
+            source,
+            stack: &appearance.stack,
+            weight: appearance.weight,
+            font_size: appearance.font_size,
+            line_height: TextLineHeight::Multiplier(appearance.line_height_multiplier),
+            maximum_width_quanta,
+            alignment,
+            paint: appearance.paint,
+            provenance: TextPlanProvenance {
+                pair_ordinal: pair_ordinal(appearance.weight),
+                owner: owner.to_owned(),
+            },
+            exact_override,
+        };
+        let environment = self.prepared_font_environment()?;
+        let result = if prepared_only {
+            environment.plan_prepared_text(input)
+        } else {
+            environment.plan_text(input)
+        };
+        result.map_err(|error| Error::Render(format!("{owner} text planning: {error}")))
+    }
+
+    /// Borrow this operation's prepared canonical font environment.
+    pub(crate) fn prepared_font_environment(&self) -> Result<&PreparedFontEnvironment, Error> {
+        #[cfg(test)]
+        if self.font_environment.get().is_none() {
+            self.font_environment.get_or_init(|| {
+                FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(calls.get() + 1));
+                PreparedFontEnvironment::discover_system().map_err(|error| error.to_string())
+            });
+        }
+        let prepared = self.font_environment.get().ok_or_else(|| {
+            Error::Render("font environment was requested before canonical text preparation".into())
+        })?;
+        prepared
+            .as_ref()
+            .map_err(|error| Error::Render(format!("font preflight: {error}")))
+    }
+
+    #[cfg(test)]
+    fn shares_font_environment_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.font_environment, &other.font_environment)
+    }
+}
+
+const fn pair_ordinal(weight: TextWeight) -> u32 {
+    match weight {
+        TextWeight::Normal => 0,
+        TextWeight::Semibold => 1,
+        TextWeight::Bold => 2,
+    }
 }
 
 /// Paints applied to renderer-owned drawing surfaces.
@@ -387,6 +676,7 @@ fn resolved_theme(
                 caption_to_content_clearance: 12.0,
             },
         },
+        font_environment: Arc::new(OnceLock::new()),
     }
 }
 
@@ -712,6 +1002,7 @@ mod tests {
                     caption_to_content_clearance: 12.0,
                 },
             },
+            font_environment: Arc::new(OnceLock::new()),
         }
     }
 
@@ -896,5 +1187,113 @@ mod tests {
                     < f64::EPSILON
             );
         }
+    }
+
+    #[test]
+    fn theme_clone_discovers_one_shared_font_environment() {
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
+        let theme = Theme::Publication.resolve();
+        let clone = theme.clone();
+
+        theme.prepare_font_environment().unwrap();
+        clone.prepare_font_environment().unwrap();
+
+        assert!(theme.shares_font_environment_with(&clone));
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| assert_eq!(calls.get(), 1));
+    }
+
+    #[test]
+    fn separately_resolved_theme_can_share_the_root_font_owner() {
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
+        let root = Theme::Publication.resolve();
+        let mut plot = Theme::Science.resolve();
+        plot.share_font_environment_from(&root);
+
+        root.prepare_font_environment().unwrap();
+        plot.prepare_font_environment().unwrap();
+
+        assert!(root.shares_font_environment_with(&plot));
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| assert_eq!(calls.get(), 1));
+    }
+
+    #[test]
+    fn runtime_font_preparation_does_not_affect_appearance_equality() {
+        let prepared = Theme::Publication.resolve();
+        let unresolved = Theme::Publication.resolve();
+        prepared.prepare_font_environment().unwrap();
+
+        assert_eq!(prepared, unresolved);
+        assert!(!prepared.shares_font_environment_with(&unresolved));
+    }
+
+    #[test]
+    fn role_weight_changes_metrics_when_the_host_resolves_a_distinct_face() {
+        let theme = Theme::Publication.resolve();
+        let normal = theme
+            .measure_text(
+                "Minimum WWW maximum",
+                &theme.typography.title,
+                PhysicalTextAlignment::Center,
+                "title",
+                false,
+            )
+            .unwrap();
+        let mut bold_role = theme.typography.title.clone();
+        bold_role.weight = TextWeight::Bold;
+        let bold = theme
+            .measure_text(
+                "Minimum WWW maximum",
+                &bold_role,
+                PhysicalTextAlignment::Center,
+                "title",
+                false,
+            )
+            .unwrap();
+
+        if normal.pair_provenance.candidates.first() != bold.pair_provenance.candidates.first() {
+            let normal_metrics = (
+                normal.width_quanta,
+                normal.height_quanta,
+                normal.lines[0].logical_advance_quanta,
+                normal.lines[0].ink_quanta,
+            );
+            let bold_metrics = (
+                bold.width_quanta,
+                bold.height_quanta,
+                bold.lines[0].logical_advance_quanta,
+                bold.lines[0].ink_quanta,
+            );
+            assert_ne!(normal_metrics, bold_metrics);
+        }
+    }
+
+    #[test]
+    fn text_block_views_do_not_rediscover_or_fallback() {
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| calls.set(0));
+        let theme = Theme::Publication.resolve();
+        let plan = theme
+            .plan_text(
+                "planned text",
+                &theme.typography.title,
+                300.0,
+                PhysicalTextAlignment::Center,
+                "title",
+                false,
+            )
+            .unwrap();
+        let block = crate::layout::TextBlock::from_resolved(plan);
+
+        assert_eq!(block.lines(), ["planned text"]);
+        assert!(theme
+            .plan_text(
+                "indivisible",
+                &theme.typography.title,
+                1.0,
+                PhysicalTextAlignment::Center,
+                "title",
+                false,
+            )
+            .is_err());
+        FONT_ENVIRONMENT_DISCOVERIES.with(|calls| assert_eq!(calls.get(), 1));
     }
 }

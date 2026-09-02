@@ -14,7 +14,7 @@ fn comparison(endpoint_a: &str, endpoint_b: &str, p_value: f64) -> SignificanceA
 
 fn default_metrics() -> BracketMetrics {
     let style = SignificanceMarkStyle::default();
-    bracket_metrics(style, &test_significance_label(style))
+    bracket_metrics(style)
 }
 
 #[test]
@@ -38,8 +38,8 @@ fn planner_packs_disjoint_spans_into_minimal_deterministic_levels() {
     .unwrap();
 
     assert_eq!(plan.brackets.len(), 3);
-    assert!((plan.brackets[0].y - plan.brackets[1].y).abs() < f64::EPSILON);
-    assert!(plan.brackets[2].y > plan.brackets[0].y);
+    assert!((plan.brackets[0].geometry.y - plan.brackets[1].geometry.y).abs() < f64::EPSILON);
+    assert!(plan.brackets[2].geometry.y > plan.brackets[0].geometry.y);
 }
 
 #[test]
@@ -63,10 +63,10 @@ fn horizontal_levels_clear_the_full_previous_significance_label() {
     )
     .unwrap();
     let metrics = default_metrics();
-    let label_width = deterministic_text_width("****", f64::from(metrics.label_font_size));
+    let label_width = plan.brackets[0].label.plan.width();
 
     assert!(
-        plan.brackets[1].y - plan.brackets[0].y
+        plan.brackets[1].geometry.y - plan.brackets[0].geometry.y
             >= metrics.label_gap + label_width + metrics.panel_padding
     );
 }
@@ -104,10 +104,13 @@ fn planner_packing_is_stable_across_input_permutations() {
 
     assert_eq!(first_plan.brackets.len(), second_plan.brackets.len());
     for (left, right) in first_plan.brackets.iter().zip(&second_plan.brackets) {
-        assert!((left.x_left - right.x_left).abs() < f64::EPSILON);
-        assert!((left.x_right - right.x_right).abs() < f64::EPSILON);
-        assert!((left.y - right.y).abs() < f64::EPSILON);
-        assert_eq!(left.label, right.label);
+        assert!((left.geometry.x_left - right.geometry.x_left).abs() < f64::EPSILON);
+        assert!((left.geometry.x_right - right.geometry.x_right).abs() < f64::EPSILON);
+        assert!((left.geometry.y - right.geometry.y).abs() < f64::EPSILON);
+        assert_eq!(left.geometry.label, right.geometry.label);
+        assert_eq!(left.label.plan.source, right.label.plan.source);
+        assert_eq!(left.label.plan.style, right.label.plan.style);
+        assert_eq!(left.label.plan.lines, right.label.plan.lines);
     }
 }
 
@@ -226,15 +229,16 @@ fn planner_level_maximum_covers_every_category_under_each_span() {
     let data_y = panel().y0 + (8.0 / 11.0) * panel().height();
 
     assert!(
-        plan.brackets[0].y >= data_y + default_metrics().tick_height + default_metrics().data_gap
+        plan.brackets[0].geometry.y
+            >= data_y + default_metrics().tick_height + default_metrics().data_gap
     );
 }
 
 #[test]
 fn planner_retains_the_exact_effective_significance_label() {
     let style = SignificanceMarkStyle::new(23, crate::TextWeight::Bold, 9.0).unwrap();
-    let label = crate::Theme::Nature
-        .resolve()
+    let plan_theme = crate::Theme::Nature.resolve();
+    let label = plan_theme
         .typography
         .effective_significance_label(Some(style));
     let plan = plan_comparisons_with_label(
@@ -247,11 +251,23 @@ fn planner_retains_the_exact_effective_significance_label() {
         panel(),
         LegendAnnotationConstraint::NoObstacle,
         style,
-        label.clone(),
+        &label,
+        &plan_theme,
+        true,
     )
     .unwrap();
 
-    assert_eq!(plan.label, label);
+    let planned_label = &plan.brackets[0].label;
+    assert_eq!(planned_label.plan.style.stack_source, label.stack);
+    assert_eq!(planned_label.plan.style.paint, label.paint);
+    assert_eq!(planned_label.plan.style.font_size, label.font_size);
+    assert_eq!(planned_label.plan.style.weight, label.weight);
+    assert!((planned_label.plan.line_height() - label.line_height()).abs() < 0.001);
+    assert!(planned_label.exact_override && planned_label.plan.style.exact_override);
+    assert_eq!(
+        planned_label.plan.style.provenance.owner,
+        "significance bracket label"
+    );
 
     let chart = Plot::bar(
         crate::CategoryValues::new("category", ["a", "b"]).unwrap(),

@@ -1,5 +1,4 @@
 use super::*;
-use crate::layout::deterministic_text_width;
 use crate::{CategoryOrder, CategoryValues, NumericValues, ValueSort};
 
 struct HeatmapValues {
@@ -314,18 +313,41 @@ fn validate_options_rejects_heatmap_incompatible_configuration() {
 
 #[test]
 fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
+    let theme = crate::Theme::Publication.resolve();
     let expected = "e\u{301}...";
-    let maximum_width = deterministic_text_width(expected, 12.0);
+    let maximum_width = theme
+        .measure_text(
+            expected,
+            &theme.typography.tick_label,
+            PhysicalTextAlignment::End,
+            "heatmap category label",
+            false,
+        )
+        .unwrap()
+        .fit_width();
 
-    let fitted = fitted_label("e\u{301}e\u{301}e\u{301}e\u{301}", maximum_width, 12);
+    let fitted = fitted_label(&theme, "e\u{301}e\u{301}e\u{301}e\u{301}", maximum_width).unwrap();
 
     assert_eq!(fitted, expected);
-    assert!(deterministic_text_width(&fitted, 12.0) <= maximum_width);
+    assert!(
+        theme
+            .measure_text(
+                &fitted,
+                &theme.typography.tick_label,
+                PhysicalTextAlignment::End,
+                "heatmap category label",
+                false,
+            )
+            .unwrap()
+            .width()
+            <= maximum_width
+    );
 }
 
 #[test]
 fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
-    let error = fitted_unique_labels(&["category".into()], 1.0, 12, "x").unwrap_err();
+    let theme = crate::Theme::Publication.resolve();
+    let error = fitted_unique_labels(&theme, &["category".into()], 1.0, "x").unwrap_err();
 
     assert!(error.to_string().contains("no room for an ellipsis"));
 }

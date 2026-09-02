@@ -5,7 +5,7 @@ use super::{
     SignificanceMark, ValueSort, FINAL_PLOT_RENDER_CALLS, PLOT_PLAN_CALLS, RENDER_PANEL_CALLS,
     RENDER_THEME_ADDRESSES, TEMP_FILE_COUNTER,
 };
-use crate::orchestrator::DeferredBackend;
+use crate::orchestrator::{DeferredBackend, TEXT_PLAN_CAPTURE_SESSIONS, TEXT_REPLAY_SESSIONS};
 use crate::render::backend::{
     Backend, LineStyle, Point2D, Rgba, SurfaceRole, TextAnchor, TextStyle,
 };
@@ -54,9 +54,21 @@ fn assert_scene_routes(expected_routes: &[&str]) {
                 .collect::<Vec<_>>(),
             expected_routes
         );
-        assert!(evidence
+        let preserve = evidence
             .iter()
-            .all(|(_, address, length)| (*address, *length) == (evidence[0].1, evidence[0].2)));
+            .filter(|(route, _, _)| *route == "preserve")
+            .map(|(_, address, length)| (*address, *length))
+            .collect::<Vec<_>>();
+        let outlined = evidence
+            .iter()
+            .filter(|(route, _, _)| *route != "preserve")
+            .map(|(_, address, length)| (*address, *length))
+            .collect::<Vec<_>>();
+        assert!(preserve.windows(2).all(|pair| pair[0] == pair[1]));
+        assert!(outlined.windows(2).all(|pair| pair[0] == pair[1]));
+        if !preserve.is_empty() && !outlined.is_empty() {
+            assert_ne!(preserve[0], outlined[0]);
+        }
     });
 }
 
@@ -276,7 +288,7 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     )
-    .caption("diagnostic provenance and model adjustment details ".repeat(20))
+    .caption("diagnostic provenance and model adjustment details ".repeat(8))
     .size(160, 120);
     let mut backend = RecordingBackend::default();
 
@@ -293,6 +305,7 @@ fn exact_root_reservation_failures_precede_concrete_backend_begin() {
         NumericValues::new("y", [3.0, 1.0, 2.0]),
     );
     for stage in 1..=5 {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         crate::layout::force_reservation_failure(stage);
         let mut backend = RecordingBackend::default();
 
@@ -303,6 +316,13 @@ fn exact_root_reservation_failures_precede_concrete_backend_begin() {
 
         assert!(error.contains(&format!("reservation stage {stage}")));
         assert_eq!((backend.begins, backend.ends), (0, 0));
+        if stage == 1 {
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0,
+                "the scalar-map reservation must precede host font discovery"
+            );
+        }
     }
 }
 
@@ -311,6 +331,9 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     crate::theme::THEME_RESOLUTION_CALLS.with(|calls| calls.set(0));
     PLOT_PLAN_CALLS.with(|calls| calls.set(0));
     FINAL_PLOT_RENDER_CALLS.with(|calls| calls.set(0));
+    TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
+    TEXT_REPLAY_SESSIONS.with(|calls| calls.set(0));
+    crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
     RENDER_THEME_ADDRESSES.with(|addresses| addresses.borrow_mut().clear());
     let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
@@ -327,6 +350,12 @@ fn standalone_terminal_resolves_and_plans_once_with_one_final_lifecycle() {
     );
     assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
     assert_eq!(FINAL_PLOT_RENDER_CALLS.with(std::cell::Cell::get), 1);
+    assert_eq!(TEXT_PLAN_CAPTURE_SESSIONS.with(std::cell::Cell::get), 1);
+    assert_eq!(TEXT_REPLAY_SESSIONS.with(std::cell::Cell::get), 1);
+    assert_eq!(
+        crate::font::canonical::FONT_PAIR_RESOLUTION_CALLS.with(std::cell::Cell::get),
+        1
+    );
     assert_eq!((backend.begins, backend.ends), (1, 1));
     assert_eq!(
         backend
@@ -469,7 +498,7 @@ fn canvas_inherited_children_share_the_root_and_explicit_publication_does_not() 
     assert_canvas_theme_identities_match(usize::MAX, 0);
     assert_canvas_theme_identities_match(usize::MAX, 1);
     assert_canvas_theme_identities_differ(usize::MAX, 2);
-    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render"]);
+    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render", "render"]);
     assert_eq!(backend.surfaces.len(), 4);
     assert_eq!(backend.surfaces[0].role, SurfaceRole::CanvasRoot);
     assert_eq!(
@@ -488,6 +517,8 @@ fn canvas_inherited_children_share_the_root_and_explicit_publication_does_not() 
                 "panel-plan",
                 "grid-render",
                 "panel-render",
+                "grid-render",
+                "panel-render",
             ],
         );
     }
@@ -504,15 +535,34 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
             .unwrap()
     };
     reset_theme_evidence();
+    TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
+    TEXT_REPLAY_SESSIONS.with(|calls| calls.set(0));
     text_canvas().preflight().unwrap();
+    assert_eq!(TEXT_PLAN_CAPTURE_SESSIONS.with(std::cell::Cell::get), 1);
+    assert_eq!(TEXT_REPLAY_SESSIONS.with(std::cell::Cell::get), 0);
     assert_eq!(
         (resolved_theme_count(), rendered_theme_identity_count()),
         (1, 0)
     );
-    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "text-plan"]);
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &[
+            "resolved",
+            "layout",
+            "text-plan",
+            "render",
+            "text-render",
+            "render",
+            "text-render",
+        ],
+    );
     reset_theme_evidence();
+    TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
+    TEXT_REPLAY_SESSIONS.with(|calls| calls.set(0));
     let mut backend = RecordingBackend::default();
     text_canvas().render_with_backend(&mut backend).unwrap();
+    assert_eq!(TEXT_PLAN_CAPTURE_SESSIONS.with(std::cell::Cell::get), 1);
+    assert_eq!(TEXT_REPLAY_SESSIONS.with(std::cell::Cell::get), 1);
     assert_eq!(
         (resolved_theme_count(), rendered_theme_identity_count()),
         (1, 0)
@@ -522,7 +572,15 @@ fn canvas_text_panel_uses_one_private_nonpublication_root() {
     assert_eq!(backend.surfaces[0].role, SurfaceRole::CanvasRoot);
     assert_canvas_theme_identity(
         usize::MAX,
-        &["resolved", "layout", "text-plan", "render", "text-render"],
+        &[
+            "resolved",
+            "layout",
+            "text-plan",
+            "render",
+            "text-render",
+            "render",
+            "text-render",
+        ],
     );
     for (text, size) in [("Title", 19), ("Body", 16)] {
         let style = &backend
@@ -617,25 +675,15 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
             (resolved_theme_count(), rendered_theme_identity_count()),
             (3, 2)
         );
-        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout"]);
-        assert_canvas_theme_identity(0, &["resolved", "panel-measure", "panel-plan"]);
-        assert_canvas_theme_identity(1, &["resolved", "panel-measure", "panel-plan"]);
-
-        reset_theme_evidence();
-        let mut backend = RecordingBackend::default();
-        canvas(themes).render_with_backend(&mut backend).unwrap();
-        assert_eq!(
-            (resolved_theme_count(), rendered_theme_identity_count()),
-            (3, 2)
-        );
-        assert_eq!((backend.begins, backend.ends), (1, 1));
-        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render"]);
+        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render", "render"]);
         assert_canvas_theme_identity(
             0,
             &[
                 "resolved",
                 "panel-measure",
                 "panel-plan",
+                "grid-render",
+                "panel-render",
                 "grid-render",
                 "panel-render",
             ],
@@ -646,6 +694,42 @@ fn canvas_preflight_and_render_reuse_one_chrome_and_one_theme_per_child() {
                 "resolved",
                 "panel-measure",
                 "panel-plan",
+                "grid-render",
+                "panel-render",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+
+        reset_theme_evidence();
+        let mut backend = RecordingBackend::default();
+        canvas(themes).render_with_backend(&mut backend).unwrap();
+        assert_eq!(
+            (resolved_theme_count(), rendered_theme_identity_count()),
+            (3, 2)
+        );
+        assert_eq!((backend.begins, backend.ends), (1, 1));
+        assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "render", "render"]);
+        assert_canvas_theme_identity(
+            0,
+            &[
+                "resolved",
+                "panel-measure",
+                "panel-plan",
+                "grid-render",
+                "panel-render",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+        assert_canvas_theme_identity(
+            1,
+            &[
+                "resolved",
+                "panel-measure",
+                "panel-plan",
+                "grid-render",
+                "panel-render",
                 "grid-render",
                 "panel-render",
             ],
@@ -677,6 +761,10 @@ fn mixed_theme_canvas(themes: [crate::Theme; 2]) -> crate::Canvas {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "capture and replay retain explicit root and child theme-stage evidence"
+)]
 fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
     let canvas = || {
         mixed_theme_canvas([crate::Theme::Nature, crate::Theme::Science])
@@ -692,9 +780,32 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
         (resolved_theme_count(), rendered_theme_identity_count()),
         (3, 2)
     );
-    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "shared-header-plan"]);
-    assert_canvas_theme_identity(0, &["resolved", "panel-measure", "panel-plan"]);
-    assert_canvas_theme_identity(1, &["resolved", "panel-measure", "panel-plan"]);
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &[
+            "resolved",
+            "layout",
+            "shared-header-plan",
+            "render",
+            "shared-header-render",
+            "render",
+            "shared-header-render",
+        ],
+    );
+    for owner in [0, 1] {
+        assert_canvas_theme_identity(
+            owner,
+            &[
+                "resolved",
+                "panel-measure",
+                "panel-plan",
+                "grid-render",
+                "panel-render",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+    }
     assert_canvas_theme_identities_differ(usize::MAX, 0);
 
     reset_theme_evidence();
@@ -713,6 +824,8 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
             "shared-header-plan",
             "render",
             "shared-header-render",
+            "render",
+            "shared-header-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -723,6 +836,8 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
             "panel-plan",
             "grid-render",
             "panel-render",
+            "grid-render",
+            "panel-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -731,6 +846,8 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
             "resolved",
             "panel-measure",
             "panel-plan",
+            "grid-render",
+            "panel-render",
             "grid-render",
             "panel-render",
         ],
@@ -769,6 +886,10 @@ fn canvas_shared_headers_use_canvas_root_for_plan_and_render() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "capture and replay retain explicit root and child theme-stage evidence"
+)]
 fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
     let canvas = || {
         mixed_theme_canvas([crate::Theme::Nature, crate::Theme::Science])
@@ -782,9 +903,32 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
         (resolved_theme_count(), rendered_theme_identity_count()),
         (3, 2)
     );
-    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "row-title-plan"]);
-    assert_canvas_theme_identity(0, &["resolved", "panel-measure", "panel-plan"]);
-    assert_canvas_theme_identity(1, &["resolved", "panel-measure", "panel-plan"]);
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &[
+            "resolved",
+            "layout",
+            "row-title-plan",
+            "render",
+            "row-title-render",
+            "render",
+            "row-title-render",
+        ],
+    );
+    for owner in [0, 1] {
+        assert_canvas_theme_identity(
+            owner,
+            &[
+                "resolved",
+                "panel-measure",
+                "panel-plan",
+                "grid-render",
+                "panel-render",
+                "grid-render",
+                "panel-render",
+            ],
+        );
+    }
     assert_canvas_theme_identities_differ(usize::MAX, 0);
 
     reset_theme_evidence();
@@ -803,6 +947,8 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
             "row-title-plan",
             "render",
             "row-title-render",
+            "render",
+            "row-title-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -813,6 +959,8 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
             "panel-plan",
             "grid-render",
             "panel-render",
+            "grid-render",
+            "panel-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -821,6 +969,8 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
             "resolved",
             "panel-measure",
             "panel-plan",
+            "grid-render",
+            "panel-render",
             "grid-render",
             "panel-render",
         ],
@@ -890,7 +1040,18 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
         (2, 2)
     );
     assert_canvas_theme_owners(&[usize::MAX, 0, 3]);
-    assert_canvas_theme_identity(usize::MAX, &["resolved", "layout", "text-plan"]);
+    assert_canvas_theme_identity(
+        usize::MAX,
+        &[
+            "resolved",
+            "layout",
+            "text-plan",
+            "render",
+            "text-render",
+            "render",
+            "text-render",
+        ],
+    );
     for owner in [0, 3] {
         assert_canvas_theme_identity(
             owner,
@@ -900,6 +1061,10 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
                 "shared-legend-preflight",
                 "panel-measure",
                 "panel-plan",
+                "grid-render",
+                "panel-render",
+                "grid-render",
+                "panel-render",
             ],
         );
     }
@@ -924,7 +1089,15 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
     assert_canvas_theme_owners(&[usize::MAX, 0, 3]);
     assert_canvas_theme_identity(
         usize::MAX,
-        &["resolved", "layout", "text-plan", "render", "text-render"],
+        &[
+            "resolved",
+            "layout",
+            "text-plan",
+            "render",
+            "text-render",
+            "render",
+            "text-render",
+        ],
     );
     for owner in [0, 3] {
         assert_canvas_theme_identity(
@@ -935,6 +1108,8 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
                 "shared-legend-preflight",
                 "panel-measure",
                 "panel-plan",
+                "grid-render",
+                "panel-render",
                 "grid-render",
                 "panel-render",
             ],
@@ -984,6 +1159,10 @@ fn coordinated_horizontal_bar_canvas() -> crate::Canvas {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the mixed-theme lifecycle keeps each owner and planning pass explicit"
+)]
 fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
     reset_theme_evidence();
     coordinated_horizontal_bar_canvas().preflight().unwrap();
@@ -994,7 +1173,18 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
     assert_canvas_theme_owners(&[usize::MAX, 0, 1]);
     assert_canvas_theme_identity(
         usize::MAX,
-        &["resolved", "layout", "shared-header-plan", "row-title-plan"],
+        &[
+            "resolved",
+            "layout",
+            "shared-header-plan",
+            "row-title-plan",
+            "render",
+            "row-title-render",
+            "shared-header-render",
+            "render",
+            "row-title-render",
+            "shared-header-render",
+        ],
     );
     assert_canvas_theme_identity(
         0,
@@ -1004,6 +1194,10 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
             "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
+            "grid-render",
+            "panel-render",
+            "grid-render",
+            "panel-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -1014,6 +1208,10 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
             "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
+            "grid-render",
+            "panel-render",
+            "grid-render",
+            "panel-render",
         ],
     );
     assert_rendered_themes_match_canvas_owners(&[0, 1]);
@@ -1039,6 +1237,9 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
             "render",
             "row-title-render",
             "shared-header-render",
+            "render",
+            "row-title-render",
+            "shared-header-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -1051,6 +1252,8 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
             "panel-plan",
             "grid-render",
             "panel-render",
+            "grid-render",
+            "panel-render",
         ],
     );
     assert_canvas_theme_identity(
@@ -1061,6 +1264,8 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
             "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
+            "grid-render",
+            "panel-render",
             "grid-render",
             "panel-render",
         ],
@@ -1079,6 +1284,9 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
     crate::scene::SCENE_ROUTE_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
     crate::scene::PNG_TARGET_VALIDATION_CALLS.with(|calls| calls.set(0));
     crate::render::svg_backend::PNG_TARGET_PLAN_CALLS.with(|calls| calls.set(0));
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+    crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow_mut().clear());
     let directory = test_directory("canonical-scene-routing");
     let first = directory.join("first.svg");
     let outlined = directory.join("outlined.svg");
@@ -1086,30 +1294,40 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
     let custom = directory.join("custom.png");
     let publication = directory.join("publication.png");
     let second = directory.join("second.svg");
-    Plot::scatter(
+    let output = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0]),
         NumericValues::new("y", [3.0, 1.0, 2.0]),
     )
     .size(320, 240)
     .title("Canonical scene")
     .svg_preserve_text(&first)
-    .unwrap()
-    .svg(&outlined)
-    .unwrap()
-    .png_preview(&preview)
-    .unwrap()
-    .png_with_options(
-        &custom,
-        crate::PngOptions {
-            sizing: crate::PngSizing::Dpi(192.0),
-            compression: crate::PngCompression::High,
-        },
-    )
-    .unwrap()
-    .png(&publication)
-    .unwrap()
-    .svg_preserve_text(&second)
     .unwrap();
+    let font_terminal_counts = (
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+        crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len()),
+    );
+    let output = output.svg(&outlined).unwrap();
+    let font_after_outline_counts = (
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+        crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len()),
+    );
+    output
+        .png_preview(&preview)
+        .unwrap()
+        .png_with_options(
+            &custom,
+            crate::PngOptions {
+                sizing: crate::PngSizing::Dpi(192.0),
+                compression: crate::PngCompression::High,
+            },
+        )
+        .unwrap()
+        .png(&publication)
+        .unwrap()
+        .svg_preserve_text(&second)
+        .unwrap();
 
     assert_eq!(
         std::fs::read(&first).unwrap(),
@@ -1144,6 +1362,21 @@ fn chained_terminals_reuse_one_canonical_scene_and_plan_each_png() {
         crate::scene::PNG_TARGET_VALIDATION_CALLS.with(std::cell::Cell::get),
         3
     );
+    assert_eq!(
+        (
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+            crate::font::canonical::FONT_OUTLINE_GLYPHS.with(|glyphs| glyphs.borrow().len()),
+        ),
+        font_after_outline_counts,
+        "later terminal conversions must reuse the lazily outlined scene"
+    );
+    assert_eq!(
+        (font_after_outline_counts.0, font_after_outline_counts.1),
+        (font_terminal_counts.0, font_terminal_counts.1),
+        "terminal outlining must not discover or shape fonts"
+    );
+    assert!(font_after_outline_counts.2 > font_terminal_counts.2);
     assert_scene_routes(&["preserve", "outline", "png", "png", "png", "preserve"]);
 
     crate::canvas::CANVAS_SCENE_RENDER_CALLS.with(|calls| calls.set(0));
@@ -1348,7 +1581,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        (3, 10, 3, 2, 3)
+        (3, 10, 4, 4, 4)
     );
 }
 
@@ -1587,6 +1820,27 @@ fn significance_annotations_are_drawn_after_marks_clip_closes() {
 }
 
 #[test]
+fn attached_significance_plan_is_not_reshaped_during_final_render() {
+    let plot = Plot::bar(
+        CategoryValues::new("group", ["a", "b"]).unwrap(),
+        crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+    )
+    .significance([Significance::at("a", SignificanceMark::OneStar)])
+    .erase();
+    crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(0));
+    let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, PlotKind::Bar).unwrap();
+    let planned_calls = crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS
+        .with(std::cell::Cell::get);
+    assert_eq!(planned_calls, 1);
+
+    plan.render(&mut RecordingBackend::default()).unwrap();
+
+    crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| {
+        assert_eq!(calls.get(), planned_calls);
+    });
+}
+
+#[test]
 fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
     let plot = Plot::scatter(
         NumericValues::new("x", [-1.0, 0.5, 2.0]),
@@ -1657,8 +1911,8 @@ fn decoration_layer_closes_after_inner_draw_error() {
 
     assert!(error.contains("line draw failed"));
     assert!(error.contains("layer cleanup failed"));
-    assert_eq!(backend.layer_ends, 1);
-    assert_eq!(backend.ends, 1);
+    assert_eq!(backend.layer_ends, 1, "{error}");
+    assert_eq!(backend.ends, 1, "{error}");
 }
 
 #[test]

@@ -7,7 +7,7 @@ use super::rendering::facet_label;
 use crate::builder::Plot;
 use crate::decorations::plan::{LegendRole, PanelPlan, ResolvedLegend};
 use crate::layout::canvas::{allocate_composed_grid, PanelRequirements};
-use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, TextBlock};
+use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::Backend;
 use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
@@ -79,25 +79,33 @@ fn shared_axis_line_counts(
 ) -> Result<(usize, usize), Error> {
     let horizontal_lines = horizontal_axis_label
         .map(|label| {
-            TextBlock::layout(
-                label,
-                theme.typography.axis_title.font_size,
-                panel.width().max(1.0),
-                "shared facet x-axis title",
-            )
-            .map(|block| block.lines().len())
+            theme
+                .plan_text(
+                    label,
+                    &theme.typography.axis_title,
+                    panel.width().max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "shared facet x-axis title",
+                    false,
+                )
+                .map(TextBlock::from_resolved)
+                .map(|block| block.lines().len())
         })
         .transpose()?
         .unwrap_or(0);
     let vertical_lines = vertical_axis_label
         .map(|label| {
-            TextBlock::layout(
-                label,
-                theme.typography.axis_title.font_size,
-                panel.height().max(1.0),
-                "shared facet y-axis title",
-            )
-            .map(|block| block.lines().len())
+            theme
+                .plan_text(
+                    label,
+                    &theme.typography.axis_title,
+                    panel.height().max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "shared facet y-axis title",
+                    false,
+                )
+                .map(TextBlock::from_resolved)
+                .map(|block| block.lines().len())
         })
         .transpose()?
         .unwrap_or(0);

@@ -31,6 +31,7 @@ pub(crate) struct PanelPlan {
     pub(crate) panel_box: PanelBox,
     pub(crate) result: PlotRenderResult,
     pub(crate) legend: Option<ResolvedLegend>,
+    pub(crate) axis_text: Option<crate::layout::PanelAxisTextPlan>,
     planned_x_limits: Option<(f64, f64)>,
     planned_y_limits: Option<(f64, f64)>,
 }
@@ -39,13 +40,15 @@ pub(crate) fn plan_outside_legend(
     plot: &Plot,
     entries: &[crate::decorations::legend::LegendEntry],
     cell: PanelBox,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<(PanelBox, ResolvedLegend), Error> {
     let legend = Legend::new(
-        crate::decorations::legend::resolved_title(entries)?,
+        &crate::decorations::legend::resolved_title(entries)?,
         entries.to_vec(),
         f64::from(plot.width()),
         f64::from(plot.height()),
-    );
+        theme,
+    )?;
     let panel_box = reserve_outside_panel(cell, &legend, plot.legend_position_spec())?;
     let bounds = resolve_box(
         &legend,
@@ -144,11 +147,12 @@ pub(crate) fn plan_panel_with_context(
         && !discovered.legend_entries.is_empty();
     let legend = if visible {
         Some(Legend::new(
-            crate::decorations::legend::resolved_title(&discovered.legend_entries)?,
+            &crate::decorations::legend::resolved_title(&discovered.legend_entries)?,
             discovered.legend_entries.clone(),
             f64::from(planning_plot.width()),
             f64::from(planning_plot.height()),
-        ))
+            context.theme,
+        )?)
     } else {
         None
     };
@@ -324,10 +328,14 @@ pub(crate) fn plan_panel_with_context(
             }
         }
     }
+    let axis_text = (result.decoration_mode == crate::spec::DecorationMode::Standard)
+        .then(|| result.layout.plan_axis_text(context.theme))
+        .transpose()?;
     Ok(PanelPlan {
         panel_box,
         result,
         legend: resolved,
+        axis_text,
         planned_x_limits,
         planned_y_limits,
     })
@@ -350,7 +358,7 @@ fn discover_geometry(
     kind: PlotKind,
     context: PlotRenderContext<'_>,
 ) -> Result<(PlotRenderResult, GeometryBackend), Error> {
-    let mut geometry = GeometryBackend::default();
+    let mut geometry = GeometryBackend::new(context.theme)?;
     geometry.begin(plot.width(), plot.height())?;
     let result = render(plot, kind, context, &mut geometry).and_then(|result| {
         record_brackets(plot, &result, context.theme, &mut geometry)?;

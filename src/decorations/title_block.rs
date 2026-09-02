@@ -17,9 +17,8 @@
     clippy::cast_precision_loss
 )]
 
-use crate::layout::CanvasLayout;
-use crate::render::backend::{Backend, Point2D, TextAnchor};
-use crate::theme::ResolvedTheme;
+use crate::layout::{CanvasLayout, ResolvedTextPlan};
+use crate::render::backend::{Backend, PlannedTextPlacement, Point2D, TextAnchor};
 use crate::Error;
 
 /// A canvas-level title / subtitle / caption block.
@@ -89,59 +88,69 @@ impl TitleBlock {
         backend: &mut dyn Backend,
         canvas_width: u32,
         canvas: &CanvasLayout,
-        theme: &ResolvedTheme,
     ) -> Result<(), Error> {
         let x = f64::from(canvas_width) / 2.0;
-        let anchor = TextAnchor::Middle;
 
-        if let Some(title) = self.title.as_deref().filter(|value| !value.is_empty()) {
-            let role = &theme.typography.title;
-            let style = role.backend_style(anchor, 0.0);
-            for (line, y) in crate::layout::canvas::try_wrap_text(
-                title,
-                role.font_size,
-                (f64::from(canvas_width) - 32.0).max(1.0),
-                "canvas title",
-            )?
-            .iter()
-            .zip(&canvas.title_lines_y)
-            {
-                backend.draw_text(Point2D::new(x.round(), y.round()), line, &style)?;
-            }
-        }
-
-        if let Some(subtitle) = self.subtitle.as_deref().filter(|value| !value.is_empty()) {
-            let role = &theme.typography.subtitle;
-            let style = role.backend_style(anchor, 0.0);
-            for (line, y) in crate::layout::canvas::try_wrap_text(
-                subtitle,
-                role.font_size,
-                (f64::from(canvas_width) - 32.0).max(1.0),
-                "canvas subtitle",
-            )?
-            .iter()
-            .zip(&canvas.subtitle_lines_y)
-            {
-                backend.draw_text(Point2D::new(x.round(), y.round()), line, &style)?;
-            }
-        }
-
-        if let Some(caption) = self.caption.as_deref().filter(|value| !value.is_empty()) {
-            let role = &theme.typography.caption;
-            let style = role.backend_style(anchor, 0.0);
-            for (line, y) in crate::layout::canvas::try_wrap_text(
-                caption,
-                role.font_size,
-                (f64::from(canvas_width) - 32.0).max(1.0),
-                "canvas caption",
-            )?
-            .iter()
-            .zip(&canvas.caption_lines_y)
-            {
-                backend.draw_text(Point2D::new(x.round(), y.round()), line, &style)?;
-            }
-        }
+        draw_planned_role(
+            backend,
+            x,
+            self.title.as_deref().filter(|value| !value.is_empty()),
+            canvas.title_plan.as_ref(),
+            &canvas.title_lines_y,
+            "title",
+        )?;
+        draw_planned_role(
+            backend,
+            x,
+            self.subtitle.as_deref().filter(|value| !value.is_empty()),
+            canvas.subtitle_plan.as_ref(),
+            &canvas.subtitle_lines_y,
+            "subtitle",
+        )?;
+        draw_planned_role(
+            backend,
+            x,
+            self.caption.as_deref().filter(|value| !value.is_empty()),
+            canvas.caption_plan.as_ref(),
+            &canvas.caption_lines_y,
+            "caption",
+        )?;
 
         Ok(())
     }
+}
+
+fn draw_planned_role(
+    backend: &mut dyn Backend,
+    x: f64,
+    source: Option<&str>,
+    plan: Option<&ResolvedTextPlan>,
+    line_positions: &[f64],
+    role: &str,
+) -> Result<(), Error> {
+    let plan = match (source, plan) {
+        (None, None) => return Ok(()),
+        (Some(source), Some(plan)) if plan.source == source => plan,
+        _ => {
+            return Err(Error::Render(format!(
+                "planned canvas {role} does not match its configured source"
+            )))
+        }
+    };
+    if plan.lines.len() != line_positions.len() {
+        return Err(Error::Render(format!(
+            "planned canvas {role} line count does not match its layout"
+        )));
+    }
+    let Some((&first, &last)) = line_positions.first().zip(line_positions.last()) else {
+        return Ok(());
+    };
+    backend.draw_planned_text(
+        PlannedTextPlacement::middle(
+            Point2D::new(x.round(), f64::midpoint(first, last).round()),
+            TextAnchor::Middle,
+            0.0,
+        ),
+        plan,
+    )
 }

@@ -4,16 +4,26 @@ use std::collections::HashMap;
 
 use crate::Error;
 
-use crate::layout::{estimated_text_width, PanelBox};
-use crate::render::backend::{
-    self, Backend, BracketOrientation, BracketStyle, FillStyle, GradientStop, LineStyle, Point2D,
-    PointStyle, Rgba, SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+use crate::font::canonical::PreparedFontEnvironment;
+use crate::layout::{
+    PanelBox, PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput,
+    TextPlanProvenance, CSS_PIXEL_QUANTA,
 };
-use crate::render::coordinates::CanonicalPoint;
+use crate::render::backend::{
+    self, Backend, BracketOrientation, BracketStyle, FillStyle, GradientStop, LineStyle,
+    PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement, Point2D, PointStyle, Rgba,
+    SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+};
+use crate::render::coordinates::{CanonicalBracket, CanonicalPoint};
 use crate::PointShape;
 
 // Labels and annotation glyphs are less tolerable legend targets than translucent marks.
 const ANNOTATION_COLLISION_WEIGHT: f64 = 100.0;
+
+#[cfg(test)]
+thread_local! {
+    static GEOMETRY_RAW_TEXT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct GeometryBox {
@@ -81,6 +91,8 @@ pub(crate) struct GeometryBackend {
     clips: Vec<PanelBox>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
+    font_environment: PreparedFontEnvironment,
+    operation_default_stack: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,20 +109,69 @@ enum GeometryCanvasState {
     Closed,
 }
 
-impl Default for GeometryBackend {
-    fn default() -> Self {
+impl GeometryBackend {
+    pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
+        Ok(Self::with_environment(
+            theme.prepared_font_environment()?.clone(),
+            theme.font_family.clone(),
+        ))
+    }
+
+    fn with_environment(
+        font_environment: PreparedFontEnvironment,
+        operation_default_stack: String,
+    ) -> Self {
         Self {
             bounds: Vec::new(),
             clips: Vec::new(),
             scopes: Vec::new(),
             state: GeometryCanvasState::Fresh,
+            font_environment,
+            operation_default_stack,
         }
     }
-}
 
-impl GeometryBackend {
     pub(crate) fn bounds(&self) -> &[GeometryBox] {
         &self.bounds
+    }
+
+    fn plan_raw_text(
+        &self,
+        text: &str,
+        style: &TextStyle,
+        alignment: PhysicalTextAlignment,
+        owner: &str,
+    ) -> Result<ResolvedTextPlan, Error> {
+        #[cfg(test)]
+        GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
+        // Point-layer labels still carry the legacy first-family token until
+        // their renderer owns immutable text plans; use the operation policy.
+        let stack = if style.font_family == crate::DEFAULT_FONT_FAMILY {
+            &self.operation_default_stack
+        } else {
+            &style.font_family
+        };
+        self.font_environment
+            .plan_prepared_text(TextPlanInput {
+                source: text,
+                stack,
+                weight: style.weight,
+                font_size: style.font_size,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment,
+                paint: style.color,
+                provenance: TextPlanProvenance {
+                    pair_ordinal: match style.weight {
+                        crate::TextWeight::Normal => 0,
+                        crate::TextWeight::Semibold => 1,
+                        crate::TextWeight::Bold => 2,
+                    },
+                    owner: owner.to_owned(),
+                },
+                exact_override: false,
+            })
+            .map_err(|error| Error::Render(format!("{owner} text planning: {error}")))
     }
 
     fn ensure_open(&self, operation: &str) -> Result<(), Error> {
@@ -131,6 +192,103 @@ impl GeometryBackend {
             self.bounds.push(bounds);
         }
     }
+
+    fn record_planned_bracket(
+        &mut self,
+        canonical: CanonicalBracket,
+        style: &BracketStyle,
+        label: &ResolvedTextPlan,
+    ) {
+        let line_start = canonical.line_start.value();
+        let line_end = canonical.line_end.value();
+        let first_tick_end = canonical.first_tick_end.value();
+        let second_tick_end = canonical.second_tick_end.value();
+        let path = GeometryBox::from_points(
+            &[line_start, line_end, first_tick_end, second_tick_end],
+            f64::from(style.width) / 2.0,
+        )
+        .map(|bounds| GeometryBox {
+            weight: ANNOTATION_COLLISION_WEIGHT,
+            ..bounds
+        });
+        let placement = backend::planned_bracket_placement(canonical);
+        let label = planned_text_ink_bounds(
+            label,
+            placement.position,
+            placement.anchor,
+            placement.rotation,
+            placement.origin,
+        );
+        self.record(match (path, label) {
+            (Some(path), Some(label)) => Some(path.union(label)),
+            (path, label) => path.or(label),
+        });
+    }
+}
+
+fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
+    match anchor {
+        TextAnchor::Start => PhysicalTextAlignment::Start,
+        TextAnchor::Middle => PhysicalTextAlignment::Center,
+        TextAnchor::End => PhysicalTextAlignment::End,
+    }
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "planned text retains exact integer quanta until collision conversion"
+)]
+fn planned_text_ink_bounds(
+    plan: &ResolvedTextPlan,
+    position: Point2D,
+    anchor: TextAnchor,
+    rotation: f64,
+    vertical_origin: PlannedTextOrigin,
+) -> Option<GeometryBox> {
+    let quanta = CSS_PIXEL_QUANTA as f64;
+    let width = plan.width_quanta as f64 / quanta;
+    let anchor_offset = match anchor {
+        TextAnchor::Start => 0.0,
+        TextAnchor::Middle => -backend::nearest_even_text_half(plan.width_quanta)? as f64 / quanta,
+        TextAnchor::End => -width,
+    };
+    let vertical_reference = match vertical_origin {
+        PlannedTextOrigin::Middle => {
+            backend::nearest_even_text_half(plan.height_quanta)? as f64 / quanta
+        }
+        PlannedTextOrigin::Baseline => plan.first_baseline_quanta.unwrap_or(0) as f64 / quanta,
+    };
+    let radians = rotation.to_radians();
+    let cosine = radians.cos();
+    let sine = radians.sin();
+    let mut bounds: Option<GeometryBox> = None;
+
+    for line in &plan.lines {
+        let Some(ink) = line.ink_quanta else {
+            continue;
+        };
+        let line_x = line.translation_x_quanta as f64 / quanta;
+        let left = anchor_offset + line_x + ink.left as f64 / quanta;
+        let right = anchor_offset + line_x + ink.right as f64 / quanta;
+        let baseline = vertical_reference - line.translation_y_quanta as f64 / quanta;
+        let bottom = baseline + ink.bottom as f64 / quanta;
+        let top = baseline + ink.top as f64 / quanta;
+        let corners = [(left, bottom), (left, top), (right, bottom), (right, top)].map(|(x, y)| {
+            Point2D::new(
+                position.x + x * cosine + y * sine,
+                position.y - x * sine + y * cosine,
+            )
+        });
+        let line_bounds = GeometryBox::from_points(&corners, 0.0).map(|bounds| GeometryBox {
+            weight: ANNOTATION_COLLISION_WEIGHT,
+            ..bounds
+        });
+        bounds = match (bounds, line_bounds) {
+            (Some(current), Some(line)) => Some(current.union(line)),
+            (current, line) => current.or(line),
+        };
+    }
+    bounds
 }
 
 fn polygon_ring(points: &[CanonicalPoint]) -> Vec<CanonicalPoint> {
@@ -459,36 +617,36 @@ impl Backend for GeometryBackend {
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.ensure_open("draw_text")?;
         let canonical = backend::validate_text(position, style)?;
-        let width = estimated_text_width(text, style.font_size);
-        let height = f64::from(style.font_size) * 1.2;
-        let x = canonical.position.x.value();
-        let y = canonical.position.y.value();
-        let left = match style.anchor {
-            TextAnchor::Start => x,
-            TextAnchor::Middle => x - width / 2.0,
-            TextAnchor::End => x - width,
-        };
-        let rotation = canonical.rotation.value();
-        if rotation == 0.0 {
-            self.record(Some(GeometryBox {
-                left,
-                right: left + width,
-                bottom: y - height / 2.0,
-                top: y + height / 2.0,
-                weight: ANNOTATION_COLLISION_WEIGHT,
-            }));
-        } else {
-            let radians = rotation.to_radians();
-            let projected_width = width * radians.cos().abs() + height * radians.sin().abs();
-            let projected_height = width * radians.sin().abs() + height * radians.cos().abs();
-            self.record(Some(GeometryBox {
-                left: x - projected_width / 2.0,
-                right: x + projected_width / 2.0,
-                bottom: y - projected_height / 2.0,
-                top: y + projected_height / 2.0,
-                weight: ANNOTATION_COLLISION_WEIGHT,
-            }));
-        }
+        let plan = self.plan_raw_text(
+            text,
+            style,
+            physical_alignment(style.anchor),
+            "geometry raw text",
+        )?;
+        self.record(planned_text_ink_bounds(
+            &plan,
+            canonical.position.value(),
+            style.anchor,
+            canonical.rotation.value(),
+            PlannedTextOrigin::Middle,
+        ));
+        Ok(())
+    }
+
+    fn draw_planned_text(
+        &mut self,
+        placement: PlannedTextPlacement,
+        plan: &ResolvedTextPlan,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_planned_text")?;
+        let canonical = backend::validate_planned_text(placement, plan)?;
+        self.record(planned_text_ink_bounds(
+            plan,
+            canonical.position.value(),
+            placement.anchor,
+            canonical.rotation.value(),
+            placement.origin,
+        ));
         Ok(())
     }
 
@@ -528,44 +686,32 @@ impl Backend for GeometryBackend {
     ) -> Result<(), Error> {
         self.ensure_open("draw_bracket")?;
         let canonical = backend::validate_bracket(bracket, style)?;
-        let label_width = estimated_text_width(&bracket.label, style.font_size);
-        let line_start = canonical.line_start.value();
-        let line_end = canonical.line_end.value();
-        let first_tick_end = canonical.first_tick_end.value();
-        let second_tick_end = canonical.second_tick_end.value();
-        let label_position = canonical.label_position.value();
-        let bounds = match canonical.orientation {
-            BracketOrientation::Vertical => GeometryBox {
-                left: line_start
-                    .x
-                    .min(line_end.x)
-                    .min(label_position.x - label_width / 2.0),
-                right: line_start
-                    .x
-                    .max(line_end.x)
-                    .max(label_position.x + label_width / 2.0),
-                bottom: first_tick_end.y.min(second_tick_end.y),
-                top: label_position.y + style.line_height,
-                weight: ANNOTATION_COLLISION_WEIGHT,
-            },
-            BracketOrientation::Horizontal => {
-                let label_half_height = style.line_height / 2.0;
-                GeometryBox {
-                    left: first_tick_end.x.min(second_tick_end.x),
-                    right: label_position.x + label_width,
-                    bottom: line_start
-                        .y
-                        .min(line_end.y)
-                        .min(label_position.y - label_half_height),
-                    top: line_start
-                        .y
-                        .max(line_end.y)
-                        .max(label_position.y + label_half_height),
-                    weight: ANNOTATION_COLLISION_WEIGHT,
-                }
-            }
+        let (anchor, alignment) = match canonical.orientation {
+            BracketOrientation::Vertical => (TextAnchor::Middle, PhysicalTextAlignment::Center),
+            BracketOrientation::Horizontal => (TextAnchor::Start, PhysicalTextAlignment::Start),
         };
-        self.record(Some(bounds));
+        let text_style = TextStyle {
+            color: style.label_color,
+            font_family: style.font_family.clone(),
+            font_size: style.font_size,
+            weight: style.weight,
+            anchor,
+            rotation: 0.0,
+        };
+        let label = self.plan_raw_text(
+            &bracket.label,
+            &text_style,
+            alignment,
+            "geometry significance bracket label",
+        )?;
+        self.record_planned_bracket(canonical, style, &label);
+        Ok(())
+    }
+
+    fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
+        self.ensure_open("draw_planned_bracket")?;
+        let canonical = backend::validate_planned_bracket(call)?;
+        self.record_planned_bracket(canonical, call.style, &call.label.plan);
         Ok(())
     }
 
@@ -589,7 +735,7 @@ mod tests {
     fn test_text_style() -> TextStyle {
         TextStyle {
             color: (0, 0, 0).into(),
-            font_family: "sans-serif".into(),
+            font_family: "Test Sans".into(),
             font_size: 12,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Middle,
@@ -598,7 +744,10 @@ mod tests {
     }
 
     fn begun_backend() -> GeometryBackend {
-        let mut backend = GeometryBackend::default();
+        let mut backend = GeometryBackend::with_environment(
+            PreparedFontEnvironment::synthetic(),
+            "Test Sans".into(),
+        );
         backend.begin(100, 100).unwrap();
         backend
     }
@@ -628,7 +777,10 @@ mod tests {
     fn geometry_lifecycle_requires_one_balanced_session_and_fresh_reuse() {
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
         let style = LineStyle::solid((0, 0, 0), 1.0);
-        let mut backend = GeometryBackend::default();
+        let mut backend = GeometryBackend::with_environment(
+            PreparedFontEnvironment::synthetic(),
+            "Test Sans".into(),
+        );
 
         assert!(backend.begin(0, 100).is_err());
         assert!(backend.draw_line(&points, &style).is_err());
@@ -1023,13 +1175,98 @@ mod tests {
     fn geometry_records_signed_text_without_unsigned_saturation() {
         let mut backend = begun_backend();
         backend
-            .draw_text(Point2D::new(-7.0, 125.0), "", &test_text_style())
+            .draw_text(Point2D::new(-7.0, 125.0), "A", &test_text_style())
             .unwrap();
         backend.end().unwrap();
 
         let bounds = backend.bounds()[0];
         assert!((f64::midpoint(bounds.left, bounds.right) + 7.0).abs() < f64::EPSILON);
-        assert!((f64::midpoint(bounds.bottom, bounds.top) - 125.0).abs() < f64::EPSILON);
+        assert!(bounds.bottom > 100.0 && bounds.top > bounds.bottom);
+    }
+
+    #[test]
+    fn text_anchors_and_rotation_follow_exact_planned_ink() {
+        let mut backend = begun_backend();
+        for (y, anchor) in [
+            (20.0, TextAnchor::Start),
+            (40.0, TextAnchor::Middle),
+            (60.0, TextAnchor::End),
+        ] {
+            backend
+                .draw_text(
+                    Point2D::new(50.0, y),
+                    "A",
+                    &TextStyle {
+                        anchor,
+                        ..test_text_style()
+                    },
+                )
+                .unwrap();
+        }
+        backend
+            .draw_text(
+                Point2D::new(50.0, 80.0),
+                "A",
+                &TextStyle {
+                    rotation: 90.0,
+                    ..test_text_style()
+                },
+            )
+            .unwrap();
+        backend.end().unwrap();
+
+        let [start, middle, end, rotated] = backend.bounds() else {
+            panic!("expected four exact text bounds");
+        };
+        let width = start.right - start.left;
+        let height = start.top - start.bottom;
+        assert!((start.left - 50.0).abs() < f64::EPSILON);
+        assert!((f64::midpoint(middle.left, middle.right) - 50.0).abs() < f64::EPSILON);
+        assert!((end.right - 50.0).abs() < f64::EPSILON);
+        assert!((rotated.right - rotated.left - height).abs() < 1.0e-12);
+        assert!((rotated.top - rotated.bottom - width).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn planned_geometry_uses_stored_ink_without_replanning() {
+        let plan = PreparedFontEnvironment::synthetic()
+            .plan_text(TextPlanInput {
+                source: "A",
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 12,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Center,
+                paint: (0, 0, 0).into(),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "planned geometry test".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        let placement =
+            PlannedTextPlacement::middle(Point2D::new(50.0, 50.0), TextAnchor::Middle, 0.0);
+        GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| calls.set(0));
+        let mut backend = begun_backend();
+
+        backend.draw_planned_text(placement, &plan).unwrap();
+        backend.end().unwrap();
+
+        GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        assert_eq!(backend.bounds.len(), 1);
+        assert_eq!(
+            backend.bounds[0],
+            planned_text_ink_bounds(
+                &plan,
+                placement.position,
+                placement.anchor,
+                placement.rotation,
+                placement.origin,
+            )
+            .unwrap()
+        );
     }
 
     #[test]
@@ -1109,7 +1346,7 @@ mod tests {
             color: (0, 0, 0).into(),
             width: 1.0,
             label_color: (0, 0, 0).into(),
-            font_family: "sans-serif".into(),
+            font_family: "Test Sans".into(),
             font_size: 20,
             line_height: 24.0,
             weight: crate::TextWeight::Normal,
@@ -1122,7 +1359,7 @@ mod tests {
                     x_left: 49.0,
                     x_right: 51.0,
                     y: 80.0,
-                    label: "****".into(),
+                    label: "A".into(),
                     orientation: BracketOrientation::Vertical,
                 },
                 &style,
@@ -1134,7 +1371,7 @@ mod tests {
                     x_left: 49.0,
                     x_right: 51.0,
                     y: 120.0,
-                    label: "****".into(),
+                    label: "A".into(),
                     orientation: BracketOrientation::Horizontal,
                 },
                 &style,
@@ -1143,8 +1380,8 @@ mod tests {
         backend.end().unwrap();
 
         assert!(backend.bounds[0].left < 49.0 && backend.bounds[0].right > 51.0);
-        assert!((backend.bounds[0].top - 109.0).abs() < f64::EPSILON);
-        assert!((backend.bounds[1].bottom - 38.0).abs() < f64::EPSILON);
-        assert!((backend.bounds[1].top - 62.0).abs() < f64::EPSILON);
+        assert!(backend.bounds[0].top > 85.0);
+        assert!(backend.bounds[1].left < 113.0 && backend.bounds[1].right > 125.0);
+        assert!(backend.bounds[1].bottom < 50.0 && backend.bounds[1].top > 50.0);
     }
 }

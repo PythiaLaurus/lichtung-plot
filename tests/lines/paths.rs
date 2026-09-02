@@ -156,6 +156,18 @@ fn changing_hue_colors_points_but_not_connector_or_group_legend() {
 }
 
 #[test]
+fn trajectory_group_identities_are_not_preflighted_as_legend_text() {
+    let absent = "\u{10FFFF}";
+    Plot::trajectory(
+        NumericValues::new("time", [0.0, 1.0]),
+        NumericValues::new("value", [0.0, 1.0]),
+        CategoryValues::new("subject", [absent, absent]).unwrap(),
+    )
+    .preflight()
+    .unwrap();
+}
+
+#[test]
 fn categorical_trajectory_uses_global_first_observed_condition_order() {
     let data = trajectory_data(
         CategoryValues::new("condition", ["after", "before", "during"])

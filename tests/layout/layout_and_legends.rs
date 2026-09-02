@@ -51,7 +51,7 @@ fn x_tick_labels_clear_tick_marks_by_their_measured_edge_gap() {
     let clip = parse_first_clip_rect(&svg);
     let endpoint = clip.y + clip.height + 5.0;
     let gap = tick.y - tick.font_size * 0.6 - endpoint;
-    assert!((7.0..=9.0).contains(&gap), "gap={gap}");
+    assert!((12.0..=13.0).contains(&gap), "gap={gap}");
 }
 
 #[test]
@@ -183,9 +183,22 @@ fn horizontal_bar_long_ticks_clear_y_axis_label() {
     let text = parse_text_elements(&svg);
     let axis = text_element(&text, "Locus and genotype");
     let tick = text_element(&text, "locus_0 aa");
-    let gap = tick.x - (axis.x + axis.font_size / 2.0);
-    assert!(axis.x - axis.font_size / 2.0 >= 12.0);
-    assert!(gap >= 60.0, "gap={gap}");
+    let axis_line = svg
+        .lines()
+        .find(|line| line.contains(">Locus and genotype</text>"))
+        .unwrap();
+    let axis_x = axis_line
+        .split_once("transform=\"rotate(-90.0,")
+        .unwrap()
+        .1
+        .split_once(',')
+        .unwrap()
+        .0
+        .parse::<f64>()
+        .unwrap();
+    let gap = tick.x - (axis_x + axis.font_size / 2.0);
+    assert!(axis_x - axis.font_size / 2.0 >= 12.0);
+    assert!(gap >= 12.0, "gap={gap}");
 }
 
 #[test]

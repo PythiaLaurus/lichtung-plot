@@ -132,7 +132,7 @@ fn render_series(
         theme,
     );
     draw_series(chart, &layout, &series, theme, backend)?;
-    draw_point_layers(&layout, &point_layers, backend)?;
+    draw_point_layers(&layout, &point_layers, theme, backend)?;
 
     let mut legends = series
         .iter()
@@ -210,6 +210,7 @@ fn prepare_point_layers(
 fn draw_point_layers(
     layout: &Layout,
     layers: &[PreparedPointLayer],
+    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if layers.is_empty() {
@@ -246,7 +247,7 @@ fn draw_point_layers(
                         label,
                         &TextStyle {
                             color: layer.style.color.into(),
-                            font_family: crate::DEFAULT_FONT_FAMILY.to_owned(),
+                            font_family: theme.font_family.clone(),
                             font_size: 10,
                             weight: crate::TextWeight::Normal,
                             anchor: TextAnchor::Start,

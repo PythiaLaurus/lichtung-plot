@@ -19,7 +19,7 @@
     clippy::cast_precision_loss
 )]
 
-use crate::layout::TextBlock;
+use crate::layout::{PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
 };
@@ -92,7 +92,7 @@ impl LegendIdentity {
         }
     }
 
-    fn resolve(&self, plot: &crate::Plot) -> (String, String) {
+    pub(crate) fn resolved_text(&self, plot: &crate::Plot) -> (String, String) {
         match self {
             Self::Single { field, value } => (plot.resolve_label(field), plot.resolve_label(value)),
             Self::Pair {
@@ -249,7 +249,7 @@ impl LegendEntry {
     }
 
     pub(crate) fn resolve(&mut self, plot: &crate::Plot) {
-        (self.title, self.label) = self.identity.resolve(plot);
+        (self.title, self.label) = self.identity.resolved_text(plot);
     }
 
     pub(crate) fn identity(&self) -> &LegendIdentity {
@@ -471,16 +471,15 @@ impl LegendMetrics {
 
 /// A plot legend.
 pub(crate) struct Legend {
-    /// The title of the legend.
-    pub(crate) title: String,
     /// The entries in the legend.
-    pub(crate) entries: Vec<LegendEntry>,
+    entries: Vec<LegendEntry>,
     /// Layout metrics (derived from canvas size or overridden).
     pub(crate) metrics: LegendMetrics,
-    title_maximum_width: f64,
-    entry_maximum_width: f64,
     available_width: f64,
     available_height: f64,
+    title_block: TextBlock,
+    entry_blocks: Vec<TextBlock>,
+    font_family: String,
 }
 
 /// A resolved legend rectangle in math-style pixel coordinates.
@@ -519,17 +518,48 @@ impl LegendBox {
 
 impl Legend {
     /// Create a new legend with metrics derived from canvas size.
-    pub fn new(title: String, entries: Vec<LegendEntry>, canvas_w: f64, canvas_h: f64) -> Self {
+    pub fn new(
+        title: &str,
+        entries: Vec<LegendEntry>,
+        canvas_w: f64,
+        canvas_h: f64,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Self, Error> {
         let metrics = LegendMetrics::from_canvas(canvas_w, canvas_h);
-        Self {
+        let title_maximum_width = (canvas_w * 0.5).max(metrics.font_size);
+        let entry_maximum_width = (canvas_w * 0.35).max(metrics.font_size);
+        let title_font_size = (metrics.font_size * 1.1).round() as u32;
+        let entry_font_size = metrics.font_size.round() as u32;
+        let title_block = TextBlock::from_resolved(theme.plan_legacy_text(
             title,
+            title_font_size,
+            title_maximum_width,
+            PhysicalTextAlignment::Start,
+            "legend title",
+        )?);
+        let entry_blocks = entries
+            .iter()
+            .map(|entry| {
+                theme
+                    .plan_legacy_text(
+                        &entry.label,
+                        entry_font_size,
+                        entry_maximum_width,
+                        PhysicalTextAlignment::Start,
+                        "legend entry",
+                    )
+                    .map(TextBlock::from_resolved)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
             entries,
             metrics,
-            title_maximum_width: (canvas_w * 0.5).max(metrics.font_size),
-            entry_maximum_width: (canvas_w * 0.35).max(metrics.font_size),
             available_width: canvas_w * 0.8,
             available_height: canvas_h * 0.8,
-        }
+            title_block,
+            entry_blocks,
+            font_family: theme.font_family.clone(),
+        })
     }
 
     /// Compute the total bounding box width based on entry labels.
@@ -540,8 +570,8 @@ impl Legend {
     fn box_size_for_columns(&self, columns: usize) -> (f64, f64) {
         let m = &self.metrics;
         let columns = columns.clamp(1, self.entries.len().max(1));
-        let title_block = self.title_block();
-        let entry_blocks = self.entry_blocks();
+        let title_block = &self.title_block;
+        let entry_blocks = &self.entry_blocks;
         let mut column_widths = vec![m.handle_w + m.handle_text; columns];
         for (index, block) in entry_blocks.iter().enumerate() {
             column_widths[index % columns] =
@@ -554,10 +584,10 @@ impl Legend {
         let content_height = if self.entries.is_empty() {
             title_block.height()
         } else {
-            let centers = self.row_centers(columns, &title_block, &entry_blocks);
+            let centers = self.row_centers(columns, title_block, entry_blocks);
             self.title_half_height()
                 + -centers.last().copied().unwrap_or(0.0)
-                + self.last_row_half_height(columns, &entry_blocks)
+                + self.last_row_half_height(columns, entry_blocks)
         };
         (width, content_height + self.glyph_edge_pad() * 2.0)
     }
@@ -649,8 +679,8 @@ impl Legend {
     pub fn draw(&self, backend: &mut dyn Backend, x: f64, y: f64) -> Result<(), Error> {
         let m = &self.metrics;
         let columns = self.column_count();
-        let title_block = self.title_block();
-        let entry_blocks = self.entry_blocks();
+        let title_block = &self.title_block;
+        let entry_blocks = &self.entry_blocks;
 
         let box_w = self.compute_box_width();
         let box_h = self.compute_box_height();
@@ -672,7 +702,7 @@ impl Legend {
         let title_font_size = self.title_font_size() as u32;
         let title_style = TextStyle {
             color: (60, 60, 60).into(),
-            font_family: crate::DEFAULT_FONT_FAMILY_STACK.to_string(),
+            font_family: self.font_family.clone(),
             font_size: title_font_size,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Start,
@@ -691,15 +721,15 @@ impl Legend {
         // ─── Entries (top to bottom = decreasing y) ───
         let entry_style = TextStyle {
             color: (40, 40, 40).into(),
-            font_family: crate::DEFAULT_FONT_FAMILY_STACK.to_string(),
+            font_family: self.font_family.clone(),
             font_size: self.entry_font_size() as u32,
             weight: crate::TextWeight::Normal,
             anchor: TextAnchor::Start,
             rotation: 0.0,
         };
 
-        let column_widths = self.column_widths(columns, &entry_blocks);
-        let row_centers = self.row_centers(columns, &title_block, &entry_blocks);
+        let column_widths = self.column_widths(columns, entry_blocks);
+        let row_centers = self.row_centers(columns, title_block, entry_blocks);
         for (index, entry) in self.entries.iter().enumerate() {
             let column = index % columns;
             let row = index / columns;
@@ -835,29 +865,6 @@ impl Legend {
             .fold(self.entry_half_height(), f64::max)
     }
 
-    fn title_block(&self) -> TextBlock {
-        legend_text_block(
-            &self.title,
-            self.title_font_size() as u32,
-            self.title_maximum_width,
-            "legend title",
-        )
-    }
-
-    fn entry_blocks(&self) -> Vec<TextBlock> {
-        self.entries
-            .iter()
-            .map(|entry| {
-                legend_text_block(
-                    &entry.label,
-                    self.entry_font_size() as u32,
-                    self.entry_maximum_width,
-                    "legend entry",
-                )
-            })
-            .collect()
-    }
-
     fn column_count(&self) -> usize {
         self.balanced_column_count(self.available_width, self.available_height)
     }
@@ -884,13 +891,6 @@ impl Legend {
     }
 }
 
-fn legend_text_block(text: &str, font_size: u32, maximum_width: f64, role: &str) -> TextBlock {
-    match TextBlock::layout(text, font_size, maximum_width, role) {
-        Ok(block) => block,
-        Err(_) => TextBlock::unwrapped(text, font_size),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -906,12 +906,15 @@ mod tests {
     }
 
     fn legend() -> Legend {
+        let theme = crate::Theme::Publication.resolve();
         Legend::new(
-            "group".to_string(),
+            "group",
             vec![entry("first"), entry("second")],
             640.0,
             480.0,
+            &theme,
         )
+        .unwrap()
     }
 
     #[test]
@@ -921,15 +924,15 @@ mod tests {
         let (_, title_center) = bounds.anchor();
         let title_top = title_center + legend.title_half_height();
         let columns = legend.column_count();
-        let title_block = legend.title_block();
-        let entry_blocks = legend.entry_blocks();
+        let title_block = &legend.title_block;
+        let entry_blocks = &legend.entry_blocks;
         let last_center = title_center
             + legend
-                .row_centers(columns, &title_block, &entry_blocks)
+                .row_centers(columns, title_block, entry_blocks)
                 .last()
                 .copied()
                 .unwrap();
-        let last_bottom = last_center - legend.last_row_half_height(columns, &entry_blocks);
+        let last_bottom = last_center - legend.last_row_half_height(columns, entry_blocks);
         let top_padding = bounds.top - title_top;
         let bottom_padding = last_bottom - bounds.bottom;
         let previous_bottom_comfort =
@@ -944,20 +947,26 @@ mod tests {
         let entries = (1..=8)
             .map(|index| entry(format!("item {index}")))
             .collect();
-        let legend = Legend::new("group".into(), entries, 640.0, 480.0);
+        let theme = crate::Theme::Publication.resolve();
+        let legend = Legend::new("group", entries, 640.0, 480.0, &theme).unwrap();
 
         assert_eq!(legend.column_count(), 2);
     }
 
     #[test]
-    fn text_mutation_is_remeasured_without_stale_cached_blocks() {
-        let mut legend = legend();
-        let original_width = legend.compute_box_width();
-        legend.title = "a substantially wider replacement legend title".into();
-        legend.entries.push(entry("third entry"));
+    fn overwide_legend_text_returns_the_planning_error() {
+        let theme = crate::Theme::Publication.resolve();
+        let error = Legend::new(
+            &"W".repeat(10_000),
+            vec![entry("entry")],
+            160.0,
+            120.0,
+            &theme,
+        )
+        .err()
+        .expect("overwide legend title must fail");
 
-        assert!(legend.compute_box_width() > original_width);
-        assert!(legend.compute_box_height().is_finite());
+        assert!(error.to_string().contains("legend title text planning"));
     }
 
     #[test]
@@ -965,6 +974,6 @@ mod tests {
         let legend = legend();
         let bounds = legend.right_box((10.0, 410.0, 20.0, 300.0));
 
-        assert!((bounds.right - bounds.left - legend.compute_box_width()).abs() <= f64::EPSILON);
+        assert!((bounds.right - bounds.left - legend.compute_box_width()).abs() <= 1.0e-9);
     }
 }

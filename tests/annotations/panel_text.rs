@@ -64,8 +64,20 @@ fn panel_text_renders_in_named_clipped_layer_with_theme_style_and_corner_anchors
         .lines()
         .find(|line| line.contains("Lower note"))
         .unwrap();
+    let coordinate = |line: &str, attribute: &str| {
+        line.split_once(&format!("{attribute}=\""))
+            .unwrap()
+            .1
+            .split_once('"')
+            .unwrap()
+            .0
+            .parse::<f64>()
+            .unwrap()
+    };
     assert!(upper.contains("text-anchor=\"start\""));
-    assert!(lower.contains("text-anchor=\"end\""));
+    assert!(lower.contains("text-anchor=\"start\""));
+    assert!(coordinate(lower, "x") > coordinate(upper, "x"));
+    assert!(coordinate(lower, "y") > coordinate(upper, "y"));
 }
 
 #[test]

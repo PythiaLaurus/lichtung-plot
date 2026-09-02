@@ -54,7 +54,7 @@ fn all_estimated_data() -> StatusData {
 
 fn all_unavailable_facet_data() -> StatusData {
     let mut data = status_data(
-        CategoryValues::new("term", ["first", "second", "first", "second"]).unwrap(),
+        CategoryValues::new("term", ["one", "two", "one", "two"]).unwrap(),
         NumericValues::nullable("estimate", [None; 4]),
         NumericValues::nullable("lower", [None; 4]),
         NumericValues::nullable("upper", [None; 4]),
@@ -435,10 +435,12 @@ fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
     }
     let narrow = point_interval(&frame, true)
         .facet(FacetSpec::column(frame.panel.clone().unwrap()))
-        .x_limits(-2.0, 2.0);
+        .x_limits(-2.0, 2.0)
+        .size(440, 300);
     let error = narrow.preflight().unwrap_err().to_string();
     assert!(
-        error.contains("Not estimable row text requires") && error.contains("chart panel provides")
+        error.contains("Not estimable row text requires") && error.contains("chart panel provides"),
+        "{error}"
     );
     let output = svg(narrow.size(960, 300), "all-unavailable-facets");
     assert_eq!(output.matches(">Not estimable</text>").count(), 4);
@@ -486,7 +488,7 @@ fn unavailable_text_avoids_estimate_guides() {
         point_interval(&data, true).zero_line().x_limits(-1.0, 1.0),
         "unavailable-point-guide",
     );
-    let separation = 45.0;
+    let separation = 6.0;
     for output in [&coefficient, &forest] {
         assert!(
             (text_x(output, "Not estimable") - vertical_line_x(output, "stroke-dasharray")).abs()

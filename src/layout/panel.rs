@@ -29,14 +29,17 @@ mod geometry;
 mod projection;
 mod range_ticks;
 
-pub use geometry::deterministic_text_width;
-pub(crate) use geometry::{estimated_text_width, y_axis_left_inset_for_tick_labels};
+pub(crate) use axis_frame_grid::PanelAxisTextPlan;
+pub(crate) use geometry::y_axis_left_inset_for_tick_labels;
 pub(crate) use range_ticks::{
-    anchored_auto_range, automatic_numeric_ticks, continuous_auto_range, display_axis_spec,
-    fit_automatic_tick_candidates, format_tick, retain_automatic_ticks_inside_panel,
+    anchored_auto_range, automatic_numeric_ticks, automatic_numeric_ticks_legacy,
+    continuous_auto_range, display_axis_spec, fit_automatic_tick_candidates, format_tick,
+    retain_automatic_ticks_inside_panel_legacy,
 };
 #[cfg(test)]
-pub(crate) use range_ticks::{nice_ticks, AUTOMATIC_TICK_TARGET};
+pub(crate) use range_ticks::{
+    nice_ticks, retain_automatic_ticks_inside_panel, AUTOMATIC_TICK_TARGET,
+};
 
 #[cfg(test)]
 use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};

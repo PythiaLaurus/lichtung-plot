@@ -249,7 +249,8 @@ impl LayoutBox {
     reason = "the closed role order is part of canonical structural identity"
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum AddressRole {
+#[repr(u16)]
+pub(crate) enum AddressRole {
     Root,
     RootTitle,
     RootSubtitle,
@@ -324,25 +325,144 @@ enum AddressRole {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct AddressSegment {
-    role: AddressRole,
-    slot_index: u32,
+pub(crate) struct AddressSegment {
+    pub(crate) role: AddressRole,
+    pub(crate) slot_index: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct ComponentAddress {
+pub(crate) struct ComponentAddress {
     root: AddressSegment,
     descendants: Box<[AddressSegment]>,
 }
 
 impl ComponentAddress {
-    fn root() -> Self {
+    pub(crate) fn root() -> Self {
         Self {
             root: AddressSegment {
                 role: AddressRole::Root,
                 slot_index: 0,
             },
             descendants: Box::new([]),
+        }
+    }
+
+    #[allow(
+        dead_code,
+        reason = "canonical child addresses are consumed as producers migrate into the census"
+    )]
+    pub(crate) fn child(&self, role: AddressRole, slot_index: u32) -> Result<Self, Error> {
+        let mut descendants = Vec::new();
+        descendants
+            .try_reserve_exact(self.descendants.len().saturating_add(1))
+            .map_err(|error| {
+                Error::Render(format!(
+                    "layout could not reserve canonical component address: {error}"
+                ))
+            })?;
+        descendants.extend_from_slice(&self.descendants);
+        descendants.push(AddressSegment { role, slot_index });
+        Ok(Self {
+            root: self.root,
+            descendants: descendants.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn prepared_child(
+        &self,
+        role: AddressRole,
+        slot_index: u32,
+        stage: &mut PreparedStage<'_>,
+    ) -> Result<Self, Error> {
+        let mut descendants = Vec::new();
+        stage.reserve_prepared(
+            &mut descendants,
+            self.descendants.len().saturating_add(1),
+            "prepared component address",
+        )?;
+        descendants.extend_from_slice(&self.descendants);
+        descendants.push(AddressSegment { role, slot_index });
+        Ok(Self {
+            root: self.root,
+            descendants: descendants.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn prepared_clone(&self, stage: &mut PreparedStage<'_>) -> Result<Self, Error> {
+        let mut descendants = Vec::new();
+        stage.reserve_prepared(
+            &mut descendants,
+            self.descendants.len(),
+            "prepared component address",
+        )?;
+        descendants.extend_from_slice(&self.descendants);
+        Ok(Self {
+            root: self.root,
+            descendants: descendants.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn prepared_copy_shell(&self, stage: &mut PreparedStage<'_>) -> Result<Self, Error> {
+        let mut descendants = Vec::new();
+        stage.reserve_prepared(
+            &mut descendants,
+            self.descendants.len(),
+            "prepared component address",
+        )?;
+        descendants.resize(
+            self.descendants.len(),
+            AddressSegment {
+                role: AddressRole::Root,
+                slot_index: 0,
+            },
+        );
+        Ok(Self {
+            root: self.root,
+            descendants: descendants.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn fill_prepared_copy(&mut self, source: &Self) -> Result<(), Error> {
+        if self.descendants.len() != source.descendants.len() {
+            return Err(Error::Render(
+                "prepared component address reservation mismatch".into(),
+            ));
+        }
+        self.root = source.root;
+        self.descendants.copy_from_slice(&source.descendants);
+        Ok(())
+    }
+
+    pub(crate) fn canonical_text_cmp(&self, other: &Self) -> Ordering {
+        let root = (
+            self.root.role.text_traversal_ordinal(),
+            self.root.slot_index,
+        )
+            .cmp(&(
+                other.root.role.text_traversal_ordinal(),
+                other.root.slot_index,
+            ));
+        if root != Ordering::Equal {
+            return root;
+        }
+        self.descendants
+            .iter()
+            .map(|segment| (segment.role.text_traversal_ordinal(), segment.slot_index))
+            .cmp(
+                other
+                    .descendants
+                    .iter()
+                    .map(|segment| (segment.role.text_traversal_ordinal(), segment.slot_index)),
+            )
+    }
+}
+
+impl AddressRole {
+    const fn text_traversal_ordinal(self) -> u16 {
+        match self {
+            // Plot and Canvas preorder visit their frame/body before the caption.
+            Self::RootCaption => u16::MAX,
+            _ => self as u16,
         }
     }
 }
@@ -414,12 +534,12 @@ struct StructuralSignature {
 }
 
 impl StructuralSignature {
-    fn exact_plot_root(kind: PlotKind, constraints: LayoutConstraints, size: LayoutSize) -> Self {
+    fn exact_root(kind: ExactRootKind, constraints: LayoutConstraints, size: LayoutSize) -> Self {
         Self {
             root: StructuralRecord {
                 address: ComponentAddress::root(),
-                component_type: ComponentType::Plot,
-                plot_kind: Some(plot_kind_discriminant(kind)),
+                component_type: kind.component_type(),
+                plot_kind: kind.plot_kind(),
                 constraints,
                 candidate_size: size,
                 track_vectors: Box::new([]),
@@ -666,22 +786,50 @@ struct AssignedGeometryContext {
 struct MeasurementFrontier {
     address: ComponentAddress,
     component_type: ComponentType,
-    plot_kind: u8,
+    plot_kind: Option<u8>,
     root_policy: u8,
     prepared_semantic_identity: u128,
     transferred_feedback: Box<[u8]>,
 }
 
 impl MeasurementFrontier {
-    fn exact_plot(kind: PlotKind) -> Self {
+    fn exact_root(kind: ExactRootKind) -> Self {
         Self {
             address: ComponentAddress::root(),
-            component_type: ComponentType::Plot,
-            plot_kind: plot_kind_discriminant(kind),
+            component_type: kind.component_type(),
+            plot_kind: kind.plot_kind(),
             root_policy: 0,
             prepared_semantic_identity: 0,
             transferred_feedback: Box::new([]),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExactRootKind {
+    Plot(PlotKind),
+    Canvas,
+}
+
+impl ExactRootKind {
+    const fn component_type(self) -> ComponentType {
+        match self {
+            Self::Plot(_) => ComponentType::Plot,
+            Self::Canvas => ComponentType::Canvas,
+        }
+    }
+
+    fn plot_kind(self) -> Option<u8> {
+        match self {
+            Self::Plot(kind) => Some(plot_kind_discriminant(kind)),
+            Self::Canvas => None,
+        }
+    }
+}
+
+impl From<PlotKind> for ExactRootKind {
+    fn from(value: PlotKind) -> Self {
+        Self::Plot(value)
     }
 }
 
@@ -768,8 +916,6 @@ impl ResourceKind {
 #[derive(Debug, Clone, Copy)]
 struct ResourceLimits {
     candidate_evaluations: u128,
-    generation_slots: u128,
-    generation_work: u128,
     measurement_calls: u128,
     cache_entries: u128,
     topology_slots: u128,
@@ -779,8 +925,6 @@ impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
             candidate_evaluations: RESOURCE_LIMIT,
-            generation_slots: RESOURCE_LIMIT,
-            generation_work: RESOURCE_LIMIT,
             measurement_calls: RESOURCE_LIMIT,
             cache_entries: RESOURCE_LIMIT,
             topology_slots: RESOURCE_LIMIT,
@@ -792,11 +936,11 @@ impl Default for ResourceLimits {
 struct ResourceState {
     limits: ResourceLimits,
     candidate_evaluations: u128,
-    generation_slots: u128,
-    generation_work: u128,
+    generation_resources: crate::font::canonical::OperationGenerationResources,
     measurement_calls: u128,
     cache_entries: u128,
     topology_slots: u128,
+    font_resources: crate::font::canonical::OperationFontResources,
 }
 
 impl ResourceState {
@@ -804,26 +948,36 @@ impl ResourceState {
         Self {
             limits: ResourceLimits::default(),
             candidate_evaluations: 0,
-            generation_slots: 0,
-            generation_work: 0,
+            generation_resources: crate::font::canonical::OperationGenerationResources::new(),
             measurement_calls: 0,
             cache_entries: 0,
             topology_slots: 0,
+            font_resources: crate::font::canonical::OperationFontResources::new(),
         }
     }
 
     fn claim(&mut self, kind: ResourceKind, amount: u128) -> Result<(), Error> {
+        match kind {
+            ResourceKind::GenerationSlots => {
+                return self
+                    .generation_resources
+                    .claim_slots(amount)
+                    .map_err(generation_resource_error);
+            }
+            ResourceKind::GenerationWork => {
+                return self
+                    .generation_resources
+                    .claim_work(amount)
+                    .map_err(generation_resource_error);
+            }
+            _ => {}
+        }
         let (consumed, limit) = match kind {
             ResourceKind::CandidateEvaluations => (
                 &mut self.candidate_evaluations,
                 self.limits.candidate_evaluations,
             ),
-            ResourceKind::GenerationSlots => {
-                (&mut self.generation_slots, self.limits.generation_slots)
-            }
-            ResourceKind::GenerationWork => {
-                (&mut self.generation_work, self.limits.generation_work)
-            }
+            ResourceKind::GenerationSlots | ResourceKind::GenerationWork => unreachable!(),
             ResourceKind::MeasurementCalls => {
                 (&mut self.measurement_calls, self.limits.measurement_calls)
             }
@@ -841,6 +995,99 @@ impl ResourceState {
         }
         *consumed = next;
         Ok(())
+    }
+}
+
+fn generation_resource_error(error: crate::font::canonical::TextGenerationClaimError) -> Error {
+    match error {
+        crate::font::canonical::TextGenerationClaimError::Arithmetic(resource) => {
+            Error::Render(format!("layout {resource} counter overflowed"))
+        }
+        crate::font::canonical::TextGenerationClaimError::Limit {
+            resource,
+            limit,
+            cumulative_claim,
+        } => Error::Render(format!(
+            "layout {resource} limit of {limit} exceeded by cumulative claim {cumulative_claim}"
+        )),
+    }
+}
+
+pub(crate) struct PreparedStage<'a> {
+    resources: &'a mut ResourceState,
+    reservations: &'a mut ReservationDriver,
+}
+
+impl PreparedStage<'_> {
+    pub(crate) fn claim_topology_slots(&mut self, amount: u128) -> Result<(), Error> {
+        self.resources.claim(ResourceKind::TopologySlots, amount)
+    }
+
+    pub(crate) fn reserve_scalar_presence_map(&mut self) -> Result<Vec<u64>, Error> {
+        const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
+        let mut presence = Vec::new();
+        self.reservations.reserve_additional(
+            ReservationStage::Prepared,
+            &mut presence,
+            SCALAR_MAP_WORDS,
+            "Unicode scalar presence map",
+        )?;
+        presence.resize(SCALAR_MAP_WORDS, 0);
+        Ok(presence)
+    }
+
+    pub(crate) fn reserve_prepared<T>(
+        &mut self,
+        values: &mut Vec<T>,
+        additional: usize,
+        payload: &str,
+    ) -> Result<(), Error> {
+        self.reservations.reserve_additional(
+            ReservationStage::Prepared,
+            values,
+            additional,
+            payload,
+        )
+    }
+
+    pub(crate) fn reserve_prepared_string(
+        &mut self,
+        value: &mut String,
+        additional: usize,
+        payload: &str,
+    ) -> Result<(), Error> {
+        self.reservations.reserve_string_additional(
+            ReservationStage::Prepared,
+            value,
+            additional,
+            payload,
+        )
+    }
+
+    pub(crate) fn font_resources(&self) -> crate::font::canonical::OperationFontResources {
+        self.resources.font_resources.clone()
+    }
+
+    pub(crate) fn generation_resources(
+        &self,
+    ) -> crate::font::canonical::OperationGenerationResources {
+        self.resources.generation_resources.clone()
+    }
+}
+
+pub(crate) struct FinalStage<'a> {
+    reservations: &'a mut ReservationDriver,
+}
+
+impl FinalStage<'_> {
+    pub(crate) fn reserve_final<T>(
+        &mut self,
+        values: &mut Vec<T>,
+        additional: usize,
+        payload: &str,
+    ) -> Result<(), Error> {
+        self.reservations
+            .reserve_additional(ReservationStage::Final, values, additional, payload)
     }
 }
 
@@ -943,11 +1190,44 @@ impl ReservationDriver {
         })
     }
 
+    fn reserve_string_additional(
+        &mut self,
+        stage: ReservationStage,
+        value: &mut String,
+        additional: usize,
+        payload: &str,
+    ) -> Result<(), Error> {
+        self.enter(stage)?;
+        #[cfg(test)]
+        if FORCED_RESERVATION_FAILURE.with(|forced| {
+            if forced.get() == Some(stage.number()) {
+                forced.set(None);
+                true
+            } else {
+                false
+            }
+        }) {
+            return Err(Error::Render(format!(
+                "layout reservation stage {} could not reserve {payload}: forced test refusal",
+                stage.number()
+            )));
+        }
+        value.try_reserve_exact(additional).map_err(|error| {
+            Error::Render(format!(
+                "layout reservation stage {} could not reserve {payload}: {error}",
+                stage.number()
+            ))
+        })
+    }
+
     fn enter(&mut self, stage: ReservationStage) -> Result<(), Error> {
         let allowed = matches!(
             (self.phase, stage),
             (ReservationPhase::Preparing, ReservationStage::Prepared)
-                | (ReservationPhase::Stable, ReservationStage::Final)
+                | (
+                    ReservationPhase::Stable | ReservationPhase::Final,
+                    ReservationStage::Final
+                )
                 | (
                     ReservationPhase::Measuring(None),
                     ReservationStage::Generation | ReservationStage::Convergence
@@ -1207,13 +1487,14 @@ fn first_empty_frontier_error<LayoutPlan>(
 }
 
 /// One promoted root plan whose dimensions are final for every backend route.
-pub(crate) struct SelectedRoot<LayoutPlan> {
+pub(crate) struct SelectedRoot<LayoutPlan, PreparedInputs = ()> {
     size: LayoutSize,
     signature: StructuralSignature,
+    prepared: PreparedInputs,
     plan: LayoutPlan,
 }
 
-impl<LayoutPlan> SelectedRoot<LayoutPlan> {
+impl<LayoutPlan, PreparedInputs> SelectedRoot<LayoutPlan, PreparedInputs> {
     pub(crate) fn dimensions(&self) -> (u32, u32) {
         debug_assert_eq!(
             self.signature.root.candidate_size, self.size,
@@ -1227,6 +1508,10 @@ impl<LayoutPlan> SelectedRoot<LayoutPlan> {
     pub(crate) fn plan(&self) -> &LayoutPlan {
         &self.plan
     }
+
+    pub(crate) fn prepared(&self) -> &PreparedInputs {
+        &self.prepared
+    }
 }
 
 /// Plan one active exact-size root through complete measurement and convergence.
@@ -1234,20 +1519,27 @@ impl<LayoutPlan> SelectedRoot<LayoutPlan> {
     clippy::too_many_lines,
     reason = "the exact-root operation keeps the five ordered reservation stages explicit"
 )]
-pub(crate) fn plan_exact_root<LayoutPlan>(
+pub(crate) fn plan_exact_root<LayoutPlan, FinalPlan, PreparedInputs>(
     width: u32,
     height: u32,
-    kind: PlotKind,
-    build_plan: impl FnOnce() -> Result<LayoutPlan, Error>,
-) -> Result<SelectedRoot<LayoutPlan>, Error> {
+    kind: impl Into<ExactRootKind>,
+    prepare: impl FnOnce(&mut PreparedStage<'_>) -> Result<PreparedInputs, Error>,
+    build_plan: impl FnOnce(&PreparedInputs) -> Result<LayoutPlan, Error>,
+    finalize: impl FnOnce(&PreparedInputs, LayoutPlan, &mut FinalStage<'_>) -> Result<FinalPlan, Error>,
+) -> Result<SelectedRoot<FinalPlan, PreparedInputs>, Error> {
+    let kind = kind.into();
     let constraints = LayoutConstraints::exact_css_pixels(width, height)?;
     let size = LayoutSize::exact_css_pixels(width, height)?;
     debug_assert!(constraints.contains(size));
-    let frontier = MeasurementFrontier::exact_plot(kind);
+    let frontier = MeasurementFrontier::exact_root(kind);
 
+    let mut reservations = ReservationDriver::new();
     let mut resources = ResourceState::new();
     resources.claim(ResourceKind::TopologySlots, 1)?;
-    let mut reservations = ReservationDriver::new();
+    let prepared = prepare(&mut PreparedStage {
+        resources: &mut resources,
+        reservations: &mut reservations,
+    })?;
     let mut cache_entries = Vec::new();
     reservations.reserve_additional(
         ReservationStage::Prepared,
@@ -1278,6 +1570,7 @@ pub(crate) fn plan_exact_root<LayoutPlan>(
                 let combinations = complete_cartesian_product(&[1], resources, reservations)?;
                 debug_assert_eq!(&*combinations[0], &[0]);
 
+                resources.claim(ResourceKind::CandidateEvaluations, 1)?;
                 let mut measured = Vec::new();
                 reservations.reserve_additional(
                     ReservationStage::Candidates,
@@ -1285,11 +1578,10 @@ pub(crate) fn plan_exact_root<LayoutPlan>(
                     1,
                     "exact-root candidate and immutable plan",
                 )?;
-                resources.claim(ResourceKind::CandidateEvaluations, 1)?;
                 let plan = build_plan.take().ok_or_else(|| {
                     Error::Render("exact-root adapter was evaluated twice".into())
-                })?()?;
-                let signature = StructuralSignature::exact_plot_root(kind, constraints, size);
+                })?(&prepared)?;
+                let signature = StructuralSignature::exact_root(kind, constraints, size);
                 let quality = RootQualityKey::exact(size, signature)?;
                 measured.push(MeasuredLayout {
                     size,
@@ -1367,17 +1659,23 @@ pub(crate) fn plan_exact_root<LayoutPlan>(
             dimensions.0, dimensions.1
         )));
     }
-    let mut promoted = Vec::new();
-    reservations.reserve_additional(
-        ReservationStage::Final,
-        &mut promoted,
-        1,
-        "promoted exact-root plan",
+    let plan = finalize(
+        &prepared,
+        selected.plan,
+        &mut FinalStage {
+            reservations: &mut reservations,
+        },
     )?;
+    let mut promoted = Vec::new();
+    FinalStage {
+        reservations: &mut reservations,
+    }
+    .reserve_final(&mut promoted, 1, "promoted exact-root plan")?;
     promoted.push(SelectedRoot {
         size: selected.size,
         signature: selected.quality.structural_signature,
-        plan: selected.plan,
+        prepared,
+        plan,
     });
     promoted
         .pop()

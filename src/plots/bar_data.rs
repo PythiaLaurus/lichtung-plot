@@ -13,6 +13,11 @@ use crate::spec::{
 use crate::theme::ResolvedTheme;
 use crate::{CategoryOrder, Plot, ValueSort};
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Bar arrangement mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BarMode {
@@ -77,6 +82,60 @@ pub(crate) struct PreparedBars {
     pub(crate) points: Vec<PreparedBarPoint>,
     /// Significance labels attached to exact bar/category anchors.
     pub(crate) significance: Vec<PreparedBarSignificance>,
+}
+
+pub(crate) fn attached_significance_text_plans(
+    context: crate::spec::PlotRenderContext<'_>,
+    marks: &[PreparedBarSignificance],
+    appearance: &crate::theme::TextAppearance,
+    alignment: impl Fn(&PreparedBarSignificance) -> crate::layout::PhysicalTextAlignment,
+    owner: &str,
+    exact_override: bool,
+) -> Result<Vec<crate::layout::ResolvedTextPlan>, Error> {
+    if let Some(frozen) = context.deferred_annotation_text() {
+        if frozen.len() != marks.len() {
+            return Err(Error::Render(format!(
+                "{owner} frozen plan count does not match its prepared labels"
+            )));
+        }
+        return marks
+            .iter()
+            .zip(frozen)
+            .map(|(mark, frozen)| {
+                let plan = &frozen.plan;
+                if plan.source != mark.label
+                    || plan.style.stack_source != appearance.stack
+                    || plan.style.paint != appearance.paint
+                    || plan.style.font_size != appearance.font_size
+                    || plan.style.weight != appearance.weight
+                    || plan.style.alignment != alignment(mark)
+                    || plan.style.exact_override != exact_override
+                    || frozen.exact_override != exact_override
+                {
+                    return Err(Error::Render(format!(
+                        "{owner} frozen plan does not match its prepared source and style"
+                    )));
+                }
+                Ok(plan.clone())
+            })
+            .collect();
+    }
+
+    #[cfg(test)]
+    ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(calls.get() + 1));
+
+    marks
+        .iter()
+        .map(|mark| {
+            context.theme.measure_text(
+                &mark.label,
+                appearance,
+                alignment(mark),
+                owner,
+                exact_override,
+            )
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy)]

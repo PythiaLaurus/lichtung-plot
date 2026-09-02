@@ -7,9 +7,9 @@
     clippy::too_many_lines
 )]
 
-use crate::layout::{AxisTick, Layout, PanelBox};
+use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, LineStyle, Point2D, TextAnchor, TextStyle,
+    with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
@@ -97,7 +97,7 @@ pub(crate) fn render(
             (base, format!("{base_label} {base:.3}")),
             (terminal, format!("{terminal_label} {terminal:.3}")),
         ],
-        theme.detail_font_size,
+        theme,
     )?;
     if annotations.height > panel.height() - MINIMUM_MARK_PANEL_HEIGHT {
         return Err(Error::Render(format!(
@@ -164,30 +164,74 @@ pub(crate) fn render(
         }
         Ok(())
     })?;
-    let total_style = TextStyle {
-        color: theme.foreground.into(),
-        font_family: theme.font_family.clone(),
-        font_size: theme.detail_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Middle,
-        rotation: 0.0,
-    };
-    for annotation in annotations.items {
-        backend.draw_text(
-            Point2D::new(
-                annotation.x.trunc(),
-                (layout.projection.panel_box().y1
-                    + ANNOTATION_PADDING
-                    + f64::from(theme.detail_font_size) / 2.0
-                    + annotation.row as f64
-                        * (f64::from(theme.detail_font_size) + ANNOTATION_ROW_GAP))
-                    .round(),
+    let AnnotationPlan {
+        items, row_height, ..
+    } = annotations;
+    for annotation in items {
+        let text_plan = annotation.text_plan;
+        backend.draw_planned_text(
+            PlannedTextPlacement::middle(
+                Point2D::new(
+                    annotation.x.trunc(),
+                    (layout.projection.panel_box().y1
+                        + ANNOTATION_PADDING
+                        + row_height / 2.0
+                        + annotation.row as f64 * (row_height + ANNOTATION_ROW_GAP))
+                        .round(),
+                ),
+                TextAnchor::Middle,
+                0.0,
             ),
-            &annotation.text,
-            &total_style,
+            &text_plan,
         )?;
     }
     Ok(PlotRenderResult::new(layout, Vec::new()))
+}
+
+pub(crate) fn text_census_annotations<'a>(
+    chart: &Plot,
+    data: impl Into<crate::data::PlotData<'a>>,
+    filter_to_range: bool,
+) -> Result<Vec<String>, Error> {
+    let data = data.into();
+    let delta_col = chart
+        .y_col()
+        .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
+    let base = chart
+        .waterfall_base()
+        .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
+    let deltas = crate::data::strict_finite_f64(data, delta_col, "waterfall")?;
+    let mut range = (base, base);
+    let terminal = deltas
+        .into_iter()
+        .enumerate()
+        .try_fold(base, |running, (index, delta)| {
+            let next = running + delta;
+            if !next.is_finite() {
+                return Err(Error::Data(format!(
+                    "waterfall: cumulative endpoint is non-finite at source row {}",
+                    data.source_row(index)
+                )));
+            }
+            range.0 = range.0.min(next);
+            range.1 = range.1.max(next);
+            Ok(next)
+        })?;
+    let range = crate::layout::continuous_auto_range(range, chart.x_axis_spec());
+    let (base_label, terminal_label) = chart
+        .waterfall_labels_spec()
+        .map_or(("base", "total"), |labels| {
+            (labels.base(), labels.terminal())
+        });
+    Ok([
+        (base, format!("{base_label} {base:.3}")),
+        (terminal, format!("{terminal_label} {terminal:.3}")),
+    ]
+    .into_iter()
+    .filter_map(|(value, source)| {
+        (!filter_to_range || (value >= range.0 && value <= range.1)).then_some(source)
+    })
+    .collect())
 }
 
 const ANNOTATION_PADDING: f64 = 4.0;
@@ -196,7 +240,7 @@ const ANNOTATION_ROW_GAP: f64 = 4.0;
 const MINIMUM_MARK_PANEL_HEIGHT: f64 = 24.0;
 
 struct Annotation {
-    text: String,
+    text_plan: ResolvedTextPlan,
     x: f64,
     row: usize,
 }
@@ -204,6 +248,7 @@ struct Annotation {
 struct AnnotationPlan {
     items: Vec<Annotation>,
     height: f64,
+    row_height: f64,
 }
 
 fn plan_annotations(
@@ -211,7 +256,7 @@ fn plan_annotations(
     panel: PanelBox,
     source_y: f64,
     candidates: [(f64, String); 2],
-    font_size: u32,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<AnnotationPlan, Error> {
     let mut rows: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut items = Vec::new();
@@ -219,7 +264,13 @@ fn plan_annotations(
         if !layout.projection.contains_data(value, source_y) {
             continue;
         }
-        let width = crate::layout::estimated_text_width(&text, font_size);
+        let text_plan = theme.measure_legacy_text(
+            &text,
+            theme.detail_font_size,
+            PhysicalTextAlignment::Center,
+            "waterfall total annotation",
+        )?;
+        let width = text_plan.width();
         if width + 2.0 * ANNOTATION_PADDING > panel.width() {
             return Err(Error::Render(format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
@@ -252,14 +303,22 @@ fn plan_annotations(
             rows.push(Vec::new());
         }
         rows[row].push(bounds);
-        items.push(Annotation { text, x, row });
+        items.push(Annotation { text_plan, x, row });
     }
+    let row_height = items
+        .iter()
+        .map(|annotation| annotation.text_plan.height())
+        .fold(0.0_f64, f64::max);
     let height = if rows.is_empty() {
         0.0
     } else {
         2.0 * ANNOTATION_PADDING
-            + rows.len() as f64 * f64::from(font_size)
+            + rows.len() as f64 * row_height
             + rows.len().saturating_sub(1) as f64 * ANNOTATION_ROW_GAP
     };
-    Ok(AnnotationPlan { items, height })
+    Ok(AnnotationPlan {
+        items,
+        height,
+        row_height,
+    })
 }

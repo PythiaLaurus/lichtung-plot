@@ -11,7 +11,7 @@ fn candidate(
 ) -> MeasuredLayout<u8> {
     let constraints = LayoutConstraints::exact_css_pixels(width, height).unwrap();
     let size = LayoutSize::exact_css_pixels(width, height).unwrap();
-    let mut signature = StructuralSignature::exact_plot_root(kind, constraints, size);
+    let mut signature = StructuralSignature::exact_root(kind.into(), constraints, size);
     signature.root.arrangement_decisions = Box::new([structural_tag]);
     let quality = RootQualityKey::exact(size, signature).unwrap();
     MeasuredLayout {
@@ -26,9 +26,9 @@ fn convergence_state(tag: u32, painted_ink_inside_root: bool) -> ConvergenceStat
     let width = 200 + tag;
     let constraints = LayoutConstraints::exact_css_pixels(width, 120).unwrap();
     let size = LayoutSize::exact_css_pixels(width, 120).unwrap();
-    let signature = StructuralSignature::exact_plot_root(PlotKind::Scatter, constraints, size);
+    let signature = StructuralSignature::exact_root(PlotKind::Scatter.into(), constraints, size);
     let quality = RootQualityKey::exact(size, signature).unwrap();
-    let mut frontier = MeasurementFrontier::exact_plot(PlotKind::Scatter);
+    let mut frontier = MeasurementFrontier::exact_root(PlotKind::Scatter.into());
     frontier.prepared_semantic_identity = u128::from(tag);
     ConvergenceState {
         selected_size: size,
@@ -173,10 +173,7 @@ fn complete_cartesian_product_retains_every_child_combination() {
             Box::<[usize]>::from([1, 2]),
         ]
     );
-    assert_eq!(
-        (resources.generation_slots, resources.generation_work),
-        (18, 36)
-    );
+    assert_eq!(resources.generation_resources.usage().unwrap(), (18, 36));
 
     let mut resources = ResourceState::new();
     let mut reservations = prepared_reservations();
@@ -239,7 +236,7 @@ fn selector_applies_first_empty_frontier_order() {
         width: LengthConstraint::new(LayoutScalar(0), Some(LayoutScalar(0))).unwrap(),
         height: LengthConstraint::new(LayoutScalar(1024), Some(LayoutScalar(1024))).unwrap(),
     };
-    let signature = StructuralSignature::exact_plot_root(PlotKind::Scatter, constraints, zero);
+    let signature = StructuralSignature::exact_root(PlotKind::Scatter.into(), constraints, zero);
     let zero_candidate = MeasuredLayout {
         size: zero,
         plan: 0,
@@ -290,7 +287,7 @@ fn convergence_accepts_pass_two_and_pass_eight() {
 fn convergence_driver_consumes_the_complete_next_frontier() {
     let mut resources = ResourceState::new();
     let mut reservations = prepared_reservations();
-    let initial = MeasurementFrontier::exact_plot(PlotKind::Scatter);
+    let initial = MeasurementFrontier::exact_root(PlotKind::Scatter.into());
     let mut calls = 0;
 
     let selected = run_convergence(
@@ -376,6 +373,39 @@ fn cumulative_resources_admit_limit_and_refuse_limit_plus_one_independently() {
     }
 }
 
+#[test]
+fn text_and_layout_share_one_operation_generation_budget() {
+    let mut resources = ResourceState::new();
+    let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
+    environment
+        .share_generation_resources(resources.generation_resources.clone())
+        .unwrap();
+
+    environment
+        .claim_text_generation_slots(RESOURCE_LIMIT - 1)
+        .unwrap();
+    resources.claim(ResourceKind::GenerationSlots, 1).unwrap();
+    let error = environment.claim_text_generation_slots(1).unwrap_err();
+    assert!(matches!(
+        error,
+        crate::font::canonical::TextGenerationClaimError::Limit {
+            resource: "candidate-generation slots",
+            limit: RESOURCE_LIMIT,
+            cumulative_claim
+        } if cumulative_claim == RESOURCE_LIMIT + 1
+    ));
+
+    environment
+        .claim_text_generation_work(RESOURCE_LIMIT - 1)
+        .unwrap();
+    resources.claim(ResourceKind::GenerationWork, 1).unwrap();
+    assert!(resources
+        .claim(ResourceKind::GenerationWork, 1)
+        .unwrap_err()
+        .to_string()
+        .contains("cumulative claim 1000001"));
+}
+
 fn assert_reservation_refusal(stage: ReservationStage) {
     let mut reservations = ReservationDriver::new();
     let mut values = Vec::<u8>::new();
@@ -452,7 +482,7 @@ fn every_reservation_stage_propagates_capacity_refusal() {
 #[test]
 fn cache_identity_includes_constraints_assigned_context_and_frontier() {
     let constraints = LayoutConstraints::exact_css_pixels(320, 240).unwrap();
-    let frontier = MeasurementFrontier::exact_plot(PlotKind::Scatter);
+    let frontier = MeasurementFrontier::exact_root(PlotKind::Scatter.into());
     let key = MeasurementCacheKey {
         constraints,
         assigned: None,
@@ -506,10 +536,17 @@ fn exact_root_converges_from_one_cached_measurement_and_promotes_identity() {
     let payload = Box::new(17_u8);
     let payload_address = std::ptr::from_ref(payload.as_ref()).addr();
 
-    let selected = plan_exact_root(317, 211, PlotKind::Scatter, || {
-        builds.set(builds.get() + 1);
-        Ok(payload)
-    })
+    let selected = plan_exact_root(
+        317,
+        211,
+        PlotKind::Scatter,
+        |_| Ok(()),
+        |()| {
+            builds.set(builds.get() + 1);
+            Ok(payload)
+        },
+        |(), plan, _| Ok(plan),
+    )
     .unwrap();
 
     assert_eq!(builds.get(), 1);
@@ -519,6 +556,14 @@ fn exact_root_converges_from_one_cached_measurement_and_promotes_identity() {
         payload_address
     );
 
-    let default = plan_exact_root(640, 480, PlotKind::Scatter, || Ok(())).unwrap();
+    let default = plan_exact_root(
+        640,
+        480,
+        PlotKind::Scatter,
+        |_| Ok(()),
+        |()| Ok(()),
+        |(), (), _| Ok(()),
+    )
+    .unwrap();
     assert_eq!(default.dimensions(), (640, 480));
 }

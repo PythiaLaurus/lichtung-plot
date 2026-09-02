@@ -1,5 +1,16 @@
 use super::*;
 
+#[test]
+fn histogram_does_not_preflight_nonexistent_legend_text() {
+    Plot::histogram(HistogramInput::samples(NumericValues::new(
+        "value",
+        [1.0, 2.0, 3.0],
+    )))
+    .labels(lichtung_plot::Labels::humanized().alias("series", "\u{10FFFF}"))
+    .preflight()
+    .unwrap();
+}
+
 /// Violin plot renders to a non-empty SVG without
 /// panicking. We use a 3-species × 15-observation
 /// synthetic sample (smaller than the iris
@@ -153,12 +164,27 @@ fn histogram_implicit_axis_label_coordinates_stay_inside_canvas() {
     let svg = std::fs::read_to_string(output).unwrap();
     let text = parse_text_elements(&svg);
     let value_label = text_element(&text, "Value");
-    let count_label = text_element(&text, "Count");
+    assert!(value_label.x.is_finite() && (0.0..=640.0).contains(&value_label.x));
+    assert!(value_label.y.is_finite() && (0.0..=480.0).contains(&value_label.y));
 
-    for label in [value_label, count_label] {
-        assert!((label.font_size..=640.0 - label.font_size).contains(&label.x));
-        assert!((label.font_size..=480.0 - label.font_size).contains(&label.y));
-    }
+    let count_line = svg
+        .lines()
+        .find(|line| line.contains(">Count</text>"))
+        .unwrap();
+    let transform = count_line
+        .split_once("transform=\"")
+        .unwrap()
+        .1
+        .split_once('"')
+        .unwrap()
+        .0
+        .strip_prefix("rotate(-90.0,")
+        .unwrap()
+        .strip_suffix(')')
+        .unwrap();
+    let (pivot_x, pivot_y) = transform.split_once(',').unwrap();
+    assert!((0.0..=640.0).contains(&pivot_x.parse::<f64>().unwrap()));
+    assert!((0.0..=480.0).contains(&pivot_y.parse::<f64>().unwrap()));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
