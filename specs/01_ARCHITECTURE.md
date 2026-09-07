@@ -136,6 +136,9 @@ allocation, deterministic component measurement, and immutable arrangement
 protocol while preserving current exact public sizing behavior. The reopened
 T5a1 and T5a3 phases repair the existing implementation against that target;
 historical completion does not establish revised-target conformance.
+T5a0s now blocks implementation pending explicit user approval of observable
+layout, label, sizing, output, font, and alignment behavior. Architectural
+agreement alone does not close that gate.
 Automatic root sizing, the bounded-width builder, rendered-output dimension
 accessors, and removal of pre-render Plot
 dimension getters are not current behavior or public API until Phase T6

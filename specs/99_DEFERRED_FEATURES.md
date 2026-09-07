@@ -13,6 +13,12 @@ and the canonical architecture and rendering contracts are atomically updated
 to describe that implemented behavior. Approval or planning alone is not a
 current API change.
 
+T5a0s in `91_IMPLEMENTATION_PLAN.md` is an explicit user-approval gate for the
+revised layout proposal. Exact-width/automatic-height sizing, narrow long-label
+controls, independent caption alignment, and font fallback consequences are
+being reconsidered there, not admitted by this document. Existing exclusions
+stay non-current until answers are recorded and contracts updated.
+
 ## Legend Composition Modes
 
 The current legend uses one exact combined entry for every observed independent
@@ -134,6 +140,12 @@ intrinsics for parent allocation and one immutable measured result or typed fit
 miss at assigned constraints. Local alternatives are permitted only with a
 declared owner, deterministic order, and finite cap; root feedback is limited to
 eight rounds and does not authorize unbounded local retries.
+
+This deferral does not prohibit bounded containing-frame recovery: an automatic
+legend fitting by itself is insufficient when its allocated plot fails. The
+T5a0s/D1 proposal tries supported edges and compact reflow while measuring the
+affected children under changed constraints; explicit placements stay fixed.
+Its finite scope and user-visible failure behavior require approval before code.
 
 A future optimization proposal would need demonstrated scientific workloads,
 measured resource/performance evidence, semantic completeness, reproducibility,

@@ -222,6 +222,7 @@ current Canvas stores one exact composed width and height and defaults to
 composed dimensions and replaces child Plot dimensions for its render context.
 
 `05_LAYOUT_SYSTEM.md` defines the approved replacement contract. After the
+behavior approval gate T5a0s is closed and the
 atomic Phase T6 migration, absence of a sizing call selects bottom-up automatic
 layout, `max_width(width)` supplies a finite width bound with automatic height,
 and `size(width, height)` remains exact. Final canonical dimensions then belong
@@ -240,6 +241,13 @@ Automatic and bounded-width roots also pass the approved finite resource and
 default-300-DPI viability envelope before backend creation. Exact roots remain
 exact and retain format-local terminal validation, so an exact SVG scene may be
 valid even when a later PNG request rejects its raster limits.
+
+Target approval is reopened in T5a0s. In particular, automatic placement must
+validate the affected plot-plus-guide layout, not accept guide-only fit; the
+bounded recovery proposal is awaiting approval. The sizing modes and initial
+default-PNG coupling described here are also explicit open decisions, not
+authorization to implement them before that gate closes. Current sizing and
+publication methods remain unchanged.
 
 ## Scene Lifecycle
 

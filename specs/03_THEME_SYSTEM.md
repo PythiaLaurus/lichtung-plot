@@ -15,6 +15,12 @@ migration. Other target names and behaviors below are not a second current API
 and must not be introduced as aliases or dormant placeholders before their
 owning phase.
 
+T5a0s in `91_IMPLEMENTATION_PLAN.md` reopens user approval for layout-related
+behavior, including long-label controls, font fallback consequences, and joint
+versus independent caption alignment. Those existing target clauses remain
+proposals under review; no new behavior or public control is authorized until
+the answers are recorded and the affected contracts reconciled.
+
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
 mutable global configuration, dynamic style plugins, backend-specific

@@ -1,6 +1,6 @@
 # Layout System
 
-**Status**: Approved implementation target; non-current until Phase T6
+**Status**: Revised target proposal; behavior approval pending T5a0s; non-current until Phase T6
 
 ## Purpose And Boundary
 
@@ -11,11 +11,20 @@ remains unchanged until the atomic Phase T6 migration in
 or a second rendering route. This specification also defines the corrected T5a3
 resource and workload target; historical global-search acceptance is superseded.
 
+The architectural direction is accepted, but implementation is blocked on the
+user-visible behavior decisions in `91_IMPLEMENTATION_PLAN.md`, T5a0s. This
+document is the working target, not evidence that every default or fit-failure
+tradeoff has user approval. Existing clauses for labels, sizing, output viability,
+fonts, and alignment remain proposed policies until those decisions are resolved.
+
 Parents allocate space. A child returns ONE measured immutable local plan or a
 typed fit miss under that allocation. Intrinsic summaries inform allocation but
 are not collections of constrained layouts. Explicit, bounded local attempts
 are allowed only where named below. There are no Cartesian child products,
 global quality keys, complete wrap-transition sets, or exhaustive width search.
+An automatic placement succeeds only when its affected containing layout fits,
+not merely when the guide itself fits. Bounded parent recovery is distinct from
+an exhaustive product of independently chosen child alternatives.
 
 The guarantee is deterministic policy execution, not discovery of every feasible
 layout or a globally best layout. A policy fit error can occur even if a different
@@ -91,8 +100,12 @@ font, and invariant errors are fatal immediately, never fit misses.
 When child boxes can be constructed, siblings run in canonical order even after
 a fit miss, so a later fatal error wins; otherwise the least terminal reason
 wins, then provisional requests aggregate. Local attempts continue only after a
-terminal local fit miss that the explicitly named alternative can address. No
-parent retries siblings' earlier decisions or searches sibling combinations.
+terminal fit miss that the explicitly named alternative can address. A placement
+owner may change an automatic guide edge or its declared flow mode and remeasure
+all children whose allocated constraints change. A child failure attributable to
+that allocation rejects the containing placement attempt, even if the guide fits.
+This does not authorize independent sibling-choice products, changing explicit
+caller policies, or treating font/resource errors as reasons to retry.
 The first provisional local attempt also stops that owner's alternatives and
 returns its named requests to the root; stale parent inputs cannot justify
 silently choosing a less-preferred tick source or guide edge.
@@ -614,13 +627,40 @@ and canonical rotation tokens stored, never trigonometric recomputation.
 
 ## Legends And Continuous Guides
 
-Explicit placement fixes its edge/typed inside anchor. Automatic outside
-placement tries only `right,top,bottom,left`, first local fit, then fails. The
-owning frame allocates one edge attempt at a time from current parent constraints;
-it cannot ask siblings to revisit tick sources, wrapping policies, or packing.
-No later sibling failure restarts earlier guide placement. Multiple guides follow
-canonical guide order. Outside guides are normal flow; inside guides are typed
-collision overlays. No root percentage chooses typography, edge, or flow.
+Explicit placement fixes its edge/typed inside anchor. The proposed bounded
+automatic policy tries `right,top,bottom,left` in that order. For each edge, the
+owning Plot frame or Canvas frame allocates space and measures the entire affected
+body, axes, labels, and guide. Success requires that containing layout to fit.
+If the right legend fits but leaves insufficient plot-label space, the right
+attempt fails and another supported arrangement is tried before final fit failure.
+
+Each edge first uses the preferred flow below, then may use its one compact flow
+variant. Explicit edges can reflow within their assigned edge but never move to
+another edge; explicit inside anchors remain fixed. No variant shrinks fonts,
+hides entries, shortens labels, or changes caller data/scale policies. Changed
+child constraints cause fresh keyed local measurement; unchanged plans may be
+reused. Provisional gutter/domain feedback follows the root protocol rather than
+being treated as terminal failure or committed success on stale inputs.
+
+The proposal has at most eight edge/flow trials per automatic guide owner per
+root round (two for an explicit outside edge), charged cumulatively across all
+calls in that round, including calls caused by ancestor attempts. Nested frames
+do not reset those budgets or enumerate combinations of guide choices. Multiple
+guides follow canonical owner order; each trial holds other guide decisions fixed
+at their current choices, initially their preferred placements. Exhaustion of
+admitted work remains a resource error, not a hidden best-effort rendering route.
+If every supported trial under the current constraints was evaluated and failed,
+return fit failure. If ancestor-driven calls consume the shared budget before
+those trials can finish, return an explicit planning-limit error instead. Reusing
+an identical cached trial charges a call but not another edge/flow evaluation;
+changed constraints are a new charged trial. Do not report a budget stop as proof
+that the content cannot fit.
+This limited recovery still does not promise every theoretically feasible figure.
+T5a0s/D1 requires user approval of the behavior and review of its bounded scope
+before implementation; these are not approved runtime defaults yet.
+
+Outside guides are normal flow; inside guides are typed collision overlays.
+No root percentage chooses typography, edge, or flow.
 
 Determine entry widths BEFORE greedy flow, using available inner WIDTH `W`,
 never height as a text wrapping width. `W` is the assigned legend width after
@@ -637,7 +677,8 @@ aligned entry height, and keep that allocated width even if actual label ink is
 narrower. In semantic order, append entries left-to-right while the next entry
 and inter-entry gap fit `W`; otherwise start the next row. Each row height is
 the maximum entry height, with traced gaps between rows. Finite `H` must contain
-the resulting total height. Do not narrow entries to squeeze another into a row.
+the resulting total height. This is the preferred flow; only the compact variant
+below may use a narrower entry width.
 
 For left/right vertical flow, choose ONE uniform column width
 `C=min(max(P[i]),W)`. Check every `M[i]<=C`, then measure each label once at
@@ -645,26 +686,37 @@ For left/right vertical flow, choose ONE uniform column width
 order while their heights and inter-entry gaps fit finite `H`; otherwise start
 the next equal-width column with its traced column gap. An entry taller than
 `H`, or columns whose total widths/gaps exceed `W`, misses. With automatic
-height, use one column and derive its height. Never try narrower columns or
-remeasure labels after flow. This conservative policy may reject a layout that
-some other column width could fit; no width search is promised.
+height, use one column and derive its height. Do not mutate a completed flow;
+the compact variant below is a separate bounded trial with newly measured labels.
+
+For the compact trial, let `g` be the horizontal entry/column gap and
+`C2=floor((W-g)/2)` in layout quanta. A nonpositive `C2` or an entry minimum above
+its compact allocation rejects this variant. Horizontal entries use
+`min(P[i],C2)` then the same ordered row flow. Vertical flow uses uniform width
+`min(max(P[i]),C2)` then the same ordered column flow. If allocations duplicate
+the preferred trial, reuse its outcome. There is no scan over all column counts
+or widths, and exact label shaping still determines height and containment.
 
 Worked horizontal example, in CSS pixels after chrome/title: `W=100`, `H=50`,
 key-plus-gap 20 for each entry, and label preferred widths `[40,30,70]` give
 fixed entry widths `[60,50,90]` and label widths `[40,30,70]`. With inter-entry
 gap 5, each entry starts its own row. If measured entry heights are `[10,10,20]`
 and row gap 4, total height is `10+4+10+4+20=48`, so it fits. Entries are not
-shrunk to put the first two together.
+shrunk in this preferred trial. If the containing frame fails, the compact trial
+may assign narrower widths and remeasure; the title/plot must also fit before
+either trial is accepted.
 
 Worked vertical example, after chrome/title: `W=150`, `H=45`, preferred entry
 widths `[60,70,50]`, minima at most 70, and key-plus-gap 20 give `C=70` and label
 width 50 for every entry. With measured heights `[20,20,20]`, vertical gap 5,
 and column gap 10, the first two entries fill column one exactly to 45; the
-third occupies column two. Total width is `70+10+70=150`. At `W=140` this same
-policy misses rather than trying width-65 columns; with automatic height it
-uses one width-70 column of height `20+5+20+5+20=70`.
+third occupies column two. Total width is `70+10+70=150`. At `W=140` the preferred
+trial misses, but the compact trial uses width-65 columns. It fits only if minima
+permit and the newly measured entries still fit the available height; it cannot
+assume their old heights. With automatic height the preferred trial uses one
+width-70 column of height `20+5+20+5+20=70`.
 
-No entry permutations or row/column-major alternatives exist. Title, keys,
+No entry permutations or additional row/column-major alternatives exist. Title, keys,
 labels, baseline heights, gaps, padding, and border ink all participate in final
 fit. Zero entries mean an absent legend, not a detached title. Flow slots and
 allocated entry widths are plan payload, not semantic topology.
@@ -1151,9 +1203,12 @@ versus exact outlined/PNG geometry. Run Unicode conformance against pinned data.
 Tick evidence includes more than five automatic ticks at wide spans, exact list
 0/1/10_000/10_001 boundaries, unlabeled exact ticks, interval first/coarsen/midpoint
 ordering, `2^53` indices, Forest expressions, and stale-gutter provisional misses.
-Guide/overlay evidence includes fixed edges, four ordered automatic attempts,
-entry-order flow, no sibling backtracking, deterministic packing/shelves, and
-terminal exact-fit errors without shrink/omission.
+Guide/overlay evidence includes fixed edges, bounded edge/compact-flow trials,
+entry-order flow, and rejection of guide-only fit when the affected plot fails.
+Prove another supported arrangement succeeds before reporting final fit failure,
+explicit placements remain fixed, nested owners share attempt/work budgets,
+and deterministic packing/shelves preserve content. There is no exhaustive
+sibling-product search or font/content change to force exact fit.
 
 Font evidence covers canonical name occurrences, first-use stacks/weights,
 SHA/face ordering, per-scalar first coverage, same-byte use, discovery permutation

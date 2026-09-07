@@ -183,8 +183,9 @@ The approved theme and layout targets follow these rules:
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | IN PROGRESS |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a0r | Parent-constraint documentation adjudication | COMPLETE |
+| T5a0s | User-visible behavior approval and bounded recovery | BLOCKED |
 | T5a1 | Exact-root kernel (reopened revised target) | PENDING |
-| T5a1r | Active parent-constraint kernel repair | PENDING |
+| T5a1r | Active parent-constraint kernel repair | BLOCKED |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
 | T5a3 | Canonical fonts and immutable text plans (reopened) | PENDING |
 | T5a3a | Unicode and font preparation, profile, and provenance | PENDING |
@@ -2287,8 +2288,8 @@ Acceptance:
 Dependencies: T4.
 
 Establish the private layout kernel while moving foundational non-data
-appearance into the resolved theme. T5a is complete only through T5a0r, T5a1r,
-T5a3a-T5a3f, and the remaining T5a4-T5a6d stages in
+appearance into the resolved theme. T5a is complete only through T5a0r, T5a0s,
+T5a1r, T5a3a-T5a3f, and the remaining T5a4-T5a6d stages in
 dependency order; no subphase may leave a dormant replacement kernel, temporary
 selector, compatibility fallback, or second root-plan representation.
 
@@ -2388,6 +2389,10 @@ fixtures, or snapshots changed and no test suite ran. Runtime repair acceptance
 remains pending in T5a1r and T5a3a1-T5a3f; this completion certifies the revised
 documentation, not the historical implementation's correctness.
 
+Reopened approval boundary: `028e2c8` established an internally reviewed document,
+but that did not establish user acceptance of its fit-failure tradeoffs. T5a0s
+now blocks implementation until those behaviors are discussed and approved.
+
 Acceptance:
 
 - Replace active universal candidate collections, root Cartesian search,
@@ -2413,6 +2418,51 @@ Acceptance:
 
 Commit: `docs(layout): adjudicate deterministic parent constraints`.
 
+### T5a0s: User-Visible Behavior Approval And Bounded Recovery
+
+**Status**: BLOCKED
+
+Dependencies: T5a0r; awaiting explicit user decisions D1-D6 below.
+
+The prior statement that no product decisions remained was premature. Distinguish
+agreement with parent-constraint architecture from approval of its observable
+defaults. No implementation phase may start until this gate closes. Existing
+public behavior is unchanged; pending options do not authorize APIs or code.
+
+| Decision | Existing proposal / consequence | Recommendation awaiting approval | Status |
+| --- | --- | --- | --- |
+| D1 Automatic recovery | A guide could fit while its allocated plot failed; fixed flow could reject ordinary reflow | Validate the entire affected frame; try bounded automatic edges and preferred/compact reflow, but never move explicit placements or hide/shrink content. No exhaustive whole-tree solver | OPEN |
+| D2 Long labels | Normal Unicode wrapping only; an unbroken identifier or crowded category label can cause a fit error | Keep normal wrapping and strict content preservation by default; decide whether explicit opt-in identifier breaking/axis-label rotation belongs in this milestone or remains deferred | OPEN |
+| D3 Sizing workflows | Future automatic dimensions, maximum width/automatic height, exact width-height; no exact-width/automatic-height mode | Retain these meanings; offer exact width with automatic height for publication columns if wanted. Canvas still owns child allocation. No public change before the scheduled switch | OPEN |
+| D4 SVG versus PNG limits | Automatic/bounded SVG must pass hypothetical default-300-DPI size limits; exact SVG does not | Keep PNG-only limits at PNG publication for all sizing modes. Preserve shared layout/resource safety, and explicitly reconsider the automatic-only SVG byte cap rather than silently inherit it from PNG | OPEN |
+| D5 Font availability | Installed-font stack, strict visible-glyph failure, first-covering-scalar fallback; even generated alphabets are checked before final labels | Keep no downloads and no replacement boxes; request approval for strict coverage and discuss grapheme-coherent fallback versus the existing scalar rule, with clear diagnostics and viewer-dependent editable SVG | OPEN |
+| D6 Caption alignment | One joint alignment controls title, subtitle, caption; built-ins center all three | Permit independent caption alignment, with centered titles/subtitles and left-aligned prose captions if desired; this changes defaults and needs explicit approval | OPEN |
+
+The recommendations are NOT defaults accepted by silence. Record each user
+answer, resulting observable rule, explicit exclusions, and concrete acceptance
+examples here; resolve affected `01`-`05` and `99` clauses atomically afterward.
+If a decision is deferred, state the behavior implemented in its absence and
+obtain agreement to that limitation. Ask focused follow-ups for ambiguity rather
+than selecting an unapproved behavior. Existing contrary clauses in the working
+target describe the choices under review, not a second selectable architecture.
+
+Correction already drafted for D1 in `05`: placement success includes the body,
+axes, labels, and guide; another edge/compact flow may remeasure affected children
+when allocated space causes failure. Per-owner trials and root work remain bounded;
+fatal font/resource errors never trigger alternatives. Explicit caller placement,
+content, dimensions, and typography are not changed to force fit.
+
+Required acceptance examples include: right-guide/plot failure with successful
+top/bottom placement; compact reflow success with every label intact; explicit
+right placement remaining right or failing; nested/multiple guides sharing work
+and trial budgets; and genuine exact-size failure after supported recovery.
+Distinguish exhausted supported fit trials from a planning-limit stop before all
+trials complete; neither may silently publish a partial or altered figure.
+Add examples for each other decision after its behavior is agreed.
+
+Completion requires explicit decisions, cross-document review, `git diff --check`,
+and a documentation commit. Do not run the code test suite for this phase.
+
 ### T5a1: Exact-Root Kernel (Reopened Revised Target)
 
 **Status**: PENDING
@@ -2425,9 +2475,10 @@ and completes only when T5a1r closes; it has no separate repair commit.
 
 ### T5a1r: Active Parent-Constraint Kernel Repair
 
-**Status**: PENDING
+**Status**: BLOCKED
 
-Dependencies: T5a0r.
+Dependencies: T5a0r and completed T5a0s. User-visible behavior approval is pending;
+do not start implementation based only on the earlier architectural approval.
 
 Scope and deletion targets:
 
@@ -3229,8 +3280,9 @@ Scope:
   allocation. The legend owner chooses one deterministic local flow at assigned
   width using final typography and exact glyphs, with fixed entry/column widths
   before greedy flow as specified in `05_LAYOUT_SYSTEM.md`; return one measured
-  result or typed fit miss. Only the specified bounded edge attempts remain;
-  do not invent row/column alternatives.
+  result or typed fit miss. The owning frame validates the affected body/axes and
+  guide together before accepting placement. Use only edge/compact-flow recovery
+  approved through T5a0s/D1; do not invent additional row/column alternatives.
   Do not send alternative sets upward or combine sibling legend choices.
 - Replace equal-cell subtraction with measured row and column tracks that
   preserve shared data-panel alignment separately from unequal decoration
