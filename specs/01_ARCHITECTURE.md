@@ -131,10 +131,13 @@ The replacement Theme values, components, colors, and scales remain non-current
 until Phase T6 completes.
 
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture for that
-same migration. T5a through T5e implement its private complete-candidate
-measurement, arrangement, and root-selection protocol while preserving the
-current exact public sizing behavior. Automatic root sizing, the bounded-width
-builder, rendered-output dimension accessors, and removal of pre-render Plot
+same migration. T5a through T5e implement its private parent-constraint
+allocation, deterministic component measurement, and immutable arrangement
+protocol while preserving current exact public sizing behavior. The reopened
+T5a1 and T5a3 phases repair the existing implementation against that target;
+historical completion does not establish revised-target conformance.
+Automatic root sizing, the bounded-width builder, rendered-output dimension
+accessors, and removal of pre-render Plot
 dimension getters are not current behavior or public API until Phase T6
 completes.
 

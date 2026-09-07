@@ -7,9 +7,11 @@
 This document records concrete features deliberately excluded from the current
 API. It is not a compatibility promise, implementation authorization, or reason
 to add placeholder enums, flags, builders, storage, or fallback behavior. A
-feature moves into the current contract only after its semantics are designed in
-the canonical architecture and rendering specifications and its implementation
-phase is added to `91_IMPLEMENTATION_PLAN.md`.
+feature moves into the current contract only after its semantics are designed,
+its admitted implementation phase in `91_IMPLEMENTATION_PLAN.md` is implemented,
+and the canonical architecture and rendering contracts are atomically updated
+to describe that implemented behavior. Approval or planning alone is not a
+current API change.
 
 ## Legend Composition Modes
 
@@ -55,16 +57,17 @@ The approved T6 target in `05_LAYOUT_SYSTEM.md` admits one optional per-axis
 preferred data interval. `TickInterval::additive` applies to linear numeric axes;
 `TickInterval::log10_decades` applies to Log10 axes. The renderer tries the
 requested complete interval vector first, then deterministic coarser complete
-vectors when no closer source survives, and finally one terminal midpoint source.
+vectors when no closer source fits, and finally one terminal midpoint source.
 Interval vectors never use evenly indexed subsequences, and source precedence is
-resolved before soft visual quality. Exact `AxisTick` values remain the strict
+resolved locally at the assigned span under a declared source order and cap, not
+by global root ranking. Exact `AxisTick` values remain the strict
 position/label control and take precedence regardless of setter order.
 
 Target counts, maximum counts, exact generated counts, visual-density scalars,
 arbitrary multiplicative ratios, categorical stride/drop policies, and tick
 generation callbacks remain deferred. A broader design must define precedence,
 nice-step deviation, small-panel behavior, facets, Canvas shared dimensions,
-and resource limits without introducing local pruning or a second axis-planning
+and resource limits without introducing global search or a second axis-planning
 route. No count, density, callback, or generic tick-generator placeholder is
 reserved.
 
@@ -87,21 +90,27 @@ setter, callback, or placeholder is reserved.
 
 The approved target in `05_LAYOUT_SYSTEM.md` admits automatic root layout, one
 finite maximum width with automatic height, and one exact width-height pair. It
-does not expose the private `LayoutConstraints`, `LengthConstraint`, candidate
-collection, or measurement types.
+does not expose the private `LayoutConstraints`, `LengthConstraint`, intrinsic,
+allocation, or measurement types. Automatic width derives from the existing
+preferred-width metric, then height from measurement; bounded width assigns
+`min(preferred_width, max_width)` without searching widths. Root viability checks
+canonical preserve-text bytes and PNG source/default-300-DPI target dimensions
+for the one produced layout rather than selecting an alternative. Actual
+outlined parser bytes and requested PNG options are terminal-local checks;
+later PNG failure does not invalidate an otherwise valid automatic SVG.
 
 A broader public surface would need demonstrated workflows for minimum width,
 minimum height, maximum height, exact single-dimension sizing, and interactions
 with scientific aspect, wrapping, legends, facets, Canvas, and exact content fit.
 No public constraint object, builder, callback, or alternate measurement API is
-reserved now, and the private complete-candidate protocol is not an extension
+reserved now, and the private parent-constraint protocol is not an extension
 surface.
 
 ## Compact Composition
 
-Automatic layout preserves declared Canvas coordinates, header spans, row
-titles, range groups, Cartesian facet coordinates, and trailing wrap slots. It
-does not pack occupied cells or collapse empty rows and columns.
+The approved automatic-layout target preserves declared Canvas coordinates,
+header spans, row titles, range groups, Cartesian facet coordinates, and trailing
+wrap slots. It does not pack occupied cells or collapse empty rows and columns.
 
 A future compact composition policy must define coordinate remapping, shared
 axes, header spans, range groups, empty semantic combinations, and deterministic
@@ -109,8 +118,34 @@ ordering. No implicit sparse-grid compaction or placeholder policy is reserved.
 
 ## Caller-Selected Layout Objective
 
-The layout quality ordering in `05_LAYOUT_SYSTEM.md` is one deterministic
-renderer policy. A future caller-selected objective would need typed semantics
-for aspect, density, whitespace, legend flow, text measure, grid balance, and
+The deterministic parent allocation and local layout rules in
+`05_LAYOUT_SYSTEM.md` are private renderer policy. A future caller-selected
+objective would need typed semantics for aspect, density, whitespace, legend
+flow, text measure, grid balance, and
 failure under exact constraints. No scoring callback, dynamic strategy, string
 mode, or public layout plugin is reserved.
+
+## Global Layout Optimization
+
+Exhaustive global optimization is deferred. The approved repair replaces
+universal complete-candidate collections, sibling Cartesian products, exhaustive
+text break partitions, and root-wide dense-rank/total-key selection with separate
+intrinsics for parent allocation and one immutable measured result or typed fit
+miss at assigned constraints. Local alternatives are permitted only with a
+declared owner, deterministic order, and finite cap; root feedback is limited to
+eight rounds and does not authorize unbounded local retries.
+
+A future optimization proposal would need demonstrated scientific workloads,
+measured resource/performance evidence, semantic completeness, reproducibility,
+and a coherent replacement contract. No runtime strategy switch, dormant search
+route, global scoring callback, or placeholder objective is admitted now.
+Existing exhaustive-search milestones remain historical achievements, not an
+active optimization requirement.
+
+This deferral does not change the approved canonical ordered font-stack/weight
+and scalar-fallback policy, admit a broad cluster-fallback rewrite, alter sparse
+Canvas/facet semantics, or make target public APIs current before T6. Repairing
+Common/Inherited script resolution and Unicode 16 coherence is active repair,
+not a new fallback policy. Preserve-text SVG remains viewer-dependent; retained
+outlines and PNG use generation-host glyph geometry. Content omission, font
+shrink, hidden roots, and asset provisioning are not optimization escape paths.

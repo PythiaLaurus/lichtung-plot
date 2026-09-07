@@ -147,12 +147,14 @@ annotation text, stroke, and mark extents; Plot and Canvas root title-block
 relationships resolve from `CompositionTheme` against adjacent title metrics;
 and other composition gaps resolve against the owning Canvas or facet
 typography. A theme never scales spacing from the root canvas width or height.
-`05_LAYOUT_SYSTEM.md` owns complete-candidate measurement direction, root-only
-candidate selection, constraints, arrangement, and output dimensions.
+`05_LAYOUT_SYSTEM.md` owns parent constraints, intrinsic requirements,
+deterministic component measurement, parent allocation/arrangement, bounded
+feedback, and output dimensions. A component returns one immutable measured
+plan or typed fit miss; it does not export complete alternatives for root search.
 
 Except for the one admitted `CompositionTheme` root title-block horizontal
 alignment, anchor, rotation, orientation, clipping, z-order, statistical
-geometry, collision rules, layout quality ordering, convergence budgets, and
+geometry, collision rules, local layout decision order, feedback budgets, and
 minimum representable geometry remain renderer invariants. Root title,
 subtitle, and caption rotation remains fixed.
 Bar spacing, legend policy, marker and connector visibility, category-label
@@ -447,22 +449,35 @@ and two for a generic-family contribution.
 Generate every occurrence tuple first; for duplicate file identities retain the
 lexicographically least complete occurrence tuple, then sort surviving identities
 by that tuple. The first candidate is the primary face. Glyph fallback scans this
-same list and selects the first face containing that scalar. The operation records
-the complete ordered identity list as font-environment provenance and fails if the
+same list and selects the first face containing each required visible scalar.
+Nonpainting Unicode controls follow the explicit text semantics in
+`05_LAYOUT_SYSTEM.md`; absence of their standalone cmap glyph is not a missing
+visible character. This exception does not change primary-face ordering or
+visible-scalar fallback and does not introduce cluster-wide font substitution.
+The operation records the complete ordered identity list as font-environment
+provenance and fails if the
 list is empty or any required glyph has no face. Measurement and drawing use the
 same selected face per glyph. No font is downloaded, provisioned, embedded, or
 read from a network or project cache.
 
-Font candidates are preflight font-resolution inputs, not layout candidates, and
-do not consume layout candidate-generation or candidate-evaluation budgets. File
-enumeration, inspected/hashed bytes, decoded metadata/occurrences, identity work,
-and glyph probes consume the separate font-preflight limits and stage-1
-reservations in `05_LAYOUT_SYSTEM.md` before measurement or backend creation.
+Font candidates are preflight font-resolution inputs, not alternative layouts.
+Layout does not choose another font because it prefers that font's dimensions.
+File enumeration, inspected/hashed bytes, decoded metadata/occurrences, identity work,
+and glyph probes consume the separate font-preflight limits and checked
+first-party admission in `05_LAYOUT_SYSTEM.md` before text measurement or backend
+creation. Known counts reserve fallibly after admission; unknown-length payloads
+use checked bounded growth, not an unbounded draft followed by a second reserved
+copy. Pinned dependencies may supply Unicode algorithms/data; generated tables
+require reproducible provenance and conformance evidence, not bespoke ownership
+for its own sake.
 
-Preserve-text SVG emits the validated ordered stack; outlined SVG and PNG use
-generation-host fonts. Text wrapping, text-derived layout geometry, outlined
-glyph paths, and PNG bytes require the same installed-font environment. The
-remaining scene structure is deterministic for identical inputs and options.
+Preserve-text SVG emits the validated ordered stack and selected line structure
+while preserving paragraph bidi context. Recipient fonts and shaping can differ;
+editable text does not promise exact generation-host glyph geometry. Outlined
+SVG and PNG use retained generation-host glyph identities and positioning.
+Text wrapping, text-derived layout geometry, outlined glyph paths, and PNG bytes
+require the same installed-font environment. The remaining scene structure is
+deterministic for identical inputs and options.
 
 `TextTheme::line_height` is a finite positive binary64 multiplier of that role's
 font size, not an absolute length. Layout resolves it from the multiplier's exact

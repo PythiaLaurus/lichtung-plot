@@ -42,20 +42,24 @@ discussion:
 - Theme values that affect text measurement, layout, legend size, or collision
   planning must resolve before preflight and remain identical during final
   rendering.
-- Scientific layout follows one private constraint, complete-candidate
-  measurement, root-selection, arrangement, convergence, accounting, and freeze
-  protocol. Parents pass named width and height constraints downward, children
-  return complete nonempty candidate collections upward, every parent candidate
-  is provisionally arranged, and only the selected root tree is promoted to
-  final positions.
-- An unconstrained or bounded root selects one finite publishable candidate
-  through the exact eligibility, nonexact viability, dense-rank, and total-key
-  rules in `05_LAYOUT_SYSTEM.md`; it does not use a hidden fixed canvas,
-  locally pruned child result, sampled continuous interval, or universal
-  per-panel multiplier.
-- Exact `.size(width,height)` remains exact. Automatic and bounded candidates
-  pass default-PNG and canonical-SVG viability before ranking; exact roots retain
-  format-local SVG behavior and apply PNG limits only on a PNG terminal.
+- Scientific layout uses deterministic parent constraints and local layouts.
+  Intrinsic requirements inform parent allocation separately from measurement;
+  each measurement returns one immutable measured result or a typed fit miss.
+  Parents assign child constraints and positions; siblings are not combined in a
+  Cartesian search. Local alternatives require a declared owner, order, and cap.
+- Root feedback is bounded to at most eight rounds with explicit cycle and
+  exhaustion failure. No component has an unbounded local retry loop. Scientific
+  requirements and local preferences do not form a global dense-rank objective.
+- Automatic sizing derives preferred width from the existing preferred-width
+  metric, assigns that width, and derives height from measurement. Bounded width
+  assigns `min(preferred_width, max_width)` without width search. There is no
+  hidden root canvas, font shrink, content omission, or universal panel multiplier.
+- Exact `.size(width,height)` and the current default/getter API remain current
+  until T6. Automatic and bounded sizing validate canonical preserve-text bytes
+  and PNG source/default-300-DPI target dimensions for the one produced layout,
+  not a pool of alternatives. Actual outlined parser bytes and call-local PNG
+  options are terminal-local safeguards; later PNG failure does not reject an
+  otherwise valid automatic SVG. Exact roots retain format-local SVG behavior.
 - Plot/Canvas root title-block alignment is one `CompositionTheme` property;
   built-ins are centered and T6 exposes Start/Center/End customization.
 - Automatic numeric ticks have no fixed five-tick ceiling or public count target.
@@ -67,8 +71,10 @@ Phase T1 settled the exact replacement theme and scale public types, replacement
 semantics, component boundaries, validation, and scope of local overrides in
 `03_THEME_SYSTEM.md`. Phase T4 made complete built-in Canvas/Plot theme
 attachment and inheritance current without introducing the replacement value
-model early. Phase T3j settled the private layout terminology, public sizing
-boundary, migration partition, and final ledger impact. Phase T3k closed
+model early. Phase T3j recorded the original private layout terminology, public
+sizing boundary, migration partition, and final ledger impact. Its exhaustive
+search scope is historical and superseded by T5a0r; its completed audit remains
+evidence of that earlier objective, not revised-target compliance. Phase T3k closed
 terminal destination naming before T4 began.
 
 ## Reference Philosophy
@@ -115,7 +121,7 @@ The approved theme and layout targets follow these rules:
 - Final rendering consumes one immutable arranged plan. It does not wrap text,
   select ticks, choose legend flow, resize tracks, derive spacing, or alter
   domains.
-- Layout quality ordering, convergence, scientific aspect, resource budgets,
+- Local layout decision order, feedback, scientific aspect, resource budgets,
   and minimum representability are private renderer policies rather than theme
   fields or public callbacks.
 - Public customization remains typed and validated. Do not add arbitrary CSS,
@@ -174,11 +180,22 @@ The approved theme and layout targets follow these rules:
 | T4b | Owner selection and resolved provenance | COMPLETE |
 | T4c | Composition theme routing | COMPLETE |
 | T4d | Public attachment and current contract | COMPLETE |
-| T5a | Layout foundation, surfaces, typography, titles, axes, and grid | PENDING |
+| T5a | Layout foundation, surfaces, typography, titles, axes, and grid | IN PROGRESS |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
-| T5a1 | Active exact-root candidate kernel | COMPLETE |
+| T5a0r | Parent-constraint documentation adjudication | COMPLETE |
+| T5a1 | Exact-root kernel (reopened revised target) | PENDING |
+| T5a1r | Active parent-constraint kernel repair | PENDING |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
-| T5a3 | Canonical fonts and immutable text plans | COMPLETE |
+| T5a3 | Canonical fonts and immutable text plans (reopened) | PENDING |
+| T5a3a | Unicode and font preparation, profile, and provenance | PENDING |
+| T5a3a1 | Unicode profile, provenance, and conformance | PENDING |
+| T5a3a2 | Bounded font discovery and handle lifecycle | PENDING |
+| T5a3a3 | Font census, selection, and retention | PENDING |
+| T5a3b | Deterministic assigned-width text wrapping | PENDING |
+| T5a3c | Shaping, bidi, and geometry repair | PENDING |
+| T5a3d | Resource and lifecycle closure | PENDING |
+| T5a3e | Producer and SVG/PNG regressions | PENDING |
+| T5a3f | Independent closure and performance evidence | PENDING |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -1596,6 +1613,13 @@ Aggregate acceptance:
 
 ## Phase T3j: Scientific Layout Architecture Adjudication
 
+Historical scope: this completed phase and T3j1-T3j3 below record the original
+exhaustive-search design and its audit achievements. Complete child products,
+global ranking, exhaustive alternatives, and exact-allocation requirements in
+this historical record are superseded search scope, not active implementation
+instructions. T5a0r adjudicates their replacements; retained ownership, public
+API boundaries, and resource caps are reconciled explicitly there.
+
 **Status**: COMPLETE
 
 Define and reconcile the layout replacement before theme inheritance or visual
@@ -1608,6 +1632,9 @@ No production code changes in this phase.
 ### T3j1: Normative Layout Contract And Private Terminology
 
 **Status**: COMPLETE
+
+Historical contract/evidence below: complete-candidate and global-search
+requirements are superseded by the T5a0r parent-constraint adjudication.
 
 Dependencies: T3i.
 
@@ -1655,6 +1682,12 @@ Acceptance:
 ### T3j2: Layout Ownership-Ledger Reconciliation
 
 **Status**: COMPLETE
+
+Historical ledger reconciliation below: preserve its source trace and counts as
+completed evidence. Its 24 target-only keys and 1884-key materialized total are
+historical, not active acceptance totals. The T5a0r successor in `04` has 22
+target-only keys, a 1574-row overlay, and 1882 materialized keys after explicit
+retirement or reassignment of search/quality roles.
 
 Dependencies: T3j1.
 
@@ -1724,6 +1757,11 @@ Acceptance:
 ### T3j3: Migration, Evidence, And Resource-Boundary Map
 
 **Status**: COMPLETE
+
+Historical migration and evidence map below: its search producers, rank pools,
+frontiers, and five exact reservation stages are not active T5 instructions.
+The reopened T5 stages replace those obligations while preserving existing caps
+and the current/target API boundary.
 
 Dependencies: T3j2.
 
@@ -2249,14 +2287,16 @@ Acceptance:
 Dependencies: T4.
 
 Establish the private layout kernel while moving foundational non-data
-appearance into the resolved theme. T5a is complete only through T5a0-T5a6d in
+appearance into the resolved theme. T5a is complete only through T5a0r, T5a1r,
+T5a3a-T5a3f, and the remaining T5a4-T5a6d stages in
 dependency order; no subphase may leave a dormant replacement kernel, temporary
 selector, compatibility fallback, or second root-plan representation.
 
 Parent acceptance:
 
-- Every T5a measurement call returns one complete nonempty candidate collection
-  or a typed recoverable `Unsatisfied` outcome.
+- Every T5a measurement call returns one immutable measured result or a typed
+  recoverable `MeasurementOutcome::FitMiss`. Intrinsics remain separate parent-
+  allocation inputs; bounded local choices never produce sibling cross-products.
 - Ordinary Plot plans contain the selected root size, title text, ticks, axis
   gutters, data panel, and final arrangement before Null or concrete rendering.
 - Layout, collision, geometry, and paint use identical resolved typography,
@@ -2272,6 +2312,11 @@ Parent acceptance:
 ### T5a0: Contract Adjudication And Execution Partition
 
 **Status**: COMPLETE
+
+Historical scope: preserve this documentation achievement, including tick,
+alignment, font-bound, and ledger decisions. Its complete total-key selector,
+frontier, and search-specific reservation partition below describe the old
+objective and are superseded by T5a0r, not instructions for the active repair.
 
 Dependencies: T4.
 
@@ -2324,76 +2369,117 @@ Acceptance:
 
 Commit: `docs(layout): adjudicate T5a implementation partition`.
 
-### T5a1: Active Exact-Root Candidate Kernel
+### T5a0r: Parent-Constraint Documentation Adjudication
 
 **Status**: COMPLETE
 
-Dependencies: T5a0.
+Dependencies: completed T5a0 and user approval of deterministic local layout.
 
-Objective: establish the sole private measurement, arrangement, selection, and
-exact-root pass driver before component migrations.
+Objective: reconcile `01`/`02` current contracts, `03` theme/font policy, `04`
+ownership ledger, `05` layout target, this plan, and `99` deferred features before
+repair implementation.
 
-Scope:
+Documentation evidence (2026-09-07): independent consistency and preserved-scope
+reviews closed the resource-counter, serialization-gate, legend-width,
+automatic-guide intrinsic, text-rebalance, track-flexibility, and assigned-box
+containment findings. Active target-key rows/count arithmetic and current/target
+boundaries were inspected; `git diff --check` passed. No code, dependencies,
+fixtures, or snapshots changed and no test suite ran. Runtime repair acceptance
+remains pending in T5a1r and T5a3a1-T5a3f; this completion certifies the revised
+documentation, not the historical implementation's correctness.
 
-- Add private `LayoutScalar`, normalized `LengthConstraint`,
-  `LayoutConstraints`, `LayoutSize`, measurement and assigned-geometry contexts,
-  `MeasuredLayout<LayoutPlan>`, structurally nonempty
-  `MeasuredCandidates<LayoutPlan>`, `MeasurementOutcome`, and typed `FitReason`.
-- Add canonical component addresses, candidate-local provisional boxes, complete
-  structural signatures, candidate sorting/deduplication, and final promotion.
-- Add the complete `RootQualityKey` representation and one generic selector.
-  Rank families not yet supplied use their specified empty normalization, never
-  a temporary key or first-fit branch.
-- Add the reusable convergence driver: two through eight complete passes,
-  immediate-predecessor equality success, non-adjacent repetition failure, and
-  changed-pass-eight exhaustion.
-- Add the one root-operation resource state, checked cumulative counters, and
-  reservation driver for candidate evaluations, generation work/slots,
-  measurement calls/cache entries, topology slots, and the five ordered
-  reservation stages. Every producer activated in T5a must count and reserve
-  through these gates before materialization; later phases add producers rather
-  than a second accounting route.
-- Add the operation-scoped measurement cache keyed by normalized constraints,
-  optional assigned context, and the complete frontier subset active in T5a;
-  cache `Unsatisfied` outcomes and their fixed accounting tuple. T5b-T5e extend
-  the typed frontier key as they activate new inputs rather than replacing the
-  cache protocol.
-- Route the current standalone Plot lifecycle through one typed exact-root
-  adapter and size-owning root envelope while preserving current `640x480` or
-  explicit exact dimensions. The adapter must return the same candidate and root
-  plan representations used by native components.
-- Make the promoted root size the sole source for Null, SVG backend, and Scene
-  construction; no post-selection path rereads Plot dimensions.
+Acceptance:
 
-Exclusions:
+- Replace active universal candidate collections, root Cartesian search,
+  mandatory dense ranks, and exhaustive wrapping with parent allocation,
+  separate intrinsics, and one measured immutable result or typed fit miss.
+- Declare local choice owners, finite orders/caps, and at most eight root
+  feedback rounds. Retire global-quality ledger roles explicitly rather than
+  pretending they are still mandatory suppliers. Reconcile the materialized
+  inventory count and evidence links after retirement: `04` now has 22
+  target-only keys, 1574 overlay rows (1552 existing plus 22 target-only), and
+  1882 materialized keys (1860 historical plus 22 target-only). Historical
+  T3j/T5a0 24/1576/1884 totals remain provenance, not active acceptance totals.
+- Preserve current exact APIs until T6, sparse composition semantics, canonical
+  ordered font stacks plus weight, and scalar fallback. Repair Common/Inherited
+  script resolution without a broad cluster-fallback policy replacement.
+- Preserve existing resource caps while replacing search-specific accounting
+  with bounded first-party admission and checked fallible incremental growth.
+  No blanket exact-allocation rule or third-party OOM guarantee is admitted.
+- Map every audit concern to T5a1r or T5a3a-f, with reproduction before claims of
+  confirmed defects. Preserve historical commits and full Unicode/test fixtures.
+- Independent documentation review resolves contradictions and checks the diff;
+  no production edits, tests, fixtures, snapshots, or verification suite here.
 
-- Public automatic or bounded sizing; specialized and all-producer
-  frontier/cache identities; native Canvas/facet measurement; complete quality
-  suppliers; fonts, text, axes, and specialized producers.
+Commit: `docs(layout): adjudicate deterministic parent constraints`.
 
-Deletion targets:
+### T5a1: Exact-Root Kernel (Reopened Revised Target)
 
-- Direct root finalization outside the selector, source-dimension rereads after
-  promotion, and any alternate root-plan/backend route replaced by the active
-  envelope.
+**Status**: PENDING
+
+Historical achievement: `b1c1406` (`feat(layout): add active exact-root candidate kernel`)
+established the original exact-root envelope, candidate kernel, accounting, and
+lifecycle route. Its complete-candidate/Cartesian/total-key search scope is
+historical, not evidence of compliance with the revised target. T5a1 is reopened
+and completes only when T5a1r closes; it has no separate repair commit.
+
+### T5a1r: Active Parent-Constraint Kernel Repair
+
+**Status**: PENDING
+
+Dependencies: T5a0r.
+
+Scope and deletion targets:
+
+- Replace the active universal candidate API with separate intrinsic inputs,
+  deterministic parent allocation, normalized assigned constraints, and one
+  immutable `MeasuredLayout` or typed fit miss. Preserve canonical component
+  identities, checked geometry, the root envelope, and one freeze/replay route.
+- Migrate all active kernel and typography consumers atomically; remove the old
+  candidate collection, Cartesian combination, global quality selector, and
+  dormant dual routes. Introduce the constrained text primitive needed by the
+  kernel here if necessary. T5a3b removes residual exhaustive text generation
+  inside that single route; it must not be needed to remove a runtime selector
+  left behind by T5a1r.
+- Limit this atomic migration to the current root wrapper, active adapters, and
+  consumers required to replace the universal root representation. Native family
+  migration remains in T5a6/T5b/T5e; this stage does not absorb those migrations.
+  T5a3b repairs residual text internals behind the one active constrained route,
+  not a second root representation or temporary strategy switch.
+- Declare the owner/order/cap of each activated local alternative. Bound root
+  feedback to eight rounds with deterministic equality, cycle, and exhaustion
+  outcomes; no local unbounded retries or hidden fallback root.
+- Retain operation-scoped accounting, applicable existing caps, typed cache
+  identities, and fallible bounded growth. Gate work and first-party storage
+  before materialization, including text primitives activated here. Admission
+  errors propagate as errors, not fit misses or `.ok()`-filtered absence.
+- Preserve exact `640x480` defaults and explicit dimensions through the current
+  API. Frozen root size alone supplies Null, SVG, and Scene construction; reserve
+  the final plan and replay storage before final Null validation.
 
 Evidence:
 
-- Quantum conversion, normalized interval, overflow, `Unsatisfied`, nonempty
-  collection, complete child Cartesian product, no-local-pruning, structural
-  equality, deterministic selection, pass-two/pass-eight, cycle, exhaustion,
-  promotion identity, cumulative limit-minus-one/exact-limit/limit-plus-one, each
-  active reservation refusal, and zero-backend-call failure tests.
-- Current omitted-size and explicit-size SVG dimensions and bytes remain exact.
-- `just verify` passes.
+- Normalized constraints, intrinsic/allocation separation, fractional geometry,
+  typed fit misses, deterministic local order/caps, bounded feedback, cycles,
+  exhaustion, cache identity, limit boundaries, reservation refusal, and failures
+  before backend calls. Prove no sibling-product or alternate active route.
+- Reproduce suspected fixed 40% gutter rejection cases against actual measured
+  fit; remove arbitrary percentage rejection where content fits, retaining real
+  hard geometry failure. T5a5 extends evidence to native axis plans.
+- Current omitted/explicit-size dimensions, immutable Null/concrete identity,
+  and focused snapshots remain accounted for; `just verify` passes.
 
-Commit: `feat(layout): add exact-root planning kernel`.
+Commit: `refactor(layout): replace exhaustive kernel with parent constraints`.
 
 ### T5a2: Foundational Resolved Appearance And Surfaces
 
 **Status**: COMPLETE
 
-Dependencies: T5a1.
+Historical achievement: `6da94ea` (`refactor(theme): centralize foundational
+appearance`). Preserve its resolved appearance, surfaces, and ownership work;
+kernel repair is not authorization to redesign that appearance.
+
+Dependencies at completion: historical T5a1. Revised consumers use T5a1r.
 
 Objective: give every T5a appearance input one private resolved owner before it
 participates in measurement.
@@ -2442,85 +2528,275 @@ Commit: `refactor(theme): centralize foundational appearance`.
 
 ### T5a3: Canonical Fonts And Immutable Text Plans
 
-**Status**: COMPLETE
+**Status**: PENDING
 
-Dependencies: T5a2.
+Dependencies: retained T5a2 and revised T5a1r; closes through T5a3a-T5a3f.
 
-Objective: make measurement, collision, preserve-text SVG, outlined SVG, PNG,
-and drawing consume the same generation-host faces, glyphs, lines, and metrics.
+Historical achievement: `4b38de4` (`feat(typography): freeze resolved text plans`)
+introduced canonical font preparation and retained text plans. Preserve that
+work, but reopen this phase: its exhaustive wrapping scope is superseded and
+the old implementation is not asserted fully compliant. Audit concerns below
+include static suspicions requiring focused reproduction, not defects verified
+by this documentation edit. The umbrella has no separate repair commit.
 
-Scope:
+Shared repair acceptance:
 
-- Census every used `(stack,weight)` in canonical topology order before text
-  measurement. Build, count, reserve, and materialize canonical font occurrence,
-  candidate, identity, primary-face, glyph-fallback, and provenance records under
-  the exact `03_THEME_SYSTEM.md` contract.
-- Install the bounded project-owned system-font discovery path and enforce the
-  `1_000_000` discovery-entry, `536_870_912` inspected/hashed-byte, and
-  `1_000_000` font-preflight-work limits before font-sized collections
-  materialize. The record/work limits reuse the T3j magnitudes; the byte limit is
-  the least power of two covering the admitted `4 * 100_000_000` RGBA backing
-  store. Through the T5a1 resource driver, reserve all stage-1 font metadata,
-  source-byte, occurrence, candidate, selected-face, glyph-probe, and provenance
-  payloads.
-- Resolve every scalar face before measurement and replace estimated `TextBlock`
-  geometry with immutable text plans containing exact source spans, shaped runs,
-  face identities, glyph IDs, clusters, offsets, advances, logical widths, ink,
-  line translations, line pitch, and first/last baselines.
-- Implement the pinned Unicode segmentation, line-break, bidi, whitespace,
-  mandatory-break, wrapping-alternative, and shaping rules. An intact overwide
-  sequence returns a typed fit miss rather than an unwrapped fallback.
-- Retain the prepared font environment needed by outlined SVG and PNG so a
-  terminal never rediscovers different host faces after Scene construction.
-- Convert every T5a foundational one-line or multiline text producer to the same
-  plan representation; no raw foundational text bypass remains.
-- Introduce a typed `DeferredAnnotationTextPlan` and freeze significance-label
-  glyphs, metrics, current effective style, and exact-override provenance through
-  it. T5c supplies final semantic appearance and geometry inputs before this same
-  planner runs; no later phase may remeasure or replace typography after plan
-  selection.
+- One immutable text result at an assigned width, with source spans, faces,
+  glyphs, clusters, offsets, advances, logical widths, ink, line translations,
+  pitch, and baselines shared by measurement, collision, and replay. No omitted
+  semantic text, font shrink, hidden root, emergency wrapping fallback, or
+  draw-time layout. Intact overwide content produces a typed fit miss.
+- Preserve canonical ordered `(stack,weight)` discovery and per-scalar fallback;
+  repair script resolution without introducing broad cluster-level fallback.
+  No public API change, asset provisioning, or network access.
+- Every stage gates its own input, work, and first-party storage before use and
+  propagates admission errors. Fallible incremental growth is permitted within
+  existing caps; T5a3d audits closure, not the first introduction of bounds.
+- Preserve `1_000_000` discovery entries, `536_870_912` inspected/hashed bytes,
+  `1_000_000` font-preflight work, and other applicable existing limits. Do not
+  promise exact allocations everywhere or recovery from all third-party OOMs.
+- Preserve all full Unicode conformance and regression fixtures. Inspect any
+  changed snapshot and commit it only with its intentional source correction.
+  Each implementation stage supplies focused evidence and `just verify`.
 
-Exclusions:
+#### T5a3a: Unicode And Font Preparation, Profile, And Provenance
 
-- Public fonts or typography components, downloaded or provisioned assets,
-  legend/facet/body roles owned by T5b, and annotation appearance or geometry
-  owned by T5c.
+**Status**: PENDING
 
-Deletion targets:
+Dependencies: T5a1r and retained T5a2.
 
-- Fixed character-width tables, `estimated_text_width`, integer font adapters,
-  arbitrary first-face fallback, process-global generic-family remapping, late
-  output-only font discovery, `TextBlock::unwrapped`, draw-time wrapping, and raw
-  foundational text geometry.
+This umbrella completes only through T5a3a1-T5a3a3 and has no separate commit.
+Each substage has its own admission gates, focused evidence, and `just verify`
+before completion. Split further before implementation if a substage cannot be
+independently reviewed as one logical objective; this is not authorization for
+a blanket cross-file typography rewrite.
 
-Evidence:
+##### T5a3a1: Unicode Profile, Provenance, And Conformance
 
-- Font name/occurrence/identity/order/deduplication, primary and per-scalar
-  fallback, discovery-order invariance, discovery-entry/byte/work boundaries,
-  complete prepared/generated scalar census and traversal, changing/short file
-  failures, missing family/glyph failures, exact reservation, whitespace, blank
-  lines, bidi, non-Latin, weight, baseline, ink, overwide sequence, significance-
-  label effective/exact carrier identity, immutable replay, and
-  preserve/outline/PNG parity tests.
-- Host-dependent smoke evidence asserts provenance and consistency rather than
-  universal glyph bytes; no network or asset provisioning is added.
-- `just verify` passes.
+**Status**: PENDING
 
-Commit: `feat(typography): freeze resolved text plans`.
+Dependencies: T5a1r and retained T5a2.
+
+Scope and acceptance:
+
+- Establish a coherent Unicode 16 profile across segmentation, line breaking,
+  scripts, bidi, shaping dependencies, and generated data. Audit transitive
+  Unicode versions, not just direct dependency labels; document any dependency
+  integration required for coherence and run full applicable conformance data.
+- Make generated-table provenance reproducible: upstream version, source inputs,
+  checksums, generator invocation, and licensing. Do not replace full fixtures
+  with reduced cases to make version mismatches disappear.
+- Inventory direct/transitive dependencies and enabled font features. Prefer
+  maintained pinned Unicode algorithms when they satisfy the profile rather than
+  owning standard algorithms unnecessarily; migrate and remove the replaced
+  implementation, not a fallback chain. Remove unused resvg/fontdb capabilities
+  only with route and build evidence. Keep required metadata, glyph coverage,
+  shaping, bidi, and identity dependencies; a shorter manifest is not acceptance.
+- Gate runtime Unicode input, table-derived work, and first-party storage before
+  materialization; retain existing caps and propagate admission errors. Evidence
+  includes transitive-version reconciliation, reproducible generation, full
+  applicable conformance fixtures, and boundary/refusal tests for activated work.
+
+Commit: `fix(unicode): reconcile profile provenance and conformance`.
+
+##### T5a3a2: Bounded Font Discovery And Handle Lifecycle
+
+**Status**: PENDING
+
+Dependencies: T5a3a1.
+
+Scope and acceptance:
+
+- Preserve canonical discovery inputs and ordered stack/weight policy; do not
+  change scalar fallback while repairing discovery and fontconfig handling.
+- Reproduce and repair suspected font file-descriptor retention/exhaustion and
+  fontconfig partial-error handling. Bound discovery, open-handle lifetimes,
+  reads/hashes, and discovery metadata; propagate partial discovery failures
+  instead of accepting a silently incomplete environment.
+- Admit fontconfig parser capacity, discovery records, and inspected bytes before
+  use with checked fallible growth under existing caps. Cover malformed/partial
+  configuration, handle release on success/error, changing/short files, order
+  invariance, limit boundaries, and reservation refusal.
+
+Commit: `fix(font): bound discovery and fontconfig handle lifecycle`.
+
+##### T5a3a3: Font Census, Selection, And Retention
+
+**Status**: PENDING
+
+Dependencies: T5a3a2.
+
+Scope and acceptance:
+
+- Preserve canonical family/occurrence/identity ordering, deduplication, weight,
+  primary-face and scalar fallback semantics, and generation-host provenance.
+- Count/admit scalar census, occurrence/selection metadata, probes, and retained
+  source bytes before copying, probing, or growing storage. Keep one operation
+  resource state and propagate failures rather than silently skipping faces.
+- Cover missing families/glyphs, scalar selection, identity/deduplication/order,
+  census-copy timing, limits, reservation refusal, and retained-font reuse by
+  outline/PNG terminals without rediscovery.
+
+Commit: `fix(font): gate census selection and retained faces`.
+
+#### T5a3b: Deterministic Assigned-Width Text Wrapping
+
+**Status**: PENDING
+
+Dependencies: T5a3a through T5a3a3; extends the sole constrained primitive active
+in T5a1r.
+
+Scope and acceptance:
+
+- Replace residual exhaustive break-partition/width generation with the declared
+  locally greedy algorithm in `05_LAYOUT_SYSTEM.md` at parent-assigned width.
+  First retain an exactly fitting shaped paragraph. Otherwise scan paragraph-
+  shaping proposal prefixes forward to the first proposal overflow, shape the
+  proposed whole line exactly, and retreat legal breaks until advance and ink
+  fit. Then try only successive next legal breaks, stopping at the first exact
+  nonfit; never skip that failure seeking a distant fit. Reuse tested endpoints
+  within a line-start sequence and release obsolete trials. No globally longest
+  fit guarantee is required. Intrinsic minimum/preferred requirements are
+  allocation inputs, not alternative plans.
+- Preserve source text, whitespace, mandatory breaks, blank lines, grapheme
+  integrity, and typed overwide failure. Local alternatives, if needed, have an
+  explicit owner/order/cap and do not cause sibling products or width searches.
+- Delete residual exhaustive text generation and its caches/ranking state in
+  this change; do not retain a runtime strategy selector or dormant old route.
+- Bound scans, break records, line storage, and fallible growth from admission
+  onward. Propagate errors, including paths previously suspected of using
+  `.ok()` to swallow resource or shaping failure as an absent choice.
+- Preserve the baseline input `"A ".repeat(144)` (288 characters with legal
+  spaces), an approximately 200-word scientific caption in one paragraph, and
+  the three-paragraph caption;
+  demonstrate fit when assigned geometry permits and typed misses otherwise.
+  Measure long legal-break input scaling and work counts; record evidence rather
+  than an unmeasured linear-time or latency promise. Preserve complete existing
+  text fixtures.
+
+Commit: `refactor(typography): wrap text at assigned widths`.
+
+#### T5a3c: Shaping, Bidi, And Geometry Repair
+
+**Status**: PENDING
+
+Dependencies: T5a3b.
+
+Scope and acceptance:
+
+- Reproduce script-mark failures and repair Common/Inherited resolution with
+  surrounding script context, including leading/interleaved combining marks.
+  Keep font selection scalar-based under the approved stack/weight policy.
+- Resolve bidi per paragraph, then apply correct line-level handling after soft
+  wrapping; test separate paragraphs, mixed directions, isolates, neutrals,
+  trailing whitespace, and mandatory versus soft breaks.
+- Reproduce fractional glyph-pen drift; retain fractional advances/offsets and
+  consistent baselines, transforms, logical widths, and painted ink through
+  measurement, collision, Null, and final outline/PNG replay.
+- Gate run/glyph/cluster/geometry storage and shaping work before use, with
+  checked arithmetic and propagated errors. Extend full conformance and focused
+  marks, non-Latin, bidi, weight, baseline, ink, and immutable-replay evidence.
+
+Commit: `fix(typography): repair script bidi and glyph geometry`.
+
+#### T5a3d: Resource And Lifecycle Closure
+
+**Status**: PENDING
+
+Dependencies: T5a3c.
+
+Scope and acceptance:
+
+- Trace all first-party font/text/census/serializer/scene allocations and work
+  through bounded admission, including copied census data before its gate and
+  final Null execution before final-plan/replay reservation. Reproduce suspected
+  ordering violations, repair them, and prove refusal occurs before side effects.
+- Audit all `.ok()` and equivalent error-discard paths; distinguish recoverable
+  fit misses from font, resource, parser, and shaping errors. Preserve one
+  operation resource state and existing caps, using fallible incremental growth
+  where exact preallocation is neither necessary nor justified.
+- At PNG terminals, validate actual outlined parser-input bytes and actual
+  requested target options, not only estimates or default dimensions. Cover
+  scale/dimension arithmetic,
+  backing-store limits, retained outline expansion, and serializer growth before
+  parser/backend materialization. These safeguards are terminal-local: root
+  viability checks canonical preserve-text bytes and source/default-300-DPI
+  target dimensions only. A later PNG may fail without invalidating an automatic
+  SVG or selecting a new layout. Do not claim third-party OOM immunity.
+- Prove limit-minus-one/exact/plus-one, checked overflow, refusal, error identity,
+  retained environment, zero-backend-call failure, and one final Null/concrete
+  lifecycle over the same frozen plan. Every earlier stage must already enforce
+  the bounds for its activated paths.
+
+Commit: `fix(render): close typography admission and lifecycle gates`.
+
+#### T5a3e: Producer And SVG/PNG Regressions
+
+**Status**: PENDING
+
+Dependencies: T5a3d.
+
+Scope and acceptance:
+
+- Census every active one-line/multiline producer and remove raw or late-layout
+  bypasses. Freeze significance effective/exact style provenance through the
+  retained `DeferredAnnotationTextPlan`; later owners supply inputs before
+  measurement, never replace typography after freeze.
+- Preserve-text SVG retains source and planned placement but remains dependent
+  on viewer font/shaping behavior. Exact retained glyph outlines and PNG share
+  generation-host geometry; do not assert universal preserve-text pixel parity.
+- Exercise Plot/Canvas titles, axes, active legend/body/annotation consumers,
+  Unicode and bidi, `"A ".repeat(144)`, the approximately 200-word
+  single-paragraph and three-paragraph captions, 40% gutter fit/failure cases,
+  actual parser bytes, and nondefault PNG options without moving future semantic
+  ownership from T5a4/T5a5/T5b/T5c. Admit any newly activated producer first.
+- Inspect snapshots and preserve full Unicode/test fixture coverage. Host smoke
+  tests assert provenance and consistency, not universal host glyph bytes.
+
+Commit: `test(typography): cover producers and retained output routes`.
+
+#### T5a3f: Independent Closure And Performance Evidence
+
+**Status**: PENDING
+
+Dependencies: T5a3e.
+
+Scope and acceptance:
+
+- Independently review every audit concern in T5a1r and T5a3a-e, recording focused
+  reproductions and fixes or evidence-based non-defect dispositions. Recheck
+  Unicode transitive versions, generated provenance, resource/lifecycle order,
+  script marks, paragraph/soft-wrap bidi, fractional pens, swallowed errors,
+  gutter fit, font handles/partial errors, and actual PNG bytes/options.
+- Benchmark `"A ".repeat(144)`, an approximately 200-word scientific
+  caption in one paragraph, the three-paragraph caption, and increasing long
+  legal-break inputs. Record setup,
+  time, memory/work counts, and before/after evidence; do not substitute relaxed
+  caps, shortened fixtures, or unmeasured performance promises for acceptance.
+- Prove the universal candidate/search API, residual exhaustive wrapping, global
+  ranks, strategy switches, and dormant dual routes are absent from active code.
+  Close ledger/evidence links, full fixture preservation, snapshot review, and
+  `just verify` before marking T5a3 and this stage COMPLETE.
+
+Commit: `test(layout): close typography repair and scaling evidence`.
 
 ### T5a4: Root Title-Block Plans
 
 **Status**: PENDING
 
-Dependencies: T5a3.
+Dependencies: revised T5a1/T5a1r and T5a3 through T5a3f. T5a4 is blocked from
+starting until both repairs complete; historical commits do not satisfy this gate.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.
 
 Scope:
 
-- Build immutable title-block candidates from resolved text roles,
+- Build one immutable title-block result at the parent-assigned width from resolved text roles,
   `CompositionTheme` spacing, and one root `TitleBlockAlignment` value.
+- Supply intrinsic requirements separately, measure height after deterministic
+  wrapping, and return a typed fit miss when exact allocated geometry cannot fit.
+  Admit text and plan storage before materialization; do not search title widths.
 - Apply alignment consistently to per-line translation and horizontal child
   placement for title, subtitle, and caption. Retain zero rotation.
 - Migrate the standalone Plot root. T5a6a connects the same producer to faceted
@@ -2556,8 +2832,8 @@ Commit: `feat(layout): plan root title blocks`.
 
 Dependencies: T5a4.
 
-Objective: replace local axis selection/retry behavior with complete immutable
-alternatives consumed only by the root selector.
+Objective: measure one immutable axis result under parent-assigned constraints,
+using declared bounded local sources rather than root-wide alternatives.
 
 Scope:
 
@@ -2568,16 +2844,17 @@ Scope:
   Preserve intentionally empty labels as unlabeled tick/grid positions with no
   text geometry.
 - Implement private span/typography adaptive numeric sources with no fixed five-
-  tick ceiling and one always-enumerated midpoint source.
+  tick ceiling and one terminal midpoint source in the declared local order.
 - Implement optional additive data intervals and Log10-decade intervals. Try the
-  requested source first, enumerate deterministic `1,2,3,5` decimal coarsening,
+  requested source first, try deterministic `1,2,3,5` decimal coarsening,
   retain complete nonempty interval vectors without subsequences, order the
-  terminal midpoint after every interval vector, and rank source precedence
-  before all soft quality only at the root. Retain tick policy/source kind/raw
-  ordinal in structural signatures and frozen axis plans so equal vectors from
-  distinct sources do not deduplicate. Keep caller count/density controls absent.
+  terminal midpoint after every interval vector, and apply source precedence
+  locally under assigned span and measured fit. Declare the axis owner's finite
+  source cap/order before generation; retain source provenance in frozen plans.
+  Do not cross-product axes or sibling sources. Keep caller count/density
+  controls absent.
 - Implement exact formatting/uniqueness, projection, categorical one-label-per-
-  slot behavior, Forest logarithmic sources, fit transitions, gutters, rotations,
+  slot behavior, Forest logarithmic sources, local fit checks, gutters, rotations,
   frame-side topology, tick reserve/draw synchronization, and grid ordering.
 - Preserve automatic-range broadening's current private five-sample nice-range
   seed under its range owner; remove only the shared tick-count meaning and use
@@ -2585,16 +2862,17 @@ Scope:
 - Populate the standard-panel carrier with T5a typography, tick, axis,
   projection, and preferred `4:3` inputs while leaving mark/density/annotation
   inputs open for T5c.
-- Count and reserve every raw tick source, text-product block, fit transition,
-  axis candidate, and plan payload through the T5a1 operation resource state
-  before materializing it.
+- Admit every raw tick source, text block, local fit attempt, and plan payload
+  through the T5a1r operation resource state before materialization, using checked
+  bounded fallible growth. No exhaustive text-product block is required.
 - Replace horizontal categorical helper duplicates with canonical raw/display
   labels and the common text/axis path.
 - Add the Canvas shared-x semantic validator: configured continuous automatic
   members only, finite strict union, categorical or exact-limit rejection. T5b
   owns child-plan/track integration.
-- Replace ordinary axis/title local stabilization with the T5a1 root pass
-  protocol; do not introduce another loop.
+- Replace ordinary axis/title local stabilization with T5a1r's at-most-eight
+  root feedback rounds; bounded local source trials are not independent
+  stabilization loops. Use actual measured gutters, not a fixed 40% cutoff.
 
 Exclusions:
 
@@ -2605,8 +2883,9 @@ Exclusions:
 Deletion targets:
 
 - The shared `AUTOMATIC_TICK_TARGET` identity, five-only tick downsampling, and
-  conditional midpoint fallback branches; retain its range-only value under a
-  range-specific private owner.
+  superseded ad hoc midpoint branches; retain the specified conditional terminal
+  midpoint in the common local policy and the range-only seed under its private
+  owner.
 - Draw-time axis text measurement, local axis/title retry loops, duplicate
   spacing/line-height estimates, measured-state booleans, horizontal categorical
   helpers, and Canvas shared-x clone/replay.
@@ -2616,11 +2895,12 @@ Evidence:
 - Wide panels with more than five generated ticks; small panels; source-span,
   `6ch`, `10_000/10_001`, representable-index boundaries, interval
   exact/coarsened/nonempty/no-subsequence/midpoint order, exact precedence,
-  source precedence over soft ranks, Log10, formatting, uniqueness, finite
+  local source precedence and cap exhaustion, Log10, formatting, uniqueness, finite
   extremes, exact-list `0/1/10_000/10_001`, empty exact labels, category order,
   collision, projection endpoints, frame sides, Science duplicate removal,
   tick/grid reserve-draw parity, horizontal categorical fit, shared-x validation,
-  accounting refusal, pass stabilization, and permutation tests.
+  accounting refusal, feedback stabilization, deterministic order, and measured
+  gutter cases below/at/above the old 40% cutoff, including real fit misses.
 - `just verify` passes.
 
 Commit: `feat(axes): freeze axis and grid plans`.
@@ -2641,6 +2921,10 @@ Exclusions across T5a6:
   appearance/measurement/geometry; T5d scales/guides; T5e specialized native
   producers and automatic/bounded roots; T6 public APIs/default switch.
 
+Deletion of family-local retries below means duplicate/ad hoc stabilization and
+source policies. It does not remove the common bounded axis source attempts or
+the root-coordinated feedback protocol specified in `05_LAYOUT_SYSTEM.md`.
+
 #### T5a6a: Ordinary Interior Carriers And Deferred-Family Adapters
 
 **Status**: PENDING
@@ -2653,14 +2937,14 @@ any family route.
 Scope:
 
 - Add the standard-coordinate and one-categorical-axis panel producer inputs and
-  integrate the T5a standard-panel carrier into the Plot frame candidate tree.
+  integrate the T5a standard-panel carrier into the parent-allocated Plot frame.
 - Add exactly one typed `DeferredMarkAdapter` producing `DeferredMarkPlan` and
   one typed `DeferredAnnotationAdapter` producing `DeferredAnnotationPlan` from
-  T5a3's `DeferredAnnotationTextPlan`. Before root selection they emit candidate-
-  local current hard-panel minima, automatic-domain envelopes, reserve requests,
+  T5a3's `DeferredAnnotationTextPlan`. Before final arrangement they emit
+  current hard-panel intrinsics, automatic-domain envelopes, reserve requests,
   obstacle/outward-ink extents, and frozen semantic/style/draw payloads. Their
-  consequences feed the canonical range, axis, collision, and parent candidate
-  routes; they cannot select a tick/root candidate, mutate an assigned panel,
+  consequences feed the canonical range, axis, collision, and parent allocation
+  routes; they cannot select a root alternative, mutate an assigned panel,
   perform work during drawing, or call a layout backend.
 - Name the current generic panel floor, where still required for parity, as the
   sole `DeferredLegacyPanelMinimum` consequence. It remains only until T5c
@@ -2675,12 +2959,14 @@ Scope:
   Canvas until T5b, regardless of child PlotKind. Connect faceted Plot, Matrix,
   and Canvas outer roots to the T5a4 title-block producer through these adapters.
   No generic fallback adapter or runtime downcast is admitted.
-- Make every carrier and adapter use the T5a1 candidate, accounting, reservation,
-  convergence, selected-plan, Null, and concrete lifecycle representations.
+- Make every carrier and adapter use the T5a1r measured-result, accounting,
+  admission, bounded feedback, frozen-plan, Null, and concrete lifecycle route.
+  Intrinsics precede parent allocation; local alternatives require an owner,
+  order, and cap, never sibling products or an adapter-specific search.
 
 Deletion targets:
 
-- Unclassified interior dispatch, adapter-specific root selection, outer-root
+- Unclassified interior dispatch, adapter-specific root search, outer-root
   title reconstruction, and any carrier that can invoke `GeometryBackend` for
   measurement.
 
@@ -2899,7 +3185,7 @@ Scope:
   axis consumers through the same plans without migrating T5b tracks or T5e
   interiors.
 - Audit every materialized T5a ledger key from source through measurement,
-  candidate generation, accounting/reservation, arrangement, frozen plan, and
+  intrinsic/allocation/measurement, bounded admission, arrangement, frozen plan, and
   draw; remove every superseded T5a path.
 - Prove the five specialized interior adapters, two composition adapters, and
   mark/annotation deferred adapters plus their named legacy-panel-minimum
@@ -2924,7 +3210,8 @@ Evidence:
 - Search evidence proves no fixed five-tick ceiling, ordinary generic panel floor
   outside a named deferred adapter, draw-time foundational wrapping, local
   ordinary retry loop, or second root route remains.
-- `just verify` passes; T5a0-T5a6d, T5a6, and parent T5a are then marked complete.
+- `just verify` passes; all reopened repair stages and T5a6a-T5a6d must be
+  complete before T5a6 and parent T5a are marked complete.
 
 Commit: `refactor(layout): close ordinary exact-root planning`.
 
@@ -2938,10 +3225,13 @@ Give composed and explanatory chrome coherent theme ownership.
 
 Scope:
 
-- Prepare legend semantic entries independently from layout and measure finite
-  complete row/column alternatives using final typography and exact glyphs;
-  return all admitted candidates to parent combination rather than selecting a
-  local flow.
+- Prepare legend semantic entries and intrinsic requirements independently from
+  allocation. The legend owner chooses one deterministic local flow at assigned
+  width using final typography and exact glyphs, with fixed entry/column widths
+  before greedy flow as specified in `05_LAYOUT_SYSTEM.md`; return one measured
+  result or typed fit miss. Only the specified bounded edge attempts remain;
+  do not invent row/column alternatives.
+  Do not send alternative sets upward or combine sibling legend choices.
 - Replace equal-cell subtraction with measured row and column tracks that
   preserve shared data-panel alignment separately from unequal decoration
   gutters.
@@ -2961,11 +3251,15 @@ Scope:
   overriding explicit limits or admitting categorical domains.
 - Remove implicit Publication styling and duplicated fixed whites and grays from
   composition code.
-- Make Canvas `TextPanel` participate in bottom-up track measurement before
-  arrangement. Keep Plot panel-text annotations in the overlay path.
+- Make Canvas `TextPanel` contribute intrinsics to parent track allocation, then
+  measure at its assigned width before arrangement. Keep Plot panel-text
+  annotations in the overlay path.
 - Remeasure constraint-dependent children when track constraints change; freeze
   final headers, row titles, shared legends, text lines, cells, and child plans
   before Canvas rendering.
+- Use deterministic parent-owned track allocation and the sole at-most-eight
+  root feedback rounds. Admit topology, local choices, text, and track storage
+  before materialization; do not add grid/legend searches or local retry loops.
 - Preserve declared sparse coordinates, spans, groups, and facet topology. Do
   not compact empty rows or columns implicitly.
 
@@ -2998,8 +3292,8 @@ Scope:
   and family-specific hard or preferred panel requirements.
 - Replace `DeferredMarkAdapter`, `DeferredAnnotationAdapter`, and
   `DeferredLegacyPanelMinimum` atomically with those native measured
-  consequences while retaining the same T5a candidate, range, collision,
-  convergence, accounting, and frozen-plan route.
+  consequences while retaining the same T5a1r parent-allocation, measured-result,
+  range, collision, bounded feedback, admission, and frozen-plan route.
 - Separate normal-flow measurement from inside-legend, significance, value-label,
   panel-text, and supplemental-layer overlay planning.
 - Define common point, line, fill, interval, ribbon, uncertainty, reference,
@@ -3023,6 +3317,9 @@ Scope:
 - Keep scale-domain expansion distinct from box overflow. Exact limits reject an
   incompatible reserve; automatic expansion remains explicit, bounded, and
   recorded in the frozen plan.
+- Admit mark/annotation work and storage before materialization. Any local
+  placement choices have declared owners, orders, and caps; use the same bounded
+  root feedback for domain/reserve consequences, not a global quality score.
 - Re-adjudicate default elision, clipping, label dropping, and post-allocation fit
   branches so automatic layout preserves semantic content unless an explicit
   current caller policy already identified in the ledger owns a narrower
@@ -3070,6 +3367,10 @@ Scope:
 - Feed exact final categorical domains, legend cardinality, continuous-guide
   labels, missing-value sections, and heatmap/beeswarm guide content into the
   typed layout measurements established in T5a-T5c.
+- Supply guide intrinsics before parent allocation and one measured guide at
+  assigned constraints afterward. Admit generated labels, mapping/guide storage,
+  and local source trials before work; never build cross-products of guide and
+  panel alternatives or add a scale-specific root retry loop.
 - Supply final continuous shared-guide contributor descriptors and perform the
   exact automatic-domain union or equal-exact/contained-automatic merge through
   T5b's sole compatibility path before labels or guide measurement.
@@ -3106,23 +3407,33 @@ Scope:
 - Replace fixed marginal bands, Matrix dummy generic layout, hardcoded guide
   reserves, and universal panel minima with typed complete composite
   measurements.
-- Complete the T5a root quality implementation with every remaining supplier for
-  semantic completeness, hard geometry, scientific aspect, readable density,
-  compactness, and stable structural tie-breaking.
-- Complete every closed candidate producer, dense-rank pool, and nonexact
-  eligibility/viability filter on the existing Cartesian-combination, signature,
-  duplicate, and selector route without local pruning or discovery-order choice.
-- Complete specialized and all-producer frontier/cache identity and bounded
-  remeasurement for wrapping, ticks, legend flow, grid tracks, shared alignment,
-  domains, and overlays on the existing T5a convergence driver. Detect repeated
-  nonfinal states and budget exhaustion explicitly.
+- Complete specialized intrinsic requirements, deterministic parent allocation,
+  and local measured layouts. Semantic completeness and hard scientific geometry
+  remain requirements; aspect, density, and spacing preferences belong to their
+  declared local owners, not global quality suppliers or mandatory dense ranks.
+- Retire remaining global-quality/search ledger roles and implementation state;
+  no root Cartesian alternatives, sibling products, or strategy switch remains.
+  Every local alternative has a declared owner, deterministic order, and cap.
+- Complete all-producer cache identities and bounded feedback for wrapping,
+  ticks, legend flow, grid tracks, shared alignment, domains, and overlays on
+  T5a1r's sole at-most-eight-round driver. Detect cycles and exhaustion; no
+  component adds an unbounded local retry loop.
 - Resolve one private automatic root size, bounded-width root size, or exact root
   size before backend creation. Convert the finite logical result once through
   checked upward CSS-pixel rounding and store it in `PlotPlan` or `CanvasPlan`.
-- Complete the T5a resource state's producer census and enforce the T3j automatic
-  resource envelope over every T5b-T5e producer, checked topology arithmetic,
-  and allocation limit without clamping, content omission, fixed-size fallback,
-  or output-format-specific mutation of the canonical scene.
+- Derive automatic preferred width from the existing preferred-width metric and
+  measure height at that width. Bounded width uses
+  `min(preferred_width, max_width)` without width search. Root viability checks
+  only canonical preserve-text bytes and PNG source/default-300-DPI target
+  dimensions on the one produced layout; failure does not select another layout.
+  Actual outlined parser bytes and requested PNG options are checked only at
+  the PNG terminal. Later PNG failure must not reject an otherwise valid
+  automatic SVG, mutate the scene, or trigger another layout.
+- Complete the operation resource census over every T5b-T5e producer, preserving
+  existing caps with checked topology/work arithmetic and first-party admission
+  before materialization. Fallible incremental growth is allowed; do not require
+  universal exact allocations or claim third-party OOM recovery. No clamping,
+  font shrink, content omission, hidden fixed root, or format-specific mutation.
 - Remove remaining final-render text layout, tick selection, legend construction,
   spacing derivation, track sizing, and domain mutation.
 - Exercise automatic and bounded-width behavior through private focused tests,
@@ -3131,15 +3442,19 @@ Scope:
 
 Acceptance:
 
-- Every admitted Plot family and Canvas child returns one complete nonempty typed
-  candidate collection or rejects its unsupported composition shape before
-  candidate generation; only root selection chooses one complete plan tree.
+- Every admitted Plot family and Canvas child supplies separate intrinsics and
+  returns one immutable measured result or typed fit miss under parent-assigned
+  constraints. Unsupported composition shapes reject before materialization;
+  one complete arranged plan tree is frozen before final Null validation.
 - Automatic and bounded-width private plans are finite, deterministic,
-  publishable under the approved quality objective, and complete in semantic
+  viable under the approved local-layout rules, and complete in semantic
   content.
 - Exact dimensions remain exact and fail rather than clip when complete content
   cannot fit.
 - Null and concrete rendering consume the same immutable root and child plans.
+- Specialized, legend, and track regressions prove local ownership and bounded
+  feedback without sibling products; scientific caption and long legal-break
+  benchmarks retain full fixtures and report measured scaling evidence.
 - Focused ordinary, categorical, specialized, facet, Canvas, convergence,
   resource, output, and snapshot tests pass.
 - `just verify` passes.
@@ -3184,6 +3499,9 @@ Scope:
 - Add positive `max_width(width)` builders for bounded-width automatic height,
   retain exact `size(width, height)`, and keep the complete constraint protocol
   private.
+- Connect only the repaired parent-constraint route: preferred width then measured
+  height, bounded `min(preferred_width, max_width)`, and viability of one produced
+  layout. Do not expose a search strategy, global objective, or alternate route.
 - Remove pre-render `Plot::width()` and `Plot::height()`. Add
   `Output::width()` and `Output::height()` as exact canonical CSS-pixel scene
   dimensions that remain stable across chained publications.
@@ -3219,6 +3537,10 @@ Acceptance:
 - Public constructors validate every structural invariant before rendering.
 - Automatic and bounded-width output report their final dimensions only through
   `Output`; exact sizing remains exact and has no nominal pre-render getters.
+- Root viability validates canonical preserve-text bytes and PNG source/default-
+  300-DPI target dimensions of the produced automatic/bounded layout. Exact SVG
+  remains format-local; PNG terminals validate actual outlined bytes/options and
+  may fail later without invalidating an otherwise valid automatic SVG.
 - Compile-pass and compile-fail evidence enforces the intended visibility and
   ownership boundaries.
 - All canonical specifications describe the implemented replacement API before
@@ -3253,10 +3575,27 @@ Scope:
   theme fields, unclassified hardcoded style values, and duplicate scale logic.
 - Search for fixed root defaults, universal panel minima, root-scaled spacing,
   draw-time layout decisions, silent overflow, and alternate layout routes.
-- Reconcile every key in the T3j-recalculated final ledger against implemented
+- Prove retirement of universal candidate APIs, root Cartesian search, mandatory
+  dense ranks, residual exhaustive wrapping, and runtime strategy selectors.
+  Audit titles, axis local sources, legends, tracks, and specialized layouts for
+  separate intrinsics, one measured result, declared local owner/order/cap, and
+  at most eight root feedback rounds without unbounded local retries.
+- Recheck every T5a3 repair disposition, Unicode 16 dependency/data provenance and
+  full conformance fixtures, scalar font fallback, preserve-text viewer limits,
+  exact retained outline/PNG geometry, actual parser bytes/PNG options, and
+  first-party admission before census copies or final Null validation.
+- Retain benchmark evidence for `"A ".repeat(144)`, an approximately
+  200-word scientific caption in one paragraph, the three-paragraph caption, and
+  increasing long legal-break inputs. Report measured
+  performance and resource scaling, not universal unmeasured guarantees.
+- Reconcile every key in the T5a0r-reconciled final ledger against implemented
   owners, current public names, focused evidence, and deletion of every
   superseded source. The historical 1836-record pre-T2h count and completed
-  1860-record T2 count are not post-adjudication acceptance thresholds.
+  1860-record T2 count and historical T3j/T5a0 1884-key total are provenance,
+  not unreviewed revised-target acceptance thresholds.
+- Check the active `04` totals explicitly: 22 target-only keys, 1574 overlay rows
+  (1552 existing plus 22 target-only), and 1882 materialized keys. Historical
+  24/1576/1884 totals remain only in labeled historical records.
 - Audit all specifications, README, guides, examples, and rustdoc for residual
   drift from the already-current implemented contract.
 
@@ -3265,7 +3604,8 @@ Acceptance:
 - Phases T1 through T7 and all admitted T5 subphases are complete with commit and
   verification evidence.
 - Every visual property has one implemented owner matching the approved
-  T3j-recalculated inventory, with every source addition, split, consumer
+  T5a0r-reconciled 1882-key inventory, including its 22 target-only keys and
+  1574-row overlay, with every source addition, split, retirement, consumer
   relationship, and explained exclusion re-audited.
 - No mutable global theme, repeated hidden Publication default outside its
   owning boundary, late theme lookup, compatibility alias, or unclassified

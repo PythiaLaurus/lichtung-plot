@@ -228,11 +228,13 @@ and `size(width, height)` remains exact. Final canonical dimensions then belong
 to the immutable root plan and rendered `Output`, not infallible pre-render Plot
 getters. None of those target behaviors or names is current before T6.
 
-The target protocol keeps scientific layout private. Constraints flow from a
-parent to its children, complete nonempty collections of measured sizes and
-immutable local plans return to the parent, and only root selection chooses one
-complete tree before parents assign final positions. Semantic content does not
-silently clip, elide, or disappear to satisfy a bound. Exact constraints either
+The target protocol keeps scientific layout private. Parents use intrinsic
+requirements to allocate child constraints; each child returns one immutable
+measured local plan or a typed fit miss. Parents assign final positions. Named
+bounded local choices and root-coordinated feedback replace exhaustive
+cross-component search. This deterministic policy does not promise to find every
+feasible arrangement. Semantic content does not silently clip, elide, or disappear
+to satisfy a bound. Exact constraints either
 fit the complete requested content or fail before backend creation.
 Automatic and bounded-width roots also pass the approved finite resource and
 default-300-DPI viability envelope before backend creation. Exact roots remain
@@ -275,22 +277,31 @@ remain outside mark clipping where required.
 ## Output Formats
 
 Publication SVG, preserve-text SVG, and PNG are unconditional capabilities.
-Plain `svg` converts every text element in the canonical scene to vector glyph
-paths through `resvg` and verifies that no `<text>` elements remain. The derived
+Plain `svg` derives vector glyph paths from the scene's retained font faces and
+planned glyph IDs and verifies that no `<text>` elements remain. The derived
 SVG requires no recipient-side fonts, but its text is no longer selectable,
 searchable, editable, or available to assistive text extraction.
 `svg_preserve_text` publishes the canonical SVG with accessible, selectable,
-searchable, and editable `<text>` elements intact. PNG rasterizes the canonical
-SVG through `resvg` and `tiny-skia`. PNG sizing validates positive, finite DPI
-or scale, positive dimensions, and bounded pixel work before allocation.
+searchable, and editable `<text>` elements intact. PNG rasterizes the derived
+outlined SVG through `resvg` and `tiny-skia`. PNG sizing validates positive,
+finite DPI or scale, positive dimensions, and bounded pixel work before allocation.
 
-Current PNG conversion admits source and target axes through `32_768` inclusive,
-source and target products through `100_000_000` pixels inclusive, and canonical
-SVG parser input through `67_108_864` bytes inclusive. Validation orders source
-axis, source work, source SVG bytes, options, rounded-positive target, target
-axis, target work, DPI metadata, parse/dimension agreement, pixmap allocation,
-render, then encode. Preserve-text and outlined SVG routes do not apply those
-PNG-only source and target limits before the Phase T6 automatic-layout switch.
+The PNG conversion limits are source and target axes through `32_768` inclusive,
+source and target products through `100_000_000` pixels inclusive, and actual
+SVG parser input through `67_108_864` bytes inclusive. Validate call-local options
+before expensive conversion, then source geometry, rounded-positive target,
+target axes/work and DPI metadata, actual outlined input bytes, parse/dimension
+agreement, pixmap allocation, render, and encode. Existing canonical source-byte
+admission is not a substitute for checking the expanded parser input.
+Preserve-text and outlined SVG routes do not apply those PNG-only source and
+target limits before the Phase T6 automatic-layout switch.
+
+Implementation status: `4b38de4` introduced retained-glyph outlining and the
+outlined PNG parser route, but the identified parser-byte and validation-order
+gaps remain repair obligations in reopened T5a3. The requirements above do not
+assert those repairs have already landed. After T6, automatic/bounded root
+viability checks canonical preserve-text bytes and default-PNG dimensions;
+actual outlined bytes and custom PNG options remain terminal-local checks.
 
 Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
 JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
@@ -308,18 +319,25 @@ bytes:
 Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 ```
 
-Publication SVG outlining and PNG generation scan platform font directories and
-select the first installed preferred family. Generic `serif`, `sans-serif`, and
-`monospace` entries resolve through the platform font database. If the primary
-face lacks a required glyph, resolution continues through later stack entries
-for that glyph and fails if none can render it. Rendering performs no download,
-provisioning, or cache lookup. Publication SVG also fails if any text remains
-after conversion. Its outlined text requires no font on the recipient's system,
-but exact glyph paths depend on the generation font environment. Preserve-text
-SVG remains accessible and editable, while its displayed text depends on fonts
-available to the viewer. SVG structure and geometry remain deterministic for
-identical inputs and options; exact glyph paths, glyph appearance, and PNG bytes
-require the same installed-font environment.
+Scene preparation discovers installed fonts and resolves faces before text
+measurement. `fontdb` supplies face metadata and host generic-family names;
+project-owned ordering and glyph coverage choose the preferred available face
+for each required visible scalar. Font candidates are not layout alternatives:
+layout does not switch to a less-preferred font to make content fit.
+The scene retains font identities, bytes, and planned glyphs for later outlined
+SVG and PNG conversion without rediscovery. Rendering performs no download,
+provisioning, or project-cache lookup. Reopened T5a3 closes the known selection,
+Unicode, geometry, and admission gaps against the detailed font contract in
+`03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`; public custom font types remain
+target-only until T6.
+
+Publication SVG fails if any text remains after conversion. Its outlined text
+requires no recipient-side font, but exact paths and text-derived layout depend
+on the generation font environment. Preserve-text SVG remains accessible and
+editable, while its displayed glyphs depend on viewer fonts and shaping. For
+identical inputs/options and the same generation font environment, scene geometry
+and retained output decisions are deterministic; no cross-viewer pixel parity
+is promised for editable text.
 
 ## Significance Annotations
 
