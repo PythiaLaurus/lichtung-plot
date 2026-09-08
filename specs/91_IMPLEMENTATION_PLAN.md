@@ -16,7 +16,7 @@ inheritance subset using the current closed `Theme` selector and updated the
 current contracts atomically when that public behavior landed. Its replacement
 theme values, components, colors, and scales remain non-current until Phase T6.
 `05_LAYOUT_SYSTEM.md` is the approved replacement layout architecture; its
-automatic layout, bounded-width sizing, and rendered-dimension behavior remain
+automatic layout, exact-width/automatic-height sizing, and rendered-dimension behavior remain
 non-current until Phase T6. Neither target specification is a second current
 API, and later implementation phases do not begin merely because they are
 listed here.
@@ -50,18 +50,32 @@ discussion:
 - Root feedback is bounded to at most eight rounds with explicit cycle and
   exhaustion failure. No component has an unbounded local retry loop. Scientific
   requirements and local preferences do not form a global dense-rank objective.
-- Automatic sizing derives preferred width from the existing preferred-width
-  metric, assigns that width, and derives height from measurement. Bounded width
-  assigns `min(preferred_width, max_width)` without width search. There is no
-  hidden root canvas, font shrink, content omission, or universal panel multiplier.
-- Exact `.size(width,height)` and the current default/getter API remain current
-  until T6. Automatic and bounded sizing validate canonical preserve-text bytes
-  and PNG source/default-300-DPI target dimensions for the one produced layout,
-  not a pool of alternatives. Actual outlined parser bytes and call-local PNG
-  options are terminal-local safeguards; later PNG failure does not reject an
-  otherwise valid automatic SVG. Exact roots retain format-local SVG behavior.
-- Plot/Canvas root title-block alignment is one `CompositionTheme` property;
-  built-ins are centered and T6 exposes Start/Center/End customization.
+- Exactly three sizing modes are approved: automatic preferred width followed by
+  measured height, exact width with automatic height, and an exact width-height
+  pair. No width search, maximum-width target, public Flutter bounds, hidden root,
+  font shrink, content omission, or universal panel multiplier is admitted.
+- Current defaults, `.size(width,height)`, and getters remain current until T6.
+  T6 introduces consuming Plot/Canvas `width(u32) -> Self`; every sizing setter
+  completely replaces the request, so width after size clears the exact height.
+  Positive-dimension validation remains at preflight, matching current timing.
+- All PNG limits are format-local in every sizing mode, including source/target
+  dimensions, backing storage, actual parser bytes, and requested DPI. Remove
+  hypothetical default-PNG checks and the automatic-only 64 MiB canonical SVG
+  gate. Shared logical-work/font caps, representability, and fallible SVG
+  allocation remain; PNG failure never relayouts or invalidates valid SVG.
+- Automatic placement uses bounded containing-frame recovery, validating body,
+  axes, labels, and guides together; explicit placements remain fixed. Wrapping
+  uses only Unicode-legal breaks, with no emergency break, rotation, ellipsis,
+  or shrink introduced as recovery.
+- Preserve the canonical font catalog, ordering, and provenance. Prefer the first
+  face covering a base plus combining marks within an extended grapheme cluster
+  (EGC) as a unit; only if none covers the unit use per-scalar first coverage when
+  possible. Missing visible coverage is fatal; no provisioning or whole-word,
+  emoji, or generic cluster-mapping extension is admitted.
+- `CompositionTheme` owns `root_title_block_alignment` for title/subtitle and
+  independent `root_caption_alignment`, both `TitleBlockAlignment`. Built-ins
+  use `Center` and `Start` respectively; both inherit from the same owner. T6
+  exposes Start/Center/End customization, not independent title/subtitle controls.
 - Automatic numeric ticks have no fixed five-tick ceiling or public count target.
   T6 exposes one optional additive or Log10-decade preferred data interval per
   axis; the renderer tries it first, then deterministic coarsenings for fit, and
@@ -183,9 +197,9 @@ The approved theme and layout targets follow these rules:
 | T5a | Layout foundation, surfaces, typography, titles, axes, and grid | IN PROGRESS |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a0r | Parent-constraint documentation adjudication | COMPLETE |
-| T5a0s | User-visible behavior approval and bounded recovery | BLOCKED |
+| T5a0s | User-visible behavior approval and bounded recovery | COMPLETE |
 | T5a1 | Exact-root kernel (reopened revised target) | PENDING |
-| T5a1r | Active parent-constraint kernel repair | BLOCKED |
+| T5a1r | Active parent-constraint kernel repair | PENDING |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
 | T5a3 | Canonical fonts and immutable text plans (reopened) | PENDING |
 | T5a3a | Unicode and font preparation, profile, and provenance | PENDING |
@@ -1618,8 +1632,8 @@ Historical scope: this completed phase and T3j1-T3j3 below record the original
 exhaustive-search design and its audit achievements. Complete child products,
 global ranking, exhaustive alternatives, and exact-allocation requirements in
 this historical record are superseded search scope, not active implementation
-instructions. T5a0r adjudicates their replacements; retained ownership, public
-API boundaries, and resource caps are reconciled explicitly there.
+instructions. T5a0r adjudicated the parent-constraint replacement; T5a0s further
+supersedes its sizing, font-selection, caption, and format-limit decisions.
 
 **Status**: COMPLETE
 
@@ -1686,9 +1700,10 @@ Acceptance:
 
 Historical ledger reconciliation below: preserve its source trace and counts as
 completed evidence. Its 24 target-only keys and 1884-key materialized total are
-historical, not active acceptance totals. The T5a0r successor in `04` has 22
-target-only keys, a 1574-row overlay, and 1882 materialized keys after explicit
-retirement or reassignment of search/quality roles.
+historical, not active acceptance totals. T5a0r recorded 22/1574/1882 after
+search-role retirement; T5a0s expects 23 target-only keys, a 1575-row overlay, and
+1883 materialized keys after adding independent caption alignment, subject to
+coordinated `04` review.
 
 Dependencies: T3j1.
 
@@ -2303,7 +2318,7 @@ Parent acceptance:
 - Layout, collision, geometry, and paint use identical resolved typography,
   spacing, glyphs, ticks, and axis geometry.
 - Theme appearance cannot remove caller-provided semantic text.
-- No public constraint, automatic-size, bounded-width, Output-dimension, theme-
+- No public constraint, automatic-size, exact-width, Output-dimension, theme-
   component, title-alignment, or tick-interval API is exposed early.
 - Every intentional built-in output change names its final-ledger owner and has
   focused evidence plus an inspected snapshot committed with the source change.
@@ -2374,6 +2389,10 @@ Commit: `docs(layout): adjudicate T5a implementation partition`.
 
 **Status**: COMPLETE
 
+Historical approval: the scope, counts, scalar fallback, and resource gates below
+record T5a0r's reviewed objective, not revised-target compliance. T5a0s supersedes
+its observable sizing, font-selection, caption, and format-limit decisions.
+
 Dependencies: completed T5a0 and user approval of deterministic local layout.
 
 Objective: reconcile `01`/`02` current contracts, `03` theme/font policy, `04`
@@ -2389,9 +2408,9 @@ fixtures, or snapshots changed and no test suite ran. Runtime repair acceptance
 remains pending in T5a1r and T5a3a1-T5a3f; this completion certifies the revised
 documentation, not the historical implementation's correctness.
 
-Reopened approval boundary: `028e2c8` established an internally reviewed document,
-but that did not establish user acceptance of its fit-failure tradeoffs. T5a0s
-now blocks implementation until those behaviors are discussed and approved.
+Historical reopening boundary: `028e2c8` established an internally reviewed
+document, not user acceptance of its fit-failure tradeoffs. T5a0s records the
+subsequent accepted decisions and still gates implementation on document closure.
 
 Acceptance:
 
@@ -2420,48 +2439,54 @@ Commit: `docs(layout): adjudicate deterministic parent constraints`.
 
 ### T5a0s: User-Visible Behavior Approval And Bounded Recovery
 
-**Status**: BLOCKED
+**Status**: COMPLETE
 
-Dependencies: T5a0r; awaiting explicit user decisions D1-D6 below.
+Dependencies: T5a0r; the user approved D1-D6, including the delegated D3
+recommendation. Target approval does not change current APIs or authorize early
+T6 exposure. This documentation objective is complete; runtime repairs remain
+pending in their implementation stages.
 
-The prior statement that no product decisions remained was premature. Distinguish
-agreement with parent-constraint architecture from approval of its observable
-defaults. No implementation phase may start until this gate closes. Existing
-public behavior is unchanged; pending options do not authorize APIs or code.
-
-| Decision | Existing proposal / consequence | Recommendation awaiting approval | Status |
+| Decision | Accepted behavior | Boundary and evidence owner | Status |
 | --- | --- | --- | --- |
-| D1 Automatic recovery | A guide could fit while its allocated plot failed; fixed flow could reject ordinary reflow | Validate the entire affected frame; try bounded automatic edges and preferred/compact reflow, but never move explicit placements or hide/shrink content. No exhaustive whole-tree solver | OPEN |
-| D2 Long labels | Normal Unicode wrapping only; an unbroken identifier or crowded category label can cause a fit error | Keep normal wrapping and strict content preservation by default; decide whether explicit opt-in identifier breaking/axis-label rotation belongs in this milestone or remains deferred | OPEN |
-| D3 Sizing workflows | Future automatic dimensions, maximum width/automatic height, exact width-height; no exact-width/automatic-height mode | Retain these meanings; offer exact width with automatic height for publication columns if wanted. Canvas still owns child allocation. No public change before the scheduled switch | OPEN |
-| D4 SVG versus PNG limits | Automatic/bounded SVG must pass hypothetical default-300-DPI size limits; exact SVG does not | Keep PNG-only limits at PNG publication for all sizing modes. Preserve shared layout/resource safety, and explicitly reconsider the automatic-only SVG byte cap rather than silently inherit it from PNG | OPEN |
-| D5 Font availability | Installed-font stack, strict visible-glyph failure, first-covering-scalar fallback; even generated alphabets are checked before final labels | Keep no downloads and no replacement boxes; request approval for strict coverage and discuss grapheme-coherent fallback versus the existing scalar rule, with clear diagnostics and viewer-dependent editable SVG | OPEN |
-| D6 Caption alignment | One joint alignment controls title, subtitle, caption; built-ins center all three | Permit independent caption alignment, with centered titles/subtitles and left-aligned prose captions if desired; this changes defaults and needs explicit approval | OPEN |
+| D1 Automatic recovery | Validate the entire affected frame; bounded supported edges and preferred/compact reflow may remeasure affected children | Explicit placements stay fixed; fatal font/resource errors are not fit alternatives. T5a1r foundation, T5b guides, T5e closure | ACCEPTED |
+| D2 Long labels | Option A: strict Unicode-legal wrapping and complete content preservation | Overwide unbroken text fails; no emergency break, new rotation, ellipsis, or font shrink. New controls remain DF5. T5a3b/T5a5 | ACCEPTED |
+| D3 Sizing workflows | User-approved delegated best choice: exactly automatic, exact-width/automatic-height, and exact-pair modes | Remove `max_width` target; consuming Plot/Canvas `width(u32) -> Self` at T6 replaces the width getter. Setters completely replace requests; width after size clears height. Positive preflight matches current timing; Canvas owns child allocation; no public Flutter bounds. T5e/T6 | ACCEPTED |
+| D4 SVG versus PNG limits | Every PNG limit is terminal-local in all sizing modes; remove hypothetical PNG viability and automatic-only 64 MiB canonical SVG gate | Shared logical-work/font caps, representability, and fallible SVG allocation remain. No relayout on PNG failure. T5a3d/T5e/T6 | ACCEPTED |
+| D5 Font availability | Preserve catalog/order/provenance; prefer first face covering base plus combining marks within an EGC as a unit, otherwise allow per-scalar first-coverage fallback when possible | Missing visible coverage is fatal, including required generated alphabets; no provisioning, whole-word, emoji, or generic cluster mapping. Preparation-unit census/selection in T5a3a3; shaping in T5a3c | ACCEPTED |
+| D6 Caption alignment | Independent `CompositionTheme::root_caption_alignment` uses the same `TitleBlockAlignment`; built-ins use Start captions and Center title/subtitle | Same-owner inheritance; no independent title versus subtitle controls. T5a4 privately connects defaults; T6 exposes customization | ACCEPTED |
 
-The recommendations are NOT defaults accepted by silence. Record each user
-answer, resulting observable rule, explicit exclusions, and concrete acceptance
-examples here; resolve affected `01`-`05` and `99` clauses atomically afterward.
-If a decision is deferred, state the behavior implemented in its absence and
-obtain agreement to that limitation. Ask focused follow-ups for ambiguity rather
-than selecting an unapproved behavior. Existing contrary clauses in the working
-target describe the choices under review, not a second selectable architecture.
+Behavioral acceptance examples, carried into the owning stages:
 
-Correction already drafted for D1 in `05`: placement success includes the body,
-axes, labels, and guide; another edge/compact flow may remeasure affected children
-when allocated space causes failure. Per-owner trials and root work remain bounded;
-fatal font/resource errors never trigger alternatives. Explicit caller placement,
-content, dimensions, and typography are not changed to force fit.
+- D1: a right guide fits alone but starves the plot; top/bottom or compact reflow
+  succeeds with all labels. Explicit right stays right or fails. Nested/multiple
+  guides share trial/work budgets; distinguish exhausted fit trials from a
+  planning-limit stop, without partial output in either case.
+- D2: a spaced scientific caption wraps; an identifier with no legal break wider
+  than its assigned box returns a typed fit miss without rotation or alteration.
+- D3: `.size(600,400).width(300)` means exactly 300 wide with measured height;
+  `.width(300).size(600,400)` means exactly 600 by 400. Omission uses preferred
+  width; zero dimensions fail at preflight. These are T6 examples, not current API.
+- D4: valid SVG may exceed PNG dimensions or 64 MiB in every sizing mode, subject
+  to retained shared safety gates; subsequent PNG refusal leaves its scene intact.
+- D5: if face A covers the base only and face B covers base plus mark, select B
+  for that unit. If no face covers the unit but separate faces cover every scalar,
+  use first coverage per scalar; if a visible mark is uncovered, fail explicitly.
+- D6: all built-ins center title/subtitle and Start-align multiline captions;
+  changing caption to End leaves titles unchanged, with Canvas/Plot owner isolation.
 
-Required acceptance examples include: right-guide/plot failure with successful
-top/bottom placement; compact reflow success with every label intact; explicit
-right placement remaining right or failing; nested/multiple guides sharing work
-and trial budgets; and genuine exact-size failure after supported recovery.
-Distinguish exhausted supported fit trials from a planning-limit stop before all
-trials complete; neither may silently publish a partial or altered figure.
-Add examples for each other decision after its behavior is agreed.
+Revised ledger: 23 target-only keys, 1575 overlay rows (1552 existing
+plus 23 target-only), and 1883 materialized keys (1860 historical plus 23), adding
+one independent caption property. Historical T3j/T5a0/T5a0r totals remain
+historical evidence, not revised target totals.
 
-Completion requires explicit decisions, cross-document review, `git diff --check`,
-and a documentation commit. Do not run the code test suite for this phase.
+Documentation evidence (2026-09-08): independent cross-contract review checked
+D1-D6, current/target staging, target-only rows/count arithmetic, and the matching
+DF1-DF9 review gates. The remaining one-alignment wording and text-control review
+checkpoint discrepancy were corrected. `git diff --check` passed. No code,
+dependency, fixture, or snapshot changes were made; the documentation-only task
+does not run the test suite. This does not certify runtime conformance.
+
+Commit: `docs(layout): finalize behavior decisions and review gates`.
 
 ### T5a1: Exact-Root Kernel (Reopened Revised Target)
 
@@ -2475,10 +2500,10 @@ and completes only when T5a1r closes; it has no separate repair commit.
 
 ### T5a1r: Active Parent-Constraint Kernel Repair
 
-**Status**: BLOCKED
+**Status**: PENDING
 
-Dependencies: T5a0r and completed T5a0s. User-visible behavior approval is pending;
-do not start implementation based only on the earlier architectural approval.
+Dependencies: completed T5a0r and T5a0s. Implement the accepted contract and
+preserve the current public API until its scheduled migration.
 
 Scope and deletion targets:
 
@@ -2500,6 +2525,10 @@ Scope and deletion targets:
 - Declare the owner/order/cap of each activated local alternative. Bound root
   feedback to eight rounds with deterministic equality, cycle, and exhaustion
   outcomes; no local unbounded retries or hidden fallback root.
+- Establish D1 containing-frame recovery in activated owners, not guide-only fit:
+  for example, try a supported automatic edge when right placement starves the
+  body, while explicit right stays fixed. Share finite trial/work accounting;
+  T5b/T5e complete native guide and composition evidence on this same route.
 - Retain operation-scoped accounting, applicable existing caps, typed cache
   identities, and fallible bounded growth. Gate work and first-party storage
   before materialization, including text primitives activated here. Admission
@@ -2528,7 +2557,9 @@ Commit: `refactor(layout): replace exhaustive kernel with parent constraints`.
 
 Historical achievement: `6da94ea` (`refactor(theme): centralize foundational
 appearance`). Preserve its resolved appearance, surfaces, and ownership work;
-kernel repair is not authorization to redesign that appearance.
+kernel repair is not authorization to redesign that appearance. The centered
+caption statements below are historical; T5a0s/D6 authorizes the independent
+Start caption default and carrier connection in T5a4, not a rewrite of T5a2.
 
 Dependencies at completion: historical T5a1. Revised consumers use T5a1r.
 
@@ -2597,8 +2628,11 @@ Shared repair acceptance:
   pitch, and baselines shared by measurement, collision, and replay. No omitted
   semantic text, font shrink, hidden root, emergency wrapping fallback, or
   draw-time layout. Intact overwide content produces a typed fit miss.
-- Preserve canonical ordered `(stack,weight)` discovery and per-scalar fallback;
-  repair script resolution without introducing broad cluster-level fallback.
+- Preserve canonical ordered `(stack,weight)` discovery, catalog, and provenance;
+  T5a3a3 prefers the first face covering a base plus combining marks within an
+  EGC as one preparation unit. Only if no face covers it, use first coverage per
+  scalar when possible. Missing visible coverage is fatal. T5a3c shapes the
+  selected runs; no whole-word, emoji, or generic cluster-mapping extension.
   No public API change, asset provisioning, or network access.
 - Every stage gates its own input, work, and first-party storage before use and
   propagates admission errors. Fallible incremental growth is permitted within
@@ -2658,8 +2692,8 @@ Dependencies: T5a3a1.
 
 Scope and acceptance:
 
-- Preserve canonical discovery inputs and ordered stack/weight policy; do not
-  change scalar fallback while repairing discovery and fontconfig handling.
+- Preserve canonical discovery inputs and ordered stack/weight policy; selection
+  changes belong to T5a3a3, not discovery or fontconfig handling in this stage.
 - Reproduce and repair suspected font file-descriptor retention/exhaustion and
   fontconfig partial-error handling. Bound discovery, open-handle lifetimes,
   reads/hashes, and discovery metadata; propagate partial discovery failures
@@ -2680,13 +2714,21 @@ Dependencies: T5a3a2.
 Scope and acceptance:
 
 - Preserve canonical family/occurrence/identity ordering, deduplication, weight,
-  primary-face and scalar fallback semantics, and generation-host provenance.
-- Count/admit scalar census, occurrence/selection metadata, probes, and retained
+  primary face, catalog, and generation-host provenance. Census preparation
+  units for base plus combining marks within each EGC; select the first ordered
+  face covering the unit. If no face covers it, allow per-scalar first coverage
+  when possible; fail on any uncovered visible scalar. This is not whole-word,
+  emoji, or generic cluster mapping, and does not provision fonts.
+- Count/admit preparation-unit and scalar census, occurrence/selection metadata,
+  unit and scalar coverage probes, and retained
   source bytes before copying, probing, or growing storage. Keep one operation
   resource state and propagate failures rather than silently skipping faces.
-- Cover missing families/glyphs, scalar selection, identity/deduplication/order,
+- Cover missing families/glyphs, unit preference and scalar fallback, identity/deduplication/order,
   census-copy timing, limits, reservation refusal, and retained-font reuse by
   outline/PNG terminals without rediscovery.
+- Example: face A covers the base, B covers base plus mark, so B wins the unit;
+  if A and C separately provide the only coverage, first coverage per scalar is
+  allowed. An uncovered visible mark fails, including in generated alphabets.
 
 Commit: `fix(font): gate census selection and retained faces`.
 
@@ -2712,6 +2754,10 @@ Scope and acceptance:
 - Preserve source text, whitespace, mandatory breaks, blank lines, grapheme
   integrity, and typed overwide failure. Local alternatives, if needed, have an
   explicit owner/order/cap and do not cause sibling products or width searches.
+- Enforce D2 Option A: only Unicode-legal wrapping, with no emergency identifier
+  breaks, new rotation, ellipsis, or font shrink. For example, a spaced caption
+  wraps at its assigned width, while an overwide unbroken identifier fails intact.
+  Broader controls remain DF5 for T6 entry review, not implementation here.
 - Delete residual exhaustive text generation and its caches/ranking state in
   this change; do not retain a runtime strategy selector or dormant old route.
 - Bound scans, break records, line storage, and fallible growth from admission
@@ -2737,7 +2783,10 @@ Scope and acceptance:
 
 - Reproduce script-mark failures and repair Common/Inherited resolution with
   surrounding script context, including leading/interleaved combining marks.
-  Keep font selection scalar-based under the approved stack/weight policy.
+  Shape using T5a3a3's frozen base-plus-mark unit selection and permitted scalar
+  fallback, without reselecting faces. For example, retain one covering face for
+  a base/mark unit, but preserve a necessary split-face fallback with correct
+  script context and geometry; do not broaden selection to whole words or emoji.
 - Resolve bidi per paragraph, then apply correct line-level handling after soft
   wrapping; test separate paragraphs, mixed directions, isolates, neutrals,
   trailing whitespace, and mandatory versus soft breaks.
@@ -2770,10 +2819,13 @@ Scope and acceptance:
   requested target options, not only estimates or default dimensions. Cover
   scale/dimension arithmetic,
   backing-store limits, retained outline expansion, and serializer growth before
-  parser/backend materialization. These safeguards are terminal-local: root
-  viability checks canonical preserve-text bytes and source/default-300-DPI
-  target dimensions only. A later PNG may fail without invalidating an automatic
-  SVG or selecting a new layout. Do not claim third-party OOM immunity.
+  parser/backend materialization. All PNG limits, including source dimensions,
+  are terminal-local for every sizing mode. Remove hypothetical default-300-DPI
+  root checks and the automatic-only 64 MiB canonical SVG gate; keep shared
+  logical-work/font caps, representability, and fallible SVG allocation. A later
+  PNG may fail without invalidating SVG or selecting a new layout. Example:
+  representable SVG above a PNG limit succeeds under retained shared gates,
+  then PNG refuses without mutating its scene. Do not claim third-party OOM immunity.
 - Prove limit-minus-one/exact/plus-one, checked overflow, refusal, error identity,
   retained environment, zero-backend-call failure, and one final Null/concrete
   lifecycle over the same frozen plan. Every earlier stage must already enforce
@@ -2843,13 +2895,16 @@ standalone Plot root without requiring composition adapters early.
 
 Scope:
 
-- Build one immutable title-block result at the parent-assigned width from resolved text roles,
-  `CompositionTheme` spacing, and one root `TitleBlockAlignment` value.
+- Build one immutable title-block result at the parent-assigned width from resolved
+  text roles, `CompositionTheme` spacing, `root_title_block_alignment` for title/
+  subtitle, and independent `root_caption_alignment`, both `TitleBlockAlignment`.
+  Extend the retained private carrier here: built-ins use Center title/subtitle
+  and Start captions; both properties resolve and inherit from the same owner.
 - Supply intrinsic requirements separately, measure height after deterministic
   wrapping, and return a typed fit miss when exact allocated geometry cannot fit.
   Admit text and plan storage before materialization; do not search title widths.
-- Apply alignment consistently to per-line translation and horizontal child
-  placement for title, subtitle, and caption. Retain zero rotation.
+- Apply each role's alignment consistently to per-line translation and horizontal
+  child placement. Retain zero rotation and no independent title/subtitle control.
 - Migrate the standalone Plot root. T5a6a connects the same producer to faceted
   Plot, Matrix, and Canvas outer-root adapters after those boundaries exist.
 - Store exact lines, widths, baselines, paints, spacing, boxes, and serialization
@@ -2871,8 +2926,10 @@ Deletion targets:
 Evidence:
 
 - Title-only, subtitle-only, caption-only, all-role, unequal multiline,
-  Start/Center/End, all-built-ins-centered, standalone owner selection, presence,
+  independent Start/Center/End, built-in Center titles/Start captions, owner selection, presence,
   baseline cardinality, Null/SVG identity, and explicit-size snapshot tests.
+- Example: changing a multiline caption to End does not move the centered title
+  or subtitle; inherited and explicit Plot themes retain the same owner boundary.
 - `just verify` passes.
 
 Commit: `feat(layout): plan root title blocks`.
@@ -2929,7 +2986,9 @@ Exclusions:
 
 - Legend clearance, Canvas/facet track measurement, mark ink/density/category
   pitch/annotations, complete Matrix/Marginal packing, full domain feedback,
-  automatic roots, and public interval/alignment APIs.
+  automatic roots, and public interval/alignment APIs. D2 admits no new label
+  rotation or emergency-break recovery; an overwide exact category label fails
+  intact, while existing role-specific rotation remains a renderer invariant.
 
 Deletion targets:
 
@@ -2970,7 +3029,7 @@ Exclusions across T5a6:
 
 - T5b legends/facets/Canvas tracks and chrome; T5c final mark and annotation
   appearance/measurement/geometry; T5d scales/guides; T5e specialized native
-  producers and automatic/bounded roots; T6 public APIs/default switch.
+  producers and automatic/exact-width roots; T6 public APIs/default switch.
 
 Deletion of family-local retries below means duplicate/ad hoc stabilization and
 source policies. It does not remove the common bounded axis source attempts or
@@ -3242,7 +3301,7 @@ Scope:
   mark/annotation deferred adapters plus their named legacy-panel-minimum
   consequence are the only remaining nonnative boundaries.
 - Preserve explicit `640x480` Plot and `960x640` Canvas behavior while leaving
-  public automatic and bounded sizing dormant until their atomic T6 switch.
+  public automatic and exact-width sizing unexposed until their atomic T6 switch.
 
 Deletion targets:
 
@@ -3321,6 +3380,10 @@ Acceptance:
 - Shared and per-plot legends use one component contract while retaining exact
   mark glyphs.
 - Mixed explicit Plot themes have deterministic documented behavior.
+- D1 examples: automatic right-guide fit that starves the body recovers through a
+  supported top/bottom edge or compact reflow with all entries intact; explicit
+  right remains right or fails. Nested guides share bounded trial/work budgets,
+  and resource refusal is distinct from exhausted supported fit trials.
 - Facet and Canvas plans have one measured root size and perform no layout
   reconstruction during final drawing.
 - T5b establishes one comparison and failure path and proves it against the
@@ -3470,17 +3533,17 @@ Scope:
   ticks, legend flow, grid tracks, shared alignment, domains, and overlays on
   T5a1r's sole at-most-eight-round driver. Detect cycles and exhaustion; no
   component adds an unbounded local retry loop.
-- Resolve one private automatic root size, bounded-width root size, or exact root
+- Resolve one private automatic root size, exact-width/automatic-height size, or exact root
   size before backend creation. Convert the finite logical result once through
   checked upward CSS-pixel rounding and store it in `PlotPlan` or `CanvasPlan`.
 - Derive automatic preferred width from the existing preferred-width metric and
-  measure height at that width. Bounded width uses
-  `min(preferred_width, max_width)` without width search. Root viability checks
-  only canonical preserve-text bytes and PNG source/default-300-DPI target
-  dimensions on the one produced layout; failure does not select another layout.
-  Actual outlined parser bytes and requested PNG options are checked only at
-  the PNG terminal. Later PNG failure must not reject an otherwise valid
-  automatic SVG, mutate the scene, or trigger another layout.
+  measure height there. Exact-width mode assigns precisely the requested width
+  and measures height; exact pair fixes both. No `max_width` mode or width search.
+  Keep shared logical-work/font caps, representability, and fallible SVG growth,
+  but remove the automatic-only 64 MiB canonical SVG gate and all hypothetical
+  PNG viability checks. Every PNG source/target, backing-store, parser-byte, and
+  requested-option limit is terminal-local in every mode. PNG refusal never
+  rejects valid SVG, mutates the scene, or triggers another layout.
 - Complete the operation resource census over every T5b-T5e producer, preserving
   existing caps with checked topology/work arithmetic and first-party admission
   before materialization. Fallible incremental growth is allowed; do not require
@@ -3488,7 +3551,7 @@ Scope:
   font shrink, content omission, hidden fixed root, or format-specific mutation.
 - Remove remaining final-render text layout, tick selection, legend construction,
   spacing derivation, track sizing, and domain mutation.
-- Exercise automatic and bounded-width behavior through private focused tests,
+- Exercise automatic and exact-width/automatic-height behavior through private focused tests,
   but retain the current public default and getters until T6 performs the one
   public switch.
 
@@ -3498,11 +3561,16 @@ Acceptance:
   returns one immutable measured result or typed fit miss under parent-assigned
   constraints. Unsupported composition shapes reject before materialization;
   one complete arranged plan tree is frozen before final Null validation.
-- Automatic and bounded-width private plans are finite, deterministic,
+- Automatic and exact-width/automatic-height private plans are finite, deterministic,
   viable under the approved local-layout rules, and complete in semantic
   content.
 - Exact dimensions remain exact and fail rather than clip when complete content
   cannot fit.
+- Examples: a private exact 300-pixel root measures caption-dependent height;
+  an exact pair that cannot fit fails after bounded frame recovery. Valid SVG
+  above PNG limits or 64 MiB remains possible under shared safety gates, with
+  later PNG refusal and no mutation. Sparse coordinates and captions retain D6
+  owner-local alignment; long unbroken labels retain D2 strict failure.
 - Null and concrete rendering consume the same immutable root and child plans.
 - Specialized, legend, and track regressions prove local ownership and bounded
   feedback without sibling products; scientific caption and long legal-break
@@ -3517,6 +3585,14 @@ Acceptance:
 
 Dependencies: T5e.
 
+ENTRY gate, after T5e closure and before T6 implementation: review DF1 separate
+legend sections, DF2 caller numeric formatting, DF5 broader text layout controls
+(including emergency breaks/rotation/alignment), and DF7 sparse compaction using
+the evidence requirements in `99_DEFERRED_FEATURES.md`. For each ID, record a
+user-approved admission with a new approved phase, rejection with reason, or
+re-deferral to a new explicit milestone checkpoint. Review is not an implementation
+promise; none of these reviews automatically expands T6.
+
 Expose the complete foundations only after every admitted consumer uses the
 private resolved model.
 
@@ -3526,11 +3602,11 @@ Scope:
   `Theme` API and built-in constructors or presets.
 - Expose only validated component theme, color, typography, and scale types
   required by the full-foundations milestone.
-- Expose `TitleBlockAlignment::{Start,Center,End}` and one
-  `CompositionTheme::root_title_block_alignment` property. Every built-in
-  constructor returns `Center`; do not expose general `TextTheme` alignment,
-  independent title/subtitle/caption alignment, backend anchors, or separate
-  Plot/Canvas alignment setters.
+- Expose `TitleBlockAlignment::{Start,Center,End}` for
+  `CompositionTheme::root_title_block_alignment` (title/subtitle) and independent
+  `root_caption_alignment`. Built-ins return Center and Start respectively; both
+  use the same owner/inheritance. No independent title versus subtitle controls,
+  general `TextTheme` alignment, backend anchors, or Plot/Canvas alignment setters.
 - Retain `Canvas::theme(Theme)` and `Plot::theme(Theme)` as the sole owner
   attachments established by T4 while replacing the closed selector arguments
   with the approved complete immutable `Theme` values. Migrate repository
@@ -3548,13 +3624,17 @@ Scope:
   retains automatic span/typography policy. Do not expose a target count, maximum
   count, visual-density scalar, categorical stride, or tick-generation callback.
 - Make absence of a sizing call select automatic layout for Plot and Canvas.
-- Add positive `max_width(width)` builders for bounded-width automatic height,
-  retain exact `size(width, height)`, and keep the complete constraint protocol
-  private.
+- Add consuming `Plot<K>::width(u32) -> Self` and `Canvas::width(u32) -> Self`
+  for exact width with automatic height; retain exact `size(width, height)`.
+  Every sizing setter completely replaces the request: width after size clears
+  height, size after width fixes both, and repeated calls replace prior values.
+  Validate positive dimensions at preflight, matching current timing. Remove the
+  `max_width` target and expose no public Flutter bounds or constraint protocol.
 - Connect only the repaired parent-constraint route: preferred width then measured
-  height, bounded `min(preferred_width, max_width)`, and viability of one produced
-  layout. Do not expose a search strategy, global objective, or alternate route.
-- Remove pre-render `Plot::width()` and `Plot::height()`. Add
+  height, exact width then measured height, or exact pair, producing one layout.
+  Do not expose a search strategy, global objective, or alternate route.
+- Replace pre-render `Plot::width()` with the consuming width builder and remove
+  `Plot::height()`; migrate all repository callers atomically, without aliases. Add
   `Output::width()` and `Output::height()` as exact canonical CSS-pixel scene
   dimensions that remain stable across chained publications.
 - Do not expose a pre-render measurement API, size-request enum, public layout
@@ -3568,16 +3648,17 @@ Scope:
   `05_LAYOUT_SYSTEM.md` current, and reconcile `99_DEFERRED_FEATURES.md`; no
   target/current specification interval remains.
 - Update examples and user documentation with standalone, Canvas inheritance,
-  Plot replacement, palette, exact local style, automatic sizing, bounded-width
+  Plot replacement, palette, exact local style, automatic sizing, exact-width
   wrapping, exact sizing, and rendered-dimension examples.
 
 Acceptance:
 
 - Callers can construct one complete custom theme covering the admitted full
   foundations without editing private renderer state.
-- A caller can derive a complete theme with Start, Center, or End root title-
-  block alignment; Canvas/Plot ownership and inheritance select the expected
-  value, and every built-in remains centered.
+- A caller can independently choose Start, Center, or End caption alignment and
+  joint title/subtitle alignment. Canvas/Plot ownership and inheritance select
+  both values; every built-in centers title/subtitle and Start-aligns captions.
+  Example: End caption customization leaves the centered title/subtitle unchanged.
 - A caller can request an additive linear or Log10-decade preferred tick interval
   independently on x and y; focused evidence proves exact-source preference,
   deterministic coarsening, terminal midpoint order, scale mismatch, exact-tick
@@ -3586,24 +3667,34 @@ Acceptance:
   through the single current API.
 - The API has no ambiguous global default setter, generic property map, detached
   mutable palette, or alternate compatibility identity.
-- Public constructors validate every structural invariant before rendering.
-- Automatic and bounded-width output report their final dimensions only through
+- Public constructors validate structural theme/scale invariants; positive sizing
+  remains preflight validation, matching current timing.
+- Automatic and exact-width output report their final dimensions only through
   `Output`; exact sizing remains exact and has no nominal pre-render getters.
-- Root viability validates canonical preserve-text bytes and PNG source/default-
-  300-DPI target dimensions of the produced automatic/bounded layout. Exact SVG
-  remains format-local; PNG terminals validate actual outlined bytes/options and
-  may fail later without invalidating an otherwise valid automatic SVG.
+- All sizing modes keep PNG limits local to PNG publication, including actual
+  source/target dimensions, backing storage, outlined parser bytes, and options.
+  No hypothetical PNG or automatic-only 64 MiB canonical SVG gate remains;
+  shared logical-work/font caps, representability, and fallible SVG growth remain.
+- Examples on Plot and Canvas: `.size(600,400).width(300)` reports exactly 300
+  wide and measured height; `.width(300).size(600,400)` reports 600 by 400;
+  repeated width calls replace. Zero fails at preflight. A valid large SVG may
+  later fail PNG without changing the frozen scene or its reported dimensions.
 - Compile-pass and compile-fail evidence enforces the intended visibility and
   ownership boundaries.
 - All canonical specifications describe the implemented replacement API before
   the phase is complete.
+- CLOSURE gate, before T7: review DF3 data-mapped alpha and DF4 broader count/
+  density tick controls against implemented T6 evidence, following each item's
+  `99` evidence requirements. Record for each ID a user-approved new-phase
+  admission, reasoned rejection, or re-deferral to a new explicit milestone.
+  Review does not promise implementation or retroactively expand T6.
 - `just verify` passes.
 
 ## Phase T7: Contract Evidence And Final Audit
 
 **Status**: PENDING
 
-Dependencies: T6.
+Dependencies: T6, including its DF3/DF4 closure gate.
 
 Close the phase with exact behavioral evidence and no residual old model.
 
@@ -3616,11 +3707,11 @@ Scope:
   capacity, missing mappings, canonical font candidate ordering/deduplication/
   provenance, shared continuous-guide compatibility/domain merging, contrast
   behavior, SVG, and PNG.
-- Cover automatic, bounded-width, and exact dimensions across ordinary,
-  specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
-- Cover root title-block alignment defaults/customization and inheritance, plus
-  automatic/additive/Log10-decade/exact tick-policy precedence across standalone,
-  facet, Canvas-child, SVG, and PNG routes.
+- Cover automatic, exact-width/automatic-height, and exact-pair dimensions across
+  ordinary, specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
+- Cover independent caption and joint title/subtitle defaults/customization and
+  inheritance, plus automatic/additive/Log10-decade/exact tick-policy precedence
+  across standalone, facet, Canvas-child, SVG, and PNG routes.
 - Retain reviewed deterministic snapshots for every built-in preset and selected
   custom themes.
 - Search for retired theme APIs, repeated hidden Publication defaults, dormant
@@ -3633,40 +3724,60 @@ Scope:
   separate intrinsics, one measured result, declared local owner/order/cap, and
   at most eight root feedback rounds without unbounded local retries.
 - Recheck every T5a3 repair disposition, Unicode 16 dependency/data provenance and
-  full conformance fixtures, scalar font fallback, preserve-text viewer limits,
+  full conformance fixtures, base-plus-mark unit preference and allowed per-scalar
+  first-coverage fallback, strict visible-miss failure, preserve-text viewer limits,
   exact retained outline/PNG geometry, actual parser bytes/PNG options, and
   first-party admission before census copies or final Null validation.
 - Retain benchmark evidence for `"A ".repeat(144)`, an approximately
   200-word scientific caption in one paragraph, the three-paragraph caption, and
   increasing long legal-break inputs. Report measured
   performance and resource scaling, not universal unmeasured guarantees.
-- Reconcile every key in the T5a0r-reconciled final ledger against implemented
+- Reconcile every key in the T5a0s-reconciled final ledger against implemented
   owners, current public names, focused evidence, and deletion of every
   superseded source. The historical 1836-record pre-T2h count and completed
   1860-record T2 count and historical T3j/T5a0 1884-key total are provenance,
   not unreviewed revised-target acceptance thresholds.
-- Check the active `04` totals explicitly: 22 target-only keys, 1574 overlay rows
-  (1552 existing plus 22 target-only), and 1882 materialized keys. Historical
-  24/1576/1884 totals remain only in labeled historical records.
+- Check expected active `04` totals explicitly: 23 target-only keys, 1575 overlay
+  rows (1552 existing plus 23 target-only), and 1883 materialized keys, including
+  the independent caption property. Coordinate any reviewed `04` difference;
+  historical 22/1574/1882 and 24/1576/1884 totals remain labeled provenance.
 - Audit all specifications, README, guides, examples, and rustdoc for residual
   drift from the already-current implemented contract.
+- Cross-route examples prove right-guide starvation recovery versus fixed explicit
+  placement, intact overwide-identifier failure, width-after-size height clearing,
+  SVG success followed by PNG refusal, coherent base/mark coverage with permitted
+  scalar fallback, and independent Start captions with Center titles/subtitles.
 
 Acceptance:
 
 - Phases T1 through T7 and all admitted T5 subphases are complete with commit and
   verification evidence.
 - Every visual property has one implemented owner matching the approved
-  T5a0r-reconciled 1882-key inventory, including its 22 target-only keys and
-  1574-row overlay, with every source addition, split, retirement, consumer
+  T5a0s-reconciled 1883-key inventory, including its 23 target-only keys and
+  1575-row overlay, with every source addition, split, retirement, consumer
   relationship, and explained exclusion re-audited.
 - No mutable global theme, repeated hidden Publication default outside its
   owning boundary, late theme lookup, compatibility alias, or unclassified
   renderer style constant remains.
 - Snapshot changes are intentional, reviewed, and committed with their owning
   behavior change.
+- CLOSURE gate, before successor planning: review DF6 broader root bounds/
+  maximum width, DF8 caller-selected objectives, and DF9 global optimization with
+  each item's `99` workflow/performance evidence. Let the user choose a small
+  justified bounds extension, not an assumed general constraint API. Each ID
+  requires user-approved admission with a new approved phase, rejection with
+  reason, or re-deferral to a new explicit milestone checkpoint. This is review,
+  not an implementation promise or automatic expansion of T6/T7.
+- Audit all DF1-DF9 entry/closure dispositions and user approvals. Remove admitted
+  features from `99` on approved planning, not code completion; only implementation
+  makes the corresponding current contracts change. Every still-deferred item
+  retains an explicit checkpoint, including any user-approved replacement gate.
 - `just verify` passes from the completed worktree.
 
 ## T1 Decisions
+
+Current approved target summary, incorporating T5a0s amendments; completed T1 and
+T3j/T5a0/T5a0r decision records above remain historical evidence.
 
 - `Theme` is one complete immutable value. Built-ins are constructors, and a
   construction-only builder produces custom complete themes.
@@ -3674,10 +3785,11 @@ Acceptance:
   replace it completely; facets add no scope.
 - Components are surfaces, typography, axes, legend, composition, marks,
   annotations, and color scales. Plot-family theme blocks are not admitted.
-- `CompositionTheme` owns one Plot/Canvas root title-block alignment applied
-  jointly to title, subtitle, and caption. Built-ins use `Center`; Start and End
-  are available through complete-theme customization; other anchors remain
-  renderer invariants.
+- `CompositionTheme` owns joint title/subtitle `root_title_block_alignment` and
+  independent `root_caption_alignment`, both `TitleBlockAlignment`, inherited
+  from the same owner. Built-ins use Center titles/subtitles and Start captions;
+  T6 customization permits Start/Center/End without independent title/subtitle
+  controls. Other anchors remain renderer invariants.
 - `OpaqueColor` owns RGB data-scale color. `Color` owns final RGBA paint with
   `u8` alpha. Alpha replacement is exact and never multiplicative.
 - Built-in qualitative palettes preserve curated colors and extend them through
@@ -3693,7 +3805,21 @@ Acceptance:
   the better theme candidate; general custom-theme contrast remains caller-owned.
 - Fonts use typed ordered stacks and one canonical generation-host candidate list
   per used `(stack,weight)`, with exact identity-based ordering, deduplication,
-  glyph fallback, and recorded environment provenance.
+  and recorded environment provenance. Prefer first-face base-plus-combining-mark
+  coverage within an EGC as a unit; otherwise permit first coverage per scalar
+  when possible. Visible misses are fatal, with no provisioning or whole-word,
+  emoji, or generic cluster-mapping extension.
+- D1 bounded containing-frame recovery keeps explicit placements fixed; D2 uses
+  strict Unicode-legal wrapping without emergency breaking, rotation, ellipsis,
+  or font shrink as recovery. Broader controls require DF5 review, not silent admission.
+- T6 exposes exactly automatic, exact-width/automatic-height, and exact-pair
+  sizing. Consuming Plot/Canvas `width(u32) -> Self` and `size` completely replace
+  requests; width after size clears height and positivity is checked at preflight.
+  No `max_width` target or public Flutter bounds remain. Current APIs stay unchanged
+  until T6; output dimensions belong to rendered `Output`.
+- All PNG limits are format-local in all modes; no hypothetical PNG viability or
+  automatic-only 64 MiB canonical SVG gate remains. Shared logical-work/font
+  caps, representability, and fallible SVG allocation still apply.
 - Themes may omit nonsemantic chrome but cannot hide caller-provided semantic
   content. Existing explicit policies own content presence and placement.
 - Automatic numeric ticks have no fixed five-tick or public count target. An

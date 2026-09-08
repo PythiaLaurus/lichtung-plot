@@ -136,13 +136,13 @@ allocation, deterministic component measurement, and immutable arrangement
 protocol while preserving current exact public sizing behavior. The reopened
 T5a1 and T5a3 phases repair the existing implementation against that target;
 historical completion does not establish revised-target conformance.
-T5a0s now blocks implementation pending explicit user approval of observable
-layout, label, sizing, output, font, and alignment behavior. Architectural
-agreement alone does not close that gate.
-Automatic root sizing, the bounded-width builder, rendered-output dimension
-accessors, and removal of pre-render Plot
-dimension getters are not current behavior or public API until Phase T6
-completes.
+T5a0s records the accepted observable layout, label, sizing, output, font, and
+alignment behavior; its documentation closure precedes implementation.
+Automatic root sizing, consuming exact-width/automatic-height `width(u32)`,
+rendered-output dimension accessors, and removal of pre-render Plot dimension
+getters are not current behavior or public API until Phase T6 completes. The
+target keeps exact `size(width,height)` and does not add public maximum-width
+or general constraint objects.
 
 The public layout module remains removed in both the current and target
 contracts; `AxisTick` is exported only from the crate root. Public geometry uses

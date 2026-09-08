@@ -1,6 +1,6 @@
 # Layout System
 
-**Status**: Revised target proposal; behavior approval pending T5a0s; non-current until Phase T6
+**Status**: Approved D1-D6 target; non-current until Phase T6
 
 ## Purpose And Boundary
 
@@ -11,11 +11,13 @@ remains unchanged until the atomic Phase T6 migration in
 or a second rendering route. This specification also defines the corrected T5a3
 resource and workload target; historical global-search acceptance is superseded.
 
-The architectural direction is accepted, but implementation is blocked on the
-user-visible behavior decisions in `91_IMPLEMENTATION_PLAN.md`, T5a0s. This
-document is the working target, not evidence that every default or fit-failure
-tradeoff has user approval. Existing clauses for labels, sizing, output viability,
-fonts, and alignment remain proposed policies until those decisions are resolved.
+The D1-D6 user-visible behavior decisions are approved: bounded containing-frame
+recovery, strict Unicode wrapping, three sizing modes, PNG-local output gates,
+base-plus-mark font preference, and separate root title and caption alignment.
+Approval is not implementation evidence. T5a0s in `91_IMPLEMENTATION_PLAN.md`
+records the decisions and documentation review. Broad public constraints remain
+deferred to DF6 review at T7 closure; new text controls remain deferred to DF5
+review at T6 entry. Neither checkpoint is a promise to implement those extensions.
 
 Parents allocate space. A child returns ONE measured immutable local plan or a
 typed fit miss under that allocation. Intrinsic summaries inform allocation but
@@ -169,13 +171,19 @@ integer operations, not floating approximations.
 | Target request | Policy |
 | --- | --- |
 | No sizing call | Derive natural preferred outer width once; measure at that width and derive content height. |
-| `max_width(w)` | Choose `min(natural_preferred_outer_width,w)`, reflow at that width, then derive height. |
+| `width(w)` | Allocate exactly width `w`, reflow at that width, then derive content height. |
 | `size(w,h)` | Allocate exactly the normalized pair; return fit/error without changing either dimension. |
 
-`max_width` is positive and does not require filling the bound. Exact dimensions
-are positive integral CSS pixels. All final boxes and backend dimensions are
-finite. Canvas owns composed dimensions; an embedded Plot's standalone `size`
-does not become a cell preference. Facets belong to their one owning Plot.
+Plot and Canvas expose consuming `width(self, width: u32) -> Self` and retain
+`size(self, width: u32, height: u32) -> Self`. One stored sizing request is
+completely replaced by each sizing call: latest call wins, and `width` after
+`size` clears the explicit height. No call means automatic width and height.
+Dimensions must be positive integral CSS pixels; zero rejects at preflight under
+the existing builder validation pattern, not by panicking in a setter.
+All final boxes and backend dimensions are finite. Canvas owns composed
+dimensions; an embedded Plot's standalone sizing request does not become a cell
+preference. Facets belong to their one owning Plot. Constraint intervals remain
+private implementation machinery, not additional public sizing modes.
 
 Natural preference is bottom-up composition of summaries with traced insets,
 gaps, guide requirements, and scientific panel preferences. For prose, preferred
@@ -282,10 +290,14 @@ Cross-axis start/end use the corresponding edge; center uses nearest-even half
 residual; baseline uses `t+BA-child_baseline`. A legend key exposes nearest-even
 half its height and aligns to the label's first baseline. Other horizontal
 sequences baseline-align children exposing a baseline and start-align the rest.
-Root title/subtitle/caption use their owner-local
-`CompositionTheme::root_title_block_alignment` both for line translation and
-nonfill horizontal placement. Built-ins use center; Start/End are physical
-left/right. Headers, row titles, and strips center in their spanned cells.
+Root title/subtitle use their owner-local
+`CompositionTheme::root_title_block_alignment`; root caption instead uses
+`CompositionTheme::root_caption_alignment`. Both fields have type
+`TitleBlockAlignment`. All four built-in presets default the title block to
+`Center` and the caption to `Start`. Each field controls both line translation
+within its text block and nonfill block placement across the post-inset root
+content span, not the panel span. Start/End are physical left/right, independent
+of bidi direction. Headers, row titles, and strips center in their spanned cells.
 Other nonfill Grid/sequence children start-align unless explicitly specified.
 
 Fill policy is closed: frames, bodies, panels, interiors, mark layers, Canvas Plot
@@ -305,8 +317,14 @@ Mandatory breaks partition present text into `b+1` paragraphs, including empty
 leading, interior, and trailing paragraphs; each produces at least one line.
 CRLF is one mandatory break as required by the profile.
 
+Wrapping uses only these legal Unicode opportunities. Failure does not authorize
+emergency breaks, fit-driven rotation, typography shrinking, or content omission.
+The fixed axis-title quarter-turns below are role geometry, not fit recovery.
+New public controls for alternative text-fit behavior are deferred.
+
 Pin one coherent Unicode-bearing dependency graph: segmentation, line breaking,
-bidi, script/Script_Extensions, normalization/casefolding for family names, and
+bidi, script/Script_Extensions, General_Category for mark classification,
+normalization/casefolding for family names, and
 shaping classification must agree with this release. A Cargo version alone is
 not evidence of data compatibility. Record versions, data releases, checksums,
 generation commands where applicable, and conformance fixtures. Pinned dependency
@@ -322,11 +340,12 @@ paired punctuation context, and inherited combining-mark base context. Prefer a
 compatible preceding strong script, otherwise following; unresolved neutrals
 remain Common. Do not split punctuation and marks into artificial script runs
 merely because their raw Script property differs. This script resolution never
-changes canonical per-scalar face fallback.
+changes the canonical face-selection policy defined below.
 
 Run boundaries follow resolved script, bidi direction, and selected face. A
-grapheme can cross face runs when scalar coverage requires it; never choose a
-different cluster-wide face to bypass the first-covering-scalar rule. Shape with
+grapheme can cross face runs when the narrow base-plus-mark preference below
+cannot cover its unit or does not apply. This is not general whole-grapheme
+fallback. Shape with
 paragraph context and exact selected line boundaries, preserving joining and
 OpenType context rather than summing independently shaped words. Retain face
 identity/index, glyph IDs, source clusters, offsets, advances, directions, and
@@ -338,19 +357,21 @@ painted glyph. ZWJ/ZWNJ, variation selectors, and other default-ignorables remai
 in shaping input and source/cluster mapping with their prescribed control
 behavior; absence of a standalone cmap glyph for them is not missing visible
 text. Associate nonpainting controls with the relevant surrounding face run (or
-primary face for an otherwise empty run) without changing any visible scalar's
-fallback. The shaper suppresses nonpainting control glyphs; a discretionary
+primary face for an otherwise empty run) without changing visible-unit or scalar
+selection. The shaper suppresses nonpainting control glyphs; a discretionary
 break at U+00AD paints U+002D only when selected, and that literal participates in
 font census; the original U+00AD remains in source mapping. Other unselected
 default-ignorables paint nothing. Tab and unsupported C0/C1 controls other than
 the named mandatory separators reject during text preflight rather than silently
 disappearing; no implicit tab-stop policy exists.
-Ordinary visible scalars, including combining marks, require the canonical first
-covering face and valid shaped glyphs; missing visible glyphs remain errors.
+Ordinary visible scalars, including combining marks, require coverage under the
+canonical base-plus-mark/scalar policy and valid shaped glyphs; missing visible
+glyphs remain errors, with no missing-glyph boxes or font downloads.
 These are explicit nonpainting-control exceptions to the glyph requirement in
-`03_THEME_SYSTEM.md`, not a different primary-face or fallback policy. Primary
-selection and every visible scalar's first-covering-face order remain unchanged;
-neither script resolution nor control association selects a cluster-wide face.
+`03_THEME_SYSTEM.md`. Primary selection and canonical candidate order remain
+unchanged; the approved narrow whole-unit preference below is the only change
+to visible face selection. Neither script resolution nor control association
+adds a general cluster-wide policy.
 
 Intrinsic text analysis shapes each full paragraph ONCE and each maximal sequence
 without a legal internal break, retaining summary requirements and bounded reusable
@@ -438,7 +459,7 @@ width. For edges `left,right`, `span=right-left`, block width `W`, line x is
 for end. TextPanel, legend title/label, guide title, and standalone text start;
 composition headers, axes, ticks, and guide numbers center. Panel/annotation
 edge anchors start at left, end at right, otherwise center. These are fixed role
-decisions except for the owned root alignment noted above.
+decisions except for the two owned root alignment fields noted above.
 
 Editable preserve-text SVG emits original content with explicit selected line
 boundaries/anchors and validated ordered font stack/weight, preserving paragraph
@@ -464,9 +485,13 @@ status, legend/guide, header, and generated text source participates. Empty exac
 tick labels retain identity but zero scalar requirements. CSS family names, SVG
 syntax, and explicitly suppressed content are not painted text. First occurrence
 assigns each structurally equal `(FontStack,weight)` pair its ordinal, retaining
-stack-entry order. Census visits pair ordinal, record order, source scalars, then
-generated alphabet in scalar order. Duplicate membership may deduplicate, but
-each consumed occurrence charges font work. Include typography metric probes.
+stack-entry order. Census visits pair ordinal, record order, source scalars and
+required unit spans, then generated alphabet in scalar order. Retain required
+base-plus-mark source spans and their face selections as well as scalar coverage
+requirements; a character union alone is insufficient. Identical requirements
+may share immutable data, but each consumed occurrence charges font work.
+Include typography metric probes. Standalone generated ASCII and metric glyphs
+retain first-covering-scalar selection.
 
 Canonical matching follows `03_THEME_SYSTEM.md`: `fontdb 0.23.0` is explicitly
 loaded from admitted files, with decoded ID-16 and ID-1 family occurrences from
@@ -479,10 +504,22 @@ Family ranks are named ID-16 zero, named ID-1 one, generic two. Style distances
 are Normal/Oblique/Italic `0/1/2`; stretch distance is from width class 5;
 weight distance is from requested Normal/Semibold/Bold `400/600/700`.
 For duplicate `(SHA-256 complete file bytes,u32 face index)` identities keep the
-least occurrence tuple, then sort. First is primary; each required visible scalar
-chooses the first covering face in that SAME list. Retain complete ordered list
-provenance for every first-use pair. Paths, timestamps, database IDs, and discovery
-order are not face identities. An empty list or uncovered visible scalar fails.
+least occurrence tuple, then sort. First is primary. For a narrow unit consisting
+of one visible non-M base and its Unicode General_Category M marks (Mn, Mc, Me) within
+one extended grapheme cluster, choose the first candidate in that SAME ordered
+list covering the entire unit. Nonpainting controls are not coverage
+requirements. If no candidate covers the entire unit, retain per-visible-scalar
+first-covering fallback in the same list; absence of a whole-unit face alone is
+not an error. Leading marks without a visible base use scalar fallback. This is
+not general emoji, ZWJ-sequence, whole-grapheme, or whole-word fallback and does
+not join multiple visible bases into a unit. Visible scalars outside such a unit
+choose the first covering face in the same list.
+
+Retain complete ordered-list provenance for every first-use pair, required unit
+source spans, whole-unit selections or scalar-fallback decisions, and selected
+face identities. Paths, timestamps, database IDs, and discovery order are not
+face identities. An empty list or uncovered visible scalar fails. A selected
+face's shaping/metric failure is fatal, not a reason to try another face.
 
 Use a bounded project-owned system-source walker, not unbounded
 `Database::load_system_fonts`. Platform locations, regular-file/extension rules,
@@ -627,10 +664,11 @@ and canonical rotation tokens stored, never trigonometric recomputation.
 
 ## Legends And Continuous Guides
 
-Explicit placement fixes its edge/typed inside anchor. The proposed bounded
+Explicit placement fixes its edge/typed inside anchor. The approved bounded
 automatic policy tries `right,top,bottom,left` in that order. For each edge, the
 owning Plot frame or Canvas frame allocates space and measures the entire affected
-body, axes, labels, and guide. Success requires that containing layout to fit.
+body, axes, labels, and guide. The first complete fitting attempt wins; guide-only
+fit is insufficient. Success requires that containing layout to fit.
 If the right legend fits but leaves insufficient plot-label space, the right
 attempt fails and another supported arrangement is tried before final fit failure.
 
@@ -642,7 +680,7 @@ child constraints cause fresh keyed local measurement; unchanged plans may be
 reused. Provisional gutter/domain feedback follows the root protocol rather than
 being treated as terminal failure or committed success on stale inputs.
 
-The proposal has at most eight edge/flow trials per automatic guide owner per
+The policy has at most eight edge/flow trials per automatic guide owner per
 root round (two for an explicit outside edge), charged cumulatively across all
 calls in that round, including calls caused by ancestor attempts. Nested frames
 do not reset those budgets or enumerate combinations of guide choices. Multiple
@@ -656,8 +694,9 @@ an identical cached trial charges a call but not another edge/flow evaluation;
 changed constraints are a new charged trial. Do not report a budget stop as proof
 that the content cannot fit.
 This limited recovery still does not promise every theoretically feasible figure.
-T5a0s/D1 requires user approval of the behavior and review of its bounded scope
-before implementation; these are not approved runtime defaults yet.
+These approved D1 behaviors are implemented by their assigned repair and
+component phases. T6 adds the new public sizing/theme surface; it does not
+postpone correctness fixes in already-active automatic placement paths.
 
 Outside guides are normal flow; inside guides are typed collision overlays.
 No root percentage chooses typography, edge, or flow.
@@ -995,9 +1034,15 @@ The independent inclusive resource envelope is:
 | Font discovery entries | `1_000_000` |
 | Font bytes inspected or hashed cumulatively | `536_870_912` |
 | Font-preflight logical work units | `1_000_000` |
-| Automatic/bounded canonical preserve-text SVG bytes | `67_108_864` |
 | PNG source/target axis | `32_768` |
 | PNG source/target pixels | `100_000_000` |
+| PNG actual parser-input bytes | `67_108_864` |
+
+PNG dimension, pixel, and parser-input limits apply only at a PNG terminal, in
+all three sizing modes. They are not shared layout or SVG admission gates.
+Automatic SVG has no PNG-derived canonical byte cap either. All modes retain
+the shared logical/font work and record caps, checked representability and byte
+arithmetic, and fallible reservations; no replacement SVG byte cap is introduced.
 
 Existing stricter semantic family limits remain. Structural slots are exactly
 the addressed component/prepared-record census above, including sparse slots,
@@ -1033,7 +1078,8 @@ first-party retention; known input work is admitted before the third-party call.
 Third-party internal processing retains the bounded-input caveat below.
 
 First-party paragraph/run headers, scalar-property/source-index metadata,
-grapheme and legal-boundary entries, shaping-cluster/source intervals, proposal
+grapheme and legal-boundary entries, base-plus-mark unit spans/selections,
+shaping-cluster/source intervals, proposal
 prefix entries, trial-cache headers/results, and retained glyph/path-command
 elements each count as one planning record per logical element. A fixed-field
 record counts once; a variable payload counts its header plus each element,
@@ -1047,13 +1093,14 @@ allocation replaces incremental admission of actually needed metadata.
 
 Font work separately charges each census scalar occurrence, discovery/config
 entry, decoded face and ID-16/ID-1 name, candidate occurrence counted/materialized,
-sorted/deduplicated identity record, and candidate/scalar coverage probe. Include
+sorted/deduplicated identity record, required-unit occurrence, and each
+candidate/scalar coverage probe, including probes for whole-unit selection. Include
 config parser-capacity work and examined canonical-path deduplication records.
 Font bytes admit each source read/hash pass before access; a single read that
 hashes the same buffer is one byte stream, rereads are additional charges.
-The 512 MiB bound is the existing power-of-two envelope above maximum admitted
-RGBA backing store; font entry/work bounds retain the existing million-record
-magnitudes. These are independent, not pooled counters.
+The 512 MiB font-byte bound remains a shared font-admission limit, independent
+of PNG backing-store viability; font entry/work bounds retain the existing
+million-record magnitudes. These are independent, not pooled counters.
 
 All logical counters bound named admitted work/storage, NOT allocator overhead,
 RSS, wall time, CPU instructions, or third-party allocations. Large glyph
@@ -1082,7 +1129,8 @@ Root lifecycle order is:
 4. Choose root width once; execute root-coordinated constrained rounds, with
    admission before every retained local plan, state, cache, and feedback growth.
 5. Converge or fail; validate semantic completeness, hard fit, finite positive
-   dimensions, canonical conversion/bound, then one-plan nonexact viability.
+   dimensions, and checked canonical dimension conversion. Do not apply
+   hypothetical PNG viability or PNG-derived byte gates to the shared plan.
 6. Freeze root plan, glyph IDs, origins/positions, advances, bounds, face identities,
    and immutable same-byte face sources needed for later outline extraction.
    Count canonical serialization tokens; reserve final plan/scene storage,
@@ -1113,8 +1161,8 @@ format-local and cannot mutate the canonical scene.
 ## Canonical Output And Viability
 
 Canonical dimension is `ceil_div(logical_quanta,1024)`, positive and `u32`.
-Exact roots reproduce caller dimensions; bounded final width does not exceed
-the integral caller bound. Conversion never clamps or reruns policy. Root SVG
+Exact-size roots reproduce both caller dimensions; exact-width roots reproduce
+the caller width and derive height. Conversion never clamps or reruns policy. Root SVG
 width/height/viewBox use these integral dimensions; internal geometry remains
 quantized, not rounded to whole pixels.
 
@@ -1130,34 +1178,46 @@ including escaped original text and exact coordinates. Count is not a Null
 lifecycle. Concrete canonical bytes must equal the count. Outlined SVG is a
 derived publication of retained glyph geometry, not the canonical text byte count.
 
-Automatic and bounded roots validate the ONE produced plan, in order: PNG source
-axis, source area, canonical preserve-text SVG bytes, default-300-DPI target axes,
-then target area. For source dimension `d`, target is checked `((25*d)+4)/8`.
-Limits are those above. A failure is a viability error, not an invitation to
-choose another width, coarsen labels, shrink fonts, or try another arrangement.
+Preserve-text and outlined SVG in all three sizing modes have no inherited PNG
+dimension, pixel, or 64 MiB byte gate. Shared logical/font work and record caps,
+representability, checked byte counts, and fallible format allocation still
+apply. No automatic-only canonical preserve-text byte limit remains.
 
-Exact SVG roots skip these PNG/nonexact byte caps. Preserve-text and outlined
-SVG have no inherited 64 MiB layout limit; representability and fallible format
-allocation still apply. PNG validates source geometry, actual parser input bytes,
-rounded-positive target geometry, axes, and products as format-local checks.
-Because PNG consumes retained glyph outlines, count/check the ACTUAL outlined
-SVG or equivalent parser payload, not merely the smaller preserve-text SVG.
-The PNG parser-input cap is `67_108_864` bytes even for an exact scene.
+Only a PNG terminal validates source geometry/axes/area, actual parser input
+bytes, and rounded-positive target geometry/axes/area against the PNG limits
+above, in every sizing mode. For default 300 DPI and source dimension `d`,
+target is checked `((25*d)+4)/8`. Custom `png_with_options` validates options
+before conversion/allocation and checks its actual requested target; preview
+checks its own raster target. Because PNG consumes retained glyph outlines,
+count/check the ACTUAL outlined SVG or equivalent parser payload against
+`67_108_864` bytes, not merely the smaller preserve-text SVG. Reject known
+dimension/product or payload limits before the corresponding allocation/parser
+work; do not rasterize to discover a known limit violation.
 
-Automatic/default viability predicts dimensions and canonical text bytes, not
-arbitrary outline expansion. A later PNG can therefore fail its actual parser
-byte cap without invalidating SVG or mutating canonical dimensions. Custom
-`png_with_options` validates options before conversion/allocation and checks its
-own target, even after default viability succeeds. Preview has its own target
-checks. `Output::width/height` always report the frozen canonical scene, never
-raster target dimensions; chained publications reuse it unchanged.
+A valid SVG can fail PNG dimension, pixel, parser-input, or reservation checks
+in any sizing mode. That failure is format-local: it neither invalidates SVG nor
+mutates the figure, canonical dimensions, or retained immutable font/path source.
+It never chooses another width, coarsens labels, shrinks fonts, or retries another
+layout. Chained publication preserves the canonical scene and same-byte path
+extraction source. `Output::width/height` always report the frozen canonical
+scene, never raster target dimensions.
 
 ## Target Public Surface
 
 Phase T6 atomically installs automatic no-sizing behavior, Plot/Canvas
-`max_width(width)`, exact `size(width,height)`, and final `Output::width()` /
-`height()`, removing pre-render Plot dimension getters. Until then the current
-exact API remains the sole public contract.
+consuming `width(self, width: u32) -> Self` for exact width with automatic height,
+retained exact `size(self, width: u32, height: u32) -> Self`, and final
+`Output::width()` / `height()`, removing pre-render Plot dimension getters.
+The target `width` builder replaces the current getter at T6, not an overload or
+compatibility alias. Each sizing call completely replaces the one stored request;
+`width` after `size` clears height, and zero dimensions fail preflight without a
+setter panic. Until then the current exact API remains the sole public contract.
+There is no public maximum-width builder. Broad public constraints are deferred
+for T7 closure; internal intervals remain private.
+
+`CompositionTheme` exposes separate `root_title_block_alignment` (title/subtitle
+only) and `root_caption_alignment`, both `TitleBlockAlignment`, with `Center`
+and `Start` defaults respectively in all four presets as specified above.
 
 `TickInterval` is an opaque immutable crate-root `Clone + Copy + Debug + PartialEq`
 value. `additive(step:f64)->Result<Self>` requires finite positive step;
@@ -1179,7 +1239,7 @@ decisions, counters, and snapshots before claiming acceptance. This specificatio
 does not assert that those implementations or fixtures already exist. Measurable
 workload acceptance includes the string `"A ".repeat(144)`, an approximately
 200-word scientific caption in a SINGLE paragraph, the three-paragraph caption
-baseline on ordinary automatic and bounded Plot/Canvas output, and
+baseline on ordinary automatic and exact-width/automatic-height Plot/Canvas output, and
 multilingual paragraphs with Arabic joining/bidi, combining marks, CJK breaks,
 and emoji controls under compatible pinned fonts. They must complete within the
 stated logical budgets at adequate assigned widths/heights, with exact-size cases
@@ -1199,6 +1259,9 @@ extension, stopping at first nonfit despite a distant nonmonotonic fit, mandator
 empty paragraphs, retained paragraph bidi across soft wraps, Common/Inherited
 resolution, default-ignorables/controls, missing visible glyphs, and viewer-text
 versus exact outlined/PNG geometry. Run Unicode conformance against pinned data.
+Unbreakable-label fixtures must return a typed fit miss without emergency
+splitting, fit-driven rotation, shrinking, or omission; no new text-fit controls
+are implied by the evidence requirements.
 
 Tick evidence includes more than five automatic ticks at wide spans, exact list
 0/1/10_000/10_001 boundaries, unlabeled exact ticks, interval first/coarsen/midpoint
@@ -1211,7 +1274,15 @@ and deterministic packing/shelves preserve content. There is no exhaustive
 sibling-product search or font/content change to force exact fit.
 
 Font evidence covers canonical name occurrences, first-use stacks/weights,
-SHA/face ordering, per-scalar first coverage, same-byte use, discovery permutation
+SHA/face ordering and unchanged primary selection, first candidate covering a
+base-plus-mark unit, scalar fallback when no candidate covers the unit, leading
+marks, and nonpainting controls excluded from coverage. Include a stack where
+the first scalar face lacks a mark but a later face covers the whole unit;
+prove the later face wins for that unit while standalone generated ASCII and
+metric probes retain scalar-first selection. Preserve unit spans/selections in
+census and profile provenance tests: equal character unions with different unit
+groupings must not erase distinct requirements. Prove no general emoji/ZWJ or
+whole-word fallback is introduced. Also cover same-byte use, discovery permutation
 invariance, bounded fontconfig malformed/partial directive and fallback behavior,
 short/changing files, no simultaneous all-file handles, and coherent Unicode
 dependency provenance. Reservation refusal is injected before preparation growth,
@@ -1221,9 +1292,20 @@ Resource evidence exercises limit-minus-one/equal/plus-one for every independent
 limit, cache hits/calls, unknown-payload growth, and logical work charges rather
 than claiming an RSS/CPU guarantee. Convergence covers rounds two/eight, changed
 eight, nonadjacent repetition, terminal misses, and feedback-resolvable misses.
+Sizing evidence covers all three modes on Plot and Canvas, exact width with
+derived height, both sizing-call orders and repeated calls, and zero dimensions
+rejecting at preflight without setter panic. Alignment evidence covers all four
+presets and overrides, title/subtitle versus caption independence, wrapped line
+and block placement across the physical post-inset root content span, and bidi
+without swapping Start/End.
+
 Output evidence covers `10_485` versus `10_486` source-axis default-target boundary,
-`3_200x3_200` versus `3_200x3_201` target-area boundary, actual outlined PNG bytes,
-and exact SVG over 64 MiB remaining format-local while PNG rejects safely.
+`3_200x3_200` versus `3_200x3_201` target-area boundary, and actual outlined PNG
+parser bytes. In all three sizing modes, cover valid SVG beyond PNG dimension,
+pixel, and 64 MiB parser-input limits, including canonical preserve-text SVG over
+64 MiB where shared admission permits it. PNG must reject safely without figure
+mutation or loss of the retained path source; later SVG publication stays valid.
+No hypothetical default-PNG gate may reject automatic or exact-width SVG.
 
 Snapshots distinguish current explicit-size preservation from intentional target
 automatic changes. Record chosen natural width, assigned tracks, local source

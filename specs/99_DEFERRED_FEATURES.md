@@ -4,160 +4,150 @@
 
 ## Contract
 
-This document records concrete features deliberately excluded from the current
-API. It is not a compatibility promise, implementation authorization, or reason
-to add placeholder enums, flags, builders, storage, or fallback behavior. A
-feature moves into the current contract only after its semantics are designed,
-its admitted implementation phase in `91_IMPLEMENTATION_PLAN.md` is implemented,
-and the canonical architecture and rendering contracts are atomically updated
-to describe that implemented behavior. Approval or planning alone is not a
-current API change.
+This document records only genuinely excluded scope, not approved work awaiting
+implementation. It grants no implementation authorization and reserves no API,
+storage, callback, or fallback. Approved boundaries are in `03_THEME_SYSTEM.md`,
+`05_LAYOUT_SYSTEM.md`, and T5a0s/D1-D6 in `91_IMPLEMENTATION_PLAN.md`.
 
-T5a0s in `91_IMPLEMENTATION_PLAN.md` is an explicit user-approval gate for the
-revised layout proposal. Exact-width/automatic-height sizing, narrow long-label
-controls, independent caption alignment, and font fallback consequences are
-being reconsidered there, not admitted by this document. Existing exclusions
-stay non-current until answers are recorded and contracts updated.
+Every item has a stable ID and an explicit review checkpoint enforced by the
+entry/closure gates in `91_IMPLEMENTATION_PLAN.md`. Review is not an implementation
+promise and does not automatically expand T6. At its checkpoint, present the
+item's evidence and tradeoffs to the user and record one user-approved outcome:
+admit with an approved new phase, reject with a reason, or re-defer with a new
+explicit milestone checkpoint. A vague future review does not close a gate.
 
-## Legend Composition Modes
+When work is admitted into an approved implementation plan, remove the admitted
+feature from this file immediately, retaining a broader heading only for related
+excluded scope. Do not wait for code to land. Separately, update the current
+architecture/rendering contracts atomically when implementation lands; planning
+or removal here never makes an API current. Future updates must preserve explicit
+checkpoints and evidence/decision records for every remaining item.
 
-The current legend uses one exact combined entry for every observed independent
-`(group, hue)` collective mark. A future legend-style design may add a caller
-choice between combined entries and separate group-style and hue-color sections.
+After a review, no retained item may keep an expired checkpoint. Re-deferral
+updates its checkpoint; rejection removes it from this active review list and
+records the reason and any lasting exclusion in the plan or canonical contract.
+Stable IDs are not reused. Related unadmitted scope may retain its ID only with
+an explicit next checkpoint.
 
-Before admission, that design must specify ordering, titles, repeated hues,
-same-field collapse, sparse facets, Canvas shared-legend compatibility, label
-mapping, collision planning, and behavior for row-level hue families. No current
-legend mode or style option reserves this extension.
+## DF1: Separate Legend Sections
 
-## Broader Numeric Formatting
+Caller selection of separate group-style and hue-color sections, instead of
+combined entries, remains excluded. Automatic placement and compact reflow are
+approved layout work, not deferred legend composition modes; see `05_LAYOUT_SYSTEM.md`.
 
-The current `NumericLabelFormat` owns fixed-decimal precision and one optional
-literal suffix only for heatmap cell values and point-only coefficient estimate
-labels. It does not select scientific, engineering, compact, percentage, or
-locale-aware notation and does not apply to axes, colorbars, waterfall totals,
-point labels, or legends.
+**Review checkpoint**: T6 ENTRY, after T5e closure.
 
-Broader numeric formatting will be reconsidered after the deferred legend
-composition and styling contracts, as part of a later cohesive review of newly
-admitted formatting needs across those numeric surfaces. That review must define
-scaling, rounding, negative zero, extreme finite values, width measurement,
-collision handling, and deterministic SVG/PNG agreement. No notation enum,
-format string, callback, prefix, or cross-surface formatter is reserved now.
+**Evidence and decision**: Review combined-entry examples with independent group
+and hue, repeated hues, same-field collapse, sparse facets, and row-level hue.
+Specify ordering, titles, label mapping, collision behavior, and Canvas shared
+compatibility before recommending admission, rejection, or explicit re-deferral
+under the user-approval process above.
 
-## Data-Mapped Alpha
+## DF2: Caller Numeric Formatting
 
-The approved target in `03_THEME_SYSTEM.md` admits RGBA element paints but keeps
-categorical and continuous data-color scales opaque. Mark and typography styles
-own one final alpha value; alpha is never multiplied with a second opacity
-property.
+Broader caller scientific, engineering, compact, percentage, and locale-aware
+formatting across axes, guides, values, totals, labels, and legends remains
+excluded. No general format string, callback, prefix, or notation enum is reserved.
 
-A future alpha scale would need to define its numeric or categorical domain,
-range, legend representation, interaction with RGBA exact styles, missing
-values, accessibility, facets, Canvas coordination, and precedence. No current
-alpha-scale enum, callback, or placeholder reserves that feature.
+**Review checkpoint**: T6 ENTRY, after T5e closure, alongside DF1.
 
-## Broader Automatic Tick Control
+**Evidence and decision**: Collect cross-surface workflows beyond current
+`NumericLabelFormat`; compare scaling, rounding, negative zero, extreme finite
+values, measured widths, collisions, and deterministic SVG/PNG behavior. Present
+a cohesive surface and its costs for the user-approved disposition, rather than
+admitting formatter controls implicitly through legend work.
 
-The approved T6 target in `05_LAYOUT_SYSTEM.md` admits one optional per-axis
-preferred data interval. `TickInterval::additive` applies to linear numeric axes;
-`TickInterval::log10_decades` applies to Log10 axes. The renderer tries the
-requested complete interval vector first, then deterministic coarser complete
-vectors when no closer source fits, and finally one terminal midpoint source.
-Interval vectors never use evenly indexed subsequences, and source precedence is
-resolved locally at the assigned span under a declared source order and cap, not
-by global root ranking. Exact `AxisTick` values remain the strict
-position/label control and take precedence regardless of setter order.
+## DF3: Data-Mapped Alpha
 
-Target counts, maximum counts, exact generated counts, visual-density scalars,
-arbitrary multiplicative ratios, categorical stride/drop policies, and tick
-generation callbacks remain deferred. A broader design must define precedence,
-nice-step deviation, small-panel behavior, facets, Canvas shared dimensions,
-and resource limits without introducing global search or a second axis-planning
-route. No count, density, callback, or generic tick-generator placeholder is
-reserved.
+Data-dependent alpha scales remain excluded; approved RGBA paint ownership is in
+`03_THEME_SYSTEM.md`.
 
-## Broader Text Alignment And Anchoring
+**Review checkpoint**: T6 CLOSURE, before T7 starts.
 
-The approved T6 target admits exactly one closed `CompositionTheme` root
-title-block alignment with `Start`, `Center`, and `End`. It applies jointly to
-Plot and Canvas root title, subtitle, and caption text, and every built-in theme
-uses `Center`.
+**Evidence and decision**: Review scientific workflows, numeric/categorical domain
+and range, missing values, legends, accessibility, facets, Canvas coordination,
+and precedence against final RGBA exact styles. Compare explicit alternatives
+without introducing multiplied opacity; obtain the user-approved disposition.
 
-Independent title/subtitle/caption alignment, general `TextTheme` alignment,
-panel-header, composition-header, row-title, TextPanel, legend, guide, axis,
-tick, or annotation alignment, arbitrary text rotation, and backend text-anchor
-access remain unavailable. A broader design must define physical versus
-bidi-logical direction, per-role precedence, multiline and rotated behavior,
-collision planning, and SVG/PNG agreement. No generic alignment field, anchor
-setter, callback, or placeholder is reserved.
+## DF4: Broader Automatic Tick Controls
 
-## Broader Root Constraints
+Target/maximum/exact generated counts, visual-density scalars, arbitrary
+multiplicative ratios, categorical stride/drop policies, and generation callbacks
+remain excluded. The admitted preferred-interval boundary is in `05_LAYOUT_SYSTEM.md`.
 
-The approved target in `05_LAYOUT_SYSTEM.md` admits automatic root layout, one
-finite maximum width with automatic height, and one exact width-height pair. It
-does not expose the private `LayoutConstraints`, `LengthConstraint`, intrinsic,
-allocation, or measurement types. Automatic width derives from the existing
-preferred-width metric, then height from measurement; bounded width assigns
-`min(preferred_width, max_width)` without searching widths. Root viability checks
-canonical preserve-text bytes and PNG source/default-300-DPI target dimensions
-for the one produced layout rather than selecting an alternative. Actual
-outlined parser bytes and requested PNG options are terminal-local checks;
-later PNG failure does not invalidate an otherwise valid automatic SVG.
+**Review checkpoint**: T6 CLOSURE, before T7 starts.
 
-A broader public surface would need demonstrated workflows for minimum width,
-minimum height, maximum height, exact single-dimension sizing, and interactions
-with scientific aspect, wrapping, legends, facets, Canvas, and exact content fit.
-No public constraint object, builder, callback, or alternate measurement API is
-reserved now, and the private parent-constraint protocol is not an extension
-surface.
+**Evidence and decision**: Use implemented interval/coarsening and exact-tick
+examples on small panels, facets, and shared Canvas dimensions to identify unmet
+needs. Review precedence, nice-step deviation, semantic completeness, and resource
+limits without a second planning route; obtain the user-approved disposition.
 
-## Compact Composition
+## DF5: Broader Text Layout Controls
 
-The approved automatic-layout target preserves declared Canvas coordinates,
-header spans, row titles, range groups, Cartesian facet coordinates, and trailing
-wrap slots. It does not pack occupied cells or collapse empty rows and columns.
+Independent title versus subtitle alignment, general per-role alignment/anchoring,
+arbitrary rotation, emergency identifier breaking, ellipsis, and font-shrink
+controls remain excluded. Independent root captions and strict Unicode-legal
+wrapping are admitted; see `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`.
 
-A future compact composition policy must define coordinate remapping, shared
-axes, header spans, range groups, empty semantic combinations, and deterministic
-ordering. No implicit sparse-grid compaction or placeholder policy is reserved.
+**Review checkpoint**: T6 ENTRY, after T5e closure.
 
-## Caller-Selected Layout Objective
+**Evidence and decision**: Review narrow unbroken identifiers, crowded category
+labels, mixed-direction multiline text, and role-specific workflows. Compare
+strict fit failures with opt-in alternatives, source preservation, physical versus
+bidi-logical direction, precedence, collisions, and SVG/PNG agreement. Any proposed
+omission or shrink behavior requires an explicit revised contract and user
+approval; obtain the disposition without relaxing strict wrapping by default.
 
-The deterministic parent allocation and local layout rules in
-`05_LAYOUT_SYSTEM.md` are private renderer policy. A future caller-selected
-objective would need typed semantics for aspect, density, whitespace, legend
-flow, text measure, grid balance, and
-failure under exact constraints. No scoring callback, dynamic strategy, string
-mode, or public layout plugin is reserved.
+## DF6: Broader Root Bounds And Maximum Width
 
-## Global Layout Optimization
+Maximum-width sizing, minimum width/height, maximum height, exact-height/automatic-
+width sizing, and public Flutter-like constraint objects remain excluded. The
+three admitted sizing modes are defined in `05_LAYOUT_SYSTEM.md`.
 
-Exhaustive global optimization is deferred. The approved repair replaces
-universal complete-candidate collections, sibling Cartesian products, exhaustive
-text break partitions, and root-wide dense-rank/total-key selection with separate
-intrinsics for parent allocation and one immutable measured result or typed fit
-miss at assigned constraints. Local alternatives are permitted only with a
-declared owner, deterministic order, and finite cap; root feedback is limited to
-eight rounds and does not authorize unbounded local retries.
+**Review checkpoint**: T7 CLOSURE, before successor planning.
 
-This deferral does not prohibit bounded containing-frame recovery: an automatic
-legend fitting by itself is insufficient when its allocated plot fails. The
-T5a0s/D1 proposal tries supported edges and compact reflow while measuring the
-affected children under changed constraints; explicit placements stay fixed.
-Its finite scope and user-visible failure behavior require approval before code.
+**Evidence and decision**: Collect publication-column and embedding workflows using
+automatic, exact-width/automatic-height, and exact-pair output. Demonstrate unmet
+needs and compare interactions with aspect, wrapping, legends, facets, Canvas,
+and strict fit. Let the user choose a small justified extension, rejection, or
+re-deferral; do not assume a general bounds surface is the destination.
 
-A future optimization proposal would need demonstrated scientific workloads,
-measured resource/performance evidence, semantic completeness, reproducibility,
-and a coherent replacement contract. No runtime strategy switch, dormant search
-route, global scoring callback, or placeholder objective is admitted now.
-Existing exhaustive-search milestones remain historical achievements, not an
-active optimization requirement.
+## DF7: Sparse Composition Compaction
 
-This deferral does not change the approved canonical ordered font-stack/weight
-and scalar-fallback policy, admit a broad cluster-fallback rewrite, alter sparse
-Canvas/facet semantics, or make target public APIs current before T6. Repairing
-Common/Inherited script resolution and Unicode 16 coherence is active repair,
-not a new fallback policy. Preserve-text SVG remains viewer-dependent; retained
-outlines and PNG use generation-host glyph geometry. Content omission, font
-shrink, hidden roots, and asset provisioning are not optimization escape paths.
+Packing occupied cells or collapsing empty rows, columns, or trailing wrap slots
+remains excluded; preserved topology is specified in `05_LAYOUT_SYSTEM.md`.
+
+**Review checkpoint**: T6 ENTRY, after T5e closure.
+
+**Evidence and decision**: Compare sparse Canvas and Cartesian facet examples,
+coordinate remapping, shared axes, header spans, row titles, range groups, empty
+semantic combinations, and deterministic ordering. Show the semantic cost of
+compaction and obtain the user-approved disposition rather than silently packing.
+
+## DF8: Caller-Selected Layout Objectives
+
+Caller objectives for aspect, density, whitespace, legend flow, text measure, or
+grid balance remain excluded. No scoring callback, strategy switch, string mode,
+or public layout plugin is reserved.
+
+**Review checkpoint**: T7 CLOSURE, before successor planning.
+
+**Evidence and decision**: Review unmet scientific workflows against the completed
+private local policies, including exact-constraint failures and reproducibility.
+Compare a small typed objective with existing explicit controls and its bounded
+costs; obtain the user-approved disposition without creating global search by
+implication.
+
+## DF9: Global Layout Optimization
+
+Exhaustive whole-tree search, sibling Cartesian products, exhaustive text break
+partitions, and root-wide dense-rank objectives remain excluded. Approved bounded
+containing-frame placement recovery is not this feature; see `05_LAYOUT_SYSTEM.md`.
+
+**Review checkpoint**: T7 CLOSURE, before successor planning, alongside DF8.
+
+**Evidence and decision**: Require demonstrated scientific workloads, measured
+performance/resource comparisons with bounded local recovery, semantic
+completeness, determinism, and a coherent replacement contract. Obtain the
+user-approved disposition; historical search achievements do not authorize a
+dormant solver or runtime strategy switch.

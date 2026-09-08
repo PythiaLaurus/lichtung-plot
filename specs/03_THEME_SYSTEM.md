@@ -15,11 +15,11 @@ migration. Other target names and behaviors below are not a second current API
 and must not be introduced as aliases or dormant placeholders before their
 owning phase.
 
-T5a0s in `91_IMPLEMENTATION_PLAN.md` reopens user approval for layout-related
-behavior, including long-label controls, font fallback consequences, and joint
-versus independent caption alignment. Those existing target clauses remain
-proposals under review; no new behavior or public control is authorized until
-the answers are recorded and the affected contracts reconciled.
+T5a0s in `91_IMPLEMENTATION_PLAN.md` records accepted layout-related behavior:
+strict Unicode-legal wrapping, the three-mode sizing surface, format-local PNG
+limits, compatible base-and-mark font fallback, and independent caption alignment.
+These are implementation targets, not claims that the current renderer already
+satisfies them. Further text controls remain deferred with explicit review gates.
 
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
@@ -46,7 +46,7 @@ properties, or a second theme representation.
   the caller. A theme does not replace a policy.
 - A **renderer invariant** is fixed behavior such as clipping, draw order,
   geometry validity, semantic orientation, or backend protocol. Text anchoring
-  is invariant except for the one root title-block alignment owned by
+  is invariant except for the two root alignment values owned by
   `CompositionTheme` below.
 - A **resolved theme** is the private complete value consumed by preflight,
   measurement, collision planning, legend construction, and rendering. It is
@@ -99,12 +99,13 @@ setters, but `build()` returns one complete validated `Theme`. A builder is neve
 stored by `Plot`, `Canvas`, or the renderer and is not a sparse runtime override.
 
 `TitleBlockAlignment` is the closed `Start`, `Center`, and `End` discriminant.
-`CompositionTheme` owns one `root_title_block_alignment` value applied jointly
-to every present title, subtitle, and caption in a Plot or Canvas root title
-block. Those roles cannot select independent alignment values. `Start` and
-`End` mean the physical left and right edges of the root's post-inset local
-content span; they are not bidi-logical directions or backend anchor spellings.
-All four built-in themes use `Center`.
+`CompositionTheme` owns `root_title_block_alignment` for title and subtitle
+jointly, and independent `root_caption_alignment` for the caption. Both use
+`TitleBlockAlignment`. `Start` and `End` mean the physical left and right edges
+of the root's post-inset local content span; they are not bidi-logical directions
+or backend anchor spellings. Both block placement and per-line alignment consume
+the owning value. All four built-in themes use `Center` for title/subtitle and
+`Start` for captions. Independent title-versus-subtitle alignment remains deferred.
 
 Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
 `HeatmapScale`, RGB tuple inputs, and multiplicative opacity naming atomically
@@ -128,8 +129,8 @@ The component taxonomy is role-based rather than plot-family-based:
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
   continuous color guides. Existing legend policies continue to own visibility
   and placement.
-- `CompositionTheme` owns one horizontal alignment and the spatial relationships
-  for Plot and Canvas root title blocks and owns Canvas and facet chrome.
+- `CompositionTheme` owns title/subtitle and independent caption alignment,
+  spatial relationships for Plot and Canvas root title blocks, and Canvas/facet chrome.
   `TypographyTheme` still owns each title, subtitle, and caption text role.
   `CompositionTheme` does not own title content, panel data, grid occupancy,
   shared-range policy, or text-panel content.
@@ -158,8 +159,8 @@ deterministic component measurement, parent allocation/arrangement, bounded
 feedback, and output dimensions. A component returns one immutable measured
 plan or typed fit miss; it does not export complete alternatives for root search.
 
-Except for the one admitted `CompositionTheme` root title-block horizontal
-alignment, anchor, rotation, orientation, clipping, z-order, statistical
+Except for the two admitted `CompositionTheme` root horizontal alignment values,
+anchor, rotation, orientation, clipping, z-order, statistical
 geometry, collision rules, local layout decision order, feedback budgets, and
 minimum representable geometry remain renderer invariants. Root title,
 subtitle, and caption rotation remains fixed.
@@ -202,10 +203,10 @@ resolved Plot theme. A composed Plot's panel surface comes from its Plot theme;
 it never repaints the Canvas root surface. The current T4 subset is limited to
 the existing theme-aware consumers stated above.
 
-A Canvas root title block consumes the Canvas root theme's title-block
-alignment. A standalone Plot, faceted Plot outer root, or Matrix Plot root title
-block consumes the resolved Plot theme's alignment. The owner-local value is
-identical for that block's title, subtitle, and caption.
+A Canvas root consumes the Canvas root theme's two alignment values. A standalone
+Plot, faceted Plot outer root, or Matrix Plot root consumes its resolved Plot
+theme's values. Title and subtitle share one value; the caption independently
+uses the other. Independence changes neither theme inheritance nor content ownership.
 
 Theme state is immutable and owner-local. There is no process-global,
 thread-local, environment-selected, backend-selected, or asynchronously scoped
@@ -455,11 +456,18 @@ and two for a generic-family contribution.
 Generate every occurrence tuple first; for duplicate file identities retain the
 lexicographically least complete occurrence tuple, then sort surviving identities
 by that tuple. The first candidate is the primary face. Glyph fallback scans this
-same list and selects the first face containing each required visible scalar.
+same list. For a base-and-combining-mark unit defined by `05_LAYOUT_SYSTEM.md`,
+prefer the first face covering every visible scalar in the unit. If no one face
+covers the unit, select the first covering face separately for each visible
+scalar. Standalone scalars retain first-covering-face selection. No required
+visible scalar may become a replacement box or disappear. Retain unit source
+spans and face decisions: a character-only union cannot describe context-dependent
+base-and-mark selection. Candidate ordering and the primary face do not change.
 Nonpainting Unicode controls follow the explicit text semantics in
 `05_LAYOUT_SYSTEM.md`; absence of their standalone cmap glyph is not a missing
-visible character. This exception does not change primary-face ordering or
-visible-scalar fallback and does not introduce cluster-wide font substitution.
+visible character. This exception does not change primary-face ordering or the
+base-and-mark fallback rule. General emoji-sequence or whole-word font selection
+is not implied by the narrow base-and-mark preference.
 The operation records the complete ordered identity list as font-environment
 provenance and fails if the
 list is empty or any required glyph has no face. Measurement and drawing use the

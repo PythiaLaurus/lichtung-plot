@@ -222,10 +222,12 @@ current Canvas stores one exact composed width and height and defaults to
 composed dimensions and replaces child Plot dimensions for its render context.
 
 `05_LAYOUT_SYSTEM.md` defines the approved replacement contract. After the
-behavior approval gate T5a0s is closed and the
-atomic Phase T6 migration, absence of a sizing call selects bottom-up automatic
-layout, `max_width(width)` supplies a finite width bound with automatic height,
-and `size(width, height)` remains exact. Final canonical dimensions then belong
+atomic Phase T6 migration, absence of a sizing call selects automatic layout,
+consuming `width(u32)` requests exact width with automatic height, and
+`size(width, height)` remains exact. Sizing calls replace the complete request:
+`width` after `size` discards the prior exact height; `size` after `width` replaces
+both dimensions. Zero dimensions fail at preflight. No public maximum-width or
+general bounds object is admitted. Final canonical dimensions then belong
 to the immutable root plan and rendered `Output`, not infallible pre-render Plot
 getters. None of those target behaviors or names is current before T6.
 
@@ -237,17 +239,17 @@ cross-component search. This deterministic policy does not promise to find every
 feasible arrangement. Semantic content does not silently clip, elide, or disappear
 to satisfy a bound. Exact constraints either
 fit the complete requested content or fail before backend creation.
-Automatic and bounded-width roots also pass the approved finite resource and
-default-300-DPI viability envelope before backend creation. Exact roots remain
-exact and retain format-local terminal validation, so an exact SVG scene may be
-valid even when a later PNG request rejects its raster limits.
+Every root mode passes shared planning-work, representability, and fallible
+allocation checks. PNG-specific dimensions, pixels, and parser-input byte limits
+apply only at PNG publication; neither hypothetical default-PNG viability nor an
+automatic-only 64 MiB SVG byte gate can reject SVG. A valid SVG in any sizing mode
+may therefore be followed by a PNG refusal without relayout or scene mutation.
 
-Target approval is reopened in T5a0s. In particular, automatic placement must
-validate the affected plot-plus-guide layout, not accept guide-only fit; the
-bounded recovery proposal is awaiting approval. The sizing modes and initial
-default-PNG coupling described here are also explicit open decisions, not
-authorization to implement them before that gate closes. Current sizing and
-publication methods remain unchanged.
+T5a0s records user approval of these target behaviors. Automatic placement must
+validate the affected plot-plus-guide layout, not accept guide-only fit. Bounded
+supported edge/reflow attempts may remeasure affected children, but explicit
+placements, typography, and content remain fixed. Current sizing and publication
+methods are unchanged until their scheduled implementation and public migration.
 
 ## Scene Lifecycle
 
@@ -301,15 +303,15 @@ before expensive conversion, then source geometry, rounded-positive target,
 target axes/work and DPI metadata, actual outlined input bytes, parse/dimension
 agreement, pixmap allocation, render, and encode. Existing canonical source-byte
 admission is not a substitute for checking the expanded parser input.
-Preserve-text and outlined SVG routes do not apply those PNG-only source and
-target limits before the Phase T6 automatic-layout switch.
+Preserve-text and outlined SVG routes do not apply those PNG-only limits, either
+before or after the Phase T6 sizing switch. Shared representability, resource
+admission, and fallible allocation still apply.
 
 Implementation status: `4b38de4` introduced retained-glyph outlining and the
 outlined PNG parser route, but the identified parser-byte and validation-order
 gaps remain repair obligations in reopened T5a3. The requirements above do not
-assert those repairs have already landed. After T6, automatic/bounded root
-viability checks canonical preserve-text bytes and default-PNG dimensions;
-actual outlined bytes and custom PNG options remain terminal-local checks.
+assert those repairs have already landed. The approved target preserves
+format-local PNG checks in every sizing mode, including automatic output.
 
 Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
 JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
@@ -338,6 +340,13 @@ provisioning, or project-cache lookup. Reopened T5a3 closes the known selection,
 Unicode, geometry, and admission gaps against the detailed font contract in
 `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`; public custom font types remain
 target-only until T6.
+
+The accepted font-selection repair additionally prefers one compatible face for
+a base letter and its combining marks when a face in the ordered stack covers
+the unit; otherwise it retains first coverage per visible scalar. Missing visible
+coverage is an error, not replacement squares. The precise unit and retained
+selection rules are target requirements in `03`/`05`, not a claim that the
+current per-scalar implementation already groups those characters.
 
 Publication SVG fails if any text remains after conversion. Its outlined text
 requires no recipient-side font, but exact paths and text-derived layout depend

@@ -12,11 +12,14 @@ replacement theme, color, typography, scale, and tick-interval value model.
 
 The completed T2 ledger contains exactly 1860 current-source records. The T3j
 layout adjudication overlay at the end of this document preserves those
-historical tables, re-adjudicates 1552 existing keys, and adds 22 target-only
+historical tables, re-adjudicates 1552 existing keys, and adds 23 target-only
 keys. Fixed dimensions, universal panel minima, and private title-block
 spacing rows do not override that approved overlay. The historical T2 count
 remains valid evidence for the completed inventory, but it is not the T7
 acceptance count after adjudication.
+
+The active overlay contains 1575 identities (1552 existing plus 23 target-only),
+and the materialized target contains 1883 unique keys.
 
 The ledger is append-only during T2 except for corrections and T2h
 reconciliation. Tests, examples, and snapshots are evidence consumers, never
@@ -7885,14 +7888,14 @@ does not rewrite current-source provenance or make the target public before T6.
 This revised overlay supersedes only the former exhaustive global-layout-search
 target, not the historical source inventory or current implementation contract.
 T5a1 and T5a3 are reopened against this target; prior completion evidence does
-not establish the revised contract. Appearance defaults, appearance ownership,
-and font policy are unchanged. Font candidates remain governed by their distinct
+not establish the revised contract. Accepted D1-D6 decisions below update sizing,
+placement, wrapping, output viability, font-unit selection, and root alignment.
+Font candidates remain governed by their distinct
 font-resolution owners, not by the local layout-alternative rules below.
 
-Implementation admission is blocked by T5a0s user-behavior approval. The proposed
-bounded-placement correction below does not certify approval of the remaining
-sizing, label, output-viability, font, or alignment defaults. Decisions changing
-owners or keys must update this single overlay and its counts before implementation.
+User decisions D1-D6 are accepted; runtime implementation and its evidence remain
+pending in the owning phases. This overlay records target ownership, not runtime
+completion.
 
 Parents own constraints and deterministic allocation; each child returns one
 constraint-dependent measured immutable plan or a typed unsatisfied outcome.
@@ -7915,7 +7918,7 @@ implementation phase, and focused evidence route.
 
 ### Target-Only Keys
 
-These 22 keys append in the exact order shown after the historical 1860-key
+These 23 keys append in the exact order shown after the historical 1860-key
 order. They occur in none of the three historical tables.
 `layout.resources.bounded-planning-work-limits` is one closed resource-envelope
 owner for four separately claimed counters; the common owner neither pools their
@@ -7927,24 +7930,30 @@ capacity nor aliases their failure checks.
 | `layout.kernel.constraint-dependent-measured-plan` | Renderer invariant; measurement deterministically returns one complete finite typed immutable local plan under parent-assigned constraints or a typed recoverable unsatisfied outcome; only the root converts final unsatisfied to a fit error | Every component measurement and frozen root | `add`, T5a-T5e; assigned-constraint, deterministic-result, recoverable-fit, and plan-completeness tests |
 | `layout.kernel.parent-owned-arrangement` | Renderer invariant; each parent assigns child constraints and positions using measured requirements; children decide only within their assigned spans, and changed constraints require new immutable plans | Canvas, facet, legend, marginal, and Matrix composition | `add`, T5a-T5e; parent/child box, constraint propagation, and sparse-coordinate tests |
 | `layout.plan.frozen-root-draw-identity` | Renderer invariant; only one unchanged complete state becomes the `PlotPlan` or `CanvasPlan` consumed by Null and concrete rendering; it retains every used `(stack,weight)` font-provenance list and the final kind-specific shared-guide descriptor, domain, labels, and glyphs | Complete convergence state, font preflight, shared-guide preparation, and canonical Scene | `add`, T5a-T5e; Null/concrete identity, font-provenance identity, shared-guide identity, and no draw-time layout tests |
-| `composition.root-title-block.horizontal-alignment` | Theme component; one `CompositionTheme::root_title_block_alignment` in closed `TitleBlockAlignment::{Start,Center,End}` applies jointly to every Plot/Canvas root title, subtitle, and caption; every built-in uses `Center` | Replaces the anchor arms of the three `typography.title-block.*.current-fixed-orientation` keys; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a; public connection T6; centered preservation, all-variant, role-consistency, inheritance, and plan/draw identity evidence |
+| `composition.root-title-block.horizontal-alignment` | Theme component; `CompositionTheme::root_title_block_alignment` in closed `TitleBlockAlignment::{Start,Center,End}` applies jointly to Plot/Canvas root title and subtitle over the physical post-inset root content span; Publication, Nature, Science, and CHI use `Center` | Replaces only title/subtitle anchor arms; independent of caption alignment; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a; public connection T6; all-variant, title/subtitle consistency, inheritance, physical-span, and plan/draw identity evidence |
+| `composition.root-caption.horizontal-alignment` | Theme component; independent `CompositionTheme::root_caption_alignment` uses the same closed `TitleBlockAlignment::{Start,Center,End}` over the physical post-inset root content span for Plot/Canvas root captions; Publication, Nature, Science, and CHI use `Start` | Replaces only the caption anchor arm; changing title/subtitle alignment does not change caption alignment or vice versa; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a; public connection T6; independent all-variant, four-preset Start default, inheritance, physical-span, and plan/draw identity evidence |
 | `axes.ticks.preferred-data-interval` | Explicit policy; optional per-axis opaque immutable `TickInterval::additive` for linear axes or `TickInterval::log10_decades` for Log10 axes; exact ticks take precedence regardless of setter order, repeated interval setters replace, absence selects automatic generation, and categorical axes reject | Ordered local complete interval vectors under assigned span, requested-first coarsening then conditional midpoint fallback, automatic generation, exact-tick controls, Forest Log10 route, immutable axis plan, and public policy | `add`, T5a; public connection T6; constructor validation, exact requested source, deterministic bounded coarsening, nonempty/no-subsequence vectors, midpoint order, mismatch, precedence, replacement, and no-count-control evidence |
-| `layout.root.automatic-constraint-policy` | Explicit policy; no sizing call supplies zero minima and no maxima; deterministically derive finite dimensions from preferred requirements and measured content without optimization | Parent track allocation, measured plans, and nonexact default-PNG viability | `add`, T5e; public connection T6; ordinary/facet/Canvas/specialized evidence |
-| `layout.root.bounded-width-constraint-policy` | Explicit policy; positive `max_width` supplies width `[0,max]` and unconstrained height without requiring width fill | Nonexact viability and canonical conversion | `add`, T5e; public connection T6; wrapping and exact-bound evidence |
-| `layout.root.exact-size-constraint-policy` | Explicit policy; `size` supplies equal positive integral bounds and fails when complete content cannot fit | Historical Plot/Canvas pixel-size keys and exact format-local viability | `add`, T5a/T5e; public connection T6; exact fit/failure evidence |
+| `layout.root.automatic-constraint-policy` | Explicit policy; absent a sizing request, zero minima and no maxima; deterministically derive finite dimensions from preferred requirements and measured content without optimization | Parent track allocation, measured plans, common root representability, and complete sizing-request replacement | `add`, T5e; public connection T6; ordinary/facet/Canvas/specialized evidence |
+| `layout.root.exact-width-auto-height-constraint-policy` | Explicit policy; a positive exact-width request fixes width and derives automatic height from complete measured content; replaces the former target-only bounded-width owner one-for-one; no public `max_width` target | Common root representability, canonical conversion, and complete sizing-request replacement; internal interval bounds stay private | `add`, T5e; public connection T6; exact-width preservation, legal wrapping, auto-height, and replacement-order evidence |
+| `layout.root.exact-size-constraint-policy` | Explicit policy; `size` supplies equal positive integral bounds and fails when complete content cannot fit | Historical Plot/Canvas pixel-size keys, all-root format-local viability, and complete sizing-request replacement | `add`, T5a/T5e; public connection T6; exact fit/failure evidence |
 | `layout.spatial.css-pixel-quantum` | Renderer invariant; signed 64-bit `1/1024` CSS-pixel quanta with exhaustive lower, upper, hard-extent, ink-edge, nearest-even, and exact-size conversion categories | Constraints, equality, feedback, and output conversion | `add`, T5a; signed range, tie, zero, overflow, and empty-interval boundaries |
-| `layout.local.bounded-alternative-policy` | Renderer invariant; each owner declares finite ordered trials and bounds. Under the T5a0s/D1 proposal, an automatic guide's owner accepts only a fitting affected frame including body, axes, labels, and guide; edge/compact-flow recovery can remeasure changed child constraints. Explicit placements stay fixed; fatal errors do not retry. No exhaustive sibling products or global ranking | Text, axes, legends, overlays, and specialized packing under parent constraints; user-behavior approval precedes implementation | `add`, T5a/T5b/T5e; guide-only-fit/body-failure recovery, explicit-placement preservation, shared nested budgets, and true fit/limit failure evidence |
+| `layout.local.bounded-alternative-policy` | Renderer invariant; each owner declares finite ordered trials and bounds. Accepted D1 requires an automatic guide's owner to accept only a fitting containing frame including body, axes, labels, and guide; bounded edge/compact-flow recovery can remeasure changed child constraints. Explicit placements stay fixed; fatal errors do not retry. No exhaustive sibling products or global ranking | Text, axes, legends, overlays, and specialized packing under parent constraints | `add`, T5a/T5b/T5e; guide-only-fit/body-failure recovery, explicit-placement preservation, shared nested budgets, and true fit/limit failure evidence |
 | `layout.composition.deterministic-track-allocation` | Renderer invariant; parents allocate tracks from child hard/preferred and measured requirements using declared deterministic surplus/deficit and spanning rules; never enumerate aspect, residual, or child-plan combinations | Canvas, facets, Marginal, Matrix, and automatic root dimensions; stable structural addresses, not ranks | `add`, T5b/T5e; hard/preferred fit, span, sparse-address, tie-rule, and reproducibility evidence |
 | `layout.feedback.measured-state-identity` | Renderer invariant; compare complete normalized typed measured feedback states exactly, including assigned constraints, requirements, domains, topology, packing, alignment, overlay inputs, immutable font-provenance lists, and shared-guide descriptors; no alternative frontier or signature deduplication | Frozen root, cache identity, prepared inputs, spatial quantum, and pass budget | `add`, T5a-T5e; exact-repeat, one-quantum change, cache-hit, changed-font-provenance, changed-shared-guide, and changed-field evidence |
 | `layout.feedback.root-coordinated-pass-budget` | Renderer invariant; at most eight root-coordinated measurement/arrangement feedback passes, immediate equality succeeds, non-adjacent repetition and changed pass eight fail; no arbitrary nested retries or component-owned stabilization loops | Replaces local axis, legend, facet, and Matrix stabilization loops; explicitly bounded local alternatives remain permitted within each pass | `add`, T5a-T5e; ordinary axis/title foundation and final pass-two/pass-eight/cycle/exhaustion evidence |
 | `layout.resources.bounded-planning-work-limits` | Renderer invariant; four independent, non-pooling inclusive `1_000_000` counters are cumulative across all root feedback rounds: admitted retained planning records, logical planning work including count-only work and local trials, measurement/intrinsic call attempts including cache hits, and root-local cache entries admitted when retained; caching is optional and has no mandatory miss allocation. Structural topology has its separate owner below. Charge points are exactly those in `05_LAYOUT_SYSTEM.md`, not CPU/RSS or search-completeness guarantees | Bounded local planning, measurement traversal/cache, and checked allocation; font candidate accounting remains separate | `add`, T5a-T5e; T5a gates every active producer and T5e completes the producer census; limit-minus-one/equal/plus-one, independent exhaustion, count-only work, shared/copied record accounting, optional cache insertion, and cache-hit call charging evidence |
 | `layout.resources.grid-facet-specialized-slot-limit` | Renderer invariant; at most `1_000_000` prepared canonical structural-address slots with checked products and sums | Complete Canvas, facet, Matrix, Heatmap, category, mark, guide, annotation, and specialized topology census | `add`, T5a-T5e; T5a installs and enforces the gate for active ordinary topology and T5e completes the all-producer census; exact address count and arithmetic-overflow evidence |
 | `layout.resources.checked-first-party-growth` | Renderer invariant; first-party storage uses checked cardinality/byte arithmetic and bounded fallible reservation before each allocation or extension; exact known sizes may be reserved upfront, while measurement-dependent sizes grow incrementally within caps, without requiring an exact whole-operation census upfront; font preflight separately retains limits of `1_000_000` discovery entries, `536_870_912` inspected/hashed bytes, and `1_000_000` logical work units | Required scalars, bounded font discovery, canonical metadata/source bytes, occurrences, font candidate lists, selected faces, glyph probes, provenance, measurement cache, local options, topology, feedback states, plans, text, and serialization storage; complete layout admission before backend creation | `add`, T5a-T5e; checked overflow, incremental cap/refusal boundaries, font scalar/discovery/byte/work boundaries, and no-partial-plan evidence |
-| `layout.resources.nonexact-default-png-viability` | Renderer invariant; derived automatic/bounded dimensions fit current source and default 300-DPI target axis/work limits plus the canonical SVG reservation | Root automatic/bounded policy and current Scene/PNG limits | `add`, T5e; exact default-PNG boundaries |
-| `layout.resources.exact-format-local-viability` | Renderer invariant; exact SVG can succeed while a later PNG terminal independently rejects without mutating the Scene | Exact root policy and current output routes | `add`, T5e; public connection T6; SVG-success/PNG-failure reuse evidence |
+| `layout.resources.common-root-representability-and-checked-svg-reservation` | Renderer invariant; every root mode requires finite representable canonical dimensions and checked, fallible canonical SVG reservation before backend creation; no automatic-only 64 MiB canonical-SVG cap and no hypothetical default-PNG gate | All root policies, canonical conversion, checked first-party growth, and pre-backend timing; PNG parser limits are terminal-local | `add`, T5e; all-root representability, reservation overflow/refusal, and canonical replay boundary evidence |
+| `layout.resources.all-root-format-local-viability` | Renderer invariant; for automatic, exact-width/auto-height, and exact-size roots alike, PNG source/target axis, pixel-work, and parser-byte checks run only at the requested PNG terminal; SVG may succeed while PNG independently rejects without mutating the Scene | All root policies and output routes; no default-DPI PNG admission requirement for canonical SVG | `add`, T5e; public connection T6; all-root SVG-success/PNG-failure reuse and PNG limit boundary evidence |
 | `layout.output.checked-canonical-dimension-conversion` | Renderer invariant; convert once by checked upward rounding to positive `u32` CSS-pixel dimensions | Spatial quantum, frozen plan, backend begin, and Scene storage | `add`, T5e; public connection T6; quantum-edge and identity evidence |
 | `output.canonical-scene-dimension-accessors` | Explicit policy; `Output` returns immutable canonical Scene width/height across chained terminals | Scene storage and Plot/Canvas canonical construction | `add`, T6; chained publication and raster-independence evidence |
 | `layout.failure.pre-backend-timing` | Renderer invariant; complete layout, arithmetic, feedback, and canonical final-plan/scene/buffer/scratch reservations before final Null or concrete backend creation. Canonical replay cannot grow beyond that reservation. Incremental planning growth occurs before this gate; later derived-format conversion has separately checked, fallible allocation and format-local limits, without partial artifact publication | Every new kernel, feedback, resource, and output key | `add`, T5a-T5e; count-only paths without backend lifecycles, canonical replay reservation identity, conversion refusal, and artifact-absence evidence |
+
+Each public sizing call replaces one complete size request; the latest call wins,
+including when switching between exact width/automatic height and exact size.
+No independent sticky width/height bounds or new public wrapping controls are
+introduced. Internal bounded constraints remain private implementation inputs.
 
 ### Existing-Key Groups
 
@@ -7955,7 +7964,7 @@ replace their old target resolution or disposition.
 
 | Group | Count | Canonical key set | Added relationship and evidence |
 | --- | ---: | --- | --- |
-| `A-root-resource` | 19 | Explicit set below | Connect to root constraints, default/exact viability, canonical conversion, and pre-backend resource evidence in T5e/T6. |
+| `A-root-resource` | 19 | Explicit set below | Connect to common all-root representability and checked SVG reservation, all-root terminal-local PNG viability, canonical conversion, and pre-backend resource evidence in T5e/T6. |
 | `A-foundation-text` | 20 | Two ranges below | Connect to deterministic constraint-dependent text plans in T5a and root feedback closure in T5e. |
 | `A-axis-fit` | 29 | Explicit set below | Connect ordered bounded local tick/axis alternatives under assigned spans to T5a measurement and T5e feedback closure. |
 | `A-panel-title-axis-plan` | 85 | Ranges and explicit title-block set below | Connect panel/title/axis measurements to frozen T5a plans and T5e convergence. |
@@ -8456,8 +8465,9 @@ other affected key retains its prior target owner and gains only its group
 relationship above.
 
 - `output.plot.pixel-size` and `canvas.output.pixel-size`: `split-and-replace`;
-  migrate exact roots in T5a/T5b, close automatic and bounded roots in T5e, and
-  connect the public sizing surface in T6.
+  migrate exact roots in T5a/T5b, close automatic and exact-width/auto-height
+  roots in T5e, and connect the public sizing surface in T6. Each sizing call
+  replaces the complete request, latest call wins; no public `max_width` remains.
 - `validation.canvas.minimum-size`: `replace`, T5b/T5e; delete the universal
   `160x120` minimum and derive complete-content and resource fit.
 - `layout.canvas.title-subtitle-top-gap` and
@@ -8468,9 +8478,12 @@ relationship above.
   `typography.title-block.subtitle.current-fixed-orientation`, and
   `typography.title-block.caption.current-fixed-orientation`:
   `split-and-replace`, T5a with public connection T6; deduplicate their hardcoded
-  `Middle` anchor arms into
-  `composition.root-title-block.horizontal-alignment`, while their zero-rotation
-  and horizontal-orientation arms remain private renderer invariants.
+  `Middle` anchor arms into two owners: title/subtitle map to
+  `composition.root-title-block.horizontal-alignment` (`Center` in all four
+  presets), and caption maps independently to
+  `composition.root-caption.horizontal-alignment` (`Start` in all four presets).
+  Both use the physical post-inset root content span; their zero-rotation and
+  horizontal-orientation arms remain private renderer invariants.
 - `font-resolution.load-system-fonts`: `move-and-replace`, T5a; discover host
   faces before measurement through the bounded project-owned discovery and
   checked fallible reservation/growth path, load admitted files explicitly rather than calling
@@ -8486,8 +8499,15 @@ relationship above.
 - `font-resolution.current-global-family-order`: `replace`, T5a; for every used
   `(stack,weight)`, generate all occurrence tuples, retain the lexicographically
   least tuple for each file identity, sort by the exact canonical tuple, use the
-  first primary and first glyph-covering candidates, and record the complete
-  ordered identity list as font-environment provenance.
+  first candidate as primary, and record the complete ordered identity list as
+  font-environment provenance. Preserve that candidate order while grouping a
+  base and its combining marks within an extended grapheme cluster (EGC) as one
+  selection unit: choose the first face covering the whole unit when possible.
+  If no face covers the whole unit but all glyphs are available, fall back to
+  first-covering-face selection per scalar; missing glyphs still fail. Selected
+  faces, glyph probes, and immutable text/root plan provenance retain these unit
+  or per-scalar decisions without changing the primary or candidate-list order;
+  selection is not unconditionally scalar-only.
 - `axes.ticks.automatic-target-count`: `split-and-replace`, T5a; fixed `5`
   remains only the current automatic-range nice-snapping source until that range
   implementation is replaced. Generated tick density has no fixed count target:
@@ -8560,11 +8580,14 @@ layout.matrix.nonconvergence-failure
 - The following 19 heuristic or discovery-order selection owners are `replace`
   in their component phase plus T5e measured-plan integration. Text uses
   the sole Unicode-aware assigned-width proposal/retreat/next-break algorithm
-  in `05_LAYOUT_SYSTEM.md`. Both historical text keys below map to that owner;
+  in `05_LAYOUT_SYSTEM.md`, using strictly Unicode-legal wrap opportunities with
+  no emergency illegal breaks or new public controls. Both historical text keys
+  below map to that owner;
   separate parenthetical rebalancing and post-selection line redistribution are
   retired. Axes use ordered assigned-span coarsening and conditional
   midpoint fallback. Legends use declared bounded edge/flow choices and local
-  collision checks with deterministic ties, respecting explicit placement.
+  containing-frame fit checks with deterministic ties and bounded edge/compact
+  recovery, respecting fixed explicit placement.
   Waterfall uses deterministic local order and row packing. These owners may
   select a first locally fitting plan; none contributes global ranks or requires
   exhaustive alternatives. Parents allocate tracks and propagate constraints,
@@ -8595,13 +8618,13 @@ annotations.waterfall.first-fit-row-packing
 ### Count Closure
 
 The three completed T2 tables remain exactly 1860 unique keys in identical
-order. The overlay expands to exactly 1574 identities: 1552 existing historical
+order. The overlay expands to exactly 1575 identities: 1552 existing historical
 keys partitioned into 62 explicit overrides and 1490 retained dispositions, plus
-22 target-only keys. No existing overlay key occurs outside the
+23 target-only keys. No existing overlay key occurs outside the
 historical set, no target-only key occurs inside it, and no overlay identity is
 duplicated. Materialization applies existing-key overrides in historical order
-and appends the 22 target-only keys in the order above, producing exactly
-**1882** unique final target keys.
+and appends the 23 target-only keys in the order above, producing exactly
+**1883** unique final target keys.
 
 The revised target removes the four former `layout.candidates.*` and
 `layout.quality.*` owners (three candidate owners and one quality owner), replacing
@@ -8612,10 +8635,18 @@ with the same topology/resource owners; exact measured-state equality belongs to
 The two former `layout.convergence.*` keys become the two `layout.feedback.*`
 keys, and the cumulative-accounting and exact-reservation resource keys become
 bounded-planning-work and checked-growth owners respectively. These four
-one-for-one successor identities do not add to the total: `24 - 4 + 2 = 22`.
-Existing groups and appearance dispositions do not change: `691 + 861 = 1552`,
-`1490 + 62 = 1552`, `1552 + 22 = 1574`, and `1860 + 22 = 1882`.
+one-for-one successor identities did not add to the previous total:
+`24 - 4 + 2 = 22`. That 22-key overlay is now history. Accepted D6 adds one
+meaningful independent caption-alignment owner, giving `24 - 4 + 2 + 1 = 23`.
+D3 replaces the bounded-width key one-for-one with
+`layout.root.exact-width-auto-height-constraint-policy`; D4 replaces the former
+nonexact-default-PNG and exact-format-local keys one-for-one with
+`layout.resources.common-root-representability-and-checked-svg-reservation` and
+`layout.resources.all-root-format-local-viability`. Field/key renames add no
+extra owners. Existing groups and the override partition remain unchanged:
+`691 + 861 = 1552`, `1490 + 62 = 1552`, `1552 + 23 = 1575`, and
+`1860 + 23 = 1883`.
 
-T7 reconciles only that 1882-key materialized target. The historical 1836-record
+T7 reconciles only that 1883-key materialized target. The historical 1836-record
 pre-T2h count and completed 1860-record T2 count remain provenance, not
 post-adjudication acceptance thresholds.
