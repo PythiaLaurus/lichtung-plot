@@ -198,8 +198,12 @@ The approved theme and layout targets follow these rules:
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a0r | Parent-constraint documentation adjudication | COMPLETE |
 | T5a0s | User-visible behavior approval and bounded recovery | COMPLETE |
-| T5a1 | Exact-root kernel (reopened revised target) | PENDING |
-| T5a1r | Active parent-constraint kernel repair | PENDING |
+| T5a1 | Exact-root kernel (reopened revised target) | IN PROGRESS |
+| T5a1r | Active parent-constraint kernel repair | IN PROGRESS |
+| T5a1r1 | Single-result exact-root and constrained-text route | COMPLETE |
+| T5a1r2 | Active parent allocation and root feedback | PENDING |
+| T5a1r3 | Typed containing-frame recovery and gutter fit | PENDING |
+| T5a1r4 | Root admission and lifecycle closure | PENDING |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
 | T5a3 | Canonical fonts and immutable text plans (reopened) | PENDING |
 | T5a3a | Unicode and font preparation, profile, and provenance | PENDING |
@@ -2490,7 +2494,7 @@ Commit: `docs(layout): finalize behavior decisions and review gates`.
 
 ### T5a1: Exact-Root Kernel (Reopened Revised Target)
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Historical achievement: `b1c1406` (`feat(layout): add active exact-root candidate kernel`)
 established the original exact-root envelope, candidate kernel, accounting, and
@@ -2500,7 +2504,7 @@ and completes only when T5a1r closes; it has no separate repair commit.
 
 ### T5a1r: Active Parent-Constraint Kernel Repair
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: completed T5a0r and T5a0s. Implement the accepted contract and
 preserve the current public API until its scheduled migration.
@@ -2549,7 +2553,118 @@ Evidence:
 - Current omitted/explicit-size dimensions, immutable Null/concrete identity,
   and focused snapshots remain accounted for; `just verify` passes.
 
-Commit: `refactor(layout): replace exhaustive kernel with parent constraints`.
+Implementation inspection found that the historical root executes one opaque
+layout once, then wraps it in a candidate selector and a synthetic two-pass
+identity; real family/guide feedback remains below it. Replacing only those
+types cannot establish parent allocation, real convergence, or D1 recovery.
+The following subphases preserve the accepted target and partition its migration.
+T5a1r completes only after all four; this umbrella has no separate commit.
+
+#### T5a1r1: Single-Result Exact-Root And Constrained-Text Route
+
+**Status**: COMPLETE
+
+Dependencies: T5a0s.
+
+- Replace universal root candidate collections, Cartesian products, global
+  quality selection, and synthetic convergence with one directly measured result
+  under the exact assigned root dimensions. Migrate Plot, Canvas, and tests
+  atomically; retain preparation once, one finalization, and one frozen replay.
+- Remove the unconditional million-entry root cache and obsolete search-only
+  reservations/counters. Admit actual root storage fallibly and pass assigned
+  dimensions to measurement/finalization rather than rereading source size.
+- Make the active text route build the requested width's result directly instead
+  of retaining and selecting a collection of complete text plans. Existing
+  transition preparation may remain in that same route until T5a3b; it is not
+  a second renderer or strategy selector.
+- Preserve exact public defaults, semantic checks, current family adapters,
+  resolved fonts, and terminal replay. Retain useful numeric and refusal tests;
+  replace search-only tests with exact-result, assigned-size, and lifecycle tests.
+- Do not claim root feedback, D1 recovery, the full producer resource census, or
+  complete pre-Null serialization reservations are repaired by this subphase.
+  No fake state equality or test-only replacement solver stands in for them.
+- Run focused kernel/text/lifecycle tests and `just verify`; inspect any output
+  changes. This phase does not authorize shortened regression fixtures.
+
+Evidence (2026-09-08): Plot and Canvas now use one `MeasuredLayout` and
+`FrozenRoot`, with exact assigned dimensions supplied to measurement/finalization.
+Canvas measurement consumes the assignment; legacy Plot builders still read the
+borrowed source after an explicit assignment-equality check. Their deeper
+allocation migration remains T5a1r2/native-owner work, not a claimed r1 result.
+The universal root candidate, quality, Cartesian, fake convergence, and fixed
+million-entry cache implementations are removed. The text path materializes
+only the requested width's final lines/plan; all-boundary-pair transition work
+and the 144-repeat limit remain until T5a3b.
+
+Eight kernel, 24 text, and existing lifecycle/backend tests cover exact-result
+identity, callback/refusal order, selected-line shaping, shared budgets, and
+unchanged terminal routing. Independent code review found no introduced
+regression within r1's scope. `just verify` passed formatting, locked/offline
+all-target check/Clippy, all 520 library tests and integration/snapshot suites,
+rustdoc, and package verification. Existing snapshots passed unchanged; no
+fixture or snapshot was shortened or updated. T5a1r2-r4 and T5a3 remain pending.
+
+Commit: `refactor(layout): use one exact-root measurement result`.
+
+#### T5a1r2: Active Parent Allocation And Root Feedback
+
+**Status**: PENDING
+
+Dependencies: T5a1r1.
+
+- Introduce separate intrinsic requirements and deterministic assigned allocation
+  in an active parent/frame owner, migrating its current adapter callers.
+- Connect real measured gutter/alignment/owned-ink/domain consequences to the
+  sole bounded root driver. Remove migrated local stabilization loops rather
+  than wrapping eight root rounds around eight local rounds.
+- Compare complete relevant geometry and consumed/next feedback, with typed
+  terminal/provisional fit results. Prove actual two/eight-round success,
+  unchanged misses, cycles, exhaustion, and invalidation under changed inputs.
+- Cache only actually requested outcomes, with operation-local identity and
+  admission. Extend to other owners in their scheduled native migrations.
+- Run focused production-route and resource tests and `just verify`.
+
+Commit: `refactor(layout): coordinate active parent feedback`.
+
+#### T5a1r3: Typed Containing-Frame Recovery And Gutter Fit
+
+**Status**: PENDING
+
+Dependencies: T5a1r2.
+
+- Retain typed text/geometry fit misses through activated parent recovery;
+  font, arithmetic, allocation, and work failures propagate without `.ok()` or
+  error-as-collision conversion.
+- Implement D1 recovery in the activated frame: guide-only fit is insufficient;
+  bounded edge/flow changes remeasure the affected body/axes. Preserve explicit
+  placement and shared nested budgets, without sibling Cartesian search.
+- Reproduce the 40% gutter failures and replace unjustified percentage limits
+  consistently across measurement and drawing. Preserve genuinely unfit inputs.
+- Prove recovery in a real Plot route, explicit-placement failure, fatal-error
+  propagation, and original long-label regressions. Native composition/legend
+  completion stays in T5b/T5e. Run focused tests and `just verify`.
+
+Commit: `fix(layout): recover containing-frame fit with typed failures`.
+
+#### T5a1r4: Root Admission And Lifecycle Closure
+
+**Status**: PENDING
+
+Dependencies: T5a1r3.
+
+- Audit activated root preparation, measurement, feedback, cache, and replay
+  payloads against the shared admission protocol; remove remaining search-era
+  stage assumptions. Font/text-specific closure remains in its T5a3 stages.
+- Reserve activated final plan/replay and canonical serialization storage before
+  final Null validation. Counting is not a backend lifecycle; final replay
+  neither measures nor chooses layout. Fix the active capture boundary rather
+  than relying only on caller-visible concrete-backend tests.
+- Independently review every T5a1r acceptance item above, including real parent
+  allocation, typed recovery, dimensions, resource refusal, and actual feedback.
+  Run `just verify` before completing T5a1r and T5a1; remaining T5a3 work stays
+  explicitly pending.
+
+Commit: `refactor(layout): close root admission and replay lifecycle`.
 
 ### T5a2: Foundational Resolved Appearance And Surfaces
 

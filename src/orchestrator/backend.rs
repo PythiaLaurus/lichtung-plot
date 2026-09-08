@@ -1384,11 +1384,18 @@ mod tests {
         crate::layout::plan_exact_root(
             100,
             100,
-            crate::PlotKind::Scatter,
             |_| Ok(()),
-            |()| Ok(()),
-            |(), (), final_stage| {
-                capture_text_replay_plan(100, 100, "test capture", theme, final_stage, &mut capture)
+            |(), assigned| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), assigned, (), final_stage| {
+                let (width, height) = assigned.dimensions();
+                capture_text_replay_plan(
+                    width,
+                    height,
+                    "test capture",
+                    theme,
+                    final_stage,
+                    &mut capture,
+                )
             },
         )
         .unwrap()

@@ -523,10 +523,7 @@ impl Canvas {
     }
 
     fn render_preflighted(
-        root: &crate::layout::SelectedRoot<
-            crate::orchestrator::TextReplayPlan,
-            PreparedCanvasInputs,
-        >,
+        root: &crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         let _ = &root.prepared().text_census;
@@ -745,13 +742,12 @@ impl Canvas {
     fn preflight_plan(
         &self,
     ) -> Result<
-        crate::layout::SelectedRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
+        crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
         Error,
     > {
         let root = crate::layout::plan_exact_root(
             self.width,
             self.height,
-            crate::layout::ExactRootKind::Canvas,
             |prepared_stage| {
                 let themes = Arc::new(ResolvedCanvasThemes::new(self.theme, &self.panels));
                 #[cfg(test)]
@@ -772,24 +768,26 @@ impl Canvas {
                     text_census: census,
                 })
             },
-            |prepared| {
-                self.build_canvas_plan(Arc::clone(&prepared.themes))
-                    .map(Box::new)
+            |prepared, assigned| {
+                let plan = self.build_canvas_plan(Arc::clone(&prepared.themes), assigned)?;
+                Ok(crate::layout::MeasuredLayout::new(assigned, Box::new(plan)))
             },
-            |_, plan, final_stage| {
+            |_, assigned, plan, final_stage| {
+                let (width, height) = assigned.dimensions();
                 crate::orchestrator::capture_text_replay_plan(
-                    self.width,
-                    self.height,
+                    width,
+                    height,
                     "prepared canvas scene capture",
                     plan.themes.root(),
                     final_stage,
-                    |backend| self.render_planned_canvas(&plan, self.width, self.height, backend),
+                    |backend| self.render_planned_canvas(&plan, width, height, backend),
                 )
             },
         )?;
+        let (width, height) = root.dimensions();
         crate::orchestrator::validate_text_replay_plan(
-            self.width,
-            self.height,
+            width,
+            height,
             root.plan(),
             "prepared canvas Null replay",
         )?;
@@ -990,12 +988,17 @@ impl Canvas {
         clippy::too_many_lines,
         reason = "composed preflight keeps shared legends, measurement, allocation, and final planning in one lifecycle"
     )]
-    fn build_canvas_plan(&self, themes: Arc<ResolvedCanvasThemes>) -> Result<CanvasPlan, Error> {
+    fn build_canvas_plan(
+        &self,
+        themes: Arc<ResolvedCanvasThemes>,
+        assigned: crate::layout::RootSize,
+    ) -> Result<CanvasPlan, Error> {
+        let (width, height) = assigned.dimensions();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "layout", themes.root());
         let canvas_layout = CanvasLayout::measured_composed_canvas(
-            self.width,
-            self.height,
+            width,
+            height,
             themes.root(),
             CanvasLayoutSpec {
                 has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
@@ -1036,7 +1039,7 @@ impl Canvas {
                             || plot.clone(),
                             |(_, levels)| plot.clone().with_global_hue_levels(levels.clone()),
                         );
-                    plot.with_canvas_size(self.width, self.height)
+                    plot.with_canvas_size(width, height)
                         .with_render_scope(format!("panel-{index}"))
                 })
             })
@@ -1051,8 +1054,8 @@ impl Canvas {
                 Legend::new(
                     &title,
                     entries,
-                    f64::from(self.width),
-                    f64::from(self.height),
+                    f64::from(width),
+                    f64::from(height),
                     themes.root(),
                 )
             })

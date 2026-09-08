@@ -304,7 +304,11 @@ fn exact_root_reservation_failures_precede_concrete_backend_begin() {
         NumericValues::new("x", [1.0, 2.0, 3.0]),
         NumericValues::new("y", [3.0, 1.0, 2.0]),
     );
-    for stage in 1..=5 {
+    for stage in [
+        crate::layout::ReservationStage::Prepared,
+        crate::layout::ReservationStage::Measured,
+        crate::layout::ReservationStage::Final,
+    ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         crate::layout::force_reservation_failure(stage);
         let mut backend = RecordingBackend::default();
@@ -314,9 +318,9 @@ fn exact_root_reservation_failures_precede_concrete_backend_begin() {
             .unwrap_err()
             .to_string();
 
-        assert!(error.contains(&format!("reservation stage {stage}")));
+        assert!(error.contains(&format!("reservation stage {}", stage.number())));
         assert_eq!((backend.begins, backend.ends), (0, 0));
-        if stage == 1 {
+        if stage == crate::layout::ReservationStage::Prepared {
             assert_eq!(
                 crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
                 0,

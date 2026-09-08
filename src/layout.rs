@@ -8,8 +8,8 @@ mod unicode16;
 
 pub(crate) use canvas::{CanvasLayout, CanvasLayoutSpec, PanelBox};
 #[cfg(test)]
-pub(crate) use kernel::force_reservation_failure;
-pub(crate) use kernel::{plan_exact_root, ExactRootKind, SelectedRoot};
+pub(crate) use kernel::{force_reservation_failure, ReservationStage};
+pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
 pub use panel::AxisTick;
 pub(crate) use panel::{

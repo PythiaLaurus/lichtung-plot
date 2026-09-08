@@ -13,7 +13,7 @@ use crate::spec::{DecorationMode, PlotKind, PlotRenderContext, PlotRenderResult}
 use crate::theme::ResolvedTheme;
 
 pub(super) struct PlotPlan {
-    root: crate::layout::SelectedRoot<TextReplayPlan, PreparedPlotInputs>,
+    root: crate::layout::FrozenRoot<TextReplayPlan, PreparedPlotInputs>,
 }
 
 struct PreparedPlotInputs {
@@ -63,7 +63,6 @@ impl PlotPlan {
         let root = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            kind,
             |prepared_stage| {
                 let theme = resolve_theme();
                 source.validate_configuration(kind)?;
@@ -107,23 +106,29 @@ impl PlotPlan {
                     text_census: census,
                 })
             },
-            |prepared| {
-                if source.has_facets() {
-                    Ok(PlotLayoutPlan::Faceted(Box::new(
-                        super::facets::FacetPlan::new(source, kind, &prepared.theme)?,
-                    )))
-                } else {
-                    Ok(PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
+            |prepared, assigned| {
+                // Legacy builders read the borrowed source; exact assignment must agree.
+                assigned.validate_dimensions(source.width(), source.height())?;
+                let plan = if source.has_facets() {
+                    PlotLayoutPlan::Faceted(Box::new(super::facets::FacetPlan::new(
                         source,
                         kind,
                         &prepared.theme,
-                    )?)))
-                }
+                    )?))
+                } else {
+                    PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
+                        source,
+                        kind,
+                        &prepared.theme,
+                    )?))
+                };
+                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
-            |prepared, layout, final_stage| {
+            |prepared, assigned, layout, final_stage| {
+                let (width, height) = assigned.dimensions();
                 let replay = capture_text_replay_plan(
-                    source.width(),
-                    source.height(),
+                    width,
+                    height,
                     "prepared plot scene capture",
                     &prepared.theme,
                     final_stage,
@@ -131,8 +136,8 @@ impl PlotPlan {
                         render_plot_scene(
                             source,
                             kind,
-                            source.width(),
-                            source.height(),
+                            width,
+                            height,
                             &prepared.theme,
                             &layout,
                             backend,

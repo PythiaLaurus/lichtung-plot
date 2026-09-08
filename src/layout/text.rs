@@ -297,34 +297,6 @@ impl PreparedFontEnvironment {
     }
 }
 
-fn plan_text(
-    environment: &PreparedFontEnvironment,
-    input: TextPlanInput<'_>,
-    prepared_only: bool,
-) -> Result<ResolvedTextPlan, TextPlanError> {
-    let maximum_width_quanta = input.maximum_width_quanta;
-    complete_text_alternatives(environment, input, prepared_only)?
-        .into_maximum_plan(maximum_width_quanta)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RawTextAttemptKind {
-    Greedy(i64),
-    Unwrapped,
-}
-
-#[derive(Debug)]
-enum RawTextAttemptOutcome {
-    Admitted(Range<usize>),
-    Rejected(TextFitMiss),
-}
-
-#[derive(Debug)]
-struct RawTextAttempt {
-    kind: RawTextAttemptKind,
-    outcome: RawTextAttemptOutcome,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct SelectedTextLine {
     paragraph_index: usize,
@@ -332,66 +304,15 @@ struct SelectedTextLine {
     ending_grapheme_index: u32,
 }
 
-#[derive(Debug)]
-struct AdmittedTextAlternative {
-    raw_attempt_index: usize,
-    plan: ResolvedTextPlan,
-}
-
-#[derive(Debug)]
-struct CompleteTextAlternatives {
-    raw_attempts: Vec<RawTextAttempt>,
-    raw_lines: Vec<SelectedTextLine>,
-    admitted: Vec<AdmittedTextAlternative>,
-}
-
-impl CompleteTextAlternatives {
-    fn into_maximum_plan(
-        mut self,
-        maximum_width_quanta: i64,
-    ) -> Result<ResolvedTextPlan, TextPlanError> {
-        let target_kind = if maximum_width_quanta == i64::MAX {
-            // The unwrapped vector is also the i64::MAX greedy vector, without
-            // introducing an unbounded endpoint into the completed width set.
-            RawTextAttemptKind::Unwrapped
-        } else {
-            RawTextAttemptKind::Greedy(maximum_width_quanta)
-        };
-        let target_index = self
-            .raw_attempts
-            .iter()
-            .position(|attempt| attempt.kind == target_kind)
-            .ok_or(TextPlanError::Arithmetic("maximum-width text attempt"))?;
-        let target_range = match &self.raw_attempts[target_index].outcome {
-            RawTextAttemptOutcome::Admitted(range) => range.clone(),
-            RawTextAttemptOutcome::Rejected(miss) => return Err(miss.clone().into()),
-        };
-        let selected_index = self
-            .admitted
-            .iter()
-            .position(|alternative| {
-                same_ending_vector(
-                    &self.raw_lines,
-                    target_range.clone(),
-                    admitted_range(&self.raw_attempts, alternative.raw_attempt_index),
-                )
-            })
-            .ok_or(TextPlanError::Arithmetic(
-                "admitted maximum-width text attempt",
-            ))?;
-        Ok(self.admitted.swap_remove(selected_index).plan)
-    }
-}
-
 #[expect(
     clippy::too_many_lines,
-    reason = "complete text planning keeps count, reservation, materialization, and freezing ordered"
+    reason = "constrained text planning keeps count, reservation, materialization, and freezing ordered"
 )]
-fn complete_text_alternatives(
+fn plan_text(
     environment: &PreparedFontEnvironment,
     mut input: TextPlanInput<'_>,
     prepared_only: bool,
-) -> Result<CompleteTextAlternatives, TextPlanError> {
+) -> Result<ResolvedTextPlan, TextPlanError> {
     if input.font_size == 0 {
         return Err(TextPlanError::InvalidFontSize);
     }
@@ -446,67 +367,70 @@ fn complete_text_alternatives(
         input.source,
         paragraph_seeds,
         input.font_size,
-        input.maximum_width_quanta,
     )?;
-    let (raw_attempts, raw_lines) = materialize_raw_attempts(environment, &transitions)?;
-    let admitted_raw_indices = canonical_admitted_indices(environment, &raw_attempts, &raw_lines)?;
-
-    let mut admitted = Vec::new();
-    admitted
-        .try_reserve_exact(admitted_raw_indices.len())
-        .map_err(|_| TextPlanError::Allocation("admitted text plans"))?;
-    for raw_attempt_index in admitted_raw_indices {
-        let range = admitted_range(&raw_attempts, raw_attempt_index);
-        let mut built_lines = Vec::new();
-        built_lines
-            .try_reserve_exact(range.len())
-            .map_err(|_| TextPlanError::Allocation("selected text lines"))?;
-        for selected in &raw_lines[range] {
-            let paragraph = transitions
-                .paragraphs
-                .get(selected.paragraph_index)
-                .ok_or(TextPlanError::Arithmetic("selected text paragraph"))?;
-            let built = if input.source[paragraph.span.range()].is_empty() {
-                empty_line(
-                    selected.source_span,
-                    selected.ending_grapheme_index,
-                    primary_metrics,
-                    input.font_size,
-                )?
-            } else {
-                prepare_line(
-                    environment,
-                    &pair,
-                    input.source,
-                    paragraph.span,
-                    selected.source_span,
-                    selected.ending_grapheme_index,
-                    input.font_size,
-                    paragraph
-                        .bidi
-                        .as_ref()
-                        .ok_or(TextPlanError::Arithmetic("paragraph bidi plan"))?,
-                )?
-            };
-            built_lines.push(built);
-        }
-        admitted.push(AdmittedTextAlternative {
-            raw_attempt_index,
-            plan: finalize_plan(
-                input.clone(),
-                stack.clone(),
-                pair.provenance.clone(),
-                line_height_quanta,
-                built_lines,
-            )?,
-        });
+    claim_generation_work(environment, transitions.rendered_scalar_count)?;
+    let mut line_count = 0_usize;
+    if let Some(miss) = greedy_text_attempt(&transitions, input.maximum_width_quanta, |_| {
+        line_count = line_count
+            .checked_add(1)
+            .ok_or(TextPlanError::Arithmetic("selected text line count"))?;
+        Ok(())
+    })? {
+        return Err(miss.into());
     }
-
-    Ok(CompleteTextAlternatives {
-        raw_attempts,
-        raw_lines,
-        admitted,
-    })
+    // Built and frozen line records coexist during finalization. Only the
+    // requested attempt's source and records are retained, never alternatives.
+    let line_slots = checked_multiply(line_count as u128, 2, "selected text line slots")?
+        .checked_add(1)
+        .and_then(|slots| slots.checked_add(source_scalar_count))
+        .ok_or(TextPlanError::Arithmetic("selected text plan slots"))?;
+    claim_collection_count(environment, line_slots)?;
+    let mut built_lines = Vec::new();
+    built_lines
+        .try_reserve_exact(line_count)
+        .map_err(|_| TextPlanError::Allocation("selected text lines"))?;
+    claim_collection_materialization(environment, line_slots)?;
+    claim_generation_work(environment, transitions.rendered_scalar_count)?;
+    if let Some(miss) = greedy_text_attempt(&transitions, input.maximum_width_quanta, |selected| {
+        let paragraph = transitions
+            .paragraphs
+            .get(selected.paragraph_index)
+            .ok_or(TextPlanError::Arithmetic("selected text paragraph"))?;
+        let built = if input.source[paragraph.span.range()].is_empty() {
+            empty_line(
+                selected.source_span,
+                selected.ending_grapheme_index,
+                primary_metrics,
+                input.font_size,
+            )?
+        } else {
+            prepare_line(
+                environment,
+                &pair,
+                input.source,
+                paragraph.span,
+                selected.source_span,
+                selected.ending_grapheme_index,
+                input.font_size,
+                paragraph
+                    .bidi
+                    .as_ref()
+                    .ok_or(TextPlanError::Arithmetic("paragraph bidi plan"))?,
+            )?
+        };
+        built_lines.push(built);
+        Ok(())
+    })? {
+        return Err(miss.into());
+    }
+    debug_assert_eq!(built_lines.len(), line_count);
+    finalize_plan(
+        input,
+        stack,
+        pair.provenance.clone(),
+        line_height_quanta,
+        built_lines,
+    )
 }
 
 #[derive(Debug)]
@@ -600,14 +524,13 @@ struct PreparedParagraph<'a> {
 struct PreparedTextTransitions<'a> {
     paragraphs: Vec<PreparedParagraph<'a>>,
     widths_quanta: Vec<i64>,
-    completed_widths_quanta: Vec<i64>,
     rendered_scalar_count: u128,
 }
 
 impl<'a> PreparedTextTransitions<'a> {
     #[expect(
         clippy::too_many_lines,
-        reason = "transition preparation keeps count, reservation, shaping, and width completion ordered"
+        reason = "transition preparation keeps count, reservation, and shaping ordered"
     )]
     fn prepare(
         environment: &PreparedFontEnvironment,
@@ -615,7 +538,6 @@ impl<'a> PreparedTextTransitions<'a> {
         source: &'a str,
         paragraph_seeds: Vec<ParagraphSeed>,
         font_size: u32,
-        maximum_width_quanta: i64,
     ) -> Result<Self, TextPlanError> {
         let mut transition_count = 0_u128;
         let paragraph_count = u128::try_from(paragraph_seeds.len())
@@ -670,24 +592,6 @@ impl<'a> PreparedTextTransitions<'a> {
         widths_quanta
             .try_reserve_exact(transition_count)
             .map_err(|_| TextPlanError::Allocation("text transition widths"))?;
-
-        let finite_maximum_count = u128::from(maximum_width_quanta != i64::MAX);
-        let completed_width_capacity = u128::try_from(transition_count)
-            .map_err(|_| TextPlanError::Arithmetic("completed text widths"))?
-            .checked_add(3)
-            .and_then(|count| count.checked_add(finite_maximum_count))
-            .ok_or(TextPlanError::Arithmetic("completed text widths"))?;
-        let completed_width_slots = completed_width_capacity
-            .checked_add(1)
-            .ok_or(TextPlanError::Arithmetic("completed text width slots"))?;
-        claim_collection_count(environment, completed_width_slots)?;
-        let mut completed_widths_quanta = Vec::new();
-        completed_widths_quanta
-            .try_reserve_exact(
-                usize::try_from(completed_width_capacity)
-                    .map_err(|_| TextPlanError::Arithmetic("completed text widths"))?,
-            )
-            .map_err(|_| TextPlanError::Allocation("completed text widths"))?;
 
         let mut paragraphs = Vec::new();
         paragraphs
@@ -785,11 +689,8 @@ impl<'a> PreparedTextTransitions<'a> {
         }
         debug_assert_eq!(transition_cursor, transition_count);
 
-        claim_collection_materialization(environment, completed_width_slots)?;
         claim_generation_work(environment, transition_scalar_work)?;
 
-        let mut hard_minimum_quanta = 0_i64;
-        let mut natural_unwrapped_width_quanta = 0_i64;
         for paragraph in &paragraphs {
             let Some(bidi) = &paragraph.bidi else {
                 continue;
@@ -811,141 +712,17 @@ impl<'a> PreparedTextTransitions<'a> {
                         bidi,
                     )?;
                     widths_quanta.push(measured.width_quanta);
-                    completed_widths_quanta.push(measured.width_quanta);
-                    if end_index == start_index + 1 {
-                        hard_minimum_quanta = hard_minimum_quanta.max(measured.ink_span_quanta);
-                    }
-                    if start_index == 0 && end_index + 1 == paragraph.transitions.boundaries.len() {
-                        natural_unwrapped_width_quanta =
-                            natural_unwrapped_width_quanta.max(measured.ink_span_quanta);
-                    }
                 }
             }
         }
         debug_assert_eq!(widths_quanta.len(), transition_count);
 
-        claim_sort_and_dedup_work(environment, completed_widths_quanta.len())?;
-        completed_widths_quanta.sort_unstable();
-        completed_widths_quanta.dedup();
-        completed_widths_quanta.push(0);
-        completed_widths_quanta.push(hard_minimum_quanta);
-        completed_widths_quanta.push(natural_unwrapped_width_quanta);
-        if maximum_width_quanta != i64::MAX {
-            completed_widths_quanta.push(maximum_width_quanta);
-        }
-        debug_assert!(
-            completed_widths_quanta.len()
-                <= usize::try_from(completed_width_capacity).unwrap_or(usize::MAX)
-        );
-        claim_generation_work(
-            environment,
-            u128::try_from(completed_widths_quanta.len())
-                .map_err(|_| TextPlanError::Arithmetic("completed text width filtering"))?,
-        )?;
-        completed_widths_quanta.retain(|width| *width >= 0 && *width <= maximum_width_quanta);
-        claim_sort_and_dedup_work(environment, completed_widths_quanta.len())?;
-        completed_widths_quanta.sort_unstable();
-        completed_widths_quanta.dedup();
-
         Ok(Self {
             paragraphs,
             widths_quanta,
-            completed_widths_quanta,
             rendered_scalar_count,
         })
     }
-}
-
-fn materialize_raw_attempts(
-    environment: &PreparedFontEnvironment,
-    transitions: &PreparedTextTransitions<'_>,
-) -> Result<(Vec<RawTextAttempt>, Vec<SelectedTextLine>), TextPlanError> {
-    let raw_attempt_count = transitions
-        .completed_widths_quanta
-        .len()
-        .checked_add(1)
-        .ok_or(TextPlanError::Arithmetic("raw text attempt count"))?;
-    let raw_attempt_count_u128 = u128::try_from(raw_attempt_count)
-        .map_err(|_| TextPlanError::Arithmetic("raw text attempt count"))?;
-    let wrapping_work = transitions
-        .rendered_scalar_count
-        .checked_mul(raw_attempt_count_u128)
-        .ok_or(TextPlanError::Arithmetic("text wrapping work"))?;
-
-    claim_generation_work(environment, wrapping_work)?;
-    let mut admitted_line_count = u128::try_from(transitions.paragraphs.len())
-        .map_err(|_| TextPlanError::Arithmetic("unwrapped text line count"))?;
-    for &width in &transitions.completed_widths_quanta {
-        let mut line_count = 0_u128;
-        let miss = greedy_text_attempt(transitions, width, |_| {
-            line_count = line_count
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("text alternative line count"))?;
-            Ok(())
-        })?;
-        if miss.is_none() {
-            admitted_line_count = admitted_line_count
-                .checked_add(line_count)
-                .ok_or(TextPlanError::Arithmetic("text alternative line count"))?;
-        }
-    }
-    let raw_slots = raw_attempt_count_u128
-        .checked_add(admitted_line_count)
-        .ok_or(TextPlanError::Arithmetic("raw text alternative slots"))?;
-    claim_collection_count(environment, raw_slots)?;
-
-    let mut raw_attempts = Vec::new();
-    raw_attempts
-        .try_reserve_exact(raw_attempt_count)
-        .map_err(|_| TextPlanError::Allocation("raw text attempts"))?;
-    let admitted_line_count = usize::try_from(admitted_line_count)
-        .map_err(|_| TextPlanError::Arithmetic("text alternative line count"))?;
-    let mut raw_lines = Vec::new();
-    raw_lines
-        .try_reserve_exact(admitted_line_count)
-        .map_err(|_| TextPlanError::Allocation("raw text alternative lines"))?;
-    claim_collection_materialization(environment, raw_slots)?;
-    claim_generation_work(environment, wrapping_work)?;
-
-    let minimum_wrap_width = minimum_wrap_width(transitions)?;
-    for &width in &transitions.completed_widths_quanta {
-        let line_start = raw_lines.len();
-        let miss = if width >= minimum_wrap_width {
-            greedy_text_attempt(transitions, width, |line| {
-                raw_lines.push(line);
-                Ok(())
-            })?
-        } else {
-            greedy_text_attempt(transitions, width, |_| Ok(()))?
-        };
-        let outcome = match miss {
-            Some(miss) if width < minimum_wrap_width => RawTextAttemptOutcome::Rejected(miss),
-            None if width >= minimum_wrap_width => {
-                RawTextAttemptOutcome::Admitted(line_start..raw_lines.len())
-            }
-            _ => {
-                return Err(TextPlanError::Arithmetic(
-                    "text attempt count/materialization",
-                ))
-            }
-        };
-        raw_attempts.push(RawTextAttempt {
-            kind: RawTextAttemptKind::Greedy(width),
-            outcome,
-        });
-    }
-
-    let line_start = raw_lines.len();
-    for paragraph_index in 0..transitions.paragraphs.len() {
-        raw_lines.push(full_paragraph_line(transitions, paragraph_index)?);
-    }
-    raw_attempts.push(RawTextAttempt {
-        kind: RawTextAttemptKind::Unwrapped,
-        outcome: RawTextAttemptOutcome::Admitted(line_start..raw_lines.len()),
-    });
-    debug_assert_eq!(raw_attempts.len(), raw_attempt_count);
-    debug_assert_eq!(raw_lines.len(), admitted_line_count);
-    Ok((raw_attempts, raw_lines))
 }
 
 fn greedy_text_attempt(
@@ -954,7 +731,7 @@ fn greedy_text_attempt(
     mut emit: impl FnMut(SelectedTextLine) -> Result<(), TextPlanError>,
 ) -> Result<Option<TextFitMiss>, TextPlanError> {
     for (paragraph_index, paragraph) in transitions.paragraphs.iter().enumerate() {
-        if paragraph.bidi.is_none() {
+        if maximum_width_quanta == i64::MAX || paragraph.bidi.is_none() {
             emit(full_paragraph_line(transitions, paragraph_index)?)?;
             continue;
         }
@@ -1027,110 +804,6 @@ fn full_paragraph_line(
     })
 }
 
-fn minimum_wrap_width(transitions: &PreparedTextTransitions<'_>) -> Result<i64, TextPlanError> {
-    let mut minimum = 0_i64;
-    for paragraph in &transitions.paragraphs {
-        for start_index in 0..paragraph.transitions.boundaries.len().saturating_sub(1) {
-            minimum = minimum.max(paragraph.transitions.width(
-                &transitions.widths_quanta,
-                start_index,
-                start_index + 1,
-            )?);
-        }
-    }
-    Ok(minimum)
-}
-
-fn canonical_admitted_indices(
-    environment: &PreparedFontEnvironment,
-    raw_attempts: &[RawTextAttempt],
-    raw_lines: &[SelectedTextLine],
-) -> Result<Vec<usize>, TextPlanError> {
-    claim_generation_work(
-        environment,
-        u128::try_from(raw_attempts.len())
-            .map_err(|_| TextPlanError::Arithmetic("admitted text count"))?,
-    )?;
-    let admitted_count = raw_attempts
-        .iter()
-        .filter(|attempt| matches!(attempt.outcome, RawTextAttemptOutcome::Admitted(_)))
-        .count();
-    let admitted_count_u128 = u128::try_from(admitted_count)
-        .map_err(|_| TextPlanError::Arithmetic("admitted text count"))?;
-    let admitted_slots = admitted_count_u128
-        .checked_add(1)
-        .ok_or(TextPlanError::Arithmetic("admitted text slots"))?;
-    claim_collection_count(environment, admitted_slots)?;
-    let mut admitted = Vec::new();
-    admitted
-        .try_reserve_exact(admitted_count)
-        .map_err(|_| TextPlanError::Allocation("admitted text alternatives"))?;
-    claim_collection_materialization(environment, admitted_slots)?;
-    admitted.extend(
-        raw_attempts
-            .iter()
-            .enumerate()
-            .filter_map(|(index, attempt)| {
-                matches!(attempt.outcome, RawTextAttemptOutcome::Admitted(_)).then_some(index)
-            }),
-    );
-
-    claim_sort_and_dedup_work(environment, admitted.len())?;
-    admitted.sort_unstable_by(|left, right| {
-        let left_range = admitted_range(raw_attempts, *left);
-        let right_range = admitted_range(raw_attempts, *right);
-        left_range
-            .len()
-            .cmp(&right_range.len())
-            .then_with(|| ending_vector_cmp(raw_lines, left_range, right_range))
-            .then_with(|| left.cmp(right))
-    });
-    admitted.dedup_by(|left, right| {
-        same_ending_vector(
-            raw_lines,
-            admitted_range(raw_attempts, *left),
-            admitted_range(raw_attempts, *right),
-        )
-    });
-    Ok(admitted)
-}
-
-fn admitted_range(raw_attempts: &[RawTextAttempt], index: usize) -> Range<usize> {
-    match &raw_attempts[index].outcome {
-        RawTextAttemptOutcome::Admitted(range) => range.clone(),
-        RawTextAttemptOutcome::Rejected(_) => {
-            unreachable!("only admitted raw text attempts enter canonical ordering")
-        }
-    }
-}
-
-fn ending_vector_cmp(
-    raw_lines: &[SelectedTextLine],
-    left: Range<usize>,
-    right: Range<usize>,
-) -> std::cmp::Ordering {
-    raw_lines[left]
-        .iter()
-        .map(|line| line.ending_grapheme_index)
-        .cmp(
-            raw_lines[right]
-                .iter()
-                .map(|line| line.ending_grapheme_index),
-        )
-}
-
-fn same_ending_vector(
-    raw_lines: &[SelectedTextLine],
-    left: Range<usize>,
-    right: Range<usize>,
-) -> bool {
-    left.len() == right.len()
-        && raw_lines[left]
-            .iter()
-            .zip(&raw_lines[right])
-            .all(|(left, right)| left.ending_grapheme_index == right.ending_grapheme_index)
-}
-
 fn claim_generation_work(
     environment: &PreparedFontEnvironment,
     amount: u128,
@@ -1151,18 +824,6 @@ fn claim_collection_materialization(
     slots: u128,
 ) -> Result<(), TextPlanError> {
     claim_generation_work(environment, slots)
-}
-
-fn claim_sort_and_dedup_work(
-    environment: &PreparedFontEnvironment,
-    count: usize,
-) -> Result<(), TextPlanError> {
-    let count = u128::try_from(count)
-        .map_err(|_| TextPlanError::Arithmetic("text sort and deduplication work"))?;
-    claim_generation_work(
-        environment,
-        checked_multiply(count, 2, "text sort and deduplication work")?,
-    )
 }
 
 fn checked_multiply(
@@ -1462,6 +1123,13 @@ fn prepare_line(
                 u128::try_from(shaped.glyphs.len())
                     .map_err(|_| TextPlanError::Arithmetic("selected line glyph work"))?,
             )?;
+            let slots = (shaped.glyphs.len() as u128)
+                .checked_add(1)
+                .ok_or(TextPlanError::Arithmetic("selected line glyph slots"))?;
+            claim_collection_count(environment, slots)?;
+            runs.try_reserve(1)
+                .map_err(|_| TextPlanError::Allocation("selected text runs"))?;
+            claim_collection_materialization(environment, slots)?;
             let built = scale_run(shaped, group.span, group.script, font_size)?;
             ascent = ascent.max(built.plan.ascender_quanta);
             descent = descent.max(
@@ -2248,7 +1916,6 @@ mod tests {
             source,
             mandatory_paragraph_seeds(source).unwrap(),
             10,
-            i64::MAX,
         )
         .unwrap()
     }
@@ -2283,45 +1950,6 @@ mod tests {
         PreparedFontEnvironment::synthetic()
             .plan_text(input(source, maximum_width_quanta, alignment))
             .unwrap()
-    }
-
-    fn alternatives(source: &str, maximum_width_quanta: i64) -> CompleteTextAlternatives {
-        complete_text_alternatives(
-            &PreparedFontEnvironment::synthetic(),
-            input(source, maximum_width_quanta, PhysicalTextAlignment::Start),
-            false,
-        )
-        .unwrap()
-    }
-
-    fn raw_ending_vector(
-        alternatives: &CompleteTextAlternatives,
-        raw_attempt_index: usize,
-    ) -> Option<Vec<u32>> {
-        match &alternatives.raw_attempts[raw_attempt_index].outcome {
-            RawTextAttemptOutcome::Admitted(range) => Some(
-                alternatives.raw_lines[range.clone()]
-                    .iter()
-                    .map(|line| line.ending_grapheme_index)
-                    .collect(),
-            ),
-            RawTextAttemptOutcome::Rejected(_) => None,
-        }
-    }
-
-    fn admitted_ending_vectors(alternatives: &CompleteTextAlternatives) -> Vec<Vec<u32>> {
-        alternatives
-            .admitted
-            .iter()
-            .map(|alternative| {
-                alternative
-                    .plan
-                    .lines
-                    .iter()
-                    .map(|line| line.ending_grapheme_index)
-                    .collect()
-            })
-            .collect()
     }
 
     fn line_texts(plan: &ResolvedTextPlan) -> Vec<&str> {
@@ -2451,83 +2079,72 @@ mod tests {
     }
 
     #[test]
-    fn completed_widths_include_distinct_complete_paragraph_ink_width() {
-        let transitions = prepared_transitions("A A");
-
-        assert_eq!(
-            transitions.completed_widths_quanta,
-            [0, 5_120, 6_144, 8_704, 13_824, 14_848]
-        );
+    fn requested_width_selects_only_its_greedy_lines() {
+        for (width, expected) in [
+            (8_704, vec!["A ", "A ", "A"]),
+            (14_848, vec!["A ", "A A"]),
+            (17_408, vec!["A A ", "A"]),
+            (20_000, vec!["A A ", "A"]),
+            (23_552, vec!["A A A"]),
+            (i64::MAX, vec!["A A A"]),
+        ] {
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+            let plan = plan("A A A", width, PhysicalTextAlignment::Start);
+            assert_eq!(line_texts(&plan), expected);
+            assert_eq!(line_texts(&plan).concat(), plan.source);
+            // Seventeen transition runs plus five selected runs, irrespective
+            // of how many other widths would produce different line vectors.
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 22));
+        }
     }
 
     #[test]
-    fn raw_attempts_use_completed_width_order_then_explicit_unwrapped() {
-        let alternatives = alternatives("A A A", 17_408);
-
-        assert_eq!(
-            alternatives
-                .raw_attempts
-                .iter()
-                .map(|attempt| attempt.kind)
-                .collect::<Vec<_>>(),
-            [
-                RawTextAttemptKind::Greedy(0),
-                RawTextAttemptKind::Greedy(5_120),
-                RawTextAttemptKind::Greedy(6_144),
-                RawTextAttemptKind::Greedy(8_704),
-                RawTextAttemptKind::Greedy(14_848),
-                RawTextAttemptKind::Greedy(17_408),
-                RawTextAttemptKind::Unwrapped,
-            ]
-        );
-    }
-
-    #[test]
-    fn explicit_unwrapped_duplicate_counts_but_shapes_one_admitted_vector() {
+    fn unwrapped_shapes_only_one_final_line() {
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let alternatives = alternatives("A", i64::MAX);
-
-        assert_eq!(alternatives.raw_attempts.len(), 4);
-        assert_eq!(raw_ending_vector(&alternatives, 2), Some(vec![1]));
-        assert_eq!(raw_ending_vector(&alternatives, 3), Some(vec![1]));
-        assert_eq!(admitted_ending_vectors(&alternatives), [vec![1]]);
+        let plan = plan("A", i64::MAX, PhysicalTextAlignment::Start);
+        assert_eq!(line_texts(&plan), ["A"]);
+        assert_eq!(plan.lines[0].ending_grapheme_index, 1);
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 2));
     }
 
     #[test]
-    fn admitted_alternatives_deduplicate_and_sort_by_line_count_then_vector() {
-        let alternatives = alternatives("A A A", i64::MAX);
-
-        assert_eq!(
-            admitted_ending_vectors(&alternatives),
-            [vec![5], vec![2, 5], vec![4, 5], vec![2, 4, 5]]
-        );
+    fn requested_plan_retains_style_and_pair_provenance() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let mut request = input("A A A", 17_408, PhysicalTextAlignment::End);
+        request.provenance.pair_ordinal = 7;
+        request.provenance.owner = "requested label".into();
+        request.exact_override = true;
+        let expected = request.clone();
+        let plan = environment.plan_text(request).unwrap();
+        assert_eq!(plan.source, expected.source);
+        assert_eq!(plan.style.provenance, expected.provenance);
+        assert_eq!(plan.pair_provenance.pair_ordinal, 7);
+        assert_eq!(plan.style.stack_source, expected.stack);
+        assert_eq!(plan.style.weight, expected.weight);
+        assert_eq!(plan.style.font_size, expected.font_size);
+        assert_eq!(plan.style.paint, expected.paint);
+        assert_eq!(plan.style.alignment, expected.alignment);
+        assert!(plan.style.exact_override);
     }
 
     #[test]
-    fn rejected_attempts_remain_in_raw_width_order() {
-        let alternatives = alternatives("A A A", 7_000);
-        let rejected = alternatives
-            .raw_attempts
-            .iter()
-            .filter_map(|attempt| match (&attempt.kind, &attempt.outcome) {
-                (RawTextAttemptKind::Greedy(width), RawTextAttemptOutcome::Rejected(miss)) => {
-                    Some((*width, miss.clone()))
-                }
-                _ => None,
+    fn requested_fit_miss_does_not_materialize_an_unwrapped_plan() {
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let error = PreparedFontEnvironment::synthetic()
+            .plan_text(input("A A A", 7_000, PhysicalTextAlignment::Start))
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            TextPlanError::Fit(TextFitMiss {
+                source_span: TextSourceSpan {
+                    start_byte: 0,
+                    end_byte: 2
+                },
+                maximum_width_quanta: 7_000,
+                required_width_quanta: 8_704,
             })
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            rejected.iter().map(|(width, _)| *width).collect::<Vec<_>>(),
-            [0, 5_120, 6_144, 7_000]
-        );
-        assert!(rejected.iter().all(|(_, miss)| {
-            miss.source_span == TextSourceSpan::new(0, 2).unwrap()
-                && miss.required_width_quanta == 8_704
-                && miss.maximum_width_quanta < 8_704
-        }));
-        assert_eq!(raw_ending_vector(&alternatives, 4), Some(vec![5]));
+        ));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 17));
     }
 
     #[test]
@@ -2549,6 +2166,48 @@ mod tests {
             } if cumulative_claim > 1_000_000
         ));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+    }
+
+    #[test]
+    fn selected_record_refusal_precedes_final_line_shaping() {
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let environment = PreparedFontEnvironment::synthetic();
+        // Twelve transition slots fit; the four selected plan/source/line
+        // records must be admitted before the final line is shaped.
+        environment.claim_text_generation_slots(999_985).unwrap();
+        let error = environment
+            .plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            TextPlanError::Limit {
+                resource: "candidate-generation slots",
+                limit: 1_000_000,
+                cumulative_claim: 1_000_001,
+            }
+        ));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+    }
+
+    #[test]
+    fn selected_plan_budget_is_exact_and_shared_by_environment_clones() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let clone = environment.clone();
+        // Twelve transition slots, four plan/source/line records, one run,
+        // and one glyph. No raw attempts or alternative plans are retained.
+        environment.claim_text_generation_slots(999_982).unwrap();
+        let plan = clone
+            .plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap();
+        assert_eq!(line_texts(&plan), ["A"]);
+        assert!(matches!(
+            environment.claim_text_generation_slots(1),
+            Err(canonical::TextGenerationClaimError::Limit {
+                resource: "candidate-generation slots",
+                limit: 1_000_000,
+                cumulative_claim: 1_000_001,
+            })
+        ));
     }
 
     #[test]
