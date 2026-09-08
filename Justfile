@@ -8,11 +8,7 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
-# Check every target.
-check:
-    cargo check --locked --offline --all-targets
-
-# Lint every target.
+# Compile and lint every target with warnings denied.
 lint:
     cargo clippy --locked --offline --all-targets -- -D warnings
 
@@ -29,4 +25,4 @@ package:
     cargo package --locked --offline --allow-dirty
 
 # Run the complete read-only repository verification.
-verify: fmt-check check lint test docs package
+verify: fmt-check lint test docs package

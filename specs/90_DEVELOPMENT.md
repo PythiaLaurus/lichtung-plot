@@ -13,7 +13,6 @@ Use the root recipes:
 
 ```text
 just fmt
-just check
 just lint
 just test
 just docs
@@ -21,8 +20,18 @@ just package
 just verify
 ```
 
-`just verify` is the complete read-only gate. It checks formatting, every target,
-lints, tests, documentation, and Cargo's independently unpacked package.
+`just verify` is the complete read-only gate. It checks formatting, compiles and
+lints every target with warnings denied, runs tests, builds documentation, and
+verifies Cargo's independently unpacked package.
+
+Compiler validation uses `just lint`, which runs
+`cargo clippy --locked --offline --all-targets -- -D warnings`. Do not substitute
+`cargo check`, including in delegated work. Targeted tests remain useful while
+iterating, but do not replace strict Clippy or the final verification gate.
+
+Do not add Python files or a `tools/` directory. Development/test support stays
+within the existing Rust project structure. Unicode fixture provenance belongs
+beside the fixtures, not in a separate tooling tree.
 
 ## Dependency Changes
 

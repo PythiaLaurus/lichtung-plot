@@ -14,6 +14,9 @@ policy.
 
 Do not add network access, asset provisioning.
 
+Do not add Python files or a `tools/` directory. Keep development and test
+support within the existing Rust project structure.
+
 ## Current Contract
 
 Keep one current API and representation. When replacing a project-owned API,
@@ -29,6 +32,10 @@ Run the narrowest relevant check while iterating. Before completing a change,
 run `just verify` if you modified code. If the change only affects documentation,
 do not run the test suite. Snapshot changes must be inspected and committed with
 the source change that intentionally alters SVG output.
+
+Compiler validation must use `cargo clippy --locked --offline --all-targets --
+-D warnings` (or `just lint`), never `cargo check`. Pass this requirement to every
+subagent; a successful non-linting build is not a substitute for strict Clippy.
 
 ## Commits
 
