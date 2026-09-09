@@ -158,7 +158,14 @@ fn automatic_numeric_ticks_with_policy(
     theme: &ResolvedTheme,
     legacy: bool,
 ) -> Result<Vec<AxisTick>, Error> {
-    let mut best: Option<Vec<AxisTick>> = None;
+    let mut candidates: [Vec<AxisTick>; AUTOMATIC_TICK_TARGET] =
+        std::array::from_fn(|_| Vec::new());
+    let mut candidate_count = 0;
+    let mut best: Option<usize> = None;
+    // At most five retained lists of five ticks; entries borrow labels by index.
+    let mut metrics =
+        [(0_usize, 0_usize, (0.0, 0.0, 0.0)); AUTOMATIC_TICK_TARGET * AUTOMATIC_TICK_TARGET];
+    let mut metric_count = 0;
 
     for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
         let positions = nice_ticks(range.0, range.1, target);
@@ -174,21 +181,44 @@ fn automatic_numeric_ticks_with_policy(
         if ticks.len() > AUTOMATIC_TICK_TARGET {
             continue;
         }
-        if !automatic_tick_labels_fit(&ticks, projection, side, theme, legacy)? {
+        if candidates[..candidate_count].iter().any(|previous| {
+            previous.len() == ticks.len()
+                && previous.iter().zip(&ticks).all(|(a, b)| {
+                    a.position.to_bits() == b.position.to_bits() && a.label == b.label
+                })
+        }) {
             continue;
         }
-        if best
-            .as_ref()
-            .is_none_or(|current| ticks.len() > current.len())
-        {
-            best = Some(ticks);
+        let index = candidate_count;
+        candidates[index] = ticks;
+        candidate_count += 1;
+        let ticks = &candidates[index];
+        if !automatic_tick_labels_fit_with_measure(ticks, projection, side, |tick_index, label| {
+            if let Some((_, _, dimensions)) = metrics[..metric_count]
+                .iter()
+                .find(|(candidate, tick, _)| candidates[*candidate][*tick].label == label)
+            {
+                return Ok(*dimensions);
+            }
+            let dimensions = tick_text_size(theme, label, legacy)?;
+            metrics[metric_count] = (index, tick_index, dimensions);
+            metric_count += 1;
+            Ok(dimensions)
+        })? {
+            continue;
+        }
+        if best.is_none_or(|current| ticks.len() > candidates[current].len()) {
+            best = Some(index);
         }
     }
 
-    Ok(best.unwrap_or_else(|| {
-        let midpoint = finite_midpoint(range);
-        vec![AxisTick::new(midpoint, format_tick(midpoint))]
-    }))
+    Ok(best.map_or_else(
+        || {
+            let midpoint = finite_midpoint(range);
+            vec![AxisTick::new(midpoint, format_tick(midpoint))]
+        },
+        |index| std::mem::take(&mut candidates[index]),
+    ))
 }
 
 pub(crate) fn fit_automatic_tick_candidates(
@@ -285,6 +315,17 @@ fn automatic_tick_labels_fit(
     theme: &ResolvedTheme,
     legacy: bool,
 ) -> Result<bool, Error> {
+    automatic_tick_labels_fit_with_measure(ticks, projection, side, |_, label| {
+        tick_text_size(theme, label, legacy)
+    })
+}
+
+fn automatic_tick_labels_fit_with_measure(
+    ticks: &[AxisTick],
+    projection: &Projection,
+    side: AxisSide,
+    mut measure: impl FnMut(usize, &str) -> Result<(f64, f64, f64), Error>,
+) -> Result<bool, Error> {
     let mut previous_end = None;
     let (x0, x1, _, _) = projection.pixel_box();
     let maximum_width = match side {
@@ -292,12 +333,14 @@ fn automatic_tick_labels_fit(
         AxisSide::Left => None,
     };
 
-    for tick in ticks {
-        let (_, _, fit_width) = tick_text_size(theme, &tick.label, legacy)?;
+    for (index, tick) in ticks.iter().enumerate() {
+        #[cfg(test)]
+        tests::VISITED_LABELS.with(|labels| labels.borrow_mut().insert(tick.label.clone()));
+        let (width, height, fit_width) = measure(index, &tick.label)?;
         if maximum_width.is_some_and(|width| fit_width > width) {
             return Ok(false);
         }
-        let (start, end) = projected_tick_extent(tick, projection, side, theme, legacy)?;
+        let (start, end) = projected_tick_extent_from_size(tick, projection, side, width, height)?;
         let fits = previous_end.is_none_or(|previous| start >= previous);
         previous_end = Some(end);
         if !fits {
@@ -314,12 +357,22 @@ fn projected_tick_extent(
     theme: &ResolvedTheme,
     legacy: bool,
 ) -> Result<(f64, f64), Error> {
+    let (width, height, _) = tick_text_size(theme, &tick.label, legacy)?;
+    projected_tick_extent_from_size(tick, projection, side, width, height)
+}
+
+fn projected_tick_extent_from_size(
+    tick: &AxisTick,
+    projection: &Projection,
+    side: AxisSide,
+    width: f64,
+    height: f64,
+) -> Result<(f64, f64), Error> {
     let center = match side {
         AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
         AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
     }
     .round();
-    let (width, height, _) = tick_text_size(theme, &tick.label, legacy)?;
     let half_extent = match side {
         AxisSide::Bottom => width / 2.0,
         AxisSide::Left => height / 2.0,
@@ -340,6 +393,8 @@ fn tick_text_size(
     label: &str,
     legacy: bool,
 ) -> Result<(f64, f64, f64), Error> {
+    #[cfg(test)]
+    tests::SIZE_LOOKUPS.with(|count| count.set(count.get() + 1));
     let plan = if legacy {
         theme.measure_legacy_appearance_text(
             label,
@@ -647,4 +702,198 @@ fn format_clean(v: f64, suffix: &str) -> String {
     let s = format!("{v:.1}");
     let trimmed = s.trim_end_matches('0').trim_end_matches('.');
     format!("{trimmed}{suffix}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    std::thread_local! {
+        pub(super) static SIZE_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(super) static VISITED_LABELS: std::cell::RefCell<std::collections::BTreeSet<String>> =
+            const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
+    }
+
+    // Pre-PF6 selection and duplicate size queries, deliberately kept as the oracle.
+    fn original_reference(
+        range: (f64, f64),
+        projection: &Projection,
+        side: AxisSide,
+        theme: &ResolvedTheme,
+        legacy: bool,
+    ) -> Result<Vec<AxisTick>, Error> {
+        let mut best: Option<Vec<AxisTick>> = None;
+        for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
+            let positions = nice_ticks(range.0, range.1, target);
+            if positions.len() < 2 {
+                continue;
+            }
+            let labels = distinct_tick_labels(&positions);
+            let ticks = positions
+                .into_iter()
+                .zip(labels)
+                .map(|(position, label)| AxisTick::new(position, label))
+                .collect::<Vec<_>>();
+            if ticks.len() > AUTOMATIC_TICK_TARGET {
+                continue;
+            }
+            let mut previous_end = None;
+            let (x0, x1, _, _) = projection.pixel_box();
+            let maximum_width = match side {
+                AxisSide::Bottom => Some((x1 - x0) / ticks.len().max(1) as f64 * 0.9),
+                AxisSide::Left => None,
+            };
+            let mut fits = true;
+            for tick in &ticks {
+                let (_, _, fit_width) = tick_text_size(theme, &tick.label, legacy)?;
+                if maximum_width.is_some_and(|width| fit_width > width) {
+                    fits = false;
+                    break;
+                }
+                let (start, end) = projected_tick_extent(tick, projection, side, theme, legacy)?;
+                fits = previous_end.is_none_or(|previous| start >= previous);
+                previous_end = Some(end);
+                if !fits {
+                    break;
+                }
+            }
+            if fits
+                && best
+                    .as_ref()
+                    .is_none_or(|current| ticks.len() > current.len())
+            {
+                best = Some(ticks);
+            }
+        }
+        Ok(best.unwrap_or_else(|| {
+            let midpoint = finite_midpoint(range);
+            vec![AxisTick::new(midpoint, format_tick(midpoint))]
+        }))
+    }
+
+    fn tick_bytes(ticks: &[AxisTick]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for tick in ticks {
+            bytes.extend(tick.position.to_bits().to_le_bytes());
+            bytes.extend(tick.label.len().to_le_bytes());
+            bytes.extend(tick.label.as_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn numeric_selection_matches_original_bytes_with_fewer_size_lookups() {
+        let ranges = [
+            (0.0, 10.0),
+            (5.0, 30.0),
+            (-7.25, 19.75),
+            (0.0, 1e-12),
+            (1e6, 9e6),
+            (1e12, 9e12),
+            (-f64::MAX, f64::MAX),
+            (f64::MAX.next_down(), f64::MAX),
+            (0.0, f64::from_bits(1)),
+            (1.0, 1.0_f64.next_up()),
+            (-0.0, 10.0),
+            (1.000_000_000_000_01, 1.000_000_000_000_09),
+        ];
+        let mut old_total = 0;
+        let mut new_total = 0;
+        for range in ranges {
+            let theme = crate::Theme::Publication.resolve();
+            for extent in [0.0, 30.0, 120.0, 1000.0] {
+                let projection =
+                    Projection::new(range, range, (10.0, 10.0 + extent, 20.0, 20.0 + extent));
+                for side in [AxisSide::Bottom, AxisSide::Left] {
+                    for legacy in [false, true] {
+                        SIZE_LOOKUPS.with(|count| count.set(0));
+                        let old =
+                            original_reference(range, &projection, side, &theme, legacy).unwrap();
+                        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+                        VISITED_LABELS.with(|labels| labels.borrow_mut().clear());
+                        let new = automatic_numeric_ticks_with_policy(
+                            range,
+                            &projection,
+                            side,
+                            &theme,
+                            legacy,
+                        )
+                        .unwrap();
+                        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+                        let distinct_visited = VISITED_LABELS.with(|labels| labels.borrow().len());
+                        assert_eq!(new_count, distinct_visited);
+                        assert_eq!(
+                            tick_bytes(&new),
+                            tick_bytes(&old),
+                            "{range:?}, {extent}, {side:?}, legacy={legacy}"
+                        );
+                        assert!(new_count <= old_count);
+                        old_total += old_count;
+                        new_total += new_count;
+                    }
+                }
+            }
+        }
+        assert!(new_total < old_total);
+        println!("PF6 matrix size lookups: {old_total} -> {new_total}");
+    }
+
+    #[test]
+    fn different_sources_share_label_metrics() {
+        let range = (0.0, 10.0);
+        let theme = crate::Theme::Publication.resolve();
+        let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
+        let mut lists = Vec::new();
+        for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
+            let positions = nice_ticks(range.0, range.1, target);
+            if (2..=AUTOMATIC_TICK_TARGET).contains(&positions.len()) {
+                let labels = distinct_tick_labels(&positions);
+                if !lists.contains(&labels) {
+                    lists.push(labels);
+                }
+            }
+        }
+        assert!(
+            lists
+                .iter()
+                .filter(|list| list.iter().any(|label| label == "0"))
+                .count()
+                > 1
+        );
+        let distinct = lists
+            .iter()
+            .flatten()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        let per_candidate_count = lists.iter().map(Vec::len).sum::<usize>();
+        SIZE_LOOKUPS.with(|count| count.set(0));
+        let old = original_reference(range, &projection, AxisSide::Bottom, &theme, false).unwrap();
+        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+        let new = automatic_numeric_ticks(range, &projection, AxisSide::Bottom, &theme).unwrap();
+        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+        assert_eq!(tick_bytes(&new), tick_bytes(&old));
+        assert_eq!(new_count, distinct);
+        assert!(new_count < per_candidate_count);
+        println!("PF6 shared labels size lookups: original={old_count}, per-candidate={per_candidate_count}, cached={new_count}");
+    }
+
+    #[test]
+    fn identical_sources_keep_first_list_and_measure_it_only_once() {
+        let range = (1.0, 1.0_f64.next_up());
+        let first = nice_ticks(range.0, range.1, AUTOMATIC_TICK_TARGET);
+        for target in 1..AUTOMATIC_TICK_TARGET {
+            assert_eq!(nice_ticks(range.0, range.1, target), first);
+        }
+        let theme = crate::Theme::Publication.resolve();
+        let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
+        SIZE_LOOKUPS.with(|count| count.set(0));
+        let old = original_reference(range, &projection, AxisSide::Bottom, &theme, false).unwrap();
+        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+        let new = automatic_numeric_ticks(range, &projection, AxisSide::Bottom, &theme).unwrap();
+        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
+        assert_eq!(tick_bytes(&new), tick_bytes(&old));
+        assert_eq!(new.len(), 2);
+        assert_eq!((old_count, new_count), (20, 2));
+        println!("PF6 five identical sources size lookups: {old_count} -> {new_count}");
+    }
 }

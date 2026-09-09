@@ -227,7 +227,7 @@ The approved theme and layout targets follow these rules:
 | T5a3p3 | Capture producers once | PENDING |
 | T5a3p4 | Simplify resource admission accounting | PENDING |
 | T5a3p5 | Evaluate repeated font setup | IN PROGRESS |
-| T5a3p6 | Avoid duplicate automatic-tick work | PENDING |
+| T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
 | T5a3p7 | Review speculative line extension | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
@@ -3795,7 +3795,16 @@ retained. No timing improvement is promised for this evaluation-only stage.
 
 #### T5a3p6: Avoid Duplicate Automatic-Tick Work
 
-**Status**: PENDING (PF6 deduplication ONLY accepted; runtime implementation pending)
+**Status**: COMPLETE
+
+Complete candidate vectors are deduplicated before fitting; a bounded stack-local
+metric cache also reuses labels shared by distinct candidates. Greatest-count
+selection and earlier-source ties are unchanged. The 192-case regression compares
+position bits and label bytes against the previous algorithm: identical selected
+lists with 726 size-helper calls instead of 3,468. Five identical sources require
+two calls instead of 20; different lists sharing labels require five instead of
+30. These are lookup counts, not timing or shaping counts. All 30 panel tests,
+strict Clippy, and the integrated `just verify` gate passed without snapshot changes.
 
 Current owner: `src/layout/panel/range_ticks.rs`. The active code tries several
 target-derived lists and retains the fitting list with greatest count; some
@@ -3805,7 +3814,7 @@ algorithm or an unbounded search.
 Accepted fix: deduplicate identical complete lists and measure each distinct
 label once per relevant font/constraint context; preserve the exact selected list,
 including positions, label bytes, order, and selection tie behavior.
-Example: measuring `0,2,4,6,8,10` twice becomes one measurement with identical tick
+Example: measuring `0,2,4,6,8` twice becomes one measurement with identical tick
 positions. Keep uniqueness, finite-number and containment checks; exact caller
 ticks remain untouched.
 
