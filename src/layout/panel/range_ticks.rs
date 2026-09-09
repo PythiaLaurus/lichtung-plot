@@ -1,6 +1,7 @@
 use super::{AxisSide, AxisSpec, AxisTick, Projection};
 use crate::layout::PhysicalTextAlignment;
 use crate::theme::ResolvedTheme;
+use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
@@ -137,7 +138,7 @@ pub(crate) fn automatic_numeric_ticks(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     automatic_numeric_ticks_with_policy(range, projection, side, theme, false)
 }
 
@@ -146,7 +147,7 @@ pub(crate) fn automatic_numeric_ticks_legacy(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     automatic_numeric_ticks_with_policy(range, projection, side, theme, true)
 }
 
@@ -156,7 +157,7 @@ fn automatic_numeric_ticks_with_policy(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     let mut best: Option<Vec<AxisTick>> = None;
 
     for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
@@ -173,7 +174,7 @@ fn automatic_numeric_ticks_with_policy(
         if ticks.len() > AUTOMATIC_TICK_TARGET {
             continue;
         }
-        if !automatic_tick_labels_fit(&ticks, projection, side, theme, legacy) {
+        if !automatic_tick_labels_fit(&ticks, projection, side, theme, legacy)? {
             continue;
         }
         if best
@@ -184,10 +185,10 @@ fn automatic_numeric_ticks_with_policy(
         }
     }
 
-    best.unwrap_or_else(|| {
+    Ok(best.unwrap_or_else(|| {
         let midpoint = finite_midpoint(range);
         vec![AxisTick::new(midpoint, format_tick(midpoint))]
-    })
+    }))
 }
 
 pub(crate) fn fit_automatic_tick_candidates(
@@ -196,12 +197,12 @@ pub(crate) fn fit_automatic_tick_candidates(
     side: AxisSide,
     theme: &ResolvedTheme,
     fallback: AxisTick,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     if !ticks.is_empty()
         && ticks.len() <= AUTOMATIC_TICK_TARGET
-        && automatic_tick_labels_fit(&ticks, projection, side, theme, false)
+        && automatic_tick_labels_fit(&ticks, projection, side, theme, false)?
     {
-        return ticks;
+        return Ok(ticks);
     }
 
     for desired in (2..=ticks.len().min(AUTOMATIC_TICK_TARGET)).rev() {
@@ -214,12 +215,12 @@ pub(crate) fn fit_automatic_tick_candidates(
                 ticks[source].clone()
             })
             .collect::<Vec<_>>();
-        if automatic_tick_labels_fit(&candidate, projection, side, theme, false) {
-            return candidate;
+        if automatic_tick_labels_fit(&candidate, projection, side, theme, false)? {
+            return Ok(candidate);
         }
     }
 
-    vec![fallback]
+    Ok(vec![fallback])
 }
 
 #[cfg(test)]
@@ -228,7 +229,7 @@ pub(crate) fn retain_automatic_ticks_inside_panel(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, false)
 }
 
@@ -237,7 +238,7 @@ pub(crate) fn retain_automatic_ticks_inside_panel_legacy(
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, true)
 }
 
@@ -247,21 +248,21 @@ fn retain_automatic_ticks_inside_panel_with_policy(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
-) -> Vec<AxisTick> {
+) -> Result<Vec<AxisTick>, Error> {
     let (x0, x1, y0, y1) = projection.pixel_box();
     let bounds = match side {
         AxisSide::Bottom => (x0, x1),
         AxisSide::Left => (y0, y1),
     };
-    let retained = ticks
-        .into_iter()
-        .filter(|tick| {
-            projected_tick_extent(tick, projection, side, theme, legacy)
-                .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
-        })
-        .collect::<Vec<_>>();
+    let mut retained = Vec::new();
+    for tick in ticks {
+        let (start, end) = projected_tick_extent(&tick, projection, side, theme, legacy)?;
+        if start >= bounds.0 && end <= bounds.1 {
+            retained.push(tick);
+        }
+    }
     if !retained.is_empty() {
-        return retained;
+        return Ok(retained);
     }
 
     let range = match side {
@@ -270,11 +271,11 @@ fn retain_automatic_ticks_inside_panel_with_policy(
     };
     let midpoint = finite_midpoint(range);
     let fallback = AxisTick::new(midpoint, format_tick(midpoint));
-    projected_tick_extent(&fallback, projection, side, theme, legacy)
-        .is_some_and(|(start, end)| start >= bounds.0 && end <= bounds.1)
+    let (start, end) = projected_tick_extent(&fallback, projection, side, theme, legacy)?;
+    Ok((start >= bounds.0 && end <= bounds.1)
         .then_some(fallback)
         .into_iter()
-        .collect()
+        .collect())
 }
 
 fn automatic_tick_labels_fit(
@@ -283,28 +284,27 @@ fn automatic_tick_labels_fit(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
-) -> bool {
+) -> Result<bool, Error> {
     let mut previous_end = None;
     let (x0, x1, _, _) = projection.pixel_box();
     let maximum_width = match side {
-        AxisSide::Bottom => (x1 - x0) / ticks.len().max(1) as f64 * 0.9,
-        AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
+        AxisSide::Bottom => Some((x1 - x0) / ticks.len().max(1) as f64 * 0.9),
+        AxisSide::Left => None,
     };
 
-    ticks.iter().all(|tick| {
-        if tick_text_size(theme, &tick.label, legacy)
-            .is_none_or(|(_, _, fit_width)| fit_width > maximum_width)
-        {
-            return false;
+    for tick in ticks {
+        let (_, _, fit_width) = tick_text_size(theme, &tick.label, legacy)?;
+        if maximum_width.is_some_and(|width| fit_width > width) {
+            return Ok(false);
         }
-        let Some((start, end)) = projected_tick_extent(tick, projection, side, theme, legacy)
-        else {
-            return false;
-        };
+        let (start, end) = projected_tick_extent(tick, projection, side, theme, legacy)?;
         let fits = previous_end.is_none_or(|previous| start >= previous);
         previous_end = Some(end);
-        fits
-    })
+        if !fits {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn projected_tick_extent(
@@ -313,7 +313,7 @@ fn projected_tick_extent(
     side: AxisSide,
     theme: &ResolvedTheme,
     legacy: bool,
-) -> Option<(f64, f64)> {
+) -> Result<(f64, f64), Error> {
     let center = match side {
         AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
         AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
@@ -324,11 +324,22 @@ fn projected_tick_extent(
         AxisSide::Bottom => width / 2.0,
         AxisSide::Left => height / 2.0,
     };
-    (center.is_finite() && half_extent.is_finite())
-        .then_some((center - half_extent, center + half_extent))
+    let start = center - half_extent;
+    let end = center + half_extent;
+    if start.is_finite() && end.is_finite() {
+        Ok((start, end))
+    } else {
+        Err(Error::Render(
+            "tick extent projection arithmetic overflowed".into(),
+        ))
+    }
 }
 
-fn tick_text_size(theme: &ResolvedTheme, label: &str, legacy: bool) -> Option<(f64, f64, f64)> {
+fn tick_text_size(
+    theme: &ResolvedTheme,
+    label: &str,
+    legacy: bool,
+) -> Result<(f64, f64, f64), Error> {
     let plan = if legacy {
         theme.measure_legacy_appearance_text(
             label,
@@ -345,9 +356,8 @@ fn tick_text_size(theme: &ResolvedTheme, label: &str, legacy: bool) -> Option<(f
             "automatic tick label",
             false,
         )
-    }
-    .ok()?;
-    Some((plan.width(), plan.height(), plan.fit_width()))
+    }?;
+    Ok((plan.width(), plan.height(), plan.fit_width()))
 }
 
 fn finite_midpoint(range: (f64, f64)) -> f64 {

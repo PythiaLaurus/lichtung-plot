@@ -27,7 +27,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let x_col = chart
         .x_col()
@@ -46,7 +46,8 @@ pub(crate) fn render(
         return Err(Error::Data(format!(
             "regression: {band:?} requires at least {minimum} points, got {}",
             x.len()
-        )));
+        ))
+        .into());
     }
 
     let fit = OlsFit::new(&x, &y)?;
@@ -91,7 +92,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         theme,
-    );
+    )?;
     let projection = &layout.projection;
     let point_style = chart.point_style(theme.colors[0], 3);
     let scatter_points = x

@@ -1,13 +1,30 @@
 //! Checked fixed-precision geometry shared by validating and drawing backends.
 
-use std::collections::{HashMap, HashSet};
-use std::fmt;
+use std::collections::HashMap;
+use std::fmt::{self, Write as _};
 
 use crate::layout::PanelBox;
 use crate::render::backend::{BracketOrientation, GradientStop, Point2D, SignificanceBracket};
 use crate::Error;
 
 const MAX_EXACT_UNITS: i64 = (1_i64 << 53) - 1;
+
+struct CoordinateSpelling {
+    bytes: [u8; 328],
+    len: usize,
+}
+
+impl fmt::Write for CoordinateSpelling {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        let end = self.len.checked_add(text.len()).ok_or(fmt::Error)?;
+        self.bytes
+            .get_mut(self.len..end)
+            .ok_or(fmt::Error)?
+            .copy_from_slice(text.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CoordinatePrecision {
@@ -61,7 +78,7 @@ impl CanonicalCoordinate {
     pub(crate) fn from_f64(
         value: f64,
         precision: CoordinatePrecision,
-        context: &str,
+        context: impl fmt::Display,
     ) -> Result<Self, Error> {
         if !value.is_finite() {
             return Err(Error::Render(format!(
@@ -70,9 +87,17 @@ impl CanonicalCoordinate {
         }
 
         let decimals = precision.decimals();
-        let spelling = format!("{value:.decimals$}");
+        // Even f64::MAX in fixed notation fits this bounded scalar scratch.
+        let mut scratch = CoordinateSpelling {
+            bytes: [0; 328],
+            len: 0,
+        };
+        write!(scratch, "{value:.decimals$}")
+            .map_err(|_| Error::Render(format!("{context} coordinate spelling overflow")))?;
+        let spelling = std::str::from_utf8(&scratch.bytes[..scratch.len])
+            .map_err(|_| Error::Render(format!("{context} coordinate spelling is not UTF-8")))?;
         let negative = spelling.starts_with('-');
-        let unsigned = spelling.strip_prefix('-').unwrap_or(&spelling);
+        let unsigned = spelling.strip_prefix('-').unwrap_or(spelling);
         let (whole, fraction) = if decimals == 0 {
             (unsigned, "")
         } else {
@@ -124,7 +149,7 @@ impl CanonicalCoordinate {
         units: i64,
         precision: CoordinatePrecision,
         negative_zero: bool,
-        context: &str,
+        context: impl fmt::Display,
     ) -> Result<Self, Error> {
         let canvas_reserve = i64::from(u32::MAX)
             .checked_mul(precision.scale())
@@ -138,7 +163,7 @@ impl CanonicalCoordinate {
     fn from_derived_units(
         units: i64,
         precision: CoordinatePrecision,
-        context: &str,
+        context: impl fmt::Display,
     ) -> Result<Self, Error> {
         Self::from_units_with_limit(units, precision, false, context, MAX_EXACT_UNITS)
     }
@@ -147,7 +172,7 @@ impl CanonicalCoordinate {
         units: i64,
         precision: CoordinatePrecision,
         negative_zero: bool,
-        context: &str,
+        context: impl fmt::Display,
         limit: i64,
     ) -> Result<Self, Error> {
         if units.unsigned_abs() > limit.unsigned_abs() {
@@ -189,18 +214,18 @@ impl CanonicalCoordinate {
         Self::from_derived_units(units, self.precision, "inverted coordinate")
     }
 
-    fn checked_add(self, other: Self, context: &str) -> Result<Self, Error> {
+    fn checked_add(self, other: Self, context: impl fmt::Display) -> Result<Self, Error> {
         self.checked_binary(other, context, i64::checked_add)
     }
 
-    fn checked_sub(self, other: Self, context: &str) -> Result<Self, Error> {
+    fn checked_sub(self, other: Self, context: impl fmt::Display) -> Result<Self, Error> {
         self.checked_binary(other, context, i64::checked_sub)
     }
 
     fn checked_binary(
         self,
         other: Self,
-        context: &str,
+        context: impl fmt::Display,
         operation: fn(i64, i64) -> Option<i64>,
     ) -> Result<Self, Error> {
         if self.precision != other.precision {
@@ -245,11 +270,11 @@ impl CanonicalPoint {
     fn from_raw(
         point: Point2D,
         precision: CoordinatePrecision,
-        context: &str,
+        context: impl fmt::Display,
     ) -> Result<Self, Error> {
         Ok(Self {
-            x: CanonicalCoordinate::from_f64(point.x, precision, &format!("{context} x"))?,
-            y: CanonicalCoordinate::from_f64(point.y, precision, &format!("{context} y"))?,
+            x: CanonicalCoordinate::from_f64(point.x, precision, format_args!("{context} x"))?,
+            y: CanonicalCoordinate::from_f64(point.y, precision, format_args!("{context} y"))?,
         })
     }
 
@@ -266,22 +291,124 @@ pub(crate) fn canonical_points(
     points: &[Point2D],
     context: &str,
 ) -> Result<Vec<CanonicalPoint>, Error> {
-    let mut converted = Vec::with_capacity(points.len());
-    for (index, point) in points.iter().copied().enumerate() {
-        if !point.x.is_finite() || !point.y.is_finite() {
-            return Err(Error::Render(format!(
-                "{context} point {index} must contain finite coordinates; got ({}, {})",
-                point.x, point.y
-            )));
-        }
-        let canonical = CanonicalPoint::from_raw(
-            point,
-            CoordinatePrecision::Thousandths,
-            &format!("{context} point {index}"),
-        )?;
-        converted.push(canonical);
+    let mut converted = Vec::new();
+    converted
+        .try_reserve_exact(points.len())
+        .map_err(|error| Error::Render(format!("{context} point reservation: {error}")))?;
+    for point in canonical_points_iter(points, context) {
+        converted.push(point?);
     }
     Ok(converted)
+}
+
+pub(crate) fn canonical_points_iter<'a>(
+    points: &'a [Point2D],
+    context: &'a str,
+) -> impl Iterator<Item = Result<CanonicalPoint, Error>> + 'a {
+    points
+        .iter()
+        .copied()
+        .enumerate()
+        .map(move |(index, point)| {
+            if !point.x.is_finite() || !point.y.is_finite() {
+                return Err(Error::Render(format!(
+                    "{context} point {index} must contain finite coordinates; got ({}, {})",
+                    point.x, point.y
+                )));
+            }
+            CanonicalPoint::from_raw(
+                point,
+                CoordinatePrecision::Thousandths,
+                format_args!("{context} point {index}"),
+            )
+        })
+}
+
+#[derive(Default)]
+pub(crate) struct ValidationScratch {
+    points: Vec<(CanonicalPoint, Point2D, usize)>,
+    fixed: bool,
+}
+
+impl ValidationScratch {
+    pub(crate) fn prepare(
+        &mut self,
+        count: usize,
+        stage: &mut crate::layout::kernel::FinalStage<'_>,
+        payload: &str,
+    ) -> Result<(), Error> {
+        super::svg_backend::reserve_storage(stage, &mut self.points, count, payload)?;
+        self.fixed = true;
+        Ok(())
+    }
+
+    fn fill(&mut self, points: &[Point2D], context: &str) -> Result<(), Error> {
+        self.points.clear();
+        if points.len() > self.points.capacity() {
+            if self.fixed {
+                return Err(Error::Render(
+                    "canonical validation exceeded reserved scratch".into(),
+                ));
+            }
+            self.points
+                .try_reserve_exact(points.len())
+                .map_err(|error| {
+                    Error::Render(format!("canonical validation reservation: {error}"))
+                })?;
+        }
+        for (index, canonical) in canonical_points_iter(points, context).enumerate() {
+            self.points.push((canonical?, points[index], index));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn line(&mut self, points: &[Point2D]) -> Result<(), Error> {
+        self.fill(points, "line")?;
+        self.points
+            .sort_unstable_by_key(|(point, _, index)| (point.x.units(), point.y.units(), *index));
+        let conflict = self
+            .points
+            .windows(2)
+            .filter(|pair| {
+                pair[0].0.same_position(pair[1].0) && !same_finite_point(pair[0].1, pair[1].1)
+            })
+            .min_by_key(|pair| pair[1].2);
+        if let Some(pair) = conflict {
+            let (_, first, first_index) = pair[0];
+            let (_, second, second_index) = pair[1];
+            return Err(Error::Render(format!("line distinct points {first_index} ({}, {}) and {second_index} ({}, {}) collapse at 3-decimal coordinate precision", first.x, first.y, second.x, second.y)));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn polygon(&mut self, points: &[Point2D]) -> Result<(), Error> {
+        self.fill(points, "polygon")?;
+        for index in 0..points.len() {
+            let next = (index + 1) % points.len();
+            if !same_finite_point(points[index], points[next])
+                && self.points[index].0.same_position(self.points[next].0)
+            {
+                return Err(Error::Render(format!("polygon distinct adjacent points {index} ({}, {}) and {next} ({}, {}) collapse at 3-decimal coordinate precision", points[index].x, points[index].y, points[next].x, points[next].y)));
+            }
+        }
+        if distinct_up_to_three(
+            points
+                .iter()
+                .map(|point| (normalized_bits(point.x), normalized_bits(point.y))),
+        ) >= 3
+            && distinct_up_to_three(
+                self.points
+                    .iter()
+                    .map(|(point, _, _)| (point.x.units(), point.y.units())),
+            ) < 3
+        {
+            return Err(Error::Render(
+                "polygon required distinct points collapse at 3-decimal coordinate precision"
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn canonical_line_points(points: &[Point2D]) -> Result<Vec<CanonicalPoint>, Error> {
@@ -307,16 +434,16 @@ pub(crate) fn canonical_polygon_points(points: &[Point2D]) -> Result<Vec<Canonic
             )));
         }
     }
-    let raw_distinct = points
-        .iter()
-        .map(|point| (normalized_bits(point.x), normalized_bits(point.y)))
-        .collect::<HashSet<_>>()
-        .len();
-    let converted_distinct = converted
-        .iter()
-        .map(|point| (point.x.units(), point.y.units()))
-        .collect::<HashSet<_>>()
-        .len();
+    let raw_distinct = distinct_up_to_three(
+        points
+            .iter()
+            .map(|point| (normalized_bits(point.x), normalized_bits(point.y))),
+    );
+    let converted_distinct = distinct_up_to_three(
+        converted
+            .iter()
+            .map(|point| (point.x.units(), point.y.units())),
+    );
     if raw_distinct >= 3 && converted_distinct < 3 {
         return Err(Error::Render(
             "polygon required distinct points collapse at 3-decimal coordinate precision".into(),
@@ -325,12 +452,29 @@ pub(crate) fn canonical_polygon_points(points: &[Point2D]) -> Result<Vec<Canonic
     Ok(converted)
 }
 
+fn distinct_up_to_three<T: Copy + PartialEq>(values: impl Iterator<Item = T>) -> usize {
+    let mut distinct = [None; 3];
+    let mut count = 0;
+    for value in values {
+        if !distinct[..count].contains(&Some(value)) {
+            distinct[count] = Some(value);
+            count += 1;
+            if count == 3 {
+                break;
+            }
+        }
+    }
+    count
+}
+
 fn canonical_distinct_points(
     points: &[Point2D],
     context: &str,
 ) -> Result<Vec<CanonicalPoint>, Error> {
     let converted = canonical_points(points, context)?;
-    let mut seen = HashMap::with_capacity(points.len());
+    let mut seen = HashMap::new();
+    seen.try_reserve(points.len())
+        .map_err(|error| Error::Render(format!("{context} distinct-point reservation: {error}")))?;
     for (index, (point, canonical)) in points.iter().zip(&converted).enumerate() {
         let raw = (normalized_bits(point.x), normalized_bits(point.y));
         let key = (canonical.x.units(), canonical.y.units());
@@ -352,19 +496,48 @@ pub(crate) fn canonical_triangles(
     points: &[Point2D],
     radius: u32,
 ) -> Result<Vec<[CanonicalPoint; 3]>, Error> {
-    let radius = f64::from(radius);
-    let half_width = radius * 0.866_025_403_784_438_6;
-    let mut converted = Vec::with_capacity(points.len());
+    let mut converted = Vec::new();
+    converted
+        .try_reserve_exact(points.len())
+        .map_err(|error| Error::Render(format!("triangle reservation: {error}")))?;
     for (index, point) in points.iter().copied().enumerate() {
-        let triangle = [
-            Point2D::new(point.x, point.y + radius),
-            Point2D::new(point.x - half_width, point.y - radius * 0.5),
-            Point2D::new(point.x + half_width, point.y - radius * 0.5),
-        ];
-        let triangle = canonical_distinct_points(&triangle, &format!("triangle {index}"))?;
-        converted.push([triangle[0], triangle[1], triangle[2]]);
+        converted.push(canonical_triangle(point, radius, index)?);
     }
     Ok(converted)
+}
+
+pub(crate) fn canonical_triangle(
+    point: Point2D,
+    radius: u32,
+    index: usize,
+) -> Result<[CanonicalPoint; 3], Error> {
+    let radius = f64::from(radius);
+    let half_width = radius * 0.866_025_403_784_438_6;
+    let raw = [
+        Point2D::new(point.x, point.y + radius),
+        Point2D::new(point.x - half_width, point.y - radius * 0.5),
+        Point2D::new(point.x + half_width, point.y - radius * 0.5),
+    ];
+    let mut result = [CanonicalPoint::from_raw(
+        raw[0],
+        CoordinatePrecision::Thousandths,
+        format_args!("triangle {index} point 0"),
+    )?; 3];
+    for i in 1..3 {
+        result[i] = CanonicalPoint::from_raw(
+            raw[i],
+            CoordinatePrecision::Thousandths,
+            format_args!("triangle {index} point {i}"),
+        )?;
+        for j in 0..i {
+            if !same_finite_point(raw[i], raw[j]) && result[i].same_position(result[j]) {
+                return Err(Error::Render(format!(
+                    "triangle {index} distinct points collapse at 3-decimal coordinate precision"
+                )));
+            }
+        }
+    }
+    Ok(result)
 }
 
 fn normalized_bits(value: f64) -> u64 {
@@ -434,10 +607,11 @@ fn canonical_rect(
 ) -> Result<CanonicalRect, Error> {
     let positive_width = width > 0.0;
     let positive_height = height > 0.0;
-    let left = CanonicalCoordinate::from_f64(left, precision, &format!("{context} left"))?;
-    let top = CanonicalCoordinate::from_f64(top, precision, &format!("{context} top"))?;
-    let width = CanonicalCoordinate::from_f64(width, precision, &format!("{context} width"))?;
-    let height = CanonicalCoordinate::from_f64(height, precision, &format!("{context} height"))?;
+    let left = CanonicalCoordinate::from_f64(left, precision, format_args!("{context} left"))?;
+    let top = CanonicalCoordinate::from_f64(top, precision, format_args!("{context} top"))?;
+    let width = CanonicalCoordinate::from_f64(width, precision, format_args!("{context} width"))?;
+    let height =
+        CanonicalCoordinate::from_f64(height, precision, format_args!("{context} height"))?;
     if (positive_width && width.units() <= 0)
         || (positive_height && height.units() <= 0)
         || (require_positive && (width.units() <= 0 || height.units() <= 0))
@@ -448,8 +622,8 @@ fn canonical_rect(
             precision.decimals()
         )));
     }
-    let right = left.checked_add(width, &format!("{context} right edge"))?;
-    let bottom = top.checked_sub(height, &format!("{context} bottom edge"))?;
+    let right = left.checked_add(width, format_args!("{context} right edge"))?;
+    let bottom = top.checked_sub(height, format_args!("{context} bottom edge"))?;
     Ok(CanonicalRect {
         left,
         right,
@@ -480,12 +654,52 @@ pub(crate) fn canonical_gradient(
     end: Point2D,
     stops: &[GradientStop],
 ) -> Result<CanonicalGradient, Error> {
+    let mut converted_stops = Vec::new();
+    converted_stops
+        .try_reserve_exact(stops.len())
+        .map_err(|error| Error::Render(format!("gradient stop reservation: {error}")))?;
+    let (bounds, start, end) = visit_canonical_gradient(bounds, start, end, stops, |stop| {
+        converted_stops.push(stop);
+    })?;
+    Ok(CanonicalGradient {
+        bounds,
+        start,
+        end,
+        stops: converted_stops,
+    })
+}
+
+pub(crate) fn validate_gradient_geometry(
+    bounds: PanelBox,
+    start: Point2D,
+    end: Point2D,
+    stops: &[GradientStop],
+) -> Result<(), Error> {
+    visit_canonical_gradient(bounds, start, end, stops, |_| {}).map(|_| ())
+}
+
+pub(crate) fn visit_canonical_gradient(
+    bounds: PanelBox,
+    start: Point2D,
+    end: Point2D,
+    stops: &[GradientStop],
+    mut emit: impl FnMut(CanonicalGradientStop),
+) -> Result<(CanonicalRect, CanonicalPoint, CanonicalPoint), Error> {
     let bounds = canonical_panel_rect(
         bounds,
         CoordinatePrecision::Thousandths,
         "linear gradient bounds",
     )?;
-    let endpoints = canonical_points(&[start, end], "linear gradient vector")?;
+    let mut endpoints = [CanonicalPoint::from_raw(
+        start,
+        CoordinatePrecision::Thousandths,
+        "linear gradient vector point 0",
+    )?; 2];
+    endpoints[1] = CanonicalPoint::from_raw(
+        end,
+        CoordinatePrecision::Thousandths,
+        "linear gradient vector point 1",
+    )?;
     if same_finite_point(start, end) {
         return Err(Error::Render(
             "linear gradient vector endpoints must be distinct".into(),
@@ -530,35 +744,25 @@ pub(crate) fn canonical_gradient(
         }
     }
 
-    let converted_stops = stops
-        .iter()
-        .enumerate()
-        .map(|(index, stop)| {
-            Ok(CanonicalGradientStop {
-                offset: CanonicalCoordinate::from_f64(
-                    stop.offset,
-                    CoordinatePrecision::Millionths,
-                    &format!("linear gradient stop {index} offset"),
-                )?,
-                color: stop.color,
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    if converted_stops
-        .windows(2)
-        .any(|pair| pair[0].offset.units() >= pair[1].offset.units())
-    {
-        return Err(Error::Render(
-            "linear gradient stop offsets collapse at 6-decimal coordinate precision".into(),
-        ));
+    let mut previous = None;
+    for (index, stop) in stops.iter().enumerate() {
+        let converted = CanonicalGradientStop {
+            offset: CanonicalCoordinate::from_f64(
+                stop.offset,
+                CoordinatePrecision::Millionths,
+                format_args!("linear gradient stop {index} offset"),
+            )?,
+            color: stop.color,
+        };
+        if previous.is_some_and(|offset| offset >= converted.offset.units()) {
+            return Err(Error::Render(
+                "linear gradient stop offsets collapse at 6-decimal coordinate precision".into(),
+            ));
+        }
+        previous = Some(converted.offset.units());
+        emit(converted);
     }
-
-    Ok(CanonicalGradient {
-        bounds,
-        start: endpoints[0],
-        end: endpoints[1],
-        stops: converted_stops,
-    })
+    Ok((bounds, endpoints[0], endpoints[1]))
 }
 
 fn same_finite_point(left: Point2D, right: Point2D) -> bool {

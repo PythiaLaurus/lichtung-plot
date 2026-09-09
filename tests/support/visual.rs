@@ -316,6 +316,25 @@ pub(super) fn assert_inside_legend_clear(svg: &str, panel: SvgRect, plot_type: &
     assert_legend_does_not_overlap_graphics(svg, plot_type);
 }
 
+pub(super) fn assert_outside_legend_clear(svg: &str, panel: SvgRect, plot_type: &str) {
+    let (legend, _) = parse_legend_rect_and_start(svg);
+    let root = SvgRect {
+        x: 0.0,
+        y: 0.0,
+        width: parse_svg_attr(svg, "width"),
+        height: parse_svg_attr(svg, "height"),
+    };
+    assert!(
+        root.contains(legend),
+        "{plot_type} guide must fit the root: {legend:?}"
+    );
+    assert!(
+        !panel.intersects(legend),
+        "{plot_type} automatic guide must be outside the data panel: {legend:?}"
+    );
+    assert_legend_does_not_overlap_graphics(svg, plot_type);
+}
+
 pub(super) fn remove_named_layer(svg: &str, layer: &str) -> String {
     let open = format!("<g id=\"{layer}\">\n");
     let Some(start) = svg.find(&open) else {

@@ -25,6 +25,110 @@ fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Erro
 }
 
 #[test]
+fn census_streams_deferred_formatted_values_in_render_order() {
+    let source = chart(&valid_data())
+        .annotations(HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::new(2)
+                .unwrap()
+                .suffix(" units")
+                .unwrap(),
+        ))
+        .erase();
+    let mut sources = Vec::new();
+    text_census(&source, source.data(), |source| {
+        sources.push(match source {
+            crate::font::canonical::CensusSource::Formatted(arguments) => {
+                crate::font::canonical::format_census_source(arguments, None)
+                    .map_err(|error| Error::Render(error.to_string()))?
+            }
+            crate::font::canonical::CensusSource::Text(std::borrow::Cow::Borrowed(text)) => {
+                text.to_owned()
+            }
+            crate::font::canonical::CensusSource::Text(std::borrow::Cow::Owned(_)) => {
+                panic!("census must not build formatted String drafts")
+            }
+        });
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        sources,
+        [
+            "1",
+            "3",
+            "1.00 units",
+            "2.00 units",
+            "3.00 units",
+            "Missing"
+        ]
+    );
+}
+
+#[test]
+fn census_stops_on_first_admission_refusal_without_formatting_later_values() {
+    let source = chart(&valid_data())
+        .annotations(HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default(),
+        ))
+        .erase();
+    crate::layout::plan_exact_root(
+        320,
+        240,
+        |stage| {
+            stage.font_resources().claim_work(1_000_000).unwrap();
+            let mut visits = 0;
+            let result = text_census(&source, source.data(), |source| {
+                visits += 1;
+                let crate::font::canonical::CensusSource::Formatted(arguments) = source else {
+                    panic!("numeric source must be deferred")
+                };
+                crate::font::canonical::format_census_source(arguments, Some(stage))
+                    .map(|_| ())
+                    .map_err(|error| Error::Render(error.to_string()))
+            });
+            assert!(result.unwrap_err().to_string().contains("logical work"));
+            assert_eq!(visits, 1);
+            assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
+            Ok(())
+        },
+        |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+        |(), _, (), _| Ok(()),
+    )
+    .unwrap();
+}
+
+#[test]
+fn colorbar_display_preserves_signed_zero_thresholds_and_trimming() {
+    for value in [
+        -0.0,
+        0.0,
+        0.00001,
+        0.0001,
+        1.23,
+        -999_999.999_999_9,
+        1_000_000.0,
+        f64::MAX,
+    ] {
+        let normalized = if value.abs().to_bits() == 0 {
+            0.0
+        } else {
+            value
+        };
+        let expected = if normalized.abs() >= 1_000_000.0
+            || (normalized.abs().to_bits() != 0 && normalized.abs() < 0.0001)
+        {
+            format!("{normalized:.3e}")
+        } else {
+            format!("{normalized:.6}")
+                .trim_end_matches('0')
+                .trim_end_matches('.')
+                .to_string()
+        };
+        assert_eq!(format_colorbar_value(value), expected);
+    }
+}
+
+#[test]
 fn prepare_normalizes_categories_and_preserves_first_observed_axes() {
     let data = valid_data();
 
@@ -347,7 +451,15 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
 #[test]
 fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
     let theme = crate::Theme::Publication.resolve();
-    let error = fitted_unique_labels(&theme, &["category".into()], 1.0, "x").unwrap_err();
+    let error = fitted_unique_labels(
+        &theme,
+        &["category".into()],
+        1.0,
+        "x",
+        &crate::layout::fit::FitScope::root(),
+    )
+    .unwrap_err()
+    .into_error();
 
     assert!(error.to_string().contains("no room for an ellipsis"));
 }

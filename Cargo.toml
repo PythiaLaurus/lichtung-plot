@@ -18,12 +18,14 @@ statrs = "0.18"
 thiserror = "2"
 ttf-parser = "=0.25.1"
 unicode-bidi = "=0.3.18"
+unicode-properties = "=0.1.3"
 unicode-script = "=0.5.7"
 unicode-segmentation = "=1.12.0"
 # Lichtung SVGs contain no raster images, so resvg's JPEG, GIF, and WebP
 # decoders are deliberately disabled.
 png = "0.18"
-resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
+# Text is already outlined by the canonical renderer; no SVG font engine.
+resvg = { version = "0.47.0", default-features = false }
 tempfile = "3.27"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies]
@@ -35,6 +37,9 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 
 [dev-dependencies]
 insta = "1.48"
+# Assert the actual tables shared with rustybuzz, not only its package version.
+unicode-ccc = "=0.4.0"
+unicode-bidi-mirroring = "=0.4.0"
 
 [[test]]
 name = "annotations"

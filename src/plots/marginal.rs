@@ -128,8 +128,8 @@ pub(crate) fn render(
                 theme,
             )
         },
-        <[crate::layout::AxisTick]>::to_vec,
-    );
+        |ticks| Ok(ticks.to_vec()),
+    )?;
     let y_ticks = chart.explicit_y_ticks().map_or_else(
         || {
             layout::automatic_numeric_ticks(
@@ -139,17 +139,21 @@ pub(crate) fn render(
                 theme,
             )
         },
-        <[crate::layout::AxisTick]>::to_vec,
-    );
+        |ticks| Ok(ticks.to_vec()),
+    )?;
     let layout = Layout {
         projection,
         x_axis: crate::layout::Axis {
             label: chart.x_label_text().unwrap_or("").to_string(),
             ticks: x_ticks,
+            explicit_ticks: chart.explicit_x_ticks().is_some(),
+            assigned_tick_width: None,
         },
         y_axis: crate::layout::Axis {
             label: chart.y_label_text().unwrap_or("").to_string(),
             ticks: y_ticks,
+            explicit_ticks: chart.explicit_y_ticks().is_some(),
+            assigned_tick_width: None,
         },
     };
 

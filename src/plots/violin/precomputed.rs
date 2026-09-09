@@ -12,7 +12,7 @@ pub(super) fn render(
     input: &RaincloudGeometry,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let data_y_range = input.validate()?;
     let raw_x_levels = input
@@ -37,6 +37,7 @@ pub(super) fn render(
         context.panel,
         &display_x_levels,
         theme,
+        context.fit_scope(),
     )?;
     let display_range = crate::layout::continuous_auto_range(data_y_range, chart.y_axis_spec());
     let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
@@ -56,7 +57,7 @@ pub(super) fn render(
         chart.x_axis_spec(),
         &y_axis_spec,
         theme,
-    );
+    )?;
     let legend_entries = hue_levels
         .iter()
         .enumerate()

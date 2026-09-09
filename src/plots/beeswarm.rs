@@ -11,10 +11,9 @@ use std::collections::BTreeMap;
 
 use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    with_clip, Backend, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
+    with_clip, Backend, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::Plot;
 
@@ -22,8 +21,9 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
+    let mut text = context.producer_text()?;
     let category_col = chart
         .y_col()
         .ok_or_else(|| Error::Data("beeswarm: categorical row column not set".into()))?;
@@ -39,7 +39,8 @@ pub(crate) fn render(
     if categories.len() != xs.len() || xs.len() != colors.len() || xs.is_empty() {
         return Err(Error::Data(
             "beeswarm: category/x/color columns must have equal non-zero lengths".into(),
-        ));
+        )
+        .into());
     }
     let mut levels = Vec::new();
     for category in &categories {
@@ -55,7 +56,7 @@ pub(crate) fn render(
             if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
                 return Err(Error::Data(format!(
                     "beeswarm: color limits must be finite and strictly ascending; got {minimum}..{maximum}"
-                )));
+                )).into());
             }
             (minimum, maximum)
         }
@@ -67,52 +68,63 @@ pub(crate) fn render(
     let high_label = format_colorbar_value(color_range.1);
     let low_label = format_colorbar_value(color_range.0);
     let color_label = chart.resolved_color_label();
-    let color_label_block = TextBlock::from_resolved(theme.plan_legacy_text(
-        &color_label,
-        detail_font_size,
-        (context.panel.height().min(150.0) * 0.9).max(1.0),
-        PhysicalTextAlignment::Center,
-        "beeswarm colorbar title",
-    )?);
-    let mut panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
-        chart,
-        context.panel,
-        &display_levels,
-        theme,
-    )?;
-    let value_width = [&high_label, &low_label]
+    let guide_scope = context
+        .fit_scope()
+        .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+    let color_label_block =
+        TextBlock::from_resolved(text.plan(&color_label, "beeswarm colorbar title", || {
+            crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                &color_label,
+                &theme.legacy_text_appearance(detail_font_size, crate::TextWeight::Normal),
+                context.panel.height().min(150.0),
+                PhysicalTextAlignment::Center,
+                "beeswarm colorbar title",
+                &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
+            ))
+        })?);
+    let values = [&high_label, &low_label]
         .into_iter()
         .map(|label| {
-            theme
-                .measure_legacy_text(
+            text.plan(label, "beeswarm colorbar value", || {
+                Ok(theme.measure_legacy_text(
                     label,
                     detail_font_size,
                     PhysicalTextAlignment::Start,
                     "beeswarm colorbar value",
-                )
-                .map(|plan| plan.width())
+                )?)
+            })
         })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let value_width = values
+        .iter()
+        .map(crate::layout::ResolvedTextPlan::width)
         .fold(0.0_f64, f64::max);
     let colorbar_reserve = (34.0 + value_width).max(
         65.0 + color_label_block.lines().len().saturating_sub(1) as f64
             * color_label_block.line_height()
             + f64::from(detail_font_size) / 2.0,
     ) + 4.0;
-    if panel.width() - colorbar_reserve < 100.0 {
-        return Err(Error::Render(
+    if context.panel.width() - colorbar_reserve < 100.0 {
+        return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide,
             "beeswarm: colorbar title does not fit while preserving the minimum 100px plot panel; increase chart width"
-                .into(),
-        ));
+        ).into());
     }
-    panel.x1 -= colorbar_reserve;
+    let mut body = context.panel;
+    body.x1 -= colorbar_reserve;
+    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
+        chart,
+        body,
+        &display_levels,
+        theme,
+        context.fit_scope(),
+    )?;
     let y_ticks = levels
         .iter()
         .enumerate()
         .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
         .collect();
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
         (0.0, levels.len() as f64),
         panel,
@@ -123,7 +135,8 @@ pub(crate) fn render(
         &x_axis_spec,
         chart.y_axis_spec(),
         theme,
-    );
+    )?;
+    layout.y_axis.assigned_tick_width = Some(tick_width);
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
             let (x, y0) = layout.projection.project(0.0, 0.0);
@@ -182,17 +195,19 @@ pub(crate) fn render(
         &layout,
         &color_label_block,
         color_range,
-        &high_label,
-        &low_label,
-        theme,
+        &values,
+        &mut text,
     )?;
-    Ok(PlotRenderResult::new(layout, Vec::new()))
+    let mut result = PlotRenderResult::new(layout, Vec::new());
+    result.producer_text = text.finish()?;
+    Ok(result)
 }
 
 pub(crate) fn text_census_colorbar_values<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
-) -> Result<[String; 2], Error> {
+    mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
+) -> Result<(), Error> {
     let color_col = chart
         .color_col()
         .ok_or_else(|| Error::Data("beeswarm: continuous color column not set".into()))?;
@@ -201,10 +216,14 @@ pub(crate) fn text_census_colorbar_values<'a>(
         Some((minimum, maximum)) => (minimum, maximum),
         None => crate::data::min_max(colors, "beeswarm")?,
     };
-    Ok([
-        format_colorbar_value(range.0),
-        format_colorbar_value(range.1),
-    ])
+    for value in [range.0, range.1] {
+        if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
+            visit(format_args!("{value:.3e}").into())?;
+        } else {
+            visit(format_args!("{value:.3}").into())?;
+        }
+    }
+    Ok(())
 }
 
 fn draw_colorbar(
@@ -212,9 +231,8 @@ fn draw_colorbar(
     layout: &Layout,
     label: &crate::layout::TextBlock,
     range: (f64, f64),
-    high_label: &str,
-    low_label: &str,
-    theme: &ResolvedTheme,
+    values: &[crate::layout::ResolvedTextPlan],
+    text: &mut crate::spec::ProducerText<'_>,
 ) -> Result<(), Error> {
     let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
     let left = panel_right + 18.0;
@@ -230,42 +248,36 @@ fn draw_colorbar(
         Point2D::new(left + 5.0, bottom + height),
         &stops,
     )?;
-    let value_style = TextStyle {
-        color: theme.foreground.into(),
-        font_family: theme.font_family.clone(),
-        font_size: theme.detail_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Start,
-        rotation: 0.0,
-    };
-    backend.draw_text(
-        Point2D::new(
-            (left + 16.0).trunc(),
-            (bottom + height - 4.0).max(0.0).trunc(),
-        ),
-        high_label,
-        &value_style,
-    )?;
-    backend.draw_text(
-        Point2D::new((left + 16.0).trunc(), (bottom - 13.0).max(0.0).trunc()),
-        low_label,
-        &value_style,
-    )?;
-    let title_style = TextStyle {
-        anchor: TextAnchor::Middle,
-        rotation: -90.0,
-        ..value_style
-    };
-    for (index, line) in label.lines().iter().enumerate() {
-        backend.draw_text(
+    text.draw(
+        PlacedText::from_first_line(
+            values[0].clone(),
             Point2D::new(
-                (left + 47.0 + index as f64 * label.line_height()).trunc(),
-                (bottom + height / 2.0).trunc(),
+                (left + 16.0).trunc(),
+                (bottom + height - 4.0).max(0.0).trunc(),
             ),
-            line,
-            &title_style,
-        )?;
-    }
+            TextAnchor::Start,
+            0.0,
+        ),
+        backend,
+    )?;
+    text.draw(
+        PlacedText::from_first_line(
+            values[1].clone(),
+            Point2D::new((left + 16.0).trunc(), (bottom - 13.0).max(0.0).trunc()),
+            TextAnchor::Start,
+            0.0,
+        ),
+        backend,
+    )?;
+    text.draw(
+        PlacedText::from_first_line(
+            label.plan().clone(),
+            Point2D::new((left + 47.0).trunc(), (bottom + height / 2.0).trunc()),
+            TextAnchor::Middle,
+            -90.0,
+        ),
+        backend,
+    )?;
     Ok(())
 }
 
@@ -300,5 +312,62 @@ fn format_colorbar_value(value: f64) -> String {
         format!("{value:.3e}")
     } else {
         format!("{value:.3}")
+    }
+}
+
+#[cfg(test)]
+mod fit_tests {
+    use super::*;
+    use crate::layout::fit::{FitKind, FitOutcome, FitScope};
+    use crate::layout::{AddressRole, ComponentAddress};
+
+    #[test]
+    fn colorbar_title_fit_preserves_its_child_address_and_zero_local_attempt() {
+        let plot = Plot::beeswarm(
+            crate::CategoryValues::new("category", ["one", "two"]).unwrap(),
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("color", [0.0, 1.0]),
+        )
+        .color_label("W".repeat(200))
+        .erase();
+        let owner = ComponentAddress::root()
+            .child(AddressRole::CanvasCell, 2)
+            .unwrap();
+        let scope = FitScope::new(&owner, 7);
+        let theme = crate::Theme::Publication.resolve();
+        theme.prepare_font_environment().unwrap();
+        let result = plot
+            .preflight_measurement(
+                crate::spec::PlotKind::Beeswarm,
+                PanelBox::new(80.0, 500.0, 80.0, 350.0),
+                &theme,
+                &scope,
+            )
+            .unwrap();
+        let FitOutcome::Miss(failure) = result else {
+            panic!("unbreakable colorbar title unexpectedly fitted")
+        };
+        assert_eq!(failure.reason.kind, FitKind::Text);
+        assert_eq!(failure.reason.ordinal, 0);
+        assert_eq!(
+            failure.reason.address,
+            owner
+                .child(AddressRole::OutsideGuideRight, 0)
+                .unwrap()
+                .child(AddressRole::GuideTitle, 0)
+                .unwrap()
+        );
+
+        let mut invalid = crate::Theme::Publication.resolve();
+        invalid.detail_font_size = 0;
+        invalid.prepare_font_environment().unwrap();
+        assert!(plot
+            .preflight_measurement(
+                crate::spec::PlotKind::Beeswarm,
+                PanelBox::new(80.0, 500.0, 80.0, 350.0),
+                &invalid,
+                &scope
+            )
+            .is_err());
     }
 }

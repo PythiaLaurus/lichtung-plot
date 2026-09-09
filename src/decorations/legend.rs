@@ -21,9 +21,26 @@
 
 use crate::layout::{PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
+    Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, PointStyle, TextAnchor,
 };
 use crate::Error;
+
+pub(crate) fn address_role(position: crate::LegendPosition) -> crate::layout::AddressRole {
+    use crate::layout::AddressRole;
+    use crate::LegendPosition::{
+        Auto, OutsideBottom, OutsideBottomLeft, OutsideBottomRight, OutsideLeft, OutsideLeftBottom,
+        OutsideLeftTop, OutsideRight, OutsideRightBottom, OutsideRightTop, OutsideTop,
+        OutsideTopLeft, OutsideTopRight,
+    };
+    match position {
+        Auto => AddressRole::OutsideGuideAuto,
+        OutsideTopLeft | OutsideTop | OutsideTopRight => AddressRole::OutsideGuideTop,
+        OutsideRightTop | OutsideRight | OutsideRightBottom => AddressRole::OutsideGuideRight,
+        OutsideBottomLeft | OutsideBottom | OutsideBottomRight => AddressRole::OutsideGuideBottom,
+        OutsideLeftTop | OutsideLeft | OutsideLeftBottom => AddressRole::OutsideGuideLeft,
+        _ => AddressRole::InsideGuide,
+    }
+}
 
 /// Raw semantic identity for one renderer-owned legend entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -470,9 +487,10 @@ impl LegendMetrics {
 }
 
 /// A plot legend.
+#[derive(Debug)]
 pub(crate) struct Legend {
     /// The entries in the legend.
-    entries: Vec<LegendEntry>,
+    entries: std::sync::Arc<[LegendEntry]>,
     /// Layout metrics (derived from canvas size or overridden).
     pub(crate) metrics: LegendMetrics,
     available_width: f64,
@@ -480,6 +498,24 @@ pub(crate) struct Legend {
     title_block: TextBlock,
     entry_blocks: Vec<TextBlock>,
     font_family: String,
+    layout: LegendLayout,
+}
+
+#[derive(Debug)]
+struct LegendLayout {
+    width: f64,
+    height: f64,
+    columns: usize,
+    title: PlannedTextPlacement,
+    entries: Vec<LegendSlot>,
+}
+
+#[derive(Debug)]
+struct LegendSlot {
+    key: Point2D,
+    label: PlannedTextPlacement,
+    width: f64,
+    height: f64,
 }
 
 /// A resolved legend rectangle in math-style pixel coordinates.
@@ -517,6 +553,305 @@ impl LegendBox {
 }
 
 impl Legend {
+    #[cfg(test)]
+    pub(crate) fn text_plans(&self) -> impl Iterator<Item = &crate::layout::ResolvedTextPlan> {
+        std::iter::once(self.title_block.plan())
+            .chain(self.entry_blocks.iter().map(TextBlock::plan))
+    }
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "one assigned edge/flow measurement retains all entry geometry"
+    )]
+    pub(crate) fn measure_outside(
+        title: &str,
+        entries: std::sync::Arc<[LegendEntry]>,
+        root: (u32, u32),
+        available: (f64, f64),
+        horizontal: bool,
+        compact: bool,
+        theme: &crate::theme::ResolvedTheme,
+        compact_changes: &mut bool,
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<crate::layout::fit::FitOutcome<Self>, Error> {
+        use crate::layout::fit::{self, FitOutcome};
+        use crate::layout::{kernel::FitKind, AddressRole};
+        theme.prepare_font_environment()?;
+        if !compact {
+            *compact_changes = false;
+        }
+        if !available.0.is_finite() || !available.1.is_finite() {
+            return Err(Error::Render("nonfinite guide assignment".into()));
+        }
+        let metrics = LegendMetrics::from_canvas(f64::from(root.0), f64::from(root.1));
+        let font_size = metrics.font_size.round() as u32;
+        let edge_pad = metrics.pad + GLYPH_EDGE_PAD_FACTOR * f64::from(font_size);
+        let inner_width = available.0 - 2.0 * metrics.pad;
+        let inner_height = available.1 - 2.0 * edge_pad;
+        if inner_width <= 0.0 || inner_height <= 0.0 {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "outside guide has no positive content extent",
+            )));
+        }
+        let mut title_appearance = theme.legacy_text_appearance(
+            (metrics.font_size * 1.1).round() as u32,
+            crate::TextWeight::Normal,
+        );
+        title_appearance.paint = (60, 60, 60).into();
+        let mut appearance = theme.legacy_text_appearance(font_size, crate::TextWeight::Normal);
+        appearance.paint = (40, 40, 40).into();
+        let title_plan = match fit::text(
+            theme,
+            title,
+            &title_appearance,
+            inner_width,
+            PhysicalTextAlignment::Start,
+            "outside legend title",
+            &scope.child(AddressRole::LegendTitle, 0)?,
+        )? {
+            FitOutcome::Measured(plan) => plan,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        let title_gap = (metrics.title_h - f64::from(title_appearance.font_size)).max(0.0);
+        let body_height = inner_height - title_plan.height() - title_gap;
+        if body_height <= 0.0 {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "outside legend title leaves no entry height",
+            )));
+        }
+        let gap = COLUMN_SPACING_FACTOR * metrics.font_size;
+        let row_gap = (metrics.entry_h - f64::from(font_size) * 1.2).max(0.0);
+        let zero = theme.measure_legacy_appearance_text(
+            "0",
+            &appearance,
+            PhysicalTextAlignment::Start,
+            "legend metric probe",
+            false,
+        )?;
+        let ch = zero
+            .lines
+            .first()
+            .map_or(0.0, |line| line.logical_advance_quanta as f64 / 1024.0);
+        if ch <= 0.0 || !ch.is_finite() {
+            return Err(Error::Render("invalid legend ch metric".into()));
+        }
+        let mut widths = Vec::new();
+        fit::reserve(
+            theme,
+            &mut widths,
+            entries.len(),
+            "guide width requirements",
+        )?;
+        for entry in entries.iter() {
+            let (hard, natural) =
+                fit::intrinsic_widths(theme, &entry.label, &appearance, "legend entry intrinsic")?;
+            let key = metrics.handle_w.max(2.0 * entry.glyph_extent());
+            let chrome = crate::layout::kernel::required_length(key + metrics.handle_text)?;
+            widths.push((
+                hard + chrome,
+                hard.max(natural.min(66.0 * ch)) + chrome,
+                key,
+                chrome,
+            ));
+        }
+        let preferred_column = widths
+            .iter()
+            .map(|(_, preferred, _, _)| *preferred)
+            .fold(0.0_f64, f64::max)
+            .min(inner_width);
+        if !compact {
+            if let Some(cap) = crate::layout::kernel::compact_half_width(inner_width, gap)? {
+                *compact_changes = widths.iter().any(|(_, preferred, _, _)| {
+                    if horizontal {
+                        preferred.min(inner_width) > cap
+                    } else {
+                        preferred_column > cap
+                    }
+                });
+            }
+        }
+        let cap = if compact {
+            let Some(width) = crate::layout::kernel::compact_half_width(inner_width, gap)? else {
+                return Ok(FitOutcome::Miss(scope.failure(
+                    FitKind::LegendOrGuide,
+                    "compact guide has no column width",
+                )));
+            };
+            width
+        } else {
+            inner_width
+        };
+        let mut entry_blocks = Vec::new();
+        let mut slots = Vec::new();
+        fit::reserve(
+            theme,
+            &mut entry_blocks,
+            entries.len(),
+            "measured guide labels",
+        )?;
+        fit::reserve(theme, &mut slots, entries.len(), "measured guide slots")?;
+        let title_half = GLYPH_HALF_HEIGHT_FACTOR * f64::from(title_appearance.font_size);
+        let body_top = title_half - title_plan.height() - title_gap;
+        let mut x = 0.0;
+        let mut y = 0.0;
+        let mut row_height = 0.0_f64;
+        let mut used_width = 0.0_f64;
+        let mut used_height = 0.0_f64;
+        let mut columns = 1;
+        let mut row_entries = 0;
+        let mut miss = None;
+        for (index, (entry, (minimum, preferred, key, chrome))) in
+            entries.iter().zip(widths).enumerate()
+        {
+            let allocated = if horizontal {
+                preferred.min(cap)
+            } else {
+                preferred_column.min(cap)
+            };
+            if allocated < minimum {
+                crate::layout::fit::FitFailure::retain_least(
+                    &mut miss,
+                    scope.child(AddressRole::LegendEntry, index)?.failure(
+                        FitKind::Text,
+                        "guide entry allocation is below its hard unbroken requirement",
+                    ),
+                );
+                continue;
+            }
+            let plan = match fit::text(
+                theme,
+                &entry.label,
+                &appearance,
+                allocated - chrome,
+                PhysicalTextAlignment::Start,
+                "outside legend entry",
+                &scope.child(AddressRole::LegendEntry, index)?,
+            )? {
+                FitOutcome::Measured(plan) => plan,
+                FitOutcome::Miss(reason) => {
+                    crate::layout::fit::FitFailure::retain_least(&mut miss, reason);
+                    continue;
+                }
+            };
+            let baseline = plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
+            let key_half = entry.glyph_extent().max(f64::from(font_size) * 0.32);
+            let ascent = baseline.max(key_half);
+            let height = ascent + (plan.height() - baseline).max(key_half);
+            if horizontal {
+                if x > 0.0 && x + allocated > inner_width {
+                    x = 0.0;
+                    y += row_height + row_gap;
+                    row_height = 0.0;
+                    row_entries = 0;
+                }
+                row_height = row_height.max(height);
+                row_entries += 1;
+                columns = columns.max(row_entries);
+            } else if y > 0.0 && y + height > body_height {
+                y = 0.0;
+                x += allocated + gap;
+                columns += 1;
+            }
+            if x + allocated > inner_width || y + height > body_height {
+                crate::layout::fit::FitFailure::retain_least(
+                    &mut miss,
+                    scope.failure(
+                        FitKind::LegendOrGuide,
+                        "outside legend flow exceeds its assigned track",
+                    ),
+                );
+            }
+            let baseline_y = body_top - y - ascent;
+            slots.push(LegendSlot {
+                key: Point2D::new(x + (key - metrics.handle_w) / 2.0, baseline_y),
+                label: PlannedTextPlacement::baseline(
+                    Point2D::new(x + chrome, baseline_y),
+                    TextAnchor::Start,
+                    0.0,
+                ),
+                width: allocated,
+                height,
+            });
+            used_width = used_width.max(x + allocated);
+            used_height = used_height.max(y + height);
+            entry_blocks.push(TextBlock::from_resolved(plan));
+            if horizontal {
+                x += allocated + gap;
+            } else {
+                y += height + row_gap;
+            }
+        }
+        if let Some(failure) = miss {
+            return Ok(FitOutcome::Miss(failure));
+        }
+        let title_baseline = title_plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
+        let layout = LegendLayout {
+            width: used_width.max(title_plan.width()) + 2.0 * metrics.pad,
+            height: title_plan.height() + title_gap + used_height + 2.0 * edge_pad,
+            columns,
+            title: PlannedTextPlacement::baseline(
+                Point2D::new(0.0, title_half - title_baseline),
+                TextAnchor::Start,
+                0.0,
+            ),
+            entries: slots,
+        };
+        Ok(FitOutcome::Measured(Self {
+            entries,
+            metrics,
+            available_width: available.0,
+            available_height: available.1,
+            title_block: TextBlock::from_resolved(title_plan),
+            entry_blocks,
+            font_family: theme.font_family.clone(),
+            layout,
+        }))
+    }
+
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        round.observe_number(self.compute_box_width())?;
+        round.observe_number(self.compute_box_height())?;
+        round.observe_count(self.column_count())?;
+        for metric in [
+            self.available_width,
+            self.available_height,
+            self.metrics.font_size,
+            self.metrics.pad,
+            self.metrics.entry_h,
+            self.metrics.title_h,
+            self.metrics.handle_w,
+            self.metrics.handle_text,
+        ] {
+            round.observe_number(metric)?;
+        }
+        round.observe_count(self.entry_blocks.len())?;
+        round.observe_string(&self.font_family)?;
+        for entry in self.entries.iter() {
+            round.observe_legend_glyph(
+                entry.glyph.point.as_ref(),
+                entry.glyph.line.as_ref(),
+                entry.glyph.fill.as_ref(),
+            )?;
+        }
+        round.observe_text_block(&self.title_block)?;
+        for entry in &self.entry_blocks {
+            round.observe_text_block(entry)?;
+        }
+        round.observe_placement(self.layout.title)?;
+        for slot in &self.layout.entries {
+            round.observe_number(slot.key.x)?;
+            round.observe_number(slot.key.y)?;
+            round.observe_placement(slot.label)?;
+            round.observe_number(slot.width)?;
+            round.observe_number(slot.height)?;
+        }
+        Ok(())
+    }
     /// Create a new legend with metrics derived from canvas size.
     pub fn new(
         title: &str,
@@ -530,41 +865,96 @@ impl Legend {
         let entry_maximum_width = (canvas_w * 0.35).max(metrics.font_size);
         let title_font_size = (metrics.font_size * 1.1).round() as u32;
         let entry_font_size = metrics.font_size.round() as u32;
-        let title_block = TextBlock::from_resolved(theme.plan_legacy_text(
+        let mut title_appearance =
+            theme.legacy_text_appearance(title_font_size, crate::TextWeight::Normal);
+        title_appearance.paint = (60, 60, 60).into();
+        let mut entry_appearance =
+            theme.legacy_text_appearance(entry_font_size, crate::TextWeight::Normal);
+        entry_appearance.paint = (40, 40, 40).into();
+        let title_block = TextBlock::from_resolved(theme.plan_legacy_appearance_text(
             title,
-            title_font_size,
+            &title_appearance,
             title_maximum_width,
             PhysicalTextAlignment::Start,
             "legend title",
+            false,
         )?);
         let entry_blocks = entries
             .iter()
             .map(|entry| {
                 theme
-                    .plan_legacy_text(
+                    .plan_legacy_appearance_text(
                         &entry.label,
-                        entry_font_size,
+                        &entry_appearance,
                         entry_maximum_width,
                         PhysicalTextAlignment::Start,
                         "legend entry",
+                        false,
                     )
                     .map(TextBlock::from_resolved)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self {
-            entries,
+        let mut legend = Self {
+            entries: entries.into(),
             metrics,
             available_width: canvas_w * 0.8,
             available_height: canvas_h * 0.8,
             title_block,
             entry_blocks,
             font_family: theme.font_family.clone(),
-        })
+            layout: LegendLayout {
+                width: 0.0,
+                height: 0.0,
+                columns: 1,
+                title: PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), TextAnchor::Start, 0.0),
+                entries: Vec::new(),
+            },
+        };
+        let columns = legend.balanced_column_count(legend.available_width, legend.available_height);
+        let (width, height) = legend.box_size_for_columns(columns);
+        let widths = legend.column_widths(columns, &legend.entry_blocks);
+        let centers = legend.row_centers(columns, &legend.title_block, &legend.entry_blocks);
+        let mut slots = Vec::new();
+        crate::layout::fit::reserve(theme, &mut slots, legend.entries.len(), "legend slots")?;
+        for (index, block) in legend.entry_blocks.iter().enumerate() {
+            let column = index % columns;
+            let row = index / columns;
+            let x = widths[..column].iter().sum::<f64>() + column as f64 * legend.column_spacing();
+            slots.push(LegendSlot {
+                key: Point2D::new(x, centers[row]),
+                label: PlannedTextPlacement::middle(
+                    Point2D::new(x + metrics.handle_w + metrics.handle_text, centers[row]),
+                    TextAnchor::Start,
+                    0.0,
+                ),
+                width: widths[column],
+                height: block
+                    .height()
+                    .max(2.0 * legend.entries[index].glyph_extent()),
+            });
+        }
+        legend.layout = LegendLayout {
+            width,
+            height,
+            columns,
+            title: PlannedTextPlacement::middle(
+                Point2D::new(
+                    0.0,
+                    -(legend.title_block.lines().len().saturating_sub(1) as f64)
+                        * legend.title_block.line_height()
+                        / 2.0,
+                ),
+                TextAnchor::Start,
+                0.0,
+            ),
+            entries: slots,
+        };
+        Ok(legend)
     }
 
     /// Compute the total bounding box width based on entry labels.
     pub fn compute_box_width(&self) -> f64 {
-        self.box_size_for_columns(self.column_count()).0
+        self.layout.width
     }
 
     fn box_size_for_columns(&self, columns: usize) -> (f64, f64) {
@@ -594,7 +984,7 @@ impl Legend {
 
     /// Compute the total bounding box height.
     pub fn compute_box_height(&self) -> f64 {
-        self.box_size_for_columns(self.column_count()).1
+        self.layout.height
     }
 
     /// Pick the preferred right-inside-axes legend box.
@@ -678,7 +1068,6 @@ impl Legend {
     /// anchor point. The SVG backend's y-flip ensures correct visual output.
     pub fn draw(&self, backend: &mut dyn Backend, x: f64, y: f64) -> Result<(), Error> {
         let m = &self.metrics;
-        let columns = self.column_count();
         let title_block = &self.title_block;
         let entry_blocks = &self.entry_blocks;
 
@@ -696,47 +1085,29 @@ impl Legend {
             stroke_width: 1.0,
             opacity: FRAME_ALPHA,
         };
-        backend.draw_rounded_rect(rx, ry_bot, box_w, box_h, CORNER_RADIUS, &bg_fill)?;
+        backend.draw_rounded_rect(
+            rx + 0.5,
+            ry_bot + 0.5,
+            box_w - 1.0,
+            box_h - 1.0,
+            CORNER_RADIUS,
+            &bg_fill,
+        )?;
 
         // ─── Title ───
-        let title_font_size = self.title_font_size() as u32;
-        let title_style = TextStyle {
-            color: (60, 60, 60).into(),
-            font_family: self.font_family.clone(),
-            font_size: title_font_size,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Start,
-            rotation: 0.0,
+        let translate = |placement: PlannedTextPlacement| PlannedTextPlacement {
+            position: Point2D::new(
+                (x + placement.position.x).round(),
+                (y + placement.position.y).round(),
+            ),
+            ..placement
         };
-        for (index, line) in title_block.lines().iter().enumerate() {
-            backend.draw_text(
-                Point2D::new(
-                    x.round(),
-                    (y - index as f64 * title_block.line_height()).round(),
-                ),
-                line,
-                &title_style,
-            )?;
-        }
+        backend.draw_planned_text(translate(self.layout.title), title_block.plan())?;
         // ─── Entries (top to bottom = decreasing y) ───
-        let entry_style = TextStyle {
-            color: (40, 40, 40).into(),
-            font_family: self.font_family.clone(),
-            font_size: self.entry_font_size() as u32,
-            weight: crate::TextWeight::Normal,
-            anchor: TextAnchor::Start,
-            rotation: 0.0,
-        };
-
-        let column_widths = self.column_widths(columns, entry_blocks);
-        let row_centers = self.row_centers(columns, title_block, entry_blocks);
         for (index, entry) in self.entries.iter().enumerate() {
-            let column = index % columns;
-            let row = index / columns;
-            let column_x = x
-                + column_widths[..column].iter().sum::<f64>()
-                + column as f64 * self.column_spacing();
-            let row_y = y + row_centers[row];
+            let slot = &self.layout.entries[index];
+            let column_x = x + slot.key.x;
+            let row_y = y + slot.key.y;
             // Renderer-owned fill, line, and point components share one handle.
             let marker_x = column_x + m.handle_w * 0.5;
             if let Some(fill_style) = &entry.glyph.fill {
@@ -764,20 +1135,8 @@ impl Legend {
                 backend.draw_scatter(&[Point2D::new(marker_x, row_y)], point_style)?;
             }
             // Label text
-            let text_x = column_x + m.handle_w + m.handle_text;
             let block = &entry_blocks[index];
-            let first_y =
-                row_y + block.lines().len().saturating_sub(1) as f64 * block.line_height() / 2.0;
-            for (line_index, line) in block.lines().iter().enumerate() {
-                backend.draw_text(
-                    Point2D::new(
-                        text_x.round(),
-                        (first_y - line_index as f64 * block.line_height()).round(),
-                    ),
-                    line,
-                    &entry_style,
-                )?;
-            }
+            backend.draw_planned_text(translate(slot.label), block.plan())?;
         }
 
         Ok(())
@@ -866,7 +1225,7 @@ impl Legend {
     }
 
     fn column_count(&self) -> usize {
-        self.balanced_column_count(self.available_width, self.available_height)
+        self.layout.columns
     }
 
     fn balanced_column_count(&self, available_width: f64, available_height: f64) -> usize {
@@ -918,6 +1277,112 @@ mod tests {
     }
 
     #[test]
+    fn compact_vertical_flow_remeasures_labels_and_fits_two_columns() {
+        use crate::layout::fit::FitOutcome;
+        let theme = crate::Theme::Publication.resolve();
+        let entries: std::sync::Arc<[LegendEntry]> =
+            vec![entry("longer longer"), entry("a"), entry("b"), entry("c")].into();
+        let probe = match Legend::measure_outside(
+            "group",
+            std::sync::Arc::clone(&entries),
+            (640, 480),
+            (500.0, 1000.0),
+            false,
+            false,
+            &theme,
+            &mut true,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .unwrap()
+        {
+            FitOutcome::Measured(guide) => guide,
+            FitOutcome::Miss(reason) => panic!("{reason}"),
+        };
+        let row_gap = probe.metrics.entry_h - probe.entry_font_size() * 1.2;
+        let title_gap = (probe.metrics.title_h - probe.title_font_size()).max(0.0);
+        let height = 2.0 * probe.glyph_edge_pad()
+            + probe.title_block.height()
+            + title_gap
+            + 3.0 * probe.layout.entries[0].height
+            + 2.0 * row_gap;
+        let width =
+            2.0 * probe.layout.entries[0].width + probe.column_spacing() + 2.0 * probe.metrics.pad
+                - 2.0;
+        assert!(matches!(
+            Legend::measure_outside(
+                "group",
+                std::sync::Arc::clone(&entries),
+                (640, 480),
+                (width, height),
+                false,
+                false,
+                &theme,
+                &mut true,
+                &crate::layout::fit::FitScope::root(),
+            )
+            .unwrap(),
+            FitOutcome::Miss(_)
+        ));
+        let compact = match Legend::measure_outside(
+            "group",
+            entries,
+            (640, 480),
+            (width, height),
+            false,
+            true,
+            &theme,
+            &mut true,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .unwrap()
+        {
+            FitOutcome::Measured(guide) => guide,
+            FitOutcome::Miss(reason) => panic!("{reason}"),
+        };
+        assert_eq!(compact.layout.columns, 2);
+        assert!(compact.entry_blocks[0].lines().len() > probe.entry_blocks[0].lines().len());
+        assert!(compact.compute_box_width() <= width && compact.compute_box_height() <= height);
+    }
+
+    #[test]
+    fn glyph_changes_invalidate_feedback_even_when_legend_extent_is_unchanged() {
+        let mut legend = legend();
+        let extent = [
+            legend.compute_box_width().to_bits(),
+            legend.compute_box_height().to_bits(),
+        ];
+        let mut calls = 0;
+        crate::layout::plan_exact_root(
+            640,
+            480,
+            |_| Ok(()),
+            |(), assigned, round| {
+                calls += 1;
+                if calls == 2 {
+                    std::sync::Arc::make_mut(&mut legend.entries)[1]
+                        .glyph
+                        .point
+                        .as_mut()
+                        .unwrap()
+                        .radius = 2;
+                }
+                assert_eq!(
+                    extent,
+                    [
+                        legend.compute_box_width().to_bits(),
+                        legend.compute_box_height().to_bits()
+                    ]
+                );
+                legend.observe_feedback(round)?;
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
     fn glyph_edge_padding_is_symmetric_and_retains_bottom_comfort() {
         let legend = legend();
         let bounds = legend.box_at(20.0, 30.0);
@@ -963,8 +1428,7 @@ mod tests {
             120.0,
             &theme,
         )
-        .err()
-        .expect("overwide legend title must fail");
+        .expect_err("overwide legend title must fail");
 
         assert!(error.to_string().contains("legend title text planning"));
     }

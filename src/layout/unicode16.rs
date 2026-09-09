@@ -1,7 +1,12 @@
 //! Unicode 16.0 default line breaking for exact text planning.
 
+use super::text::TextPlanError;
 use std::cmp::Ordering;
 
+#[cfg(test)]
+mod admission;
+#[cfg(test)]
+mod conformance;
 mod data;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,44 +83,54 @@ struct Scalar {
     initial_punctuation: bool,
     final_punctuation: bool,
     unassigned_extended_pictographic: bool,
+    non_space: Option<usize>,
+    numeric: bool,
+    odd_regional_run: bool,
 }
 
-pub(super) fn linebreaks(value: &str) -> Vec<(usize, BreakOpportunity)> {
-    let raw_scalars = value
-        .char_indices()
-        .map(|(offset, scalar)| {
-            let codepoint = scalar as u32;
-            let original = line_break_class(codepoint);
-            let class = match original {
-                Class::CJ => Class::NS,
-                Class::SA if in_ranges(codepoint, data::MARK) => Class::CM,
-                Class::AI | Class::SG | Class::XX | Class::SA => Class::AL,
-                class => class,
-            };
-            Scalar {
-                offset,
+pub(super) fn linebreaks(
+    value: &str,
+    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
+) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError> {
+    u32::try_from(value.len()).map_err(|_| TextPlanError::Arithmetic("Unicode input length"))?;
+    claim(0, value.len() as u64)?;
+    let mut scalars: Vec<Scalar> = Vec::new();
+    for (offset, scalar) in value.char_indices() {
+        // Bounds all table comparisons and LB1/LB9/LB10 processing.
+        claim(0, 64)?;
+        let codepoint = scalar as u32;
+        let original = line_break_class(codepoint);
+        let class = match original {
+            Class::CJ => Class::NS,
+            Class::SA if in_ranges(codepoint, data::MARK) => Class::CM,
+            Class::AI | Class::SG | Class::XX | Class::SA => Class::AL,
+            class => class,
+        };
+        let mut scalar = Scalar {
+            offset,
+            codepoint,
+            class,
+            accepts_combining: false,
+            ends_with_zwj: false,
+            east_asian: in_ranges(codepoint, data::EAST_ASIAN),
+            initial_punctuation: in_ranges(codepoint, data::INITIAL_PUNCTUATION),
+            final_punctuation: in_ranges(codepoint, data::FINAL_PUNCTUATION),
+            unassigned_extended_pictographic: in_ranges(
                 codepoint,
-                class,
-                accepts_combining: false,
-                ends_with_zwj: false,
-                east_asian: in_ranges(codepoint, data::EAST_ASIAN),
-                initial_punctuation: in_ranges(codepoint, data::INITIAL_PUNCTUATION),
-                final_punctuation: in_ranges(codepoint, data::FINAL_PUNCTUATION),
-                unassigned_extended_pictographic: in_ranges(
-                    codepoint,
-                    data::UNASSIGNED_EXTENDED_PICTOGRAPHIC,
-                ),
-            }
-        })
-        .collect::<Vec<_>>();
+                data::UNASSIGNED_EXTENDED_PICTOGRAPHIC,
+            ),
+            non_space: None,
+            numeric: false,
+            odd_regional_run: false,
+        };
 
-    // LB9 removes attached combining marks from all later rule matching. LB10
-    // turns only marks without an eligible base into independent AL scalars.
-    let mut scalars: Vec<Scalar> = Vec::with_capacity(raw_scalars.len());
-    for mut scalar in raw_scalars {
+        // LB9 removes attached combining marks from all later rule matching. LB10
+        // turns only marks without an eligible base into independent AL scalars.
         if matches!(scalar.class, Class::CM | Class::ZWJ) {
             if let Some(base) = scalars.last_mut().filter(|base| base.accepts_combining) {
-                base.ends_with_zwj |= scalar.class == Class::ZWJ;
+                // LB8a applies before LB9: only the final raw scalar can
+                // protect the boundary after this collapsed sequence.
+                base.ends_with_zwj = scalar.class == Class::ZWJ;
                 continue;
             }
             scalar.ends_with_zwj = scalar.class == Class::ZWJ;
@@ -126,17 +141,83 @@ pub(super) fn linebreaks(value: &str) -> Vec<(usize, BreakOpportunity)> {
                 Class::BK | Class::CR | Class::LF | Class::NL | Class::SP | Class::ZW
             );
         }
+        reserve(&mut scalars, 1, claim)?;
         scalars.push(scalar);
+    }
+
+    // Cache backward contexts once instead of rescanning each prefix.
+    let mut non_space = None;
+    let mut numeric = false;
+    let mut odd_regional_run = false;
+    for (index, scalar) in scalars.iter_mut().enumerate() {
+        claim(0, 8)?;
+        if scalar.class != Class::SP {
+            non_space = Some(index);
+        }
+        numeric =
+            scalar.class == Class::NU || (matches!(scalar.class, Class::SY | Class::IS) && numeric);
+        odd_regional_run = scalar.class == Class::RI && !odd_regional_run;
+        scalar.non_space = non_space;
+        scalar.numeric = numeric;
+        scalar.odd_regional_run = odd_regional_run;
     }
 
     let mut breaks = Vec::new();
     for boundary in 1..scalars.len() {
+        // Contexts are O(1); 256 bounds the primitive class/property
+        // comparisons in the entire rule cascade, including lookahead.
+        claim(0, 256)?;
         if let Some(opportunity) = opportunity_at(&scalars, boundary) {
+            reserve(&mut breaks, 1, claim)?;
             breaks.push((scalars[boundary].offset, opportunity));
         }
     }
+    claim(0, 1)?;
+    reserve(&mut breaks, 1, claim)?;
     breaks.push((value.len(), BreakOpportunity::Mandatory));
-    breaks
+    Ok(breaks)
+}
+
+pub(super) fn reserve<T>(
+    values: &mut Vec<T>,
+    additional: usize,
+    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
+) -> Result<(), TextPlanError> {
+    let required = values
+        .len()
+        .checked_add(additional)
+        .ok_or(TextPlanError::Arithmetic("Unicode vector length"))?;
+    u32::try_from(required).map_err(|_| TextPlanError::Arithmetic("Unicode vector length"))?;
+    if required > values.capacity() {
+        let target = required.max(
+            values
+                .capacity()
+                .checked_mul(2)
+                .ok_or(TextPlanError::Arithmetic("Unicode vector capacity"))?,
+        );
+        let bytes = target
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or(TextPlanError::Arithmetic("Unicode vector bytes"))?;
+        claim(
+            u64::try_from(bytes).map_err(|_| TextPlanError::Arithmetic("Unicode vector bytes"))?,
+            values.len() as u64,
+        )?;
+        values
+            .try_reserve_exact(target - values.len())
+            .map_err(|_| TextPlanError::Allocation("Unicode vector"))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+fn breaks_for_test(value: &str) -> Vec<(usize, BreakOpportunity)> {
+    let resources = crate::font::canonical::OperationFontResources::new();
+    linebreaks(value, &mut |bytes, work| {
+        resources.claim_bytes(bytes)?;
+        resources.claim_work(work)?;
+        Ok(())
+    })
+    .unwrap()
 }
 
 #[expect(
@@ -338,7 +419,10 @@ fn opportunity_at(scalars: &[Scalar], boundary: usize) -> Option<BreakOpportunit
     if matches!(left.class, Class::HY | Class::IS) && right.class == Class::NU {
         return None;
     }
-    if right.class == Class::NU && numeric_prefix_before(scalars, boundary) {
+    if right.class == Class::NU
+        && !matches!(left.class, Class::CL | Class::CP)
+        && numeric_prefix_before(scalars, boundary)
+    {
         return None;
     }
 
@@ -385,15 +469,8 @@ fn opportunity_at(scalars: &[Scalar], boundary: usize) -> Option<BreakOpportunit
     {
         return None;
     }
-    if left.class == Class::RI && right.class == Class::RI {
-        let preceding = scalars[..boundary]
-            .iter()
-            .rev()
-            .take_while(|scalar| scalar.class == Class::RI)
-            .count();
-        if preceding % 2 == 1 {
-            return None;
-        }
+    if left.class == Class::RI && right.class == Class::RI && left.odd_regional_run {
+        return None;
     }
     if right.class == Class::EM
         && (left.class == Class::EB || left.unassigned_extended_pictographic)
@@ -410,10 +487,7 @@ fn numeric_prefix_before(scalars: &[Scalar], boundary: usize) -> bool {
     if index > 0 && matches!(scalars[index - 1].class, Class::CL | Class::CP) {
         index -= 1;
     }
-    while index > 0 && matches!(scalars[index - 1].class, Class::SY | Class::IS) {
-        index -= 1;
-    }
-    index > 0 && scalars[index - 1].class == Class::NU
+    index > 0 && scalars[index - 1].numeric
 }
 
 fn numeric_suffix_after(scalars: &[Scalar], boundary: usize) -> bool {
@@ -428,9 +502,9 @@ fn numeric_suffix_after(scalars: &[Scalar], boundary: usize) -> bool {
 }
 
 fn previous_non_space(scalars: &[Scalar], boundary: usize) -> Option<usize> {
-    (0..boundary)
-        .rev()
-        .find(|index| scalars[*index].class != Class::SP)
+    boundary
+        .checked_sub(1)
+        .and_then(|index| scalars[index].non_space)
 }
 
 fn is_alphabetic(class: Class) -> bool {
@@ -472,7 +546,7 @@ fn compare_range(start: u32, end: u32, codepoint: u32) -> Ordering {
 
 #[cfg(test)]
 mod tests {
-    use super::{line_break_class, linebreaks, BreakOpportunity, Class};
+    use super::{breaks_for_test as linebreaks, line_break_class, BreakOpportunity, Class};
 
     fn allowed_offsets(value: &str) -> Vec<usize> {
         linebreaks(value)

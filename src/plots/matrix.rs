@@ -26,8 +26,8 @@ use crate::layout::{
     self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, PhysicalTextAlignment, TextBlock,
 };
 use crate::render::backend::{
-    points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
-    TextAnchor, TextStyle,
+    points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle,
+    PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
@@ -46,6 +46,30 @@ struct HueGroup {
     color: (u8, u8, u8),
 }
 
+#[cfg(test)]
+#[test]
+fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
+    let plot = Plot::matrix(vec![
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+    ])
+    .erase();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.prepare_font_environment().unwrap();
+    theme.typography.tick_label.font_size = 0;
+    let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+    backend.begin(plot.width(), plot.height()).unwrap();
+    let context =
+        PlotRenderContext::new(plot.data(), PanelBox::new(80.0, 600.0, 60.0, 440.0), &theme);
+    let error = render(&plot, context, &mut backend).err().unwrap();
+    backend.end().unwrap();
+    assert!(
+        error.to_string().contains("font size must be positive"),
+        "{error}"
+    );
+    assert!(!error.to_string().contains("within their cells"));
+}
+
 /// Render a scatter matrix (pairplot).
 ///
 /// Returns a dummy `Layout` (the matrix is self-decorated) and
@@ -56,6 +80,7 @@ pub(crate) fn render(
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, Error> {
     let theme = context.theme;
+    let mut text = context.producer_text()?;
     let df = context.data;
 
     let cols = chart
@@ -68,7 +93,23 @@ pub(crate) fn render(
 
     // --- Build graphical groups ---
     let (groups, _hue_levels) = build_groups(chart, &cols, df, theme)?;
-    let legend = matrix_legend(chart, &groups, theme)?;
+    let legend = match context.self_managed_legend {
+        Some(legend) => legend.clone(),
+        None => matrix_legend(chart, &groups, theme)?
+            .map(|legend| {
+                let environment = theme.prepared_font_environment()?;
+                environment
+                    .claim_text_generation_slots(1)
+                    .map_err(|error| Error::Render(format!("matrix legend slot: {error:?}")))?;
+                environment
+                    .claim_unicode_bytes(
+                        (std::mem::size_of::<Legend>() + 2 * std::mem::size_of::<usize>()) as u64,
+                    )
+                    .map_err(|error| Error::Render(format!("matrix legend bytes: {error}")))?;
+                Ok::<_, Error>(std::sync::Arc::new(legend))
+            })
+            .transpose()?,
+    };
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
@@ -89,31 +130,35 @@ pub(crate) fn render(
         let column_blocks = display_cols
             .iter()
             .map(|label| {
-                theme
-                    .plan_legacy_appearance_text(
+                text.plan(label, "matrix column label", || {
+                    Ok(theme.plan_legacy_appearance_text(
                         label,
                         &theme.typography.axis_title,
                         candidate_cell_width.max(1.0),
                         PhysicalTextAlignment::Center,
                         "matrix column label",
                         false,
-                    )
-                    .map(TextBlock::from_resolved)
+                    )?)
+                })
+                .map(TextBlock::from_resolved)
+                .map_err(crate::layout::fit::PlanError::into_error)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let row_blocks = display_cols
             .iter()
             .map(|label| {
-                theme
-                    .plan_legacy_appearance_text(
+                text.plan(label, "matrix row label", || {
+                    Ok(theme.plan_legacy_appearance_text(
                         label,
                         &theme.typography.axis_title,
                         candidate_cell_height.max(1.0),
                         PhysicalTextAlignment::Center,
                         "matrix row label",
                         false,
-                    )
-                    .map(TextBlock::from_resolved)
+                    )?)
+                })
+                .map(TextBlock::from_resolved)
+                .map_err(crate::layout::fit::PlanError::into_error)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let extra_bottom = column_blocks
@@ -191,19 +236,44 @@ pub(crate) fn render(
         .ticks
         .as_ref()
         .map(|appearance| appearance.stroke.backend_style());
-    let tick_text_style = theme
-        .typography
-        .tick_label
-        .backend_style(TextAnchor::Middle, 0.0);
-    let label_style = theme
-        .typography
-        .axis_title
-        .backend_style(TextAnchor::Middle, 0.0);
     let tick_len = theme
         .axes
         .ticks
         .as_ref()
         .map_or(0.0, |appearance| f64::from(appearance.length));
+
+    // X selection depends only on a column's range and X coordinates; Y
+    // selection depends only on a row's range and Y coordinates. Keep the
+    // unfiltered selections separate from outer-cell label filtering.
+    let environment = theme.prepared_font_environment()?;
+    let cache_records = n
+        .checked_mul(2)
+        .ok_or_else(|| Error::Render("matrix tick cache count overflow".into()))?;
+    let cache_bytes = cache_records
+        .checked_mul(size_of::<Option<Vec<layout::AxisTick>>>())
+        .ok_or_else(|| Error::Render("matrix tick cache bytes overflow".into()))?;
+    environment
+        .claim_text_generation_slots(cache_records as u128)
+        .map_err(|error| Error::Render(format!("matrix tick cache: {error:?}")))?;
+    environment
+        .claim_text_generation_work(cache_records as u128)
+        .map_err(|error| Error::Render(format!("matrix tick cache: {error:?}")))?;
+    environment
+        .claim_unicode_bytes(
+            u64::try_from(cache_bytes)
+                .map_err(|_| Error::Render("matrix tick cache bytes overflow".into()))?,
+        )
+        .map_err(|error| Error::Render(format!("matrix tick cache: {error}")))?;
+    let mut x_ticks = Vec::new();
+    let mut y_ticks = Vec::new();
+    x_ticks
+        .try_reserve_exact(n)
+        .map_err(|_| Error::Render("cannot reserve matrix X tick cache".into()))?;
+    y_ticks
+        .try_reserve_exact(n)
+        .map_err(|_| Error::Render("cannot reserve matrix Y tick cache".into()))?;
+    x_ticks.resize_with(n, || None);
+    y_ticks.resize_with(n, || None);
 
     // --- Render cells ---
     for row in 0..n {
@@ -270,19 +340,22 @@ pub(crate) fn render(
                     variable_ranges[row],
                     (x0, x1, y0, y1),
                 );
-                let ticks = layout::automatic_numeric_ticks_legacy(
+                let ticks = matrix_ticks(
+                    &mut x_ticks[col],
                     (x_lo, x_hi),
                     &projection,
                     crate::layout::AxisSide::Bottom,
                     theme,
-                );
+                )?;
+                let filtered;
                 let ticks = if row == n - 1 {
-                    layout::retain_automatic_ticks_inside_panel_legacy(
-                        ticks,
+                    filtered = layout::retain_automatic_ticks_inside_panel_legacy(
+                        copy_ticks(ticks, theme)?,
                         &projection,
                         crate::layout::AxisSide::Bottom,
                         theme,
-                    )
+                    )?;
+                    filtered.as_slice()
                 } else {
                     ticks
                 };
@@ -292,7 +365,7 @@ pub(crate) fn render(
                             .into(),
                     ));
                 }
-                for tick in &ticks {
+                for tick in ticks {
                     let tv = tick.position;
                     let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
                     let px = x0 + t * cell_w;
@@ -305,10 +378,25 @@ pub(crate) fn render(
                     }
                     // Tick label only on bottom row
                     if row == n - 1 {
-                        backend.draw_text(
-                            Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
-                            &tick.label,
-                            &tick_text_style,
+                        let plan = text
+                            .plan(&tick.label, "matrix x tick", || {
+                                Ok(theme.measure_legacy_appearance_text(
+                                    &tick.label,
+                                    &theme.typography.tick_label,
+                                    PhysicalTextAlignment::Center,
+                                    "matrix x tick",
+                                    false,
+                                )?)
+                            })
+                            .map_err(crate::layout::fit::PlanError::into_error)?;
+                        text.draw(
+                            PlacedText::from_first_line(
+                                plan,
+                                Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
+                                TextAnchor::Middle,
+                                0.0,
+                            ),
+                            backend,
                         )?;
                     }
                 }
@@ -316,16 +404,15 @@ pub(crate) fn render(
                 if row == n - 1 {
                     let cx = f64::midpoint(x0, x1);
                     let first_y = y0 - tick_len - 28.0;
-                    for (index, line) in column_blocks[col].lines().iter().enumerate() {
-                        backend.draw_text(
-                            Point2D::new(
-                                cx.round(),
-                                (first_y - index as f64 * column_blocks[col].line_height()).round(),
-                            ),
-                            line,
-                            &label_style,
-                        )?;
-                    }
+                    text.draw(
+                        PlacedText::from_first_line(
+                            column_blocks[col].plan().clone(),
+                            Point2D::new(cx.round(), first_y.round()),
+                            TextAnchor::Middle,
+                            0.0,
+                        ),
+                        backend,
+                    )?;
                 }
             }
             // --- Y-axis ticks ---
@@ -336,19 +423,22 @@ pub(crate) fn render(
                     (y_lo, y_hi),
                     (x0, x1, y0, y1),
                 );
-                let ticks = layout::automatic_numeric_ticks_legacy(
+                let ticks = matrix_ticks(
+                    &mut y_ticks[row],
                     (y_lo, y_hi),
                     &projection,
                     crate::layout::AxisSide::Left,
                     theme,
-                );
+                )?;
+                let filtered;
                 let ticks = if col == 0 {
-                    layout::retain_automatic_ticks_inside_panel_legacy(
-                        ticks,
+                    filtered = layout::retain_automatic_ticks_inside_panel_legacy(
+                        copy_ticks(ticks, theme)?,
                         &projection,
                         crate::layout::AxisSide::Left,
                         theme,
-                    )
+                    )?;
+                    filtered.as_slice()
                 } else {
                     ticks
                 };
@@ -358,11 +448,7 @@ pub(crate) fn render(
                             .into(),
                     ));
                 }
-                let y_tick_text = TextStyle {
-                    anchor: TextAnchor::End,
-                    ..tick_text_style.clone()
-                };
-                for tick in &ticks {
+                for tick in ticks {
                     let tv = tick.position;
                     let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
                     let py = y0 + t * cell_h;
@@ -375,42 +461,54 @@ pub(crate) fn render(
                     }
                     // Tick label only on left column
                     if col == 0 {
-                        backend.draw_text(
-                            Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
-                            &tick.label,
-                            &y_tick_text,
+                        let plan = text
+                            .plan(&tick.label, "matrix y tick", || {
+                                Ok(theme.measure_legacy_appearance_text(
+                                    &tick.label,
+                                    &theme.typography.tick_label,
+                                    PhysicalTextAlignment::End,
+                                    "matrix y tick",
+                                    false,
+                                )?)
+                            })
+                            .map_err(crate::layout::fit::PlanError::into_error)?;
+                        text.draw(
+                            PlacedText::from_first_line(
+                                plan,
+                                Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
+                                TextAnchor::End,
+                                0.0,
+                            ),
+                            backend,
                         )?;
                     }
                 }
                 // Row label to the left of ticks (left column only)
                 if col == 0 {
                     let cy = f64::midpoint(y0, y1);
-                    let row_label_style = TextStyle {
-                        anchor: TextAnchor::Middle,
-                        rotation: -90.0,
-                        ..label_style.clone()
-                    };
                     let first_x = (x0 - tick_len - 40.0).max(4.0);
-                    for (index, line) in row_blocks[row].lines().iter().enumerate() {
-                        backend.draw_text(
-                            Point2D::new(
-                                (first_x - index as f64 * row_blocks[row].line_height())
-                                    .max(4.0)
-                                    .round(),
-                                cy.round(),
-                            ),
-                            line,
-                            &row_label_style,
-                        )?;
-                    }
+                    let first_x = (first_x
+                        - row_blocks[row].plan().lines.len().saturating_sub(1) as f64
+                            * row_blocks[row].line_height())
+                    .max(4.0);
+                    text.draw(
+                        PlacedText::from_first_line(
+                            row_blocks[row].plan().clone(),
+                            Point2D::new(first_x.round(), cy.round()),
+                            TextAnchor::Middle,
+                            -90.0,
+                        )
+                        .with_reversed_lines(),
+                        backend,
+                    )?;
                 }
             }
         }
     }
 
     // --- Legend (when hue is active) ---
-    if let Some(legend) = legend {
-        let right_edge = (w - 16.0).max(legend_total_width(&legend));
+    if let Some(legend) = &legend {
+        let right_edge = (w - 16.0).max(legend_total_width(legend));
         let top_edge = grid_top - 4.0;
         let legend_w = legend.compute_box_width();
         let legend_h = legend.compute_box_height();
@@ -428,7 +526,155 @@ pub(crate) fn render(
     // Return a dummy layout — matrix is self-decorated.
     let layout = Layout::self_managed(chart.width(), chart.height());
 
-    Ok(PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations())
+    let mut result = PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations();
+    result.producer_text = text.finish()?;
+    result.self_managed_legend = legend;
+    Ok(result)
+}
+
+fn matrix_ticks<'a>(
+    cached: &'a mut Option<Vec<layout::AxisTick>>,
+    range: (f64, f64),
+    projection: &layout::Projection,
+    side: layout::AxisSide,
+    theme: &ResolvedTheme,
+) -> Result<&'a [layout::AxisTick], Error> {
+    let environment = theme.prepared_font_environment()?;
+    environment
+        .claim_text_generation_work(1)
+        .map_err(|error| Error::Render(format!("matrix tick lookup: {error:?}")))?;
+    if cached.is_none() {
+        let ticks = layout::automatic_numeric_ticks_legacy(range, projection, side, theme)?;
+        environment
+            .claim_text_generation_slots(ticks.len() as u128)
+            .map_err(|error| Error::Render(format!("matrix tick retention: {error:?}")))?;
+        environment
+            .claim_text_generation_work(ticks.len() as u128)
+            .map_err(|error| Error::Render(format!("matrix tick retention: {error:?}")))?;
+        let bytes = ticks.iter().try_fold(
+            ticks
+                .capacity()
+                .checked_mul(size_of::<layout::AxisTick>())
+                .ok_or_else(|| Error::Render("matrix tick bytes overflow".into()))?,
+            |bytes, tick| {
+                bytes
+                    .checked_add(tick.label.capacity())
+                    .ok_or_else(|| Error::Render("matrix tick bytes overflow".into()))
+            },
+        )?;
+        environment
+            .claim_unicode_bytes(
+                u64::try_from(bytes)
+                    .map_err(|_| Error::Render("matrix tick bytes overflow".into()))?,
+            )
+            .map_err(|error| Error::Render(format!("matrix tick retention: {error}")))?;
+        *cached = Some(ticks);
+    }
+    cached
+        .as_deref()
+        .ok_or_else(|| Error::Render("matrix tick selection is missing".into()))
+}
+
+fn copy_ticks(
+    ticks: &[layout::AxisTick],
+    theme: &ResolvedTheme,
+) -> Result<Vec<layout::AxisTick>, Error> {
+    let environment = theme.prepared_font_environment()?;
+    environment
+        .claim_text_generation_slots(ticks.len() as u128)
+        .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
+    environment
+        .claim_text_generation_work(ticks.len() as u128)
+        .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
+    let text_bytes = ticks.iter().try_fold(0_usize, |bytes, tick| {
+        bytes
+            .checked_add(tick.label.len())
+            .ok_or_else(|| Error::Render("matrix outer tick text bytes overflow".into()))
+    })?;
+    let bytes = ticks
+        .len()
+        .checked_mul(size_of::<layout::AxisTick>())
+        .and_then(|bytes| bytes.checked_add(text_bytes))
+        .ok_or_else(|| Error::Render("matrix outer tick bytes overflow".into()))?;
+    environment
+        .claim_text_generation_work(ticks.len() as u128 + text_bytes as u128)
+        .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
+    environment
+        .claim_unicode_bytes(
+            u64::try_from(bytes)
+                .map_err(|_| Error::Render("matrix outer tick bytes overflow".into()))?,
+        )
+        .map_err(|error| Error::Render(format!("matrix outer ticks: {error}")))?;
+    let mut copied = Vec::new();
+    copied
+        .try_reserve_exact(ticks.len())
+        .map_err(|_| Error::Render("cannot reserve matrix outer ticks".into()))?;
+    for tick in ticks {
+        let mut label = String::new();
+        label
+            .try_reserve_exact(tick.label.len())
+            .map_err(|_| Error::Render("cannot reserve matrix tick text".into()))?;
+        label.push_str(&tick.label);
+        copied.push(layout::AxisTick::new(tick.position, label));
+    }
+    Ok(copied)
+}
+
+#[test]
+fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
+    let theme = crate::Theme::Publication.resolve();
+    let environment = theme.prepared_font_environment().unwrap();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    environment
+        .share_generation_resources(resources.clone())
+        .unwrap();
+    let range = (0.0, 10.0);
+    let original = layout::Projection::new(range, range, (10.25, 210.75, 20.25, 220.75));
+    for (side, translated) in [
+        (
+            layout::AxisSide::Bottom,
+            layout::Projection::new(range, (-100.0, 100.0), (10.25, 210.75, 500.0, 800.0)),
+        ),
+        (
+            layout::AxisSide::Left,
+            layout::Projection::new((-100.0, 100.0), range, (500.0, 800.0, 20.25, 220.75)),
+        ),
+    ] {
+        let mut cached = None;
+        let first = matrix_ticks(&mut cached, range, &original, side, &theme).unwrap();
+        let expected =
+            layout::automatic_numeric_ticks_legacy(range, &translated, side, &theme).unwrap();
+        assert_eq!(first, expected);
+        let before = resources.usage().unwrap();
+        let bytes = environment.resource_usage().unwrap().font_bytes;
+        let reused = matrix_ticks(&mut cached, range, &translated, side, &theme).unwrap();
+        assert_eq!(reused, expected);
+        assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
+        assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
+        let expected_outer =
+            layout::retain_automatic_ticks_inside_panel_legacy(expected, &translated, side, &theme)
+                .unwrap();
+        let actual_outer = layout::retain_automatic_ticks_inside_panel_legacy(
+            copy_ticks(reused, &theme).unwrap(),
+            &translated,
+            side,
+            &theme,
+        )
+        .unwrap();
+        assert_eq!(actual_outer, expected_outer);
+    }
+}
+
+#[test]
+fn matrix_outer_tick_copy_admits_bytes_before_copying() {
+    let theme = crate::Theme::Publication.resolve();
+    let environment = theme.prepared_font_environment().unwrap();
+    let used = environment.resource_usage().unwrap().font_bytes;
+    environment
+        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
+        .unwrap();
+    let error = copy_ticks(&[layout::AxisTick::new(1.0, "1")], &theme).unwrap_err();
+    assert!(error.to_string().contains("system-font bytes"));
 }
 
 pub(crate) fn panel_box(

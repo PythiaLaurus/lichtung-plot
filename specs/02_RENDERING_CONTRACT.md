@@ -280,6 +280,13 @@ standalone form before Canvas-only composition validation. Moving a plot into a
 Canvas cannot make aligned values, family-owned options, facets, intervals,
 ticks, guides, or supplemental layers more permissive.
 
+Planning retains complete text/glyph plans and producer placements before final
+capture. Capture and serializer counting do not open Null lifecycles. Canonical
+SVG storage and validation scratch are reserved before the final Null validation;
+concrete replay uses the same frozen calls without remeasurement or reshaping.
+Automatic guide placement validates the affected body, axes, labels, and guide
+together and uses bounded supported recovery. Explicit placements remain fixed.
+
 `Canvas` renders all panels through one backend begin/end lifecycle. Marks are
 clipped to their panel; titles, axes, legends, captions, and other decorations
 remain outside mark clipping where required.
@@ -307,11 +314,11 @@ Preserve-text and outlined SVG routes do not apply those PNG-only limits, either
 before or after the Phase T6 sizing switch. Shared representability, resource
 admission, and fallible allocation still apply.
 
-Implementation status: `4b38de4` introduced retained-glyph outlining and the
-outlined PNG parser route, but the identified parser-byte and validation-order
-gaps remain repair obligations in reopened T5a3. The requirements above do not
-assert those repairs have already landed. The approved target preserves
-format-local PNG checks in every sizing mode, including automatic output.
+The completed T5a3 repair validates requested PNG options before outline work,
+counts actual outlined parser input before allocating that derived payload, and
+checks the parser bytes again before parsing. These PNG-only refusals do not
+poison the retained SVG source or outline cache. Public automatic sizing remains
+scheduled for T6; its target preserves the same format-local separation.
 
 Lichtung's canonical SVG backend emits no raster image elements, so the `resvg`
 JPEG, GIF, and WebP decoders are excluded. The dedicated PNG encoder remains
@@ -332,21 +339,22 @@ Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif
 Scene preparation discovers installed fonts and resolves faces before text
 measurement. `fontdb` supplies face metadata and host generic-family names;
 project-owned ordering and glyph coverage choose the preferred available face
-for each required visible scalar. Font candidates are not layout alternatives:
+for each required visible unit or scalar. Font candidates are not layout alternatives:
 layout does not switch to a less-preferred font to make content fit.
 The scene retains font identities, bytes, and planned glyphs for later outlined
 SVG and PNG conversion without rediscovery. Rendering performs no download,
-provisioning, or project-cache lookup. Reopened T5a3 closes the known selection,
-Unicode, geometry, and admission gaps against the detailed font contract in
+provisioning, or project-cache lookup. T5a3 implements the canonical selection,
+Unicode, geometry, and admission contract detailed in
 `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`; public custom font types remain
 target-only until T6.
 
-The accepted font-selection repair additionally prefers one compatible face for
+Font selection prefers one compatible face for
 a base letter and its combining marks when a face in the ordered stack covers
 the unit; otherwise it retains first coverage per visible scalar. Missing visible
 coverage is an error, not replacement squares. The precise unit and retained
-selection rules are target requirements in `03`/`05`, not a claim that the
-current per-scalar implementation already groups those characters.
+selection rules are in `03`/`05`. The original source remains unchanged, including
+nonpainting Unicode controls and discretionary soft hyphens. Selected soft-hyphen
+breaks paint the prepared literal hyphen with retained original source mapping.
 
 Publication SVG fails if any text remains after conversion. Its outlined text
 requires no recipient-side font, but exact paths and text-derived layout depend

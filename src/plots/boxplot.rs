@@ -54,7 +54,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
     let sample = crate::plots::distribution_sample::prepare(chart, context.data, "boxplot")?;
@@ -119,6 +119,7 @@ pub(crate) fn render(
         panel,
         x_levels,
         context.theme,
+        context.fit_scope(),
     )?;
     let legend_entries: Vec<LegendEntry> = hue_levels
         .iter()
@@ -145,6 +146,7 @@ pub(crate) fn render(
             base_y_range,
             panel,
             theme,
+            context.fit_scope(),
         )?
     } else {
         crate::significance::plan_grouped(
@@ -157,6 +159,7 @@ pub(crate) fn render(
             panel,
             false,
             theme,
+            context.fit_scope(),
         )?
     };
     let y_range = significance.y_range;
@@ -172,7 +175,7 @@ pub(crate) fn render(
         chart.x_axis_spec(),
         &y_axis_spec,
         theme,
-    );
+    )?;
     let proj = &layout.projection;
     let box_w_data = if group_active {
         (0.72 / group_levels.len() as f64).min(0.32)

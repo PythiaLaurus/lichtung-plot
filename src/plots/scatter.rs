@@ -32,7 +32,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let x_col = chart
         .x_col()
@@ -46,7 +46,7 @@ pub(crate) fn render(
     // Layout covers every hue group on a common axis scale.
     let points_all = crate::data::aligned_finite_f64(df, x_col, y_col, "scatter")?;
     if points_all.is_empty() {
-        return Err(Error::Data("scatter: no rows".into()));
+        return Err(Error::Data("scatter: no rows".into()).into());
     }
     let (xmin, xmax) = crate::data::min_max(points_all.iter().map(|(x, _)| *x), "scatter")?;
     let (ymin, ymax) = crate::data::min_max(points_all.iter().map(|(_, y)| *y), "scatter")?;
@@ -71,7 +71,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         theme,
-    );
+    )?;
     let proj = &layout.projection;
 
     let mut legend_entries = Vec::new();

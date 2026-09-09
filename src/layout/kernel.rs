@@ -1,4 +1,4 @@
-//! Single measured exact-root layout and operation-scoped preparation resources.
+//! Bounded exact-root parent feedback and operation-scoped preparation resources.
 
 use std::cmp::Ordering;
 
@@ -10,6 +10,7 @@ const TOPOLOGY_SLOT_LIMIT: u128 = 1_000_000;
 #[cfg(test)]
 thread_local! {
     static FORCED_RESERVATION_FAILURE: std::cell::Cell<Option<ReservationStage>> = const { std::cell::Cell::new(None) };
+    pub(crate) static ROOT_FEEDBACK_ROUNDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -20,7 +21,6 @@ pub(crate) fn force_reservation_failure(stage: ReservationStage) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct LayoutScalar(i64);
 
-#[cfg(test)]
 #[derive(Debug, Clone, Copy)]
 enum SpatialRounding {
     Floor,
@@ -47,7 +47,6 @@ impl LayoutScalar {
         u32::try_from(rounded).ok()
     }
 
-    #[cfg(test)]
     fn from_css_pixels(value: f64, rounding: SpatialRounding) -> Result<Self, Error> {
         let bits = value.to_bits();
         let exponent_bits = ((bits >> 52) & 0x7ff) as u16;
@@ -354,37 +353,6 @@ impl ComponentAddress {
         })
     }
 
-    pub(crate) fn prepared_copy_shell(&self, stage: &mut PreparedStage<'_>) -> Result<Self, Error> {
-        let mut descendants = Vec::new();
-        stage.reserve_prepared(
-            &mut descendants,
-            self.descendants.len(),
-            "prepared component address",
-        )?;
-        descendants.resize(
-            self.descendants.len(),
-            AddressSegment {
-                role: AddressRole::Root,
-                slot_index: 0,
-            },
-        );
-        Ok(Self {
-            root: self.root,
-            descendants: descendants.into_boxed_slice(),
-        })
-    }
-
-    pub(crate) fn fill_prepared_copy(&mut self, source: &Self) -> Result<(), Error> {
-        if self.descendants.len() != source.descendants.len() {
-            return Err(Error::Render(
-                "prepared component address reservation mismatch".into(),
-            ));
-        }
-        self.root = source.root;
-        self.descendants.copy_from_slice(&source.descendants);
-        Ok(())
-    }
-
     pub(crate) fn canonical_text_cmp(&self, other: &Self) -> Ordering {
         let root = (
             self.root.role.text_traversal_ordinal(),
@@ -639,7 +607,7 @@ struct RootAllocation<Plan, Prepared> {
     plan: Plan,
 }
 
-/// One frozen result, with no convergence or final-admission claim.
+/// One result frozen after parent feedback. Final admission remains a separate stage.
 pub(crate) struct FrozenRoot<Plan, Prepared = ()> {
     allocation: Box<[RootAllocation<Plan, Prepared>; 1]>,
 }
@@ -656,12 +624,52 @@ impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
     }
 }
 
-/// Prepare once, measure the exact assignment once, then freeze once.
+mod feedback;
+pub(crate) use feedback::TrialOutcome;
+pub(crate) use feedback::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
+
+pub(crate) fn compact_half_width(width: f64, gap: f64) -> Result<Option<f64>, Error> {
+    let width = LayoutScalar::from_css_pixels(width, SpatialRounding::Floor)?.0;
+    let gap = LayoutScalar::from_css_pixels(gap, SpatialRounding::NearestEven)?.0;
+    let remainder = i128::from(width) - i128::from(gap);
+    if remainder <= 0 {
+        return Ok(None);
+    }
+    let half = i64::try_from(remainder / 2)
+        .map_err(|_| Error::Render("compact guide width overflowed".into()))?;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "assigned guide widths are bounded by exact u32 root dimensions"
+    )]
+    let pixels = half as f64 / 1024.0;
+    Ok(Some(pixels))
+}
+
+pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
+    let length = LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil)?;
+    if !length.is_nonnegative() {
+        return Err(Error::Render(
+            "required layout length must be nonnegative".into(),
+        ));
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "required guide lengths are subsequently checked against exact u32 root constraints"
+    )]
+    let value = length.0 as f64 / 1024.0;
+    Ok(value)
+}
+
+/// Prepare once, coordinate at most eight complete rounds, then freeze once.
 pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     width: u32,
     height: u32,
     prepare: impl FnOnce(&mut PreparedStage<'_>) -> Result<Prepared, Error>,
-    measure: impl FnOnce(&Prepared, RootSize) -> Result<MeasuredLayout<Plan>, Error>,
+    mut measure: impl FnMut(
+        &Prepared,
+        RootSize,
+        &mut FeedbackRound,
+    ) -> Result<MeasuredLayout<Plan>, Error>,
     finalize: impl FnOnce(&Prepared, RootSize, Plan, &mut FinalStage<'_>) -> Result<FinalPlan, Error>,
 ) -> Result<FrozenRoot<FinalPlan, Prepared>, Error> {
     let assigned = RootSize::new(width, height);
@@ -676,15 +684,53 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     let prepared = prepare(&mut prepared_stage)?;
 
     reservations.phase = ReservationStage::Measured;
-    let mut measured = Vec::new();
+    #[cfg(test)]
+    ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(0));
+    let mut history = Vec::new();
     reservations.reserve_additional(
         ReservationStage::Measured,
-        &mut measured,
+        &mut history,
         1,
         "measured exact-root plan",
     )?;
-    measured.push(measure(&prepared, assigned)?);
-    let measured = measured.pop().expect("one exact-root measurement");
+    let measured = loop {
+        #[cfg(test)]
+        ROOT_FEEDBACK_ROUNDS.with(|rounds| rounds.set(rounds.get() + 1));
+        let mut round = FeedbackRound::new(
+            history.last(),
+            resources.generation_resources.clone(),
+            history.len(),
+        )?;
+        round.observe_number(f64::from(width))?;
+        round.observe_number(f64::from(height))?;
+        let result = measure(&prepared, assigned, &mut round)?;
+        result.size.validate_dimensions(width, height)?;
+        let state = round.finish()?;
+        if let Some(error) = state.terminal_error() {
+            return Err(error);
+        }
+        if history.last() == Some(&state) {
+            if let Some(error) = state.unchanged_error() {
+                return Err(error);
+            }
+            break result;
+        }
+        if history.contains(&state) {
+            return Err(Error::Render("layout root feedback cycle detected".into()));
+        }
+        if history.len() == 7 {
+            return Err(Error::Render(
+                "layout root feedback exhausted eight rounds".into(),
+            ));
+        }
+        reservations.reserve_additional(
+            ReservationStage::Measured,
+            &mut history,
+            1,
+            "root feedback state",
+        )?;
+        history.push(state);
+    };
     let size = LayoutSize::exact_css_pixels(measured.size.width, measured.size.height)?;
     if !constraints.contains(size) {
         return Err(Error::Render(

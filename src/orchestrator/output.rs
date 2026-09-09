@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use crate::builder::Plot;
-use crate::render::svg_backend::SvgBackend;
 use crate::scene::RenderedScene;
 use crate::{Error, Output};
 
@@ -11,8 +10,7 @@ impl Plot {
     fn render_scene(&self) -> Result<RenderedScene, Error> {
         let plan = super::lifecycle::PlotPlan::new(self, self.kind())?;
         let (width, height) = plan.dimensions();
-        let mut backend =
-            SvgBackend::in_memory_with_fonts(width, height, plan.font_environment()?.clone());
+        let mut backend = plan.take_svg_backend()?;
         plan.render(&mut backend)?;
         RenderedScene::new(width, height, backend.into_output())
     }

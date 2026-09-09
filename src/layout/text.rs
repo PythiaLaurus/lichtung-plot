@@ -5,7 +5,7 @@
 use std::ops::Range;
 use std::str::FromStr;
 
-use unicode_bidi::ParagraphBidiInfo;
+use unicode_bidi::{BidiDataSource, HardcodedBidiData, ParagraphBidiInfo};
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -18,6 +18,8 @@ use crate::render::backend::Rgba;
 use crate::TextWeight;
 
 mod requirements;
+#[cfg(test)]
+mod shaping_tests;
 #[allow(unused_imports)]
 pub(crate) use requirements::{
     foundational_plot_requirements, PreparedFontPairRequirement, PreparedTextCensus,
@@ -28,6 +30,18 @@ pub(crate) const CSS_PIXEL_QUANTA: i64 = 1024;
 #[cfg(test)]
 thread_local! {
     static PARAGRAPH_BIDI_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEXT_WORK: std::cell::Cell<TextWork> = const { std::cell::Cell::new(TextWork {
+        proposal_visits: 0, exact_trials: 0, shaping_scalars: 0, shaped_glyphs: 0,
+    }) };
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct TextWork {
+    proposal_visits: usize,
+    exact_trials: usize,
+    shaping_scalars: usize,
+    shaped_glyphs: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +118,9 @@ pub(crate) struct PlannedGlyph {
     pub(crate) y_advance_quanta: i64,
     pub(crate) x_offset_quanta: i64,
     pub(crate) y_offset_quanta: i64,
+    /// Absolute within the line, baseline-relative and y-up. Rounded once.
+    pub(crate) glyph_origin_x_quanta: i64,
+    pub(crate) glyph_origin_y_quanta: i64,
     pub(crate) ink_quanta: Option<TextInkBounds>,
 }
 
@@ -112,6 +129,8 @@ pub(crate) struct ShapedTextRun {
     pub(crate) source_span: TextSourceSpan,
     pub(crate) face: FaceIdentity,
     pub(crate) direction: ShapingDirection,
+    /// Paragraph-resolved embedding level after this line's L1 reset.
+    pub(crate) bidi_level: u8,
     pub(crate) script: Script,
     pub(crate) units_per_em: u16,
     pub(crate) design_ascender: i16,
@@ -129,6 +148,8 @@ pub(crate) struct ShapedTextRun {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TextLinePlan {
     pub(crate) source_span: TextSourceSpan,
+    /// Selected discretionary break: render U+002D for this original U+00AD span.
+    pub(crate) selected_soft_hyphen: Option<TextSourceSpan>,
     pub(crate) ending_grapheme_index: u32,
     pub(crate) translation_x_quanta: i64,
     pub(crate) translation_y_quanta: i64,
@@ -151,8 +172,80 @@ pub(crate) struct ResolvedTextStyle {
     pub(crate) exact_override: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolvedTextPlan {
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedTextPlan(
+    std::sync::Arc<ResolvedTextPayload>,
+    Option<std::sync::Arc<TextAnalysis>>,
+);
+
+// Cached analysis is operational state, not part of rendered-plan equality.
+impl PartialEq for ResolvedTextPlan {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for ResolvedTextPlan {}
+
+#[derive(Debug)]
+struct TextAnalysis {
+    environment: PreparedFontEnvironment,
+    original: std::sync::Arc<ResolvedTextPayload>,
+    paragraphs: Vec<AnalyzedParagraph>,
+}
+
+#[derive(Debug)]
+struct AnalyzedParagraph {
+    span: TextSourceSpan,
+    grapheme_start: usize,
+    grapheme_ends: Vec<usize>,
+    bidi: Option<ParagraphBidiData>,
+    items: Vec<ScalarItem>,
+    hyphen_face: Option<FaceIdentity>,
+    whole_width: i64,
+    whole: ParagraphWhole,
+    wrapping: std::sync::OnceLock<ParagraphWrapping>,
+    hard_width: std::sync::OnceLock<i64>,
+}
+
+#[derive(Debug)]
+enum ParagraphWhole {
+    Retained(BuiltLine),
+    OriginalLine {
+        index: usize,
+        advance: ExactRational,
+        ascent: i64,
+        descent: i64,
+    },
+}
+
+#[derive(Debug)]
+struct ParagraphWrapping {
+    boundaries: Vec<usize>,
+    prefixes: Vec<ExactRational>,
+}
+
+#[derive(Debug)]
+struct ParagraphBidiData {
+    original_classes: Vec<unicode_bidi::BidiClass>,
+    levels: Vec<unicode_bidi::Level>,
+    paragraph_level: unicode_bidi::Level,
+    is_pure_ltr: bool,
+}
+
+impl From<ParagraphBidiInfo<'_>> for ParagraphBidiData {
+    fn from(info: ParagraphBidiInfo<'_>) -> Self {
+        Self {
+            original_classes: info.original_classes,
+            levels: info.levels,
+            paragraph_level: info.paragraph_level,
+            is_pure_ltr: info.is_pure_ltr,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(test, derive(Clone))]
+pub(crate) struct ResolvedTextPayload {
     pub(crate) source: String,
     pub(crate) style: ResolvedTextStyle,
     pub(crate) pair_provenance: PairProvenance,
@@ -164,7 +257,274 @@ pub(crate) struct ResolvedTextPlan {
     pub(crate) height_quanta: i64,
 }
 
+impl std::ops::Deref for ResolvedTextPlan {
+    type Target = ResolvedTextPayload;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl ResolvedTextPlan {
+    pub(crate) fn intrinsic_from_analysis(
+        &self,
+        preferred_lines: usize,
+    ) -> Result<TextIntrinsicRequirements, TextPlanError> {
+        let analysis = self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?;
+        let environment = &analysis.environment;
+        let original = &analysis.original;
+        let mut result = TextIntrinsicRequirements {
+            hard_width_quanta: 0,
+            natural_width_quanta: 0,
+            preferred_width_quanta: 0,
+        };
+        for paragraph in &analysis.paragraphs {
+            claim_generation_work(environment, 1)?;
+            if paragraph.span.start_byte == paragraph.span.end_byte {
+                continue;
+            }
+            let (whole, _, _, _) = paragraph.whole(original);
+            if let Some(ink) = whole.ink_quanta {
+                result.natural_width_quanta = result.natural_width_quanta.max(
+                    ink.right
+                        .checked_sub(ink.left)
+                        .ok_or(TextPlanError::Arithmetic("intrinsic ink width"))?,
+                );
+            }
+            let wrapping = paragraph.wrapping(
+                environment,
+                &original.source,
+                whole,
+                original.style.font_size,
+            )?;
+            let last = wrapping.boundaries.len() - 1;
+            if paragraph.hard_width.get().is_none() {
+                let mut hard = 0;
+                for start in 0..last {
+                    claim_generation_work(environment, 1)?;
+                    let width = if last == 1 {
+                        paragraph.whole_width
+                    } else {
+                        let end = wrapping.boundaries[start + 1];
+                        let line = prepare_line(
+                            environment,
+                            &original.source,
+                            paragraph.span,
+                            TextSourceSpan::new(
+                                paragraph.span.start_byte as usize + wrapping.boundaries[start],
+                                paragraph.span.start_byte as usize + end,
+                            )?,
+                            ending_grapheme_index(
+                                &paragraph.grapheme_ends,
+                                end,
+                                paragraph.grapheme_start,
+                            )?,
+                            original.style.font_size,
+                            paragraph
+                                .bidi
+                                .as_ref()
+                                .ok_or(TextPlanError::Arithmetic("empty intrinsic paragraph"))?,
+                            &paragraph.items,
+                            paragraph.hyphen_face,
+                        )?;
+                        exact_line_width(environment, &line)?
+                    };
+                    hard = hard.max(width);
+                }
+                let _ = paragraph.hard_width.set(hard);
+            }
+            result.hard_width_quanta = result.hard_width_quanta.max(
+                *paragraph
+                    .hard_width
+                    .get()
+                    .ok_or(TextPlanError::Arithmetic("intrinsic width initialization"))?,
+            );
+            let lines = (preferred_lines / analysis.paragraphs.len().max(1)).max(1);
+            let chunk = last.div_ceil(lines);
+            for start in (0..last).step_by(chunk) {
+                claim_generation_work(environment, 1)?;
+                let end = start.saturating_add(chunk).min(last);
+                result.preferred_width_quanta = result.preferred_width_quanta.max(
+                    prefix_difference(wrapping.prefixes[end], wrapping.prefixes[start])?
+                        .ceil_i64("preferred width")?,
+                );
+            }
+        }
+        result.preferred_width_quanta = result.preferred_width_quanta.max(result.hard_width_quanta);
+        Ok(result)
+    }
+
+    /// Re-select lines from this operation's immutable source/font analysis.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "reflow keeps cached paragraph context separate from newly selected lines"
+    )]
+    pub(crate) fn reflow(&self, mut input: TextPlanInput<'_>) -> Result<Self, TextPlanError> {
+        let analysis = self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?;
+        let environment = &analysis.environment;
+        let original = &analysis.original;
+        claim_generation_work(
+            environment,
+            (input.source.len() + input.stack.len() + 1) as u128,
+        )?;
+        if input.source != original.source
+            || input.stack != original.style.stack_source
+            || input.weight != original.style.weight
+            || input.font_size != original.style.font_size
+        {
+            return Err(TextPlanError::Arithmetic("text analysis profile mismatch"));
+        }
+        if input.maximum_width_quanta < 0 {
+            return Err(TextPlanError::InvalidMaximumWidth);
+        }
+        let line_height = resolve_line_height(input.line_height, input.font_size)?;
+        let mut lines = Vec::new();
+        for paragraph in &analysis.paragraphs {
+            claim_generation_work(environment, 1)?;
+            let (whole, advance, ascent, descent) = paragraph.whole(original);
+            if paragraph.whole_width <= input.maximum_width_quanta {
+                retain_line(
+                    environment,
+                    &mut lines,
+                    copy_line(environment, whole, advance, ascent, descent)?,
+                )?;
+                continue;
+            }
+            let wrapping = paragraph.wrapping(environment, input.source, whole, input.font_size)?;
+            let boundaries = &wrapping.boundaries;
+            let bidi = paragraph
+                .bidi
+                .as_ref()
+                .ok_or(TextPlanError::Arithmetic("empty paragraph reflow"))?;
+            let mut start = 0;
+            while start + 1 < boundaries.len() {
+                let (end, line) = select_line(
+                    environment,
+                    &wrapping.prefixes,
+                    start,
+                    input.maximum_width_quanta,
+                    (start == 0).then_some(paragraph.whole_width),
+                    TextSourceSpan::new(
+                        paragraph.span.start_byte as usize + boundaries[start],
+                        paragraph.span.start_byte as usize + boundaries[start + 1],
+                    )?,
+                    |end| {
+                        prepare_line(
+                            environment,
+                            input.source,
+                            paragraph.span,
+                            TextSourceSpan::new(
+                                paragraph.span.start_byte as usize + boundaries[start],
+                                paragraph.span.start_byte as usize + boundaries[end],
+                            )?,
+                            ending_grapheme_index(
+                                &paragraph.grapheme_ends,
+                                boundaries[end],
+                                paragraph.grapheme_start,
+                            )?,
+                            input.font_size,
+                            bidi,
+                            &paragraph.items,
+                            paragraph.hyphen_face,
+                        )
+                    },
+                )?;
+                retain_line(environment, &mut lines, line)?;
+                start = end;
+            }
+        }
+        let mut candidates = Vec::new();
+        let provenance = &original.pair_provenance;
+        claim_collection_count(environment, provenance.candidates.len() as u128)?;
+        super::unicode16::reserve(
+            &mut candidates,
+            provenance.candidates.len(),
+            &mut |bytes, work| claim_unicode(environment, bytes, work),
+        )?;
+        claim_collection_materialization(environment, provenance.candidates.len() as u128)?;
+        candidates.extend_from_slice(&provenance.candidates);
+        input.provenance.pair_ordinal = provenance.pair_ordinal;
+        let stack = environment.parse_family_stack(input.stack)?;
+        let mut plan = finalize_plan(
+            environment,
+            input,
+            stack,
+            PairProvenance {
+                pair_ordinal: provenance.pair_ordinal,
+                weight: provenance.weight,
+                candidates,
+            },
+            line_height,
+            lines,
+        )?;
+        plan.1 = Some(std::sync::Arc::clone(analysis));
+        Ok(plan)
+    }
+
+    pub(crate) fn unwrapped_fit_width(
+        &self,
+        environment: &PreparedFontEnvironment,
+    ) -> Result<Option<i64>, TextPlanError> {
+        let mut previous_end = None;
+        let mut required = 0;
+        for line in &self.lines {
+            claim_generation_work(environment, 1)?;
+            if let Some(end) = previous_end {
+                let separator = &self.source[end..line.source_span.start_byte as usize];
+                if separator.is_empty() {
+                    return Ok(None);
+                }
+                for scalar in separator.chars() {
+                    claim_generation_work(environment, 1)?;
+                    if !canonical::is_nonrendering_mandatory_break(scalar) {
+                        return Ok(None);
+                    }
+                }
+            }
+            previous_end = Some(line.source_span.end_byte as usize);
+            let mut advance = ExactRational::ZERO;
+            for run in &line.runs {
+                claim_generation_work(environment, 1)?;
+                advance = advance.add(
+                    scale_design(run.design_x_advance, self.style.font_size, run.units_per_em)?,
+                    "cached paragraph advance",
+                )?;
+            }
+            let ink_width = line.ink_quanta.map_or(Ok(0), |ink| {
+                ink.right
+                    .checked_sub(ink.left)
+                    .ok_or(TextPlanError::Arithmetic("cached paragraph ink"))
+            })?;
+            required = required
+                .max(advance.ceil_i64("cached paragraph advance")?)
+                .max(ink_width);
+        }
+        Ok(Some(required))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edit_for_test(&mut self) -> &mut ResolvedTextPayload {
+        std::sync::Arc::make_mut(&mut self.0)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_payload(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_analysis(&self, other: &Self) -> bool {
+        match (&self.1, &other.1) {
+            (Some(left), Some(right)) => std::sync::Arc::ptr_eq(left, right),
+            _ => false,
+        }
+    }
     #[expect(
         clippy::cast_precision_loss,
         reason = "immutable plans retain exact i64 quanta; layout adapters use pixels"
@@ -211,12 +571,116 @@ impl ResolvedTextPlan {
             .collect()
     }
 
-    pub(crate) fn into_line_texts(self) -> Vec<String> {
-        self.lines
-            .iter()
-            .map(|line| self.source[line.source_span.range()].to_owned())
-            .collect()
+    /// Standalone rendered lines for string-based adapters; the immutable plan
+    /// continues to retain the original source and discretionary-break span.
+    pub(crate) fn into_line_texts(
+        self,
+        environment: &PreparedFontEnvironment,
+    ) -> Result<Vec<String>, TextPlanError> {
+        let mut lines = Vec::new();
+        claim_collection_count(environment, self.lines.len() as u128)?;
+        super::unicode16::reserve(&mut lines, self.lines.len(), &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
+        for line in &self.lines {
+            let text = &self.source[line.source_span.range()];
+            let length = text.len() - usize::from(line.selected_soft_hyphen.is_some());
+            claim_unicode(environment, length as u64, text.len() as u64)?;
+            let mut retained = String::new();
+            retained
+                .try_reserve_exact(length)
+                .map_err(|_| TextPlanError::Allocation("owned text line"))?;
+            if let Some(soft) = line.selected_soft_hyphen {
+                retained.push_str(
+                    &self.source[line.source_span.start_byte as usize..soft.start_byte as usize],
+                );
+                retained.push('-');
+                retained.push_str(
+                    &self.source[soft.end_byte as usize..line.source_span.end_byte as usize],
+                );
+            } else {
+                retained.push_str(text);
+            }
+            lines.push(retained);
+        }
+        Ok(lines)
     }
+}
+
+impl AnalyzedParagraph {
+    fn whole<'a>(
+        &'a self,
+        original: &'a ResolvedTextPayload,
+    ) -> (&'a TextLinePlan, ExactRational, i64, i64) {
+        match &self.whole {
+            ParagraphWhole::Retained(line) => (&line.plan, line.advance, line.ascent, line.descent),
+            ParagraphWhole::OriginalLine {
+                index,
+                advance,
+                ascent,
+                descent,
+            } => (&original.lines[*index], *advance, *ascent, *descent),
+        }
+    }
+
+    fn wrapping(
+        &self,
+        environment: &PreparedFontEnvironment,
+        source: &str,
+        whole: &TextLinePlan,
+        font_size: u32,
+    ) -> Result<&ParagraphWrapping, TextPlanError> {
+        if self.wrapping.get().is_none() {
+            let mut boundaries = legal_line_breaks_at_graphemes(
+                &source[self.span.range()],
+                &self.grapheme_ends,
+                environment,
+            )?;
+            claim_collection_count(environment, 1)?;
+            super::unicode16::reserve(&mut boundaries, 1, &mut |bytes, work| {
+                claim_unicode(environment, bytes, work)
+            })?;
+            boundaries.insert(0, 0);
+            let prefixes = proposal_prefixes(environment, whole, &boundaries, font_size)?;
+            let _ = self.wrapping.set(ParagraphWrapping {
+                boundaries,
+                prefixes,
+            });
+        }
+        self.wrapping.get().ok_or(TextPlanError::Arithmetic(
+            "paragraph wrapping initialization",
+        ))
+    }
+}
+
+fn copy_line(
+    environment: &PreparedFontEnvironment,
+    line: &TextLinePlan,
+    advance: ExactRational,
+    ascent: i64,
+    descent: i64,
+) -> Result<BuiltLine, TextPlanError> {
+    let mut runs = Vec::new();
+    claim_collection_count(environment, line.runs.len() as u128)?;
+    super::unicode16::reserve(&mut runs, line.runs.len(), &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
+    for run in &line.runs {
+        let mut glyphs = Vec::new();
+        claim_collection_count(environment, run.glyphs.len() as u128)?;
+        super::unicode16::reserve(&mut glyphs, run.glyphs.len(), &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
+        claim_collection_materialization(environment, run.glyphs.len() as u128 + 1)?;
+        glyphs.extend_from_slice(&run.glyphs);
+        runs.push(ShapedTextRun { glyphs, ..*run });
+    }
+    Ok(BuiltLine {
+        plan: TextLinePlan { runs, ..*line },
+        advance,
+        ascent,
+        descent,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -234,7 +698,7 @@ pub(crate) enum TextPlanError {
     #[error(transparent)]
     Stack(#[from] FamilyStackError),
     #[error(transparent)]
-    Font(#[from] FontError),
+    Font(FontError),
     #[error(transparent)]
     Fit(#[from] TextFitMiss),
     #[error("font size must be positive")]
@@ -265,6 +729,18 @@ pub(crate) enum TextPlanError {
     MissingPreparedScalar(u32),
 }
 
+impl From<FontError> for TextPlanError {
+    fn from(error: FontError) -> Self {
+        match error {
+            FontError::ShapeAdmission(claim) => match claim_text_generation(Err(claim)) {
+                Err(error) => error,
+                Ok(()) => unreachable!("failed shaping admission"),
+            },
+            error => Self::Font(error),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeferredAnnotationTextPlan {
     pub(crate) plan: ResolvedTextPlan,
@@ -286,33 +762,66 @@ impl PreparedFontEnvironment {
         &self,
         input: TextPlanInput<'_>,
     ) -> Result<ResolvedTextPlan, TextPlanError> {
-        plan_text(self, input, false)
+        match measure_text(self, input, false, None)? {
+            TextMeasurement::Assigned(plan) => Ok(plan),
+            TextMeasurement::Intrinsic(_) => unreachable!("assigned text request"),
+        }
     }
 
     pub(crate) fn plan_prepared_text(
         &self,
         input: TextPlanInput<'_>,
     ) -> Result<ResolvedTextPlan, TextPlanError> {
-        plan_text(self, input, self.prepared_pairs_are_sealed()?)
+        match measure_text(self, input, self.prepared_pairs_are_sealed()?, None)? {
+            TextMeasurement::Assigned(plan) => Ok(plan),
+            TextMeasurement::Intrinsic(_) => unreachable!("assigned text request"),
+        }
+    }
+
+    pub(crate) fn text_intrinsic_requirements(
+        &self,
+        input: TextPlanInput<'_>,
+        preferred_lines: usize,
+    ) -> Result<TextIntrinsicRequirements, TextPlanError> {
+        match measure_text(
+            self,
+            input,
+            self.prepared_pairs_are_sealed()?,
+            Some(preferred_lines),
+        )? {
+            TextMeasurement::Intrinsic(requirements) => Ok(requirements),
+            TextMeasurement::Assigned(_) => unreachable!("intrinsic text request"),
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SelectedTextLine {
-    paragraph_index: usize,
-    source_span: TextSourceSpan,
-    ending_grapheme_index: u32,
+#[derive(Debug, Clone, Copy)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "explicit quantum units distinguish these widths from the pixel-space adapter lengths"
+)]
+pub(crate) struct TextIntrinsicRequirements {
+    pub(crate) hard_width_quanta: i64,
+    pub(crate) natural_width_quanta: i64,
+    pub(crate) preferred_width_quanta: i64,
+}
+
+enum TextMeasurement {
+    Intrinsic(TextIntrinsicRequirements),
+    Assigned(ResolvedTextPlan),
 }
 
 #[expect(
     clippy::too_many_lines,
     reason = "constrained text planning keeps count, reservation, materialization, and freezing ordered"
 )]
-fn plan_text(
+fn measure_text(
     environment: &PreparedFontEnvironment,
     mut input: TextPlanInput<'_>,
     prepared_only: bool,
-) -> Result<ResolvedTextPlan, TextPlanError> {
+    intrinsic_lines: Option<usize>,
+) -> Result<TextMeasurement, TextPlanError> {
+    let prepared_only = prepared_only || environment.prepared_pairs_are_sealed()?;
     if input.font_size == 0 {
         return Err(TextPlanError::InvalidFontSize);
     }
@@ -321,22 +830,31 @@ fn plan_text(
     }
     let _ = u32::try_from(input.source.len()).map_err(|_| TextPlanError::SourceTooLong)?;
 
-    let stack = canonical::parse_family_stack(input.stack)?;
+    let stack = environment.parse_family_stack(input.stack)?;
     let line_height_quanta = resolve_line_height(input.line_height, input.font_size)?;
-    let required_scalars = input.source.chars().collect::<Vec<_>>();
+    claim_generation_work(environment, input.source.len() as u128)?;
+    let scalar_count = input.source.chars().count();
+    let mut required_scalars = Vec::new();
+    super::unicode16::reserve(
+        &mut required_scalars,
+        scalar_count + 1,
+        &mut |bytes, work| claim_unicode(environment, bytes, work),
+    )?;
+    required_scalars.extend(input.source.chars());
+    if input.source.contains('\u{ad}') {
+        required_scalars.push('-');
+    }
     let weight = requested_weight(input.weight);
     let prepared = environment.prepared_pair(&stack, weight)?;
-    let pair = match prepared {
+    let mut pair = match prepared {
+        Some(pair) if prepared_only => pair,
         Some(pair) => {
-            if let Some(scalar) = required_scalars.iter().find(|scalar| {
+            if required_scalars.iter().any(|scalar| {
                 !pair
                     .selected_scalars
                     .iter()
-                    .any(|selection| selection.scalar == **scalar)
+                    .any(|selection| selection.scalar == *scalar)
             }) {
-                if prepared_only {
-                    return Err(TextPlanError::MissingPreparedScalar(*scalar as u32));
-                }
                 environment.resolve_pair(
                     pair.provenance.pair_ordinal,
                     &stack,
@@ -348,163 +866,273 @@ fn plan_text(
             }
         }
         None if prepared_only => return Err(TextPlanError::MissingPreparedPair),
-        None => environment.resolve_pair(
-            input.provenance.pair_ordinal,
-            &stack,
-            weight,
-            &required_scalars,
-        )?,
+        None => {
+            environment.prepare_pair(
+                input.provenance.pair_ordinal,
+                &stack,
+                weight,
+                &required_scalars,
+                None,
+            )?;
+            environment
+                .prepared_pair(&stack, weight)?
+                .ok_or(TextPlanError::MissingPreparedPair)?
+        }
     };
     input.provenance.pair_ordinal = pair.provenance.pair_ordinal;
+    if !prepared_only {
+        environment.prepare_source_units(pair.provenance.pair_ordinal, input.source, None)?;
+        pair.selected_units = environment
+            .prepared_pair(&stack, weight)?
+            .ok_or(TextPlanError::MissingPreparedPair)?
+            .selected_units;
+    }
     let primary_metrics = environment.face_metrics(pair.primary)?;
     let source_scalar_count = u128::try_from(required_scalars.len())
         .map_err(|_| TextPlanError::Arithmetic("text scalar count"))?;
     claim_generation_work(environment, source_scalar_count)?;
-    let paragraph_seeds = mandatory_paragraph_seeds(input.source)?;
-    let transitions = PreparedTextTransitions::prepare(
-        environment,
-        &pair,
-        input.source,
-        paragraph_seeds,
-        input.font_size,
-    )?;
-    claim_generation_work(environment, transitions.rendered_scalar_count)?;
-    let mut line_count = 0_usize;
-    if let Some(miss) = greedy_text_attempt(&transitions, input.maximum_width_quanta, |_| {
-        line_count = line_count
-            .checked_add(1)
-            .ok_or(TextPlanError::Arithmetic("selected text line count"))?;
-        Ok(())
-    })? {
-        return Err(miss.into());
-    }
-    // Built and frozen line records coexist during finalization. Only the
-    // requested attempt's source and records are retained, never alternatives.
-    let line_slots = checked_multiply(line_count as u128, 2, "selected text line slots")?
-        .checked_add(1)
-        .and_then(|slots| slots.checked_add(source_scalar_count))
-        .ok_or(TextPlanError::Arithmetic("selected text plan slots"))?;
-    claim_collection_count(environment, line_slots)?;
+    let paragraph_seeds = mandatory_paragraph_seeds(environment, input.source)?;
     let mut built_lines = Vec::new();
-    built_lines
-        .try_reserve_exact(line_count)
-        .map_err(|_| TextPlanError::Allocation("selected text lines"))?;
-    claim_collection_materialization(environment, line_slots)?;
-    claim_generation_work(environment, transitions.rendered_scalar_count)?;
-    if let Some(miss) = greedy_text_attempt(&transitions, input.maximum_width_quanta, |selected| {
-        let paragraph = transitions
-            .paragraphs
-            .get(selected.paragraph_index)
-            .ok_or(TextPlanError::Arithmetic("selected text paragraph"))?;
-        let built = if input.source[paragraph.span.range()].is_empty() {
-            empty_line(
-                selected.source_span,
-                selected.ending_grapheme_index,
-                primary_metrics,
-                input.font_size,
-            )?
-        } else {
+    let mut analyzed_paragraphs = Vec::new();
+    let mut requirements = TextIntrinsicRequirements {
+        hard_width_quanta: 0,
+        natural_width_quanta: 0,
+        preferred_width_quanta: 0,
+    };
+    let paragraph_count = paragraph_seeds.len();
+    let mut grapheme_start = 0_usize;
+    claim_collection_count(
+        environment,
+        source_scalar_count + paragraph_count as u128 + 1,
+    )?;
+    for seed in paragraph_seeds {
+        let paragraph = &input.source[seed.span.range()];
+        claim_generation_work(environment, seed.scalar_count)?;
+        let mut grapheme_ends = Vec::new();
+        for (start, grapheme) in paragraph.grapheme_indices(true) {
+            claim_collection_count(environment, 1)?;
+            super::unicode16::reserve(&mut grapheme_ends, 1, &mut |bytes, work| {
+                claim_unicode(environment, bytes, work)
+            })?;
+            claim_collection_materialization(environment, 1)?;
+            grapheme_ends.push(start + grapheme.len());
+        }
+        let next_grapheme = grapheme_start
+            .checked_add(grapheme_ends.len())
+            .ok_or(TextPlanError::Arithmetic("grapheme index"))?;
+        let ending = u32::try_from(next_grapheme)
+            .map_err(|_| TextPlanError::Arithmetic("grapheme index"))?;
+        if paragraph.is_empty() {
+            if intrinsic_lines.is_none() {
+                let whole = empty_line(seed.span, ending, primary_metrics, input.font_size)?;
+                retain_paragraph(
+                    environment,
+                    &mut analyzed_paragraphs,
+                    AnalyzedParagraph {
+                        span: seed.span,
+                        grapheme_start,
+                        grapheme_ends,
+                        bidi: None,
+                        items: Vec::new(),
+                        hyphen_face: None,
+                        whole_width: 0,
+                        whole: ParagraphWhole::OriginalLine {
+                            index: built_lines.len(),
+                            advance: whole.advance,
+                            ascent: whole.ascent,
+                            descent: whole.descent,
+                        },
+                        wrapping: std::sync::OnceLock::new(),
+                        hard_width: std::sync::OnceLock::new(),
+                    },
+                )?;
+                retain_line(environment, &mut built_lines, whole)?;
+            }
+            continue;
+        }
+        claim_generation_work(environment, seed.scalar_count)?;
+        #[cfg(test)]
+        PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(calls.get() + 1));
+        claim_unicode(
+            environment,
+            (paragraph.len()
+                * (size_of::<unicode_bidi::BidiClass>() + size_of::<unicode_bidi::Level>()))
+                as u64,
+            0,
+        )?;
+        let bidi = ParagraphBidiData::from(ParagraphBidiInfo::new(paragraph, None));
+        let items = selected_paragraph_items(environment, &pair, paragraph)?;
+        let hyphen_face = paragraph
+            .contains('\u{ad}')
+            .then(|| selected_face(&pair, "-", '-'))
+            .transpose()?;
+        let whole = prepare_line(
+            environment,
+            input.source,
+            seed.span,
+            seed.span,
+            ending,
+            input.font_size,
+            &bidi,
+            &items,
+            hyphen_face,
+        )?;
+        let whole_width = exact_line_width(environment, &whole)?;
+        if intrinsic_lines.is_none() && whole_width <= input.maximum_width_quanta {
+            retain_paragraph(
+                environment,
+                &mut analyzed_paragraphs,
+                AnalyzedParagraph {
+                    span: seed.span,
+                    grapheme_start,
+                    grapheme_ends,
+                    bidi: Some(bidi),
+                    items,
+                    hyphen_face,
+                    whole_width,
+                    whole: ParagraphWhole::OriginalLine {
+                        index: built_lines.len(),
+                        advance: whole.advance,
+                        ascent: whole.ascent,
+                        descent: whole.descent,
+                    },
+                    wrapping: std::sync::OnceLock::new(),
+                    hard_width: std::sync::OnceLock::new(),
+                },
+            )?;
+            retain_line(environment, &mut built_lines, whole)?;
+            grapheme_start = next_grapheme;
+            continue;
+        }
+        let mut boundaries =
+            legal_line_breaks_at_graphemes(paragraph, &grapheme_ends, environment)?;
+        claim_collection_count(environment, 1)?;
+        super::unicode16::reserve(&mut boundaries, 1, &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
+        boundaries.insert(0, 0);
+        let prefixes = proposal_prefixes(environment, &whole.plan, &boundaries, input.font_size)?;
+        let last = boundaries.len() - 1;
+        let shape = |start: usize, end: usize| {
+            let span = TextSourceSpan::new(
+                seed.span.start_byte as usize + boundaries[start],
+                seed.span.start_byte as usize + boundaries[end],
+            )?;
             prepare_line(
                 environment,
-                &pair,
                 input.source,
-                paragraph.span,
-                selected.source_span,
-                selected.ending_grapheme_index,
+                seed.span,
+                span,
+                ending_grapheme_index(&grapheme_ends, boundaries[end], grapheme_start)?,
                 input.font_size,
-                paragraph
-                    .bidi
-                    .as_ref()
-                    .ok_or(TextPlanError::Arithmetic("paragraph bidi plan"))?,
-            )?
+                &bidi,
+                &items,
+                hyphen_face,
+            )
         };
-        built_lines.push(built);
-        Ok(())
-    })? {
-        return Err(miss.into());
+        if let Some(preferred_lines) = intrinsic_lines {
+            requirements.natural_width_quanta =
+                requirements.natural_width_quanta.max(ink_width(&whole)?);
+            for start in 0..last {
+                let width = if last == 1 {
+                    whole_width
+                } else {
+                    exact_line_width(environment, &shape(start, start + 1)?)?
+                };
+                requirements.hard_width_quanta = requirements.hard_width_quanta.max(width);
+            }
+            let lines = (preferred_lines / paragraph_count.max(1)).max(1);
+            let chunk = last.div_ceil(lines);
+            for start in (0..last).step_by(chunk) {
+                claim_generation_work(environment, 1)?;
+                let end = start.saturating_add(chunk).min(last);
+                let width = prefix_difference(prefixes[end], prefixes[start])?
+                    .ceil_i64("preferred width")?;
+                requirements.preferred_width_quanta =
+                    requirements.preferred_width_quanta.max(width);
+            }
+        } else {
+            // A failed endpoint is the extension barrier for this line start.
+            // No failed glyph payload or prior line-start trial table is retained.
+            let mut start = 0;
+            while start < last {
+                let (end, selected) = select_line(
+                    environment,
+                    &prefixes,
+                    start,
+                    input.maximum_width_quanta,
+                    (start == 0).then_some(whole_width),
+                    TextSourceSpan::new(
+                        seed.span.start_byte as usize + boundaries[start],
+                        seed.span.start_byte as usize + boundaries[start + 1],
+                    )?,
+                    |end| shape(start, end),
+                )?;
+                retain_line(environment, &mut built_lines, selected)?;
+                start = end;
+            }
+            retain_paragraph(
+                environment,
+                &mut analyzed_paragraphs,
+                AnalyzedParagraph {
+                    span: seed.span,
+                    grapheme_start,
+                    grapheme_ends,
+                    bidi: Some(bidi),
+                    items,
+                    hyphen_face,
+                    whole_width,
+                    whole: ParagraphWhole::Retained(whole),
+                    wrapping: std::sync::OnceLock::from(ParagraphWrapping {
+                        boundaries,
+                        prefixes,
+                    }),
+                    hard_width: std::sync::OnceLock::new(),
+                },
+            )?;
+        }
+        grapheme_start = next_grapheme;
     }
-    debug_assert_eq!(built_lines.len(), line_count);
-    finalize_plan(
+    if intrinsic_lines.is_some() {
+        requirements.preferred_width_quanta = requirements
+            .preferred_width_quanta
+            .max(requirements.hard_width_quanta);
+        return Ok(TextMeasurement::Intrinsic(requirements));
+    }
+    let mut plan = finalize_plan(
+        environment,
         input,
         stack,
-        pair.provenance.clone(),
+        pair.provenance,
         line_height_quanta,
         built_lines,
-    )
+    )?;
+    claim_collection_count(environment, 1)?;
+    claim_unicode(
+        environment,
+        (size_of::<TextAnalysis>() + 2 * size_of::<usize>()) as u64,
+        1,
+    )?;
+    plan.1 = Some(std::sync::Arc::new(TextAnalysis {
+        environment: environment.clone(),
+        original: std::sync::Arc::clone(&plan.0),
+        paragraphs: analyzed_paragraphs,
+    }));
+    Ok(TextMeasurement::Assigned(plan))
 }
 
-#[derive(Debug)]
-struct ParagraphTransitions {
-    boundaries: Vec<usize>,
-    width_range: Range<usize>,
-}
-
-impl ParagraphTransitions {
-    fn source_span(
-        &self,
-        paragraph_span: TextSourceSpan,
-        start_index: usize,
-        end_index: usize,
-    ) -> Result<TextSourceSpan, TextPlanError> {
-        Self::source_span_from_boundaries(paragraph_span, &self.boundaries, start_index, end_index)
-    }
-
-    fn source_span_from_boundaries(
-        paragraph_span: TextSourceSpan,
-        boundaries: &[usize],
-        start_index: usize,
-        end_index: usize,
-    ) -> Result<TextSourceSpan, TextPlanError> {
-        let start = boundaries
-            .get(start_index)
-            .copied()
-            .ok_or(TextPlanError::Arithmetic("text transition start"))?;
-        let end = boundaries
-            .get(end_index)
-            .copied()
-            .ok_or(TextPlanError::Arithmetic("text transition end"))?;
-        TextSourceSpan::new(
-            (paragraph_span.start_byte as usize)
-                .checked_add(start)
-                .ok_or(TextPlanError::Arithmetic("text transition start"))?,
-            (paragraph_span.start_byte as usize)
-                .checked_add(end)
-                .ok_or(TextPlanError::Arithmetic("text transition end"))?,
-        )
-    }
-
-    fn width(
-        &self,
-        widths_quanta: &[i64],
-        start_index: usize,
-        end_index: usize,
-    ) -> Result<i64, TextPlanError> {
-        let index = transition_index(self.boundaries.len(), start_index, end_index)?;
-        let index = self
-            .width_range
-            .start
-            .checked_add(index)
-            .ok_or(TextPlanError::Arithmetic("text transition width"))?;
-        widths_quanta
-            .get(index)
-            .copied()
-            .ok_or(TextPlanError::Arithmetic("text transition width"))
-    }
-
-    fn furthest_fitting_end(
-        &self,
-        widths_quanta: &[i64],
-        start_index: usize,
-        maximum_width_quanta: i64,
-    ) -> Result<Option<usize>, TextPlanError> {
-        let mut selected = None;
-        for end_index in start_index + 1..self.boundaries.len() {
-            if self.width(widths_quanta, start_index, end_index)? <= maximum_width_quanta {
-                selected = Some(end_index);
-            }
-        }
-        Ok(selected)
-    }
+fn retain_paragraph(
+    environment: &PreparedFontEnvironment,
+    paragraphs: &mut Vec<AnalyzedParagraph>,
+    paragraph: AnalyzedParagraph,
+) -> Result<(), TextPlanError> {
+    claim_collection_count(environment, 1)?;
+    super::unicode16::reserve(paragraphs, 1, &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
+    claim_collection_materialization(environment, 1)?;
+    paragraphs.push(paragraph);
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -513,295 +1141,215 @@ struct ParagraphSeed {
     scalar_count: u128,
 }
 
-struct PreparedParagraph<'a> {
-    span: TextSourceSpan,
-    grapheme_start: usize,
-    grapheme_ends: Vec<usize>,
-    transitions: ParagraphTransitions,
-    bidi: Option<ParagraphBidiInfo<'a>>,
-}
-
-struct PreparedTextTransitions<'a> {
-    paragraphs: Vec<PreparedParagraph<'a>>,
-    widths_quanta: Vec<i64>,
-    rendered_scalar_count: u128,
-}
-
-impl<'a> PreparedTextTransitions<'a> {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "transition preparation keeps count, reservation, and shaping ordered"
-    )]
-    fn prepare(
-        environment: &PreparedFontEnvironment,
-        pair: &ResolvedFontPair,
-        source: &'a str,
-        paragraph_seeds: Vec<ParagraphSeed>,
-        font_size: u32,
-    ) -> Result<Self, TextPlanError> {
-        let mut transition_count = 0_u128;
-        let paragraph_count = u128::try_from(paragraph_seeds.len())
-            .map_err(|_| TextPlanError::Arithmetic("text paragraph slots"))?;
-        let mut transition_storage_slots = paragraph_count
-            .checked_add(2)
-            .ok_or(TextPlanError::Arithmetic("text transition slots"))?;
-        for seed in &paragraph_seeds {
-            let paragraph = &source[seed.span.range()];
-            claim_generation_work(
-                environment,
-                checked_multiply(seed.scalar_count, 3, "text transition count passes")?,
-            )?;
-            let grapheme_count = paragraph.graphemes(true).count();
-            let boundary_count = if paragraph.is_empty() {
-                1
-            } else {
-                legal_line_breaks(paragraph)
-                    .len()
-                    .checked_add(1)
-                    .ok_or(TextPlanError::Arithmetic("text transition boundaries"))?
-            };
-            let grapheme_slots = u128::try_from(grapheme_count)
-                .map_err(|_| TextPlanError::Arithmetic("text grapheme slots"))?
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("text grapheme slots"))?;
-            let boundary_slots = u128::try_from(boundary_count)
-                .map_err(|_| TextPlanError::Arithmetic("text transition slots"))?
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("text transition slots"))?;
-            transition_storage_slots = transition_storage_slots
-                .checked_add(grapheme_slots)
-                .and_then(|slots| slots.checked_add(boundary_slots))
-                .ok_or(TextPlanError::Arithmetic("text transition slots"))?;
-            if !paragraph.is_empty() {
-                transition_storage_slots = transition_storage_slots
-                    .checked_add(boundary_slots)
-                    .ok_or(TextPlanError::Arithmetic("text transition slots"))?;
-                transition_count = transition_count
-                    .checked_add(checked_transition_count(boundary_count)?)
-                    .ok_or(TextPlanError::Arithmetic("text transition count"))?;
-            }
-        }
-        transition_storage_slots = transition_storage_slots
-            .checked_add(transition_count)
-            .ok_or(TextPlanError::Arithmetic("text transition slots"))?;
-
-        claim_collection_count(environment, transition_storage_slots)?;
-        let transition_count = usize::try_from(transition_count)
-            .map_err(|_| TextPlanError::Arithmetic("text transition count"))?;
-        let mut widths_quanta = Vec::new();
-        widths_quanta
-            .try_reserve_exact(transition_count)
-            .map_err(|_| TextPlanError::Allocation("text transition widths"))?;
-
-        let mut paragraphs = Vec::new();
-        paragraphs
-            .try_reserve_exact(paragraph_seeds.len())
-            .map_err(|_| TextPlanError::Allocation("text paragraphs"))?;
-        let mut grapheme_start = 0_usize;
-        let mut transition_cursor = 0_usize;
-        let mut transition_scalar_work = 0_u128;
-        let mut rendered_scalar_count = 0_u128;
-        claim_collection_materialization(environment, transition_storage_slots)?;
-        for seed in paragraph_seeds {
-            rendered_scalar_count = rendered_scalar_count
-                .checked_add(seed.scalar_count)
-                .ok_or(TextPlanError::Arithmetic("rendered text scalar count"))?;
-            let paragraph = &source[seed.span.range()];
-            if paragraph.is_empty() {
-                let mut boundaries = Vec::new();
-                boundaries
-                    .try_reserve_exact(1)
-                    .map_err(|_| TextPlanError::Allocation("text transition boundaries"))?;
-                boundaries.push(0);
-                paragraphs.push(PreparedParagraph {
-                    span: seed.span,
-                    grapheme_start,
-                    grapheme_ends: Vec::new(),
-                    transitions: ParagraphTransitions {
-                        boundaries,
-                        width_range: transition_cursor..transition_cursor,
-                    },
-                    bidi: None,
-                });
-                continue;
-            }
-
-            claim_generation_work(
-                environment,
-                checked_multiply(
-                    seed.scalar_count,
-                    3,
-                    "text transition materialization passes",
-                )?,
-            )?;
-            let grapheme_count = paragraph.graphemes(true).count();
-            let mut grapheme_ends = Vec::new();
-            grapheme_ends
-                .try_reserve_exact(grapheme_count)
-                .map_err(|_| TextPlanError::Allocation("text grapheme boundaries"))?;
-            grapheme_ends.extend(
-                paragraph
-                    .grapheme_indices(true)
-                    .map(|(start, grapheme)| start + grapheme.len()),
-            );
-            let legal_boundaries = legal_line_breaks_at_graphemes(paragraph, &grapheme_ends);
-            let boundary_count = legal_boundaries
-                .len()
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("text transition boundaries"))?;
-            let paragraph_transition_count =
-                usize::try_from(checked_transition_count(boundary_count)?)
-                    .map_err(|_| TextPlanError::Arithmetic("text transition count"))?;
-            let transition_end = transition_cursor
-                .checked_add(paragraph_transition_count)
-                .ok_or(TextPlanError::Arithmetic("text transition range"))?;
-            let mut boundaries = Vec::new();
-            boundaries
-                .try_reserve_exact(boundary_count)
-                .map_err(|_| TextPlanError::Allocation("text transition boundaries"))?;
-            boundaries.push(0);
-            boundaries.extend(legal_boundaries);
-
-            claim_generation_work(environment, seed.scalar_count)?;
-            let scalar_prefixes = scalar_prefixes_at_boundaries(paragraph, &boundaries)?;
-            transition_scalar_work = transition_scalar_work
-                .checked_add(transition_scalar_work_for_prefixes(&scalar_prefixes)?)
-                .ok_or(TextPlanError::Arithmetic("text transition scalar work"))?;
-            claim_generation_work(environment, seed.scalar_count)?;
-            #[cfg(test)]
-            PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(calls.get() + 1));
-            let bidi = ParagraphBidiInfo::new(paragraph, None);
-            let next_grapheme_start = grapheme_start
-                .checked_add(grapheme_ends.len())
-                .ok_or(TextPlanError::Arithmetic("grapheme index"))?;
-            paragraphs.push(PreparedParagraph {
-                span: seed.span,
-                grapheme_start,
-                grapheme_ends,
-                transitions: ParagraphTransitions {
-                    boundaries,
-                    width_range: transition_cursor..transition_end,
-                },
-                bidi: Some(bidi),
+fn select_line(
+    environment: &PreparedFontEnvironment,
+    prefixes: &[ExactRational],
+    start: usize,
+    maximum_width_quanta: i64,
+    failed_paragraph_width: Option<i64>,
+    first_span: TextSourceSpan,
+    mut shape: impl FnMut(usize) -> Result<BuiltLine, TextPlanError>,
+) -> Result<(usize, BuiltLine), TextPlanError> {
+    let last = prefixes.len() - 1;
+    let mut end = start + 1;
+    for candidate in start + 1..=last {
+        claim_generation_work(environment, 1)?;
+        #[cfg(test)]
+        TEXT_WORK.with(|work| {
+            work.update(|mut work| {
+                work.proposal_visits += 1;
+                work
             });
-            grapheme_start = next_grapheme_start;
-            transition_cursor = transition_end;
+        });
+        if prefix_difference(prefixes[candidate], prefixes[start])?.ceil_i64("proposal width")?
+            > maximum_width_quanta
+        {
+            end = candidate.saturating_sub(1).max(start + 1);
+            break;
         }
-        debug_assert_eq!(transition_cursor, transition_count);
+        end = candidate;
+    }
+    let mut failed = failed_paragraph_width.map(|_| last);
+    let mut selected = loop {
+        claim_generation_work(environment, 1)?;
+        let (trial, width) = if let Some(width) = failed_paragraph_width.filter(|_| end == last) {
+            (None, width)
+        } else {
+            let trial = shape(end)?;
+            let width = exact_line_width(environment, &trial)?;
+            (Some(trial), width)
+        };
+        if width <= maximum_width_quanta {
+            break trial.ok_or(TextPlanError::Arithmetic("failed paragraph trial"))?;
+        }
+        failed = Some(end);
+        if end == start + 1 {
+            return Err(TextFitMiss {
+                source_span: first_span,
+                maximum_width_quanta,
+                required_width_quanta: width,
+            }
+            .into());
+        }
+        end -= 1;
+    };
+    while end < last {
+        claim_generation_work(environment, 1)?;
+        if failed == Some(end + 1) {
+            break;
+        }
+        let trial = shape(end + 1)?;
+        if exact_line_width(environment, &trial)? > maximum_width_quanta {
+            break;
+        }
+        selected = trial;
+        end += 1;
+    }
+    Ok((end, selected))
+}
 
-        claim_generation_work(environment, transition_scalar_work)?;
+fn retain_line(
+    environment: &PreparedFontEnvironment,
+    lines: &mut Vec<BuiltLine>,
+    line: BuiltLine,
+) -> Result<(), TextPlanError> {
+    claim_collection_count(environment, 2)?;
+    super::unicode16::reserve(lines, 1, &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
+    claim_collection_materialization(environment, 2)?;
+    lines.push(line);
+    Ok(())
+}
 
-        for paragraph in &paragraphs {
-            let Some(bidi) = &paragraph.bidi else {
-                continue;
-            };
-            for start_index in 0..paragraph.transitions.boundaries.len() - 1 {
-                for end_index in start_index + 1..paragraph.transitions.boundaries.len() {
-                    let line_span = paragraph.transitions.source_span(
-                        paragraph.span,
-                        start_index,
-                        end_index,
-                    )?;
-                    let measured = transition_measurement(
-                        environment,
-                        pair,
-                        source,
-                        paragraph.span,
-                        line_span,
-                        font_size,
-                        bidi,
-                    )?;
-                    widths_quanta.push(measured.width_quanta);
+fn ink_width(line: &BuiltLine) -> Result<i64, TextPlanError> {
+    line.plan.ink_quanta.map_or(Ok(0), |ink| {
+        ink.right
+            .checked_sub(ink.left)
+            .ok_or(TextPlanError::Arithmetic("line ink span"))
+    })
+}
+
+fn exact_line_width(
+    environment: &PreparedFontEnvironment,
+    line: &BuiltLine,
+) -> Result<i64, TextPlanError> {
+    claim_generation_work(environment, 1)?;
+    #[cfg(test)]
+    TEXT_WORK.with(|work| {
+        work.update(|mut work| {
+            work.exact_trials += 1;
+            work
+        });
+    });
+    Ok(line.advance.ceil_i64("wrap advance")?.max(ink_width(line)?))
+}
+
+fn prefix_difference(
+    end: ExactRational,
+    start: ExactRational,
+) -> Result<ExactRational, TextPlanError> {
+    end.add(
+        ExactRational::new(
+            start
+                .numerator
+                .checked_neg()
+                .ok_or(TextPlanError::Arithmetic("proposal difference"))?,
+            start.denominator,
+        )?,
+        "proposal difference",
+    )
+}
+
+fn proposal_prefixes(
+    environment: &PreparedFontEnvironment,
+    whole: &TextLinePlan,
+    boundaries: &[usize],
+    font_size: u32,
+) -> Result<Vec<ExactRational>, TextPlanError> {
+    claim_collection_count(environment, boundaries.len() as u128)?;
+    let mut prefixes = Vec::new();
+    prefixes
+        .try_reserve_exact(boundaries.len())
+        .map_err(|_| TextPlanError::Allocation("paragraph advance prefixes"))?;
+    prefixes.resize(boundaries.len(), ExactRational::ZERO);
+    // Rustybuzz clusters are monotone within each directional run. Traverse in
+    // logical order, and defer the entire cluster to its first legal endpoint.
+    let mut clusters = Vec::new();
+    for (run_order, run) in whole.runs.iter().enumerate() {
+        let mut cursor = if run.direction == ShapingDirection::RightToLeft {
+            run.glyphs.len()
+        } else {
+            0
+        };
+        let rtl = run.direction == ShapingDirection::RightToLeft;
+        while if rtl {
+            cursor > 0
+        } else {
+            cursor < run.glyphs.len()
+        } {
+            let index = if rtl { cursor - 1 } else { cursor };
+            let glyph_order = index;
+            let cluster = run.glyphs[index].cluster;
+            let mut total = 0_i64;
+            loop {
+                let index = if rtl { cursor - 1 } else { cursor };
+                claim_generation_work(environment, 1)?;
+                total = total
+                    .checked_add(i64::from(run.glyphs[index].design_x_advance))
+                    .ok_or(TextPlanError::Arithmetic("cluster advance"))?;
+                if rtl {
+                    cursor -= 1;
+                } else {
+                    cursor += 1;
+                }
+                if (rtl && cursor == 0) || (!rtl && cursor == run.glyphs.len()) {
+                    break;
+                }
+                let next = if rtl { cursor - 1 } else { cursor };
+                if run.glyphs[next].cluster != cluster {
+                    break;
                 }
             }
-        }
-        debug_assert_eq!(widths_quanta.len(), transition_count);
-
-        Ok(Self {
-            paragraphs,
-            widths_quanta,
-            rendered_scalar_count,
-        })
-    }
-}
-
-fn greedy_text_attempt(
-    transitions: &PreparedTextTransitions<'_>,
-    maximum_width_quanta: i64,
-    mut emit: impl FnMut(SelectedTextLine) -> Result<(), TextPlanError>,
-) -> Result<Option<TextFitMiss>, TextPlanError> {
-    for (paragraph_index, paragraph) in transitions.paragraphs.iter().enumerate() {
-        if maximum_width_quanta == i64::MAX || paragraph.bidi.is_none() {
-            emit(full_paragraph_line(transitions, paragraph_index)?)?;
-            continue;
-        }
-
-        let mut start_index = 0_usize;
-        while start_index + 1 < paragraph.transitions.boundaries.len() {
-            let required_width_quanta = paragraph.transitions.width(
-                &transitions.widths_quanta,
-                start_index,
-                start_index + 1,
-            )?;
-            if required_width_quanta > maximum_width_quanta {
-                return Ok(Some(TextFitMiss {
-                    source_span: paragraph.transitions.source_span(
-                        paragraph.span,
-                        start_index,
-                        start_index + 1,
-                    )?,
-                    maximum_width_quanta,
-                    required_width_quanta,
-                }));
-            }
-            let Some(end_index) = paragraph.transitions.furthest_fitting_end(
-                &transitions.widths_quanta,
-                start_index,
-                maximum_width_quanta,
-            )?
-            else {
-                return Err(TextPlanError::Arithmetic(
-                    "greedy text transition selection",
-                ));
+            let end = if (rtl && cursor == 0) || (!rtl && cursor == run.glyphs.len()) {
+                run.source_span.end_byte
+            } else {
+                run.glyphs[if rtl { cursor - 1 } else { cursor }].cluster
             };
-            let end = paragraph.transitions.boundaries[end_index];
-            emit(SelectedTextLine {
-                paragraph_index,
-                source_span: paragraph.transitions.source_span(
-                    paragraph.span,
-                    start_index,
-                    end_index,
-                )?,
-                ending_grapheme_index: ending_grapheme_index(
-                    &paragraph.grapheme_ends,
-                    end,
-                    paragraph.grapheme_start,
-                )?,
-            })?;
-            start_index = end_index;
+            let magnitude = total
+                .checked_abs()
+                .ok_or(TextPlanError::Arithmetic("cluster magnitude"))?;
+            claim_collection_count(environment, 1)?;
+            clusters
+                .try_reserve(1)
+                .map_err(|_| TextPlanError::Allocation("paragraph clusters"))?;
+            claim_collection_materialization(environment, 1)?;
+            clusters.push((
+                end,
+                run_order,
+                glyph_order,
+                cluster,
+                scale_design(magnitude, font_size, run.units_per_em)?,
+            ));
         }
     }
-    Ok(None)
-}
-
-fn full_paragraph_line(
-    transitions: &PreparedTextTransitions<'_>,
-    paragraph_index: usize,
-) -> Result<SelectedTextLine, TextPlanError> {
-    let paragraph = transitions
-        .paragraphs
-        .get(paragraph_index)
-        .ok_or(TextPlanError::Arithmetic("unwrapped text paragraph"))?;
-    let ending_grapheme_index = paragraph
-        .grapheme_start
-        .checked_add(paragraph.grapheme_ends.len())
-        .ok_or(TextPlanError::Arithmetic("ending grapheme index"))?;
-    Ok(SelectedTextLine {
-        paragraph_index,
-        source_span: paragraph.span,
-        ending_grapheme_index: u32::try_from(ending_grapheme_index)
-            .map_err(|_| TextPlanError::Arithmetic("ending grapheme index"))?,
-    })
+    claim_generation_work(environment, clusters.len() as u128)?;
+    clusters.sort_unstable_by_key(|&(end, run, glyph, _, _)| (end, run, glyph));
+    let mut boundary = 1;
+    for (end, _, _, _, advance) in clusters {
+        claim_generation_work(environment, 1)?;
+        let end = (end - whole.source_span.start_byte) as usize;
+        while boundaries[boundary] < end {
+            claim_generation_work(environment, 1)?;
+            boundary += 1;
+        }
+        prefixes[boundary] = prefixes[boundary].add(advance, "cluster prefix")?;
+    }
+    for index in 1..prefixes.len() {
+        claim_generation_work(environment, 1)?;
+        prefixes[index] = prefixes[index].add(prefixes[index - 1], "paragraph prefix")?;
+    }
+    Ok(prefixes)
 }
 
 fn claim_generation_work(
@@ -856,89 +1404,6 @@ fn claim_text_generation(
     }
 }
 
-fn checked_transition_count(boundary_count: usize) -> Result<u128, TextPlanError> {
-    let count = u128::try_from(boundary_count)
-        .map_err(|_| TextPlanError::Arithmetic("text transition count"))?;
-    count
-        .checked_mul(
-            count
-                .checked_sub(1)
-                .ok_or(TextPlanError::Arithmetic("text transition count"))?,
-        )
-        .and_then(|value| value.checked_div(2))
-        .ok_or(TextPlanError::Arithmetic("text transition count"))
-}
-
-fn transition_index(
-    boundary_count: usize,
-    start_index: usize,
-    end_index: usize,
-) -> Result<usize, TextPlanError> {
-    if start_index >= end_index || end_index >= boundary_count {
-        return Err(TextPlanError::Arithmetic("text transition index"));
-    }
-    let count = u128::try_from(boundary_count)
-        .map_err(|_| TextPlanError::Arithmetic("text transition index"))?;
-    let start = u128::try_from(start_index)
-        .map_err(|_| TextPlanError::Arithmetic("text transition index"))?;
-    let end = u128::try_from(end_index)
-        .map_err(|_| TextPlanError::Arithmetic("text transition index"))?;
-    let row_offset = start
-        .checked_mul(
-            count
-                .checked_mul(2)
-                .and_then(|value| value.checked_sub(start))
-                .and_then(|value| value.checked_sub(1))
-                .ok_or(TextPlanError::Arithmetic("text transition index"))?,
-        )
-        .and_then(|value| value.checked_div(2))
-        .ok_or(TextPlanError::Arithmetic("text transition index"))?;
-    usize::try_from(
-        row_offset
-            .checked_add(end - start - 1)
-            .ok_or(TextPlanError::Arithmetic("text transition index"))?,
-    )
-    .map_err(|_| TextPlanError::Arithmetic("text transition index"))
-}
-
-fn scalar_prefixes_at_boundaries(
-    paragraph: &str,
-    boundaries: &[usize],
-) -> Result<Vec<u128>, TextPlanError> {
-    let mut prefixes = Vec::new();
-    prefixes
-        .try_reserve_exact(boundaries.len())
-        .map_err(|_| TextPlanError::Allocation("text transition scalar prefixes"))?;
-    let mut scalars = paragraph.char_indices().peekable();
-    let mut count = 0_u128;
-    for &boundary in boundaries {
-        while scalars.peek().is_some_and(|(index, _)| *index < boundary) {
-            scalars.next();
-            count = count
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("text transition scalar work"))?;
-        }
-        prefixes.push(count);
-    }
-    Ok(prefixes)
-}
-
-fn transition_scalar_work_for_prefixes(prefixes: &[u128]) -> Result<u128, TextPlanError> {
-    let mut work = 0_u128;
-    for start_index in 0..prefixes.len().saturating_sub(1) {
-        for end_index in start_index + 1..prefixes.len() {
-            work = work
-                .checked_add(
-                    prefixes[end_index]
-                        .checked_sub(prefixes[start_index])
-                        .ok_or(TextPlanError::Arithmetic("text transition scalar work"))?,
-                )
-                .ok_or(TextPlanError::Arithmetic("text transition scalar work"))?;
-        }
-    }
-    Ok(work)
-}
-
 fn requested_weight(weight: TextWeight) -> RequestedWeight {
     match weight {
         TextWeight::Normal => RequestedWeight::Normal,
@@ -947,14 +1412,10 @@ fn requested_weight(weight: TextWeight) -> RequestedWeight {
     }
 }
 
-fn mandatory_paragraphs(source: &str) -> Result<Vec<TextSourceSpan>, TextPlanError> {
-    Ok(mandatory_paragraph_seeds(source)?
-        .into_iter()
-        .map(|paragraph| paragraph.span)
-        .collect())
-}
-
-fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPlanError> {
+fn mandatory_paragraph_seeds(
+    environment: &PreparedFontEnvironment,
+    source: &str,
+) -> Result<Vec<ParagraphSeed>, TextPlanError> {
     let mut paragraphs = Vec::new();
     let mut start = 0_usize;
     let mut scalar_count = 0_u128;
@@ -966,6 +1427,9 @@ fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPla
                 .ok_or(TextPlanError::Arithmetic("paragraph scalar count"))?;
             continue;
         }
+        super::unicode16::reserve(&mut paragraphs, 1, &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
         paragraphs.push(ParagraphSeed {
             span: TextSourceSpan::new(start, index)?,
             scalar_count,
@@ -980,6 +1444,9 @@ fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPla
         start = break_end;
         scalar_count = 0;
     }
+    super::unicode16::reserve(&mut paragraphs, 1, &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
     paragraphs.push(ParagraphSeed {
         span: TextSourceSpan::new(start, source.len())?,
         scalar_count,
@@ -988,31 +1455,139 @@ fn mandatory_paragraph_seeds(source: &str) -> Result<Vec<ParagraphSeed>, TextPla
 }
 
 /// Exact Unicode 16 UAX #14 opportunities, restricted to Unicode 16 UAX #29
-/// grapheme boundaries before transition shaping.
-fn legal_line_breaks(paragraph: &str) -> Vec<usize> {
-    let grapheme_ends = paragraph
-        .grapheme_indices(true)
-        .map(|(start, grapheme)| start + grapheme.len())
-        .collect::<Vec<_>>();
-    legal_line_breaks_at_graphemes(paragraph, &grapheme_ends)
+/// grapheme boundaries before contextual line trials.
+fn legal_line_breaks(
+    paragraph: &str,
+    environment: &PreparedFontEnvironment,
+) -> Result<Vec<usize>, TextPlanError> {
+    u32::try_from(paragraph.len()).map_err(|_| TextPlanError::SourceTooLong)?;
+    claim_unicode(environment, 0, paragraph.len() as u64)?;
+    let mut grapheme_ends = Vec::new();
+    for (start, grapheme) in paragraph.grapheme_indices(true) {
+        super::unicode16::reserve(&mut grapheme_ends, 1, &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
+        grapheme_ends.push(start + grapheme.len());
+    }
+    legal_line_breaks_at_graphemes(paragraph, &grapheme_ends, environment)
 }
 
-fn legal_line_breaks_at_graphemes(paragraph: &str, grapheme_ends: &[usize]) -> Vec<usize> {
+fn claim_unicode(
+    environment: &PreparedFontEnvironment,
+    bytes: u64,
+    work: u64,
+) -> Result<(), TextPlanError> {
+    if bytes != 0 {
+        environment.claim_unicode_bytes(bytes)?;
+    }
+    if work != 0 {
+        claim_generation_work(environment, u128::from(work))?;
+    }
+    Ok(())
+}
+
+fn paragraph_linebreaks(
+    paragraph: &str,
+    claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
+) -> Result<Vec<(usize, super::unicode16::BreakOpportunity)>, TextPlanError> {
     if paragraph.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    let mut breaks = super::unicode16::linebreaks(paragraph)
-        .into_iter()
-        .filter_map(|(index, _)| {
-            (index > 0 && grapheme_ends.binary_search(&index).is_ok()).then_some(index)
+    // ASCII letters have identical AL/non-East-Asian line-break properties.
+    // LB28 forbids every internal AL/AL boundary, and no other rule counts
+    // consecutive AL characters. Evaluate each run once, retaining its source
+    // start and the following boundary; shaping always uses the original text.
+    claim(0, paragraph.len() as u64)?;
+    let mut reduced = String::new();
+    claim(paragraph.len() as u64, 0)?;
+    reduced
+        .try_reserve_exact(paragraph.len())
+        .map_err(|_| TextPlanError::Allocation("line-break analysis source"))?;
+    let mut offsets = Vec::new();
+    let mut alphabetic = false;
+    for (offset, scalar) in paragraph.char_indices() {
+        claim(0, 1)?;
+        let next_alphabetic = scalar.is_ascii_alphabetic();
+        if !alphabetic || !next_alphabetic {
+            super::unicode16::reserve(&mut offsets, 1, claim)?;
+            offsets.push((reduced.len(), offset));
+            reduced.push(scalar);
+        }
+        alphabetic = next_alphabetic;
+    }
+    super::unicode16::reserve(&mut offsets, 1, claim)?;
+    offsets.push((reduced.len(), paragraph.len()));
+    let mut opportunities = super::unicode16::linebreaks(&reduced, claim)?;
+    let mut mapped = 0;
+    for (index, _) in &mut opportunities {
+        loop {
+            claim(0, 1)?;
+            if offsets[mapped].0 >= *index {
+                break;
+            }
+            mapped += 1;
+        }
+        *index = offsets[mapped].1;
+    }
+    Ok(opportunities)
+}
+
+fn legal_line_breaks_at_graphemes(
+    paragraph: &str,
+    grapheme_ends: &[usize],
+    environment: &PreparedFontEnvironment,
+) -> Result<Vec<usize>, TextPlanError> {
+    let mut claim = |bytes, work| claim_unicode(environment, bytes, work);
+    let opportunities = paragraph_linebreaks(paragraph, &mut claim)?;
+    let mut breaks = Vec::new();
+    let mut grapheme = 0;
+    // Both inputs are sorted and unique. Intersect without sorting or another
+    // unbounded binary-search pass, charging before every context comparison.
+    for (index, _) in opportunities {
+        while grapheme < grapheme_ends.len() {
+            claim(0, 1)?;
+            if grapheme_ends[grapheme] >= index {
+                break;
+            }
+            grapheme += 1;
+        }
+        claim(0, 1)?;
+        if index > 0 && grapheme_ends.get(grapheme) == Some(&index) {
+            claim_collection_count(environment, 1)?;
+            super::unicode16::reserve(&mut breaks, 1, &mut claim)?;
+            claim_collection_materialization(environment, 1)?;
+            breaks.push(index);
+        }
+    }
+    Ok(breaks)
+}
+
+#[test]
+fn legal_line_breaks_share_root_work_and_byte_refusals() {
+    let environment = PreparedFontEnvironment::synthetic();
+    let clone = environment.clone();
+    environment.claim_text_generation_work(1_000_000).unwrap();
+    assert!(matches!(
+        legal_line_breaks("A A", &clone),
+        Err(TextPlanError::Limit {
+            resource: "candidate-generation work units",
+            limit: 1_000_000,
+            ..
         })
-        .collect::<Vec<_>>();
-    if breaks.last().copied() != Some(paragraph.len()) {
-        breaks.push(paragraph.len());
-    }
-    breaks.sort_unstable();
-    breaks.dedup();
-    breaks
+    ));
+
+    let environment = PreparedFontEnvironment::synthetic();
+    let used = environment.resource_usage().unwrap().font_bytes;
+    environment
+        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
+        .unwrap();
+    assert!(matches!(
+        legal_line_breaks("A A", &environment.clone()),
+        Err(TextPlanError::Font(FontError::Limit {
+            resource: "system-font bytes",
+            ..
+        }))
+    ));
 }
 
 fn ending_grapheme_index(
@@ -1054,6 +1629,7 @@ fn empty_line(
     Ok(BuiltLine {
         plan: TextLinePlan {
             source_span: span,
+            selected_soft_hyphen: None,
             ending_grapheme_index,
             translation_x_quanta: 0,
             translation_y_quanta: 0,
@@ -1072,17 +1648,30 @@ fn empty_line(
     clippy::too_many_arguments,
     reason = "selected-line shaping retains exact paragraph and line identities"
 )]
+#[expect(
+    clippy::too_many_lines,
+    reason = "contextual shaping keeps budget admission, glyph retention, and exact line geometry ordered"
+)]
 fn prepare_line(
     environment: &PreparedFontEnvironment,
-    pair: &ResolvedFontPair,
     source: &str,
     paragraph_span: TextSourceSpan,
     line_span: TextSourceSpan,
     ending_grapheme_index: u32,
     font_size: u32,
-    bidi: &ParagraphBidiInfo<'_>,
+    bidi: &ParagraphBidiData,
+    items: &[ScalarItem],
+    hyphen_face: Option<FaceIdentity>,
 ) -> Result<BuiltLine, TextPlanError> {
-    let paragraph = &source[paragraph_span.range()];
+    let selected_soft_hyphen = (line_span.end_byte < paragraph_span.end_byte
+        && source[line_span.range()].ends_with('\u{ad}'))
+    .then(|| {
+        TextSourceSpan::new(
+            line_span.end_byte as usize - '\u{ad}'.len_utf8(),
+            line_span.end_byte as usize,
+        )
+    })
+    .transpose()?;
     let line_local_start = (line_span.start_byte - paragraph_span.start_byte) as usize;
     let line_local_end = (line_span.end_byte - paragraph_span.start_byte) as usize;
     let line_scalar_count = u128::try_from(source[line_span.range()].chars().count())
@@ -1091,7 +1680,23 @@ fn prepare_line(
         environment,
         checked_multiply(line_scalar_count, 2, "selected line scalar work")?,
     )?;
-    let (levels, bidi_runs) = bidi.visual_runs(line_local_start..line_local_end);
+    claim_unicode(
+        environment,
+        u64::try_from(checked_multiply(
+            (line_local_end - line_local_start) as u128,
+            (size_of::<unicode_bidi::BidiClass>()
+                + 2 * size_of::<unicode_bidi::Level>()
+                + size_of::<Range<usize>>()) as u128,
+            "selected line bidi storage",
+        )?)
+        .map_err(|_| TextPlanError::Arithmetic("selected line bidi storage"))?,
+        0,
+    )?;
+    let (levels, bidi_runs) = line_visual_runs(
+        bidi,
+        &source[paragraph_span.range()],
+        line_local_start..line_local_end,
+    )?;
 
     let mut runs = Vec::new();
     let mut exact_ink: Option<ExactInk> = None;
@@ -1106,31 +1711,89 @@ fn prepare_line(
         } else {
             ShapingDirection::LeftToRight
         };
-        let mut groups = itemize_bidi_run(pair, paragraph, paragraph_span.start_byte, bidi_run)?;
+        let mut groups = itemize_bidi_run(
+            environment,
+            items,
+            paragraph_span.start_byte,
+            bidi_run.start + line_local_start..bidi_run.end + line_local_start,
+        )?;
+        if let Some(soft) = selected_soft_hyphen {
+            if let Some(index) = groups
+                .iter()
+                .position(|group| group.span.range().contains(&(soft.start_byte as usize)))
+            {
+                let hyphen = ItemGroup {
+                    span: soft,
+                    face: hyphen_face.ok_or(TextPlanError::MissingPreparedScalar('-' as u32))?,
+                    script: groups[index].script,
+                };
+                // Keep same-face GSUB/GPOS context intact through the replacement.
+                if groups[index].face != hyphen.face {
+                    if groups[index].span.start_byte == soft.start_byte {
+                        groups[index] = hyphen;
+                    } else {
+                        super::unicode16::reserve(&mut groups, 1, &mut |bytes, work| {
+                            claim_unicode(environment, bytes, work)
+                        })?;
+                        groups[index].span.end_byte = soft.start_byte;
+                        groups.insert(index + 1, hyphen);
+                    }
+                }
+            }
+        }
         if direction == ShapingDirection::RightToLeft {
             groups.reverse();
         }
         for group in groups {
             let text = &source[group.span.range()];
-            let shaped = environment.shape_run(
+            #[cfg(test)]
+            TEXT_WORK.with(|work| {
+                work.update(|mut work| {
+                    work.shaping_scalars += text.chars().count();
+                    work
+                });
+            });
+            let shaped = environment.shape_run_with_context(
                 group.face,
                 text,
                 direction,
                 rustybuzz_script(group.script)?,
+                canonical::ShapingContext {
+                    pre: &source[line_span.start_byte as usize..group.span.start_byte as usize],
+                    post: if selected_soft_hyphen
+                        .is_some_and(|soft| soft.start_byte == group.span.end_byte)
+                    {
+                        "-"
+                    } else {
+                        &source[group.span.end_byte as usize..line_span.end_byte as usize]
+                    },
+                    soft_hyphen: selected_soft_hyphen
+                        .filter(|soft| group.span.range().contains(&(soft.start_byte as usize)))
+                        .map(|soft| (soft.start_byte - group.span.start_byte) as usize),
+                },
             )?;
-            claim_generation_work(
+            #[cfg(test)]
+            TEXT_WORK.with(|work| {
+                work.update(|mut work| {
+                    work.shaped_glyphs += shaped.glyphs.len();
+                    work
+                });
+            });
+            claim_collection_count(environment, 1)?;
+            super::unicode16::reserve(&mut runs, 1, &mut |bytes, work| {
+                claim_unicode(environment, bytes, work)
+            })?;
+            claim_collection_materialization(environment, 1)?;
+            let built = scale_run(
                 environment,
-                u128::try_from(shaped.glyphs.len())
-                    .map_err(|_| TextPlanError::Arithmetic("selected line glyph work"))?,
+                shaped,
+                group.span,
+                group.script,
+                font_size,
+                pen_x,
+                pen_y,
+                levels[bidi_run.start].number(),
             )?;
-            let slots = (shaped.glyphs.len() as u128)
-                .checked_add(1)
-                .ok_or(TextPlanError::Arithmetic("selected line glyph slots"))?;
-            claim_collection_count(environment, slots)?;
-            runs.try_reserve(1)
-                .map_err(|_| TextPlanError::Allocation("selected text runs"))?;
-            claim_collection_materialization(environment, slots)?;
-            let built = scale_run(shaped, group.span, group.script, font_size)?;
             ascent = ascent.max(built.plan.ascender_quanta);
             descent = descent.max(
                 built
@@ -1141,8 +1804,8 @@ fn prepare_line(
             );
             if let Some(ink) = built.ink {
                 exact_ink = Some(match exact_ink {
-                    Some(current) => current.union(ink.translated(pen_x, pen_y)?)?,
-                    None => ink.translated(pen_x, pen_y)?,
+                    Some(current) => current.union(ink)?,
+                    None => ink,
                 });
             }
             pen_x = pen_x.add(built.advance_x, "line advance")?;
@@ -1169,6 +1832,7 @@ fn prepare_line(
     Ok(BuiltLine {
         plan: TextLinePlan {
             source_span: line_span,
+            selected_soft_hyphen,
             ending_grapheme_index,
             translation_x_quanta: 0,
             translation_y_quanta: 0,
@@ -1188,103 +1852,6 @@ fn prepare_line(
 }
 
 #[derive(Debug, Clone, Copy)]
-struct TransitionMeasurement {
-    width_quanta: i64,
-    ink_span_quanta: i64,
-}
-
-fn transition_measurement(
-    environment: &PreparedFontEnvironment,
-    pair: &ResolvedFontPair,
-    source: &str,
-    paragraph_span: TextSourceSpan,
-    line_span: TextSourceSpan,
-    font_size: u32,
-    bidi: &ParagraphBidiInfo<'_>,
-) -> Result<TransitionMeasurement, TextPlanError> {
-    let paragraph = &source[paragraph_span.range()];
-    let line_local_start = (line_span.start_byte - paragraph_span.start_byte) as usize;
-    let line_local_end = (line_span.end_byte - paragraph_span.start_byte) as usize;
-    let (levels, bidi_runs) = bidi.visual_runs(line_local_start..line_local_end);
-    let mut pen_x = ExactRational::ZERO;
-    let mut pen_y = ExactRational::ZERO;
-    let mut exact_ink: Option<ExactInk> = None;
-
-    for bidi_run in bidi_runs {
-        let direction = if levels[bidi_run.start].is_rtl() {
-            ShapingDirection::RightToLeft
-        } else {
-            ShapingDirection::LeftToRight
-        };
-        let mut groups = itemize_bidi_run(pair, paragraph, paragraph_span.start_byte, bidi_run)?;
-        if direction == ShapingDirection::RightToLeft {
-            groups.reverse();
-        }
-        for group in groups {
-            let shaped = environment.shape_run(
-                group.face,
-                &source[group.span.range()],
-                direction,
-                rustybuzz_script(group.script)?,
-            )?;
-            claim_generation_work(
-                environment,
-                u128::try_from(shaped.glyphs.len())
-                    .map_err(|_| TextPlanError::Arithmetic("text transition glyph work"))?,
-            )?;
-            for glyph in shaped.glyphs {
-                if let Some(ink) = glyph.ink {
-                    let ink = exact_glyph_ink(
-                        ink,
-                        glyph.x_offset,
-                        glyph.y_offset,
-                        font_size,
-                        shaped.metrics.units_per_em,
-                    )?
-                    .translated(pen_x, pen_y)?;
-                    exact_ink = Some(match exact_ink {
-                        Some(current) => current.union(ink)?,
-                        None => ink,
-                    });
-                }
-                pen_x = pen_x.add(
-                    scale_design(
-                        i64::from(glyph.x_advance),
-                        font_size,
-                        shaped.metrics.units_per_em,
-                    )?,
-                    "text transition advance",
-                )?;
-                pen_y = pen_y.add(
-                    scale_design(
-                        i64::from(glyph.y_advance),
-                        font_size,
-                        shaped.metrics.units_per_em,
-                    )?,
-                    "text transition advance",
-                )?;
-            }
-        }
-    }
-    let width_quanta = pen_x.ceil_i64("wrap advance")?;
-    if width_quanta < 0 {
-        return Err(TextPlanError::Arithmetic(
-            "negative text transition advance",
-        ));
-    }
-    let ink_span_quanta = exact_ink.map_or(Ok(0), |ink| {
-        let ink = ink.outward()?;
-        ink.right
-            .checked_sub(ink.left)
-            .ok_or(TextPlanError::Arithmetic("text transition ink span"))
-    })?;
-    Ok(TransitionMeasurement {
-        width_quanta,
-        ink_span_quanta,
-    })
-}
-
-#[derive(Debug, Clone, Copy)]
 struct ItemGroup {
     span: TextSourceSpan,
     face: FaceIdentity,
@@ -1299,27 +1866,205 @@ struct ScalarItem {
     script: Script,
 }
 
-fn itemize_bidi_run(
+/// Slice already-resolved paragraph levels, not independently resolved text.
+/// The library then applies L1 and L2 with work proportional to this line only.
+fn line_visual_runs(
+    bidi: &ParagraphBidiData,
+    paragraph: &str,
+    line: Range<usize>,
+) -> Result<(Vec<unicode_bidi::Level>, Vec<Range<usize>>), TextPlanError> {
+    let mut original_classes = Vec::new();
+    let mut levels = Vec::new();
+    original_classes
+        .try_reserve_exact(line.len())
+        .map_err(|_| TextPlanError::Allocation("line bidi classes"))?;
+    levels
+        .try_reserve_exact(line.len())
+        .map_err(|_| TextPlanError::Allocation("line bidi levels"))?;
+    original_classes.extend_from_slice(&bidi.original_classes[line.clone()]);
+    levels.extend_from_slice(&bidi.levels[line.clone()]);
+    let selected = ParagraphBidiInfo {
+        text: &paragraph[line.clone()],
+        original_classes,
+        levels,
+        paragraph_level: bidi.paragraph_level,
+        is_pure_ltr: bidi.is_pure_ltr,
+    };
+    Ok(selected.visual_runs(0..selected.text.len()))
+}
+
+fn selected_paragraph_items(
+    environment: &PreparedFontEnvironment,
     pair: &ResolvedFontPair,
     paragraph: &str,
+) -> Result<Vec<ScalarItem>, TextPlanError> {
+    let mut units = canonical::selection_units(paragraph);
+    let mut unit = "";
+    let mut unit_end = 0;
+    let mut items = paragraph_items(environment, paragraph, |start, scalar| {
+        if start == unit_end {
+            unit = units
+                .next()
+                .ok_or(TextPlanError::Arithmetic("source unit boundary"))?;
+            unit_end += unit.len();
+        }
+        selected_face(pair, unit, scalar)
+    })?;
+    // Controls retain their source and shaping context, but do not impose
+    // nominal coverage or split a fallback run back onto the primary face.
+    let mut following_face = pair.primary;
+    for item in items.iter_mut().rev() {
+        claim_generation_work(environment, 1)?;
+        let scalar = paragraph[item.start..item.end]
+            .chars()
+            .next()
+            .ok_or(TextPlanError::Arithmetic("source scalar boundary"))?;
+        if canonical::is_nonpainting_control(scalar) {
+            item.face = following_face;
+        } else {
+            following_face = item.face;
+        }
+    }
+    let mut preceding_face = None;
+    for item in &mut items {
+        claim_generation_work(environment, 1)?;
+        let scalar = paragraph[item.start..item.end]
+            .chars()
+            .next()
+            .ok_or(TextPlanError::Arithmetic("source scalar boundary"))?;
+        if canonical::is_nonpainting_control(scalar) {
+            if let Some(face) = preceding_face {
+                item.face = face;
+            }
+        } else {
+            preceding_face = Some(item.face);
+        }
+    }
+    Ok(items)
+}
+
+fn paragraph_items(
+    environment: &PreparedFontEnvironment,
+    paragraph: &str,
+    mut face_for: impl FnMut(usize, char) -> Result<FaceIdentity, TextPlanError>,
+) -> Result<Vec<ScalarItem>, TextPlanError> {
+    let mut items: Vec<ScalarItem> = Vec::new();
+    let mut extensions = unicode_script::ScriptExtension::default();
+    let mut segment_start = 0;
+    let mut segment_script = None;
+    for (start, scalar) in paragraph.char_indices() {
+        super::unicode16::reserve(&mut items, 1, &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
+        claim_generation_work(environment, 1)?;
+        let next = extensions.intersection(scalar.script_extension());
+        if next.is_empty() {
+            let script = segment_script.unwrap_or(Script::Common);
+            for item in &mut items[segment_start..] {
+                claim_generation_work(environment, 1)?;
+                item.script = script;
+            }
+            segment_start = items.len();
+            extensions = scalar.script_extension();
+            segment_script = None;
+        } else {
+            extensions = next;
+        }
+        if !matches!(
+            scalar.script(),
+            Script::Common | Script::Inherited | Script::Unknown
+        ) {
+            segment_script = Some(scalar.script());
+        }
+        items.push(ScalarItem {
+            start,
+            end: start + scalar.len_utf8(),
+            face: face_for(start, scalar)?,
+            script: scalar.script(),
+        });
+    }
+    let script = segment_script.unwrap_or(Script::Common);
+    for item in &mut items[segment_start..] {
+        claim_generation_work(environment, 1)?;
+        item.script = script;
+    }
+
+    // The key set is bounded by Unicode's bracket repertoire, not source length.
+    // Per-key stacks avoid scanning arbitrary nesting for unmatched closers.
+    let mut openings: Vec<(char, Vec<usize>)> = Vec::new();
+    let mut stack: Vec<(usize, usize)> = Vec::new();
+    for (index, scalar) in paragraph.chars().enumerate() {
+        claim_generation_work(environment, 1)?;
+        let Some(bracket) = HardcodedBidiData.bidi_matched_opening_bracket(scalar) else {
+            // Inherited characters stay with their resolved base, including a
+            // closing bracket whose context was restored above. Unrestricted
+            // Common characters carry that context forward; Script_Extensions
+            // such as the Kana prolonged sound mark remain constrained.
+            if index > 0
+                && (scalar.script() == Script::Inherited || scalar.script_extension().is_common())
+            {
+                items[index].script = items[index - 1].script;
+            }
+            continue;
+        };
+        claim_generation_work(environment, openings.len() as u128)?;
+        let key = openings
+            .iter()
+            .position(|(opening, _)| *opening == bracket.opening);
+        if bracket.is_open {
+            let key = if let Some(key) = key {
+                key
+            } else {
+                super::unicode16::reserve(&mut openings, 1, &mut |bytes, work| {
+                    claim_unicode(environment, bytes, work)
+                })?;
+                openings.push((bracket.opening, Vec::new()));
+                openings.len() - 1
+            };
+            let indices = &mut openings[key].1;
+            super::unicode16::reserve(indices, 1, &mut |bytes, work| {
+                claim_unicode(environment, bytes, work)
+            })?;
+            super::unicode16::reserve(&mut stack, 1, &mut |bytes, work| {
+                claim_unicode(environment, bytes, work)
+            })?;
+            indices.push(stack.len());
+            stack.push((key, index));
+        } else if let Some(position) = key.and_then(|key| openings[key].1.last()).copied() {
+            items[index].script = items[stack[position].1].script;
+            while stack.len() > position {
+                claim_generation_work(environment, 1)?;
+                let (key, _) = stack.pop().expect("matched bracket stack");
+                openings[key].1.pop();
+            }
+        }
+    }
+    Ok(items)
+}
+
+fn itemize_bidi_run(
+    environment: &PreparedFontEnvironment,
+    items: &[ScalarItem],
     paragraph_source_start: u32,
     bidi_run: Range<usize>,
 ) -> Result<Vec<ItemGroup>, TextPlanError> {
-    let items = paragraph[bidi_run.clone()]
-        .char_indices()
-        .map(|(relative, scalar)| {
-            let start = bidi_run.start + relative;
-            Ok(ScalarItem {
-                start,
-                end: start + scalar.len_utf8(),
-                face: selected_face(pair, scalar)?,
-                script: scalar.script(),
-            })
-        })
-        .collect::<Result<Vec<_>, TextPlanError>>()?;
-
+    let mut limits = [0; 2];
+    for (limit, boundary) in limits.iter_mut().zip([bidi_run.start, bidi_run.end]) {
+        let (mut low, mut high) = (0, items.len());
+        while low < high {
+            claim_generation_work(environment, 1)?;
+            let middle = low + (high - low) / 2;
+            if items[middle].start < boundary {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        *limit = low;
+    }
+    let [first, last] = limits;
     let mut groups: Vec<ItemGroup> = Vec::new();
-    for item in items {
+    for item in &items[first..last] {
         let absolute_start = (paragraph_source_start as usize)
             .checked_add(item.start)
             .ok_or(TextPlanError::Arithmetic("run source span"))?;
@@ -1336,6 +2081,9 @@ fn itemize_bidi_run(
                 continue;
             }
         }
+        super::unicode16::reserve(&mut groups, 1, &mut |bytes, work| {
+            claim_unicode(environment, bytes, work)
+        })?;
         groups.push(ItemGroup {
             span: TextSourceSpan::new(absolute_start, absolute_end)?,
             face: item.face,
@@ -1345,14 +2093,21 @@ fn itemize_bidi_run(
     Ok(groups)
 }
 
-fn selected_face(pair: &ResolvedFontPair, scalar: char) -> Result<FaceIdentity, TextPlanError> {
-    let selected = pair
-        .selected_scalars
-        .binary_search_by_key(&scalar, |selected| selected.scalar)
-        .ok()
-        .and_then(|index| pair.selected_scalars.get(index))
-        .ok_or(TextPlanError::InvalidScalarSelection(scalar as u32))?;
-    match selected.selection {
+fn selected_face(
+    pair: &ResolvedFontPair,
+    unit: &str,
+    scalar: char,
+) -> Result<FaceIdentity, TextPlanError> {
+    if canonical::is_nonpainting_control(scalar) {
+        return Ok(pair.primary);
+    }
+    let selection = pair
+        .selection_for_unit(unit, scalar)
+        .map_err(|error| match error {
+            FontError::MissingGlyph { .. } => TextPlanError::MissingPreparedScalar(scalar as u32),
+            error => TextPlanError::Font(error),
+        })?;
+    match selection {
         ScalarFaceSelection::Face(identity) => Ok(identity),
         ScalarFaceSelection::NonRenderingMandatoryBreak => {
             Err(TextPlanError::InvalidScalarSelection(scalar as u32))
@@ -1373,13 +2128,30 @@ struct BuiltRun {
     ink: Option<ExactInk>,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "freeze origins and ink in one pass while retaining exact advances for wrapping"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "root admission accompanies exact run geometry"
+)]
 fn scale_run(
+    environment: &PreparedFontEnvironment,
     shaped: CanonicalShapedRun,
     source_span: TextSourceSpan,
     script: Script,
     font_size: u32,
+    line_pen_x: ExactRational,
+    line_pen_y: ExactRational,
+    bidi_level: u8,
 ) -> Result<BuiltRun, TextPlanError> {
-    let mut glyphs = Vec::with_capacity(shaped.glyphs.len());
+    let mut glyphs = Vec::new();
+    claim_collection_count(environment, shaped.glyphs.len() as u128)?;
+    super::unicode16::reserve(&mut glyphs, shaped.glyphs.len(), &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
+    claim_collection_materialization(environment, shaped.glyphs.len() as u128)?;
     let mut pen_x = ExactRational::ZERO;
     let mut pen_y = ExactRational::ZERO;
     let mut exact_ink: Option<ExactInk> = None;
@@ -1407,22 +2179,27 @@ fn scale_run(
             font_size,
             shaped.metrics.units_per_em,
         )?;
+        let origin_x = line_pen_x
+            .add(pen_x, "glyph origin")?
+            .add(x_offset, "glyph origin")?
+            .nearest_even_i64("glyph origin")?;
+        let origin_y = line_pen_y
+            .add(pen_y, "glyph origin")?
+            .add(y_offset, "glyph origin")?
+            .nearest_even_i64("glyph origin")?;
         let glyph_exact_ink = glyph
             .ink
             .map(|ink| {
-                exact_glyph_ink(
-                    ink,
-                    glyph.x_offset,
-                    glyph.y_offset,
-                    font_size,
-                    shaped.metrics.units_per_em,
+                exact_glyph_ink(ink, 0, 0, font_size, shaped.metrics.units_per_em)?.translated(
+                    ExactRational::new(i128::from(origin_x), 1)?,
+                    ExactRational::new(i128::from(origin_y), 1)?,
                 )
             })
             .transpose()?;
         if let Some(ink) = glyph_exact_ink {
             exact_ink = Some(match exact_ink {
-                Some(current) => current.union(ink.translated(pen_x, pen_y)?)?,
-                None => ink.translated(pen_x, pen_y)?,
+                Some(current) => current.union(ink)?,
+                None => ink,
             });
         }
         let cluster = source_span
@@ -1442,6 +2219,8 @@ fn scale_run(
             y_advance_quanta: y_advance.nearest_even_i64("glyph y advance")?,
             x_offset_quanta: x_offset.nearest_even_i64("glyph x offset")?,
             y_offset_quanta: y_offset.nearest_even_i64("glyph y offset")?,
+            glyph_origin_x_quanta: origin_x,
+            glyph_origin_y_quanta: origin_y,
             ink_quanta: glyph_exact_ink.map(ExactInk::outward).transpose()?,
         });
         pen_x = pen_x.add(x_advance, "run x advance")?;
@@ -1460,6 +2239,7 @@ fn scale_run(
             source_span,
             face: shaped.identity,
             direction: shaped.direction,
+            bidi_level,
             script,
             units_per_em: shaped.metrics.units_per_em,
             design_ascender: shaped.metrics.ascender,
@@ -1520,20 +2300,25 @@ fn exact_glyph_ink(
 
 fn scaled_metrics(metrics: DesignMetrics, font_size: u32) -> Result<(i64, i64), TextPlanError> {
     let ascender = scale_design(i64::from(metrics.ascender), font_size, metrics.units_per_em)?
-        .nearest_even_i64("face ascender")?;
+        .ceil_i64("face ascender")?;
     let descender = scale_design(
         i64::from(metrics.descender),
         font_size,
         metrics.units_per_em,
     )?
-    .nearest_even_i64("face descender")?;
+    .floor_i64("face descender")?;
     if ascender <= 0 || descender >= 0 {
         return Err(TextPlanError::Arithmetic("scaled face metrics"));
     }
     Ok((ascender, descender))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "final geometry and root-admitted payload freezing remain ordered"
+)]
 fn finalize_plan(
+    environment: &PreparedFontEnvironment,
     input: TextPlanInput<'_>,
     stack: Vec<FamilyPreference>,
     pair_provenance: PairProvenance,
@@ -1615,27 +2400,60 @@ fn finalize_plan(
         )
     };
 
-    Ok(ResolvedTextPlan {
-        source: input.source.to_owned(),
-        style: ResolvedTextStyle {
-            stack_source: input.stack.to_owned(),
-            stack,
-            weight: input.weight,
-            font_size: input.font_size,
-            line_height_quanta,
-            alignment: input.alignment,
-            paint: input.paint,
-            provenance: input.provenance,
-            exact_override: input.exact_override,
-        },
-        pair_provenance,
-        lines: built_lines.into_iter().map(|line| line.plan).collect(),
-        line_pitch_quanta,
-        first_baseline_quanta,
-        last_baseline_quanta,
-        width_quanta,
-        height_quanta,
-    })
+    let mut source = String::new();
+    let mut stack_source = String::new();
+    let mut lines = Vec::new();
+    claim_unicode(
+        environment,
+        u64::try_from(
+            input
+                .source
+                .len()
+                .checked_add(input.stack.len())
+                .and_then(|bytes| {
+                    bytes.checked_add(size_of::<ResolvedTextPayload>() + 2 * size_of::<usize>())
+                })
+                .ok_or(TextPlanError::Arithmetic("text payload bytes"))?,
+        )
+        .map_err(|_| TextPlanError::Arithmetic("text payload bytes"))?,
+        input.source.len() as u64 + input.stack.len() as u64,
+    )?;
+    source
+        .try_reserve_exact(input.source.len())
+        .map_err(|_| TextPlanError::Allocation("text source"))?;
+    stack_source
+        .try_reserve_exact(input.stack.len())
+        .map_err(|_| TextPlanError::Allocation("text stack source"))?;
+    super::unicode16::reserve(&mut lines, built_lines.len(), &mut |bytes, work| {
+        claim_unicode(environment, bytes, work)
+    })?;
+    source.push_str(input.source);
+    stack_source.push_str(input.stack);
+    lines.extend(built_lines.into_iter().map(|line| line.plan));
+    Ok(ResolvedTextPlan(
+        std::sync::Arc::new(ResolvedTextPayload {
+            source,
+            style: ResolvedTextStyle {
+                stack_source,
+                stack,
+                weight: input.weight,
+                font_size: input.font_size,
+                line_height_quanta,
+                alignment: input.alignment,
+                paint: input.paint,
+                provenance: input.provenance,
+                exact_override: input.exact_override,
+            },
+            pair_provenance,
+            lines,
+            line_pitch_quanta,
+            first_baseline_quanta,
+            last_baseline_quanta,
+            width_quanta,
+            height_quanta,
+        }),
+        None,
+    ))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1870,16 +2688,15 @@ pub(crate) struct TextBlock {
 }
 
 impl TextBlock {
+    pub(crate) const fn plan(&self) -> &ResolvedTextPlan {
+        &self.plan
+    }
     pub(crate) const fn from_resolved(plan: ResolvedTextPlan) -> Self {
         Self { plan }
     }
 
     pub(crate) fn lines(&self) -> Vec<&str> {
         self.plan.line_texts()
-    }
-
-    pub(crate) fn into_lines(self) -> Vec<String> {
-        self.plan.into_line_texts()
     }
 
     pub(crate) fn width(&self) -> f64 {
@@ -1899,28 +2716,7 @@ impl TextBlock {
 mod tests {
     use super::*;
 
-    fn prepared_transitions(source: &str) -> PreparedTextTransitions<'_> {
-        let environment = PreparedFontEnvironment::synthetic();
-        let stack = canonical::parse_family_stack("Test Sans").unwrap();
-        let pair = environment
-            .resolve_pair(
-                0,
-                &stack,
-                RequestedWeight::Normal,
-                &source.chars().collect::<Vec<_>>(),
-            )
-            .unwrap();
-        PreparedTextTransitions::prepare(
-            &environment,
-            &pair,
-            source,
-            mandatory_paragraph_seeds(source).unwrap(),
-            10,
-        )
-        .unwrap()
-    }
-
-    fn input(
+    pub(super) fn input(
         source: &str,
         maximum_width_quanta: i64,
         alignment: PhysicalTextAlignment,
@@ -1942,7 +2738,7 @@ mod tests {
         }
     }
 
-    fn plan(
+    pub(super) fn plan(
         source: &str,
         maximum_width_quanta: i64,
         alignment: PhysicalTextAlignment,
@@ -1957,6 +2753,39 @@ mod tests {
             .iter()
             .map(|line| &plan.source[line.source_span.range()])
             .collect()
+    }
+
+    #[test]
+    fn intrinsic_widths_are_separate_from_assigned_line_capacity() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let source = "AAAA AAAA AAAA AAAA";
+        let one = environment
+            .text_intrinsic_requirements(input(source, i64::MAX, PhysicalTextAlignment::Start), 1)
+            .unwrap();
+        let two = environment
+            .text_intrinsic_requirements(input(source, i64::MAX, PhysicalTextAlignment::Start), 2)
+            .unwrap();
+        assert_eq!(one.hard_width_quanta, two.hard_width_quanta);
+        assert_eq!(one.natural_width_quanta, two.natural_width_quanta);
+        assert!(two.hard_width_quanta < two.natural_width_quanta);
+        let unwrapped = environment
+            .plan_text(input(source, i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap();
+        assert_eq!(one.natural_width_quanta, unwrapped.width_quanta);
+        assert_eq!(
+            one.preferred_width_quanta,
+            unwrapped.lines[0].logical_advance_quanta
+        );
+        assert!(two.preferred_width_quanta < one.preferred_width_quanta);
+        let measured = environment
+            .plan_text(input(
+                source,
+                two.preferred_width_quanta,
+                PhysicalTextAlignment::Start,
+            ))
+            .unwrap();
+        assert_eq!(measured.lines.len(), 2);
+        assert_eq!(measured.source, source);
     }
 
     #[test]
@@ -2033,68 +2862,41 @@ mod tests {
     }
 
     #[test]
-    fn every_legal_transition_is_shaped_once_and_reused_for_fitting() {
+    fn exact_fit_retains_the_whole_paragraph_without_reshaping() {
+        TEXT_WORK.with(|work| work.set(TextWork::default()));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
-        let transitions = prepared_transitions("A A A");
-        let paragraph = &transitions.paragraphs[0].transitions;
-
-        assert_eq!(paragraph.boundaries, [0, 2, 4, 5]);
-        assert_eq!(
-            transitions.widths_quanta,
-            [8_704, 17_408, 23_552, 8_704, 14_848, 6_144]
-        );
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 17));
-
-        assert_eq!(
-            paragraph
-                .furthest_fitting_end(&transitions.widths_quanta, 0, 8_704)
-                .unwrap(),
-            Some(1)
-        );
-        assert_eq!(
-            paragraph
-                .furthest_fitting_end(&transitions.widths_quanta, 0, 17_408)
-                .unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            paragraph
-                .furthest_fitting_end(&transitions.widths_quanta, 0, 23_552)
-                .unwrap(),
-            Some(3)
-        );
-        assert_eq!(
-            paragraph
-                .furthest_fitting_end(&transitions.widths_quanta, 1, 14_848)
-                .unwrap(),
-            Some(3)
-        );
-        assert_eq!(
-            paragraph
-                .furthest_fitting_end(&transitions.widths_quanta, 0, 8_703)
-                .unwrap(),
-            None
-        );
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 17));
+        let plan = plan("A A A", 23_552, PhysicalTextAlignment::Start);
+        assert_eq!(line_texts(&plan), ["A A A"]);
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        TEXT_WORK.with(|work| {
+            assert_eq!(
+                work.get(),
+                TextWork {
+                    proposal_visits: 0,
+                    exact_trials: 1,
+                    shaping_scalars: 5,
+                    shaped_glyphs: 5,
+                }
+            );
+        });
     }
 
     #[test]
     fn requested_width_selects_only_its_greedy_lines() {
-        for (width, expected) in [
-            (8_704, vec!["A ", "A ", "A"]),
-            (14_848, vec!["A ", "A A"]),
-            (17_408, vec!["A A ", "A"]),
-            (20_000, vec!["A A ", "A"]),
-            (23_552, vec!["A A A"]),
-            (i64::MAX, vec!["A A A"]),
+        for (width, expected, shapes) in [
+            (8_704, vec!["A ", "A ", "A"], 6),
+            (14_848, vec!["A ", "A A"], 4),
+            (17_408, vec!["A A ", "A"], 3),
+            (20_000, vec!["A A ", "A"], 3),
+            (23_552, vec!["A A A"], 1),
+            (i64::MAX, vec!["A A A"], 1),
         ] {
             crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
             let plan = plan("A A A", width, PhysicalTextAlignment::Start);
             assert_eq!(line_texts(&plan), expected);
             assert_eq!(line_texts(&plan).concat(), plan.source);
-            // Seventeen transition runs plus five selected runs, irrespective
-            // of how many other widths would produce different line vectors.
-            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 22));
+            crate::font::canonical::FONT_SHAPE_CALLS
+                .with(|calls| assert_eq!(calls.get(), shapes, "width {width}"));
         }
     }
 
@@ -2104,7 +2906,7 @@ mod tests {
         let plan = plan("A", i64::MAX, PhysicalTextAlignment::Start);
         assert_eq!(line_texts(&plan), ["A"]);
         assert_eq!(plan.lines[0].ending_grapheme_index, 1);
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 2));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
     }
 
     #[test]
@@ -2144,11 +2946,11 @@ mod tests {
                 required_width_quanta: 8_704,
             })
         ));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 17));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 2));
     }
 
     #[test]
-    fn transition_slot_refusal_precedes_all_paragraph_shaping() {
+    fn paragraph_slot_refusal_precedes_all_paragraph_shaping() {
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let environment = PreparedFontEnvironment::synthetic();
         environment.claim_text_generation_slots(999_995).unwrap();
@@ -2169,12 +2971,12 @@ mod tests {
     }
 
     #[test]
-    fn selected_record_refusal_precedes_final_line_shaping() {
+    fn selected_record_refusal_does_not_reshape_the_paragraph() {
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let environment = PreparedFontEnvironment::synthetic();
-        // Twelve transition slots fit; the four selected plan/source/line
-        // records must be admitted before the final line is shaped.
-        environment.claim_text_generation_slots(999_985).unwrap();
+        // Source/header, grapheme, glyph/run, and paragraph-analysis records fit;
+        // the two retained line records cross the shared boundary by one.
+        environment.claim_text_generation_slots(999_991).unwrap();
         let error = environment
             .plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start))
             .unwrap_err();
@@ -2193,9 +2995,8 @@ mod tests {
     fn selected_plan_budget_is_exact_and_shared_by_environment_clones() {
         let environment = PreparedFontEnvironment::synthetic();
         let clone = environment.clone();
-        // Twelve transition slots, four plan/source/line records, one run,
-        // and one glyph. No raw attempts or alternative plans are retained.
-        environment.claim_text_generation_slots(999_982).unwrap();
+        // Nine source/glyph/line slots plus the paragraph and shared analysis records.
+        environment.claim_text_generation_slots(999_989).unwrap();
         let plan = clone
             .plan_text(input("A", i64::MAX, PhysicalTextAlignment::Start))
             .unwrap();
@@ -2211,7 +3012,7 @@ mod tests {
     }
 
     #[test]
-    fn paragraph_bidi_is_computed_once_for_transitions_and_selected_lines() {
+    fn paragraph_bidi_is_computed_once_for_proposals_and_selected_lines() {
         PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(0));
         let plan = plan("A A A", i64::MAX, PhysicalTextAlignment::Start);
 
@@ -2245,7 +3046,7 @@ mod tests {
     }
 
     #[test]
-    fn shaping_runs_split_at_direct_common_script_boundaries() {
+    fn shaping_runs_resolve_common_script_from_paragraph_context() {
         let plan = plan("A A", i64::MAX, PhysicalTextAlignment::Start);
         let runs = &plan.lines[0].runs;
 
@@ -2253,51 +3054,298 @@ mod tests {
             runs.iter()
                 .map(|run| (&plan.source[run.source_span.range()], run.script))
                 .collect::<Vec<_>>(),
-            [
-                ("A", Script::Latin),
-                (" ", Script::Common),
-                ("A", Script::Latin)
-            ]
+            [("A A", Script::Latin)]
         );
     }
 
     #[test]
-    fn transition_pairs_are_counted_per_mandatory_paragraph() {
-        let paragraphs = mandatory_paragraphs("A A\nA A").unwrap();
-        let total = paragraphs
-            .iter()
-            .map(|span| {
-                let boundary_count = legal_line_breaks(&"A A\nA A"[span.range()]).len() + 1;
-                checked_transition_count(boundary_count).unwrap()
-            })
-            .sum::<u128>();
-
-        assert_eq!(total, 6);
+    fn legal_wrapping_preserves_mandatory_paragraph_context() {
+        PARAGRAPH_BIDI_CALLS.with(|calls| calls.set(0));
+        let plan = plan("A A\nA A", 8_704, PhysicalTextAlignment::Start);
+        assert_eq!(line_texts(&plan), ["A ", "A", "A ", "A"]);
+        PARAGRAPH_BIDI_CALLS.with(|calls| assert_eq!(calls.get(), 2));
     }
 
     #[test]
-    fn transition_pair_count_is_checked_at_the_slot_limit() {
-        assert_eq!(checked_transition_count(1_414).unwrap(), 998_991);
-        assert_eq!(checked_transition_count(1_415).unwrap(), 1_000_405);
-    }
-
-    #[test]
-    fn long_breakable_input_returns_typed_generation_work_limit_before_shaping() {
+    fn original_144_repeat_wraps_with_linear_selected_work() {
+        TEXT_WORK.with(|work| work.set(TextWork::default()));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let source = "A ".repeat(144);
-        let error = PreparedFontEnvironment::synthetic()
-            .plan_text(input(&source, i64::MAX, PhysicalTextAlignment::Start))
-            .unwrap_err();
+        let plan = plan(&source, 87_040, PhysicalTextAlignment::Start);
+        assert_eq!(line_texts(&plan).concat(), source);
+        assert_eq!(plan.lines.len(), 15);
+        // Whole paragraph, selected lines, and the first failing extension.
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 30));
+        TEXT_WORK.with(|work| {
+            assert_eq!(
+                work.get(),
+                TextWork {
+                    proposal_visits: 158,
+                    exact_trials: 30,
+                    shaping_scalars: 884,
+                    shaped_glyphs: 884,
+                }
+            );
+        });
+    }
 
-        assert!(matches!(
-            error,
-            TextPlanError::Limit {
-                resource: "candidate-generation work units",
-                limit: 1_000_000,
-                cumulative_claim,
-            } if cumulative_claim > 1_000_000
-        ));
-        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+    #[test]
+    fn synthetic_trials_retreat_reuse_failure_and_stop_at_the_first_failed_extension() {
+        let template = plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].clone();
+        for (prefixes, widths, maximum, paragraph_failure, expected_end, expected_trials) in [
+            (
+                vec![0, 2, 4, 6, 8],
+                vec![0, 2, 5, 8, 9],
+                6,
+                Some(9),
+                2,
+                vec![3, 2],
+            ),
+            (
+                vec![0, 4, 8, 12, 16],
+                vec![0, 2, 3, 9, 4],
+                6,
+                Some(9),
+                2,
+                vec![1, 2, 3],
+            ),
+            (
+                vec![0, 1, 2, 3],
+                vec![0, 2, 6, 6],
+                5,
+                Some(6),
+                1,
+                vec![2, 1],
+            ),
+        ] {
+            let environment = PreparedFontEnvironment::synthetic();
+            let prefixes = prefixes
+                .into_iter()
+                .map(|width| ExactRational::new(width, 1).unwrap())
+                .collect::<Vec<_>>();
+            let mut trials = Vec::new();
+            let (end, _) = select_line(
+                &environment,
+                &prefixes,
+                0,
+                maximum,
+                paragraph_failure,
+                TextSourceSpan::new(0, 1).unwrap(),
+                |end| {
+                    trials.push(end);
+                    let mut line = template.clone();
+                    line.ink_quanta = None;
+                    Ok(BuiltLine {
+                        plan: line,
+                        advance: ExactRational::new(widths[end], 1)?,
+                        ascent: 0,
+                        descent: 0,
+                    })
+                },
+            )
+            .unwrap();
+            assert_eq!(end, expected_end);
+            assert_eq!(trials, expected_trials);
+        }
+    }
+
+    #[test]
+    fn synthetic_trial_work_has_an_exact_shared_budget_and_refuses_before_shaping() {
+        let template = plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].clone();
+        let prefixes = [0, 2, 4, 6, 8].map(|width| ExactRational::new(width, 1).unwrap());
+        for remaining in [0, 9] {
+            let environment = PreparedFontEnvironment::synthetic();
+            environment
+                .claim_text_generation_work(1_000_000 - remaining)
+                .unwrap();
+            let mut trials = Vec::new();
+            let result = select_line(
+                &environment.clone(),
+                &prefixes,
+                0,
+                6,
+                Some(9),
+                TextSourceSpan::new(0, 1).unwrap(),
+                |end| {
+                    trials.push(end);
+                    let mut line = template.clone();
+                    line.ink_quanta = None;
+                    Ok(BuiltLine {
+                        plan: line,
+                        advance: ExactRational::new(if end == 3 { 8 } else { 5 }, 1)?,
+                        ascent: 0,
+                        descent: 0,
+                    })
+                },
+            );
+            if remaining == 0 {
+                assert!(matches!(
+                    result,
+                    Err(TextPlanError::Limit {
+                        resource: "candidate-generation work units",
+                        cumulative_claim: 1_000_001,
+                        ..
+                    })
+                ));
+                assert!(trials.is_empty());
+            } else {
+                assert_eq!(result.unwrap().0, 2);
+                assert_eq!(trials, [3, 2]);
+                assert!(matches!(
+                    environment.claim_text_generation_work(1),
+                    Err(canonical::TextGenerationClaimError::Limit {
+                        cumulative_claim: 1_000_001,
+                        ..
+                    })
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn exact_trial_checks_outward_ink_and_upward_advance_as_one_budget_unit() {
+        let template = plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].clone();
+        for (advance, ink_right) in [
+            (ExactRational::new(13, 2).unwrap(), 6),
+            (ExactRational::new(6, 1).unwrap(), 7),
+        ] {
+            let environment = PreparedFontEnvironment::synthetic();
+            environment.claim_text_generation_work(999_999).unwrap();
+            let mut line = template.clone();
+            line.ink_quanta = Some(TextInkBounds {
+                left: 0,
+                right: ink_right,
+                bottom: 0,
+                top: 1,
+            });
+            let line = BuiltLine {
+                plan: line,
+                advance,
+                ascent: 1,
+                descent: 0,
+            };
+            assert_eq!(exact_line_width(&environment, &line).unwrap(), 7);
+            assert!(matches!(
+                environment.claim_text_generation_work(1),
+                Err(canonical::TextGenerationClaimError::Limit {
+                    cumulative_claim: 1_000_001,
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[test]
+    fn proposal_map_defers_whole_clusters_past_internal_legal_graphemes() {
+        let plan = plan("AAA", i64::MAX, PhysicalTextAlignment::Start);
+        let mut line = plan.lines[0].clone();
+        line.runs[0].glyphs[1].cluster = 0;
+        let mut whole = BuiltLine {
+            plan: line,
+            advance: ExactRational::ZERO,
+            ascent: 0,
+            descent: 0,
+        };
+        let prefixes = proposal_prefixes(
+            &PreparedFontEnvironment::synthetic(),
+            &whole.plan,
+            &[0, 1, 2, 3],
+            10,
+        )
+        .unwrap();
+        assert_eq!(
+            prefixes
+                .iter()
+                .map(|width| width.ceil_i64("test prefix").unwrap())
+                .collect::<Vec<_>>(),
+            [0, 0, 12_288, 18_432]
+        );
+        // Magnitude is taken after summing the cluster, not per glyph.
+        whole.plan.runs[0].glyphs[0].design_x_advance = -600;
+        let prefixes = proposal_prefixes(
+            &PreparedFontEnvironment::synthetic(),
+            &whole.plan,
+            &[0, 1, 2, 3],
+            10,
+        )
+        .unwrap();
+        assert_eq!(
+            prefixes
+                .iter()
+                .map(|width| width.ceil_i64("test prefix").unwrap())
+                .collect::<Vec<_>>(),
+            [0, 0, 0, 6144]
+        );
+    }
+
+    #[test]
+    fn ordinary_caption_workloads_render_in_adequate_public_boxes() {
+        let sentence = "Measured responses remained stable across independent trials under controlled conditions. ";
+        let captions = [
+            "A ".repeat(144),
+            sentence.repeat(20),
+            [sentence.repeat(7), sentence.repeat(7), sentence.repeat(6)].join("\n"),
+        ];
+        assert_eq!(captions[1].split_whitespace().count(), 200);
+        assert_eq!(captions[2].split_whitespace().count(), 200);
+        for (index, caption) in captions.iter().enumerate() {
+            let environment = PreparedFontEnvironment::discover_system().unwrap();
+            let mut request = input(
+                caption,
+                768 * CSS_PIXEL_QUANTA,
+                PhysicalTextAlignment::Start,
+            );
+            request.stack = crate::DEFAULT_FONT_FAMILY_STACK;
+            request.font_size = 15;
+            TEXT_WORK.with(|work| work.set(TextWork::default()));
+            let planned = environment.plan_text(request).unwrap();
+            assert_eq!(planned.line_texts().concat(), caption.replace('\n', ""));
+            assert!(planned.lines.len() > 1);
+            TEXT_WORK.with(|work| {
+                let work = work.get();
+                assert!(
+                    work.shaping_scalars <= 4 * caption.chars().count(),
+                    "{work:?}"
+                );
+                assert!(work.exact_trials <= 2 * planned.lines.len() + 1, "{work:?}");
+                assert!(
+                    work.proposal_visits
+                        <= caption.split_whitespace().count() + planned.lines.len(),
+                    "{work:?}"
+                );
+                eprintln!(
+                    "caption {index}: {work:?}, selected lines {}",
+                    planned.lines.len()
+                );
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("caption.svg");
+            crate::Plot::scatter(
+                crate::NumericValues::new("x", [0.0, 1.0]),
+                crate::NumericValues::new("y", [0.0, 1.0]),
+            )
+            .caption(caption)
+            .size(800, 900)
+            .svg_preserve_text(&path)
+            .unwrap();
+            let svg = std::fs::read_to_string(path).unwrap();
+            let words = svg
+                .split("<text ")
+                .skip(1)
+                .flat_map(|element| {
+                    element
+                        .split_once('>')
+                        .unwrap()
+                        .1
+                        .split_once("</text>")
+                        .unwrap()
+                        .0
+                        .split_whitespace()
+                })
+                .filter(|word| *word == if index == 0 { "A" } else { "Measured" })
+                .count();
+            assert_eq!(words, if index == 0 { 144 } else { 20 });
+        }
     }
 
     #[test]

@@ -1,9 +1,8 @@
 ---
 source: tests/visual_regression/suite.rs
-assertion_line: 53
 expression: "specialized_svg_structure(&svg,\n&[\"Beeswarm structural title\", \"Color\", \"0.100\", \"1.000\"])"
 ---
-<clipPath id="clip-0"><rect x="86.828" y="52.000" width="166.945" height="159.400"/></clipPath>
+<clipPath id="clip-0"><rect x="114.884" y="52.000" width="138.889" height="159.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0

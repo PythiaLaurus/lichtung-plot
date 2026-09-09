@@ -49,6 +49,8 @@ use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 pub struct AxisSpec {
     /// Explicit visible data range. When `None`, the renderer computes one.
     pub limits: Option<(f64, f64)>,
+    /// Exact numeric tick source, selected before any automatic text is measured.
+    pub(crate) exact_ticks: Option<Vec<AxisTick>>,
 }
 
 /// A single tick on an axis: a data-space position and the
@@ -58,7 +60,7 @@ pub struct AxisSpec {
 /// `tick_labels: Vec<String>` design so categorical labels
 /// ("setosa", "versicolor") and numeric labels ("0.5", "10k")
 /// share the same type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AxisTick {
     /// Data-space position of the tick.
     pub position: f64,
@@ -87,6 +89,8 @@ pub struct Axis {
     pub label: String,
     /// Tick positions + labels in data space.
     pub ticks: Vec<AxisTick>,
+    pub(crate) explicit_ticks: bool,
+    pub(crate) assigned_tick_width: Option<f64>,
 }
 
 /// A four-sided frame for a plot area.

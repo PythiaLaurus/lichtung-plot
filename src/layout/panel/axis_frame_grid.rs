@@ -51,6 +51,23 @@ struct AxisTextPlan {
     title: Option<ResolvedTextPlan>,
 }
 
+impl PanelAxisTextPlan {
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        for axis in [&self.x_axis, &self.y_axis] {
+            for label in axis.tick_labels.iter().flatten() {
+                round.observe_text(label)?;
+            }
+            if let Some(title) = &axis.title {
+                round.observe_text(title)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Layout {
     pub(crate) fn plan_axis_text(&self, theme: &ResolvedTheme) -> Result<PanelAxisTextPlan, Error> {
         Ok(PanelAxisTextPlan {
@@ -88,14 +105,53 @@ impl Layout {
 }
 
 impl Axis {
+    pub(crate) fn validate_ticks(
+        ticks: &[AxisTick],
+        range: (f64, f64),
+        axis: &str,
+    ) -> Result<(), Error> {
+        const MAX_EXPLICIT_TICKS: usize = 10_000;
+        if ticks.is_empty() {
+            return Err(Error::Data(format!(
+                "{axis} explicit numeric ticks must not be empty"
+            )));
+        }
+        if ticks.len() > MAX_EXPLICIT_TICKS {
+            return Err(Error::Data(format!(
+                "{axis} explicit numeric tick count {} exceeds {MAX_EXPLICIT_TICKS}",
+                ticks.len()
+            )));
+        }
+        for (index, tick) in ticks.iter().enumerate() {
+            if !tick.position.is_finite() {
+                return Err(Error::Data(format!(
+                    "{axis} explicit tick {index} position must be finite; got {}",
+                    tick.position
+                )));
+            }
+            if tick.position < range.0 || tick.position > range.1 {
+                return Err(Error::Data(format!(
+                    "{axis} explicit tick {index} position {} is outside resolved range {}..{}",
+                    tick.position, range.0, range.1
+                )));
+            }
+            if index > 0 && ticks[index - 1].position >= tick.position {
+                return Err(Error::Data(format!(
+                    "{axis} explicit tick positions must be strictly ascending"
+                )));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn validate_explicit_tick_collisions(
         &self,
         projection: &Projection,
         side: AxisSide,
         theme: &ResolvedTheme,
         axis: &str,
-    ) -> Result<(), Error> {
-        let maximum_width = self.tick_label_maximum_width(projection, side);
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<(), crate::layout::fit::PlanError> {
+        let maximum_width = self.tick_label_width(projection.panel_box(), side, theme)?;
         let role = format!("{axis} explicit tick label");
         let mut previous = None;
         for (index, tick) in self
@@ -104,17 +160,19 @@ impl Axis {
             .enumerate()
             .filter(|(_, tick)| !tick.label.is_empty())
         {
-            let block = text_block(
-                theme,
-                &tick.label,
-                &theme.typography.tick_label,
-                maximum_width,
-                match side {
-                    AxisSide::Bottom => PhysicalTextAlignment::Center,
-                    AxisSide::Left => PhysicalTextAlignment::End,
-                },
-                &role,
-            )?;
+            let block =
+                TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
+                    theme,
+                    &tick.label,
+                    &theme.typography.tick_label,
+                    maximum_width,
+                    match side {
+                        AxisSide::Bottom => PhysicalTextAlignment::Center,
+                        AxisSide::Left => PhysicalTextAlignment::End,
+                    },
+                    &role,
+                    scope,
+                ))?);
             let center = match side {
                 AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
                 AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
@@ -134,9 +192,9 @@ impl Axis {
             };
             if let Some((previous_index, previous_end)) = previous {
                 if start < previous_end {
-                    return Err(Error::Render(format!(
+                    return Err(scope.failure(crate::layout::kernel::FitKind::Tick, format!(
                         "{axis} explicit tick labels at indices {previous_index} and {index} overlap after projection; increase chart size, shorten the labels, or provide non-overlapping exact ticks"
-                    )));
+                    )).into());
                 }
             }
             previous = Some((index, end));
@@ -144,11 +202,35 @@ impl Axis {
         Ok(())
     }
 
-    fn tick_label_maximum_width(&self, projection: &Projection, side: AxisSide) -> f64 {
-        let (x0, x1, _, _) = projection.pixel_box();
+    pub(crate) fn tick_label_width(
+        &self,
+        panel: crate::layout::PanelBox,
+        side: AxisSide,
+        theme: &ResolvedTheme,
+    ) -> Result<f64, Error> {
+        if let Some(width) = self.assigned_tick_width {
+            return Ok(width);
+        }
         match side {
-            AxisSide::Bottom => (x1 - x0) / self.ticks.len().max(1) as f64,
-            AxisSide::Left => ((x1 - x0) * 0.4).max(1.0),
+            AxisSide::Bottom => Ok(panel.width() / self.ticks.len().max(1) as f64),
+            AxisSide::Left if self.explicit_ticks => {
+                let mut width = 1.0 / 1024.0;
+                for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
+                    let plan = theme.measure_text(
+                        &tick.label,
+                        &theme.typography.tick_label,
+                        PhysicalTextAlignment::End,
+                        "y-axis exact tick label",
+                        false,
+                    )?;
+                    width = f64::max(width, plan.width().max(plan.fit_width()));
+                }
+                Ok(width)
+            }
+            AxisSide::Left => theme.intrinsic_tick_label_width(
+                self.ticks.iter().map(|tick| tick.label.as_str()),
+                panel.height(),
+            ),
         }
     }
 
@@ -158,7 +240,7 @@ impl Axis {
         side: AxisSide,
         theme: &ResolvedTheme,
     ) -> Result<AxisTextPlan, Error> {
-        let maximum_width = self.tick_label_maximum_width(projection, side);
+        let maximum_width = self.tick_label_width(projection.panel_box(), side, theme)?;
         let (alignment, tick_role, title_role, title_width) = match side {
             AxisSide::Bottom => (
                 PhysicalTextAlignment::Center,
@@ -179,13 +261,13 @@ impl Axis {
             .map(|tick| {
                 (!tick.label.is_empty())
                     .then(|| {
-                        theme.plan_text(
+                        tick_text_plan(
+                            theme,
                             &tick.label,
                             &theme.typography.tick_label,
                             maximum_width,
                             alignment,
                             tick_role,
-                            false,
                         )
                     })
                     .transpose()
@@ -383,17 +465,15 @@ impl Axis {
     }
 }
 
-fn text_block(
+fn tick_text_plan(
     theme: &ResolvedTheme,
     source: &str,
     appearance: &crate::theme::TextAppearance,
     maximum_width: f64,
     alignment: PhysicalTextAlignment,
     owner: &str,
-) -> Result<TextBlock, Error> {
-    theme
-        .plan_text(source, appearance, maximum_width, alignment, owner, false)
-        .map(TextBlock::from_resolved)
+) -> Result<ResolvedTextPlan, Error> {
+    theme.plan_text(source, appearance, maximum_width, alignment, owner, false)
 }
 
 impl Frame {

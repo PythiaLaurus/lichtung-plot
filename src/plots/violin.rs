@@ -30,8 +30,9 @@ mod precomputed;
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
+use crate::layout::fit::with_clip;
 use crate::layout::{AxisTick, Layout};
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
+use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range, quantile};
 use crate::theme::ResolvedTheme;
@@ -60,7 +61,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     render_samples(chart, context, theme, backend, DistributionLayout::Mirrored)
 }
@@ -69,7 +70,7 @@ pub(crate) fn render_raincloud(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     if let Some(input) = chart.raincloud_geometry_input() {
         return precomputed::render(chart, input, context, backend);
@@ -89,7 +90,7 @@ fn render_samples(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
     distribution_layout: DistributionLayout,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let family = match distribution_layout {
         DistributionLayout::Mirrored => "violin",
         DistributionLayout::Raincloud => "raincloud",
@@ -105,7 +106,8 @@ fn render_samples(
                 return Err(Error::Data(format!(
                     "raincloud: duplicate source-row identity {}",
                     observation.source_row
-                )));
+                ))
+                .into());
             }
         }
     }
@@ -125,7 +127,8 @@ fn render_samples(
     if data_y_min >= data_y_max {
         return Err(Error::Data(format!(
             "{family}: data has zero variance (all y values are equal)"
-        )));
+        ))
+        .into());
     }
 
     let extent_groups: Vec<(String, Vec<f64>)> = sample
@@ -151,8 +154,13 @@ fn render_samples(
     let rendered_maxima = vec![support_range.1; x_levels.len()];
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let panel =
-        crate::plots::horizontal_bar::panel_box_for_x_tick_labels(chart, panel, x_levels, theme)?;
+    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
+        chart,
+        panel,
+        x_levels,
+        theme,
+        context.fit_scope(),
+    )?;
     let legend_entries = hue_levels
         .iter()
         .enumerate()
@@ -184,6 +192,7 @@ fn render_samples(
             base_display_range,
             panel,
             theme,
+            context.fit_scope(),
         )?
     } else {
         let mut grouped_maxima = vec![vec![f64::NEG_INFINITY; group_levels.len()]; x_levels.len()];
@@ -200,6 +209,7 @@ fn render_samples(
             panel,
             false,
             theme,
+            context.fit_scope(),
         )?
     };
     let display_range = significance.y_range;
@@ -223,7 +233,7 @@ fn render_samples(
         chart.x_axis_spec(),
         &y_axis_spec,
         theme,
-    );
+    )?;
     let proj = &layout.projection;
 
     let n_grid: usize = 64;
@@ -395,10 +405,9 @@ fn render_samples(
                 let strip_min = strip_left + point_radius;
                 let strip_max = strip_right - point_radius;
                 if strip_min - point_radius <= box_right || strip_max < strip_min {
-                    return Err(Error::Render(
+                    return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
                         "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce series"
-                            .into(),
-                    ));
+                    ).into());
                 }
                 let color = group_color(chart, group, index, group_active, family, theme)?;
                 let points = group

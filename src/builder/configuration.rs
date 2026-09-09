@@ -183,7 +183,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericX,
     {
-        self.x_ticks = Some(ticks);
+        self.x_axis_spec.exact_ticks = Some(ticks);
         self
     }
 
@@ -193,7 +193,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::NumericY,
     {
-        self.y_ticks = Some(ticks);
+        self.y_axis_spec.exact_ticks = Some(ticks);
         self
     }
 

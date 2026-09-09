@@ -25,7 +25,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
@@ -63,7 +63,8 @@ pub(crate) fn render(
     {
         return Err(Error::Data(
             "interaction: all channels must have equal non-zero lengths".into(),
-        ));
+        )
+        .into());
     }
     let mut x_levels = Vec::new();
     let trace_levels = chart.resolved_group_levels(channels.group_levels.clone());
@@ -76,14 +77,15 @@ pub(crate) fn render(
             let source_row = context.data.source_row(index);
             return Err(Error::Data(format!(
                 "interaction: source row {source_row} must satisfy lower <= estimate <= upper"
-            )));
+            ))
+            .into());
         }
         if !cells.insert((x[index].clone(), channels.rows[index].clone())) {
             let source_row = context.data.source_row(index);
             return Err(Error::Data(format!(
                 "interaction: duplicate (condition, group, hue) cell ({:?}, {:?}, {:?}) at source row {source_row}",
                 x[index], channels.rows[index].group, channels.rows[index].hue
-            )));
+            )).into());
         }
         if !x_levels.contains(&x[index]) {
             x_levels.push(x[index].clone());
@@ -105,6 +107,7 @@ pub(crate) fn render(
         panel,
         &x_levels,
         context.theme,
+        context.fit_scope(),
     )?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         (0.0, x_levels.len() as f64),
@@ -117,7 +120,7 @@ pub(crate) fn render(
         chart.x_axis_spec(),
         &y_axis,
         context.theme,
-    );
+    )?;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for identity in &identities {
             if !channels.rows.contains(identity) {

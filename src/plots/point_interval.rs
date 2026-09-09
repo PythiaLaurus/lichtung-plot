@@ -27,7 +27,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let rows = prepare(chart, context.data)?;
     let estimates = rows.iter().map(|row| row.estimate).collect::<Vec<_>>();
     let x_data_range = crate::plots::interval_estimate::estimate_data_range(&estimates);
@@ -51,7 +51,8 @@ pub(crate) fn render(
             (None, None) => {
                 return Err(Error::Data(
                     "point_interval: all rows are not_estimable; set explicit x-axis limits".into(),
-                ))
+                )
+                .into())
             }
         },
     };
@@ -66,13 +67,14 @@ pub(crate) fn render(
         .enumerate()
         .map(|(index, label)| AxisTick::new(row_y(index, rows.len()), label.clone()))
         .collect();
-    let panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
+    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
         chart,
         context.panel,
         &display_labels,
         context.theme,
+        context.fit_scope(),
     )?;
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
         (0.0, row_count),
         panel,
@@ -83,11 +85,26 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         context.theme,
-    );
+    )?;
+    layout.y_axis.assigned_tick_width = Some(tick_width);
     let theme = context.theme;
     let interval_style = LineStyle::solid(theme.foreground, 1.4);
     let zero_line_x = (chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0)
         .then(|| layout.projection.project(0.0, 0.0).0);
+    let not_estimable_plan = rows
+        .iter()
+        .position(|row| row.estimate.is_none())
+        .map(|index| {
+            crate::plots::interval_estimate::plan_not_estimable(
+                theme,
+                &layout,
+                zero_line_x,
+                &context
+                    .fit_scope()
+                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
+            )
+        })
+        .transpose()?;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if let Some(x) = zero_line_x {
@@ -102,12 +119,11 @@ pub(crate) fn render(
         for (index, row) in rows.iter().enumerate() {
             let y = row_y(index, rows.len());
             let Some(tuple) = row.estimate else {
-                crate::plots::interval_estimate::draw_not_estimable(
-                    context.theme,
-                    &layout,
-                    y,
-                    zero_line_x,
-                    backend,
+                let (plan, x) = not_estimable_plan
+                    .as_ref()
+                    .expect("unavailable rows have a measured status plan");
+                crate::plots::interval_estimate::draw_planned_not_estimable(
+                    plan, *x, &layout, y, backend,
                 )?;
                 continue;
             };

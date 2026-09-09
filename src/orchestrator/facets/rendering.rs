@@ -5,11 +5,28 @@ use crate::Error;
 use super::data::{FacetCell, FacetPanel};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
-use crate::layout::canvas::try_wrap_legacy_text;
-use crate::layout::{PanelBox, PhysicalTextAlignment, TextBlock};
-use crate::render::backend::{Backend, Point2D, SurfaceRole, TextAnchor, TextStyle};
+use crate::layout::{PanelBox, PhysicalTextAlignment};
+use crate::render::backend::{Backend, PlacedText, Point2D, SurfaceRole, TextAnchor};
 use crate::spec::{PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
+
+pub(super) fn observe_arranged_chrome(
+    plan: &super::FacetPlan,
+    theme: &ResolvedTheme,
+    round: &mut crate::layout::kernel::FeedbackRound,
+) -> Result<(), Error> {
+    let mut geometry = crate::render::geometry::GeometryBackend::new(theme)?;
+    geometry.begin(plan.plot.width(), plan.plot.height())?;
+    let result = (|| {
+        for (facet, text) in plan.panels.iter().zip(&plan.strip_text) {
+            round.observe_box(facet.panel)?;
+            draw_facet_strip(facet, text, &mut geometry)?;
+        }
+        draw_shared_facet_axis_labels(&plan.shared_axis_text, &mut geometry)
+    })();
+    crate::render::backend::finish_scope(result, geometry.end(), "arranged facet chrome")?;
+    geometry.observe_feedback(round)
+}
 
 #[expect(
     clippy::too_many_arguments,
@@ -21,11 +38,9 @@ pub(super) fn render_scene(
     kind: PlotKind,
     panels: &[FacetPanel],
     panel_plans: &[PanelPlan],
-    horizontal_axis_label: Option<&str>,
-    vertical_axis_label: Option<&str>,
+    strip_text: &[PlacedText],
+    shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::CanvasLayout,
-    outer: PanelBox,
-    shared_axis_origin: (f64, f64),
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -44,7 +59,7 @@ pub(super) fn render_scene(
         crate::decorations::apply::apply_grid(&panel_plot, &panel_plan.result, theme, backend)?;
     }
 
-    for (facet, panel_plan) in panels.iter().zip(panel_plans) {
+    for ((facet, panel_plan), strip) in panels.iter().zip(panel_plans).zip(strip_text) {
         let panel_plot = shared_plot
             .clone()
             .with_render_scope(facet.render_scope())
@@ -55,7 +70,8 @@ pub(super) fn render_scene(
             theme,
         )
         .with_facet_scales(source.facet_scales_spec())
-        .with_deferred_annotation_text(&panel_plan.result.deferred_annotation_text);
+        .with_deferred_annotation_text(&panel_plan.result.deferred_annotation_text)
+        .with_retained_body(&panel_plan.result);
         panel_plan
             .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;
@@ -68,16 +84,9 @@ pub(super) fn render_scene(
             panel_plan.legend.as_ref(),
             backend,
         )?;
-        draw_facet_strip(&panel_plot, facet, theme, backend)?;
+        draw_facet_strip(facet, strip, backend)?;
     }
-    draw_shared_facet_axis_labels(
-        horizontal_axis_label,
-        vertical_axis_label,
-        outer,
-        shared_axis_origin,
-        theme,
-        backend,
-    )?;
+    draw_shared_facet_axis_labels(shared_axis_text, backend)?;
     crate::decorations::apply::apply_canvas_text(source, canvas_layout, backend)
 }
 
@@ -85,46 +94,41 @@ pub(super) fn render_scene(
     clippy::cast_precision_loss,
     reason = "small facet-line indexes are projected into backend coordinates"
 )]
-fn draw_facet_strip(
+pub(super) fn plan_facet_strip(
     plot: &Plot,
     facet: &FacetPanel,
     theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
+) -> Result<PlacedText, Error> {
     let label = facet_label(plot, &facet.cell);
-    let lines = try_wrap_legacy_text(
-        theme,
+    let plan = theme.plan_legacy_text(
         &label,
         theme.facet_header_font_size,
         (facet.panel.width() - 16.0).max(1.0),
         PhysicalTextAlignment::Center,
         "facet strip",
     )?;
-    let line_height = f64::from(theme.facet_header_font_size) + 6.0;
-    let style = TextStyle {
-        color: theme.foreground.into(),
-        font_family: theme.font_family.clone(),
-        font_size: theme.facet_header_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Middle,
-        rotation: 0.0,
-    };
+    let first_y =
+        facet.panel.y1 + 14.0 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
+    Ok(PlacedText::from_first_line(
+        plan,
+        Point2D::new(
+            f64::midpoint(facet.panel.x0, facet.panel.x1).round(),
+            first_y.round(),
+        ),
+        TextAnchor::Middle,
+        0.0,
+    ))
+}
+
+fn draw_facet_strip(
+    facet: &FacetPanel,
+    text: &PlacedText,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
     crate::render::backend::with_layer(
         backend,
         &format!("facet-strip-{}", facet.panel_index),
-        |backend| {
-            for (index, line) in lines.iter().rev().enumerate() {
-                backend.draw_text(
-                    Point2D::new(
-                        f64::midpoint(facet.panel.x0, facet.panel.x1).round(),
-                        (facet.panel.y1 + 14.0 + index as f64 * line_height).round(),
-                    ),
-                    line,
-                    &style,
-                )?;
-            }
-            Ok(())
-        },
+        |backend| text.draw(backend),
     )
 }
 
@@ -132,67 +136,70 @@ fn draw_facet_strip(
     clippy::cast_precision_loss,
     reason = "small wrapped-line indexes are projected into backend coordinates"
 )]
-fn draw_shared_facet_axis_labels(
+pub(super) fn plan_shared_facet_axis_labels(
     horizontal_label: Option<&str>,
     vertical_label: Option<&str>,
     grid: PanelBox,
     axis_origin: (f64, f64),
     theme: &ResolvedTheme,
+) -> Result<Vec<PlacedText>, Error> {
+    let mut plans = Vec::new();
+    crate::render::backend::reserve_text_records(
+        &mut plans,
+        usize::from(horizontal_label.is_some()) + usize::from(vertical_label.is_some()),
+        theme.prepared_font_environment()?,
+    )?;
+    if let Some(label) = horizontal_label {
+        let plan = theme.plan_text(
+            label,
+            &theme.typography.axis_title,
+            grid.width().max(1.0),
+            PhysicalTextAlignment::Center,
+            "shared facet x-axis title",
+            false,
+        )?;
+        let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
+        plans.push(PlacedText::from_first_line(
+            plan,
+            Point2D::new(f64::midpoint(grid.x0, grid.x1).round(), first_y.round()),
+            TextAnchor::Middle,
+            0.0,
+        ));
+    }
+    if let Some(label) = vertical_label {
+        let plan = theme.plan_text(
+            label,
+            &theme.typography.axis_title,
+            grid.height().max(1.0),
+            PhysicalTextAlignment::Center,
+            "shared facet y-axis title",
+            false,
+        )?;
+        let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
+        let first_x = first_x - plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
+        plans.push(
+            PlacedText::from_first_line(
+                plan,
+                Point2D::new(first_x.round(), f64::midpoint(grid.y0, grid.y1).round()),
+                TextAnchor::Middle,
+                -90.0,
+            )
+            .with_reversed_lines(),
+        );
+    }
+    Ok(plans)
+}
+
+fn draw_shared_facet_axis_labels(
+    plans: &[PlacedText],
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    if horizontal_label.is_none() && vertical_label.is_none() {
+    if plans.is_empty() {
         return Ok(());
     }
     crate::render::backend::with_layer(backend, "facet-shared-axis-labels", |backend| {
-        let base_style = theme
-            .typography
-            .axis_title
-            .backend_style(TextAnchor::Middle, 0.0);
-        if let Some(label) = horizontal_label {
-            let block = TextBlock::from_resolved(theme.plan_text(
-                label,
-                &theme.typography.axis_title,
-                grid.width().max(1.0),
-                PhysicalTextAlignment::Center,
-                "shared facet x-axis title",
-                false,
-            )?);
-            let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
-            for (index, line) in block.lines().iter().enumerate() {
-                backend.draw_text(
-                    Point2D::new(
-                        f64::midpoint(grid.x0, grid.x1).round(),
-                        (first_y - index as f64 * block.line_height()).round(),
-                    ),
-                    line,
-                    &base_style,
-                )?;
-            }
-        }
-        if let Some(label) = vertical_label {
-            let block = TextBlock::from_resolved(theme.plan_text(
-                label,
-                &theme.typography.axis_title,
-                grid.height().max(1.0),
-                PhysicalTextAlignment::Center,
-                "shared facet y-axis title",
-                false,
-            )?);
-            let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
-            let style = TextStyle {
-                rotation: -90.0,
-                ..base_style
-            };
-            for (index, line) in block.lines().iter().enumerate() {
-                backend.draw_text(
-                    Point2D::new(
-                        (first_x - index as f64 * block.line_height()).round(),
-                        f64::midpoint(grid.y0, grid.y1).round(),
-                    ),
-                    line,
-                    &style,
-                )?;
-            }
+        for text in plans {
+            text.draw(backend)?;
         }
         Ok(())
     })

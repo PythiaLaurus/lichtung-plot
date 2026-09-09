@@ -269,11 +269,31 @@ impl NumericLabelFormat {
     }
 
     pub(crate) fn format(&self, value: f64) -> String {
-        let mut label = format!("{value:.precision$}", precision = self.precision);
-        if let Some(suffix) = &self.suffix {
-            label.push_str(suffix);
+        self.display(value).to_string()
+    }
+
+    pub(crate) fn display(&self, value: f64) -> impl std::fmt::Display + '_ {
+        NumericLabelDisplay {
+            format: self,
+            value,
         }
-        label
+    }
+}
+
+struct NumericLabelDisplay<'a> {
+    format: &'a NumericLabelFormat,
+    value: f64,
+}
+
+impl std::fmt::Display for NumericLabelDisplay<'_> {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            output,
+            "{:.precision$}",
+            self.value,
+            precision = self.format.precision
+        )?;
+        output.write_str(self.format.suffix.as_deref().unwrap_or_default())
     }
 }
 
@@ -654,6 +674,8 @@ pub(crate) enum LegendClearance {
     VerticalMaximum,
 }
 
+use crate::Error;
+
 /// Shared immutable inputs for one plot renderer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PlotRenderContext<'a> {
@@ -662,10 +684,15 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
     deferred_annotation_text: Option<&'a [crate::layout::DeferredAnnotationTextPlan]>,
+    producer_text: Option<&'a [crate::render::backend::PlacedText]>,
+    pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
+    pub(crate) self_managed_legend:
+        Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
+    fit_scope: &'a crate::layout::fit::FitScope,
 }
 
 impl<'a> PlotRenderContext<'a> {
-    pub(crate) const fn new(
+    pub(crate) fn new(
         data: crate::data::PlotData<'a>,
         panel: PanelBox,
         theme: &'a crate::theme::ResolvedTheme,
@@ -676,6 +703,10 @@ impl<'a> PlotRenderContext<'a> {
             theme,
             facet_scales: None,
             deferred_annotation_text: None,
+            producer_text: None,
+            panel_text: None,
+            self_managed_legend: None,
+            fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
 
@@ -691,6 +722,10 @@ impl<'a> PlotRenderContext<'a> {
             theme,
             facet_scales: None,
             deferred_annotation_text: None,
+            producer_text: None,
+            panel_text: None,
+            self_managed_legend: None,
+            fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
 
@@ -702,6 +737,14 @@ impl<'a> PlotRenderContext<'a> {
     pub(crate) const fn with_panel(mut self, panel: PanelBox) -> Self {
         self.panel = panel;
         self
+    }
+
+    pub(crate) const fn with_fit_scope(mut self, scope: &'a crate::layout::fit::FitScope) -> Self {
+        self.fit_scope = scope;
+        self
+    }
+    pub(crate) const fn fit_scope(self) -> &'a crate::layout::fit::FitScope {
+        self.fit_scope
     }
 
     pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
@@ -721,6 +764,118 @@ impl<'a> PlotRenderContext<'a> {
     ) -> Option<&'a [crate::layout::DeferredAnnotationTextPlan]> {
         self.deferred_annotation_text
     }
+
+    pub(crate) fn producer_text(self) -> Result<ProducerText<'a>, Error> {
+        let mut lookup = std::collections::HashMap::new();
+        if let Some(frozen) = self.producer_text {
+            let environment = self.theme.prepared_font_environment()?;
+            environment
+                .claim_text_generation_slots(frozen.len() as u128)
+                .map_err(|error| Error::Render(format!("producer lookup slots: {error:?}")))?;
+            // Four bucket records per entry also covers the hash table's control bytes.
+            let bucket_bytes = 4
+                * (std::mem::size_of::<((&str, &str), &crate::layout::ResolvedTextPlan)>() + 1)
+                + 16;
+            environment
+                .claim_unicode_bytes((frozen.len() * bucket_bytes) as u64)
+                .map_err(|error| Error::Render(format!("producer lookup bytes: {error}")))?;
+            lookup
+                .try_reserve(frozen.len())
+                .map_err(|_| Error::Render("producer lookup allocation failed".into()))?;
+            for text in frozen {
+                let owner = text.plan.style.provenance.owner.as_str();
+                environment
+                    .claim_text_generation_work((owner.len() + text.plan.source.len() + 1) as u128)
+                    .map_err(|error| Error::Render(format!("producer lookup work: {error:?}")))?;
+                lookup
+                    .entry((owner, text.plan.source.as_str()))
+                    .or_insert(&text.plan);
+            }
+        }
+        Ok(ProducerText {
+            frozen: self.producer_text,
+            lookup,
+            retained: Vec::new(),
+            environment: self.theme,
+        })
+    }
+
+    pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
+        self.producer_text = Some(&result.producer_text);
+        self.panel_text = Some(&result.panel_text);
+        self.self_managed_legend = Some(&result.self_managed_legend);
+        self
+    }
+}
+
+/// Typography measured by body producers, retained across the final capture boundary.
+pub(crate) struct ProducerText<'a> {
+    frozen: Option<&'a [crate::render::backend::PlacedText]>,
+    lookup: std::collections::HashMap<(&'a str, &'a str), &'a crate::layout::ResolvedTextPlan>,
+    retained: Vec<crate::render::backend::PlacedText>,
+    environment: &'a crate::theme::ResolvedTheme,
+}
+
+impl ProducerText<'_> {
+    pub(crate) fn plan(
+        &self,
+        source: &str,
+        owner: &str,
+        measure: impl FnOnce() -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError>,
+    ) -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError> {
+        if self.frozen.is_some() {
+            self.environment
+                .prepared_font_environment()?
+                .claim_text_generation_work((source.len() + owner.len() + 1) as u128)
+                .map_err(|error| Error::Render(format!("retained producer lookup: {error:?}")))?;
+            return self
+                .lookup
+                .get(&(owner, source))
+                .map(|plan| (*plan).clone())
+                .ok_or_else(|| {
+                    Error::Render(format!(
+                        "frozen producer text is missing {owner}: {source:?}"
+                    ))
+                    .into()
+                });
+        }
+        measure()
+    }
+
+    pub(crate) fn draw(
+        &mut self,
+        text: crate::render::backend::PlacedText,
+        backend: &mut dyn crate::render::backend::Backend,
+    ) -> Result<(), Error> {
+        let text = if let Some(frozen) = self.frozen {
+            let retained = frozen
+                .get(self.retained.len())
+                .ok_or_else(|| Error::Render("extra frozen producer text call".into()))?;
+            if retained.plan != text.plan || retained.placement != text.placement {
+                return Err(Error::Render(
+                    "frozen producer text identity changed".into(),
+                ));
+            }
+            retained.clone()
+        } else {
+            text
+        };
+        let environment = self.environment.prepared_font_environment()?;
+        crate::render::backend::reserve_text_records(&mut self.retained, 1, environment)?;
+        text.draw(backend)?;
+        self.retained.push(text);
+        Ok(())
+    }
+
+    pub(crate) fn finish(self) -> Result<Vec<crate::render::backend::PlacedText>, Error> {
+        if self
+            .frozen
+            .is_some_and(|text| text.len() != self.retained.len())
+        {
+            return Err(Error::Render("missing frozen producer text calls".into()));
+        }
+        Ok(self.retained)
+    }
 }
 
 pub(crate) struct PlotRenderResult {
@@ -733,6 +888,9 @@ pub(crate) struct PlotRenderResult {
     pub(crate) x_tick_keys: Option<Vec<String>>,
     pub(crate) y_tick_keys: Option<Vec<String>>,
     pub(crate) deferred_annotation_text: Vec<crate::layout::DeferredAnnotationTextPlan>,
+    pub(crate) producer_text: Vec<crate::render::backend::PlacedText>,
+    pub(crate) panel_text: Vec<crate::decorations::panel_text::PanelTextPlan>,
+    pub(crate) self_managed_legend: Option<std::sync::Arc<crate::decorations::legend::Legend>>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -760,6 +918,9 @@ impl PlotRenderResult {
             x_tick_keys: None,
             y_tick_keys: None,
             deferred_annotation_text: Vec::new(),
+            producer_text: Vec::new(),
+            panel_text: Vec::new(),
+            self_managed_legend: None,
         }
     }
 

@@ -94,6 +94,17 @@ fn rendered_theme_identity_count() -> usize {
 }
 
 fn assert_canvas_theme_identity(owner: usize, stages: &[&str]) {
+    let rounds = crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get);
+    assert!((2..=8).contains(&rounds));
+    let first_render = stages
+        .iter()
+        .position(|stage| *stage == "render" || stage.ends_with("-render"))
+        .unwrap_or(stages.len());
+    let mut expected = vec![stages[0]];
+    for _ in 0..rounds {
+        expected.extend_from_slice(&stages[1..first_render]);
+    }
+    expected.extend_from_slice(&stages[first_render..]);
     crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| {
         let evidence = evidence.borrow();
         let records = evidence
@@ -109,7 +120,7 @@ fn assert_canvas_theme_identity(owner: usize, stages: &[&str]) {
                 .iter()
                 .map(|(_, stage, _)| *stage)
                 .collect::<Vec<_>>(),
-            stages
+            expected
         );
     });
 }
@@ -442,6 +453,10 @@ fn unthemed_standalone_selects_publication_once() {
     let mut backend = RecordingBackend::default();
 
     plot.render_with_backend(&mut backend).unwrap();
+    assert_eq!(
+        crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get),
+        2
+    );
 
     assert_eq!(resolved_theme_count(), 1);
     assert_eq!(PLOT_PLAN_CALLS.with(std::cell::Cell::get), 1);
@@ -475,6 +490,36 @@ fn public_preflight_uses_the_prepared_plan_without_a_final_lifecycle() {
         assert!(!addresses.is_empty());
         assert!(addresses.iter().all(|address| *address == addresses[0]));
     });
+}
+
+#[test]
+fn canvas_gutter_remeasurement_uses_the_assigned_projection() {
+    crate::canvas::CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| evidence.borrow_mut().clear());
+    let plot = Plot::scatter(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
+    );
+    let canvas = crate::Canvas::grid(1, 2)
+        .unwrap()
+        .panel(0, 0, plot.clone())
+        .unwrap()
+        .panel(0, 1, plot)
+        .unwrap();
+    let mut backend = RecordingBackend::default();
+    canvas.render_with_backend(&mut backend).unwrap();
+
+    crate::canvas::CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| {
+        let evidence = evidence.borrow();
+        assert_eq!(evidence.len(), 6);
+        for (assigned, projection) in evidence.iter() {
+            assert_eq!(projection, assigned);
+            assert!(assigned.width() < 480.0);
+        }
+        assert!(evidence[0].0.x1 < evidence[1].0.x0);
+        assert_ne!(evidence[0].0, evidence[2].0);
+        assert_eq!(evidence[2..4], evidence[4..6]);
+    });
+    assert_eq!((backend.begins, backend.ends), (1, 1));
 }
 
 #[test]
@@ -1077,6 +1122,7 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
         assert_eq!(
             evidence.borrow().as_slice(),
             &[(0, "inherited-root"), (3, "explicit-plot")]
+                .repeat(crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get))
         );
     });
 
@@ -1124,6 +1170,7 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
         assert_eq!(
             evidence.borrow().as_slice(),
             &[(0, "inherited-root"), (3, "explicit-plot")]
+                .repeat(crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get))
         );
     });
 }
@@ -1507,7 +1554,12 @@ fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
-    let expected_panel = plot.canvas_layout().panel_box;
+    let expected_panel = crate::layout::kernel::FrameRequirements {
+        minimum_body: (1.0, 1.0),
+        natural_insets: [0.0; 4],
+    }
+    .assign(plot.canvas_layout().panel_box, [0.0; 4])
+    .unwrap();
     let mut backend = RecordingBackend::default();
 
     plot.render_kind(PlotKind::Scatter, &mut backend).unwrap();
@@ -1585,7 +1637,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        (3, 10, 4, 4, 4)
+        (6, 22, 8, 8, 8)
     );
 }
 
@@ -1835,7 +1887,7 @@ fn attached_significance_plan_is_not_reshaped_during_final_render() {
     let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, PlotKind::Bar).unwrap();
     let planned_calls = crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS
         .with(std::cell::Cell::get);
-    assert_eq!(planned_calls, 1);
+    assert_eq!(planned_calls, 4);
 
     plan.render(&mut RecordingBackend::default()).unwrap();
 

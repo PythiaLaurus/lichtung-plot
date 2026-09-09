@@ -7,7 +7,7 @@ use crate::Error;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor, TextStyle,
+    with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor,
 };
 use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
@@ -55,7 +55,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     render_series(chart, context, theme, backend)
 }
@@ -64,7 +64,7 @@ pub(crate) fn render_trajectory(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     render_grouped(chart, context, theme, backend, false)
 }
@@ -73,7 +73,7 @@ pub(crate) fn render_path(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     render_grouped(chart, context, theme, backend, true)
 }
@@ -83,8 +83,9 @@ fn render_series(
     context: PlotRenderContext<'_>,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let (series, primary_color_slots) = prepare(chart, context.data)?;
+    let mut text = context.producer_text()?;
     let point_layers = prepare_point_layers(chart, primary_color_slots, theme)?;
     let x_range = crate::layout::continuous_auto_range(
         crate::data::min_max(
@@ -130,9 +131,9 @@ fn render_series(
         &x_axis,
         &y_axis,
         theme,
-    );
+    )?;
     draw_series(chart, &layout, &series, theme, backend)?;
-    draw_point_layers(&layout, &point_layers, theme, backend)?;
+    draw_point_layers(&layout, &point_layers, theme, &mut text, backend)?;
 
     let mut legends = series
         .iter()
@@ -163,7 +164,9 @@ fn render_series(
                 .without_hue_level()
         })
     }));
-    Ok(PlotRenderResult::new(layout, legends))
+    let mut result = PlotRenderResult::new(layout, legends);
+    result.producer_text = text.finish()?;
+    Ok(result)
 }
 
 fn prepare_point_layers(
@@ -211,13 +214,14 @@ fn draw_point_layers(
     layout: &Layout,
     layers: &[PreparedPointLayer],
     theme: &ResolvedTheme,
+    text: &mut crate::spec::ProducerText<'_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if layers.is_empty() {
         return Ok(());
     }
     with_clip(backend, layout.projection.panel_box(), |backend| {
-        for layer in layers {
+        for (layer_index, layer) in layers.iter().enumerate() {
             let projected = layer
                 .points
                 .iter()
@@ -239,20 +243,33 @@ fn draw_point_layers(
                     {
                         continue;
                     }
-                    backend.draw_text(
-                        Point2D::new(
-                            (point.x + label_offset).max(0.0).round(),
-                            (point.y + label_offset).max(0.0).round(),
+                    let owner = format!("line point layer {layer_index} label");
+                    let mut appearance =
+                        theme.legacy_text_appearance(10, crate::TextWeight::Normal);
+                    appearance.line_height_multiplier = 1.2;
+                    appearance.paint = layer.style.color.into();
+                    let plan = text
+                        .plan(label, &owner, || {
+                            Ok(theme.measure_legacy_appearance_text(
+                                label,
+                                &appearance,
+                                crate::layout::PhysicalTextAlignment::Start,
+                                &owner,
+                                false,
+                            )?)
+                        })
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
+                    text.draw(
+                        crate::render::backend::PlacedText::middle(
+                            plan,
+                            Point2D::new(
+                                (point.x + label_offset).max(0.0).round(),
+                                (point.y + label_offset).max(0.0).round(),
+                            ),
+                            TextAnchor::Start,
+                            0.0,
                         ),
-                        label,
-                        &TextStyle {
-                            color: layer.style.color.into(),
-                            font_family: theme.font_family.clone(),
-                            font_size: 10,
-                            weight: crate::TextWeight::Normal,
-                            anchor: TextAnchor::Start,
-                            rotation: 0.0,
-                        },
+                        backend,
                     )?;
                 }
             }
@@ -271,7 +288,7 @@ fn render_grouped(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
     ordered_path: bool,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let trajectory = prepare_trajectory(chart, context.data, ordered_path)?;
     let family = if ordered_path {
         "line path"
@@ -327,6 +344,7 @@ fn render_grouped(
                 context.panel,
                 levels,
                 theme,
+                context.fit_scope(),
             )
         })?;
     let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
@@ -340,7 +358,7 @@ fn render_grouped(
         &x_axis,
         &y_axis,
         theme,
-    );
+    )?;
     let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for group in &trajectory.groups {

@@ -14,7 +14,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::layout::{AxisSpec, AxisTick, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, GradientStop, LineStyle, Point2D, TextAnchor, TextStyle,
+    with_clip, Backend, FillStyle, GradientStop, LineStyle, PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{
     CategoryOrder, HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapScale, LegendPolicy,
@@ -46,50 +46,40 @@ struct ColorDomain {
     center: Option<f64>,
 }
 
-pub(crate) struct HeatmapTextCensus {
-    pub(crate) colorbar_values: Vec<String>,
-    pub(crate) value_annotations: Vec<String>,
-    pub(crate) has_missing: bool,
-}
-
 pub(crate) fn text_census<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
-) -> Result<HeatmapTextCensus, Error> {
+    mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
+) -> Result<(), Error> {
     let prepared = prepare(chart, data)?;
-    let mut colorbar_values = vec![
-        format_colorbar_value(prepared.domain.minimum),
-        format_colorbar_value(prepared.domain.maximum),
-    ];
+    for value in [prepared.domain.minimum, prepared.domain.maximum] {
+        visit(format_args!("{}", ColorbarValue(value)).into())?;
+    }
     if let Some(center) = prepared
         .domain
         .center
         .filter(|center| *center > prepared.domain.minimum && *center < prepared.domain.maximum)
     {
-        colorbar_values.push(format_colorbar_value(center));
+        visit(format_args!("{}", ColorbarValue(center)).into())?;
     }
-    let value_annotations = match chart.heatmap_annotations_spec() {
-        HeatmapAnnotations::Hidden => Vec::new(),
-        HeatmapAnnotations::Values(format) => prepared
-            .cells
-            .iter()
-            .flatten()
-            .map(|value| format.format(*value))
-            .collect(),
-    };
-    Ok(HeatmapTextCensus {
-        colorbar_values,
-        value_annotations,
-        has_missing: prepared.has_missing,
-    })
+    if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
+        for value in prepared.cells.iter().flatten() {
+            visit(format_args!("{}", format.display(*value)).into())?;
+        }
+    }
+    if prepared.has_missing {
+        visit("Missing".into())?;
+    }
+    Ok(())
 }
 
 pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
+    let mut text = context.producer_text()?;
     let prepared = prepare(chart, context.data)?;
     let x_labels = chart.resolve_label_domain(
         "heatmap x-axis categories",
@@ -101,75 +91,93 @@ pub(crate) fn render(
     )?;
     let color_label = chart.resolved_color_label();
     let detail_font_size = theme.detail_font_size;
-    let color_label_block = TextBlock::from_resolved(theme.plan_legacy_text(
-        &color_label,
-        detail_font_size,
-        (context.panel.height().min(170.0) * 0.9).max(1.0),
-        PhysicalTextAlignment::Center,
-        "heatmap colorbar title",
-    )?);
+    let guide_scope = context
+        .fit_scope()
+        .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+    let title_width = if prepared.has_missing {
+        (context.panel.height() - 34.0).clamp(40.0, 160.0)
+    } else {
+        context.panel.height().clamp(40.0, 180.0)
+    };
+    let color_label_block =
+        TextBlock::from_resolved(text.plan(&color_label, "heatmap colorbar title", || {
+            crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                &color_label,
+                &theme.legacy_text_appearance(detail_font_size, crate::TextWeight::Normal),
+                title_width,
+                PhysicalTextAlignment::Center,
+                "heatmap colorbar title",
+                &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
+            ))
+        })?);
     let mut colorbar_values = vec![
         format_colorbar_value(prepared.domain.minimum),
         format_colorbar_value(prepared.domain.maximum),
     ];
-    if let Some(center) = prepared.domain.center {
+    if let Some(center) = prepared
+        .domain
+        .center
+        .filter(|center| *center > prepared.domain.minimum && *center < prepared.domain.maximum)
+    {
         colorbar_values.push(format_colorbar_value(center));
     }
     if prepared.has_missing {
         colorbar_values.push("Missing".to_string());
     }
-    let value_width = colorbar_values
+    let value_plans = colorbar_values
         .iter()
         .map(|label| {
-            theme
-                .measure_legacy_text(
+            text.plan(label, "heatmap colorbar value", || {
+                Ok(theme.measure_legacy_text(
                     label,
                     detail_font_size,
                     PhysicalTextAlignment::Start,
                     "heatmap colorbar value",
-                )
-                .map(|plan| plan.width())
+                )?)
+            })
         })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let value_width = value_plans
+        .iter()
+        .map(crate::layout::ResolvedTextPlan::width)
         .fold(0.0_f64, f64::max);
     let colorbar_reserve = (36.0 + value_width).max(
         73.0 + color_label_block.lines().len().saturating_sub(1) as f64
             * color_label_block.line_height()
             + f64::from(detail_font_size) / 2.0,
     ) + 4.0;
+    if context.panel.width() - colorbar_reserve < 40.0 {
+        return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide, "heatmap: colorbar title does not fit while preserving the minimum 40px plot panel; increase chart width").into());
+    }
+    let mut body = context.panel;
+    body.x1 -= colorbar_reserve;
     let wrap_labels = chart.heatmap_label_fit_spec() == HeatmapLabelFit::Wrap;
-    let mut panel = if wrap_labels {
+    let (panel, tick_width) = if wrap_labels {
         crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
             chart,
-            context.panel,
+            body,
             &y_labels,
             theme,
+            context.fit_scope(),
         )?
     } else {
         crate::plots::horizontal_bar::panel_box_for_elided_y_tick_labels(
             chart,
-            context.panel,
+            body,
             &y_labels,
             theme,
+            context.fit_scope(),
         )?
     };
-    if panel.width() - colorbar_reserve < 40.0 {
-        return Err(Error::Render(
-            "heatmap: colorbar title does not fit while preserving the minimum 40px plot panel; increase chart width"
-                .into(),
-        ));
-    }
-    panel.x1 -= colorbar_reserve;
     let minimum_panel_height = if prepared.has_missing { 90.0 } else { 60.0 };
     if panel.width() < 40.0
         || panel.height() < minimum_panel_height
         || panel.x1 + colorbar_reserve > f64::from(chart.width())
     {
-        return Err(Error::Render(
+        return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry,
             "heatmap: canvas is too small after reserving categorical labels and the colorbar; increase chart size"
-                .into(),
-        ));
+        ).into());
     }
 
     let x_count = prepared.x_levels.len();
@@ -183,7 +191,15 @@ pub(crate) fn render(
     let y_labels = if wrap_labels {
         y_labels
     } else {
-        fitted_unique_labels(theme, &y_labels, (panel.x0 - 38.0).max(20.0), "y")?
+        fitted_unique_labels(
+            theme,
+            &y_labels,
+            tick_width,
+            "y",
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::AxisLeft, 0)?,
+        )?
     };
     let y_ticks = y_labels
         .iter()
@@ -203,24 +219,53 @@ pub(crate) fn render(
         &x_spec,
         &y_spec,
         theme,
-    );
-    validate_annotation_fit(chart, &prepared, &layout, theme)?;
+    )?;
+    // Elision already selected the complete displayed labels; do not wrap them again.
+    layout.y_axis.explicit_ticks = !wrap_labels;
+    layout.y_axis.assigned_tick_width = Some(tick_width);
+    let annotations =
+        plan_annotations(chart, &prepared, &layout, theme, context.fit_scope(), &text)?;
     let x_labels = if wrap_labels {
         x_labels
     } else {
-        fitted_unique_labels(theme, &x_labels, panel.width() / x_count as f64 * 0.9, "x")?
+        fitted_unique_labels(
+            theme,
+            &x_labels,
+            panel.width() / x_count as f64 * 0.9,
+            "x",
+            &context
+                .fit_scope()
+                .child(crate::layout::AddressRole::AxisBottom, 0)?,
+        )?
     };
     for (tick, label) in layout.x_axis.ticks.iter_mut().zip(x_labels) {
         tick.label = label;
     }
 
     with_clip(backend, panel, |backend| {
-        draw_cells(chart, &prepared, &layout, theme, backend)
+        draw_cells(
+            chart,
+            &prepared,
+            &layout,
+            theme,
+            &annotations,
+            &mut text,
+            backend,
+        )
     })?;
-    draw_colorbar(&prepared, &layout, &color_label_block, theme, backend)?;
+    draw_colorbar(
+        &prepared,
+        &layout,
+        &color_label_block,
+        &value_plans,
+        &mut text,
+        backend,
+    )?;
 
-    Ok(PlotRenderResult::new(layout, Vec::new())
-        .with_resolved_axis_keys(prepared.x_levels.clone(), prepared.y_levels.clone()))
+    let mut result = PlotRenderResult::new(layout, Vec::new())
+        .with_resolved_axis_keys(prepared.x_levels.clone(), prepared.y_levels.clone());
+    result.producer_text = text.finish()?;
+    Ok(result)
 }
 
 fn prepare<'a>(
@@ -648,18 +693,16 @@ fn draw_cells(
     prepared: &HeatmapData,
     layout: &Layout,
     theme: &ResolvedTheme,
+    annotations: &AnnotationPlans,
+    text: &mut crate::spec::ProducerText<'_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let x_count = prepared.x_levels.len();
     let y_count = prepared.y_levels.len();
-    let annotation_format = match chart.heatmap_annotations_spec() {
-        HeatmapAnnotations::Hidden => None,
-        HeatmapAnnotations::Values(format) => Some(format),
-    };
     for y_index in 0..y_count {
         let y0 = y_count as f64 - y_index as f64 - 1.0;
         let y1 = y0 + 1.0;
-        if let Some(annotation) = &prepared.null_row_annotations[y_index] {
+        if let Some(annotation) = &annotations.rows[y_index] {
             let (left, bottom) = layout.projection.project(0.0, y0);
             let (right, top) = layout.projection.project(x_count as f64, y1);
             backend.draw_polygon(
@@ -676,7 +719,20 @@ fn draw_cells(
                     opacity: 1.0,
                 },
             )?;
-            draw_null_row_annotation(theme, annotation, left, right, bottom, top, backend)?;
+            text.draw(
+                PlacedText {
+                    plan: annotation.clone(),
+                    placement: crate::render::backend::PlannedTextPlacement::middle(
+                        Point2D::new(
+                            f64::midpoint(left, right).round(),
+                            f64::midpoint(bottom, top).round(),
+                        ),
+                        TextAnchor::Middle,
+                        0.0,
+                    ),
+                },
+                backend,
+            )?;
             continue;
         }
         for x_index in 0..x_count {
@@ -708,23 +764,19 @@ fn draw_cells(
                     opacity: 1.0,
                 },
             )?;
-            if let Some(value) = value {
-                if let Some(format) = annotation_format {
-                    let style = TextStyle {
-                        color: contrasting_text(color).into(),
-                        font_family: theme.font_family.clone(),
-                        font_size: ANNOTATION_FONT_SIZE,
-                        weight: crate::TextWeight::Normal,
-                        anchor: TextAnchor::Middle,
-                        rotation: 0.0,
-                    };
-                    backend.draw_text(
-                        Point2D::new(
-                            f64::midpoint(left, right).round(),
-                            f64::midpoint(bottom, top).round(),
+            if value.is_some() {
+                if let Some(plan) = &annotations.values[y_index * x_count + x_index] {
+                    text.draw(
+                        PlacedText::middle(
+                            plan.clone(),
+                            Point2D::new(
+                                f64::midpoint(left, right).round(),
+                                f64::midpoint(bottom, top).round(),
+                            ),
+                            TextAnchor::Middle,
+                            0.0,
                         ),
-                        &format.format(value),
-                        &style,
+                        backend,
                     )?;
                 }
             } else {
@@ -750,78 +802,75 @@ fn draw_cells(
     Ok(())
 }
 
-fn draw_null_row_annotation(
-    theme: &ResolvedTheme,
-    annotation: &str,
-    left: f64,
-    right: f64,
-    bottom: f64,
-    top: f64,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    let block = TextBlock::from_resolved(theme.plan_legacy_text(
-        annotation,
-        ANNOTATION_FONT_SIZE,
-        right - left - 12.0,
-        PhysicalTextAlignment::Center,
-        "heatmap fully-null row annotation",
-    )?);
-    let style = TextStyle {
-        color: theme.foreground.into(),
-        font_family: theme.font_family.clone(),
-        font_size: ANNOTATION_FONT_SIZE,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Middle,
-        rotation: 0.0,
-    };
-    let first_y = f64::midpoint(bottom, top)
-        + block.lines().len().saturating_sub(1) as f64 * block.line_height() / 2.0;
-    for (index, line) in block.lines().iter().enumerate() {
-        backend.draw_text(
-            Point2D::new(
-                f64::midpoint(left, right).round(),
-                (first_y - index as f64 * block.line_height()).round(),
-            ),
-            line,
-            &style,
-        )?;
-    }
-    Ok(())
+struct AnnotationPlans {
+    values: Vec<Option<crate::layout::ResolvedTextPlan>>,
+    rows: Vec<Option<crate::layout::ResolvedTextPlan>>,
 }
 
-fn validate_annotation_fit(
+fn plan_annotations(
     chart: &Plot,
     prepared: &HeatmapData,
     layout: &Layout,
     theme: &ResolvedTheme,
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+    text: &crate::spec::ProducerText<'_>,
+) -> Result<AnnotationPlans, crate::layout::fit::PlanError> {
+    use crate::layout::fit::{self, FitFailure, FitKind, FitOutcome};
+    use crate::layout::AddressRole;
+    let mut miss = None;
+    let count = prepared.cells.len() + prepared.null_row_annotations.len();
+    let environment = theme.prepared_font_environment()?;
+    environment
+        .claim_text_generation_slots(count as u128)
+        .map_err(|error| Error::Render(format!("heatmap text slots: {error:?}")))?;
+    environment
+        .claim_unicode_bytes(
+            (count * std::mem::size_of::<Option<crate::layout::ResolvedTextPlan>>()) as u64,
+        )
+        .map_err(|error| Error::Render(format!("heatmap text bytes: {error}")))?;
+    let mut plans = AnnotationPlans {
+        values: Vec::new(),
+        rows: Vec::new(),
+    };
+    plans
+        .values
+        .try_reserve_exact(prepared.cells.len())
+        .map_err(|_| Error::Render("heatmap value plans allocation failed".into()))?;
+    plans
+        .rows
+        .try_reserve_exact(prepared.null_row_annotations.len())
+        .map_err(|_| Error::Render("heatmap row plans allocation failed".into()))?;
+    plans.values.resize(prepared.cells.len(), None);
+    plans.rows.resize(prepared.null_row_annotations.len(), None);
     let cell_width = layout.projection.panel_box().width() / prepared.x_levels.len() as f64;
     let cell_height = layout.projection.panel_box().height() / prepared.y_levels.len() as f64;
     if let HeatmapAnnotations::Values(format) = chart.heatmap_annotations_spec() {
-        let widest = prepared
-            .cells
-            .iter()
-            .flatten()
-            .map(|value| {
-                theme
-                    .measure_legacy_text(
-                        &format.format(*value),
-                        ANNOTATION_FONT_SIZE,
-                        PhysicalTextAlignment::Center,
-                        "heatmap value annotation",
-                    )
-                    .map(|plan| plan.width())
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .fold(0.0_f64, f64::max);
-        if cell_height < f64::from(ANNOTATION_FONT_SIZE) + 5.0 || cell_width < widest + 6.0 {
-            return Err(Error::Render(format!(
+        for (index, value) in prepared.cells.iter().enumerate() {
+            let Some(value) = value else { continue };
+            let source = format.format(*value);
+            let mut appearance =
+                theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal);
+            appearance.paint = contrasting_text(heatmap_color(*value, prepared.domain)).into();
+            let owner = format!("heatmap value annotation {index}");
+            let plan = text.plan(&source, &owner, || {
+                Ok(theme.measure_legacy_appearance_text(
+                    &source,
+                    &appearance,
+                    PhysicalTextAlignment::Center,
+                    &owner,
+                    false,
+                )?)
+            })?;
+            let width = plan.width();
+            plans.values[index] = Some(plan);
+            if cell_height < f64::from(ANNOTATION_FONT_SIZE) + 5.0 || cell_width < width + 6.0 {
+                FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
                 "heatmap: cells are too small for value annotations at precision {} (cell {cell_width:.1}x{cell_height:.1}px, need at least {:.1}x{:.1}px); increase chart size, reduce precision, or hide annotations",
                 format.configured_precision(),
-                widest + 6.0,
+                width + 6.0,
                 f64::from(ANNOTATION_FONT_SIZE) + 5.0
-            )));
+                )));
+            }
         }
     }
     let available_width = layout.projection.panel_box().width() - 12.0;
@@ -830,30 +879,50 @@ fn validate_annotation_fit(
         let Some(annotation) = annotation else {
             continue;
         };
-        let block = TextBlock::from_resolved(theme.plan_legacy_text(
+        let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
+        let block = match fit::outcome(text.plan(
             annotation,
-            ANNOTATION_FONT_SIZE,
-            available_width,
-            PhysicalTextAlignment::Center,
             "heatmap fully-null row annotation",
-        )?);
+            || {
+                fit::measured(fit::text(
+                    theme,
+                    annotation,
+                    &theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal),
+                    available_width,
+                    PhysicalTextAlignment::Center,
+                    "heatmap fully-null row annotation",
+                    &row_scope,
+                ))
+            },
+        ))? {
+            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+            FitOutcome::Miss(failure) => {
+                FitFailure::retain_least(&mut miss, failure);
+                continue;
+            }
+        };
         if block.width() > available_width || block.height() > available_height {
-            return Err(Error::Render(format!(
+            FitFailure::retain_least(&mut miss, row_scope.failure(FitKind::Text, format!(
                 "heatmap: wrapped fully-null row annotation for {:?} does not fit its merged row ({available_width:.1}x{available_height:.1}px available, {:.1}x{:.1}px needed); increase chart size or shorten the annotation",
                 prepared.y_levels[y_index],
                 block.width(),
                 block.height()
             )));
         }
+        plans.rows[y_index] = Some(block.plan().clone());
     }
-    Ok(())
+    match miss {
+        Some(failure) => Err(failure.into()),
+        None => Ok(plans),
+    }
 }
 
 fn draw_colorbar(
     prepared: &HeatmapData,
     layout: &Layout,
     color_label: &crate::layout::TextBlock,
-    theme: &ResolvedTheme,
+    values: &[crate::layout::ResolvedTextPlan],
+    text: &mut crate::spec::ProducerText<'_>,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
@@ -872,62 +941,60 @@ fn draw_colorbar(
         Point2D::new(left + 6.0, bottom + height),
         &stops,
     )?;
-    let value_style = TextStyle {
-        color: theme.foreground.into(),
-        font_family: theme.font_family.clone(),
-        font_size: theme.detail_font_size,
-        weight: crate::TextWeight::Normal,
-        anchor: TextAnchor::Start,
-        rotation: 0.0,
-    };
-    backend.draw_text(
-        Point2D::new(
-            (left + 18.0).round(),
-            (bottom + height - 4.0).max(0.0).round(),
+    text.draw(
+        PlacedText::from_first_line(
+            values[1].clone(),
+            Point2D::new(
+                (left + 18.0).round(),
+                (bottom + height - 4.0).max(0.0).round(),
+            ),
+            TextAnchor::Start,
+            0.0,
         ),
-        &format_colorbar_value(prepared.domain.maximum),
-        &value_style,
+        backend,
     )?;
-    backend.draw_text(
-        Point2D::new((left + 18.0).round(), (bottom - 12.0).max(0.0).round()),
-        &format_colorbar_value(prepared.domain.minimum),
-        &value_style,
+    text.draw(
+        PlacedText::from_first_line(
+            values[0].clone(),
+            Point2D::new((left + 18.0).round(), (bottom - 12.0).max(0.0).round()),
+            TextAnchor::Start,
+            0.0,
+        ),
+        backend,
     )?;
     if let Some(center) = prepared.domain.center {
         if center > prepared.domain.minimum && center < prepared.domain.maximum {
-            backend.draw_text(
-                Point2D::new(
-                    (left + 18.0).round(),
-                    (bottom
-                        + height
-                            * normalized_fraction(
-                                center,
-                                prepared.domain.minimum,
-                                prepared.domain.maximum,
-                            ))
-                    .max(0.0)
-                    .round(),
+            text.draw(
+                PlacedText::from_first_line(
+                    values[2].clone(),
+                    Point2D::new(
+                        (left + 18.0).round(),
+                        (bottom
+                            + height
+                                * normalized_fraction(
+                                    center,
+                                    prepared.domain.minimum,
+                                    prepared.domain.maximum,
+                                ))
+                        .max(0.0)
+                        .round(),
+                    ),
+                    TextAnchor::Start,
+                    0.0,
                 ),
-                &format_colorbar_value(center),
-                &value_style,
+                backend,
             )?;
         }
     }
-    let title_style = TextStyle {
-        anchor: TextAnchor::Middle,
-        rotation: -90.0,
-        ..value_style.clone()
-    };
-    for (index, line) in color_label.lines().iter().enumerate() {
-        backend.draw_text(
-            Point2D::new(
-                (left + 55.0 + index as f64 * color_label.line_height()).round(),
-                (bottom + height / 2.0).round(),
-            ),
-            line,
-            &title_style,
-        )?;
-    }
+    text.draw(
+        PlacedText::from_first_line(
+            color_label.plan().clone(),
+            Point2D::new((left + 55.0).round(), (bottom + height / 2.0).round()),
+            TextAnchor::Middle,
+            -90.0,
+        ),
+        backend,
+    )?;
 
     if prepared.has_missing {
         let swatch_bottom = (bottom - 32.0).max(3.0);
@@ -945,10 +1012,17 @@ fn draw_colorbar(
                 opacity: 1.0,
             },
         )?;
-        backend.draw_text(
-            Point2D::new((left + 18.0).round(), (swatch_bottom + 6.0).round()),
-            "Missing",
-            &value_style,
+        text.draw(
+            PlacedText::from_first_line(
+                values
+                    .last()
+                    .ok_or_else(|| Error::Render("missing colorbar text plan".into()))?
+                    .clone(),
+                Point2D::new((left + 18.0).round(), (swatch_bottom + 6.0).round()),
+                TextAnchor::Start,
+                0.0,
+            ),
+            backend,
         )?;
     }
     Ok(())
@@ -1045,18 +1119,48 @@ fn contrasting_text(color: (u8, u8, u8)) -> (u8, u8, u8) {
 }
 
 fn format_colorbar_value(value: f64) -> String {
-    let value = if value.abs().to_bits() == 0 {
-        0.0
-    } else {
-        value
-    };
-    if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
-        format!("{value:.3e}")
-    } else {
-        format!("{value:.6}")
-            .trim_end_matches('0')
-            .trim_end_matches('.')
-            .to_string()
+    ColorbarValue(value).to_string()
+}
+
+struct ColorbarValue(f64);
+
+impl std::fmt::Display for ColorbarValue {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use std::fmt::Write as _;
+        let value = if self.0.abs().to_bits() == 0 {
+            0.0
+        } else {
+            self.0
+        };
+        if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
+            write!(output, "{value:.3e}")
+        } else {
+            // Fixed notation is below one million: sign, seven rounded integer
+            // digits, decimal point, and six decimals fit without heap storage.
+            struct Decimal {
+                bytes: [u8; 32],
+                length: usize,
+            }
+            impl std::fmt::Write for Decimal {
+                fn write_str(&mut self, text: &str) -> std::fmt::Result {
+                    let end = self.length.checked_add(text.len()).ok_or(std::fmt::Error)?;
+                    self.bytes
+                        .get_mut(self.length..end)
+                        .ok_or(std::fmt::Error)?
+                        .copy_from_slice(text.as_bytes());
+                    self.length = end;
+                    Ok(())
+                }
+            }
+            let mut decimal = Decimal {
+                bytes: [0; 32],
+                length: 0,
+            };
+            write!(&mut decimal, "{value:.6}")?;
+            let text = std::str::from_utf8(&decimal.bytes[..decimal.length])
+                .map_err(|_| std::fmt::Error)?;
+            output.write_str(text.trim_end_matches('0').trim_end_matches('.'))
+        }
     }
 }
 
@@ -1099,21 +1203,22 @@ fn fitted_unique_labels(
     labels: &[String],
     maximum_width: f64,
     axis: &str,
-) -> Result<Vec<String>, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<Vec<String>, crate::layout::fit::PlanError> {
     let fitted = labels
         .iter()
         .map(|label| fitted_label(theme, label, maximum_width))
         .collect::<Result<Vec<_>, _>>()?;
     if fitted.iter().any(String::is_empty) {
-        return Err(Error::Render(format!(
+        return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
             "heatmap: {axis}-axis category labels have no room for an ellipsis; increase chart size or shorten labels"
-        )));
+        )).into());
     }
     let unique = fitted.iter().collect::<HashSet<_>>();
     if unique.len() != fitted.len() {
-        return Err(Error::Render(format!(
+        return Err(scope.failure(crate::layout::fit::FitKind::Tick, format!(
             "heatmap: {axis}-axis category labels become ambiguous after elision; increase chart size or shorten labels"
-        )));
+        )).into());
     }
     Ok(fitted)
 }

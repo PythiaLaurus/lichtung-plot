@@ -17,7 +17,6 @@ mod layout;
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisSpec;
-use crate::layout::AxisTick;
 use crate::render::backend::PointOutline;
 use crate::spec::{
     AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetSpec,
@@ -448,10 +447,8 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     labels: Labels,
     x_axis_spec: AxisSpec,
     x_limits_user_explicit: bool,
-    x_ticks: Option<Vec<AxisTick>>,
     y_axis_spec: AxisSpec,
     y_limits_user_explicit: bool,
-    y_ticks: Option<Vec<AxisTick>>,
     theme: Option<Theme>,
     significance: Vec<crate::significance::SignificanceAnnotation>,
     width: u32,
@@ -535,10 +532,8 @@ impl Plot<crate::kind::Any> {
             labels: Labels::default(),
             x_axis_spec: AxisSpec::default(),
             x_limits_user_explicit: false,
-            x_ticks: None,
             y_axis_spec: AxisSpec::default(),
             y_limits_user_explicit: false,
-            y_ticks: None,
             theme: None,
             significance: Vec::new(),
             width: 640,
@@ -935,10 +930,8 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             labels,
             x_axis_spec,
             x_limits_user_explicit,
-            x_ticks,
             y_axis_spec,
             y_limits_user_explicit,
-            y_ticks,
             theme,
             significance,
             width,
@@ -1009,10 +1002,8 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             labels,
             x_axis_spec,
             x_limits_user_explicit,
-            x_ticks,
             y_axis_spec,
             y_limits_user_explicit,
-            y_ticks,
             theme,
             significance,
             width,

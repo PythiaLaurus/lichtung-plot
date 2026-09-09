@@ -88,11 +88,19 @@ impl GeometryBox {
 
 pub(crate) struct GeometryBackend {
     bounds: Vec<GeometryBox>,
+    text: Vec<PositionedText>,
     clips: Vec<PanelBox>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
     font_environment: PreparedFontEnvironment,
     operation_default_stack: String,
+}
+
+struct PositionedText {
+    placement: PlannedTextPlacement,
+    plan: ResolvedTextPlan,
+    clip: Option<PanelBox>,
+    bounds_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +131,7 @@ impl GeometryBackend {
     ) -> Self {
         Self {
             bounds: Vec::new(),
+            text: Vec::new(),
             clips: Vec::new(),
             scopes: Vec::new(),
             state: GeometryCanvasState::Fresh,
@@ -133,6 +142,222 @@ impl GeometryBackend {
 
     pub(crate) fn bounds(&self) -> &[GeometryBox] {
         &self.bounds
+    }
+
+    pub(crate) fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        round.observe_count(self.bounds.len())?;
+        for bounds in &self.bounds {
+            round.observe_box(PanelBox::new(
+                bounds.left,
+                bounds.right,
+                bounds.bottom,
+                bounds.top,
+            ))?;
+            round.observe_number(bounds.weight)?;
+        }
+        round.observe_count(self.text.len())?;
+        for text in &self.text {
+            round.observe_placement(text.placement)?;
+            round.observe_text(&text.plan)?;
+            round.observe_count(usize::from(text.clip.is_some()))?;
+            if let Some(clip) = text.clip {
+                round.observe_box(clip)?;
+            }
+            round.observe_count(usize::from(text.bounds_index.is_some()))?;
+            if let Some(index) = text.bounds_index {
+                round.observe_count(index)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn overlap_after_assignment(
+        &self,
+        before: PanelBox,
+        after: PanelBox,
+        legend: GeometryBox,
+        margin: f64,
+        screen_text: impl Fn(&ResolvedTextPlan) -> Option<PlannedTextPlacement>,
+    ) -> Result<f64, Error> {
+        self.font_environment
+            .claim_text_generation_work(self.bounds.len() as u128 + self.text.len() as u128)
+            .map_err(|error| Error::Render(format!("assignment feedback work: {error:?}")))?;
+        let mut text = self
+            .text
+            .iter()
+            .filter(|text| text.bounds_index.is_some())
+            .peekable();
+        let mut overlap = 0.0;
+        for (index, bounds) in self.bounds.iter().enumerate() {
+            let placed = if text
+                .peek()
+                .is_some_and(|text| text.bounds_index == Some(index))
+            {
+                let text = text.next().expect("matched text bounds");
+                screen_text(&text.plan).and_then(|placement| {
+                    planned_text_ink_bounds(
+                        &text.plan,
+                        placement.position,
+                        placement.anchor,
+                        placement.rotation,
+                        placement.origin,
+                        placement.reverse_lines,
+                    )
+                })
+            } else {
+                None
+            };
+            let Some(bounds) = bounds.clipped(Some(before)) else {
+                continue;
+            };
+            let predicted = if let Some(placed) = placed {
+                placed
+            } else {
+                let x = |value| after.x0 + (value - before.x0) / before.width() * after.width();
+                let y = |value| after.y0 + (value - before.y0) / before.height() * after.height();
+                let left = x(bounds.left);
+                let right = x(bounds.right);
+                let bottom = y(bounds.bottom);
+                let top = y(bounds.top);
+                // Reserves do not shrink pixel-sized glyphs or stroke footprints.
+                let extra_x = ((bounds.right - bounds.left) - (right - left)).max(0.0) / 2.0;
+                let extra_y = ((bounds.top - bounds.bottom) - (top - bottom)).max(0.0) / 2.0;
+                GeometryBox {
+                    left: left - extra_x,
+                    right: right + extra_x,
+                    bottom: bottom - extra_y,
+                    top: top + extra_y,
+                    weight: bounds.weight,
+                }
+            };
+            overlap += predicted.overlap_area(legend, margin);
+        }
+        if overlap.is_finite() {
+            Ok(overlap)
+        } else {
+            Err(Error::Render(
+                "assignment collision arithmetic overflowed".into(),
+            ))
+        }
+    }
+
+    /// Test only declared data-anchored annotation text against a pending
+    /// projection. Unrelated painted overflow does not inherit its remedy.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the clonable iterator is an allocation-free view over declared annotation owners"
+    )]
+    pub(crate) fn text_overflow_resolved<'a>(
+        &self,
+        bounds: GeometryBox,
+        root: PanelBox,
+        current: &crate::layout::Projection,
+        next: &crate::layout::Projection,
+        declared: impl Iterator<Item = &'a ResolvedTextPlan> + Clone,
+    ) -> Result<bool, Error> {
+        let count = declared.clone().count() as u128;
+        self.font_environment
+            .claim_text_generation_work(count * self.text.len() as u128 + 1)
+            .map_err(|error| Error::Render(format!("annotation feedback work: {error:?}")))?;
+        for text in &self.text {
+            if !declared.clone().any(|plan| plan == &text.plan) {
+                continue;
+            }
+            let Some(ink) = planned_text_ink_bounds(
+                &text.plan,
+                text.placement.position,
+                text.placement.anchor,
+                text.placement.rotation,
+                text.placement.origin,
+                text.placement.reverse_lines,
+            ) else {
+                continue;
+            };
+            let same_overflow = (bounds.left >= root.x0
+                || ink.left.to_bits() == bounds.left.to_bits())
+                && (bounds.right <= root.x1 || ink.right.to_bits() == bounds.right.to_bits())
+                && (bounds.bottom >= root.y0 || ink.bottom.to_bits() == bounds.bottom.to_bits())
+                && (bounds.top <= root.y1 || ink.top.to_bits() == bounds.top.to_bits());
+            if !same_overflow {
+                continue;
+            }
+            let before = current.panel_box();
+            let after = next.panel_box();
+            let position = Point2D::new(
+                feedback_coordinate(
+                    text.placement.position.x,
+                    (before.x0, before.x1),
+                    (after.x0, after.x1),
+                    current.x_range(),
+                    next.x_range(),
+                )?,
+                feedback_coordinate(
+                    text.placement.position.y,
+                    (before.y0, before.y1),
+                    (after.y0, after.y1),
+                    current.y_range(),
+                    next.y_range(),
+                )?,
+            );
+            let placement = PlannedTextPlacement {
+                position,
+                ..text.placement
+            };
+            let canonical = backend::validate_planned_text(placement, &text.plan)?;
+            if let Some(ink) = planned_text_ink_bounds(
+                &text.plan,
+                canonical.position.value(),
+                placement.anchor,
+                canonical.rotation.value(),
+                placement.origin,
+                placement.reverse_lines,
+            ) {
+                if ink.left >= root.x0
+                    && ink.right <= root.x1
+                    && ink.bottom >= root.y0
+                    && ink.top <= root.y1
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn record_text(
+        &mut self,
+        placement: PlannedTextPlacement,
+        plan: &ResolvedTextPlan,
+    ) -> Result<(), Error> {
+        self.font_environment
+            .claim_text_generation_slots(1)
+            .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
+        self.font_environment
+            .claim_text_generation_work(1 + self.clips.len() as u128)
+            .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
+        self.text
+            .try_reserve_exact(1)
+            .map_err(|error| Error::Render(format!("geometry text allocation: {error}")))?;
+        let clip = self.clips.iter().copied().reduce(|a, b| {
+            let left = a.x0.max(b.x0);
+            let bottom = a.y0.max(b.y0);
+            PanelBox::new(
+                left,
+                a.x1.min(b.x1).max(left),
+                bottom,
+                a.y1.min(b.y1).max(bottom),
+            )
+        });
+        self.text.push(PositionedText {
+            placement,
+            plan: plan.clone(),
+            clip,
+            bounds_index: None,
+        });
+        Ok(())
     }
 
     fn plan_raw_text(
@@ -198,7 +423,7 @@ impl GeometryBackend {
         canonical: CanonicalBracket,
         style: &BracketStyle,
         label: &ResolvedTextPlan,
-    ) {
+    ) -> Result<(), Error> {
         let line_start = canonical.line_start.value();
         let line_end = canonical.line_end.value();
         let first_tick_end = canonical.first_tick_end.value();
@@ -212,17 +437,51 @@ impl GeometryBackend {
             ..bounds
         });
         let placement = backend::planned_bracket_placement(canonical);
+        self.record_text(placement, label)?;
         let label = planned_text_ink_bounds(
             label,
             placement.position,
             placement.anchor,
             placement.rotation,
             placement.origin,
+            placement.reverse_lines,
         );
         self.record(match (path, label) {
             (Some(path), Some(label)) => Some(path.union(label)),
             (path, label) => path.or(label),
         });
+        Ok(())
+    }
+}
+
+fn feedback_coordinate(
+    value: f64,
+    before: (f64, f64),
+    after: (f64, f64),
+    domain: (f64, f64),
+    next: (f64, f64),
+) -> Result<f64, Error> {
+    let fraction = (value - before.0) / (before.1 - before.0);
+    let next_fraction = if domain == next {
+        fraction
+    } else {
+        let scale = domain
+            .0
+            .abs()
+            .max(domain.1.abs())
+            .max(next.0.abs())
+            .max(next.1.abs())
+            .max(f64::MIN_POSITIVE);
+        let data = domain.0 / scale + fraction * (domain.1 / scale - domain.0 / scale);
+        (data - next.0 / scale) / (next.1 / scale - next.0 / scale)
+    };
+    let result = after.0 + next_fraction * (after.1 - after.0);
+    if result.is_finite() {
+        Ok(result)
+    } else {
+        Err(Error::Render(
+            "annotation feedback projection arithmetic overflowed".into(),
+        ))
     }
 }
 
@@ -244,6 +503,7 @@ fn planned_text_ink_bounds(
     anchor: TextAnchor,
     rotation: f64,
     vertical_origin: PlannedTextOrigin,
+    reverse_lines: bool,
 ) -> Option<GeometryBox> {
     let quanta = CSS_PIXEL_QUANTA as f64;
     let width = plan.width_quanta as f64 / quanta;
@@ -270,7 +530,15 @@ fn planned_text_ink_bounds(
         let line_x = line.translation_x_quanta as f64 / quanta;
         let left = anchor_offset + line_x + ink.left as f64 / quanta;
         let right = anchor_offset + line_x + ink.right as f64 / quanta;
-        let baseline = vertical_reference - line.translation_y_quanta as f64 / quanta;
+        let placement = PlannedTextPlacement {
+            position,
+            anchor,
+            rotation,
+            origin: vertical_origin,
+            reverse_lines,
+        };
+        let baseline = vertical_reference
+            - placement.line_y(plan, line.translation_y_quanta).ok()? as f64 / quanta;
         let bottom = baseline + ink.bottom as f64 / quanta;
         let top = baseline + ink.top as f64 / quanta;
         let corners = [(left, bottom), (left, top), (right, bottom), (right, top)].map(|(x, y)| {
@@ -456,6 +724,7 @@ impl Backend for GeometryBackend {
             ));
         }
         self.bounds.clear();
+        self.text.clear();
         self.clips.clear();
         self.scopes.clear();
         self.state = GeometryCanvasState::Open;
@@ -623,13 +892,26 @@ impl Backend for GeometryBackend {
             physical_alignment(style.anchor),
             "geometry raw text",
         )?;
+        self.record_text(
+            PlannedTextPlacement::middle(
+                canonical.position.value(),
+                style.anchor,
+                canonical.rotation.value(),
+            ),
+            &plan,
+        )?;
+        let index = self.bounds.len();
         self.record(planned_text_ink_bounds(
             &plan,
             canonical.position.value(),
             style.anchor,
             canonical.rotation.value(),
             PlannedTextOrigin::Middle,
+            false,
         ));
+        if self.bounds.len() > index {
+            self.text.last_mut().expect("recorded text").bounds_index = Some(index);
+        }
         Ok(())
     }
 
@@ -640,13 +922,26 @@ impl Backend for GeometryBackend {
     ) -> Result<(), Error> {
         self.ensure_open("draw_planned_text")?;
         let canonical = backend::validate_planned_text(placement, plan)?;
+        self.record_text(
+            PlannedTextPlacement {
+                position: canonical.position.value(),
+                rotation: canonical.rotation.value(),
+                ..placement
+            },
+            plan,
+        )?;
+        let index = self.bounds.len();
         self.record(planned_text_ink_bounds(
             plan,
             canonical.position.value(),
             placement.anchor,
             canonical.rotation.value(),
             placement.origin,
+            placement.reverse_lines,
         ));
+        if self.bounds.len() > index {
+            self.text.last_mut().expect("recorded text").bounds_index = Some(index);
+        }
         Ok(())
     }
 
@@ -704,14 +999,14 @@ impl Backend for GeometryBackend {
             alignment,
             "geometry significance bracket label",
         )?;
-        self.record_planned_bracket(canonical, style, &label);
+        self.record_planned_bracket(canonical, style, &label)?;
         Ok(())
     }
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
         self.ensure_open("draw_planned_bracket")?;
         let canonical = backend::validate_planned_bracket(call)?;
-        self.record_planned_bracket(canonical, call.style, &call.label.plan);
+        self.record_planned_bracket(canonical, call.style, &call.label.plan)?;
         Ok(())
     }
 
@@ -750,6 +1045,137 @@ mod tests {
         );
         backend.begin(100, 100).unwrap();
         backend
+    }
+
+    #[test]
+    fn feedback_observes_annotation_placement_even_when_clipped_ink_is_unchanged() {
+        let mut producer = begun_backend();
+        let plan = producer
+            .plan_raw_text(
+                "A",
+                &test_text_style(),
+                PhysicalTextAlignment::Center,
+                "deferred annotation",
+            )
+            .unwrap();
+        producer.end().unwrap();
+        let mut calls = 0;
+        crate::layout::plan_exact_root(
+            100,
+            100,
+            |_| Ok(()),
+            |(), assigned, round| {
+                calls += 1;
+                let mut geometry = begun_backend();
+                geometry.begin_clip(PanelBox::new(0.0, 1.0, 0.0, 1.0))?;
+                geometry.draw_planned_text(
+                    PlannedTextPlacement::middle(
+                        Point2D::new(if calls == 1 { 50.0 } else { 60.0 }, 50.0),
+                        TextAnchor::Middle,
+                        0.0,
+                    ),
+                    &plan,
+                )?;
+                geometry.end_clip()?;
+                geometry.end()?;
+                assert!(geometry.bounds().is_empty());
+                geometry.observe_feedback(round)?;
+                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
+    fn root_text_overflow_uses_only_a_linked_resolving_domain_request() {
+        use crate::layout::kernel::{FeedbackKind, FitKind};
+        let mut producer = begun_backend();
+        let plan = producer
+            .plan_raw_text(
+                "A",
+                &test_text_style(),
+                PhysicalTextAlignment::Center,
+                "deferred annotation",
+            )
+            .unwrap();
+        producer.end().unwrap();
+        for (declared, requested_axis) in [
+            (true, FeedbackKind::AutomaticDomainX),
+            (false, FeedbackKind::AutomaticDomainX),
+            (true, FeedbackKind::AutomaticDomainY),
+        ] {
+            let mut calls = 0;
+            let root = crate::layout::plan_exact_root(
+                100,
+                100,
+                |_| Ok(()),
+                |(), assigned, round| {
+                    calls += 1;
+                    let address = crate::layout::ComponentAddress::root();
+                    let domain = round
+                        .domain(&address, FeedbackKind::AutomaticDomainX)
+                        .unwrap_or((0.0, 1.0));
+                    let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+                    let current =
+                        crate::layout::Projection::new(domain, (0.0, 1.0), panel.as_tuple());
+                    let (x, y) = current.project(1.1, 0.5);
+                    let mut geometry = begun_backend();
+                    geometry.draw_planned_text(
+                        PlannedTextPlacement::middle(Point2D::new(x, y), TextAnchor::Middle, 0.0),
+                        &plan,
+                    )?;
+                    geometry.end()?;
+                    geometry.observe_feedback(round)?;
+                    let bounds = geometry.bounds()[0];
+                    if bounds.right > panel.x1 {
+                        let request =
+                            round.request_domain(&address, &address, requested_axis, (0.0, 2.0))?;
+                        let next = crate::layout::Projection::new(
+                            if requested_axis == FeedbackKind::AutomaticDomainX {
+                                (0.0, 2.0)
+                            } else {
+                                domain
+                            },
+                            if requested_axis == FeedbackKind::AutomaticDomainY {
+                                (0.0, 2.0)
+                            } else {
+                                (0.0, 1.0)
+                            },
+                            panel.as_tuple(),
+                        );
+                        let remedy = geometry.text_overflow_resolved(
+                            bounds,
+                            panel,
+                            &current,
+                            &next,
+                            declared.then_some(&plan).into_iter(),
+                        )?;
+                        let requests = [request];
+                        round.miss(
+                            &address,
+                            FitKind::OverlayCollision,
+                            if remedy { &requests } else { &[] },
+                            "root annotation overflow",
+                        )?;
+                    }
+                    Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+                },
+                |(), _, (), _| Ok(()),
+            );
+            if declared && requested_axis == FeedbackKind::AutomaticDomainX {
+                assert!(root.is_ok());
+                assert_eq!(calls, 3);
+            } else {
+                assert!(root
+                    .err()
+                    .unwrap()
+                    .to_string()
+                    .contains("root annotation overflow"));
+                assert_eq!(calls, 1);
+            }
+        }
     }
 
     fn test_fill_style(opacity: f64, stroke_width: f32) -> FillStyle {
@@ -1256,6 +1682,8 @@ mod tests {
 
         GEOMETRY_RAW_TEXT_PLAN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         assert_eq!(backend.bounds.len(), 1);
+        assert_eq!(backend.text.len(), 1);
+        assert!(backend.text[0].plan.shares_payload(&plan));
         assert_eq!(
             backend.bounds[0],
             planned_text_ink_bounds(
@@ -1264,9 +1692,13 @@ mod tests {
                 placement.anchor,
                 placement.rotation,
                 placement.origin,
+                placement.reverse_lines,
             )
             .unwrap()
         );
+        backend.begin(100, 100).unwrap();
+        assert!(backend.text.is_empty());
+        backend.end().unwrap();
     }
 
     #[test]

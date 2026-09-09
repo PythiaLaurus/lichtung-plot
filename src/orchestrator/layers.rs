@@ -8,9 +8,12 @@ use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::{GuideSpec, Plot};
 
-const MAX_EXPLICIT_TICKS: usize = 10_000;
-
 impl Plot {
+    pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<AxisTick>>, Error> {
+        self.explicit_x_ticks()
+            .map(|ticks| projected_x_ticks(self, ticks))
+            .transpose()
+    }
     pub(crate) fn validate_supplemental_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         let configured = self.explicit_x_ticks().is_some()
             || self.explicit_y_ticks().is_some()
@@ -77,27 +80,35 @@ pub(crate) fn apply(
     result: &mut PlotRenderResult,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
     let projection = &result.layout.projection;
-    if let Some(ticks) = chart.explicit_x_ticks() {
-        let ticks = projected_x_ticks(chart, ticks)?;
-        validate_ticks(&ticks, projection.x_range(), "x-axis")?;
-        result.layout.x_axis.ticks = ticks;
+    if chart.explicit_x_ticks().is_some() {
+        crate::layout::Axis::validate_ticks(
+            &result.layout.x_axis.ticks,
+            projection.x_range(),
+            "x-axis",
+        )?;
         result.layout.x_axis.validate_explicit_tick_collisions(
             projection,
             AxisSide::Bottom,
             theme,
             "x-axis",
+            &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
         )?;
     }
-    if let Some(ticks) = chart.explicit_y_ticks() {
-        validate_ticks(ticks, projection.y_range(), "y-axis")?;
-        result.layout.y_axis.ticks = ticks.to_vec();
+    if chart.explicit_y_ticks().is_some() {
+        crate::layout::Axis::validate_ticks(
+            &result.layout.y_axis.ticks,
+            projection.y_range(),
+            "y-axis",
+        )?;
         result.layout.y_axis.validate_explicit_tick_collisions(
             projection,
             AxisSide::Left,
             theme,
             "y-axis",
+            &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
         )?;
     }
     if chart.guides().is_empty() {
@@ -118,6 +129,7 @@ pub(crate) fn apply(
         }
         Ok(())
     })
+    .map_err(Into::into)
 }
 
 fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
@@ -137,40 +149,6 @@ fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, 
             Ok(AxisTick::new(tick.position.log10(), tick.label.clone()))
         })
         .collect()
-}
-
-fn validate_ticks(ticks: &[AxisTick], range: (f64, f64), axis: &str) -> Result<(), Error> {
-    if ticks.is_empty() {
-        return Err(Error::Data(format!(
-            "{axis} explicit numeric ticks must not be empty"
-        )));
-    }
-    if ticks.len() > MAX_EXPLICIT_TICKS {
-        return Err(Error::Data(format!(
-            "{axis} explicit numeric tick count {} exceeds {MAX_EXPLICIT_TICKS}",
-            ticks.len()
-        )));
-    }
-    for (index, tick) in ticks.iter().enumerate() {
-        if !tick.position.is_finite() {
-            return Err(Error::Data(format!(
-                "{axis} explicit tick {index} position must be finite; got {}",
-                tick.position
-            )));
-        }
-        if tick.position < range.0 || tick.position > range.1 {
-            return Err(Error::Data(format!(
-                "{axis} explicit tick {index} position {} is outside resolved range {}..{}",
-                tick.position, range.0, range.1
-            )));
-        }
-        if index > 0 && ticks[index - 1].position >= tick.position {
-            return Err(Error::Data(format!(
-                "{axis} explicit tick positions must be strictly ascending"
-            )));
-        }
-    }
-    Ok(())
 }
 
 fn project_guide(

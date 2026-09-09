@@ -31,7 +31,7 @@ impl Plot {
             return canvas;
         }
         let cell = canvas.panel_box;
-        if let Ok(plan) = crate::decorations::plan::plan_panel(
+        if let Ok(plan) = crate::decorations::plan::plan_panel_for_test(
             self,
             kind,
             cell,
@@ -56,7 +56,7 @@ impl Plot {
         theme: &ResolvedTheme,
     ) -> Result<CanvasLayout, Error> {
         let labels_present = self.axis_label_presence();
-        let mut canvas = CanvasLayout::measured_single_panel(
+        let canvas = CanvasLayout::measured_single_panel(
             self.width,
             self.height,
             theme,
@@ -76,7 +76,6 @@ impl Plot {
                 self.caption.as_deref(),
             ),
         )?;
-        self.reserve_multiline_axis_titles(&mut canvas, true, theme)?;
         Ok(canvas)
     }
 
@@ -87,7 +86,7 @@ impl Plot {
 
     fn resolve_canvas_layout(&self, theme: &ResolvedTheme) -> CanvasLayout {
         let labels_present = self.axis_label_presence();
-        let mut canvas = CanvasLayout::single_panel(
+        CanvasLayout::single_panel(
             self.width,
             self.height,
             theme,
@@ -101,43 +100,25 @@ impl Plot {
                 has_x_label: labels_present.0,
                 has_y_label: labels_present.1,
             },
-        );
-        let _ = self.reserve_multiline_axis_titles(&mut canvas, false, theme);
-        canvas
-    }
-
-    fn reserve_multiline_axis_titles(
-        &self,
-        canvas: &mut CanvasLayout,
-        checked: bool,
-        theme: &ResolvedTheme,
-    ) -> Result<(), Error> {
-        let kind = self.kind;
-        let baseline = self.axis_title_line_counts(kind, canvas.panel_box, theme)?;
-        let baseline = (baseline.0.min(1), baseline.1.min(1));
-        let (panel, extra_left, extra_bottom) =
-            self.adjusted_axis_title_panel(kind, baseline, canvas.panel_box, checked, theme)?;
-        canvas.panel_box = panel;
-        canvas.insets.left += extra_left;
-        canvas.insets.bottom += extra_bottom;
-        Ok(())
+        )
     }
 
     #[expect(
         clippy::cast_precision_loss,
         reason = "tick counts are bounded by finite canvas dimensions"
     )]
-    pub(crate) fn reserve_rewrapped_axis_titles(
+    pub(crate) fn measured_axis_title_gutters(
         &self,
         kind: PlotKind,
-        reserved_panel: PanelBox,
-        mut candidate_panel: PanelBox,
+        candidate_panel: PanelBox,
         discovered_layout: &Layout,
         theme: &ResolvedTheme,
-    ) -> Result<PanelBox, Error> {
-        let baseline = self.axis_title_line_counts(kind, reserved_panel, theme)?;
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
+        let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
+        let mut extra_bottom = 0.0;
         if !self.axis_text_measured
-            && discovered_layout.projection.panel_box().y0 <= reserved_panel.y0 + f64::EPSILON
+            && discovered_layout.projection.panel_box().y0 <= candidate_panel.y0 + f64::EPSILON
         {
             let tick_width =
                 candidate_panel.width() / discovered_layout.x_axis.ticks.len().max(1) as f64;
@@ -147,32 +128,37 @@ impl Plot {
                 .iter()
                 .filter(|tick| !tick.label.is_empty())
                 .map(|tick| {
-                    theme
-                        .plan_text(
-                            &tick.label,
-                            &theme.typography.tick_label,
-                            tick_width.max(1.0),
-                            PhysicalTextAlignment::Center,
-                            "x-axis tick label",
-                            false,
-                        )
-                        .map(TextBlock::from_resolved)
-                        .map(|block| block.height())
+                    crate::layout::fit::measured(crate::layout::fit::text(
+                        theme,
+                        &tick.label,
+                        &theme.typography.tick_label,
+                        tick_width.max(1.0),
+                        PhysicalTextAlignment::Center,
+                        "x-axis tick label",
+                        &x_scope,
+                    ))
+                    .map(TextBlock::from_resolved)
+                    .map(|block| block.height())
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .into_iter()
                 .fold(0.0_f64, f64::max);
             let extra = (maximum_height - theme.typography.tick_label.line_height()).max(0.0);
             if candidate_panel.height() - extra < 60.0 {
-                return Err(Error::Render(
+                return Err(x_scope.failure(crate::layout::fit::FitKind::TrackOrResidual,
                     "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or shorten the tick labels"
-                        .into(),
-                ));
+                ).into());
             }
-            candidate_panel.y0 += extra;
+            extra_bottom = extra;
         }
-        self.adjusted_axis_title_panel(kind, baseline, candidate_panel, true, theme)
-            .map(|(panel, _, _)| panel)
+        let lines = self.axis_title_line_counts(kind, candidate_panel, theme, scope)?;
+        let line_height = theme.typography.axis_title.line_height();
+        Ok([
+            lines.1.saturating_sub(1) as f64 * line_height,
+            0.0,
+            extra_bottom + lines.0.saturating_sub(1) as f64 * line_height,
+            0.0,
+        ])
     }
 
     fn axis_title_line_counts(
@@ -180,80 +166,39 @@ impl Plot {
         kind: PlotKind,
         panel: PanelBox,
         theme: &ResolvedTheme,
-    ) -> Result<(usize, usize), Error> {
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<(usize, usize), crate::layout::fit::PlanError> {
         let (x_label, y_label) = self.resolved_axis_labels(kind);
         let x_lines = if x_label.is_empty() {
             0
         } else {
-            TextBlock::from_resolved(theme.plan_text(
+            TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
                 &x_label,
                 &theme.typography.axis_title,
                 panel.width().max(1.0),
                 PhysicalTextAlignment::Center,
                 "x-axis title",
-                false,
-            )?)
+                &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
+            ))?)
             .lines()
             .len()
         };
         let y_lines = if y_label.is_empty() {
             0
         } else {
-            TextBlock::from_resolved(theme.plan_text(
+            TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
                 &y_label,
                 &theme.typography.axis_title,
                 panel.height().max(1.0),
                 PhysicalTextAlignment::Center,
                 "y-axis title",
-                false,
-            )?)
+                &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
+            ))?)
             .lines()
             .len()
         };
         Ok((x_lines, y_lines))
-    }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "wrapped line counts are bounded by finite u32 canvas dimensions"
-    )]
-    fn adjusted_axis_title_panel(
-        &self,
-        kind: PlotKind,
-        baseline: (usize, usize),
-        candidate: PanelBox,
-        checked: bool,
-        theme: &ResolvedTheme,
-    ) -> Result<(PanelBox, f64, f64), Error> {
-        let line_height = theme.typography.axis_title.line_height();
-        let mut panel = candidate;
-        for _ in 0..4 {
-            let lines = self.axis_title_line_counts(kind, panel, theme)?;
-            let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
-            let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
-            if checked
-                && (candidate.width() - extra_left < 80.0
-                    || candidate.height() - extra_bottom < 60.0)
-            {
-                return Err(Error::Render(
-                    "multiline axis titles do not fit while preserving the minimum 80x60 plot panel; increase chart size"
-                        .into(),
-                ));
-            }
-            let next = PanelBox::new(
-                (candidate.x0 + extra_left).min(candidate.x1 - 80.0),
-                candidate.x1,
-                (candidate.y0 + extra_bottom).min(candidate.y1 - 60.0),
-                candidate.y1,
-            );
-            if next == panel {
-                return Ok((next, extra_left, extra_bottom));
-            }
-            panel = next;
-        }
-        Err(Error::Render(
-            "multiline axis-title layout did not stabilize; increase chart size or shorten labels"
-                .into(),
-        ))
     }
 }

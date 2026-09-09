@@ -34,7 +34,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let value_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("density: value column not set".into()))?;
@@ -58,7 +58,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         context.theme,
-    );
+    )?;
     let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {

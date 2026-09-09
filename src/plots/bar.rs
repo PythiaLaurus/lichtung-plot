@@ -23,7 +23,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
     let mode = match chart.kind() {
@@ -64,6 +64,7 @@ pub(crate) fn render(
         panel,
         &prepared.categories,
         theme,
+        context.fit_scope(),
     )?;
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
@@ -115,6 +116,7 @@ pub(crate) fn render(
             base_y_range,
             panel,
             theme,
+            context.fit_scope(),
         )?
     } else {
         crate::significance::plan_grouped(
@@ -127,6 +129,7 @@ pub(crate) fn render(
             panel,
             mode == BarMode::Stacked,
             theme,
+            context.fit_scope(),
         )?
     };
     let y_range = significance.y_range;
@@ -149,8 +152,15 @@ pub(crate) fn render(
         chart.x_axis_spec(),
         &y_axis_spec,
         theme,
-    );
-    validate_bar_significance_collisions(chart, &prepared, mode, &layout, &attached_label_plans)?;
+    )?;
+    validate_bar_significance_collisions(
+        chart,
+        &prepared,
+        mode,
+        &layout,
+        &attached_label_plans,
+        context.fit_scope(),
+    )?;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for bar in &prepared.bars {
@@ -280,10 +290,12 @@ fn validate_bar_significance_collisions(
     mode: BarMode,
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
-    for (mark, text_plan) in prepared.significance.iter().zip(text_plans) {
+    for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
+        let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
         let center = significance_center(mark.category_index, mark.series_index, prepared, mode);
         let (x, edge_y) = layout.projection.project(center, mark.edge);
         let width = text_plan.width();
@@ -294,13 +306,24 @@ fn validate_bar_significance_collisions(
             edge_y - style.gap_spec() - height
         };
         let candidate = (x - width / 2.0, x + width / 2.0, y0, y0 + height);
+        let draw_y = if mark.positive {
+            edge_y + style.gap_spec()
+        } else {
+            edge_y - style.gap_spec() - f64::from(text_plan.style.font_size)
+        };
+        let panel = layout.projection.panel_box();
+        if draw_y < panel.y0 || draw_y + height > panel.y1 {
+            return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the y-axis range", mark.label)).into());
+        }
         if bounds.iter().any(|&(x0, x1, y0, y1)| {
             candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
         }) {
-            return Err(Error::Render(
-                "bar significance marks overlap; enlarge the chart or reduce mark typography"
-                    .into(),
-            ));
+            return Err(scope
+                .failure(
+                    crate::layout::fit::FitKind::OverlayCollision,
+                    "bar significance marks overlap; enlarge the chart or reduce mark typography",
+                )
+                .into());
         }
         bounds.push(candidate);
     }

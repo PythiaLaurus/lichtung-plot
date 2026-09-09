@@ -19,7 +19,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let label_col = chart
         .x_col()
@@ -37,10 +37,11 @@ pub(crate) fn render(
     if labels.is_empty() || labels.len() != deltas.len() {
         return Err(Error::Data(
             "waterfall: labels and deltas must have equal non-zero lengths".into(),
-        ));
+        )
+        .into());
     }
     if !base.is_finite() {
-        return Err(Error::Data("waterfall: base value must be finite".into()));
+        return Err(Error::Data("waterfall: base value must be finite".into()).into());
     }
     let mut running = base;
     let mut spans = Vec::with_capacity(deltas.len());
@@ -51,7 +52,8 @@ pub(crate) fn render(
             return Err(Error::Data(format!(
                 "waterfall: cumulative endpoint is non-finite at source row {}",
                 context.data.source_row(index)
-            )));
+            ))
+            .into());
         }
         range.0 = range.0.min(next);
         range.1 = range.1.max(next);
@@ -66,11 +68,12 @@ pub(crate) fn render(
         .enumerate()
         .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
         .collect::<Vec<_>>();
-    let panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
+    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
         chart,
         context.panel,
         &display_labels,
         theme,
+        context.fit_scope(),
     )?;
     let initial_layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
@@ -83,7 +86,7 @@ pub(crate) fn render(
         &x_axis_spec,
         chart.y_axis_spec(),
         theme,
-    );
+    )?;
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
         .map_or(("base", "total"), |labels| {
@@ -98,17 +101,26 @@ pub(crate) fn render(
             (terminal, format!("{terminal_label} {terminal:.3}")),
         ],
         theme,
+        context.fit_scope(),
     )?;
     if annotations.height > panel.height() - MINIMUM_MARK_PANEL_HEIGHT {
-        return Err(Error::Render(format!(
+        return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving a {MINIMUM_MARK_PANEL_HEIGHT:.0}px mark panel; increase chart height or shorten the configured labels",
             annotations.height
-        )));
+        )).into());
     }
     let mut mark_panel = panel;
     mark_panel.y1 -= annotations.height;
-    crate::plots::horizontal_bar::validate_y_tick_label_rows(mark_panel, &display_labels, theme)?;
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+    crate::plots::horizontal_bar::validate_y_tick_label_rows(
+        mark_panel,
+        &display_labels,
+        theme,
+        tick_width,
+        &context
+            .fit_scope()
+            .child(crate::layout::AddressRole::AxisLeft, 0)?,
+    )?;
+    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
         (0.0, labels.len() as f64),
         mark_panel,
@@ -119,7 +131,8 @@ pub(crate) fn render(
         &x_axis_spec,
         chart.y_axis_spec(),
         theme,
-    );
+    )?;
+    layout.y_axis.assigned_tick_width = Some(tick_width);
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for (index, ((start, end), delta)) in spans.iter().zip(&deltas).enumerate() {
             let y0 = index as f64 + 0.2;
@@ -192,7 +205,8 @@ pub(crate) fn text_census_annotations<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
     filter_to_range: bool,
-) -> Result<Vec<String>, Error> {
+    mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
+) -> Result<(), Error> {
     let data = data.into();
     let delta_col = chart
         .y_col()
@@ -223,15 +237,12 @@ pub(crate) fn text_census_annotations<'a>(
         .map_or(("base", "total"), |labels| {
             (labels.base(), labels.terminal())
         });
-    Ok([
-        (base, format!("{base_label} {base:.3}")),
-        (terminal, format!("{terminal_label} {terminal:.3}")),
-    ]
-    .into_iter()
-    .filter_map(|(value, source)| {
-        (!filter_to_range || (value >= range.0 && value <= range.1)).then_some(source)
-    })
-    .collect())
+    for (value, label) in [(base, base_label), (terminal, terminal_label)] {
+        if !filter_to_range || (value >= range.0 && value <= range.1) {
+            visit(format_args!("{label} {value:.3}").into())?;
+        }
+    }
+    Ok(())
 }
 
 const ANNOTATION_PADDING: f64 = 4.0;
@@ -257,10 +268,12 @@ fn plan_annotations(
     source_y: f64,
     candidates: [(f64, String); 2],
     theme: &crate::theme::ResolvedTheme,
-) -> Result<AnnotationPlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
     let mut rows: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut items = Vec::new();
-    for (value, text) in candidates {
+    let mut miss = None;
+    for (index, (value, text)) in candidates.into_iter().enumerate() {
         if !layout.projection.contains_data(value, source_y) {
             continue;
         }
@@ -272,11 +285,12 @@ fn plan_annotations(
         )?;
         let width = text_plan.width();
         if width + 2.0 * ANNOTATION_PADDING > panel.width() {
-            return Err(Error::Render(format!(
+            crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
                 width + 2.0 * ANNOTATION_PADDING,
                 panel.width()
             )));
+            continue;
         }
         let (projected_x, _) = layout.projection.project(value, source_y);
         let half_width = width / 2.0;
@@ -304,6 +318,9 @@ fn plan_annotations(
         }
         rows[row].push(bounds);
         items.push(Annotation { text_plan, x, row });
+    }
+    if let Some(failure) = miss {
+        return Err(failure.into());
     }
     let row_height = items
         .iter()

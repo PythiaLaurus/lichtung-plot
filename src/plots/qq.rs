@@ -27,11 +27,12 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     if let Some(hue) = chart.hue_col() {
         return Err(Error::Data(format!(
             "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
-        )));
+        ))
+        .into());
     }
     let value_col = chart
         .x_col()
@@ -56,7 +57,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         context.theme,
-    );
+    )?;
     let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {

@@ -87,6 +87,16 @@ impl Plot {
         context: PlotRenderContext<'_>,
         backend: &mut dyn Backend,
     ) -> Result<PlotRenderResult, Error> {
+        self.measure_panel(kind, context, backend)
+            .map_err(crate::layout::fit::PlanError::into_error)
+    }
+
+    pub(crate) fn measure_panel(
+        &self,
+        kind: PlotKind,
+        context: PlotRenderContext<'_>,
+        backend: &mut dyn Backend,
+    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         #[cfg(test)]
         {
             RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -120,8 +130,12 @@ impl Plot {
             PlotKind::Violin => crate::plots::violin::render(self, context, backend),
             PlotKind::Raincloud => crate::plots::violin::render_raincloud(self, context, backend),
             PlotKind::Regression => crate::plots::regression::render(self, context, backend),
-            PlotKind::Marginal => crate::plots::marginal::render(self, context, backend),
-            PlotKind::Matrix => crate::plots::matrix::render(self, context, backend),
+            PlotKind::Marginal => {
+                crate::plots::marginal::render(self, context, backend).map_err(Into::into)
+            }
+            PlotKind::Matrix => {
+                crate::plots::matrix::render(self, context, backend).map_err(Into::into)
+            }
             PlotKind::Beeswarm => crate::plots::beeswarm::render(self, context, backend),
             PlotKind::Waterfall => crate::plots::waterfall::render(self, context, backend),
         }?;
@@ -148,12 +162,27 @@ impl Plot {
         };
         result.x_domain = domains.0;
         result.y_domain = domains.1;
-        layers::apply(self, &mut result, context.theme, backend)?;
+        layers::apply(
+            self,
+            &mut result,
+            context.theme,
+            backend,
+            context.fit_scope(),
+        )?;
         let (x_label, y_label) = self.resolved_axis_labels(kind);
         result.layout.x_axis.label = x_label;
         result.layout.y_axis.label = y_label;
-        resolve_rendered_labels(self, &mut result, context.theme)?;
-        crate::decorations::panel_text::draw(self, &result.layout, context.theme, backend)?;
+        resolve_rendered_labels(self, &mut result, context.theme, context.fit_scope())?;
+        result.panel_text = match context.panel_text {
+            Some(plans) => plans.to_vec(),
+            None => crate::decorations::panel_text::measure_plans(
+                self,
+                &result.layout,
+                context.theme,
+                context.fit_scope(),
+            )?,
+        };
+        crate::decorations::panel_text::draw(self, &result.layout, &result.panel_text, backend)?;
         Ok(result)
     }
 }
@@ -162,7 +191,8 @@ fn resolve_rendered_labels(
     plot: &Plot,
     result: &mut PlotRenderResult,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
     if result.decoration_mode == crate::spec::DecorationMode::SelfManaged {
         return Ok(());
     }
@@ -199,7 +229,7 @@ fn resolve_rendered_labels(
     if !result.legend_entries.is_empty() {
         crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
     }
-    validate_axis_text(&result.layout, theme)?;
+    validate_axis_text(&result.layout, theme, scope)?;
     Ok(())
 }
 
@@ -210,62 +240,101 @@ fn resolve_rendered_labels(
 fn validate_axis_text(
     layout: &crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
+    use crate::layout::fit;
+    let mut miss = None;
+    let mut record = |result: Result<fit::FitOutcome<crate::layout::ResolvedTextPlan>, Error>| -> Result<(), Error> {
+        if let fit::FitOutcome::Miss(failure) = result? { fit::FitFailure::retain_least(&mut miss, failure); }
+        Ok(())
+    };
+    let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
+    let y_scope = scope.child(crate::layout::AddressRole::AxisLeft, 0)?;
     let panel = layout.projection.panel_box();
     let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64;
-    let y_tick_width = (panel.width() * 0.4).max(1.0);
     for tick in layout
         .x_axis
         .ticks
         .iter()
         .filter(|tick| !tick.label.is_empty())
     {
-        theme.plan_text(
+        record(fit::text(
+            theme,
             &tick.label,
             &theme.typography.tick_label,
             x_tick_width.max(1.0),
             crate::layout::PhysicalTextAlignment::Center,
             "x-axis tick label",
-            false,
-        )?;
+            &x_scope,
+        ))?;
     }
     if !layout.x_axis.label.is_empty() {
-        theme.plan_text(
+        record(fit::text(
+            theme,
             &layout.x_axis.label,
             &theme.typography.axis_title,
             panel.width().max(1.0),
             crate::layout::PhysicalTextAlignment::Center,
             "x-axis title",
-            false,
-        )?;
+            &x_scope,
+        ))?;
     }
 
     if !layout.y_axis.label.is_empty() {
-        theme.plan_text(
+        record(fit::text(
+            theme,
             &layout.y_axis.label,
             &theme.typography.axis_title,
             panel.height().max(1.0),
             crate::layout::PhysicalTextAlignment::Center,
             "y-axis title",
-            false,
-        )?;
+            &y_scope,
+        ))?;
     }
+    let y_tick_width =
+        layout
+            .y_axis
+            .tick_label_width(panel, crate::layout::AxisSide::Left, theme)?;
     for tick in layout
         .y_axis
         .ticks
         .iter()
         .filter(|tick| !tick.label.is_empty())
     {
-        theme.plan_text(
+        record(fit::text(
+            theme,
             &tick.label,
             &theme.typography.tick_label,
             y_tick_width,
             crate::layout::PhysicalTextAlignment::End,
             "y-axis tick label",
-            false,
-        )?;
+            &y_scope,
+        ))?;
     }
-    Ok(())
+    match miss {
+        Some(failure) => Err(failure.into()),
+        None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn later_axis_font_failure_wins_over_an_earlier_text_fit() {
+    use crate::layout::fit::{FitScope, PlanError};
+    let theme = crate::Theme::Publication.resolve();
+    theme.prepare_font_environment().unwrap();
+    let mut layout = crate::layout::Layout::self_managed(640, 480);
+    layout.x_axis.label = "W".repeat(200);
+    let scope = FitScope::root();
+    assert!(matches!(
+        validate_axis_text(&layout, &theme, &scope),
+        Err(PlanError::Fit(_))
+    ));
+    layout.y_axis.label = "\u{10ffff}".into();
+    assert!(matches!(
+        validate_axis_text(&layout, &theme, &scope),
+        Err(PlanError::Fatal(_))
+    ));
 }
 
 #[cfg(test)]

@@ -1,12 +1,13 @@
 ---
 source: tests/visual_regression/suite.rs
-assertion_line: 72
-expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A notably long category\"])"
+expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A deliberately \", \"long category\"])"
 ---
-<clipPath id="clip-0"><rect x="131.508" y="52.000" width="198.492" height="159.400"/></clipPath>
+<clipPath id="clip-0"><rect x="172.422" y="52.000" width="157.578" height="159.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
 <g id="axes">
+<text x="50.140625" y="166.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">A deliberately </text>
+<text x="51.1484375" y="185.7568359375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">long category</text>
 <text x="54.228515625" y="25.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Horizontal structural title</text>

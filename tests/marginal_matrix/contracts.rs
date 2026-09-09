@@ -361,6 +361,7 @@ fn marginal_hue_legend_headroom_is_bounded_and_avoids_cluster() {
     let plot = marginal(&data)
         .group(data.group.clone().unwrap())
         .hue(data.hue.clone().unwrap())
+        .legend(LegendPolicy::Visible(LegendPosition::InsideTopRight))
         .size(420, 320);
     let svg = render(plot, "marginal-legend");
     let central = parse_first_clip_rect(&svg);

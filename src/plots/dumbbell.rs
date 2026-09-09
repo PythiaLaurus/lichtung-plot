@@ -33,7 +33,7 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let prepared = prepare(chart, context.data)?;
     let endpoints = chart
         .dumbbell_endpoints_spec()
@@ -52,13 +52,14 @@ pub(crate) fn render(
         .map(|(index, category)| AxisTick::new(row_y(index, category_count), category.clone()))
         .collect();
     let y_axis = AxisSpec::default().limits(0.0, category_count as f64);
-    let panel = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
+    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
         chart,
         context.panel,
         &display_categories,
         context.theme,
+        context.fit_scope(),
     )?;
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
         x_range,
         (0.0, category_count as f64),
         panel,
@@ -69,7 +70,8 @@ pub(crate) fn render(
         &x_axis,
         &y_axis,
         context.theme,
-    );
+    )?;
+    layout.y_axis.assigned_tick_width = Some(tick_width);
     let connector = LineStyle::solid(context.theme.foreground, 1.2);
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for row in &prepared.rows {

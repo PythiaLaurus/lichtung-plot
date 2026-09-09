@@ -1,6 +1,7 @@
 //! Private plot and canvas layout modules.
 
 pub(crate) mod canvas;
+pub(crate) mod fit;
 pub(crate) mod kernel;
 mod panel;
 mod text;

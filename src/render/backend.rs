@@ -421,15 +421,116 @@ pub(crate) struct PlannedTextPlacement {
     pub(crate) anchor: TextAnchor,
     pub(crate) rotation: f64,
     pub(crate) origin: PlannedTextOrigin,
+    /// Physical column order for existing outward-stacked rotated axis titles.
+    pub(crate) reverse_lines: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PlacedText {
+    pub(crate) plan: ResolvedTextPlan,
+    pub(crate) placement: PlannedTextPlacement,
+}
+
+pub(crate) fn reserve_text_records<T>(
+    records: &mut Vec<T>,
+    additional: usize,
+    environment: &crate::font::canonical::PreparedFontEnvironment,
+) -> Result<(), Error> {
+    environment
+        .claim_text_generation_slots(additional as u128)
+        .map_err(|error| Error::Render(format!("producer text slots: {error:?}")))?;
+    environment
+        .claim_text_generation_work(additional as u128)
+        .map_err(|error| Error::Render(format!("producer text work: {error:?}")))?;
+    if additional > records.capacity() - records.len() {
+        let capacity = records
+            .len()
+            .checked_add(additional)
+            .zip(records.capacity().checked_mul(2))
+            .map(|(required, doubled)| required.max(doubled).max(4))
+            .ok_or_else(|| Error::Render("producer text capacity overflow".into()))?;
+        let bytes = capacity
+            .checked_mul(std::mem::size_of::<T>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("producer text storage overflow".into()))?;
+        environment
+            .claim_unicode_bytes(bytes)
+            .map_err(|error| Error::Render(format!("producer text bytes: {error}")))?;
+        environment
+            .claim_text_generation_work(records.len() as u128)
+            .map_err(|error| Error::Render(format!("producer text relocation: {error:?}")))?;
+        records
+            .try_reserve_exact(capacity - records.len())
+            .map_err(|_| Error::Render("producer text allocation failed".into()))?;
+    }
+    Ok(())
+}
+
+impl PlacedText {
+    pub(crate) fn middle(
+        plan: ResolvedTextPlan,
+        position: Point2D,
+        anchor: TextAnchor,
+        rotation: f64,
+    ) -> Self {
+        Self {
+            plan,
+            placement: PlannedTextPlacement::middle(position, anchor, rotation),
+        }
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "line counts are bounded by text admission"
+    )]
+    pub(crate) fn from_first_line(
+        plan: ResolvedTextPlan,
+        first: Point2D,
+        anchor: TextAnchor,
+        rotation: f64,
+    ) -> Self {
+        let offset = plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
+        let angle = rotation.to_radians();
+        Self {
+            plan,
+            placement: PlannedTextPlacement::middle(
+                Point2D::new(
+                    first.x - offset * angle.sin(),
+                    first.y - offset * angle.cos(),
+                ),
+                anchor,
+                rotation,
+            ),
+        }
+    }
+
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        backend.draw_planned_text(self.placement, &self.plan)
+    }
+
+    pub(crate) fn with_reversed_lines(mut self) -> Self {
+        self.placement.reverse_lines = true;
+        self
+    }
 }
 
 impl PlannedTextPlacement {
+    pub(crate) fn line_y(self, plan: &ResolvedTextPlan, y: i64) -> Result<i64, Error> {
+        if !self.reverse_lines {
+            return Ok(y);
+        }
+        plan.last_baseline_quanta
+            .unwrap_or(0)
+            .checked_sub(y)
+            .and_then(|offset| plan.first_baseline_quanta.unwrap_or(0).checked_add(offset))
+            .ok_or_else(|| Error::Render("reversed text line placement overflowed".into()))
+    }
     pub(crate) const fn middle(position: Point2D, anchor: TextAnchor, rotation: f64) -> Self {
         Self {
             position,
             anchor,
             rotation,
             origin: PlannedTextOrigin::Middle,
+            reverse_lines: false,
         }
     }
 
@@ -439,6 +540,7 @@ impl PlannedTextPlacement {
             anchor,
             rotation,
             origin: PlannedTextOrigin::Baseline,
+            reverse_lines: false,
         }
     }
 }
@@ -718,11 +820,15 @@ pub(crate) const fn nearest_even_text_half(value: i64) -> Option<i64> {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one protocol validator checks linked immutable style, line, discretionary-break, and glyph spans"
+)]
 pub(crate) fn validate_planned_text(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
 ) -> Result<CanonicalText, Error> {
-    let canonical = validate_text(placement.position, &planned_text_style(placement, plan))?;
+    let canonical = coordinates::canonical_text(placement.position, placement.rotation)?;
     let expected_alignment = match placement.anchor {
         TextAnchor::Start => PhysicalTextAlignment::Start,
         TextAnchor::Middle => PhysicalTextAlignment::Center,
@@ -779,6 +885,22 @@ pub(crate) fn validate_planned_text(
         _ => unreachable!("a slice cannot have only one of first/last"),
     }
     for (index, line) in plan.lines.iter().enumerate() {
+        placement.line_y(plan, line.translation_y_quanta)?;
+        if let Some(soft) = line.selected_soft_hyphen {
+            if !valid_span(soft.start_byte, soft.end_byte)
+                || soft.start_byte < line.source_span.start_byte
+                || soft.end_byte != line.source_span.end_byte
+                || &plan.source[soft.start_byte as usize..soft.end_byte as usize] != "\u{ad}"
+                || !line.runs.iter().any(|run| {
+                    run.source_span.start_byte <= soft.start_byte
+                        && run.source_span.end_byte >= soft.end_byte
+                })
+            {
+                return Err(Error::Render(
+                    "planned text has an invalid selected soft-hyphen span or run".into(),
+                ));
+            }
+        }
         let expected_y = plan
             .first_baseline_quanta
             .and_then(|first| {
@@ -945,6 +1067,29 @@ pub(crate) fn finish_scope<T>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn producer_record_storage_refuses_before_allocating() {
+        use crate::font::canonical::PreparedFontEnvironment;
+        for resource in ["slots", "work", "bytes"] {
+            let environment = PreparedFontEnvironment::synthetic();
+            match resource {
+                "slots" => environment.claim_text_generation_slots(1_000_000).unwrap(),
+                "work" => environment.claim_text_generation_work(1_000_000).unwrap(),
+                _ => {
+                    let used = environment.resource_usage().unwrap().font_bytes;
+                    environment
+                        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
+                        .unwrap();
+                }
+            }
+            let mut records = Vec::<super::PlacedText>::new();
+            assert!(
+                super::reserve_text_records(&mut records, 1, &environment).is_err(),
+                "{resource}"
+            );
+            assert_eq!(records.capacity(), 0);
+        }
+    }
     use super::*;
 
     fn valid_bracket() -> (SignificanceBracket, BracketStyle) {

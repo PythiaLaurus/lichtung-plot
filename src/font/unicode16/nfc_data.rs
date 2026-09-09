@@ -1,12 +1,4 @@
-//! Generated Unicode 16.0 canonical-normalization data.
-//!
-//! Unicode 16.0.0 source artifacts:
-//! - `UnicodeData.txt`: <https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt>
-//! - `DerivedNormalizationProps.txt` (`Full_Composition_Exclusion`):
-//!   <https://www.unicode.org/Public/16.0.0/ucd/DerivedNormalizationProps.txt>
-//!
-//! Do not edit by hand.
-
+// Generated from Unicode 16.0.0; see tests/fixtures/unicode16/README.md.
 pub(super) static CANONICAL_COMBINING_CLASS: &[(u32, u32, u8)] = &[
     (0x300, 0x314, 230),
     (0x315, 0x315, 232),

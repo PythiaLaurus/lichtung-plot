@@ -7,16 +7,14 @@ use crate::Error;
 
 use super::backend::{
     nearest_even_text_half, validate_bracket, validate_clip_region, validate_fill_style,
-    validate_line_points, validate_line_style, validate_linear_gradient, validate_point_style,
-    validate_points, validate_polygon_points, validate_rounded_rect, validate_surface_bounds,
-    validate_text, validate_triangle_points, Backend, BracketStyle, FillStyle, GradientStop,
-    LayerRole, LineStyle, PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement,
-    Point2D, PointStyle, Rgba, SignificanceBracket, SurfaceRole, TextAnchor, TextStyle,
-    POLYGON_MITER_LIMIT,
+    validate_line_style, validate_point_style, validate_rounded_rect, validate_surface_bounds,
+    validate_text, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
+    PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement, Point2D, PointStyle, Rgba,
+    SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
 };
-use super::coordinates::CanonicalPoint;
+use super::coordinates::{self, CanonicalPoint, ValidationScratch};
 use crate::font::canonical::{PreparedFontEnvironment, ShapingDirection};
-use crate::layout::{PanelBox, ResolvedTextPlan, TextLinePlan, CSS_PIXEL_QUANTA};
+use crate::layout::{PanelBox, ResolvedTextPlan, CSS_PIXEL_QUANTA};
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
 use crate::PointShape;
 
@@ -25,6 +23,31 @@ thread_local! {
     pub(crate) static PNG_TARGET_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SVG_RAW_TEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static SVG_PLANNED_TEXT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static SVG_BEGIN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static SVG_END_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static REFUSE_STORAGE: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
+    pub(crate) static DERIVED_BUFFER_RESERVATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn reserve_storage<T>(
+    stage: &mut crate::layout::kernel::FinalStage<'_>,
+    values: &mut Vec<T>,
+    count: usize,
+    payload: &str,
+) -> Result<(), Error> {
+    if count == 0 {
+        return Ok(());
+    }
+    #[cfg(test)]
+    REFUSE_STORAGE.with(|refuse| {
+        if refuse.get() == Some(payload) {
+            refuse.set(None);
+            crate::layout::kernel::force_reservation_failure(
+                crate::layout::kernel::ReservationStage::Final,
+            );
+        }
+    });
+    stage.reserve_final(values, count, payload)
 }
 
 #[derive(Clone, Copy)]
@@ -72,26 +95,51 @@ fn nearest_even_half(value: i64, field: &str) -> Result<i64, Error> {
 }
 
 impl SvgBackend {
+    #[cfg(test)]
+    pub(crate) fn reserved_storage_addresses(&self) -> [(usize, usize); 8] {
+        let address = |text: &String| (text.as_ptr().addr(), text.capacity());
+        [
+            address(&self.body.text),
+            address(&self.root_surfaces.text),
+            address(&self.panel_surfaces.text),
+            address(&self.grid_buf.text),
+            address(&self.clip_defs.text),
+            address(&self.gradient_defs.text),
+            address(&self.document),
+            (
+                self.text_replacements.as_ptr().addr(),
+                self.text_replacements.capacity(),
+            ),
+        ]
+    }
+    #[cfg(test)]
     pub(crate) fn in_memory(width: u32, height: u32) -> Self {
         Self {
             output: None,
             width,
             height,
-            body: String::new(),
-            root_surfaces: String::new(),
-            panel_surfaces: String::new(),
-            grid_buf: String::new(),
-            clip_defs: String::new(),
-            gradient_defs: String::new(),
+            body: WriteBuffer::default(),
+            root_surfaces: WriteBuffer::default(),
+            panel_surfaces: WriteBuffer::default(),
+            grid_buf: WriteBuffer::default(),
+            clip_defs: WriteBuffer::default(),
+            gradient_defs: WriteBuffer::default(),
             group_stack: Vec::new(),
             next_clip_id: 0,
             next_gradient_id: 0,
             state: SvgCanvasState::Fresh,
             font_environment: None,
             text_replacements: Vec::new(),
+            replacement_count: 0,
+            validation: ValidationScratch::default(),
+            fixed: false,
+            document: String::new(),
+            expected_document_bytes: None,
+            run_order: Vec::new(),
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn in_memory_with_fonts(
         width: u32,
         height: u32,
@@ -109,7 +157,7 @@ impl SvgBackend {
     #[cfg(test)]
     pub(crate) fn into_bytes(self) -> Result<Vec<u8>, Error> {
         self.into_output()
-            .map(|output| output.bytes.into_vec())
+            .map(|output| output.bytes)
             .ok_or_else(|| Error::Render("in-memory SVG backend did not finish rendering".into()))
     }
 
@@ -121,12 +169,13 @@ impl SvgBackend {
         output
             .outline_plan
             .derive(output.width_css_px, output.height_css_px)
-            .map(<[u8]>::into_vec)
             .map_err(Error::Render)
     }
+}
 
+impl<S: SvgSink> SvgSerializer<S> {
     /// Returns a reference to the active output buffer (grid or main body).
-    fn buf(&mut self) -> &mut String {
+    fn buf(&mut self) -> &mut S {
         if self
             .group_stack
             .iter()
@@ -150,45 +199,69 @@ impl SvgBackend {
         }
     }
 
-    fn append_text_replacement(&mut self, preserve: &str, outline: Option<PlannedLineOutline>) {
+    fn append_text_replacement(
+        &mut self,
+        start: usize,
+        outline: Option<PlannedLineOutline>,
+    ) -> Result<(), Error> {
         let buffer = self.active_text_buffer();
         let target = match buffer {
             TextBuffer::Body => &mut self.body,
             TextBuffer::Grid => &mut self.grid_buf,
         };
-        let start = target.len();
-        target.push_str(preserve);
         let end = target.len();
+        self.replacement_count = self
+            .replacement_count
+            .checked_add(1)
+            .ok_or_else(|| Error::Render("SVG replacement count overflow".into()))?;
+        if S::COUNTING {
+            return Ok(());
+        }
+        if self.text_replacements.len() == self.text_replacements.capacity() {
+            if self.fixed {
+                return Err(Error::Render("SVG exceeded reserved replacements".into()));
+            }
+            self.text_replacements
+                .try_reserve(1)
+                .map_err(|error| Error::Render(format!("SVG replacement reservation: {error}")))?;
+        }
         self.text_replacements.push(TextReplacement {
             buffer,
             range: start..end,
             outline,
         });
+        Ok(())
     }
 
-    fn fmt_points(&self, points: &[CanonicalPoint]) -> Result<String, Error> {
-        let mut out = String::new();
-        for (i, p) in points.iter().enumerate() {
-            if i > 0 {
-                out.push(' ');
+    fn push_group(&mut self, group: GroupState) -> Result<(), Error> {
+        if self.group_stack.len() == self.group_stack.capacity() {
+            if self.fixed {
+                return Err(Error::Render("SVG exceeded reserved scopes".into()));
             }
-            let y = p.y.inverted(self.height)?;
-            let _ = write!(out, "{},{}", p.x, y);
+            self.group_stack
+                .try_reserve(1)
+                .map_err(|error| Error::Render(format!("SVG scope reservation: {error}")))?;
         }
-        Ok(out)
+        self.group_stack.push(group);
+        Ok(())
     }
 
-    fn escape_text(text: &str) -> String {
-        text.chars()
-            .flat_map(|ch| match ch {
-                '&' => "&amp;".chars().collect::<Vec<_>>(),
-                '<' => "&lt;".chars().collect(),
-                '>' => "&gt;".chars().collect(),
-                '"' => "&quot;".chars().collect(),
-                '\'' => "&apos;".chars().collect(),
-                _ => vec![ch],
-            })
-            .collect()
+    pub(crate) fn check_buffers(&self) -> Result<(), Error> {
+        for buffer in [
+            &self.body,
+            &self.root_surfaces,
+            &self.panel_surfaces,
+            &self.grid_buf,
+            &self.clip_defs,
+            &self.gradient_defs,
+        ] {
+            buffer.check()?;
+        }
+        Ok(())
+    }
+
+    fn escape_text(text: &str) -> EscapedText<'_> {
+        EscapedText(text)
     }
 
     fn ensure_begun(&self, operation: &str) -> Result<(), Error> {
@@ -200,20 +273,23 @@ impl SvgBackend {
             )))
         }
     }
+}
 
+impl SvgBackend {
     #[expect(
         clippy::cast_precision_loss,
         clippy::too_many_lines,
         reason = "one pass validates and serializes every immutable glyph-plan field"
     )]
-    fn outline_planned_line(
+    fn outline_planned_line<S: SvgSink>(
         height_css_px: u32,
         environment: &PreparedFontEnvironment,
         outline: &PlannedLineOutline,
-    ) -> Result<String, Error> {
+        outlined: &mut S,
+    ) -> Result<(), Error> {
         let canonical = outline.canonical;
         let placement = outline.placement;
-        let line = &outline.line;
+        let line = &outline.plan.lines[outline.line_index];
         let quanta = CSS_PIXEL_QUANTA as f64;
         let position_x = pixel_coordinate_quanta(canonical.position.x.value(), "x position")?;
         let position_y = pixel_coordinate_quanta(canonical.position.y.value(), "y position")?;
@@ -237,18 +313,16 @@ impl SvgBackend {
         let line_x = block_left
             .checked_add(line.translation_x_quanta)
             .ok_or_else(|| Error::Render("planned text line x overflowed".into()))?;
+        let line_y = placement.line_y(&outline.plan, line.translation_y_quanta)?;
         let baseline = position_y
             .checked_add(vertical_reference)
-            .and_then(|value| value.checked_sub(line.translation_y_quanta))
+            .and_then(|value| value.checked_sub(line_y))
             .ok_or_else(|| Error::Render("planned text baseline overflowed".into()))?;
         let rotation_center = (
             canonical.position.x.value(),
             canonical.position.y.inverted(height_css_px)?.value(),
         );
-        let rotation = canonical.rotation.value().to_radians();
         let fill = SvgPaint::from(outline.paint).attributes("fill");
-        let mut outlined = String::new();
-        let mut advance_cursor = (0_i64, 0_i64);
 
         for run in &line.runs {
             for glyph in &run.glyphs {
@@ -257,7 +331,7 @@ impl SvgBackend {
                         "planned glyph face does not match its immutable shaped run".into(),
                     ));
                 }
-                let mut builder = SvgGlyphPath::default();
+                let mut builder = SvgGlyphPath::<S>::default();
                 let (metrics, retained_ink) = environment
                     .outline_glyph(glyph.face, glyph.glyph_id, &mut builder)
                     .map_err(|error| Error::Render(format!("planned glyph outlining: {error}")))?;
@@ -282,26 +356,17 @@ impl SvgBackend {
                         "retained glyph outline contains a non-finite coordinate".into(),
                     ));
                 }
-                if retained_ink.is_some() && builder.data.is_empty() {
+                if builder.allocation_failed {
+                    return Err(Error::Render("glyph path buffer reservation failed".into()));
+                }
+                if retained_ink.is_some() && builder.data.len() == 0 {
                     return Err(Error::Render(
                         "planned glyph has ink but its retained outline path is empty".into(),
                     ));
                 }
-                if !builder.data.is_empty() {
-                    let glyph_origin_quanta = (
-                        advance_cursor
-                            .0
-                            .checked_add(glyph.x_offset_quanta)
-                            .ok_or_else(|| {
-                                Error::Render("planned glyph x origin overflow".into())
-                            })?,
-                        advance_cursor
-                            .1
-                            .checked_add(glyph.y_offset_quanta)
-                            .ok_or_else(|| {
-                                Error::Render("planned glyph y origin overflow".into())
-                            })?,
-                    );
+                if builder.data.len() != 0 {
+                    let glyph_origin_quanta =
+                        (glyph.glyph_origin_x_quanta, glyph.glyph_origin_y_quanta);
                     let glyph_x = line_x.checked_add(glyph_origin_quanta.0).ok_or_else(|| {
                         Error::Render("planned glyph x placement overflowed".into())
                     })?;
@@ -317,13 +382,14 @@ impl SvgBackend {
                         scale,
                         path_origin.0,
                         path_origin.1,
-                        rotation,
+                        outline.rotation_sin_cos,
                         rotation_center,
                     );
+                    let _ = outlined.write_str("<path d=\"");
+                    outlined.append(&builder.data);
                     let _ = writeln!(
                         outlined,
-                        "<path d=\"{}\" {fill} transform=\"matrix({} {} {} {} {} {})\"/>",
-                        builder.data,
+                        "\" {fill} transform=\"matrix({} {} {} {} {} {})\"/>",
                         transform[0],
                         transform[1],
                         transform[2],
@@ -331,20 +397,19 @@ impl SvgBackend {
                         transform[4],
                         transform[5],
                     );
+                    outlined.check()?;
                 }
-                advance_cursor.0 = advance_cursor
-                    .0
-                    .checked_add(glyph.x_advance_quanta)
-                    .ok_or_else(|| Error::Render("planned glyph x advance overflow".into()))?;
-                advance_cursor.1 = advance_cursor
-                    .1
-                    .checked_add(glyph.y_advance_quanta)
-                    .ok_or_else(|| Error::Render("planned glyph y advance overflow".into()))?;
             }
         }
-        Ok(outlined)
+        Ok(())
     }
+}
 
+impl<S: SvgSink> SvgSerializer<S> {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one shared emitter preserves line framing and frozen visual-run placement"
+    )]
     fn draw_multiline_planned_text(
         &mut self,
         canonical: super::coordinates::CanonicalText,
@@ -372,11 +437,7 @@ impl SvgBackend {
         };
         let fill = SvgPaint::from(plan.style.paint).attributes("fill");
         let family = Self::escape_text(&plan.style.stack_source);
-        let weight = if plan.style.weight == crate::TextWeight::Normal {
-            String::new()
-        } else {
-            format!(" font-weight=\"{}\"", plan.style.weight.svg_value())
-        };
+        let weight = FontWeight(plan.style.weight);
         let root_height = i64::from(self.height)
             .checked_mul(CSS_PIXEL_QUANTA)
             .ok_or_else(|| Error::Render("planned text root height overflowed".into()))?;
@@ -385,7 +446,7 @@ impl SvgBackend {
             .ok_or_else(|| Error::Render("planned text rotation center overflowed".into()))?;
         let rotation = canonical.rotation;
         let rotated = rotation.units() != 0;
-        for line in &plan.lines {
+        for (line_index, line) in plan.lines.iter().enumerate() {
             let start = line.source_span.start_byte as usize;
             let end = line.source_span.end_byte as usize;
             let source = &plan.source[start..end];
@@ -402,18 +463,23 @@ impl SvgBackend {
             let x = block_left
                 .checked_add(line.translation_x_quanta)
                 .ok_or_else(|| Error::Render("planned text line x overflowed".into()))?;
+            let line_y = placement.line_y(plan, line.translation_y_quanta)?;
             let baseline = position_y
                 .checked_add(vertical_reference)
-                .and_then(|value| value.checked_sub(line.translation_y_quanta))
+                .and_then(|value| value.checked_sub(line_y))
                 .ok_or_else(|| Error::Render("planned text baseline overflowed".into()))?;
             let y = root_height
                 .checked_sub(baseline)
                 .ok_or_else(|| Error::Render("planned text SVG y overflowed".into()))?;
-            let mut preserve = String::new();
+            let preserve = match self.active_text_buffer() {
+                TextBuffer::Body => &mut self.body,
+                TextBuffer::Grid => &mut self.grid_buf,
+            };
+            let start = preserve.len();
             if rotated {
-                let _ = writeln!(
+                let _ = write!(
                     preserve,
-                    "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\" transform=\"rotate({rotation},{},{})\">{escaped}</text>",
+                    "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\" transform=\"rotate({rotation},{},{})\"",
                     CanonicalQuantum(x),
                     CanonicalQuantum(y),
                     plan.style.font_size,
@@ -421,18 +487,98 @@ impl SvgBackend {
                     CanonicalQuantum(rotation_center_y),
                 );
             } else {
-                let _ = writeln!(
+                let _ = write!(
                     preserve,
-                    "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\">{escaped}</text>",
+                    "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\"",
                     CanonicalQuantum(x),
                     CanonicalQuantum(y),
                     plan.style.font_size,
                 );
             }
+            let isolate_runs = line.selected_soft_hyphen.is_some()
+                || line.runs.len() > 1
+                || line
+                    .runs
+                    .iter()
+                    .any(|run| run.bidi_level > 1 || run.direction != line.base_direction);
+            if isolate_runs {
+                let order = if line.runs.len() > 1 {
+                    self.run_order.clear();
+                    if line.runs.len() > self.run_order.capacity() {
+                        if self.fixed {
+                            return Err(Error::Render(
+                                "SVG exceeded reserved run-order scratch".into(),
+                            ));
+                        }
+                        self.run_order
+                            .try_reserve_exact(line.runs.len())
+                            .map_err(|error| {
+                                Error::Render(format!("SVG run-order reservation: {error}"))
+                            })?;
+                    }
+                    self.run_order.extend(0..line.runs.len());
+                    self.run_order
+                        .sort_unstable_by_key(|index| line.runs[*index].source_span.start_byte);
+                    self.run_order.as_slice()
+                } else {
+                    &[0][..line.runs.len()]
+                };
+                let _ = write!(preserve, " aria-label=\"{}\">", EscapedAttribute(source));
+                for &index in order {
+                    let run = &line.runs[index];
+                    let Some(first) = run.glyphs.first() else {
+                        continue;
+                    };
+                    let rtl = run.bidi_level % 2 != 0;
+                    let origin = first
+                        .glyph_origin_x_quanta
+                        .checked_sub(first.x_offset_quanta)
+                        .and_then(|origin| x.checked_add(origin))
+                        .ok_or_else(|| Error::Render("planned SVG run origin overflow".into()))?;
+                    let run_y = first
+                        .glyph_origin_y_quanta
+                        .checked_sub(first.y_offset_quanta)
+                        .and_then(|origin| y.checked_sub(origin))
+                        .ok_or_else(|| Error::Render("planned SVG run baseline overflow".into()))?;
+                    let run_source = &plan.source
+                        [run.source_span.start_byte as usize..run.source_span.end_byte as usize];
+                    let (run_direction, anchor) = if rtl {
+                        // SVG end anchoring in RTL keeps x at the physical left edge.
+                        ("rtl", "end")
+                    } else {
+                        ("ltr", "start")
+                    };
+                    let _ = write!(preserve, "<tspan x=\"{}\" y=\"{}\" direction=\"{run_direction}\" unicode-bidi=\"bidi-override\" text-anchor=\"{anchor}\">", CanonicalQuantum(origin), CanonicalQuantum(run_y));
+                    if let Some(soft) = line.selected_soft_hyphen.filter(|soft| {
+                        soft.start_byte >= run.source_span.start_byte
+                            && soft.end_byte <= run.source_span.end_byte
+                    }) {
+                        let _ = write!(
+                            preserve,
+                            "{}-{}",
+                            EscapedText(
+                                &plan.source
+                                    [run.source_span.start_byte as usize..soft.start_byte as usize]
+                            ),
+                            EscapedText(
+                                &plan.source
+                                    [soft.end_byte as usize..run.source_span.end_byte as usize]
+                            )
+                        );
+                    } else {
+                        let _ = write!(preserve, "{}", EscapedText(run_source));
+                    }
+                    let _ = preserve.write_str("</tspan>");
+                }
+                let _ = writeln!(preserve, "</text>");
+            } else {
+                let _ = writeln!(preserve, ">{escaped}</text>");
+            }
             self.append_text_replacement(
-                &preserve,
-                Some(PlannedLineOutline::new(canonical, placement, plan, line)),
-            );
+                start,
+                (!S::COUNTING)
+                    .then(|| PlannedLineOutline::new(canonical, placement, plan, line_index)),
+            )?;
         }
         Ok(())
     }
@@ -441,13 +587,33 @@ impl SvgBackend {
 pub(crate) struct FinalizedSvgOutput {
     width_css_px: u32,
     height_css_px: u32,
-    bytes: Box<[u8]>,
+    bytes: Vec<u8>,
     outline_plan: SvgOutlinePlan,
 }
 
-type FinalizedSvgParts = (u32, u32, Box<[u8]>, SvgOutlinePlan);
+type FinalizedSvgParts = (u32, u32, Vec<u8>, SvgOutlinePlan);
 
 impl FinalizedSvgOutput {
+    #[cfg(test)]
+    pub(crate) fn storage_addresses(&self) -> [(usize, usize); 8] {
+        let SvgOutlinePlan::Ready(source) = &self.outline_plan else {
+            panic!("expected real SVG source");
+        };
+        let address = |text: &String| (text.as_ptr().addr(), text.capacity());
+        [
+            address(&source.body),
+            address(&source.root_surfaces),
+            address(&source.panel_surfaces),
+            address(&source.grid),
+            address(&source.clip_defs),
+            address(&source.gradient_defs),
+            (self.bytes.as_ptr().addr(), self.bytes.capacity()),
+            (
+                source.replacements.as_ptr().addr(),
+                source.replacements.capacity(),
+            ),
+        ]
+    }
     pub(crate) fn into_parts(self) -> FinalizedSvgParts {
         (
             self.width_css_px,
@@ -477,47 +643,90 @@ pub(crate) enum SvgOutlinePlan {
 }
 
 impl SvgOutlinePlan {
-    pub(crate) fn derive(
+    pub(crate) fn count_bytes(&self, width: u32, height: u32) -> Result<usize, String> {
+        let mut count = CountBuffer::default();
+        self.emit(&mut count, width, height)?;
+        Ok(count.len())
+    }
+
+    pub(crate) fn count_parser_bytes(
+        &self,
+        width: u32,
+        height: u32,
+        limit: usize,
+    ) -> Result<usize, String> {
+        let mut count = CountBuffer {
+            limit: Some(limit),
+            ..CountBuffer::default()
+        };
+        self.emit(&mut count, width, height)?;
+        Ok(count.len())
+    }
+
+    pub(crate) fn derive(&self, width_css_px: u32, height_css_px: u32) -> Result<Vec<u8>, String> {
+        let count = self.count_bytes(width_css_px, height_css_px)?;
+        self.derive_counted(width_css_px, height_css_px, count)
+    }
+
+    pub(crate) fn derive_counted(
         &self,
         width_css_px: u32,
         height_css_px: u32,
-    ) -> Result<Box<[u8]>, String> {
+        count: usize,
+    ) -> Result<Vec<u8>, String> {
+        let mut output = WriteBuffer::default();
+        #[cfg(test)]
+        DERIVED_BUFFER_RESERVATIONS.with(|calls| calls.set(calls.get() + 1));
+        output
+            .text
+            .try_reserve_exact(count)
+            .map_err(|error| format!("outlined SVG reservation: {error}"))?;
+        output.fixed = true;
+        self.emit(&mut output, width_css_px, height_css_px)?;
+        if output.len() != count {
+            return Err("outlined SVG differs from counted tokens".into());
+        }
+        if contains_svg_text(output.text.as_bytes()) {
+            return Err("finalized outlined SVG still contains text elements".into());
+        }
+        Ok(output.text.into_bytes())
+    }
+
+    fn emit<S: SvgSink>(&self, output: &mut S, width: u32, height: u32) -> Result<(), String> {
         let source = match self {
             Self::Ready(source) => source,
             #[cfg(test)]
             Self::Failed(error) => return Err(error.clone()),
         };
-        let outlined_grid = apply_text_replacements(
+        emit_svg_header(output, width, height)
+            .map_err(|_| "outlined SVG header emission failed".to_owned())?;
+        if !source.gradient_defs.is_empty() || !source.clip_defs.is_empty() {
+            let _ = output.write_str("<defs>\n");
+            let _ = output.write_str(&source.gradient_defs);
+            let _ = output.write_str(&source.clip_defs);
+            let _ = output.write_str("</defs>\n");
+        }
+        let _ = output.write_str(&source.root_surfaces);
+        let _ = output.write_str(&source.panel_surfaces);
+        output.check().map_err(|error| error.to_string())?;
+        apply_text_replacements(
             &source.grid,
             TextBuffer::Grid,
             &source.replacements,
             source.font_environment.as_ref(),
-            height_css_px,
+            height,
+            output,
         )?;
-        let outlined_body = apply_text_replacements(
+        apply_text_replacements(
             &source.body,
             TextBuffer::Body,
             &source.replacements,
             source.font_environment.as_ref(),
-            height_css_px,
+            height,
+            output,
         )?;
-        let mut content = String::new();
-        content.push_str(&source.root_surfaces);
-        content.push_str(&source.panel_surfaces);
-        content.push_str(&outlined_grid);
-        content.push_str(&outlined_body);
-        let outlined = assemble_svg_document(
-            width_css_px,
-            height_css_px,
-            &source.gradient_defs,
-            &source.clip_defs,
-            &content,
-        );
-        if contains_svg_text(outlined.as_bytes()) {
-            Err("finalized outlined SVG still contains text elements".into())
-        } else {
-            Ok(outlined.into_bytes().into_boxed_slice())
-        }
+        let _ = output.write_str("</svg>\n");
+        output.check().map_err(|error| error.to_string())
     }
 
     pub(crate) fn replacement_count(&self) -> usize {
@@ -560,7 +769,9 @@ struct PlannedLineOutline {
     first_baseline_quanta: Option<i64>,
     font_size: u32,
     paint: Rgba,
-    line: TextLinePlan,
+    plan: ResolvedTextPlan,
+    line_index: usize,
+    rotation_sin_cos: (f64, f64),
 }
 
 impl PlannedLineOutline {
@@ -568,7 +779,7 @@ impl PlannedLineOutline {
         canonical: super::coordinates::CanonicalText,
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
-        line: &TextLinePlan,
+        line_index: usize,
     ) -> Self {
         Self {
             canonical,
@@ -578,18 +789,27 @@ impl PlannedLineOutline {
             first_baseline_quanta: plan.first_baseline_quanta,
             font_size: plan.style.font_size,
             paint: plan.style.paint,
-            line: line.clone(),
+            plan: plan.clone(),
+            line_index,
+            rotation_sin_cos: canonical.rotation.value().to_radians().sin_cos(),
         }
     }
 }
 
 #[derive(Default)]
-struct SvgGlyphPath {
-    data: String,
+struct SvgGlyphPath<S: SvgSink> {
+    data: S,
     invalid: bool,
+    allocation_failed: bool,
 }
 
-impl SvgGlyphPath {
+impl<S: SvgSink> SvgGlyphPath<S> {
+    fn append(&mut self, tokens: fmt::Arguments<'_>) {
+        if !self.allocation_failed && self.data.write_fmt(tokens).is_err() {
+            self.allocation_failed = true;
+        }
+    }
+
     fn coordinates_are_finite(&mut self, coordinates: &[f32]) -> bool {
         let finite = coordinates.iter().all(|coordinate| coordinate.is_finite());
         self.invalid |= !finite;
@@ -597,33 +817,33 @@ impl SvgGlyphPath {
     }
 }
 
-impl ttf_parser::OutlineBuilder for SvgGlyphPath {
+impl<S: SvgSink> ttf_parser::OutlineBuilder for SvgGlyphPath<S> {
     fn move_to(&mut self, x: f32, y: f32) {
         if self.coordinates_are_finite(&[x, y]) {
-            let _ = write!(self.data, "M{x} {y}");
+            self.append(format_args!("M{x} {y}"));
         }
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
         if self.coordinates_are_finite(&[x, y]) {
-            let _ = write!(self.data, "L{x} {y}");
+            self.append(format_args!("L{x} {y}"));
         }
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
         if self.coordinates_are_finite(&[x1, y1, x, y]) {
-            let _ = write!(self.data, "Q{x1} {y1} {x} {y}");
+            self.append(format_args!("Q{x1} {y1} {x} {y}"));
         }
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
         if self.coordinates_are_finite(&[x1, y1, x2, y2, x, y]) {
-            let _ = write!(self.data, "C{x1} {y1} {x2} {y2} {x} {y}");
+            self.append(format_args!("C{x1} {y1} {x2} {y2} {x} {y}"));
         }
     }
 
     fn close(&mut self) {
-        self.data.push('Z');
+        self.append(format_args!("Z"));
     }
 }
 
@@ -631,10 +851,10 @@ fn glyph_transform(
     scale: f64,
     origin_x: f64,
     origin_y: f64,
-    rotation_radians: f64,
+    rotation_sin_cos: (f64, f64),
     rotation_center: (f64, f64),
 ) -> [f64; 6] {
-    let (sin, cos) = rotation_radians.sin_cos();
+    let (sin, cos) = rotation_sin_cos;
     let (center_x, center_y) = rotation_center;
     [
         cos * scale,
@@ -664,14 +884,314 @@ enum SvgCanvasState {
 struct SvgPaint(Rgba);
 
 impl SvgPaint {
-    fn attributes(self, property: &str) -> String {
-        let mut attributes = format!("{property}=\"{self}\"");
-        if self.0.alpha() != 255 {
-            let opacity = f64::from(self.0.alpha()) / 255.0;
-            let _ = write!(attributes, " {property}-opacity=\"{opacity}\"");
+    fn attributes(self, property: &str) -> PaintAttributes<'_> {
+        PaintAttributes {
+            paint: self,
+            property,
         }
-        attributes
     }
+}
+
+struct PaintAttributes<'a> {
+    paint: SvgPaint,
+    property: &'a str,
+}
+
+impl fmt::Display for PaintAttributes<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self { paint, property } = self;
+        write!(formatter, "{property}=\"{paint}\"")?;
+        if paint.0.alpha() != 255 {
+            let opacity = f64::from(paint.0.alpha()) / 255.0;
+            write!(formatter, " {property}-opacity=\"{opacity}\"")?;
+        }
+        Ok(())
+    }
+}
+
+struct EscapedText<'a>(&'a str);
+
+struct EscapedAttribute<'a>(&'a str);
+
+impl fmt::Display for EscapedAttribute<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ch in self.0.chars() {
+            match ch {
+                '\t' => formatter.write_str("&#9;")?,
+                '\n' => formatter.write_str("&#10;")?,
+                '\r' => formatter.write_str("&#13;")?,
+                _ => {
+                    let mut bytes = [0; 4];
+                    EscapedText(ch.encode_utf8(&mut bytes)).fmt(formatter)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+struct PointTokens<'a>(&'a [Point2D], u32);
+
+impl fmt::Display for PointTokens<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        emit_points(
+            formatter,
+            coordinates::canonical_points_iter(self.0, "SVG points"),
+            self.1,
+        )
+    }
+}
+
+struct TriangleTokens([CanonicalPoint; 3], u32);
+
+impl fmt::Display for TriangleTokens {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        emit_points(formatter, self.0.into_iter().map(Ok), self.1)
+    }
+}
+
+fn emit_points(
+    formatter: &mut fmt::Formatter<'_>,
+    points: impl Iterator<Item = Result<CanonicalPoint, Error>>,
+    height: u32,
+) -> fmt::Result {
+    for (index, point) in points.enumerate() {
+        let point = point.map_err(|_| fmt::Error)?;
+        let y = point.y.inverted(height).map_err(|_| fmt::Error)?;
+        if index != 0 {
+            formatter.write_str(" ")?;
+        }
+        write!(formatter, "{},{}", point.x, y)?;
+    }
+    Ok(())
+}
+
+struct FontWeight(crate::TextWeight);
+
+impl fmt::Display for FontWeight {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 != crate::TextWeight::Normal {
+            write!(formatter, " font-weight=\"{}\"", self.0.svg_value())?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for EscapedText<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ch in self.0.chars() {
+            match ch {
+                '&' => formatter.write_str("&amp;")?,
+                '<' => formatter.write_str("&lt;")?,
+                '>' => formatter.write_str("&gt;")?,
+                '"' => formatter.write_str("&quot;")?,
+                '\'' => formatter.write_str("&apos;")?,
+                _ => formatter.write_char(ch)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Internal token sink shared by nonrendering counting and concrete writing.
+pub trait SvgSink: Default + fmt::Write {
+    /// Whether this sink only counts tokens.
+    const COUNTING: bool;
+    /// Exact emitted byte count.
+    fn len(&self) -> usize;
+    /// Report a previous checked-write failure.
+    fn check(&self) -> Result<(), Error>;
+    /// Append an already emitted section without changing its tokens.
+    fn append(&mut self, source: &Self);
+}
+
+/// Reserved canonical UTF-8 storage. Fixed writers never grow during replay.
+#[derive(Default)]
+pub struct WriteBuffer {
+    text: String,
+    fixed: bool,
+    failed: bool,
+}
+
+impl WriteBuffer {
+    fn prepare(
+        bytes: usize,
+        stage: &mut crate::layout::kernel::FinalStage<'_>,
+        payload: &str,
+    ) -> Result<Self, Error> {
+        let mut storage = Vec::new();
+        reserve_storage(stage, &mut storage, bytes, payload)?;
+        let text = String::from_utf8(storage)
+            .map_err(|error| Error::Render(format!("{payload}: {error}")))?;
+        Ok(Self {
+            text,
+            fixed: true,
+            failed: false,
+        })
+    }
+
+    fn clear(&mut self) {
+        self.text.clear();
+        self.failed = false;
+    }
+}
+
+impl std::ops::Deref for WriteBuffer {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.text
+    }
+}
+
+impl fmt::Write for WriteBuffer {
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        let result = fmt::write(self, args);
+        self.failed |= result.is_err();
+        result
+    }
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        let Some(end) = self.text.len().checked_add(text.len()) else {
+            self.failed = true;
+            return Err(fmt::Error);
+        };
+        if end > self.text.capacity() && (self.fixed || self.text.try_reserve(text.len()).is_err())
+        {
+            self.failed = true;
+            return Err(fmt::Error);
+        }
+        self.text.push_str(text);
+        Ok(())
+    }
+}
+
+impl SvgSink for WriteBuffer {
+    const COUNTING: bool = false;
+    fn len(&self) -> usize {
+        self.text.len()
+    }
+    fn check(&self) -> Result<(), Error> {
+        if self.failed {
+            Err(Error::Render(
+                "SVG token write exceeded reserved storage".into(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+    fn append(&mut self, source: &Self) {
+        let _ = self.write_str(&source.text);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct CountBuffer {
+    bytes: usize,
+    failed: bool,
+    limit: Option<usize>,
+    limit_exceeded: bool,
+}
+
+impl fmt::Write for CountBuffer {
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
+        let result = fmt::write(self, args);
+        self.failed |= result.is_err();
+        result
+    }
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        self.add(text.len())
+    }
+}
+
+impl CountBuffer {
+    fn add(&mut self, bytes: usize) -> fmt::Result {
+        let Some(total) = self.bytes.checked_add(bytes) else {
+            self.failed = true;
+            return Err(fmt::Error);
+        };
+        if self.limit.is_some_and(|limit| total > limit) {
+            self.limit_exceeded = true;
+            return Err(fmt::Error);
+        }
+        self.bytes = total;
+        Ok(())
+    }
+}
+
+impl SvgSink for CountBuffer {
+    const COUNTING: bool = true;
+    fn len(&self) -> usize {
+        self.bytes
+    }
+    fn check(&self) -> Result<(), Error> {
+        if self.limit_exceeded {
+            return Err(Error::Render(format!(
+                "PNG SVG parser input size exceeds the {}-byte conversion limit",
+                self.limit.unwrap_or(usize::MAX)
+            )));
+        }
+        if self.failed {
+            Err(Error::Render("SVG token count overflow".into()))
+        } else {
+            Ok(())
+        }
+    }
+    fn append(&mut self, source: &Self) {
+        let _ = self.add(source.bytes);
+    }
+}
+
+fn emit_svg_parts<S: SvgSink>(
+    out: &mut S,
+    width: u32,
+    height: u32,
+    gradients: &S,
+    clips: &S,
+    content: &[&S],
+) -> Result<(), Error> {
+    emit_svg_header(out, width, height)
+        .map_err(|_| Error::Render("SVG header emission failed".into()))?;
+    if gradients.len() != 0 || clips.len() != 0 {
+        let _ = out.write_str("<defs>\n");
+        out.append(gradients);
+        out.append(clips);
+        let _ = out.write_str("</defs>\n");
+    }
+    for part in content {
+        out.append(part);
+    }
+    let _ = out.write_str("</svg>\n");
+    out.check()
+}
+
+macro_rules! svg_backend_methods {
+    ($(fn $name:ident($($arg:ident: $ty:ty),*);)*) => {
+        impl Backend for SvgBackend {
+            $(fn $name(&mut self, $($arg: $ty),*) -> Result<(), Error> {
+                SvgSerializer::$name(self, $($arg),*)?;
+                self.check_buffers()
+            })*
+        }
+    };
+}
+
+svg_backend_methods! {
+    fn begin(width: u32, height: u32);
+    fn end();
+    fn begin_layer(name: &str);
+    fn begin_layer_with_role(name: &str, role: LayerRole);
+    fn end_layer();
+    fn begin_clip(region: PanelBox);
+    fn end_clip();
+    fn draw_surface(bounds: PanelBox, paint: Rgba, role: SurfaceRole);
+    fn draw_scatter(points: &[Point2D], style: &PointStyle);
+    fn draw_line(points: &[Point2D], style: &LineStyle);
+    fn draw_polygon(points: &[Point2D], style: &FillStyle);
+    fn draw_linear_gradient(bounds: PanelBox, start: Point2D, end: Point2D, stops: &[GradientStop]);
+    fn draw_text(position: Point2D, text: &str, style: &TextStyle);
+    fn draw_planned_text(placement: PlannedTextPlacement, plan: &ResolvedTextPlan);
+    fn draw_rounded_rect(x: f64, y: f64, width: f64, height: f64, radius: f64, style: &FillStyle);
+    fn draw_bracket(bracket: &SignificanceBracket, style: &BracketStyle);
+    fn draw_planned_bracket(call: PlannedSignificanceCall<'_>);
 }
 
 impl From<(u8, u8, u8)> for SvgPaint {
@@ -701,10 +1221,10 @@ impl fmt::Display for SvgPaint {
 /// Rasterize one finalized path-only SVG scene with explicit export options.
 pub(crate) fn rasterize_svg_bytes_to_png(
     svg_data: &[u8],
-    source_size: resvg::tiny_skia::IntSize,
+    plan: PngTargetPlan,
     png_options: &PngOptions,
 ) -> Result<Vec<u8>, Error> {
-    let plan = PngTargetPlan::new(source_size, png_options)?;
+    crate::scene::validate_png_parser_bytes(svg_data.len())?;
     if contains_svg_text(svg_data) {
         return Err(Error::Render(
             "PNG rasterization requires the finalized path-only SVG scene".into(),
@@ -734,14 +1254,17 @@ fn contains_svg_text(svg_data: &[u8]) -> bool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PngTargetPlan {
+pub(crate) struct PngTargetPlan {
     source_size: resvg::tiny_skia::IntSize,
     target_size: resvg::tiny_skia::IntSize,
     dpi: Option<u32>,
 }
 
 impl PngTargetPlan {
-    fn new(source_size: resvg::tiny_skia::IntSize, options: &PngOptions) -> Result<Self, Error> {
+    pub(crate) fn new(
+        source_size: resvg::tiny_skia::IntSize,
+        options: &PngOptions,
+    ) -> Result<Self, Error> {
         #[cfg(test)]
         PNG_TARGET_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
         validate_png_options(options)?;
@@ -809,12 +1332,32 @@ fn png_transform(
     )
 }
 
+struct PngBuffer(Vec<u8>);
+
+impl std::io::Write for PngBuffer {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .len()
+            .checked_add(bytes.len())
+            .ok_or_else(|| std::io::Error::other("PNG output byte count overflow"))?;
+        self.0
+            .try_reserve(bytes.len())
+            .map_err(std::io::Error::other)?;
+        self.0.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 fn encode_png(
     pixmap: resvg::tiny_skia::Pixmap,
     compression: PngCompression,
     dpi: Option<u32>,
 ) -> Result<Vec<u8>, Error> {
-    let mut bytes = Vec::new();
+    let mut bytes = PngBuffer(Vec::new());
     {
         let mut encoder = png::Encoder::new(&mut bytes, pixmap.width(), pixmap.height());
         encoder.set_color(png::ColorType::Rgba);
@@ -838,7 +1381,7 @@ fn encode_png(
             .finish()
             .map_err(|e| Error::Render(format!("finish png: {e}")))?;
     }
-    Ok(bytes)
+    Ok(bytes.0)
 }
 
 fn map_png_compression(compression: PngCompression) -> png::Compression {
@@ -889,38 +1432,204 @@ fn dpi_to_pixels_per_meter(dpi: f32) -> Result<u32, Error> {
 /// emitted after semantic surfaces but before ordinary content at `end()` time,
 /// ensuring grid lines always appear behind data marks without constraining
 /// their unique IDs.
-pub struct SvgBackend {
+pub struct SvgSerializer<S: SvgSink> {
     output: Option<FinalizedSvgOutput>,
     width: u32,
     height: u32,
-    body: String,
+    body: S,
     /// Buffered Canvas root surfaces (emitted before panel surfaces).
-    root_surfaces: String,
+    root_surfaces: S,
     /// Buffered Plot panel surfaces (emitted before grid and body content).
-    panel_surfaces: String,
+    panel_surfaces: S,
     /// Buffered grid layer content (emitted before body at end).
-    grid_buf: String,
-    clip_defs: String,
-    gradient_defs: String,
+    grid_buf: S,
+    clip_defs: S,
+    gradient_defs: S,
     group_stack: Vec<GroupState>,
     next_clip_id: usize,
     next_gradient_id: usize,
     state: SvgCanvasState,
     font_environment: Option<PreparedFontEnvironment>,
     text_replacements: Vec<TextReplacement>,
+    replacement_count: usize,
+    validation: ValidationScratch,
+    fixed: bool,
+    document: String,
+    expected_document_bytes: Option<usize>,
+    run_order: Vec<usize>,
 }
 
-impl Backend for SvgBackend {
+/// Concrete canonical SVG writer.
+pub type SvgBackend = SvgSerializer<WriteBuffer>;
+
+pub(crate) struct SvgStorage {
+    writer: SvgBackend,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct SvgStorageRequirements {
+    pub(crate) scopes: usize,
+    pub(crate) points: usize,
+    pub(crate) runs: usize,
+}
+
+impl SvgStorage {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one preparation owns counting and transfer of every actual canonical buffer"
+    )]
+    pub(crate) fn prepare(
+        width: u32,
+        height: u32,
+        environment: PreparedFontEnvironment,
+        requirements: SvgStorageRequirements,
+        stage: &mut crate::layout::kernel::FinalStage<'_>,
+        visit: impl FnOnce(&mut SvgSerializer<CountBuffer>) -> Result<(), Error>,
+    ) -> Result<Self, Error> {
+        let mut groups = Vec::new();
+        reserve_storage(
+            stage,
+            &mut groups,
+            requirements.scopes,
+            "canonical SVG scopes",
+        )?;
+        let mut validation = ValidationScratch::default();
+        validation.prepare(
+            requirements.points,
+            stage,
+            "canonical SVG validation points",
+        )?;
+        let mut run_order = Vec::new();
+        reserve_storage(
+            stage,
+            &mut run_order,
+            requirements.runs,
+            "canonical SVG run-order scratch",
+        )?;
+        let mut count = SvgSerializer {
+            output: None,
+            width,
+            height,
+            body: CountBuffer::default(),
+            root_surfaces: CountBuffer::default(),
+            panel_surfaces: CountBuffer::default(),
+            grid_buf: CountBuffer::default(),
+            clip_defs: CountBuffer::default(),
+            gradient_defs: CountBuffer::default(),
+            group_stack: groups,
+            next_clip_id: 0,
+            next_gradient_id: 0,
+            state: SvgCanvasState::Open,
+            font_environment: None,
+            text_replacements: Vec::new(),
+            replacement_count: 0,
+            validation,
+            fixed: true,
+            document: String::new(),
+            expected_document_bytes: None,
+            run_order,
+        };
+        visit(&mut count)?;
+        count.check_buffers()?;
+        if !count.group_stack.is_empty() {
+            return Err(Error::Render(
+                "canonical SVG count ended with unclosed scopes".into(),
+            ));
+        }
+        let mut document = CountBuffer::default();
+        emit_svg_parts(
+            &mut document,
+            width,
+            height,
+            &count.gradient_defs,
+            &count.clip_defs,
+            &[
+                &count.root_surfaces,
+                &count.panel_surfaces,
+                &count.grid_buf,
+                &count.body,
+            ],
+        )?;
+        let mut replacements = Vec::new();
+        reserve_storage(
+            stage,
+            &mut replacements,
+            count.replacement_count,
+            "canonical SVG replacements",
+        )?;
+        let document_storage =
+            WriteBuffer::prepare(document.len(), stage, "canonical SVG document")?;
+        Ok(Self {
+            writer: SvgSerializer {
+                output: None,
+                width,
+                height,
+                body: WriteBuffer::prepare(count.body.len(), stage, "canonical SVG body")?,
+                root_surfaces: WriteBuffer::prepare(
+                    count.root_surfaces.len(),
+                    stage,
+                    "canonical SVG root surfaces",
+                )?,
+                panel_surfaces: WriteBuffer::prepare(
+                    count.panel_surfaces.len(),
+                    stage,
+                    "canonical SVG panel surfaces",
+                )?,
+                grid_buf: WriteBuffer::prepare(count.grid_buf.len(), stage, "canonical SVG grid")?,
+                clip_defs: WriteBuffer::prepare(
+                    count.clip_defs.len(),
+                    stage,
+                    "canonical SVG clips",
+                )?,
+                gradient_defs: WriteBuffer::prepare(
+                    count.gradient_defs.len(),
+                    stage,
+                    "canonical SVG gradients",
+                )?,
+                group_stack: count.group_stack,
+                next_clip_id: 0,
+                next_gradient_id: 0,
+                state: SvgCanvasState::Fresh,
+                font_environment: Some(environment),
+                text_replacements: replacements,
+                replacement_count: 0,
+                validation: count.validation,
+                fixed: true,
+                document: document_storage.text,
+                expected_document_bytes: Some(document.len()),
+                run_order: count.run_order,
+            },
+        })
+    }
+
+    pub(crate) fn into_backend(self) -> SvgBackend {
+        self.writer
+    }
+}
+
+impl SvgBackend {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
+        #[cfg(test)]
+        SVG_BEGIN_CALLS.with(|calls| calls.set(calls.get() + 1));
         self.output = None;
         if self.state == SvgCanvasState::Open {
             return Err(Error::Render(
                 "svg backend begin called while a canvas is already open".into(),
             ));
         }
+        if self.fixed && self.state == SvgCanvasState::Closed {
+            return Err(Error::Render(
+                "prepared SVG storage permits only one concrete lifecycle".into(),
+            ));
+        }
         if width == 0 || height == 0 {
             return Err(Error::Render(
                 "svg backend canvas dimensions must be positive".into(),
+            ));
+        }
+        if self.fixed && (width, height) != (self.width, self.height) {
+            return Err(Error::Render(
+                "SVG dimensions must match prepared storage".into(),
             ));
         }
         self.width = width;
@@ -935,15 +1644,22 @@ impl Backend for SvgBackend {
         self.next_clip_id = 0;
         self.next_gradient_id = 0;
         self.text_replacements.clear();
+        self.replacement_count = 0;
         self.state = SvgCanvasState::Open;
         Ok(())
     }
+}
 
-    fn begin_layer(&mut self, name: &str) -> Result<(), Error> {
+impl<S: SvgSink> SvgSerializer<S> {
+    pub(crate) fn begin_layer(&mut self, name: &str) -> Result<(), Error> {
         self.begin_layer_with_role(name, LayerRole::Generic)
     }
 
-    fn begin_layer_with_role(&mut self, name: &str, role: LayerRole) -> Result<(), Error> {
+    pub(crate) fn begin_layer_with_role(
+        &mut self,
+        name: &str,
+        role: LayerRole,
+    ) -> Result<(), Error> {
         self.ensure_begun("begin_layer")?;
         if role == LayerRole::Grid {
             if !self.group_stack.is_empty() {
@@ -953,16 +1669,16 @@ impl Backend for SvgBackend {
             }
             let escaped = Self::escape_text(name);
             let _ = writeln!(self.grid_buf, "<g id=\"{escaped}\">");
-            self.group_stack.push(GroupState::Grid);
+            self.push_group(GroupState::Grid)?;
         } else {
             let escaped = Self::escape_text(name);
             let _ = writeln!(self.buf(), "<g id=\"{escaped}\">");
-            self.group_stack.push(GroupState::Layer);
+            self.push_group(GroupState::Layer)?;
         }
         Ok(())
     }
 
-    fn end_layer(&mut self) -> Result<(), Error> {
+    pub(crate) fn end_layer(&mut self) -> Result<(), Error> {
         self.ensure_begun("end_layer")?;
         match self.group_stack.last() {
             Some(GroupState::Grid) => {
@@ -987,11 +1703,14 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
+    pub(crate) fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
         self.ensure_begun("begin_clip")?;
         let region = validate_clip_region(region)?;
         let id = self.next_clip_id;
-        self.next_clip_id += 1;
+        self.next_clip_id = self
+            .next_clip_id
+            .checked_add(1)
+            .ok_or_else(|| Error::Render("SVG clip identifier overflow".into()))?;
         let svg_y = region.top.inverted(self.height)?;
         let _ = writeln!(
             self.clip_defs,
@@ -999,11 +1718,11 @@ impl Backend for SvgBackend {
             region.left, svg_y, region.width, region.height,
         );
         let _ = writeln!(self.buf(), "<g clip-path=\"url(#clip-{id})\">");
-        self.group_stack.push(GroupState::Clip);
+        self.push_group(GroupState::Clip)?;
         Ok(())
     }
 
-    fn end_clip(&mut self) -> Result<(), Error> {
+    pub(crate) fn end_clip(&mut self) -> Result<(), Error> {
         self.ensure_begun("end_clip")?;
         match self.group_stack.last() {
             Some(GroupState::Clip) => {
@@ -1020,7 +1739,7 @@ impl Backend for SvgBackend {
         }
     }
 
-    fn draw_surface(
+    pub(crate) fn draw_surface(
         &mut self,
         bounds: PanelBox,
         paint: Rgba,
@@ -1055,9 +1774,15 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
+    pub(crate) fn draw_scatter(
+        &mut self,
+        points: &[Point2D],
+        style: &PointStyle,
+    ) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        let canonical_points = validate_points(points, "scatter")?;
+        for point in coordinates::canonical_points_iter(points, "scatter") {
+            point?;
+        }
         validate_point_style(style)?;
         let color = SvgPaint::from(style.color);
         let outline = style.outline.map(|outline| {
@@ -1070,30 +1795,30 @@ impl Backend for SvgBackend {
         match style.shape {
             PointShape::Circle => {
                 let buf = self.buf();
-                for p in canonical_points {
+                for p in coordinates::canonical_points_iter(points, "scatter") {
+                    let p = p?;
                     let y = p.y.inverted(height)?;
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             buf,
                             "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\"/>",
-                            p.x, y,
-                            style.radius,
-                            style.opacity
+                            p.x, y, style.radius, style.opacity
                         );
                     } else {
                         let _ = writeln!(
                             buf,
                             "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            p.x, y,
-                            style.radius,
-                            style.opacity
+                            p.x, y, style.radius, style.opacity
                         );
                     }
                 }
             }
             PointShape::TriangleUp => {
-                for triangle in validate_triangle_points(points, style.radius)? {
-                    let vertices = self.fmt_points(&triangle)?;
+                for (index, point) in points.iter().copied().enumerate() {
+                    let vertices = TriangleTokens(
+                        coordinates::canonical_triangle(point, style.radius, index)?,
+                        height,
+                    );
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             self.buf(),
@@ -1113,15 +1838,15 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
+    pub(crate) fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
         self.ensure_begun("draw_line")?;
         if points.len() < 2 {
             return Ok(());
         }
-        let points = validate_line_points(points)?;
+        self.validation.line(points)?;
         validate_line_style(style)?;
         let stroke = SvgPaint::from(style.color).attributes("stroke");
-        let pts_str = self.fmt_points(&points)?;
+        let pts_str = PointTokens(points, self.height);
         let buf = self.buf();
         if let Some(dasharray) = style.pattern.svg_dasharray() {
             let _ = writeln!(
@@ -1139,16 +1864,20 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_polygon(&mut self, points: &[Point2D], style: &FillStyle) -> Result<(), Error> {
+    pub(crate) fn draw_polygon(
+        &mut self,
+        points: &[Point2D],
+        style: &FillStyle,
+    ) -> Result<(), Error> {
         self.ensure_begun("draw_polygon")?;
         if points.len() < 3 {
             return Ok(());
         }
-        let points = validate_polygon_points(points)?;
+        self.validation.polygon(points)?;
         validate_fill_style(style)?;
         let fill = SvgPaint::from(style.color);
         let stroke = SvgPaint::from(style.stroke);
-        let pts_str = self.fmt_points(&points)?;
+        let pts_str = PointTokens(points, self.height);
         let buf = self.buf();
         let _ = writeln!(
             buf,
@@ -1158,7 +1887,7 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_linear_gradient(
+    pub(crate) fn draw_linear_gradient(
         &mut self,
         bounds: PanelBox,
         start: Point2D,
@@ -1166,38 +1895,46 @@ impl Backend for SvgBackend {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.ensure_begun("draw_linear_gradient")?;
-        let gradient = validate_linear_gradient(bounds, start, end, stops)?;
+        let (bounds, start, end) =
+            coordinates::visit_canonical_gradient(bounds, start, end, stops, |_| {})?;
         let id = self.next_gradient_id;
-        self.next_gradient_id += 1;
-        let start_y = gradient.start.y.inverted(self.height)?;
-        let end_y = gradient.end.y.inverted(self.height)?;
+        self.next_gradient_id = self
+            .next_gradient_id
+            .checked_add(1)
+            .ok_or_else(|| Error::Render("SVG gradient identifier overflow".into()))?;
+        let start_y = start.y.inverted(self.height)?;
+        let end_y = end.y.inverted(self.height)?;
         let _ = writeln!(
             self.gradient_defs,
             "<linearGradient id=\"linear-gradient-{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">",
-            gradient.start.x, start_y, gradient.end.x, end_y,
+            start.x, start_y, end.x, end_y,
         );
-        for stop in gradient.stops {
+        for stop in stops {
+            let offset = coordinates::CanonicalCoordinate::from_f64(
+                stop.offset,
+                coordinates::CoordinatePrecision::Millionths,
+                "linear gradient stop offset",
+            )?;
             let color = SvgPaint::from(stop.color);
             let _ = writeln!(
                 self.gradient_defs,
-                "<stop offset=\"{}\" stop-color=\"{color}\"/>",
-                stop.offset
+                "<stop offset=\"{offset}\" stop-color=\"{color}\"/>"
             );
         }
         let _ = writeln!(self.gradient_defs, "</linearGradient>");
-        let svg_y = gradient.bounds.top.inverted(self.height)?;
+        let svg_y = bounds.top.inverted(self.height)?;
         let _ = writeln!(
             self.buf(),
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"url(#linear-gradient-{id})\"/>",
-            gradient.bounds.left,
+            bounds.left,
             svg_y,
-            gradient.bounds.width,
-            gradient.bounds.height,
+            bounds.width,
+            bounds.height,
         );
         Ok(())
     }
 
-    fn draw_rounded_rect(
+    pub(crate) fn draw_rounded_rect(
         &mut self,
         rect_x: f64,
         rect_y: f64,
@@ -1228,9 +1965,16 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
+    pub(crate) fn draw_text(
+        &mut self,
+        position: Point2D,
+        text: &str,
+        style: &TextStyle,
+    ) -> Result<(), Error> {
         #[cfg(test)]
-        SVG_RAW_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        if !S::COUNTING {
+            SVG_RAW_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        }
         self.ensure_begun("draw_text")?;
         let canonical = validate_text(position, style)?;
         let fill = SvgPaint::from(style.color).attributes("fill");
@@ -1242,11 +1986,7 @@ impl Backend for SvgBackend {
             TextAnchor::Middle => "middle",
             TextAnchor::End => "end",
         };
-        let weight = if style.weight == crate::TextWeight::Normal {
-            String::new()
-        } else {
-            format!(" font-weight=\"{}\"", style.weight.svg_value())
-        };
+        let weight = FontWeight(style.weight);
         let preserve_space = if text.contains("  ") {
             " xml:space=\"preserve\""
         } else {
@@ -1257,17 +1997,20 @@ impl Backend for SvgBackend {
             let _ = writeln!(
                 buf,
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
-                x, y,
+                x,
+                y,
                 Self::escape_text(&style.font_family),
                 style.font_size,
                 canonical.rotation,
-                x, y
+                x,
+                y
             );
         } else {
             let _ = writeln!(
                 buf,
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{escaped}</text>",
-                x, y,
+                x,
+                y,
                 Self::escape_text(&style.font_family),
                 style.font_size
             );
@@ -1275,19 +2018,21 @@ impl Backend for SvgBackend {
         Ok(())
     }
 
-    fn draw_planned_text(
+    pub(crate) fn draw_planned_text(
         &mut self,
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
         #[cfg(test)]
-        SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        if !S::COUNTING {
+            SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        }
         self.ensure_begun("draw_planned_text")?;
         let canonical = super::backend::validate_planned_text(placement, plan)?;
         self.draw_multiline_planned_text(canonical, placement, plan)
     }
 
-    fn draw_bracket(
+    pub(crate) fn draw_bracket(
         &mut self,
         bracket: &SignificanceBracket,
         style: &BracketStyle,
@@ -1298,11 +2043,7 @@ impl Backend for SvgBackend {
         let fill = SvgPaint::from(style.label_color).attributes("fill");
         let label = Self::escape_text(&bracket.label);
         let font_family = Self::escape_text(&style.font_family);
-        let weight = if style.weight == crate::TextWeight::Normal {
-            String::new()
-        } else {
-            format!(" font-weight=\"{}\"", style.weight.svg_value())
-        };
+        let weight = FontWeight(style.weight);
         let height = self.height;
         let line_start_y = canonical.line_start.y.inverted(height)?;
         let line_end_y = canonical.line_end.y.inverted(height)?;
@@ -1332,9 +2073,7 @@ impl Backend for SvgBackend {
                 let _ = writeln!(
                     buf,
                     "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} {fill}>{label}</text>",
-                    canonical.label_position.x,
-                    label_y,
-                    style.font_size,
+                    canonical.label_position.x, label_y, style.font_size,
                 );
             }
             super::backend::BracketOrientation::Horizontal => {
@@ -1358,18 +2097,21 @@ impl Backend for SvgBackend {
                 let _ = writeln!(
                     buf,
                     "<text x=\"{}\" y=\"{}\" text-anchor=\"start\" dominant-baseline=\"middle\" font-family=\"{font_family}\" font-size=\"{}\"{weight} {fill}>{label}</text>",
-                    canonical.label_position.x,
-                    label_y,
-                    style.font_size,
+                    canonical.label_position.x, label_y, style.font_size,
                 );
             }
         }
         Ok(())
     }
 
-    fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
+    pub(crate) fn draw_planned_bracket(
+        &mut self,
+        call: PlannedSignificanceCall<'_>,
+    ) -> Result<(), Error> {
         #[cfg(test)]
-        SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        if !S::COUNTING {
+            SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
+        }
         self.ensure_begun("draw_planned_bracket")?;
         let canonical = super::backend::validate_planned_bracket(call)?;
         let stroke = SvgPaint::from(call.style.color).attributes("stroke");
@@ -1424,8 +2166,12 @@ impl Backend for SvgBackend {
         self.draw_multiline_planned_text(canonical_text, placement, plan)?;
         Ok(())
     }
+}
 
+impl SvgBackend {
     fn end(&mut self) -> Result<(), Error> {
+        #[cfg(test)]
+        SVG_END_CALLS.with(|calls| calls.set(calls.get() + 1));
         if self.state != SvgCanvasState::Open {
             return Err(Error::Render("svg backend ended before begin".into()));
         }
@@ -1435,34 +2181,47 @@ impl Backend for SvgBackend {
                 self.group_stack.len()
             )));
         }
-        let mut content = String::new();
-        content.push_str(&self.root_surfaces);
-        content.push_str(&self.panel_surfaces);
-        if !self.grid_buf.is_empty() {
-            content.push_str(&self.grid_buf);
-        }
-        content.push_str(&self.body);
-        let svg = assemble_svg_document(
+        self.check_buffers()?;
+        let mut svg = WriteBuffer {
+            text: std::mem::take(&mut self.document),
+            fixed: self.fixed,
+            failed: false,
+        };
+        emit_svg_parts(
+            &mut svg,
             self.width,
             self.height,
             &self.gradient_defs,
             &self.clip_defs,
-            &content,
-        );
+            &[
+                &self.root_surfaces,
+                &self.panel_surfaces,
+                &self.grid_buf,
+                &self.body,
+            ],
+        )?;
+        if self
+            .expected_document_bytes
+            .is_some_and(|expected| expected != svg.len())
+        {
+            return Err(Error::Render(
+                "canonical SVG differs from counted byte size".into(),
+            ));
+        }
         let outline_plan = SvgOutlinePlan::Ready(SvgOutlineSource {
             font_environment: self.font_environment.clone(),
-            root_surfaces: std::mem::take(&mut self.root_surfaces),
-            panel_surfaces: std::mem::take(&mut self.panel_surfaces),
-            grid: std::mem::take(&mut self.grid_buf),
-            body: std::mem::take(&mut self.body),
-            gradient_defs: std::mem::take(&mut self.gradient_defs),
-            clip_defs: std::mem::take(&mut self.clip_defs),
+            root_surfaces: std::mem::take(&mut self.root_surfaces).text,
+            panel_surfaces: std::mem::take(&mut self.panel_surfaces).text,
+            grid: std::mem::take(&mut self.grid_buf).text,
+            body: std::mem::take(&mut self.body).text,
+            gradient_defs: std::mem::take(&mut self.gradient_defs).text,
+            clip_defs: std::mem::take(&mut self.clip_defs).text,
             replacements: std::mem::take(&mut self.text_replacements),
         });
         self.output = Some(FinalizedSvgOutput {
             width_css_px: self.width,
             height_css_px: self.height,
-            bytes: svg.into_bytes().into_boxed_slice(),
+            bytes: svg.text.into_bytes(),
             outline_plan,
         });
         self.state = SvgCanvasState::Closed;
@@ -1470,14 +2229,14 @@ impl Backend for SvgBackend {
     }
 }
 
-fn apply_text_replacements(
+fn apply_text_replacements<S: SvgSink>(
     source: &str,
     buffer: TextBuffer,
     replacements: &[TextReplacement],
     font_environment: Option<&PreparedFontEnvironment>,
     height_css_px: u32,
-) -> Result<String, String> {
-    let mut outlined = String::new();
+    outlined: &mut S,
+) -> Result<(), String> {
     let mut cursor = 0_usize;
     for replacement in replacements
         .iter()
@@ -1489,47 +2248,30 @@ fn apply_text_replacements(
         {
             return Err("planned SVG text replacement ranges are invalid".into());
         }
-        outlined.push_str(&source[cursor..replacement.range.start]);
+        let _ = outlined.write_str(&source[cursor..replacement.range.start]);
+        outlined.check().map_err(|error| error.to_string())?;
         if let Some(outline) = &replacement.outline {
             let environment = font_environment.ok_or_else(|| {
                 "planned SVG text was serialized without its retained font environment".to_owned()
             })?;
-            outlined.push_str(
-                &SvgBackend::outline_planned_line(height_css_px, environment, outline)
-                    .map_err(|error| error.to_string())?,
-            );
+            SvgBackend::outline_planned_line(height_css_px, environment, outline, outlined)
+                .map_err(|error| error.to_string())?;
         }
         cursor = replacement.range.end;
     }
-    outlined.push_str(&source[cursor..]);
-    Ok(outlined)
+    let _ = outlined.write_str(&source[cursor..]);
+    outlined.check().map_err(|error| error.to_string())
 }
 
-fn assemble_svg_document(
-    width: u32,
-    height: u32,
-    gradient_defs: &str,
-    clip_defs: &str,
-    content: &str,
-) -> String {
-    let mut svg = String::new();
-    let _ = writeln!(
+fn emit_svg_header(svg: &mut impl fmt::Write, width: u32, height: u32) -> fmt::Result {
+    writeln!(
         svg,
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" role=\"img\">"
-    );
-    let _ = writeln!(
+    )?;
+    writeln!(
         svg,
         "<style>line,path,polyline,polygon,circle{{vector-effect:non-scaling-stroke}}</style>"
-    );
-    if !gradient_defs.is_empty() || !clip_defs.is_empty() {
-        svg.push_str("<defs>\n");
-        svg.push_str(gradient_defs);
-        svg.push_str(clip_defs);
-        svg.push_str("</defs>\n");
-    }
-    svg.push_str(content);
-    svg.push_str("</svg>\n");
-    svg
+    )
 }
 
 #[cfg(test)]
@@ -1537,6 +2279,153 @@ mod tests {
     use super::*;
     use crate::font::canonical::PreparedFontEnvironment;
     use crate::layout::{PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance};
+
+    #[test]
+    fn shared_svg_tokens_count_escaped_utf8_and_refuse_overflow() {
+        let escaped = EscapedText("<&\"'\u{03b1}");
+        let attribute = EscapedAttribute("\t\n\r<&");
+        let paint = SvgPaint(Rgba::new(1, 2, 3, 128)).attributes("fill");
+        let mut count = CountBuffer::default();
+        write!(count, "{escaped} {paint} {attribute}").unwrap();
+        let mut output = WriteBuffer::default();
+        write!(output, "{escaped} {paint} {attribute}").unwrap();
+        assert_eq!(count.len(), output.len());
+        assert!(output.starts_with("&lt;&amp;&quot;&apos;"));
+        assert!(output.ends_with("&#9;&#10;&#13;&lt;&amp;"));
+        let mut overflow = CountBuffer {
+            bytes: usize::MAX,
+            ..CountBuffer::default()
+        };
+        assert!(overflow.write_str("x").is_err());
+        assert_eq!(overflow.len(), usize::MAX);
+    }
+
+    #[test]
+    fn formatter_errors_remain_latched_through_enclosing_serialization() {
+        struct FailingDisplay;
+        impl fmt::Display for FailingDisplay {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("prefix")?;
+                Err(fmt::Error)
+            }
+        }
+
+        let mut count = CountBuffer::default();
+        assert!(write!(count, "{FailingDisplay}").is_err());
+        count.write_str("suffix").unwrap();
+        assert_eq!(count.len(), 12);
+        assert!(!count.limit_exceeded);
+        assert!(count.check().is_err());
+        assert!(emit_svg_parts(
+            &mut count,
+            100,
+            100,
+            &CountBuffer::default(),
+            &CountBuffer::default(),
+            &[]
+        )
+        .is_err());
+
+        let mut buffer = WriteBuffer {
+            text: String::with_capacity(32),
+            fixed: true,
+            failed: false,
+        };
+        assert!(write!(buffer, "{FailingDisplay}").is_err());
+        buffer.write_str("suffix").unwrap();
+        assert_eq!(&*buffer, "prefixsuffix");
+        assert!(buffer.len() < buffer.text.capacity());
+        assert!(buffer.check().is_err());
+        let mut svg = SvgBackend::in_memory(100, 100);
+        Backend::begin(&mut svg, 100, 100).unwrap();
+        svg.body = buffer;
+        assert!(Backend::end(&mut svg).is_err());
+        assert!(svg.into_output().is_none());
+    }
+
+    #[test]
+    fn fixed_primitive_and_document_overflows_reject_enclosing_svg_output() {
+        let points = [Point2D::new(10.0, 20.0), Point2D::new(30.0, 40.0)];
+        let style = LineStyle::solid((1, 2, 3), 1.0);
+        let mut svg = SvgBackend::in_memory(100, 100);
+        Backend::begin(&mut svg, 100, 100).unwrap();
+        svg.body.fixed = true;
+        assert!(Backend::draw_line(&mut svg, &points, &style).is_err());
+        assert!(svg.body.failed);
+        assert_eq!(svg.body.text.capacity(), 0);
+        assert!(Backend::end(&mut svg).is_err());
+        assert!(svg.into_output().is_none());
+
+        let mut reference = SvgBackend::in_memory(100, 100);
+        Backend::begin(&mut reference, 100, 100).unwrap();
+        Backend::draw_line(&mut reference, &points, &style).unwrap();
+        Backend::end(&mut reference).unwrap();
+        let required = reference.into_bytes().unwrap().len();
+        let mut svg = SvgBackend::in_memory(100, 100);
+        Backend::begin(&mut svg, 100, 100).unwrap();
+        Backend::draw_line(&mut svg, &points, &style).unwrap();
+        svg.document = String::with_capacity(required - 1);
+        assert!(svg.document.capacity() < required);
+        svg.fixed = true;
+        let error = Backend::end(&mut svg).unwrap_err();
+        assert!(error.to_string().contains("reserved storage"));
+        assert!(svg.into_output().is_none());
+    }
+
+    #[test]
+    fn fixed_glyph_and_outline_overflows_reject_derived_output() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let plan = environment
+            .plan_text(TextPlanInput {
+                source: "A",
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 12,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Rgba::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "outline overflow".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        let placement =
+            PlannedTextPlacement::middle(Point2D::new(8.0, 20.0), TextAnchor::Start, 0.0);
+        let canonical = super::super::backend::validate_planned_text(placement, &plan).unwrap();
+        let outline = PlannedLineOutline::new(canonical, placement, &plan, 0);
+        let mut buffer = WriteBuffer {
+            fixed: true,
+            ..WriteBuffer::default()
+        };
+        let error =
+            SvgBackend::outline_planned_line(40, &environment, &outline, &mut buffer).unwrap_err();
+        assert!(error.to_string().contains("reserved storage"));
+        assert!(buffer.failed);
+        assert_eq!(buffer.text.capacity(), 0);
+
+        let mut svg = SvgBackend::in_memory_with_fonts(100, 40, environment);
+        Backend::begin(&mut svg, 100, 40).unwrap();
+        Backend::draw_planned_text(&mut svg, placement, &plan).unwrap();
+        Backend::end(&mut svg).unwrap();
+        let output = svg.into_output().unwrap();
+        let required = output.outline_plan.count_bytes(100, 40).unwrap();
+        let error = output
+            .outline_plan
+            .derive_counted(100, 40, required - 1)
+            .unwrap_err();
+        assert!(error.contains("reserved storage"), "{error}");
+        assert_eq!(
+            output
+                .outline_plan
+                .derive_counted(100, 40, required)
+                .unwrap()
+                .len(),
+            required
+        );
+    }
 
     fn source_size(width: u32, height: u32) -> resvg::tiny_skia::IntSize {
         resvg::tiny_skia::IntSize::from_wh(width, height).unwrap()
@@ -1744,7 +2633,7 @@ mod tests {
                 exact_override: false,
             })
             .unwrap();
-        plan.lines[0].base_direction = ShapingDirection::RightToLeft;
+        plan.edit_for_test().lines[0].base_direction = ShapingDirection::RightToLeft;
         let mut backend = SvgBackend::in_memory(100, 40);
         backend.begin(100, 40).unwrap();
         backend
@@ -1779,7 +2668,7 @@ mod tests {
 
         backend.begin(120, 80).unwrap();
         backend.end().unwrap();
-        let latest = String::from_utf8(backend.output.as_ref().unwrap().bytes.to_vec()).unwrap();
+        let latest = String::from_utf8(backend.output.as_ref().unwrap().bytes.clone()).unwrap();
         assert!(latest.contains("width=\"120\" height=\"80\""));
         assert!(!latest.contains("<polyline"));
 
@@ -1975,7 +2864,9 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             rounded_rects,
-            ["<rect x=\"10.00\" y=\"74.00\" width=\"30.00\" height=\"20.00\" rx=\"3.0\" ry=\"3.0\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"]
+            [
+                "<rect x=\"10.00\" y=\"74.00\" width=\"30.00\" height=\"20.00\" rx=\"3.0\" ry=\"3.0\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"
+            ]
         );
         assert!(!svg.contains("<polygon"));
     }
@@ -2187,8 +3078,12 @@ mod tests {
         backend.end().unwrap();
         let svg = backend.into_bytes().unwrap();
 
-        let png =
-            rasterize_svg_bytes_to_png(&svg, source_size(1, 1), &PngOptions::default()).unwrap();
+        let png = rasterize_svg_bytes_to_png(
+            &svg,
+            PngTargetPlan::new(source_size(1, 1), &PngOptions::default()).unwrap(),
+            &PngOptions::default(),
+        )
+        .unwrap();
         let mut reader = png::Decoder::new(std::io::Cursor::new(png))
             .read_info()
             .unwrap();
@@ -2394,11 +3289,10 @@ mod tests {
             output
                 .outline_plan
                 .derive(output.width_css_px, output.height_css_px)
-                .unwrap()
-                .into_vec(),
+                .unwrap(),
         )
         .unwrap();
-        let preserve = String::from_utf8(output.bytes.into_vec()).unwrap();
+        let preserve = String::from_utf8(output.bytes).unwrap();
 
         assert_eq!(
             preserve,
@@ -2409,8 +3303,353 @@ mod tests {
         assert!(outlined.contains('L') && outlined.contains('Z'));
         assert!(outlined.contains("fill=\"#010203\""));
         crate::font::canonical::FONT_OUTLINE_GLYPHS
-            .with(|glyphs| assert_eq!(&*glyphs.borrow(), &planned_glyphs));
+            .with(|glyphs| assert_eq!(&*glyphs.borrow(), &planned_glyphs.repeat(2)));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shape_calls));
+    }
+
+    #[test]
+    fn reversed_rotated_block_preserves_existing_column_positions_in_png() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let input = |source| TextPlanInput {
+            source,
+            stack: "Test Sans",
+            weight: crate::TextWeight::Normal,
+            font_size: 10,
+            line_height: TextLineHeight::Multiplier(1.6),
+            maximum_width_quanta: i64::MAX,
+            alignment: PhysicalTextAlignment::Center,
+            paint: Rgba::rgb(1, 2, 3),
+            provenance: TextPlanProvenance {
+                pair_ordinal: 0,
+                owner: "rotated columns".into(),
+            },
+            exact_override: false,
+        };
+        let plan = environment.plan_text(input("A\nAA")).unwrap();
+        let singles = [
+            environment.plan_text(input("A")).unwrap(),
+            environment.plan_text(input("AA")).unwrap(),
+        ];
+        let block = crate::render::backend::PlacedText::from_first_line(
+            plan.clone(),
+            Point2D::new(34.0, 50.0),
+            TextAnchor::Middle,
+            -90.0,
+        )
+        .with_reversed_lines();
+        assert_eq!(
+            block
+                .placement
+                .line_y(&plan, plan.lines[0].translation_y_quanta)
+                .unwrap(),
+            plan.lines[1].translation_y_quanta
+        );
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let mut outlined = Vec::new();
+        for whole in [true, false] {
+            let mut backend = SvgBackend::in_memory_with_fonts(120, 100, environment.clone());
+            backend.begin(120, 100).unwrap();
+            if whole {
+                block.draw(&mut backend).unwrap();
+            } else {
+                for (single, x) in singles.iter().zip([50.0, 34.0]) {
+                    backend
+                        .draw_planned_text(
+                            PlannedTextPlacement::middle(
+                                Point2D::new(x, 50.0),
+                                TextAnchor::Middle,
+                                -90.0,
+                            ),
+                            single,
+                        )
+                        .unwrap();
+                }
+            }
+            backend.end().unwrap();
+            outlined.push(backend.into_outlined_bytes().unwrap());
+        }
+        let options = PngOptions {
+            sizing: PngSizing::Source,
+            compression: PngCompression::Balanced,
+        };
+        let rasterize = |svg: &[u8]| {
+            rasterize_svg_bytes_to_png(
+                svg,
+                PngTargetPlan::new(source_size(120, 100), &options).unwrap(),
+                &options,
+            )
+            .unwrap()
+        };
+        assert_eq!(rasterize(&outlined[0]), rasterize(&outlined[1]));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        assert_eq!(block.plan, plan);
+    }
+
+    #[test]
+    fn outline_uses_absolute_glyph_origins_without_summing_rounded_advances() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let mut plan = environment
+            .plan_text(TextPlanInput {
+                source: "AA",
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 20,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Rgba::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "absolute origins".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        for (glyph, x) in plan.edit_for_test().lines[0].runs[0]
+            .glyphs
+            .iter_mut()
+            .zip([5, 17])
+        {
+            glyph.glyph_origin_x_quanta = x * CSS_PIXEL_QUANTA;
+            glyph.glyph_origin_y_quanta = 0;
+            glyph.x_advance_quanta = i64::MAX;
+        }
+        let mut backend = SvgBackend::in_memory_with_fonts(120, 40, environment);
+        backend.begin(120, 40).unwrap();
+        backend
+            .draw_planned_text(
+                PlannedTextPlacement::baseline(Point2D::new(0.0, 0.0), TextAnchor::Start, 0.0),
+                &plan,
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let outlined = String::from_utf8(backend.into_outlined_bytes().unwrap()).unwrap();
+        assert!(
+            outlined.contains("matrix(0.02 0 0 -0.02 5 40)"),
+            "{outlined}"
+        );
+        assert!(
+            outlined.contains("matrix(0.02 0 0 -0.02 17 40)"),
+            "{outlined}"
+        );
+    }
+
+    #[test]
+    fn wrapped_bidi_preserve_text_isolates_frozen_visual_runs_and_keeps_logical_source() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let source = "A \u{202b}\u{5d0} \u{5d0} \u{202c}A";
+        let plan = environment
+            .plan_text(TextPlanInput {
+                source,
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 10,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: 8_704,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Rgba::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "paragraph bidi".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        assert!(plan.lines.len() >= 3);
+        let mut backend = SvgBackend::in_memory_with_fonts(120, 100, environment);
+        backend.begin(120, 100).unwrap();
+        backend
+            .draw_planned_text(
+                PlannedTextPlacement::middle(Point2D::new(10.0, 50.0), TextAnchor::Start, 0.0),
+                &plan,
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let output = backend.into_output().unwrap();
+        let svg = std::str::from_utf8(&output.bytes).unwrap();
+        assert!(svg.contains("unicode-bidi=\"bidi-override\""));
+        assert!(
+            svg.contains("direction=\"rtl\" unicode-bidi=\"bidi-override\" text-anchor=\"end\"")
+        );
+        for line in &plan.lines {
+            let logical = &plan.source
+                [line.source_span.start_byte as usize..line.source_span.end_byte as usize];
+            assert!(
+                svg.contains(&format!("aria-label=\"{}\"", EscapedText(logical)))
+                    || svg.contains(&format!(">{}</text>", EscapedText(logical)))
+            );
+        }
+        assert_eq!(plan.line_texts().concat(), source);
+        assert!(!contains_svg_text(
+            &output.outline_plan.derive(120, 100).unwrap()
+        ));
+    }
+
+    #[test]
+    fn bidi_run_dom_order_preserves_selectable_logical_text() {
+        let environment = PreparedFontEnvironment::synthetic_faces(&[
+            ("Latin", &['A', ' ']),
+            ("Hebrew", &['\u{5d0}']),
+        ]);
+        let source = "A \u{202b}\u{5d0} A\u{202c} A";
+        let plan = environment
+            .plan_text(TextPlanInput {
+                source,
+                stack: "Latin, Hebrew",
+                weight: crate::TextWeight::Normal,
+                font_size: 10,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Rgba::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "logical selection".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        assert!(plan.lines[0]
+            .runs
+            .windows(2)
+            .any(|pair| pair[0].source_span.start_byte > pair[1].source_span.start_byte));
+        let first_face = plan.lines[0].runs[0].face;
+        assert!(plan.lines[0].runs.iter().any(|run| run.face != first_face));
+        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+        let mut backend = SvgBackend::in_memory_with_fonts(120, 100, environment);
+        backend.begin(120, 100).unwrap();
+        backend
+            .draw_planned_text(
+                PlannedTextPlacement::middle(Point2D::new(10.0, 50.0), TextAnchor::Start, 0.0),
+                &plan,
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let output = backend.into_output().unwrap();
+        let svg = std::str::from_utf8(&output.bytes).unwrap();
+        assert!(svg.contains("font-family=\"Latin, Hebrew\""));
+        assert!(!svg.contains("@font-face"));
+        assert!(!contains_svg_text(
+            &output.outline_plan.derive(120, 100).unwrap()
+        ));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shapes));
+        let selected = svg
+            .split("<tspan ")
+            .skip(1)
+            .map(|part| {
+                part.split_once('>')
+                    .unwrap()
+                    .1
+                    .split_once("</tspan>")
+                    .unwrap()
+                    .0
+            })
+            .collect::<String>();
+        assert_eq!(selected, source);
+        let line = &plan.lines[0];
+        let run = line
+            .runs
+            .iter()
+            .find(|run| {
+                run.bidi_level % 2 == 1
+                    && plan.source
+                        [run.source_span.start_byte as usize..run.source_span.end_byte as usize]
+                        .contains('\u{5d0}')
+            })
+            .unwrap();
+        let glyph = &run.glyphs[0];
+        let expected_x =
+            10 * CSS_PIXEL_QUANTA + line.translation_x_quanta + glyph.glyph_origin_x_quanta
+                - glyph.x_offset_quanta;
+        let run_source =
+            &plan.source[run.source_span.start_byte as usize..run.source_span.end_byte as usize];
+        let tag = svg
+            .split("<tspan ")
+            .skip(1)
+            .find(|tag| {
+                tag.split_once('>')
+                    .unwrap()
+                    .1
+                    .split_once("</tspan>")
+                    .unwrap()
+                    .0
+                    == run_source
+            })
+            .unwrap();
+        assert!(tag.starts_with(&format!("x=\"{}\" ", CanonicalQuantum(expected_x))));
+    }
+
+    #[test]
+    fn selected_soft_hyphen_paints_ascii_hyphen_without_rewriting_accessible_source() {
+        for (environment, stack, selected_runs) in [
+            (
+                PreparedFontEnvironment::synthetic_faces(&[("Soft", &['A', '-'])]),
+                "Soft",
+                1,
+            ),
+            (
+                PreparedFontEnvironment::synthetic_faces(&[
+                    ("Letters", &['A']),
+                    ("Hyphens", &['-']),
+                ]),
+                "Letters, Hyphens",
+                2,
+            ),
+        ] {
+            for (source, maximum_width_quanta, selected) in [
+                ("A\u{ad}AA", 12_288, true),
+                ("A\u{ad}AA", i64::MAX, false),
+                ("A\u{ad}", i64::MAX, false),
+            ] {
+                let plan = environment
+                    .plan_text(TextPlanInput {
+                        source,
+                        stack,
+                        weight: crate::TextWeight::Normal,
+                        font_size: 10,
+                        line_height: TextLineHeight::Multiplier(1.2),
+                        maximum_width_quanta,
+                        alignment: PhysicalTextAlignment::Start,
+                        paint: Rgba::rgb(1, 2, 3),
+                        provenance: TextPlanProvenance {
+                            pair_ordinal: 0,
+                            owner: "soft hyphen SVG".into(),
+                        },
+                        exact_override: false,
+                    })
+                    .unwrap();
+                assert_eq!(plan.source, source);
+                assert_eq!(plan.lines[0].selected_soft_hyphen.is_some(), selected);
+                let placement =
+                    PlannedTextPlacement::middle(Point2D::new(8.0, 20.0), TextAnchor::Start, 0.0);
+                let mut svg = SvgBackend::in_memory_with_fonts(100, 60, environment.clone());
+                Backend::begin(&mut svg, 100, 60).unwrap();
+                Backend::draw_planned_text(&mut svg, placement, &plan).unwrap();
+                Backend::end(&mut svg).unwrap();
+                let output = svg.into_output().unwrap();
+                let text = std::str::from_utf8(&output.bytes).unwrap();
+                if selected {
+                    assert_eq!(plan.lines[0].runs.len(), selected_runs);
+                    assert!(text.contains("aria-label=\"A\u{ad}\""), "{text}");
+                    assert!(text.contains("-</tspan>"), "{text}");
+                    assert!(!text.contains(">\u{ad}</tspan>"));
+                    let mut invalid = plan.clone();
+                    invalid.edit_for_test().lines[0].selected_soft_hyphen =
+                        Some(plan.lines[0].source_span);
+                    assert!(
+                        super::super::backend::validate_planned_text(placement, &invalid).is_err()
+                    );
+                } else {
+                    assert!(text.contains(source));
+                    assert!(!text.contains(">-</tspan>"));
+                }
+                let count = output.outline_plan.count_bytes(100, 60).unwrap();
+                let outlined = output.outline_plan.derive_counted(100, 60, count).unwrap();
+                assert_eq!(outlined.len(), count);
+                assert!(!contains_svg_text(&outlined));
+                assert_eq!(plan.source, source);
+            }
+        }
     }
 
     #[test]
@@ -2444,7 +3683,7 @@ mod tests {
         assert!(!outlined.contains("<text") && !outlined.contains("<path d="));
 
         let mut inconsistent = environment.plan_text(input("A")).unwrap();
-        inconsistent.lines[0].runs[0].glyphs[0].glyph_id = 2;
+        inconsistent.edit_for_test().lines[0].runs[0].glyphs[0].glyph_id = 2;
         let mut backend = SvgBackend::in_memory_with_fonts(120, 40, environment);
         backend.begin(120, 40).unwrap();
         backend.draw_planned_text(placement, &inconsistent).unwrap();
@@ -2460,18 +3699,17 @@ mod tests {
     fn png_conversion_keeps_parse_and_dimension_failures_route_specific() {
         let options = PngOptions::default();
         let text_svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text x="1" y="8">late text</text></svg>"#;
-        let error =
-            rasterize_svg_bytes_to_png(text_svg, source_size(10, 10), &options).unwrap_err();
+        let target = PngTargetPlan::new(source_size(10, 10), &options).unwrap();
+        let error = rasterize_svg_bytes_to_png(text_svg, target, &options).unwrap_err();
         assert!(error.to_string().contains("path-only SVG scene"));
 
-        let error =
-            rasterize_svg_bytes_to_png(b"not svg", source_size(10, 10), &options).unwrap_err();
+        let error = rasterize_svg_bytes_to_png(b"not svg", target, &options).unwrap_err();
         assert!(error
             .to_string()
             .contains("parse svg for png rasterization"));
 
         let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="10" viewBox="0 0 11 10"/>"#;
-        let error = rasterize_svg_bytes_to_png(svg, source_size(10, 10), &options).unwrap_err();
+        let error = rasterize_svg_bytes_to_png(svg, target, &options).unwrap_err();
         assert!(error
             .to_string()
             .contains("dimensions do not match its canonical CSS dimensions"));

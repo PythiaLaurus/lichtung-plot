@@ -4,12 +4,8 @@ use crate::Error;
 
 use super::data::{stable_levels, FacetPanel};
 use crate::builder::Plot;
-use crate::decorations::plan::ResolvedLegend;
-use crate::layout::PanelBox;
 use crate::render::backend::Backend;
-use crate::spec::{
-    AxisDomain, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext, PlotRenderResult,
-};
+use crate::spec::{AxisDomain, LegendPolicy, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 
 pub(super) fn preflight_coordinated_panels(
@@ -92,29 +88,11 @@ fn coordinate_hue_levels(
     Ok(base_plot)
 }
 
-pub(super) fn reserve_shared_legend(
+pub(super) fn shared_legend_entries(
     source: &Plot,
     shared_plot: &Plot,
     preflight: &[PlotRenderResult],
-    mut outer: PanelBox,
-    theme: &ResolvedTheme,
-) -> Result<
-    (
-        PanelBox,
-        Option<ResolvedLegend>,
-        Vec<crate::decorations::legend::LegendEntry>,
-    ),
-    Error,
-> {
-    let mut outside_legend = None;
-    let legend_position = source.legend_position_spec();
-    let facet_legend_position = if legend_position == LegendPosition::Auto {
-        Some(LegendPosition::OutsideRightTop)
-    } else if crate::decorations::plan::is_outside(legend_position) {
-        Some(legend_position)
-    } else {
-        None
-    };
+) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
     let mut entries = if source.legend_policy_spec() == LegendPolicy::Hidden {
         Vec::new()
     } else {
@@ -148,21 +126,8 @@ pub(super) fn reserve_shared_legend(
                 .position(|identity| identity == entry.identity())
                 .unwrap_or(usize::MAX)
         });
-        if let Some(facet_legend_position) = facet_legend_position {
-            let legend_plot = shared_plot
-                .clone()
-                .with_legend_position(facet_legend_position);
-            let (reserved, legend) = crate::decorations::plan::plan_outside_legend(
-                &legend_plot,
-                &entries,
-                outer,
-                theme,
-            )?;
-            outer = reserved;
-            outside_legend = Some(legend);
-        }
     }
-    Ok((outer, outside_legend, entries))
+    Ok(entries)
 }
 
 pub(super) fn resolve_shared_facet_axis(

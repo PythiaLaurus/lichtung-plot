@@ -52,6 +52,7 @@ enum LegendAnnotationConstraint {
 
 #[derive(Debug)]
 struct ResolvedComparison {
+    source_index: usize,
     left: usize,
     right: usize,
     level: usize,
@@ -65,7 +66,8 @@ pub(crate) fn plan(
     y_range: (f64, f64),
     panel: PanelBox,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     let label = theme
         .typography
         .effective_significance_label(chart.significance_mark_style_override());
@@ -82,6 +84,7 @@ pub(crate) fn plan(
         &label,
         theme,
         chart.significance_mark_style_override().is_some(),
+        scope,
     )
 }
 
@@ -118,7 +121,9 @@ fn plan_comparisons(
         &label,
         &theme,
         false,
+        &crate::layout::fit::ROOT_SCOPE,
     )
+    .map_err(crate::layout::fit::PlanError::into_error)
 }
 
 #[expect(
@@ -138,7 +143,8 @@ fn plan_comparisons_with_label(
     label: &TextAppearance,
     theme: &crate::theme::ResolvedTheme,
     exact_override: bool,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_comparisons_at_with_label(
         annotations,
         categories,
@@ -154,6 +160,7 @@ fn plan_comparisons_with_label(
         label,
         theme,
         exact_override,
+        scope,
     )
 }
 
@@ -194,7 +201,9 @@ fn plan_comparisons_at(
         &label,
         &theme,
         false,
+        &crate::layout::fit::ROOT_SCOPE,
     )
+    .map_err(crate::layout::fit::PlanError::into_error)
 }
 
 #[expect(
@@ -218,7 +227,8 @@ fn plan_comparisons_at_with_label(
     label: &TextAppearance,
     theme: &crate::theme::ResolvedTheme,
     exact_override: bool,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     let metrics = bracket_metrics(mark_style);
     validate_range(y_range, y_limits.is_some())?;
     if categories.len() != rendered_maxima.len()
@@ -229,7 +239,7 @@ fn plan_comparisons_at_with_label(
             "significance placement requires one rendered maximum per category ({} categories, {} maxima)",
             categories.len(),
             rendered_maxima.len()
-        )));
+        )).into());
     }
     if !panel.x0.is_finite()
         || !panel.x1.is_finite()
@@ -240,33 +250,35 @@ fn plan_comparisons_at_with_label(
     {
         return Err(render_error(format!(
             "significance placement requires a finite positive plot panel; got {panel:?}"
-        )));
+        ))
+        .into());
     }
     if matches!(legend_constraint, LegendAnnotationConstraint::TopCeiling(ceiling) if !ceiling.is_finite())
     {
         return Err(render_error(
             "significance placement received a non-finite annotation ceiling",
-        ));
+        )
+        .into());
     }
     for (index, maximum) in rendered_maxima.iter().enumerate() {
         if !maximum.is_finite() {
             return Err(render_error(format!(
                 "significance placement received a non-finite rendered maximum for category {:?} at index {index}",
                 categories[index]
-            )));
+            )).into());
         }
     }
     for (index, category) in categories.iter().enumerate() {
         if categories[..index].iter().any(|seen| seen == category) {
             return Err(render_error(format!(
                 "significance placement requires unique category labels; {category:?} appears more than once"
-            )));
+            )).into());
         }
     }
 
     let mut resolved = Vec::new();
     let mut comparison_pairs = Vec::new();
-    for annotation in annotations {
+    for (source_index, annotation) in annotations.iter().enumerate() {
         let Some((endpoint_a, endpoint_b)) = annotation.endpoints() else {
             continue;
         };
@@ -288,14 +300,14 @@ fn plan_comparisons_at_with_label(
         {
             return Err(Error::Data(format!(
                 "significance comparison targets {endpoint_a:?} and {endpoint_b:?} resolve to the same rendered anchor"
-            )));
+            )).into());
         }
         let pair = (a.min(b), a.max(b));
         if comparison_pairs.contains(&pair) {
             return Err(Error::Data(format!(
                 "duplicate significance comparison for {:?} and {:?}; each unordered category pair may appear only once",
                 categories[pair.0], categories[pair.1]
-            )));
+            )).into());
         }
         comparison_pairs.push(pair);
         let source = annotation.mark().glyph()?.to_owned();
@@ -311,6 +323,7 @@ fn plan_comparisons_at_with_label(
             exact_override,
         )?;
         resolved.push(ResolvedComparison {
+            source_index,
             left: pair.0,
             right: pair.1,
             level: 0,
@@ -334,7 +347,7 @@ fn plan_comparisons_at_with_label(
     if categorical_x_override.is_some() {
         return Err(render_error(
             "categorical x_limits cannot be used with visible significance comparisons because bracket endpoints would not align; remove x_limits or remove the comparisons",
-        ));
+        ).into());
     }
     let annotation_ceiling = match legend_constraint {
         LegendAnnotationConstraint::NoObstacle => None,
@@ -342,7 +355,7 @@ fn plan_comparisons_at_with_label(
         LegendAnnotationConstraint::UnsupportedInside => {
             return Err(render_error(
                 "significance brackets cannot safely avoid a centered or bottom inside legend; use a top-aligned, outside, or hidden legend",
-            ));
+            ).into());
         }
     };
     let global_maximum = rendered_maxima
@@ -402,12 +415,12 @@ fn plan_comparisons_at_with_label(
         + metrics.label_gap
         + 2.0 * metrics.panel_padding;
     if available_height <= minimum_height {
-        return Err(render_error(format!(
+        return Err(scope.failure(crate::layout::fit::FitKind::TrackOrResidual, format!(
             "plot panel space below the inside legend is too short for {} significance level(s): {:.1}px available, more than {:.1}px required; increase chart height, move/hide the legend, or reduce comparisons",
             level_maxima.len(),
             available_height,
             minimum_height
-        )));
+        )).into());
     }
 
     let (planned_range, line_positions) = if let Some(limits) = y_limits {
@@ -419,7 +432,8 @@ fn plan_comparisons_at_with_label(
             annotation_ceiling,
             global_maximum,
             metrics,
-        ) else {
+        )?
+        else {
             let suggested = expand_upper_limit(
                 limits,
                 panel,
@@ -435,10 +449,10 @@ fn plan_comparisons_at_with_label(
             } else {
                 "increase the upper limit or use automatic y limits"
             };
-            return Err(render_error(format!(
+            return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!(
                 "explicit y_limits ({}, {}) leave insufficient room for significance brackets; y_max must be at least {}; {remedy}",
                 limits.0, limits.1, suggested.1
-            )));
+            )).into());
         };
         (limits, lines)
     } else if let Some(lines) = place_lines(
@@ -449,7 +463,7 @@ fn plan_comparisons_at_with_label(
         annotation_ceiling,
         global_maximum,
         metrics,
-    ) {
+    )? {
         (y_range, lines)
     } else {
         expand_upper_limit(
@@ -471,7 +485,7 @@ fn plan_comparisons_at_with_label(
             .then_with(|| left.label.plan.source.cmp(&right.label.plan.source))
     });
     let category_width = panel.width() / categories.len() as f64;
-    let brackets = resolved
+    let brackets = crate::layout::fit::collect(theme, "significance brackets", resolved
         .into_iter()
         .map(|comparison| {
             let anchor = |index: usize| {
@@ -491,9 +505,9 @@ fn plan_comparisons_at_with_label(
             if label_center - label_half_extent < panel.x0
                 || label_center + label_half_extent > panel.x1
             {
-                return Err(render_error(
+                return Err(scope.child(crate::layout::AddressRole::Annotation, comparison.source_index)?.failure(crate::layout::fit::FitKind::Text,
                     "significance bracket label does not fit inside the plot panel; enlarge the chart or reduce mark typography",
-                ));
+                ).into());
             }
             Ok(PlannedSignificanceBracket {
                 geometry: SignificanceBracket {
@@ -506,7 +520,7 @@ fn plan_comparisons_at_with_label(
                 label: comparison.label,
             })
         })
-        .collect::<Result<Vec<_>, Error>>()?;
+        )?;
 
     Ok(SignificancePlan {
         y_range: planned_range,
@@ -529,7 +543,8 @@ pub(crate) fn plan_grouped(
     panel: PanelBox,
     stacked: bool,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
         chart,
         categories,
@@ -542,6 +557,7 @@ pub(crate) fn plan_grouped(
         stacked,
         false,
         theme,
+        scope,
     )
 }
 
@@ -560,7 +576,8 @@ pub(crate) fn plan_horizontal(
     panel: PanelBox,
     stacked: bool,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     plan_grouped_oriented(
         chart,
         categories,
@@ -573,18 +590,28 @@ pub(crate) fn plan_horizontal(
         stacked,
         true,
         theme,
+        scope,
     )
-    .map_err(|error| match error {
-        Error::Render(message) => Error::Render(
+    .map_err(|error| {
+        let orient = |message: String| {
             message
                 .replace("y_limits", "x_limits")
                 .replace("y_max", "x_max")
                 .replace("automatic y", "automatic x")
                 .replace(" y range", " x range")
                 .replace("categorical x_limits", "categorical y_limits")
-                .replace("top-aligned", "right-aligned"),
-        ),
-        other => other,
+                .replace("top-aligned", "right-aligned")
+        };
+        match error {
+            crate::layout::fit::PlanError::Fatal(Error::Render(message)) => {
+                Error::Render(orient(message)).into()
+            }
+            crate::layout::fit::PlanError::Fit(mut failure) => {
+                failure.message = orient(failure.message);
+                failure.into()
+            }
+            other @ crate::layout::fit::PlanError::Fatal(_) => other,
+        }
     })
 }
 
@@ -606,7 +633,8 @@ fn plan_grouped_oriented(
     stacked: bool,
     horizontal: bool,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<SignificancePlan, Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<SignificancePlan, crate::layout::fit::PlanError> {
     if categories.is_empty()
         || rendered_maxima.len() != categories.len()
         || rendered_maxima
@@ -615,7 +643,8 @@ fn plan_grouped_oriented(
     {
         return Err(render_error(
             "grouped significance placement requires one maximum per category and series anchor",
-        ));
+        )
+        .into());
     }
     let group_count = groups.len().max(1);
     let mut labels = Vec::new();
@@ -705,6 +734,7 @@ fn plan_grouped_oriented(
         &label,
         theme,
         chart.significance_mark_style_override().is_some(),
+        scope,
     )?;
     if horizontal {
         for bracket in &mut result.brackets {
@@ -819,20 +849,31 @@ fn place_lines(
     annotation_ceiling: Option<f64>,
     global_maximum: f64,
     metrics: BracketMetrics,
-) -> Option<Vec<f64>> {
+) -> Result<Option<Vec<f64>>, Error> {
     if annotation_ceiling.is_some_and(|ceiling| {
         !data_fits_below_ceiling(range, panel, global_maximum, ceiling, metrics)
     }) {
-        return None;
+        return Ok(None);
     }
     if level_maxima.len() != level_label_extents.len() {
-        return None;
+        return Err(render_error("significance level/label counts differ"));
     }
     let annotation_edge =
         annotation_ceiling.unwrap_or(panel.y1).min(panel.y1) - metrics.panel_padding;
     let mut lines = Vec::with_capacity(level_maxima.len());
     for (level, maximum) in level_maxima.iter().enumerate() {
-        let fraction = ((*maximum - range.0) / (range.1 - range.0)).clamp(0.0, 1.0);
+        let offset = *maximum - range.0;
+        let span = range.1 - range.0;
+        if !offset.is_finite() || !span.is_finite() || span <= 0.0 {
+            return Err(render_error(
+                "significance projection arithmetic is not finite",
+            ));
+        }
+        let fraction = offset / span;
+        if !fraction.is_finite() {
+            return Err(render_error("significance projection ratio is not finite"));
+        }
+        let fraction = fraction.clamp(0.0, 1.0);
         let data_y = panel.y0 + fraction * panel.height();
         let clearance_y = data_y + metrics.tick_height + metrics.data_gap;
         let line = lines.last().map_or(clearance_y, |previous| {
@@ -840,12 +881,17 @@ fn place_lines(
                 .max(previous + significance_level_spacing(level_label_extents[level - 1], metrics))
         });
         let label_edge = line + metrics.label_gap + level_label_extents[level];
-        if !line.is_finite() || !label_edge.is_finite() || label_edge > annotation_edge {
-            return None;
+        if !line.is_finite() || !label_edge.is_finite() || !annotation_edge.is_finite() {
+            return Err(render_error(
+                "significance placement arithmetic is not finite",
+            ));
+        }
+        if label_edge > annotation_edge {
+            return Ok(None);
         }
         lines.push(line);
     }
-    Some(lines)
+    Ok(Some(lines))
 }
 
 fn significance_level_spacing(label_extent: f64, metrics: BracketMetrics) -> f64 {
@@ -890,7 +936,7 @@ fn expand_upper_limit(
             annotation_ceiling,
             global_maximum,
             metrics,
-        ) {
+        )? {
             break lines;
         }
         failing_upper = passing_upper;
@@ -908,7 +954,7 @@ fn expand_upper_limit(
             annotation_ceiling,
             global_maximum,
             metrics,
-        ) {
+        )? {
             passing_upper = midpoint;
             lines = candidate;
         } else {

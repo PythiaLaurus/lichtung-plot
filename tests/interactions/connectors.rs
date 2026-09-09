@@ -104,7 +104,12 @@ fn interaction_rejects_hiding_both_markers_and_connectors_preflight() {
 #[test]
 fn hidden_connectors_do_not_participate_in_legend_range_planning() {
     let frame = connector_collision_data();
-    let visible = svg(chart(&frame), "collision-visible");
+    let inside = || {
+        chart(&frame).legend(LegendPolicy::Visible(
+            lichtung_plot::LegendPosition::InsideTopRight,
+        ))
+    };
+    let visible = svg(inside(), "collision-visible");
     let visible_without_legend = svg(
         chart(&frame).legend(LegendPolicy::Hidden),
         "collision-visible-no-legend",
@@ -114,7 +119,7 @@ fn hidden_connectors_do_not_participate_in_legend_range_planning() {
         clipped_marks(&visible_without_legend)
     );
 
-    let hidden = svg(chart(&frame).connectors(false), "collision-hidden");
+    let hidden = svg(inside().connectors(false), "collision-hidden");
     let hidden_without_legend = svg(
         chart(&frame).connectors(false).legend(LegendPolicy::Hidden),
         "collision-hidden-no-legend",

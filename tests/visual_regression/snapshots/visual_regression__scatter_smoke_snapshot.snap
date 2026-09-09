@@ -16,7 +16,7 @@ expression: "normalize_embedded_font(&String::from_utf8_lossy(&bytes))"
 <polyline points="216.539,171.400 216.539,30.000" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="280.418,171.400 280.418,30.000" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="79.200,164.973 290.000,164.973" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="79.200,132.836 290.000,132.836" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="79.200,132.837 290.000,132.837" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="79.200,100.700 290.000,100.700" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="79.200,68.564 290.000,68.564" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="79.200,36.427 290.000,36.427" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
@@ -25,7 +25,7 @@ expression: "normalize_embedded_font(&String::from_utf8_lossy(&bytes))"
 <circle cx="88.782" cy="100.700" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="95.170" cy="81.706" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="101.558" cy="64.409" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
-<circle cx="107.945" cy="50.353" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
+<circle cx="107.946" cy="50.353" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="114.333" cy="40.795" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="120.721" cy="36.588" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="127.109" cy="38.108" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
@@ -33,18 +33,18 @@ expression: "normalize_embedded_font(&String::from_utf8_lossy(&bytes))"
 <circle cx="139.885" cy="57.286" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="146.273" cy="73.231" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="152.661" cy="91.630" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
-<circle cx="159.048" cy="110.839" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
+<circle cx="159.049" cy="110.839" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="165.436" cy="129.142" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="171.824" cy="144.905" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="178.212" cy="156.719" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="184.600" cy="163.529" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
-<circle cx="190.988" cy="164.726" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
+<circle cx="190.988" cy="164.727" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="197.376" cy="160.205" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="203.764" cy="150.368" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="210.152" cy="136.094" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="216.539" cy="118.659" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
-<circle cx="222.927" cy="99.619" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
-<circle cx="229.315" cy="80.676" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
+<circle cx="222.927" cy="99.620" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
+<circle cx="229.315" cy="80.677" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="235.703" cy="63.522" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="242.091" cy="49.689" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
 <circle cx="248.479" cy="40.412" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
@@ -69,7 +69,7 @@ expression: "normalize_embedded_font(&String::from_utf8_lossy(&bytes))"
 <text x="179.189453125" y="223.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
 <polyline points="79.200,164.973 74.200,164.973" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="59.21875" y="169.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<polyline points="79.200,132.836 74.200,132.836" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="79.200,132.837 74.200,132.837" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="43.953125" y="137.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">7.5</text>
 <polyline points="79.200,100.700 74.200,100.700" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="48.703125" y="105.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>

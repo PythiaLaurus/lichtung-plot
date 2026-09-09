@@ -7,7 +7,9 @@
 use crate::Error;
 
 use crate::layout::{Layout, PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
-use crate::theme::{ResolvedTheme, TextAppearance};
+use crate::theme::ResolvedTheme;
+#[cfg(test)]
+use crate::theme::TextAppearance;
 
 const MIN_PANEL_WIDTH: f64 = 80.0;
 const MIN_PANEL_HEIGHT: f64 = 60.0;
@@ -69,19 +71,28 @@ impl PanelRequirements {
         theme: &ResolvedTheme,
         top_text: Option<&str>,
         available_panel: PanelBox,
-    ) -> Result<Self, Error> {
-        let mut requirements = Self::measure_header(layout, theme, None, None, available_panel)?;
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<Self, crate::layout::fit::PlanError> {
+        let mut requirements =
+            Self::measure_header(layout, theme, None, None, available_panel, scope)?;
         if let Some(text) = top_text {
-            let lines = try_wrap_legacy_text(
+            let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 text,
-                theme.facet_header_font_size,
+                &theme.legacy_text_appearance(
+                    theme.facet_header_font_size,
+                    crate::TextWeight::Normal,
+                ),
                 (available_panel.width() - 16.0).max(1.0),
                 PhysicalTextAlignment::Center,
                 "facet strip",
-            )?;
+                &scope.child(crate::layout::AddressRole::FacetHeader, 0)?,
+            ))?;
             let line_height = f64::from(theme.facet_header_font_size) + 6.0;
-            let facet_top = lines.iter().fold(8.0, |height, _| height + line_height);
+            let facet_top = plan
+                .lines
+                .iter()
+                .fold(8.0, |height, _| height + line_height);
             requirements.top = requirements.top.max(facet_top);
         }
         Ok(requirements)
@@ -101,7 +112,11 @@ impl PanelRequirements {
         top_title: Option<&str>,
         top_subtitle: Option<&str>,
         available_panel: PanelBox,
-    ) -> Result<Self, Error> {
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<Self, crate::layout::fit::PlanError> {
+        use crate::layout::fit;
+        let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
+        let y_scope = scope.child(crate::layout::AddressRole::AxisLeft, 0)?;
         let tick_length = theme
             .axes
             .ticks
@@ -111,43 +126,53 @@ impl PanelRequirements {
         let axis_title_role = &theme.typography.axis_title;
         let spacing = &theme.axes.spacing;
         let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64;
-        let x_tick_blocks = layout
-            .x_axis
-            .ticks
-            .iter()
-            .filter(|tick| !tick.label.is_empty())
-            .map(|tick| {
-                theme
-                    .plan_text(
+        let x_tick_blocks = fit::collect(
+            theme,
+            "x-axis tick labels",
+            layout
+                .x_axis
+                .ticks
+                .iter()
+                .filter(|tick| !tick.label.is_empty())
+                .map(|tick| {
+                    fit::measured(fit::text(
+                        theme,
                         &tick.label,
                         tick_role,
                         x_tick_width.max(1.0),
                         PhysicalTextAlignment::Center,
                         "x-axis tick label",
-                        false,
-                    )
+                        &x_scope,
+                    ))
                     .map(TextBlock::from_resolved)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let y_tick_maximum_width = (available_panel.width() * 0.4).max(1.0);
-        let y_tick_blocks = layout
-            .y_axis
-            .ticks
-            .iter()
-            .filter(|tick| !tick.label.is_empty())
-            .map(|tick| {
-                theme
-                    .plan_text(
+                }),
+        )?;
+        let y_tick_maximum_width = layout.y_axis.tick_label_width(
+            available_panel,
+            crate::layout::AxisSide::Left,
+            theme,
+        )?;
+        let y_tick_blocks = fit::collect(
+            theme,
+            "y-axis tick labels",
+            layout
+                .y_axis
+                .ticks
+                .iter()
+                .filter(|tick| !tick.label.is_empty())
+                .map(|tick| {
+                    fit::measured(fit::text(
+                        theme,
                         &tick.label,
                         tick_role,
                         y_tick_maximum_width,
                         PhysicalTextAlignment::End,
                         "y-axis tick label",
-                        false,
-                    )
+                        &y_scope,
+                    ))
                     .map(TextBlock::from_resolved)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                }),
+        )?;
         let x_tick_half_width = x_tick_blocks
             .iter()
             .map(|block| block.width() / 2.0)
@@ -158,30 +183,30 @@ impl PanelRequirements {
             .fold(0.0_f64, f64::max);
         let x_label_block = (!layout.x_axis.label.is_empty())
             .then(|| {
-                theme
-                    .plan_text(
-                        &layout.x_axis.label,
-                        axis_title_role,
-                        available_panel.width().max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "x-axis title",
-                        false,
-                    )
-                    .map(TextBlock::from_resolved)
+                fit::measured(fit::text(
+                    theme,
+                    &layout.x_axis.label,
+                    axis_title_role,
+                    available_panel.width().max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "x-axis title",
+                    &x_scope,
+                ))
+                .map(TextBlock::from_resolved)
             })
             .transpose()?;
         let y_label_block = (!layout.y_axis.label.is_empty())
             .then(|| {
-                theme
-                    .plan_text(
-                        &layout.y_axis.label,
-                        axis_title_role,
-                        available_panel.height().max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "y-axis title",
-                        false,
-                    )
-                    .map(TextBlock::from_resolved)
+                fit::measured(fit::text(
+                    theme,
+                    &layout.y_axis.label,
+                    axis_title_role,
+                    available_panel.height().max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "y-axis title",
+                    &y_scope,
+                ))
+                .map(TextBlock::from_resolved)
             })
             .transpose()?;
         let x_label_overhang = ((x_label_block
@@ -239,28 +264,32 @@ impl PanelRequirements {
 
         let maximum_width = (available_panel.width() - 16.0).max(1.0);
         let title_lines = top_title.map_or(Ok(0), |text| {
-            Ok::<_, Error>(
-                try_wrap_text(
+            Ok::<_, fit::PlanError>(
+                fit::measured(fit::text(
                     theme,
                     text,
                     &theme.typography.title,
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel title",
-                )?
+                    &scope.child(crate::layout::AddressRole::RootTitle, 0)?,
+                ))?
+                .lines
                 .len(),
             )
         })?;
         let subtitle_lines = top_subtitle.map_or(Ok(0), |text| {
-            Ok::<_, Error>(
-                try_wrap_text(
+            Ok::<_, fit::PlanError>(
+                fit::measured(fit::text(
                     theme,
                     text,
                     &theme.typography.subtitle,
                     maximum_width,
                     PhysicalTextAlignment::Start,
                     "panel subtitle",
-                )?
+                    &scope.child(crate::layout::AddressRole::RootSubtitle, 0)?,
+                ))?
+                .lines
                 .len(),
             )
         })?;
@@ -290,10 +319,6 @@ impl PanelRequirements {
 }
 
 /// Allocate equal data panels with measured decoration gutters and one safety gap.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "validated grid dimensions are projected into finite canvas coordinates"
-)]
 pub(crate) fn allocate_composed_grid(
     outer: PanelBox,
     rows: usize,
@@ -301,6 +326,31 @@ pub(crate) fn allocate_composed_grid(
     requirements: &[(usize, usize, PanelRequirements)],
     description: &str,
 ) -> Result<Vec<PanelBox>, Error> {
+    match allocate_composed_grid_fit(
+        outer,
+        rows,
+        columns,
+        requirements,
+        description,
+        &crate::layout::fit::FitScope::root(),
+    )? {
+        crate::layout::fit::FitOutcome::Measured(cells) => Ok(cells),
+        crate::layout::fit::FitOutcome::Miss(reason) => Err(reason.into_error()),
+    }
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "validated declared tracks fit the exact root coordinate domain"
+)]
+pub(crate) fn allocate_composed_grid_fit(
+    outer: PanelBox,
+    rows: usize,
+    columns: usize,
+    requirements: &[(usize, usize, PanelRequirements)],
+    description: &str,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<crate::layout::fit::FitOutcome<Vec<PanelBox>>, Error> {
     if rows == 0 || columns == 0 {
         return Err(Error::Render(format!(
             "{description} requires at least one row and column"
@@ -331,9 +381,9 @@ pub(crate) fn allocate_composed_grid(
     let panel_width = (outer.width() - horizontal_reservation) / columns as f64;
     let panel_height = (outer.height() - vertical_reservation) / rows as f64;
     if panel_width < MIN_PANEL_WIDTH || panel_height < MIN_PANEL_HEIGHT {
-        return Err(Error::Render(format!(
+        return Ok(crate::layout::fit::FitOutcome::Miss(scope.failure(crate::layout::kernel::FitKind::TrackOrResidual, format!(
             "{description} is too dense for {rows}x{columns} panels after reserving measured decorations; available panel size is {panel_width:.1}x{panel_height:.1}"
-        )));
+        ))));
     }
 
     let mut x_positions = Vec::with_capacity(columns);
@@ -357,20 +407,22 @@ pub(crate) fn allocate_composed_grid(
         }
     }
 
-    Ok((0..rows)
-        .flat_map(|row| {
-            let x_positions = &x_positions;
-            let y_positions = &y_positions;
-            (0..columns).map(move |column| {
-                PanelBox::new(
-                    x_positions[column],
-                    x_positions[column] + panel_width,
-                    y_positions[row] - panel_height,
-                    y_positions[row],
-                )
+    Ok(crate::layout::fit::FitOutcome::Measured(
+        (0..rows)
+            .flat_map(|row| {
+                let x_positions = &x_positions;
+                let y_positions = &y_positions;
+                (0..columns).map(move |column| {
+                    PanelBox::new(
+                        x_positions[column],
+                        x_positions[column] + panel_width,
+                        y_positions[row] - panel_height,
+                        y_positions[row],
+                    )
+                })
             })
-        })
-        .collect())
+            .collect(),
+    ))
 }
 
 /// Reserved canvas margins around the plot panel.
@@ -706,7 +758,8 @@ fn planned_line_counts(plans: &PlannedRootText) -> (usize, usize, usize) {
     )
 }
 
-pub(crate) fn try_wrap_text(
+#[cfg(test)]
+fn try_wrap_text(
     theme: &ResolvedTheme,
     text: &str,
     appearance: &TextAppearance,
@@ -716,20 +769,10 @@ pub(crate) fn try_wrap_text(
 ) -> Result<Vec<String>, Error> {
     theme
         .plan_text(text, appearance, maximum_width, alignment, role, false)
-        .map(crate::layout::ResolvedTextPlan::into_line_texts)
-}
-
-pub(crate) fn try_wrap_legacy_text(
-    theme: &ResolvedTheme,
-    text: &str,
-    font_size: u32,
-    maximum_width: f64,
-    alignment: PhysicalTextAlignment,
-    role: &str,
-) -> Result<Vec<String>, Error> {
-    theme
-        .plan_legacy_text(text, font_size, maximum_width, alignment, role)
-        .map(crate::layout::ResolvedTextPlan::into_line_texts)
+        .and_then(|plan| {
+            plan.into_line_texts(theme.prepared_font_environment()?)
+                .map_err(|error| Error::Render(error.to_string()))
+        })
 }
 
 #[cfg(test)]
@@ -846,15 +889,25 @@ mod tests {
             x_axis: crate::layout::Axis {
                 label: String::new(),
                 ticks: Vec::new(),
+                explicit_ticks: false,
+                assigned_tick_width: None,
             },
             y_axis: crate::layout::Axis {
                 label: String::new(),
                 ticks: Vec::new(),
+                explicit_ticks: false,
+                assigned_tick_width: None,
             },
         };
 
-        let requirements =
-            PanelRequirements::measure(&layout, &theme, Some("facet"), panel).unwrap();
+        let requirements = PanelRequirements::measure(
+            &layout,
+            &theme,
+            Some("facet"),
+            panel,
+            &crate::layout::fit::FitScope::root(),
+        )
+        .unwrap();
 
         assert!((requirements.top - 46.0).abs() < f64::EPSILON);
     }

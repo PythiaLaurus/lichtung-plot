@@ -27,6 +27,11 @@ and commit each admitted phase as one logical change before starting the next
 phase. Split a broad phase into smaller approved phases before implementation
 rather than combining unrelated migrations in one commit.
 
+The primary-approved T5a1r2-r4/T5a3a1-f closure is one coupled interface migration
+after the completed T5a1r1 commit, as recorded under T5a3f. Its original per-stage
+commit titles are intended partition labels, not claims that those commits exist.
+This explicit atomic bundle does not relax the rule for unrelated later phases.
+
 ## Confirmed Direction
 
 The following decisions are accepted starting points for the architecture
@@ -198,23 +203,23 @@ The approved theme and layout targets follow these rules:
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a0r | Parent-constraint documentation adjudication | COMPLETE |
 | T5a0s | User-visible behavior approval and bounded recovery | COMPLETE |
-| T5a1 | Exact-root kernel (reopened revised target) | IN PROGRESS |
-| T5a1r | Active parent-constraint kernel repair | IN PROGRESS |
+| T5a1 | Exact-root kernel (revised target) | COMPLETE |
+| T5a1r | Active parent-constraint kernel repair | COMPLETE |
 | T5a1r1 | Single-result exact-root and constrained-text route | COMPLETE |
-| T5a1r2 | Active parent allocation and root feedback | PENDING |
-| T5a1r3 | Typed containing-frame recovery and gutter fit | PENDING |
-| T5a1r4 | Root admission and lifecycle closure | PENDING |
+| T5a1r2 | Active parent allocation and root feedback | COMPLETE |
+| T5a1r3 | Typed containing-frame recovery and gutter fit | COMPLETE |
+| T5a1r4 | Root admission and lifecycle closure | COMPLETE |
 | T5a2 | Foundational resolved appearance and surfaces | COMPLETE |
-| T5a3 | Canonical fonts and immutable text plans (reopened) | PENDING |
-| T5a3a | Unicode and font preparation, profile, and provenance | PENDING |
-| T5a3a1 | Unicode profile, provenance, and conformance | PENDING |
-| T5a3a2 | Bounded font discovery and handle lifecycle | PENDING |
-| T5a3a3 | Font census, selection, and retention | PENDING |
-| T5a3b | Deterministic assigned-width text wrapping | PENDING |
-| T5a3c | Shaping, bidi, and geometry repair | PENDING |
-| T5a3d | Resource and lifecycle closure | PENDING |
-| T5a3e | Producer and SVG/PNG regressions | PENDING |
-| T5a3f | Independent closure and performance evidence | PENDING |
+| T5a3 | Canonical fonts and immutable text plans | COMPLETE |
+| T5a3a | Unicode and font preparation, profile, and provenance | COMPLETE |
+| T5a3a1 | Unicode profile, provenance, and conformance | COMPLETE |
+| T5a3a2 | Bounded font discovery and handle lifecycle | COMPLETE |
+| T5a3a3 | Font census, selection, and retention | COMPLETE |
+| T5a3b | Deterministic assigned-width text wrapping | COMPLETE |
+| T5a3c | Shaping, bidi, and geometry repair | COMPLETE |
+| T5a3d | Resource and lifecycle closure | COMPLETE |
+| T5a3e | Producer and SVG/PNG regressions | COMPLETE |
+| T5a3f | Independent closure and performance evidence | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -2409,12 +2414,13 @@ automatic-guide intrinsic, text-rebalance, track-flexibility, and assigned-box
 containment findings. Active target-key rows/count arithmetic and current/target
 boundaries were inspected; `git diff --check` passed. No code, dependencies,
 fixtures, or snapshots changed and no test suite ran. Runtime repair acceptance
-remains pending in T5a1r and T5a3a1-T5a3f; this completion certifies the revised
-documentation, not the historical implementation's correctness.
+was pending at this documentation checkpoint; it is now discharged by the
+integrated T5a1r/T5a3 closure recorded under T5a3f. The earlier documentation
+completion alone did not certify the historical implementation's correctness.
 
 Historical reopening boundary: `028e2c8` established an internally reviewed
 document, not user acceptance of its fit-failure tradeoffs. T5a0s records the
-subsequent accepted decisions and still gates implementation on document closure.
+subsequent accepted decisions and the document closure required before runtime repair.
 
 Acceptance:
 
@@ -2447,8 +2453,9 @@ Commit: `docs(layout): adjudicate deterministic parent constraints`.
 
 Dependencies: T5a0r; the user approved D1-D6, including the delegated D3
 recommendation. Target approval does not change current APIs or authorize early
-T6 exposure. This documentation objective is complete; runtime repairs remain
-pending in their implementation stages.
+T6 exposure. This documentation objective is complete; the admitted T5a1r/T5a3
+runtime repairs subsequently completed through the integrated closure below.
+Remaining native migrations and the public T6 API are still future work.
 
 | Decision | Accepted behavior | Boundary and evidence owner | Status |
 | --- | --- | --- | --- |
@@ -2492,19 +2499,20 @@ does not run the test suite. This does not certify runtime conformance.
 
 Commit: `docs(layout): finalize behavior decisions and review gates`.
 
-### T5a1: Exact-Root Kernel (Reopened Revised Target)
+### T5a1: Exact-Root Kernel (Revised Target)
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Historical achievement: `b1c1406` (`feat(layout): add active exact-root candidate kernel`)
 established the original exact-root envelope, candidate kernel, accounting, and
 lifecycle route. Its complete-candidate/Cartesian/total-key search scope is
-historical, not evidence of compliance with the revised target. T5a1 is reopened
-and completes only when T5a1r closes; it has no separate repair commit.
+historical, not evidence of compliance with the revised target. The reopened
+target is now complete through T5a1r and the primary-verified integrated closure
+under T5a3f; this umbrella has no separate repair commit.
 
 ### T5a1r: Active Parent-Constraint Kernel Repair
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: completed T5a0r and T5a0s. Implement the accepted contract and
 preserve the current public API until its scheduled migration.
@@ -2553,12 +2561,14 @@ Evidence:
 - Current omitted/explicit-size dimensions, immutable Null/concrete identity,
   and focused snapshots remain accounted for; `just verify` passes.
 
-Implementation inspection found that the historical root executes one opaque
-layout once, then wraps it in a candidate selector and a synthetic two-pass
-identity; real family/guide feedback remains below it. Replacing only those
-types cannot establish parent allocation, real convergence, or D1 recovery.
+Historical inspection found that the former root executed one opaque
+layout once, then wrapped it in a candidate selector and a synthetic two-pass
+identity; real family/guide feedback remained below it. Replacing only those
+types could not establish parent allocation, real convergence, or D1 recovery.
 The following subphases preserve the accepted target and partition its migration.
-T5a1r completes only after all four; this umbrella has no separate commit.
+All four acceptance stages are now complete. T5a1r1 landed separately; the
+coupled r2-r4/a1-f acceptance is discharged by the integrated verified bundle
+under T5a3f. This umbrella has no separate commit.
 
 #### T5a1r1: Single-Result Exact-Root And Constrained-Text Route
 
@@ -2586,29 +2596,31 @@ Dependencies: T5a0s.
 - Run focused kernel/text/lifecycle tests and `just verify`; inspect any output
   changes. This phase does not authorize shortened regression fixtures.
 
-Evidence (2026-09-08): Plot and Canvas now use one `MeasuredLayout` and
+Historical r1-only evidence (2026-09-08; later limitations superseded by the
+integrated closure under T5a3f): Plot and Canvas use one `MeasuredLayout` and
 `FrozenRoot`, with exact assigned dimensions supplied to measurement/finalization.
-Canvas measurement consumes the assignment; legacy Plot builders still read the
+Canvas measurement consumed the assignment; legacy Plot builders still read the
 borrowed source after an explicit assignment-equality check. Their deeper
-allocation migration remains T5a1r2/native-owner work, not a claimed r1 result.
+allocation migration was assigned to T5a1r2/native owners, not claimed by r1.
 The universal root candidate, quality, Cartesian, fake convergence, and fixed
 million-entry cache implementations are removed. The text path materializes
 only the requested width's final lines/plan; all-boundary-pair transition work
-and the 144-repeat limit remain until T5a3b.
+and the 144-repeat limit persisted at that checkpoint and were removed in T5a3b.
 
 Eight kernel, 24 text, and existing lifecycle/backend tests cover exact-result
 identity, callback/refusal order, selected-line shaping, shared budgets, and
 unchanged terminal routing. Independent code review found no introduced
 regression within r1's scope. `just verify` passed formatting, locked/offline
-all-target check/Clippy, all 520 library tests and integration/snapshot suites,
+all-target Clippy, all 520 library tests and integration/snapshot suites,
 rustdoc, and package verification. Existing snapshots passed unchanged; no
-fixture or snapshot was shortened or updated. T5a1r2-r4 and T5a3 remain pending.
+fixture or snapshot was shortened or updated. T5a1r2-r4 and T5a3 were pending
+at that checkpoint, not in the current status inventory.
 
 Commit: `refactor(layout): use one exact-root measurement result`.
 
 #### T5a1r2: Active Parent Allocation And Root Feedback
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1r1.
 
@@ -2624,11 +2636,75 @@ Dependencies: T5a1r1.
   admission. Extend to other owners in their scheduled native migrations.
 - Run focused production-route and resource tests and `just verify`.
 
-Commit: `refactor(layout): coordinate active parent feedback`.
+Original intended title: `refactor(layout): coordinate active parent feedback`.
+
+Historical intermediate evidence (2026-09-08; superseded as a progress report
+by the integrated closure under T5a3f): the production Plot/Canvas root
+coordinates up to eight measurement rounds and compares retained normalized
+observations plus consumed/requested/next feedback. The active frame separates
+natural guide insets from assigned body allocation; title/tick gutter and legend
+domain changes return to the root rather than running local stabilization loops.
+The text adapter exposes hard unbroken and natural widths separately from a
+single source-ordered width preference for the assigned vertical label-row
+capacity. It still reused contextual transition preparation at that checkpoint;
+T5a3b subsequently removed that search-era preparation. The r2-only checkpoint
+did not claim the later text/font milestones.
+Canvas/facet grids measure their assigned cells once per round; Canvas range-group
+alignment and row-title owned reserves participate in feedback. Shared facet
+title and domain remeasurement no longer starts a nested convergence loop.
+No outcome cache was installed at that checkpoint; changed assignments
+remeasured. The subsequently completed font-scoped analysis and indexed query
+memo retain requested results under the same operation generation budget.
+
+That intermediate checkpoint was not a completion or full D1 claim. Its planned
+per-stage commit boundary was superseded by the primary-approved atomic
+interface migration; combined review and full verification are recorded below.
+Typed automatic-clearance error propagation and natural vertical-label gutter
+measurement are prerequisites included here: remeasurement reproduced the 40%
+rejection in the original composition regressions, so measurement, validation,
+tick-source fitting, and drawing no longer use that percentage. Containing-frame
+edge/flow recovery and the complete typed-fit/gutter audit were assigned to r3;
+producer/final-replay admission closure was assigned to r4. Both are now covered
+by the integrated closure. Native scientific intrinsic minima and specialized
+family adapters remain with their scheduled migrations.
+
+Focused evidence: 16 kernel, 25 text, 25 panel, 36 lifecycle, 16 decoration-plan,
+57 composition, 20 layout, and five visual-regression tests pass. The kernel
+cases include actual two/eight-round success, changed assigned geometry with
+unchanged feedback, cycles, exhaustion, unchanged provisional misses, fatal
+precedence, and admission refusal. Production cases exercise domain expansion,
+changed cell projections, shared groups, row-title reserves, and the intact
+long-label facet regression. Reviewed snapshot corrections are subpixel frame
+quantization in Scatter/Matrix and the measured HorizontalBar gutter; no source
+label, input fixture, or mark is removed. These focused runs preceded the full
+verification now recorded under T5a3f.
+
+Independent-review corrections (2026-09-08): final parent observations now run
+after facet outside-legend installation and include the shared-axis origin,
+legend anchors and glyph carriers, and actual text placements and clip contexts
+from geometry discovery. Canvas retains its arranged shared-legend bounds rather
+than deriving them again at draw time. Regressions change final legend/origin
+fields, a nonmaximal legend glyph, and a fully clipped annotation placement while
+holding the former extent-only observations fixed.
+
+Domain clearance now returns `Result<Option<DomainExpansion>>`; domain/panel
+spans, expanded endpoints, and ranking ratios reject arithmetic failure instead
+of treating it as a local miss. Text plans have one immutable shared payload;
+feedback admits a handle before retaining it, and no longer deep-clones text,
+runs, glyphs, or font provenance. Feedback string/address copies are fallible and
+charged before allocation. Provisional misses retain concrete changed requests
+from the current round, with stale/unrelated handles rejected; annotation and
+overflow predicates link only to a resolving assignment/projection prediction.
+Negative regressions retain terminal failure for screen-anchored conflicts and
+unowned or unrelated-axis overflow. The next root round still performs actual
+measurement; a prediction is not a frozen successful plan. Focused geometry,
+SVG, annotation, composition, and snapshot suites pass without further snapshot
+or fixture changes. Full admitted D1 recovery and root admission closure were
+subsequently discharged with r3/r4 in the integrated bundle.
 
 #### T5a1r3: Typed Containing-Frame Recovery And Gutter Fit
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1r2.
 
@@ -2644,11 +2720,86 @@ Dependencies: T5a1r2.
   propagation, and original long-label regressions. Native composition/legend
   completion stays in T5b/T5e. Run focused tests and `just verify`.
 
-Commit: `fix(layout): recover containing-frame fit with typed failures`.
+Original intended title: `fix(layout): recover containing-frame fit with typed failures`.
+
+Historical intermediate evidence (2026-09-08; superseded as a progress report
+by the integrated closure under T5a3f): active Plot, shared-Canvas, and shared-facet
+guide owners try outside right/top/bottom/left with preferred then compact flow.
+Explicit outside edges remain fixed and explicit inside placements retain their
+inside policy. Guide-only fit does not accept a trial: assigned axes, annotations,
+headers, tracks, and the actual body participate before acceptance. Provisional
+feedback returns to the root. Rejected ancestor attempts do not reset descendant
+guide trial budgets. Legend plans retain their flow slots and measured text rather
+than choosing columns or wrapping while drawing. Left/bottom guide reservations
+include complete measured axis ink, with pixel-envelope rounding required by the
+current integer-anchor axis adapter.
+
+Tick fitting and Matrix tick retention now propagate planner errors through the
+private Layout constructors and repository callers, instead of converting them
+to absent ticks or a spurious small-cell error. The offset-panel lifecycle test
+compares the production quantized assignment exactly. No public API, font catalog,
+text-engine implementation, theme appearance, or r4 serializer changed here.
+
+Focused evidence includes real Plot, Canvas, and facet right-to-top containing-frame
+recovery, explicit-right failure, compact-column remeasurement, left/bottom axis
+clearance, nonresetting nested trial budgets, and fatal tick/Matrix planner errors.
+The original long-label composition and annotation fixtures remain intact.
+The typed channel now reaches panel measurement, frame assignment, and enclosing
+Canvas/facet trials. Constructible plot siblings retain the least fit reason and
+continue, with a production facet regression proving that a later fatal data
+error wins. Diagnostic tests cover kind/address/attempt ordering and original
+child-reason preservation; Render messages are never parsed to select recovery.
+Typed text planning shares the existing root-local theme query memo, avoiding
+repeated work that exhausted the unchanged long-label facet fixture's budget.
+Parent-measured axes no longer acquire duplicate child overflow reserves. The
+exact Canvas lifecycle counts consequently drop from ten to eight panel calls.
+Heatmap elision reserves natural label width and does not rewrap fitted labels;
+composed discovery uses local capacity rather than absolute x as its budget.
+Inside-collision interaction and marginal tests now explicitly request inside
+placement, retaining their data and exact geometry assertions under D1.
+
+Follow-up (2026-09-08): both unchanged `tests/rendering/labels.rs` regressions now
+pass. Standalone categorical labels request natural width when it fits the real
+remaining width after axis chrome and the existing family body minimum; otherwise
+they use the compact intrinsic preference. The selected width is retained on the
+axis and observed by feedback, rather than independently recomputed by drawing.
+Parent-measured categorical gutters retain their parent's existing preference;
+residual mark width does not become a second label allocation. A narrow-width
+regression proves complete source retention with genuine wrapping. Heatmap elision
+uses that same selected width, and continuous guides reserve their width before
+categorical allocation. No label-input shortening or percentage cap was added.
+
+The activated fit audit now includes categorical x/y allocation and row height,
+parent headers and axis-title gutters, panel-annotation conflict planning,
+beeswarm/heatmap colorbar titles, heatmap value and merged-row labels, elision,
+estimate/status text, attached and pairwise significance, waterfall annotations,
+and raincloud strip geometry. These paths preserve typed misses through their
+containing-frame trials. Fixed guides use their fixed-edge address role;
+no-alternative children use local ordinal zero rather than inheriting an ancestor
+guide attempt. Pairwise diagnostics retain caller slots after bracket sorting.
+Constructible sibling collections retain the canonical least miss; later fatal
+producer or scope-cleanup errors win. Nonfinite body and significance placement
+arithmetic remains fatal, and no Render message is parsed to select recovery.
+
+Focused evidence: rendering 31/31, composition 57/57, estimates 38/38, heatmap
+35/35, layout 20/20, annotations 27/27, distributions 67/67, categorical 42/42,
+and lines 41/41 pass. All five visual regressions pass after inspection of the
+intentional horizontal-bar complete-label allocation and beeswarm outward-ink
+reserve changes. The earlier locus-label wrapping workaround was replaced with
+complete-label counts, widest-label clearance, and the existing canvas-bound
+checks; the input is unchanged. Fit/fatal, canonical identity, sorted-bracket,
+feedback-budget, and complete-frame guide tests also pass.
+
+The intermediate concurrent Clippy diagnostics in kernel preparation and replay
+storage are resolved and superseded by the final strict all-target Clippy and
+full `just verify` pass recorded under T5a3f. The fit-only follow-up did not itself
+claim census/replay closure; the integrated migration discharges that r4 scope.
+Native interior representation completion stays in its existing phases; current
+colorbar and annotation fit propagation is included here, not deferred to them.
 
 #### T5a1r4: Root Admission And Lifecycle Closure
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1r3.
 
@@ -2661,10 +2812,10 @@ Dependencies: T5a1r3.
   than relying only on caller-visible concrete-backend tests.
 - Independently review every T5a1r acceptance item above, including real parent
   allocation, typed recovery, dimensions, resource refusal, and actual feedback.
-  Run `just verify` before completing T5a1r and T5a1; remaining T5a3 work stays
-  explicitly pending.
+  Run `just verify` before completing T5a1r and T5a1. This gate and the coupled
+  T5a3 acceptance are discharged by the integrated closure under T5a3f.
 
-Commit: `refactor(layout): close root admission and replay lifecycle`.
+Original intended title: `refactor(layout): close root admission and replay lifecycle`.
 
 ### T5a2: Foundational Resolved Appearance And Surfaces
 
@@ -2725,16 +2876,17 @@ Commit: `refactor(theme): centralize foundational appearance`.
 
 ### T5a3: Canonical Fonts And Immutable Text Plans
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: retained T5a2 and revised T5a1r; closes through T5a3a-T5a3f.
 
 Historical achievement: `4b38de4` (`feat(typography): freeze resolved text plans`)
-introduced canonical font preparation and retained text plans. Preserve that
-work, but reopen this phase: its exhaustive wrapping scope is superseded and
-the old implementation is not asserted fully compliant. Audit concerns below
-include static suspicions requiring focused reproduction, not defects verified
-by this documentation edit. The umbrella has no separate repair commit.
+introduced canonical font preparation and retained text plans. That achievement
+was reopened because its exhaustive wrapping scope was superseded. The revised
+acceptance is now complete through T5a3a-f in the primary-verified integrated
+bundle below, not by retroactively certifying the old implementation. The audit
+matrix records fixes and evidence-based dispositions within this scope. The
+umbrella has no separate repair commit.
 
 Shared repair acceptance:
 
@@ -2757,23 +2909,24 @@ Shared repair acceptance:
   promise exact allocations everywhere or recovery from all third-party OOMs.
 - Preserve all full Unicode conformance and regression fixtures. Inspect any
   changed snapshot and commit it only with its intentional source correction.
-  Each implementation stage supplies focused evidence and `just verify`.
+  Each acceptance stage supplies focused evidence; the coupled interface bundle
+  satisfies the final `just verify` gate together, as recorded under T5a3f.
 
 #### T5a3a: Unicode And Font Preparation, Profile, And Provenance
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1r and retained T5a2.
 
-This umbrella completes only through T5a3a1-T5a3a3 and has no separate commit.
-Each substage has its own admission gates, focused evidence, and `just verify`
-before completion. Split further before implementation if a substage cannot be
-independently reviewed as one logical objective; this is not authorization for
-a blanket cross-file typography rewrite.
+This umbrella is complete through T5a3a1-T5a3a3 and has no separate commit.
+Each substage's admission gates and focused evidence are retained; their shared
+font/census/text interfaces were migrated and fully verified in the atomic
+bundle described under T5a3f. That approved coupling is not authorization for
+unrelated cross-file migrations or dormant compatibility routes.
 
 ##### T5a3a1: Unicode Profile, Provenance, And Conformance
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a1r and retained T5a2.
 
@@ -2797,11 +2950,11 @@ Scope and acceptance:
   includes transitive-version reconciliation, reproducible generation, full
   applicable conformance fixtures, and boundary/refusal tests for activated work.
 
-Commit: `fix(unicode): reconcile profile provenance and conformance`.
+Original intended title: `fix(unicode): reconcile profile provenance and conformance`.
 
 ##### T5a3a2: Bounded Font Discovery And Handle Lifecycle
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3a1.
 
@@ -2818,11 +2971,11 @@ Scope and acceptance:
   configuration, handle release on success/error, changing/short files, order
   invariance, limit boundaries, and reservation refusal.
 
-Commit: `fix(font): bound discovery and fontconfig handle lifecycle`.
+Original intended title: `fix(font): bound discovery and fontconfig handle lifecycle`.
 
 ##### T5a3a3: Font Census, Selection, And Retention
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3a2.
 
@@ -2845,11 +2998,11 @@ Scope and acceptance:
   if A and C separately provide the only coverage, first coverage per scalar is
   allowed. An uncovered visible mark fails, including in generated alphabets.
 
-Commit: `fix(font): gate census selection and retained faces`.
+Original intended title: `fix(font): gate census selection and retained faces`.
 
 #### T5a3b: Deterministic Assigned-Width Text Wrapping
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3a through T5a3a3; extends the sole constrained primitive active
 in T5a1r.
@@ -2886,11 +3039,11 @@ Scope and acceptance:
   than an unmeasured linear-time or latency promise. Preserve complete existing
   text fixtures.
 
-Commit: `refactor(typography): wrap text at assigned widths`.
+Original intended title: `refactor(typography): wrap text at assigned widths`.
 
 #### T5a3c: Shaping, Bidi, And Geometry Repair
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3b.
 
@@ -2912,11 +3065,11 @@ Scope and acceptance:
   checked arithmetic and propagated errors. Extend full conformance and focused
   marks, non-Latin, bidi, weight, baseline, ink, and immutable-replay evidence.
 
-Commit: `fix(typography): repair script bidi and glyph geometry`.
+Original intended title: `fix(typography): repair script bidi and glyph geometry`.
 
 #### T5a3d: Resource And Lifecycle Closure
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3c.
 
@@ -2946,11 +3099,11 @@ Scope and acceptance:
   lifecycle over the same frozen plan. Every earlier stage must already enforce
   the bounds for its activated paths.
 
-Commit: `fix(render): close typography admission and lifecycle gates`.
+Original intended title: `fix(render): close typography admission and lifecycle gates`.
 
 #### T5a3e: Producer And SVG/PNG Regressions
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3d.
 
@@ -2971,11 +3124,11 @@ Scope and acceptance:
 - Inspect snapshots and preserve full Unicode/test fixture coverage. Host smoke
   tests assert provenance and consistency, not universal host glyph bytes.
 
-Commit: `test(typography): cover producers and retained output routes`.
+Original intended title: `test(typography): cover producers and retained output routes`.
 
 #### T5a3f: Independent Closure And Performance Evidence
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a3e.
 
@@ -2996,14 +3149,352 @@ Scope and acceptance:
   Close ledger/evidence links, full fixture preservation, snapshot review, and
   `just verify` before marking T5a3 and this stage COMPLETE.
 
-Commit: `test(layout): close typography repair and scaling evidence`.
+##### Integrated Closure (2026-09-09)
+
+The primary approved completion of T5a1 and T5a1r (including T5a1r1-r4), and
+T5a3 (including T5a3a, T5a3a1-T5a3a3, and T5a3b-T5a3f),
+after the final full verification pass. This discharges the admitted exact-root,
+typed-fit, canonical-record, controlled-replay, font, and text repair acceptance;
+T5a remains IN PROGRESS and T5a4 onward remain PENDING. Native T5a6/T5b/T5e
+representation/composition/scientific-layout completion and the public T6 API
+are not claimed. No universal proof of layout/shaping correctness, unbounded
+scaling, cross-host preserve-text pixel parity, or third-party OOM recovery follows
+from these tests and scoped reviews. Pinned third-party shaping/context behavior
+and allocation limits remain residual boundaries, not eliminated guarantees.
+
+Primary verification records `just verify` passing formatting, strict
+`cargo clippy --locked --offline --all-targets -- -D warnings`, all-target tests,
+rustdoc with warnings denied, and locked/offline package verification. Results:
+666 library tests passed, zero failed, one opt-in regeneration test ignored;
+all 14 integration targets passed 441 tests, including all five snapshots.
+The package contains 204 files, 21.5MiB uncompressed (3.1MiB compressed), and its
+unpacked verification build passed. This document update did not rerun commands.
+
+The primary separately confirmed the ignored Rust regeneration check passed
+with 11 validated original Unicode inputs and 11 byte-identical outputs. Its
+owner is `src/font/unicode16/regeneration.rs::regenerate_unicode16`; source
+manifest, generated-output hashes, licenses, exact commands, and full corpus
+counts are in `tests/fixtures/unicode16/{README.md,sources.json,SHA256SUMS,LICENSE}`.
+Full applicable conformance is covered by `src/font/unicode16/conformance.rs`
+and `src/layout/unicode16/conformance.rs`, not sampled replacement fixtures.
+The runtime profile is Unicode 16.0.0: unicode-segmentation 1.12.0,
+unicode-script 0.5.7, unicode-bidi 0.3.18, unicode-properties 0.1.3,
+unicode-ccc 0.4.0, unicode-bidi-mirroring 0.4.0, and rustybuzz 0.20.1's pinned
+private `src/hb/unicode_norm.rs`. Family-name NFC/NFKC_CF uses generated
+`src/font/unicode16/{nfc_data.rs,casefold_data.rs}`; rendered source is not
+normalized. The original archive/member checks are distinct from output hashes.
+
+The primary reports scoped independent r4 review with no production blocker and
+closure of the five font/text findings. Their concrete dispositions remain in
+the acceptance matrix: contextual/script/bidi and fractional geometry repairs,
+actual output admission, retained source/control/soft-hyphen handling (including
+the real sealed production title census), and font-scoped indexed reuse without
+resetting the root budget. Canvas, facet, and specialized producer freeze tests
+retain complete source, glyph and placement identity with no first-capture
+reshaping. This is scoped acceptance evidence, not a claim that every possible
+input or all future native owners have been reviewed.
+
+**Verified bundle and commit partition.** After the completed r1 commit, the
+shared font-plan, preparation-unit census, producer, and replay interfaces made
+the final r2-r4/a1-f source migration coupled. Their acceptance obligations are
+discharged by this same atomic verified bundle, not by invented per-stage commits.
+The `Original intended title` lines retain the planned partition for provenance;
+they are intended subjects, not actual commit history. Planned source-bundle
+subject: `fix(typography): close retained text and root planning`.
+No bundle commit hash or completed source-bundle commit is asserted here. The
+primary may put the Unicode data fixtures in a separate data commit; none is
+invented or assigned a hash here. Intentional snapshots belong with their source
+correction. The migrated current APIs replace their predecessors; no dormant
+compatibility selector, alternate root representation, or old wrapping strategy
+is retained to make a partial partition compile.
+
+##### Recorded Working-Tree Measurements (2026-09-09)
+
+The measurements below preceded the integrated verification and remain exact
+working-tree observations. Their historical comparison is an earlier run
+recorded in the same repair session, **not** a commit-to-commit benchmark and not
+a measurement of historical commit `4b38de4`. No cap, source fixture, or expected
+output was changed to obtain these results. Intermediate progress limits,
+concurrent lint diagnostics, and full-suite counts below are superseded as
+closure gates by the integrated result above, not silently rewritten benchmarks.
+
+**Recorded reproduction commands.** The evidence runs used locked, offline Rust tests:
+
+The indexed-cache follow-up freshly reran the performance and three-producer
+selections below, plus these four cache/analysis tests and strict compiler gate:
+
+```sh
+cargo test --locked --offline --lib indexed_ -- --nocapture
+cargo test --locked --offline --lib text_query_index_storage_is_admitted_before_allocation -- --nocapture
+cargo test --locked --offline --lib text_analysis_is_font_scoped_not_presentation_scoped -- --nocapture
+cargo clippy --locked --offline --all-targets -- -D warnings
+```
+
+The remaining commands retain the preceding evidence-pass results unless noted:
+
+```sh
+cargo test --locked --offline --lib typography_performance_evidence_and_root_cache_budgets -- --nocapture
+cargo test --locked --offline --lib producer_plans_survive_first_capture -- --nocapture
+cargo test --locked --offline --lib facet_producer_plans_survive_first_capture_without_shaping -- --nocapture
+cargo test --locked --offline --lib reversed_rotated_block_preserves_existing_column_positions_in_png -- --nocapture
+cargo test --locked --offline --lib producer_record_storage_refuses_before_allocating -- --nocapture
+cargo test --locked --offline --lib production_title_census_prepares_soft_hyphen_for_unwrapped_and_wrapped_svg -- --nocapture
+cargo test --locked --offline --lib reflow_reuses_analysis_through_unwrapped_wrapped_and_blank_paragraphs -- --nocapture
+cargo test --locked --offline --lib contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii_runs -- --nocapture
+cargo test --locked --offline --lib packaged_unicode_provenance -- --nocapture
+cargo test --locked --offline --test visual-regression -- --nocapture
+```
+
+At the indexed-cache checkpoint the performance test passed (1 test; 5.89s
+including setup). The then-fresh three-producer selection passed 3/3 in 2.64s:
+Canvas, facets, and specialized
+producers all completed their full plan/placement identity and zero-first-capture-
+shaping assertions. **The prior facet budget regression is closed by this rerun.**
+Its historical failure at attempted work claim 1,000,040 is retained here only
+as the before-index observation, not as a current open issue. The unchanged
+60-repeat soft-hyphen/paragraph-bidi fixture passes with the indexed lookup.
+The four cache/analysis tests also passed, giving eight targeted passes;
+strict locked/offline all-target Clippy passed with warnings denied. The other
+six named focused tests and all five visual snapshots have the preceding pass's
+passing evidence. The then-reported 664 library passes and one ignored test are
+superseded by the final 666-pass integrated verification above. These recorded
+measurements and earlier focused runs remain historical evidence; the current
+completion decision uses the primary's final verification and scoped reviews.
+
+**Setup.** AMD Ryzen 9 7950X3D, 16 cores/32 logical CPUs, WSL2 Linux
+`6.18.33.2-microsoft-standard-WSL2`, x86_64; rustc
+`1.96.0 (ac68faa20 2026-05-25)`, LLVM 22.1.2. Cargo reported the test profile as
+`unoptimized + debuginfo`. These are individual elapsed observations, not latency
+thresholds, release-mode results, peak-memory measurements, or statistical
+speedup estimates. A fresh Publication theme/font environment is created for
+each workload; its caption uses 15px text and the stack
+`Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif`.
+The retained Latin face is DejaVu Sans, index 0, matching the independently hashed
+`/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf`:
+`ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280`.
+
+Every setup reported 457 discovery entries, 26,548,922 admitted font bytes, and
+75,103 font-work units before the measured queries. Setup times in microseconds:
+`original144=769283`, `caption200=592575`, `paragraphs200=584656`,
+`words128=593247`, `words256=568414`, `words512=566245`, `words2048=566370`.
+Setup is excluded from the per-query elapsed times below.
+
+The unchanged inputs are `"A ".repeat(144)`; the exact ten-word sentence
+`"Measured responses remained stable across independent trials under controlled conditions. "`
+repeated 20 times; the same sentence in 7/7/6 repetitions joined by newlines;
+and `"Measured ".repeat(n)` for n=128/256/512/2048. Queries share one root ledger
+in the order cold 768px, hit 768px, new_width 736px, return_width 768px.
+
+**Exact measured counters.** The following transcribes every numeric query-log
+field, factoring out repeated font identities and line/glyph totals. `slots` and
+`bytes` are cumulative-admission deltas, including temporary work and retained
+storage claims; they are **not live retained slots, allocator bytes, or RSS**.
+`cum_slots`/`cum_work` are the root ledger after the query. `font_work` is a
+separate font-resource delta. P/T/S/G denote proposal visits, exact width trials,
+shaping input scalars, and shaped glyphs. B/H denote paragraph-bidi and font-shape
+calls. Successful phases retain the same source and have these line/glyph totals:
+original144=3/288, caption200=20/1800, paragraphs200=20/1800, words128=15/1152,
+words256=29/2304, words512=57/4608. The refused 2048-word request has no final plan.
+
+```text
+workload/phase              elapsed_us slots work   cum_slots cum_work bytes   font_work P   T   S     G     B H
+original144/cold             15188      2741  110879 2741      110879   312383  5782      146 6   784   784   1 6
+original144/hit              26         0     827    2741      111706   0       0         0   0   0     0     0 0
+original144/new_width        8550       990   5928   3731      117634   106739  139       146 5   484   484   0 5
+original144/return_width     25         0     828    3731      118462   0       0         0   0   0     0     0 0
+caption200/cold              113715     16851 223501 16851     223501   1534986 40614     219 40  5481  5481  1 40
+caption200/hit               56         0     3851   16851     227352   0       0         0   0   0     0     0 0
+caption200/new_width         75483      7452  36762  24303     264114   803570  139       219 39  3681  3681  0 39
+caption200/return_width      54         0     3852   24303     267966   0       0         0   0   0     0     0 0
+paragraphs200/cold           109139     16465 224128 16465     224128   1644264 41845     217 40  5283  5283  3 40
+paragraphs200/hit            56         0     3855   16465     227983   0       0         0   0   0     0     0 0
+paragraphs200/new_width      70955      7054  35427  23519     263410   761364  139       217 37  3483  3483  0 37
+paragraphs200/return_width   56         0     3856   23519     267266   0       0         0   0   0     0     0 0
+words128/cold                71706      10909 140951 10909     140951   1090279 16208     142 30  3564  3564  1 30
+words128/hit                 43         0     2555   10909     143506   0       0         0   0   0     0     0 0
+words128/new_width           48466      4894  24196  15803     167702   526123  139       142 29  2412  2412  0 29
+words128/return_width        44         0     2556   15803     170258   0       0         0   0   0     0     0 0
+words256/cold                140769     21805 281737 21805     281737   2173211 27728     284 58  7128  7128  1 58
+words256/hit                 65         0     4859   21805     286596   0       0         0   0   0     0     0 0
+words256/new_width           96798      9774  47729  31579     334325   1050719 139       284 57  4824  4824  0 57
+words256/return_width        68         0     4860   31579     339185   0       0         0   0   0     0     0 0
+words512/cold                276724     43597 563417 43597     563417   4339075 50768     568 114 14256 14256 1 114
+words512/hit                 111        0     9467   43597     572884   0       0         0   0   0     0     0 0
+words512/new_width           192281     19534 94914  63131     667798   2099911 139       568 113 9648  9648  0 113
+words512/return_width        112        0     9468   63131     677266   0       0         0   0   0     0     0 0
+words2048/cold               416930     73731 999862 73731     999862   8824736 189008    0   1   18432 18432 1 1
+```
+
+The 2048-word query returned the existing typed generation-work limit through
+the Render adapter: limit 1,000,000, attempted cumulative claim 1,000,118. The
+failed claim was not added to the ledger. This bounded refusal is allowed by the
+test; it is not evidence of successful 2048-word layout or unbounded scalability.
+The 128/256/512 successful cold and reflow work counts satisfy the test's measured
+doubling allowance (`next <= 2 * previous + 4096`). Exact hits and return-width
+hits share payload and analysis, allocate no new slots/bytes, and shape nothing.
+With `B = source_bytes + stack_bytes + owner_bytes`, the indexed fixture charges
+`2*B+61` for the immediate hit and `2*B+62` on return. This includes one source
+hash pass plus 58 encoded header/scalar bytes, one/two binary-search comparisons,
+one digest equality, and one full-key equality. An exact hit does not scan the
+shaping bucket or compare the full key of the intervening width.
+New-width queries share paragraph analysis, not the prior selected-line payload;
+they make zero new paragraph-bidi calls but still shape the selected line trials.
+
+**Historical comparison, same full inputs and widths.** Before paragraph-analysis
+reuse and the optimized legal-break path, the recorded one-paragraph caption
+used 673,339 cold work units, 16,847 slot claims, and 1,635,378 byte claims
+(117,487us). After its 3,793-work exact hit, a second width consumed another
+322,858 work units before refusing at attempted cumulative 1,000,246. The current
+run uses 223,501 cold work and 36,762 successful second-width work, with the whole
+four-query sequence ending at 267,966. The three-paragraph caption previously
+used 674,846 cold work (115,368us), then refused its second width at attempted
+1,000,220; it now uses 224,128 cold and 35,427 second-width work. The preceding
+pre-index observation was slower than that historical run, while this indexed
+observation is faster. Such individual elapsed variation is not a statistical
+speedup result; reduced admitted work is not a universal wall-time guarantee.
+
+The historical 512-word cold query refused at attempted 1,000,033 after admitting
+999,777 work units; current cold plus changed width plus both hits succeeds at
+677,266 total work. Historical original144 cold work was 109,140 versus current
+110,879, while its changed-width work drops from 109,453 to 5,928. The original
+fixture is retained, not replaced with a shorter proxy. Historical and current
+2048-word queries both refuse under the unchanged cap.
+
+**Indexed-lookup delta.** Keep the major pre-optimization comparison (673,339
+caption cold work versus approximately 223k) distinct from this small subsequent
+cache change. The preceding optimized-but-unindexed caption measured
+223,384/34,777 cold/reflow work; the indexed run measures 223,501/36,762. Cold
+successful queries add 117 work units, two slot claims, and 64 byte claims; the
+caption reflow adds 1,985 work units, one slot, and 48 bytes. Immediate caption
+hit work rises 3,793 to 3,851, but return-width hit work falls 5,690 to 3,852.
+All proposal/trial/scalar/glyph/bidi/shape counts and retained line/glyph totals
+in this benchmark are unchanged by the index. These differences reflect admitted
+fingerprinting, binary search, key comparison, and index insertion/storage, not
+new shaping or shortened inputs. `TextQueryCache` in `src/theme/resolved.rs`
+maintains sorted exact and shaping fingerprint indexes and checks full keys in
+matching buckets, including collisions. It removes unrelated-key scans in a
+larger root workload, closing the facet fixture's prior cumulative-budget failure;
+the tiny one/two-entry benchmark is not expected to show a universal lookup-time
+speedup. Both the unindexed and indexed figures remain working-tree observations,
+not separate commit baselines.
+
+**Final Matrix reuse correction.** The primary's last integration failure was
+Matrix-with-hue exhausting work through repeated per-cell tick selection. In
+`src/plots/matrix.rs`, per-axis tick vectors are now selected once per variable
+within each render, reducing selection calls from `2*n*n` to `2*n`; outer-axis
+filtering still uses its actual projection and admitted copied records. The
+primary recorded affected query counts falling from 3,575 to 1,416; these are
+query counts, not elapsed times or work-unit totals. The log confirms all 18
+`marginal-matrix` integration tests pass after this fix. Unit coverage is
+`matrix_tick_selection_is_shared_only_along_the_orthogonal_axis` and
+`matrix_outer_tick_copy_admits_bytes_before_copying`. This correction does not
+replace the separately recorded text benchmark or claim all Matrix/native
+scientific layout ownership is complete.
+
+**Acceptance/disposition matrix.** Each row consolidates related earlier review
+concerns instead of repeating superseded failures. The named nonignored tests
+are included in the primary's passing full run; earlier focused observations
+remain attributed to their checkpoints. Opt-in Unicode regeneration is the
+separately primary-confirmed pass. The integrated closure establishes these
+scoped acceptance stages, not correctness for every possible input or future owner.
+
+| Owner / Concern | Current Disposition And Regression Evidence |
+| --- | --- |
+| T5a1r2: actual parent allocation, feedback convergence/cycles, stale geometry | Implemented in `src/layout/kernel.rs` and `src/layout/kernel/feedback.rs`; `src/layout/kernel/tests.rs`: `parent_feedback_reallocates_real_geometry_and_converges_on_round_eight`, `feedback_cycles_exhaustion_and_unchanged_misses_never_finalize`, `changed_owner_geometry_is_not_reused_on_equal_feedback`. Final facet origin/legend observations: `final_facet_legend_and_shared_axis_origin_invalidate_observations` in `src/orchestrator/facets.rs`. |
+| T5a1r3: guide-only acceptance, nested budgets, swallowed arithmetic/fit errors | Complete-frame and typed-fatal coverage: `automatic_outside_guide_rejects_right_when_only_the_body_fails`, `clearance_arithmetic_failures_are_fatal_through_every_owner` in `src/decorations/plan/tests.rs`; `render_error_messages_never_select_recovery`, `sibling_collection_preserves_later_fatal_and_canonical_child_identity`, `inline_child_calls_do_not_inherit_the_parent_guide_attempt` in `src/layout/fit.rs`. Native future ownership is not claimed here. |
+| T5a1r3: 40% gutters, offset panels, intact unfit text, tick errors | Percentage cap removed from active allocation/drawing; selected width is retained on the axis. `preferred_y_width_uses_available_room_and_retains_compact_wrapping` in `src/plots/horizontal_bar.rs`; `long_label_facets_measure_gutters_and_wrap_strips_inside_owned_cells` in `tests/composition/facets.rs`; `tick_planner_failure_is_not_reported_as_small_matrix_cells` in `src/plots/matrix.rs`. Snapshot/source inspection below preserves real body minima and full labels. |
+| T5a1r4: final reservation before Null, canonical scratch, immutable replay | Implemented in `src/orchestrator/backend.rs`, `src/render/coordinates.rs`, `src/render/svg_backend.rs`: `all_root_preflights_reserve_before_the_only_null_lifecycle`, `every_nonempty_canonical_storage_refusal_precedes_null`, `capture_rejects_extra_calls_before_retaining_or_shaping_the_payload`, `frozen_scene_replay_consumes_exactly_the_captured_calls`. Historical primitive gate below is distinct from typography changes. |
+| T5a3a1: actual transitive Unicode versions, provenance, fixture completeness | `unicode_16_versions_are_exact` in `src/font/unicode16.rs` and `packaged_unicode_provenance` in `src/font/unicode16/conformance.rs` pass in the final log. The runtime inventory, private rustybuzz normalization-version audit, original source hashes, license, and complete fixture counts are in `tests/fixtures/unicode16/README.md` and `sources.json`. The primary separately confirms `regenerate_unicode16` in `src/font/unicode16/regeneration.rs` passed its 11-original-member/11-output comparison. No expectations were regenerated by this documentation update. |
+| T5a3a1: official conformance does not cover every line-break bug | Rule-derived `unicode_16_lb25_closing_punctuation_does_not_extend_digits` and `unicode_16_lb8a_only_protects_the_immediate_zwj_boundary` in `src/layout/unicode16/conformance.rs` cover the independently reproduced `1}2` and ZWJ/CM cases; official fixtures were not weakened. `official_breaks`, `official_bidi_characters`, `official_bidi_classes`, `official_nfc`, and `official_nfkc_casefold` retain the full packaged cases. |
+| T5a3a1/d: normalization/line-break work and allocation before admission | `admission_precedes_input_work_and_first_allocation`, `expansion_and_every_intermediate_share_exact_admission`, `adversarial_mark_ordering_refuses_before_quadratic_work_finishes` in `src/font/unicode16/admission.rs`; `input_and_storage_refusals_precede_processing_and_pushes`, `linebreak_work_and_storage_boundaries_are_exact` in `src/layout/unicode16/admission.rs`. No third-party OOM guarantee. |
+| T5a3a2: retained OS handles, short/changing reads | Bounded retained bytes replace long-lived file handles. `discovery_retains_one_handle_at_a_time_and_closes_on_byte_refusal`, `discovery_closes_handle_on_observed_file_changes`, `retained_font_read_rejects_short_and_never_reads_past_admitted_length` in `src/font/canonical.rs`. |
+| T5a3a2: partial fontconfig and decoder errors | Not every partial parse is fatal under the pinned parser policy. `bounded_fontconfig_retains_directives_before_a_relevant_parse_failure`, `bounded_fontconfig_root_status_drives_fallback_like_locked_parser`, `bounded_fontconfig_included_failures_do_not_fail_parent` compare that policy explicitly; `bounded_fontconfig_missing_optional_paths_but_not_admitted_io_are_ignored` keeps admitted I/O failure fatal. `decoder_may_admit_zero_faces_from_a_retained_file` and `partial_collection_preserves_actual_decoder_face_index` distinguish decoder omission from lost identity. Owner: `src/font/canonical.rs`. |
+| T5a3a3: source census copies, units, generated coverage, sealed re-selection | `formatted_census_admits_work_and_bytes_before_output_writes`, `retained_units_prefer_complete_faces_without_changing_scalar_or_primary_selection`, `sealed_environment_rejects_every_late_pair_resolution_route` in `src/font/canonical.rs`; `borrowed_source_work_refusal_precedes_source_retention`, `generated_metric_scalars_are_selected_and_missing_generated_coverage_is_fatal` in `src/layout/text/requirements.rs`. Scalar fallback is permitted only when no face covers the narrow complete unit. |
+| T5a3b: exhaustive wrapping and failed-endpoint reuse | One greedy assigned-width implementation; no active `CandidateSet`, `TextCandidate`, `global_rank`, or `WrapStrategy` found in the source scan. `original_144_repeat_wraps_with_linear_selected_work`, `synthetic_trials_retreat_reuse_failure_and_stop_at_the_first_failed_extension`, `intact_overwide_sequence_returns_typed_fit_miss`, `mandatory_breaks_preserve_crlf_and_all_blank_paragraphs` in `src/layout/text.rs`. A longest-fitting-line or universal linear-time guarantee is not asserted. |
+| T5a3c: script marks, unresolved extensions, fallback context and controls | `script_extensions_brackets_and_leading_marks_use_paragraph_context`, `review_unresolved_script_extensions_do_not_pick_an_arbitrary_script`, `review_context_survives_forced_face_boundaries`, `fallback_controls_keep_source_and_neighbor_face_without_nominal_coverage`, `control_only_text_does_not_require_a_space_or_control_glyph` in `src/layout/text/shaping_tests.rs`. Real generated GSUB/GPOS font tests distinguish contextual shaping from scalar concatenation. |
+| T5a3c: paragraph bidi, fractional pen/ink, blank-line hard metrics | `wrapped_plans_keep_paragraph_embedding_context_and_line_l1_levels`, `selected_line_l1_l2_equal_paragraph_reference_with_embeddings_and_isolates`, `origins_round_exact_cumulative_positions_once_and_ink_uses_those_origins`, `fallback_runs_with_different_font_units_share_one_exact_pen_and_outward_ink`, `review_hard_metrics_round_outward_for_empty_lines` in `src/layout/text/shaping_tests.rs`. |
+| T5a3c/e: selected soft hyphen, original source, sealed literal fallback | `selected_soft_hyphen_preserves_same_face_gpos_and_original_clusters`, `selected_soft_hyphen_uses_the_sealed_literal_hyphen_fallback`, `wrapped_arabic_context_stops_at_selected_line_boundaries` in `src/layout/text/shaping_tests.rs`. Fresh production pass: `production_title_census_prepares_soft_hyphen_for_unwrapped_and_wrapped_svg` in `src/orchestrator/lifecycle.rs`. Source spans remain original; painted ASCII hyphen is not a source rewrite. |
+| T5a3d: actual GSUB output and retained plan storage gates | `actual_gsub_count_and_root_bytes_gate_every_glyph_copy` and `review_canonical_output_admission_precedes_retention` in `src/layout/text/shaping_tests.rs`; fresh pass `producer_record_storage_refuses_before_allocating` in `src/render/backend.rs`. Existing slot/work/byte caps remain active. |
+| T5a3d: parser bytes and nondefault PNG options are terminal-local | `png_parser_gate_uses_outlined_bytes_without_poisoning_svg`, `invalid_png_options_do_not_initialize_the_outline_cache`, `actual_glyph_payload_limit_precedes_derived_buffer_reservation` in `src/scene.rs`; `png_with_options_uses_exact_scale_and_dpi` in `tests/output/png.rs`; `output_png_options_are_call_local_across_preview_custom_and_publication` in `tests/output/multiformat.rs`. Their earlier focused evidence is now joined by the primary's passing full library/output integration run. |
+| T5a3e: discard/re-shape producer bypasses and significance style replacement | Retained `PlacedText`/`ProducerText` routes in `src/render/backend.rs` and `src/spec.rs`; producers in `src/canvas.rs`, `src/orchestrator/facets/rendering.rs`, `src/plots/{matrix,heatmap,beeswarm,line}.rs`, and `src/decorations/panel_text.rs`. No raw `draw_text`/line-extraction call remains in those producers. Fresh `canvas_producer_plans_survive_first_capture_without_shaping`, `facet_producer_plans_survive_first_capture_without_shaping`, and `specialized_producer_plans_survive_first_capture_without_shaping` all pass with complete payload/placement identity and zero first-capture shaping, including matrix legend and root-owned shared headers. The indexed-cache follow-up closes the prior facet budget regression without shortening its source. `planned_significance_capture_preserves_the_exact_deferred_plan` in `src/orchestrator/backend.rs` and `planner_retains_the_exact_effective_significance_label` in `src/significance/tests.rs` cover exact/effective provenance. |
+| T5a3e: preserve-text versus outlines/PNG, rotated column order | Viewer shaping is not a universal pixel-parity contract. Retained outlines and PNG use host-generation glyph geometry. Fresh `reversed_rotated_block_preserves_existing_column_positions_in_png` in `src/render/svg_backend.rs` proves byte-identical PNG against independently placed columns without changing font/line-height style. `wrapped_bidi_preserve_text_isolates_frozen_visual_runs_and_keeps_logical_source` covers selectable logical source separately. |
+| T5a3f: measured scaling, reflow cache correctness, return-width identity | Recorded exact performance run above; `reflow_reuses_analysis_through_unwrapped_wrapped_and_blank_paragraphs` and `contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii_runs` in `src/layout/text/shaping_tests.rs` also pass in the final run. The contraction test compares every official line-break case and expanded ASCII runs; the optimization does not generate new expected answers. `indexed_text_queries_charge_search_and_matching_buckets_only`, `indexed_query_fingerprints_include_exact_presentation_and_provenance`, `text_query_index_storage_is_admitted_before_allocation`, and `text_analysis_is_font_scoped_not_presentation_scoped` in `src/theme/resolved.rs` cover indexed lookup, collision/full-key identity, storage refusal, and analysis scoping. Primary full verification and scoped review have discharged this acceptance; future native/public phases remain separate. |
+
+**Historical primitive-phase gate, not regenerated expectations.** The earlier
+logged passing `prepared_storage_preserves_legacy_primitive_svg_and_png_bytes`
+run in `src/orchestrator/backend.rs` compared retained replay to this literal
+pre-storage primitive source (100x100, one surface and one point), and compared
+its PNG using Source sizing and Balanced compression:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" role="img">
+<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<circle cx="10.000" cy="80.000" r="2" fill="#010203" fill-opacity="1"/>
+</svg>
+```
+
+That passing comparison printed SVG SHA-256
+`864205bbd95079b2cf120226c538d88129a64ccb55e3bc0ec707659837127102`
+and PNG SHA-256
+`262de6cee2697b28de5b6bc996c77b4f55795bc568db6b183d254df4be37f2a9`.
+These are transcribed historical logs, not fresh hashes installed as replacement
+expectations. The test's before/after equality is gated to the primitive-storage
+phase; it does not assert that subsequent intentional typography/layout changes
+leave every chart byte-identical. Raw-font rejection and extra-call/payload
+refusal tests separately gate capture before final Null/concrete lifecycles.
+
+**Snapshot/source review.** All four changed snapshots under
+`tests/visual_regression/snapshots/` were inspected against their complete source
+diffs. Before the source commit, the original pre-4b38de4 longer Beeswarm and
+HorizontalBar inputs were restored in `tests/visual_regression/suite.rs`, and
+their resulting snapshots were inspected and updated. Other inputs are unchanged.
+The HorizontalBar snapshot now includes both wrapped fragments so it verifies
+the complete display label rather than omitting it from the structural view:
+
+- `visual_regression__scatter_smoke_snapshot.snap`: grid/tick and five circle
+  coordinate spellings shift by 0.001px; text, mark count, and source data remain.
+  `FrameRequirements::assign_fit` in `src/layout/kernel/feedback.rs` quantizes
+  assigned frame coordinates to 1/1024px with outward inset admission; the
+  canonical formatter in `src/render/coordinates.rs` then spells those values.
+- `visual_regression__matrix_clip_structure_snapshot.snap`: second-column clip
+  x changes 181.198 to 181.199; dimensions, four clips, data, and mark counts
+  remain. The same quantized parent assignment feeds `src/plots/matrix.rs`.
+- `visual_regression__horizontal_bar_clip_structure_snapshot.snap`: clip x/width
+  changes 131.508/198.492 to 172.422/157.578 with the restored
+  `a deliberately long category` input. The snapshot retains `A deliberately `
+  and `long category`, including the inter-word space, as two measured lines.
+  `src/plots/horizontal_bar.rs` selects natural
+  width when real room permits and `src/layout/panel/axis_frame_grid.rs` consumes
+  that retained width. This is not removal of the long label or smaller text.
+- `visual_regression__beeswarm_clip_structure_snapshot.snap`: clip x/width changes
+  86.828/166.945 to 114.884/138.889 with restored `first`/`second` categories,
+  four points, and title/colorbar text intact.
+  `src/plots/beeswarm.rs` reserves the measured guide before the shared
+  categorical allocator, whose natural width includes conservative fit width.
+
+Related source-test deltas were also inspected: `tests/layout/layout_and_legends.rs`
+now checks all `locus_0 aa`, `locus_0 Aa`, and `locus_0 AA` labels exactly once and
+uses the widest label for clearance; no genotype input was shortened. Its new
+outside-guide assertions use `tests/support/visual.rs` to require root containment,
+panel separation, and no graphics overlap. `tests/interactions/connectors.rs`
+and `tests/marginal_matrix/contracts.rs` explicitly select inside placement for
+their inside-collision tests, retaining their datasets and geometry comparisons
+under the new automatic outside-guide policy. Unicode fixture integrity passed
+the packaged hash check. The separate primary-confirmed source regeneration and
+the supplied final full verification now satisfy those closure gates; the
+snapshot inspection and original primitive hashes remain attributed to their
+earlier observations rather than newly generated expectations.
+
+Original intended title: `test(layout): close typography repair and scaling evidence`.
 
 ### T5a4: Root Title-Block Plans
 
 **Status**: PENDING
 
-Dependencies: revised T5a1/T5a1r and T5a3 through T5a3f. T5a4 is blocked from
-starting until both repairs complete; historical commits do not satisfy this gate.
+Dependencies: completed revised T5a1/T5a1r and T5a3 through T5a3f. Their repair
+gate is satisfied by the integrated verification, not merely historical commits.
+T5a4 remains PENDING and has not started; this closure does not implement its scope.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.

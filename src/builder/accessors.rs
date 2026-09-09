@@ -909,7 +909,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn explicit_x_ticks(&self) -> Option<&[AxisTick]> {
-        self.x_ticks.as_deref()
+        self.x_axis_spec.exact_ticks.as_deref()
     }
 
     /// Borrow y-axis scale configuration.
@@ -919,7 +919,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn explicit_y_ticks(&self) -> Option<&[AxisTick]> {
-        self.y_ticks.as_deref()
+        self.y_axis_spec.exact_ticks.as_deref()
     }
 
     pub(crate) fn guides(&self) -> &[GuideSpec] {

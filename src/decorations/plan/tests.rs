@@ -1,4 +1,675 @@
+use super::plan_panel_for_test as plan_panel;
 use super::*;
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one freeze-to-capture harness covers all specialized producer families"
+)]
+fn specialized_producer_plans_survive_first_capture_without_shaping() {
+    let source = format!(
+        "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
+        "A\u{ad}".repeat(60)
+    );
+    let plots = [
+        Plot::beeswarm(
+            crate::CategoryValues::new("category", ["one", "two"]).unwrap(),
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("color", [0.0, 1.0]),
+        )
+        .color_label(&source)
+        .erase(),
+        Plot::heatmap(
+            crate::CategoryValues::new("column", ["left", "right", "left", "right"]).unwrap(),
+            crate::CategoryValues::new("row", ["finite", "finite", "missing", "missing"]).unwrap(),
+            crate::NumericValues::nullable("value", [Some(0.12), Some(0.88), None, None]),
+        )
+        .color_label(&source)
+        .annotations(crate::HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default(),
+        ))
+        .heatmap_null_row_annotation(
+            crate::HeatmapNullRowAnnotation::new("missing", &source).unwrap(),
+        )
+        .erase(),
+        Plot::matrix(vec![
+            crate::NumericValues::new(&source, [0.0, 1.0, 2.0, 3.0]),
+            crate::NumericValues::new("other", [1.0, 0.0, 3.0, 2.0]),
+        ])
+        .labels(crate::Labels::raw())
+        .hue(
+            crate::CategoryValues::new("group", ["A\u{301}", "A\u{301}", "A\u{301}", "A\u{301}"])
+                .unwrap(),
+        )
+        .erase(),
+        Plot::line(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .point_layer(
+            crate::PointLayer::new(
+                crate::NumericValues::new("px", [0.25]),
+                crate::NumericValues::new("py", [0.5]),
+            )
+            .labels(
+                crate::CategoryValues::new("label", ["A\u{301}\u{2029}A \u{202b}\u{5d0}\u{202c}"])
+                    .unwrap(),
+            ),
+        )
+        .panel_text_annotation(
+            crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "A\u{301} \u{5d0}")
+                .unwrap(),
+        )
+        .erase(),
+    ];
+    for plot in plots {
+        let plot = plot.with_canvas_size(1000, 1000);
+        let kind = plot.kind();
+        let theme = crate::Theme::Publication.resolve();
+        crate::layout::plan_exact_root(
+            plot.width(),
+            plot.height(),
+            |stage| {
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &plot,
+                    kind,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)
+            },
+            |(), assigned, _| {
+                let panel = PanelBox::new(100.0, 800.0, 100.0, 850.0);
+                let mut geometry = GeometryBackend::new(&theme)?;
+                geometry.begin(plot.width(), plot.height())?;
+                let result = plot
+                    .measure_panel(
+                        kind,
+                        PlotRenderContext::new(plot.data(), panel, &theme),
+                        &mut geometry,
+                    )
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                geometry.end()?;
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned,
+                    (panel, result),
+                ))
+            },
+            |(), assigned, (panel, result), stage| {
+                assert!(!result.producer_text.is_empty(), "{kind:?}");
+                if kind != PlotKind::Line {
+                    assert!(
+                        result
+                            .producer_text
+                            .iter()
+                            .any(|text| text.plan.source.contains('\u{2029}')),
+                        "{kind:?}"
+                    );
+                    assert!(
+                        result.producer_text.iter().any(|text| text
+                            .plan
+                            .lines
+                            .iter()
+                            .any(|line| line.selected_soft_hyphen.is_some())),
+                        "{kind:?}"
+                    );
+                }
+                crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+                let (width, height) = assigned.dimensions();
+                let replay = crate::orchestrator::capture_text_replay_plan(
+                    width,
+                    height,
+                    "specialized producer closure",
+                    &theme,
+                    stage,
+                    |backend| {
+                        plot.render_panel(
+                            kind,
+                            PlotRenderContext::new(plot.data(), panel, &theme)
+                                .with_retained_body(&result),
+                            backend,
+                        )
+                        .map(|_| ())
+                    },
+                )?;
+                crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| {
+                    assert_eq!(calls.get(), 0, "{kind:?} shaped during first capture");
+                });
+                let captured = replay.retained_text();
+                if kind == PlotKind::Matrix {
+                    for text in result.self_managed_legend.as_ref().unwrap().text_plans() {
+                        assert!(captured
+                            .iter()
+                            .any(|(_, actual)| actual.shares_payload(text) && *actual == text));
+                    }
+                }
+                for text in &result.producer_text {
+                    assert!(
+                        captured
+                            .iter()
+                            .any(|(placement, actual)| *placement == text.placement
+                                && actual.shares_payload(&text.plan)
+                                && **actual == text.plan),
+                        "{kind:?}"
+                    );
+                }
+                for text in &result.panel_text {
+                    assert!(captured
+                        .iter()
+                        .any(|(_, actual)| actual.shares_payload(&text.text_plan)
+                            && **actual == text.text_plan));
+                }
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+    }
+}
+
+#[test]
+fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
+    let source = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+        NumericValues::new("y", [1.0, 2.0, 1.5, 2.5]),
+    )
+    .hue(
+        CategoryValues::new(
+            "hue",
+            [
+                "Complete explanatory first condition",
+                "Complete explanatory first condition",
+                "Complete explanatory second condition",
+                "Complete explanatory second condition",
+            ],
+        )
+        .unwrap(),
+    )
+    .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMM")
+    .size(640, 480)
+    .erase();
+    let cell = PanelBox::new(80.0, 600.0, 80.0, 440.0);
+    for automatic in [true, false] {
+        let plot = if automatic {
+            source.clone()
+        } else {
+            source
+                .clone()
+                .with_legend_position(LegendPosition::OutsideRight)
+        };
+        let theme = theme();
+        let root = crate::layout::plan_exact_root(
+            plot.width(),
+            plot.height(),
+            |stage| {
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &plot,
+                    PlotKind::Scatter,
+                    &theme,
+                    &ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    None,
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(format!("D1 text census: {error}")))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(())
+            },
+            |(), assigned, round| {
+                Ok(crate::layout::MeasuredLayout::new(
+                    assigned,
+                    crate::layout::fit::measured(super::plan_panel(
+                        &plot,
+                        PlotKind::Scatter,
+                        cell,
+                        LegendRole::Panel,
+                        &theme,
+                        round,
+                        &ComponentAddress::root(),
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?,
+                ))
+            },
+            |(), _, plan, _| Ok(plan),
+        );
+        if automatic {
+            let root = root.unwrap();
+            let plan = root.plan();
+            let guide = plan.legend.as_ref().unwrap();
+            assert!(
+                guide.bounds.bottom > plan.panel_box.y1,
+                "the complete top frame, not merely a right guide, must win"
+            );
+            assert_eq!(
+                plan.result.layout.x_axis.label,
+                "MMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+            );
+        } else {
+            assert!(root.err().unwrap().to_string().contains("x-axis title"));
+        }
+    }
+}
+
+#[test]
+fn explicit_left_and_bottom_guides_reserve_complete_axis_ink() {
+    let source = Plot::scatter(
+        NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+        NumericValues::new("y", [1.0, 2.0, 1.5, 2.5]),
+    )
+    .hue(CategoryValues::new("hue", ["first", "first", "second", "second"]).unwrap())
+    .erase();
+    for edge in [LegendPosition::OutsideLeft, LegendPosition::OutsideBottom] {
+        let plot = source.clone().with_legend_position(edge);
+        let theme = theme();
+        let plan = plan_panel(
+            &plot,
+            PlotKind::Scatter,
+            PanelBox::new(80.0, 600.0, 80.0, 440.0),
+            LegendRole::Panel,
+            &theme,
+        )
+        .unwrap();
+        let guide = plan.legend.as_ref().unwrap();
+        let mut chrome = GeometryBackend::new(&theme).unwrap();
+        chrome.begin(plot.width(), plot.height()).unwrap();
+        plan.result
+            .layout
+            .draw_decorations_with_text(&theme, plan.axis_text.as_ref().unwrap(), &mut chrome)
+            .unwrap();
+        chrome.end().unwrap();
+        for bounds in chrome.bounds() {
+            assert!(
+                bounds.right <= guide.bounds.left
+                    || bounds.left >= guide.bounds.right
+                    || bounds.top <= guide.bounds.bottom
+                    || bounds.bottom >= guide.bounds.top
+            );
+        }
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "explicit boundary cases trace fatal arithmetic through every clearance owner"
+)]
+fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
+    let plot =
+        crate::kind::into_erased(line_plot(&line_data(["upper", "upper", "lower", "lower"])));
+    let theme = theme();
+    let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
+    let (mut result, _) = discover_geometry(
+        &plot,
+        PlotKind::Line,
+        PlotRenderContext::new(plot.data(), cell, &theme),
+    )
+    .unwrap();
+    let legend = Legend::new(
+        "hue",
+        result.legend_entries.clone(),
+        f64::from(plot.width()),
+        f64::from(plot.height()),
+        &theme,
+    )
+    .unwrap();
+    let geometry = [crate::render::geometry::GeometryBox {
+        left: cell.x0,
+        right: cell.x1,
+        bottom: cell.y0,
+        top: cell.y1,
+        weight: 1.0,
+    }];
+    for range in [
+        (-f64::MAX, f64::MAX),
+        (0.0, f64::MAX / 2.0),
+        (f64::MAX * 0.8, f64::MAX * 0.9),
+    ] {
+        result.layout.projection =
+            crate::layout::Projection::new(range, (0.0, 1.0), cell.as_tuple());
+        let bounds = legend.box_at(
+            cell.x0 + cell.width() * 0.1 + legend.metrics.font_size.max(6.0),
+            cell.y0,
+        );
+        assert!(expanded_axis_limits(
+            PlotKind::Line,
+            &plot,
+            &result,
+            &legend,
+            bounds,
+            ClearanceEdge::Right
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("clearance arithmetic"));
+        assert!(explicit_clearance(
+            PlotKind::Line,
+            &plot,
+            &result,
+            &legend,
+            bounds,
+            ClearanceEdge::Right
+        )
+        .is_err());
+    }
+    result.layout.projection = crate::layout::Projection::new(
+        (f64::MAX * 0.8, f64::MAX * 0.9),
+        (0.0, 1.0),
+        cell.as_tuple(),
+    );
+    let bounds = legend.box_at(
+        cell.x0 + cell.width() * 0.5 + legend.metrics.font_size.max(6.0),
+        cell.y0,
+    );
+    assert!(expanded_axis_limits(
+        PlotKind::Line,
+        &plot,
+        &result,
+        &legend,
+        bounds,
+        ClearanceEdge::Right
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("expanded domain maximum"));
+    result.layout.projection = crate::layout::Projection::new(
+        (-f64::MAX * 0.9, -f64::MAX * 0.8),
+        (0.0, 1.0),
+        cell.as_tuple(),
+    );
+    let bounds = legend.box_at(
+        cell.x1
+            - cell.width() * 0.5
+            - legend.metrics.font_size.max(6.0)
+            - legend.compute_box_width(),
+        cell.y0,
+    );
+    assert!(expanded_axis_limits(
+        PlotKind::Line,
+        &plot,
+        &result,
+        &legend,
+        bounds,
+        ClearanceEdge::Left
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("expanded domain minimum"));
+    result.layout.projection =
+        crate::layout::Projection::new((-f64::MAX, f64::MAX), (0.0, 1.0), cell.as_tuple());
+    assert!(top_right_clearance(
+        PlotKind::Line,
+        &plot,
+        &result,
+        &legend,
+        &geometry,
+        LegendClearance::HorizontalMaximum,
+        0,
+        &theme,
+        &crate::layout::fit::ROOT_SCOPE
+    )
+    .is_err());
+    assert!(automatic_clearance(
+        PlotKind::Line,
+        &plot,
+        &result,
+        &legend,
+        &geometry,
+        LegendDefault::LowestOverlap,
+        0,
+        &theme,
+        &crate::layout::fit::ROOT_SCOPE
+    )
+    .is_err());
+    assert!(expansion_ratio((0.0, f64::from_bits(1)), (0.0, f64::MAX))
+        .unwrap_err()
+        .to_string()
+        .contains("expansion ratio"));
+}
+
+#[test]
+fn annotation_conflict_links_only_to_a_resolving_assignment() {
+    let theme = theme();
+    let note = "Caller annotation";
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 0.0]),
+    )
+    .hue(crate::CategoryValues::new("hue", ["a", "b"]).unwrap())
+    .legend(LegendPolicy::Visible(LegendPosition::InsideRightTop));
+    let initial = source
+        .clone()
+        .erase()
+        .preflight_panel(
+            PlotKind::Scatter,
+            PanelBox::new(100.0, 500.0, 80.0, 400.0),
+            &theme,
+        )
+        .unwrap();
+    let legend = Legend::new(
+        "hue",
+        initial.legend_entries,
+        f64::from(source.width()),
+        f64::from(source.height()),
+        &theme,
+    )
+    .unwrap();
+    let note_width = theme
+        .measure_legacy_text(
+            note,
+            theme.detail_font_size,
+            crate::layout::PhysicalTextAlignment::Start,
+            "panel text annotation",
+        )
+        .unwrap()
+        .width();
+    let width = note_width + legend.compute_box_width() + 36.0;
+    let cell = PanelBox::new(100.0, 100.0 + width, 80.0, 400.0);
+    let source = source.panel_text_annotation(
+        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, note).unwrap(),
+    );
+    let address = ComponentAddress::root();
+    let mut calls = 0;
+    crate::layout::plan_exact_root(
+        source.width(),
+        source.height(),
+        |_| Ok(()),
+        |(), assigned, round| {
+            calls += 1;
+            if calls == 1 {
+                round.seed_insets_for_test(&address, [40.0, 0.0, 0.0, 0.0])?;
+            }
+            let plan = crate::layout::fit::measured(super::plan_panel(
+                &source,
+                PlotKind::Scatter,
+                cell,
+                LegendRole::Panel,
+                &theme,
+                round,
+                &address,
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
+            Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+        },
+        |(), _, _, _| Ok(()),
+    )
+    .unwrap();
+    assert!(calls >= 3);
+    let narrow = PanelBox::new(cell.x0 + 40.0, cell.x1, cell.y0, cell.y1);
+    let result = plan_panel(
+        &source,
+        PlotKind::Scatter,
+        narrow,
+        LegendRole::Panel,
+        &theme,
+    );
+    assert!(result
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("panel text annotation"));
+}
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the automatic regression retains all four blocked corners under distinct initial allocations"
+)]
+fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
+    let note = "Caller annotation";
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 0.0]),
+    )
+    .hue(crate::CategoryValues::new("hue", ["a", "b"]).unwrap())
+    .legend(LegendPolicy::Automatic)
+    .panel_text_annotation(
+        crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, note).unwrap(),
+    )
+    .panel_text_annotation(
+        crate::PanelTextAnnotation::new(crate::PanelCorner::BottomLeft, note).unwrap(),
+    )
+    .erase();
+    let address = ComponentAddress::root();
+    for (resolves, seed) in [
+        (true, [40.0, 0.0, 0.0, 0.0]),
+        (false, [0.0; 4]),
+        (false, [0.0, 0.0, 40.0, 0.0]),
+    ] {
+        let theme = theme();
+        let mut calls = 0;
+        let result = crate::layout::plan_exact_root(
+            source.width(),
+            source.height(),
+            |stage| {
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &address,
+                    true,
+                    true,
+                    true,
+                    None,
+                )?;
+                stage.claim_topology_slots(
+                    crate::layout::PreparedTextCensus::structural_address_count(&requirements)
+                        .map_err(|error| {
+                            Error::Render(format!("automatic annotation test topology: {error}"))
+                        })?,
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| {
+                    Error::Render(format!("automatic annotation test census: {error}"))
+                })?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                let initial = source.preflight_panel(
+                    PlotKind::Scatter,
+                    PanelBox::new(100.0, 500.0, 80.0, 400.0),
+                    &theme,
+                )?;
+                let title = crate::decorations::legend::resolved_title(&initial.legend_entries)?;
+                let legend = Legend::new(
+                    &title,
+                    initial.legend_entries,
+                    f64::from(source.width()),
+                    f64::from(source.height()),
+                    &theme,
+                )?;
+                let note_width = theme
+                    .measure_legacy_text(
+                        note,
+                        theme.detail_font_size,
+                        crate::layout::PhysicalTextAlignment::Start,
+                        "panel text annotation",
+                    )?
+                    .width();
+                let cell = PanelBox::new(
+                    100.0,
+                    100.0 + note_width + legend.compute_box_width() + 36.0,
+                    80.0,
+                    400.0,
+                );
+                let narrow = PanelBox::new(cell.x0 + 40.0, cell.x1, cell.y0, cell.y1);
+                let mut current = initial.layout;
+                current.projection = crate::layout::Projection::new(
+                    current.projection.x_range(),
+                    current.projection.y_range(),
+                    narrow.as_tuple(),
+                );
+                let annotations = crate::decorations::panel_text::plans(&source, &current, &theme)?;
+                for bounds in legend.inside_candidates(narrow.as_tuple()) {
+                    assert!(annotations
+                        .iter()
+                        .any(|plan| !plan.avoids_legend_in(narrow, bounds)));
+                }
+                Ok((if resolves { cell } else { narrow }, annotations))
+            },
+            |(cell, _), assigned, round| {
+                calls += 1;
+                if calls == 1 {
+                    round.seed_insets_for_test(&address, seed)?;
+                }
+                let plan = crate::layout::fit::measured(super::plan_panel(
+                    &source,
+                    PlotKind::Scatter,
+                    *cell,
+                    LegendRole::Panel,
+                    &theme,
+                    round,
+                    &address,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+            },
+            |_, _, plan, _| Ok(plan),
+        );
+        {
+            let root = result.unwrap();
+            assert!((2..=8).contains(&calls));
+            let plan = root.plan();
+            let legend = plan.legend.as_ref().unwrap();
+            assert!(!legend_fits_panel(
+                legend.bounds,
+                plan.result.layout.projection.panel_box()
+            ));
+            assert!(root.prepared().1.iter().all(|annotation| annotation
+                .avoids_legend_in(plan.result.layout.projection.panel_box(), legend.bounds)));
+            let mut invalid_theme = crate::Theme::Publication.resolve();
+            invalid_theme.detail_font_size = 0;
+            assert!(auto_candidate_avoiding_panel_text(
+                &source,
+                &plan.result,
+                &legend.legend,
+                0,
+                &invalid_theme,
+                &crate::layout::fit::FitScope::root()
+            )
+            .is_err());
+        }
+    }
+}
+
 use crate::render::backend::{Backend, LineStyle, Point2D};
 use crate::{CategoryValues, NumericValues};
 
@@ -314,7 +985,15 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
     )
     .unwrap();
 
-    assert!(auto.planned_x_limits().is_some() || auto.planned_y_limits().is_some());
+    assert!(auto.planned_x_limits().is_none() && auto.planned_y_limits().is_none());
+    assert_eq!(
+        auto.result.layout.projection.x_range(),
+        hidden.result.layout.projection.x_range()
+    );
+    assert_eq!(
+        auto.result.layout.projection.y_range(),
+        hidden.result.layout.projection.y_range()
+    );
     assert_eq!(
         outside.result.layout.projection.x_range(),
         hidden.result.layout.projection.x_range()
@@ -334,7 +1013,7 @@ fn hidden_outside_and_shared_suppression_leave_automatic_domains_unchanged() {
 }
 
 #[test]
-fn scatter_with_automatic_y_limits_keeps_top_right_default() {
+fn scatter_automatic_guide_is_outside_without_domain_expansion() {
     let visible = Plot::scatter(
         NumericValues::new("x", [0.0, 0.5, 9.5, 10.0]),
         NumericValues::new("y", [0.0, 0.5, 9.5, 10.0]),
@@ -361,15 +1040,12 @@ fn scatter_with_automatic_y_limits_keeps_top_right_default() {
     .unwrap();
 
     let legend = visible.legend.as_ref().unwrap();
-    let top_right = legend
-        .legend
-        .inside_candidates(visible.result.layout.projection.pixel_box())[0];
-
     assert!(visible.planned_x_limits().is_none());
-    assert!(visible.planned_y_limits().is_some());
-    assert_eq!(legend.bounds, top_right);
-    assert!(
-        visible.result.layout.projection.y_range().1 > hidden.result.layout.projection.y_range().1
+    assert!(visible.planned_y_limits().is_none());
+    assert!(legend.bounds.left > visible.panel_box.x1);
+    assert_eq!(
+        visible.result.layout.projection.y_range(),
+        hidden.result.layout.projection.y_range()
     );
 }
 
@@ -390,11 +1066,14 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
     let rightmost_point = plan.result.layout.projection.project(10.0, 5.0).0;
 
     assert!(plan.planned_x_limits().is_some());
+    assert!(
+        (3..=8).contains(&crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get))
+    );
     assert!(rightmost_point < legend.left);
 }
 
 #[test]
-fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
+fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
@@ -450,19 +1129,14 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
     )
     .unwrap();
 
-    assert!(plan.planned_x_limits().is_some());
+    assert!(plan.planned_x_limits().is_none());
     assert!(plan.planned_y_limits().is_none());
     assert_eq!(
         final_result.layout.projection.x_range().0.to_bits(),
         0.0_f64.to_bits()
     );
-    assert_eq!(
-        legend.bounds,
-        legend
-            .legend
-            .inside_candidates(final_result.layout.projection.pixel_box())[0]
-    );
-    assert!(legend_fits_panel(
+    assert!(legend.bounds.left > plan.panel_box.x1);
+    assert!(!legend_fits_panel(
         legend.bounds,
         final_result.layout.projection.panel_box()
     ));
@@ -477,7 +1151,7 @@ fn auto_legend_expands_continuous_x_for_dense_horizontal_categorical_scene() {
 }
 
 #[test]
-fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_top_left_fallback() {
+fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_outside_guide() {
     let data = signed_dense_bar_data(-1.0);
     let plot = dense_bar_plot(&data, true);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
@@ -499,57 +1173,48 @@ fn negative_horizontal_bars_keep_zero_maximum_with_deterministic_top_left_fallba
     )
     .unwrap();
     let legend = first.legend.as_ref().unwrap();
-    let top_left = legend
-        .legend
-        .inside_candidates(first.result.layout.projection.pixel_box())[1];
 
     assert_eq!(
         first.result.layout.projection.x_range().1.to_bits(),
         0.0_f64.to_bits()
     );
-    assert_eq!(legend.bounds, top_left);
+    assert!(legend.bounds.left > first.panel_box.x1);
     assert_eq!(first.planned_x_limits(), second.planned_x_limits());
     assert_eq!(legend.bounds, second.legend.unwrap().bounds);
 }
 
 #[test]
-fn positive_vertical_bars_keep_zero_minimum_at_top_right() {
+fn positive_vertical_bars_keep_zero_minimum_with_outside_guide() {
     let data = signed_dense_bar_data(1.0);
     let plot = dense_bar_plot(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
     let plan = plan_panel(&plot, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let top_right = legend
-        .legend
-        .inside_candidates(plan.result.layout.projection.pixel_box())[0];
 
     assert_eq!(
         plan.result.layout.projection.y_range().0.to_bits(),
         0.0_f64.to_bits()
     );
-    assert_eq!(legend.bounds, top_right);
-    assert!(plan.planned_y_limits().is_some());
+    assert!(legend.bounds.left > plan.panel_box.x1);
+    assert!(plan.planned_y_limits().is_none());
 }
 
 #[test]
-fn negative_vertical_bars_keep_zero_maximum_with_bottom_right_fallback() {
+fn negative_vertical_bars_keep_zero_maximum_with_outside_guide() {
     let data = signed_dense_bar_data(-1.0);
     let plot = dense_bar_plot(&data, false);
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
     let plan = plan_panel(&plot, PlotKind::Bar, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let bottom_right = legend
-        .legend
-        .inside_candidates(plan.result.layout.projection.pixel_box())[2];
 
     assert_eq!(
         plan.result.layout.projection.y_range().1.to_bits(),
         0.0_f64.to_bits()
     );
-    assert_eq!(legend.bounds, bottom_right);
-    assert!(plan.planned_y_limits().is_some());
+    assert!(legend.bounds.left > plan.panel_box.x1);
+    assert!(plan.planned_y_limits().is_none());
 }
 
 #[test]
@@ -583,6 +1248,8 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
         PlotKind::HorizontalBar.legend_default(false),
         0,
         &theme(),
+        &crate::layout::fit::ROOT_SCOPE,
     )
+    .unwrap()
     .is_none());
 }

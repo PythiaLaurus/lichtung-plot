@@ -31,14 +31,14 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     if let Some(input) = chart.histogram_composite_geometry_input() {
         return render_precomputed_composite(chart, input, context.panel, context.theme, backend);
     }
     if let Some(hue) = chart.hue_col() {
         return Err(Error::Data(format!(
             "histogram: hue column {hue:?} is not supported yet; render separate single-series histograms"
-        )));
+        )).into());
     }
     let value_col = chart
         .x_col()
@@ -70,7 +70,7 @@ pub(crate) fn render(
         &x_axis_spec,
         &y_axis_spec,
         context.theme,
-    );
+    )?;
     let theme = context.theme;
     let fill = FillStyle {
         color: theme.colors[0],
@@ -125,7 +125,7 @@ fn render_precomputed_composite(
     panel: PanelBox,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let x_range = input.validate()?;
     let y_max = input
         .bins
@@ -146,7 +146,7 @@ fn render_precomputed_composite(
         &x_axis_spec,
         &y_axis_spec,
         theme,
-    );
+    )?;
     let fill = FillStyle {
         color: theme.colors[0],
         stroke: theme.foreground,

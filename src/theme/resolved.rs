@@ -6,7 +6,9 @@
 
 #![deny(missing_docs)]
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use sha2::{Digest, Sha256};
 
 use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
@@ -95,6 +97,254 @@ pub(crate) struct ResolvedTheme {
     /// Root and panel composition relationships.
     pub(crate) composition: CompositionAppearance,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
+    text_queries: Arc<Mutex<TextQueryCache>>,
+}
+
+#[derive(Debug, Default)]
+struct TextQueryCache {
+    entries: Vec<CachedTextQuery>,
+    exact: Vec<TextQueryIndex>,
+    shaping: Vec<TextQueryIndex>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct TextQueryIndex {
+    fingerprint: [u8; 32],
+    entry: usize,
+}
+
+impl TextQueryCache {
+    fn lower_bound(
+        index: &[TextQueryIndex],
+        fingerprint: [u8; 32],
+        environment: &PreparedFontEnvironment,
+    ) -> Result<usize, Error> {
+        let (mut low, mut high) = (0, index.len());
+        while low < high {
+            environment
+                .claim_text_generation_work(1)
+                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+            let middle = low + (high - low) / 2;
+            if index[middle].fingerprint < fingerprint {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        Ok(low)
+    }
+
+    fn find(
+        &self,
+        index: &[TextQueryIndex],
+        fingerprint: [u8; 32],
+        key: (&TextPlanInput<'_>, Option<usize>, bool),
+        exact: bool,
+        environment: &PreparedFontEnvironment,
+    ) -> Result<Option<usize>, Error> {
+        let (input, preferred_lines, prepared_only) = key;
+        let start = Self::lower_bound(index, fingerprint, environment)?;
+        for candidate in &index[start..] {
+            environment
+                .claim_text_generation_work(1)
+                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+            if candidate.fingerprint != fingerprint {
+                break;
+            }
+            let comparison_work = input.source.len() as u128
+                + input.stack.len() as u128
+                + 1
+                + if exact {
+                    input.provenance.owner.len() as u128
+                } else {
+                    0
+                };
+            environment
+                .claim_text_generation_work(comparison_work)
+                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+            let query = &self.entries[candidate.entry];
+            if query.matches_shaping(input, prepared_only)
+                && (!exact
+                    || (query.width == input.maximum_width_quanta
+                        && query.matches_presentation(input, preferred_lines)))
+            {
+                return Ok(Some(candidate.entry));
+            }
+        }
+        Ok(None)
+    }
+
+    fn reserve<T>(values: &mut Vec<T>, environment: &PreparedFontEnvironment) -> Result<(), Error> {
+        if values.len() < values.capacity() {
+            return Ok(());
+        }
+        let capacity = values
+            .len()
+            .checked_add(1)
+            .and_then(|required| {
+                values
+                    .capacity()
+                    .checked_mul(2)
+                    .map(|doubled| required.max(doubled))
+            })
+            .ok_or_else(|| Error::Render("text query cache capacity overflow".into()))?;
+        let bytes = capacity
+            .checked_mul(size_of::<T>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
+        environment
+            .claim_unicode_bytes(bytes)
+            .map_err(|error| Error::Render(format!("text query cache: {error}")))?;
+        environment
+            .claim_text_generation_work(values.len() as u128)
+            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
+        values
+            .try_reserve_exact(capacity - values.len())
+            .map_err(|_| Error::Render("cannot reserve text query cache".into()))
+    }
+
+    fn insertion_point(
+        index: &[TextQueryIndex],
+        value: TextQueryIndex,
+        environment: &PreparedFontEnvironment,
+    ) -> Result<usize, Error> {
+        let (mut low, mut high) = (0, index.len());
+        while low < high {
+            environment
+                .claim_text_generation_work(1)
+                .map_err(|error| Error::Render(format!("text query index: {error:?}")))?;
+            let middle = low + (high - low) / 2;
+            if index[middle] < value {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        environment
+            .claim_text_generation_work((index.len() - low) as u128 + 1)
+            .map_err(|error| Error::Render(format!("text query index: {error:?}")))?;
+        Ok(low)
+    }
+}
+
+#[derive(Debug)]
+struct CachedTextQuery {
+    source: String,
+    appearance: TextAppearance,
+    alignment: PhysicalTextAlignment,
+    owner: String,
+    pair_ordinal: u32,
+    exact_override: bool,
+    prepared_only: bool,
+    width: i64,
+    preferred_lines: Option<usize>,
+    unwrapped_width: Option<i64>,
+    result: CachedTextResult,
+}
+
+#[derive(Debug, Clone)]
+enum CachedTextResult {
+    Plan(ResolvedTextPlan),
+    /// Lookup-only result: reuse analysis, never this plan's width-specific lines.
+    Reflow(ResolvedTextPlan),
+    PreferredWidth(i64),
+}
+
+impl CachedTextQuery {
+    fn fingerprints(
+        input: &TextPlanInput<'_>,
+        preferred_lines: Option<usize>,
+        prepared_only: bool,
+    ) -> ([u8; 32], [u8; 32]) {
+        let mut hash = Sha256::new();
+        // The complete, unnormalized source fixes paragraph bidi and scripts;
+        // language and Unicode policy are fixed for this renderer. The memo is
+        // shared only together with its immutable operation font environment.
+        for text in [input.source, input.stack] {
+            hash.update((text.len() as u64).to_le_bytes());
+            hash.update(text.as_bytes());
+        }
+        hash.update(input.font_size.to_le_bytes());
+        hash.update([
+            match input.weight {
+                TextWeight::Normal => 0,
+                TextWeight::Semibold => 1,
+                TextWeight::Bold => 2,
+            },
+            u8::from(prepared_only),
+        ]);
+        let shaping = hash.clone().finalize().into();
+        hash.update((input.provenance.owner.len() as u64).to_le_bytes());
+        hash.update(input.provenance.owner.as_bytes());
+        hash.update(input.provenance.pair_ordinal.to_le_bytes());
+        hash.update(input.maximum_width_quanta.to_le_bytes());
+        hash.update([match input.alignment {
+            PhysicalTextAlignment::Start => 0,
+            PhysicalTextAlignment::Center => 1,
+            PhysicalTextAlignment::End => 2,
+        }]);
+        match input.line_height {
+            TextLineHeight::Multiplier(value) => {
+                hash.update([0]);
+                hash.update(value.to_bits().to_le_bytes());
+            }
+            TextLineHeight::ResolvedQuanta(value) => {
+                hash.update([1]);
+                hash.update(value.to_le_bytes());
+            }
+        }
+        hash.update([
+            input.paint.red(),
+            input.paint.green(),
+            input.paint.blue(),
+            input.paint.alpha(),
+            u8::from(input.exact_override),
+        ]);
+        hash.update([u8::from(preferred_lines.is_some())]);
+        if let Some(lines) = preferred_lines {
+            hash.update((lines as u64).to_le_bytes());
+        }
+        (shaping, hash.finalize().into())
+    }
+
+    fn hash_work(input: &TextPlanInput<'_>, preferred_lines: Option<usize>) -> u128 {
+        // Exact encoded lengths: three string lengths, all scalar fields and
+        // tags, and the optional preferred-line count. Source bytes hash once.
+        input.source.len() as u128
+            + input.stack.len() as u128
+            + input.provenance.owner.len() as u128
+            + 58
+            + if preferred_lines.is_some() { 8 } else { 0 }
+    }
+    fn matches_shaping(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> bool {
+        self.source == input.source
+            && self.appearance.stack == input.stack
+            && self.appearance.font_size == input.font_size
+            && self.appearance.weight == input.weight
+            && self.prepared_only == prepared_only
+    }
+
+    fn matches_presentation(
+        &self,
+        input: &TextPlanInput<'_>,
+        preferred_lines: Option<usize>,
+    ) -> bool {
+        self.appearance.paint == input.paint
+            && input.line_height
+                == TextLineHeight::Multiplier(self.appearance.line_height_multiplier)
+            && self.alignment == input.alignment
+            && self.owner == input.provenance.owner
+            && self.pair_ordinal == input.provenance.pair_ordinal
+            && self.exact_override == input.exact_override
+            && self.preferred_lines == preferred_lines
+    }
+
+    fn matches_width(&self, width: i64) -> bool {
+        self.width == width
+            || self
+                .unwrapped_width
+                .is_some_and(|required| required <= width)
+    }
 }
 
 impl PartialEq for ResolvedTheme {
@@ -144,6 +394,7 @@ impl ResolvedTheme {
     /// Make this separately resolved theme use the root operation's environment.
     pub(crate) fn share_font_environment_from(&mut self, root: &Self) {
         self.font_environment = Arc::clone(&root.font_environment);
+        self.text_queries = Arc::clone(&root.text_queries);
     }
 
     /// Plan one foundational appearance within an exact finite pixel width.
@@ -171,6 +422,94 @@ impl ResolvedTheme {
             owner,
             exact_override,
         )
+    }
+
+    /// Common label width from contextual legal spans and the assigned row capacity.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "axis label requirements are normalized layout quanta consumed by pixel adapters"
+    )]
+    pub(crate) fn intrinsic_tick_label_width<'a>(
+        &self,
+        labels: impl ExactSizeIterator<Item = &'a str>,
+        available_height: f64,
+    ) -> Result<f64, crate::Error> {
+        self.prepare_font_environment()?;
+        let environment = self.prepared_font_environment()?;
+        let appearance = &self.typography.tick_label;
+        let height = crate::layout::maximum_width_quanta(available_height)
+            .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
+        let count = i64::try_from(labels.len().max(1))
+            .map_err(|_| crate::Error::Render("axis row count overflowed".into()))?;
+        let pitch = crate::layout::maximum_width_quanta(appearance.line_height())
+            .map_err(|error| crate::Error::Render(format!("axis row pitch: {error}")))?;
+        if height < 0 || pitch <= 0 {
+            return Err(crate::Error::Render(
+                "axis row allocation requires nonnegative height and positive text pitch".into(),
+            ));
+        }
+        let preferred_lines = usize::try_from(((height / count - 4096).max(0) / pitch).max(1))
+            .map_err(|_| crate::Error::Render("axis row capacity overflowed".into()))?;
+        let mut width = 1_i64;
+        for source in labels {
+            let input = crate::layout::TextPlanInput {
+                source,
+                stack: &appearance.stack,
+                weight: appearance.weight,
+                font_size: appearance.font_size,
+                line_height: crate::layout::TextLineHeight::Multiplier(
+                    appearance.line_height_multiplier,
+                ),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::End,
+                paint: appearance.paint,
+                provenance: crate::layout::TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "y-axis tick label".into(),
+                },
+                exact_override: false,
+            };
+            let cached = self.cached_text_query(&input, Some(preferred_lines), true)?;
+            let preferred_width = if let Some(CachedTextResult::PreferredWidth(width)) = cached {
+                width
+            } else {
+                let analysis = if let Some(CachedTextResult::Reflow(plan)) = cached {
+                    plan
+                } else {
+                    let plan = environment
+                        .plan_prepared_text(input.clone())
+                        .map_err(|error| {
+                            crate::Error::Render(format!("axis intrinsic text analysis: {error}"))
+                        })?;
+                    self.cache_text_query(
+                        &input,
+                        appearance,
+                        None,
+                        true,
+                        CachedTextResult::Plan(plan.clone()),
+                    )?;
+                    plan
+                };
+                let requirements =
+                    analysis
+                        .intrinsic_from_analysis(preferred_lines)
+                        .map_err(|error| {
+                            crate::Error::Render(format!(
+                                "axis intrinsic text requirements: {error}"
+                            ))
+                        })?;
+                self.cache_text_query(
+                    &input,
+                    appearance,
+                    Some(preferred_lines),
+                    true,
+                    CachedTextResult::PreferredWidth(requirements.preferred_width_quanta),
+                )?;
+                requirements.preferred_width_quanta
+            };
+            width = width.max(preferred_width);
+        }
+        Ok(width as f64 / 1024.0)
     }
 
     /// Measure one foundational appearance without introducing a wrap boundary.
@@ -267,7 +606,9 @@ impl ResolvedTheme {
             owner,
             exact_override,
             true,
+            &crate::layout::fit::ROOT_SCOPE,
         )
+        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     pub(crate) fn measure_legacy_appearance_text(
@@ -286,7 +627,9 @@ impl ResolvedTheme {
             owner,
             exact_override,
             true,
+            &crate::layout::fit::ROOT_SCOPE,
         )
+        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     fn plan_text_quanta(
@@ -306,14 +649,16 @@ impl ResolvedTheme {
             owner,
             exact_override,
             true,
+            &crate::layout::fit::ROOT_SCOPE,
         )
+        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     #[expect(
         clippy::too_many_arguments,
         reason = "the shared adapter preserves every immutable text-plan input while selecting the phase-owned preparation policy"
     )]
-    fn plan_text_quanta_with_policy(
+    pub(crate) fn plan_text_quanta_with_policy(
         &self,
         source: &str,
         appearance: &TextAppearance,
@@ -322,7 +667,8 @@ impl ResolvedTheme {
         owner: &str,
         exact_override: bool,
         prepared_only: bool,
-    ) -> Result<ResolvedTextPlan, Error> {
+        scope: &crate::layout::fit::FitScope,
+    ) -> Result<ResolvedTextPlan, crate::layout::fit::PlanError> {
         let input = TextPlanInput {
             source,
             stack: &appearance.stack,
@@ -339,12 +685,184 @@ impl ResolvedTheme {
             exact_override,
         };
         let environment = self.prepared_font_environment()?;
-        let result = if prepared_only {
-            environment.plan_prepared_text(input)
-        } else {
-            environment.plan_text(input)
+        let result = match self.cached_text_query(&input, None, prepared_only)? {
+            Some(CachedTextResult::Plan(plan)) => return Ok(plan),
+            Some(CachedTextResult::Reflow(plan)) => plan.reflow(input.clone()),
+            _ if prepared_only => environment.plan_prepared_text(input.clone()),
+            _ => environment.plan_text(input.clone()),
         };
-        result.map_err(|error| Error::Render(format!("{owner} text planning: {error}")))
+        let plan = result.map_err(|error| match error {
+            crate::layout::TextPlanError::Fit(miss) => scope
+                .failure(
+                    crate::layout::fit::FitKind::Text,
+                    format!("{owner} text planning: {miss}"),
+                )
+                .into(),
+            error => crate::layout::fit::PlanError::Fatal(Error::Render(format!(
+                "{owner} text planning: {error}"
+            ))),
+        })?;
+        self.cache_text_query(
+            &input,
+            appearance,
+            None,
+            prepared_only,
+            CachedTextResult::Plan(plan.clone()),
+        )?;
+        Ok(plan)
+    }
+
+    fn cached_text_query(
+        &self,
+        input: &TextPlanInput<'_>,
+        preferred_lines: Option<usize>,
+        prepared_only: bool,
+    ) -> Result<Option<CachedTextResult>, Error> {
+        let cache = self
+            .text_queries
+            .lock()
+            .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
+        let environment = self.prepared_font_environment()?;
+        environment
+            .claim_text_generation_work(CachedTextQuery::hash_work(input, preferred_lines))
+            .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+        let (shaping_fingerprint, fingerprint) =
+            CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
+        let key = (input, preferred_lines, prepared_only);
+        if let Some(index) = cache.find(&cache.exact, fingerprint, key, true, environment)? {
+            return Ok(Some(cache.entries[index].result.clone()));
+        }
+        if let Some(index) =
+            cache.find(&cache.shaping, shaping_fingerprint, key, false, environment)?
+        {
+            let query = &cache.entries[index];
+            environment
+                .claim_text_generation_work(1)
+                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+            if query.matches_width(input.maximum_width_quanta) {
+                environment
+                    .claim_text_generation_work(input.provenance.owner.len() as u128 + 1)
+                    .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
+                if query.matches_presentation(input, preferred_lines) {
+                    return Ok(Some(query.result.clone()));
+                }
+            }
+            if let CachedTextResult::Plan(plan) = &query.result {
+                return Ok(Some(CachedTextResult::Reflow(plan.clone())));
+            }
+        }
+        Ok(None)
+    }
+
+    fn cache_text_query(
+        &self,
+        input: &TextPlanInput<'_>,
+        appearance: &TextAppearance,
+        preferred_lines: Option<usize>,
+        prepared_only: bool,
+        result: CachedTextResult,
+    ) -> Result<(), Error> {
+        let mut cache = self
+            .text_queries
+            .lock()
+            .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
+        // This root-local memo is optional and bounded, never an all-width table.
+        if cache.entries.len() == 256 {
+            return Ok(());
+        }
+        let environment = self.prepared_font_environment()?;
+        let key_bytes = input
+            .source
+            .len()
+            .checked_add(input.stack.len())
+            .and_then(|bytes| bytes.checked_add(input.provenance.owner.len()))
+            .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
+        environment
+            .claim_text_generation_work(CachedTextQuery::hash_work(input, preferred_lines))
+            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
+        let (shaping_fingerprint, fingerprint) =
+            CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
+        let key = (input, preferred_lines, prepared_only);
+        if cache
+            .find(&cache.exact, fingerprint, key, true, environment)?
+            .is_some()
+        {
+            return Ok(());
+        }
+        let new_shaping = matches!(&result, CachedTextResult::Plan(_))
+            && cache
+                .find(&cache.shaping, shaping_fingerprint, key, false, environment)?
+                .is_none();
+        environment
+            .claim_text_generation_slots(2 + u128::from(new_shaping))
+            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
+        environment
+            .claim_text_generation_work(key_bytes as u128 + 1)
+            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
+        environment
+            .claim_unicode_bytes(
+                u64::try_from(key_bytes)
+                    .map_err(|_| Error::Render("text query cache byte count overflow".into()))?,
+            )
+            .map_err(|error| Error::Render(format!("text query cache: {error}")))?;
+        TextQueryCache::reserve(&mut cache.entries, environment)?;
+        TextQueryCache::reserve(&mut cache.exact, environment)?;
+        if new_shaping {
+            TextQueryCache::reserve(&mut cache.shaping, environment)?;
+        }
+        let exact_record = TextQueryIndex {
+            fingerprint,
+            entry: cache.entries.len(),
+        };
+        let shaping_record = TextQueryIndex {
+            fingerprint: shaping_fingerprint,
+            entry: cache.entries.len(),
+        };
+        let exact_position =
+            TextQueryCache::insertion_point(&cache.exact, exact_record, environment)?;
+        let shaping_position = if new_shaping {
+            Some(TextQueryCache::insertion_point(
+                &cache.shaping,
+                shaping_record,
+                environment,
+            )?)
+        } else {
+            None
+        };
+        let copy = |text: &str| -> Result<String, Error> {
+            let mut owned = String::new();
+            owned
+                .try_reserve_exact(text.len())
+                .map_err(|_| Error::Render("cannot reserve text query key".into()))?;
+            owned.push_str(text);
+            Ok(owned)
+        };
+        cache.entries.push(CachedTextQuery {
+            unwrapped_width: match &result {
+                CachedTextResult::Plan(plan) => plan
+                    .unwrapped_fit_width(environment)
+                    .map_err(|error| Error::Render(format!("cached paragraph fit: {error}")))?,
+                CachedTextResult::PreferredWidth(_) | CachedTextResult::Reflow(_) => None,
+            },
+            source: copy(input.source)?,
+            appearance: TextAppearance {
+                stack: copy(&appearance.stack)?,
+                ..*appearance
+            },
+            alignment: input.alignment,
+            owner: copy(&input.provenance.owner)?,
+            pair_ordinal: input.provenance.pair_ordinal,
+            exact_override: input.exact_override,
+            prepared_only,
+            width: input.maximum_width_quanta,
+            preferred_lines,
+            result,
+        });
+        cache.exact.insert(exact_position, exact_record);
+        if let Some(position) = shaping_position {
+            cache.shaping.insert(position, shaping_record);
+        }
+        Ok(())
     }
 
     /// Borrow this operation's prepared canonical font environment.
@@ -677,6 +1195,7 @@ fn resolved_theme(
             },
         },
         font_environment: Arc::new(OnceLock::new()),
+        text_queries: Arc::default(),
     }
 }
 
@@ -1003,6 +1522,7 @@ mod tests {
                 },
             },
             font_environment: Arc::new(OnceLock::new()),
+            text_queries: Arc::default(),
         }
     }
 
@@ -1295,5 +1815,396 @@ mod tests {
             )
             .is_err());
         FONT_ENVIRONMENT_DISCOVERIES.with(|calls| assert_eq!(calls.get(), 1));
+    }
+
+    #[test]
+    fn root_text_queries_share_payloads_but_not_profiles_or_constraints() {
+        let root = Theme::Publication.resolve();
+        let mut child = Theme::Science.resolve();
+        child.share_font_environment_from(&root);
+        let appearance = &root.typography.title;
+        let first = root
+            .plan_text(
+                "Measured responses",
+                appearance,
+                400.0,
+                PhysicalTextAlignment::Start,
+                "title",
+                false,
+            )
+            .unwrap();
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let second = child
+            .plan_text(
+                "Measured responses",
+                appearance,
+                400.0,
+                PhysicalTextAlignment::Start,
+                "title",
+                false,
+            )
+            .unwrap();
+        assert!(first.shares_payload(&second));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        let narrower = root
+            .plan_text(
+                "Measured responses",
+                appearance,
+                390.0,
+                PhysicalTextAlignment::Start,
+                "title",
+                false,
+            )
+            .unwrap();
+        assert!(first.shares_payload(&narrower));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        assert!(root
+            .plan_text(
+                "Measured responses",
+                appearance,
+                1.0,
+                PhysicalTextAlignment::Start,
+                "title",
+                false
+            )
+            .is_err());
+        let mut changed = appearance.clone();
+        changed.paint = Rgba::rgb(3, 2, 1);
+        let changed = root
+            .plan_text(
+                "Measured responses",
+                &changed,
+                400.0,
+                PhysicalTextAlignment::Start,
+                "title",
+                false,
+            )
+            .unwrap();
+        assert_eq!(changed.style.paint, Rgba::rgb(3, 2, 1));
+        assert!(!first.shares_payload(&changed));
+        assert!(first.shares_analysis(&changed));
+        let other_root = Theme::Publication.resolve();
+        assert!(!Arc::ptr_eq(&root.text_queries, &other_root.text_queries));
+    }
+
+    #[test]
+    fn text_analysis_is_font_scoped_not_presentation_scoped() {
+        let root = Theme::Publication.resolve();
+        root.font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic()))
+            .unwrap();
+        let mut appearance = root.typography.caption.clone();
+        appearance.stack = "Test Sans".into();
+        appearance.font_size = 10;
+        let first = root
+            .plan_text(
+                "A A A A",
+                &appearance,
+                20.0,
+                PhysicalTextAlignment::Start,
+                "first",
+                false,
+            )
+            .unwrap();
+        appearance.paint = Rgba::rgb(4, 5, 6);
+        appearance.line_height_multiplier = 1.5;
+        let restyled = root
+            .plan_text(
+                "A A A A",
+                &appearance,
+                15.0,
+                PhysicalTextAlignment::End,
+                "restyled",
+                true,
+            )
+            .unwrap();
+        assert!(first.shares_analysis(&restyled));
+        assert!(!first.shares_payload(&restyled));
+        assert_eq!(restyled.style.paint, appearance.paint);
+        assert_eq!(restyled.style.line_height_quanta, 15 * 1024);
+        assert_eq!(restyled.style.alignment, PhysicalTextAlignment::End);
+        assert_eq!(restyled.style.provenance.owner, "restyled");
+        assert!(restyled.style.exact_override);
+        appearance.font_size = 11;
+        let resized = root
+            .plan_text(
+                "A A A A",
+                &appearance,
+                15.0,
+                PhysicalTextAlignment::End,
+                "restyled",
+                true,
+            )
+            .unwrap();
+        assert!(!first.shares_analysis(&resized));
+        appearance.font_size = 10;
+        appearance.weight = crate::TextWeight::Bold;
+        let reweighted = root
+            .plan_text(
+                "A A A A",
+                &appearance,
+                15.0,
+                PhysicalTextAlignment::End,
+                "restyled",
+                true,
+            )
+            .unwrap();
+        assert!(!first.shares_analysis(&reweighted));
+    }
+
+    #[test]
+    fn intrinsic_query_memo_reuses_the_root_prepared_fonts() {
+        let root = Theme::Publication.resolve();
+        let first = root
+            .intrinsic_tick_label_width(["Measured responses"].into_iter(), 100.0)
+            .unwrap();
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let second = root
+            .clone()
+            .intrinsic_tick_label_width(["Measured responses"].into_iter(), 100.0)
+            .unwrap();
+        assert_eq!(first.to_bits(), second.to_bits());
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+    }
+
+    fn indexed_query_input<'a>(
+        source: &'a str,
+        appearance: &'a TextAppearance,
+        owner: &str,
+    ) -> TextPlanInput<'a> {
+        TextPlanInput {
+            source,
+            stack: &appearance.stack,
+            weight: appearance.weight,
+            font_size: appearance.font_size,
+            line_height: TextLineHeight::Multiplier(appearance.line_height_multiplier),
+            maximum_width_quanta: 100 * 1024,
+            alignment: PhysicalTextAlignment::Start,
+            paint: appearance.paint,
+            provenance: TextPlanProvenance {
+                pair_ordinal: pair_ordinal(appearance.weight),
+                owner: owner.into(),
+            },
+            exact_override: false,
+        }
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one root verifies index scaling, stable collision order, and exact charged comparisons"
+    )]
+    fn indexed_text_queries_charge_search_and_matching_buckets_only() {
+        let root = Theme::Publication.resolve();
+        root.font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic()))
+            .unwrap();
+        let environment = root.prepared_font_environment().unwrap();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        environment
+            .share_generation_resources(resources.clone())
+            .unwrap();
+        let mut appearance = root.typography.caption.clone();
+        appearance.stack = "Test Sans".into();
+        appearance.font_size = 10;
+        let mut first = None;
+        for index in 0..128 {
+            let plan = root
+                .plan_text(
+                    "A",
+                    &appearance,
+                    100.0,
+                    PhysicalTextAlignment::Start,
+                    &format!("owner {index:03}"),
+                    false,
+                )
+                .unwrap();
+            if index == 0 {
+                first = Some(plan);
+            }
+        }
+        let input = indexed_query_input("A", &appearance, "owner 000");
+        let (_, fingerprint) = CachedTextQuery::fingerprints(&input, None, true);
+        let comparisons = {
+            let cache = root.text_queries.lock().unwrap();
+            assert_eq!(cache.entries.len(), 128);
+            assert_eq!(cache.exact.len(), 128);
+            assert_eq!(
+                cache.shaping.len(),
+                1,
+                "one analysis representative per compatible font/source profile"
+            );
+            assert!(cache.exact.windows(2).all(|pair| pair[0] < pair[1]));
+            let (mut low, mut high, mut comparisons) = (0, cache.exact.len(), 0);
+            while low < high {
+                comparisons += 1;
+                let middle = low + (high - low) / 2;
+                if cache.exact[middle].fingerprint < fingerprint {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            comparisons
+        };
+        assert!(comparisons <= 8);
+        let before = resources.usage().unwrap();
+        let bytes = environment.resource_usage().unwrap().font_bytes;
+        let hit = root
+            .plan_text(
+                "A",
+                &appearance,
+                100.0,
+                PhysicalTextAlignment::Start,
+                "owner 000",
+                false,
+            )
+            .unwrap();
+        assert!(first.unwrap().shares_payload(&hit));
+        let after = resources.usage().unwrap();
+        let equality_work =
+            (input.source.len() + input.stack.len() + input.provenance.owner.len() + 1) as u128;
+        assert_eq!(
+            after.1 - before.1,
+            CachedTextQuery::hash_work(&input, None) + comparisons + 1 + equality_work
+        );
+        assert_eq!(after.0, before.0);
+        assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
+
+        root.plan_text(
+            "AA",
+            &appearance,
+            100.0,
+            PhysicalTextAlignment::Start,
+            "collision",
+            false,
+        )
+        .unwrap();
+        let collision = indexed_query_input("AA", &appearance, "collision");
+        let mut cache = root.text_queries.lock().unwrap();
+        let expected = cache.entries.len() - 1;
+        let TextQueryCache { exact, shaping, .. } = &mut *cache;
+        for index in [exact, shaping] {
+            for entry in index.iter_mut() {
+                entry.fingerprint = [0; 32];
+            }
+            index.sort_unstable();
+        }
+        let before = resources.usage().unwrap().1;
+        assert_eq!(
+            cache
+                .find(
+                    &cache.exact,
+                    [0; 32],
+                    (&collision, None, true),
+                    true,
+                    environment
+                )
+                .unwrap(),
+            Some(expected)
+        );
+        let equality_work =
+            (collision.source.len() + collision.stack.len() + collision.provenance.owner.len() + 1)
+                as u128;
+        assert_eq!(
+            resources.usage().unwrap().1 - before,
+            8 + cache.exact.len() as u128 * (equality_work + 1)
+        );
+        let before = resources.usage().unwrap().1;
+        assert_eq!(
+            cache
+                .find(
+                    &cache.shaping,
+                    [0; 32],
+                    (&collision, None, true),
+                    false,
+                    environment
+                )
+                .unwrap(),
+            Some(expected)
+        );
+        assert_eq!(
+            resources.usage().unwrap().1 - before,
+            4 + 2 * (collision.source.len() + collision.stack.len() + 1) as u128
+        );
+        let mut wrong_provenance = collision.clone();
+        wrong_provenance.provenance.pair_ordinal += 1;
+        assert!(cache
+            .find(
+                &cache.exact,
+                [0; 32],
+                (&wrong_provenance, None, true),
+                true,
+                environment
+            )
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            cache
+                .find(
+                    &cache.shaping,
+                    [0; 32],
+                    (&wrong_provenance, None, true),
+                    false,
+                    environment
+                )
+                .unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn indexed_query_fingerprints_include_exact_presentation_and_provenance() {
+        let appearance = Theme::Publication.resolve().typography.caption;
+        let input = indexed_query_input("A", &appearance, "owner");
+        let fingerprints = CachedTextQuery::fingerprints(&input, None, true);
+        for change in 0..7 {
+            let mut changed = input.clone();
+            match change {
+                0 => changed.maximum_width_quanta += 1,
+                1 => changed.alignment = PhysicalTextAlignment::End,
+                2 => changed.paint = Rgba::new(4, 5, 6, 7),
+                3 => changed.line_height = TextLineHeight::ResolvedQuanta(1000),
+                4 => changed.exact_override = true,
+                5 => changed.provenance.owner.push('x'),
+                _ => changed.provenance.pair_ordinal += 1,
+            }
+            let changed = CachedTextQuery::fingerprints(&changed, None, true);
+            assert_eq!(changed.0, fingerprints.0);
+            assert_ne!(changed.1, fingerprints.1);
+        }
+        assert_ne!(
+            CachedTextQuery::fingerprints(&input, Some(2), true).1,
+            fingerprints.1
+        );
+        for change in 0..4 {
+            let mut changed = input.clone();
+            match change {
+                0 => changed.source = "AA",
+                1 => changed.stack = "Other",
+                2 => changed.font_size += 1,
+                _ => changed.weight = TextWeight::Bold,
+            }
+            assert_ne!(
+                CachedTextQuery::fingerprints(&changed, None, true).0,
+                fingerprints.0
+            );
+        }
+        assert_ne!(
+            CachedTextQuery::fingerprints(&input, None, false).0,
+            fingerprints.0
+        );
+    }
+
+    #[test]
+    fn text_query_index_storage_is_admitted_before_allocation() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let used = environment.resource_usage().unwrap().font_bytes;
+        environment
+            .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
+            .unwrap();
+        let mut index = Vec::<TextQueryIndex>::new();
+        assert!(TextQueryCache::reserve(&mut index, &environment).is_err());
+        assert_eq!(index.capacity(), 0);
     }
 }

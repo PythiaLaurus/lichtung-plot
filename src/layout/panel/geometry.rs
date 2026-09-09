@@ -14,10 +14,14 @@ impl Layout {
             x_axis: Axis {
                 label: String::new(),
                 ticks: Vec::new(),
+                explicit_ticks: false,
+                assigned_tick_width: None,
             },
             y_axis: Axis {
                 label: String::new(),
                 ticks: Vec::new(),
+                explicit_ticks: false,
+                assigned_tick_width: None,
             },
             projection: Projection {
                 x_range: (0.0, 1.0),
@@ -30,7 +34,6 @@ impl Layout {
     /// Create a new layout using explicit axis specs for limits.
     #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new_with_axis_specs(
         x_range: (f64, f64),
         y_range: (f64, f64),
@@ -41,7 +44,7 @@ impl Layout {
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
         theme: &ResolvedTheme,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         // Hardcoded academic-style margins for now.
         let pixel_box = default_panel_box(canvas_width, canvas_height);
 
@@ -52,7 +55,6 @@ impl Layout {
 
     /// Create a new numeric layout inside an explicit panel box.
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new_with_axis_specs_in_panel_box(
         x_range: (f64, f64),
         y_range: (f64, f64),
@@ -62,33 +64,23 @@ impl Layout {
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
         theme: &ResolvedTheme,
-    ) -> Self {
-        let pixel_box = panel_box.as_tuple();
-
-        let x_range = resolve_range(x_range, x_spec);
-        let y_range = resolve_range(y_range, y_spec);
-        let projection = Projection {
+    ) -> Result<Self, Error> {
+        Self::new_with_ticks_and_axis_specs_in_panel_box(
             x_range,
             y_range,
-            pixel_box,
-        };
-
-        Self {
-            x_axis: Axis {
-                label: x_label,
-                ticks: automatic_numeric_ticks(x_range, &projection, AxisSide::Bottom, theme),
-            },
-            y_axis: Axis {
-                label: y_label,
-                ticks: automatic_numeric_ticks(y_range, &projection, AxisSide::Left, theme),
-            },
-            projection,
-        }
+            panel_box,
+            x_label,
+            y_label,
+            Vec::new(),
+            Vec::new(),
+            x_spec,
+            y_spec,
+            theme,
+        )
     }
 
     /// Create a new layout with explicit ticks and axis specs inside an explicit panel box.
     #[allow(clippy::too_many_arguments)]
-    #[must_use]
     pub fn new_with_ticks_and_axis_specs_in_panel_box(
         x_range: (f64, f64),
         y_range: (f64, f64),
@@ -100,19 +92,19 @@ impl Layout {
         x_spec: &AxisSpec,
         y_spec: &AxisSpec,
         theme: &ResolvedTheme,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let pixel_box = panel_box.as_tuple();
 
         // Don't expand categorical x ranges — the user picked
         // them deliberately.
-        let x_range = if x_ticks.is_empty() {
+        let x_range = if x_ticks.is_empty() || x_spec.exact_ticks.is_some() {
             resolve_range(x_range, x_spec)
         } else if let Some(limits) = x_spec.limits {
             limits
         } else {
             x_range
         };
-        let y_range = if y_ticks.is_empty() {
+        let y_range = if y_ticks.is_empty() || y_spec.exact_ticks.is_some() {
             resolve_range(y_range, y_spec)
         } else if let Some(limits) = y_spec.limits {
             limits
@@ -125,29 +117,24 @@ impl Layout {
             pixel_box,
         };
 
-        // Auto-generate numeric ticks when none were provided.
-        let x_ticks = if x_ticks.is_empty() {
-            automatic_numeric_ticks(x_range, &projection, AxisSide::Bottom, theme)
-        } else {
-            x_ticks
-        };
-        let y_ticks = if y_ticks.is_empty() {
-            automatic_numeric_ticks(y_range, &projection, AxisSide::Left, theme)
-        } else {
-            y_ticks
-        };
+        let x_ticks = x_spec.layout_ticks(x_ticks, &projection, AxisSide::Bottom, theme)?;
+        let y_ticks = y_spec.layout_ticks(y_ticks, &projection, AxisSide::Left, theme)?;
 
-        Self {
+        Ok(Self {
             projection,
             x_axis: Axis {
                 label: x_label,
                 ticks: x_ticks,
+                explicit_ticks: x_spec.exact_ticks.is_some(),
+                assigned_tick_width: None,
             },
             y_axis: Axis {
                 label: y_label,
                 ticks: y_ticks,
+                explicit_ticks: y_spec.exact_ticks.is_some(),
+                assigned_tick_width: None,
             },
-        }
+        })
     }
 
     /// Draw frame and axes ON TOP of data (called after data rendering).
@@ -170,6 +157,30 @@ impl Layout {
         backend: &mut dyn Backend,
     ) -> Result<(), Error> {
         Grid::draw(&self.projection, &self.x_axis, &self.y_axis, theme, backend)
+    }
+}
+
+impl AxisSpec {
+    fn layout_ticks(
+        &self,
+        supplied: Vec<AxisTick>,
+        projection: &Projection,
+        side: AxisSide,
+        theme: &ResolvedTheme,
+    ) -> Result<Vec<AxisTick>, Error> {
+        let (range, axis) = match side {
+            AxisSide::Bottom => (projection.x_range(), "x-axis"),
+            AxisSide::Left => (projection.y_range(), "y-axis"),
+        };
+        if let Some(ticks) = &self.exact_ticks {
+            Axis::validate_ticks(ticks, range, axis)?;
+            return Ok(ticks.clone());
+        }
+        if supplied.is_empty() {
+            automatic_numeric_ticks(range, projection, side, theme)
+        } else {
+            Ok(supplied)
+        }
     }
 }
 

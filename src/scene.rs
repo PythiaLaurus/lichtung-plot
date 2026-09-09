@@ -21,9 +21,9 @@ thread_local! {
 /// One internal fully rendered SVG scene shared by terminal outputs.
 pub(crate) struct RenderedScene {
     size: CanonicalSceneSize,
-    svg: Box<[u8]>,
+    svg: Vec<u8>,
     outline_plan: SvgOutlinePlan,
-    outlined_svg: OnceLock<Result<Box<[u8]>, String>>,
+    outlined_svg: OnceLock<Result<Vec<u8>, String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +107,12 @@ impl RenderedScene {
                 .borrow_mut()
                 .push(("outline", outlined.as_ptr().addr(), outlined.len()));
         });
-        Ok(outlined.to_vec())
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(outlined.len())
+            .map_err(|error| Error::Render(format!("outlined SVG copy reservation: {error}")))?;
+        bytes.extend_from_slice(outlined);
+        Ok(bytes)
     }
 
     /// Rasterize the scene to deterministic PNG bytes with explicit options.
@@ -117,19 +122,47 @@ impl RenderedScene {
     /// Returns an error for invalid or excessive sizing, planned-glyph failures,
     /// SVG parsing failures, allocation failure, or PNG encoding failure.
     pub(crate) fn png_bytes(&self, options: &PngOptions) -> Result<Vec<u8>, Error> {
+        self.png_bytes_with_parser_limit(options, MAX_CONVERSION_SCENE_BYTES)
+    }
+
+    fn png_bytes_with_parser_limit(
+        &self,
+        options: &PngOptions,
+        parser_limit: usize,
+    ) -> Result<Vec<u8>, Error> {
         self.validate_png_source_limits()?;
-        let outlined = self.outlined_svg_bytes()?;
+        let target = crate::render::svg_backend::PngTargetPlan::new(self.size.dimensions, options)?;
+        let bytes = match self.outlined_svg.get() {
+            Some(Ok(bytes)) => bytes.len(),
+            Some(Err(error)) => return Err(Error::Render(error.clone())),
+            None => self
+                .outline_plan
+                .count_parser_bytes(
+                    self.size.dimensions.width(),
+                    self.size.dimensions.height(),
+                    parser_limit,
+                )
+                .map_err(Error::Render)?,
+        };
+        validate_parser_bytes(bytes, parser_limit)?;
+        let outlined = self
+            .outlined_svg
+            .get_or_init(|| {
+                self.outline_plan.derive_counted(
+                    self.size.dimensions.width(),
+                    self.size.dimensions.height(),
+                    bytes,
+                )
+            })
+            .as_deref()
+            .map_err(|error| Error::Render(error.clone()))?;
         #[cfg(test)]
         SCENE_ROUTE_EVIDENCE.with(|evidence| {
             evidence
                 .borrow_mut()
                 .push(("png", outlined.as_ptr().addr(), outlined.len()));
         });
-        crate::render::svg_backend::rasterize_svg_bytes_to_png(
-            outlined,
-            self.size.dimensions,
-            options,
-        )
+        crate::render::svg_backend::rasterize_svg_bytes_to_png(outlined, target, options)
     }
 
     fn validate_png_source_limits(&self) -> Result<(), Error> {
@@ -146,12 +179,6 @@ impl RenderedScene {
                 "PNG scene work of {pixels} CSS pixels exceeds the {MAX_EXPORT_PIXELS}-pixel conversion limit"
             )));
         }
-        let conversion_bytes = self.svg.len();
-        if conversion_bytes > MAX_CONVERSION_SCENE_BYTES {
-            return Err(Error::Render(format!(
-                "PNG SVG scene size exceeds the {MAX_CONVERSION_SCENE_BYTES}-byte conversion limit"
-            )));
-        }
         Ok(())
     }
 
@@ -164,6 +191,19 @@ impl RenderedScene {
             .as_deref()
             .map_err(|error| Error::Render(error.clone()))
     }
+}
+
+pub(crate) fn validate_png_parser_bytes(bytes: usize) -> Result<(), Error> {
+    validate_parser_bytes(bytes, MAX_CONVERSION_SCENE_BYTES)
+}
+
+fn validate_parser_bytes(bytes: usize, limit: usize) -> Result<(), Error> {
+    if bytes > limit {
+        return Err(Error::Render(format!(
+            "PNG SVG parser input size exceeds the {limit}-byte conversion limit"
+        )));
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_png_target_dimensions(width: f64, height: f64) -> Result<(), Error> {
@@ -205,7 +245,7 @@ mod tests {
             size: CanonicalSceneSize {
                 dimensions: resvg::tiny_skia::IntSize::from_wh(width, height).unwrap(),
             },
-            svg: vec![0; byte_count].into_boxed_slice(),
+            svg: vec![0; byte_count],
             outline_plan: SvgOutlinePlan::Failed("not used by source-limit tests".into()),
             outlined_svg: OnceLock::new(),
         }
@@ -261,9 +301,9 @@ mod tests {
             .contains("scene work"));
         assert!(direct_scene(1, 1, MAX_CONVERSION_SCENE_BYTES + 1)
             .validate_png_source_limits()
-            .unwrap_err()
-            .to_string()
-            .contains("scene size"));
+            .is_ok());
+        assert!(validate_png_parser_bytes(MAX_CONVERSION_SCENE_BYTES).is_ok());
+        assert!(validate_png_parser_bytes(MAX_CONVERSION_SCENE_BYTES + 1).is_err());
     }
 
     #[test]
@@ -284,5 +324,82 @@ mod tests {
             })
             .unwrap_err();
         assert!(error.to_string().contains("scene dimensions"));
+    }
+
+    #[test]
+    fn invalid_png_options_do_not_initialize_the_outline_cache() {
+        let scene = RenderedScene::new(10, 10, Some(finalized(10, 10))).unwrap();
+        let error = scene
+            .png_bytes(&PngOptions {
+                sizing: crate::PngSizing::Scale(f32::NAN),
+                compression: crate::PngCompression::Balanced,
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("png scale"));
+        assert!(scene.outlined_svg.get().is_none());
+        assert!(scene.svg_with_text_as_paths().is_ok());
+    }
+
+    #[test]
+    fn actual_glyph_payload_limit_precedes_derived_buffer_reservation() {
+        use crate::layout::{
+            PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance,
+        };
+        use crate::render::backend::{PlannedTextPlacement, Point2D, Rgba, TextAnchor};
+        let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
+        let plan = environment
+            .plan_text(TextPlanInput {
+                source: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 10,
+                line_height: TextLineHeight::Multiplier(1.2),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Start,
+                paint: Rgba::rgb(1, 2, 3),
+                provenance: TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "parser count test".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        let mut backend = SvgBackend::in_memory_with_fonts(320, 40, environment);
+        backend.begin(320, 40).unwrap();
+        backend
+            .draw_planned_text(
+                PlannedTextPlacement::middle(Point2D::new(10.0, 20.0), TextAnchor::Start, 0.0),
+                &plan,
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let scene = RenderedScene::new(320, 40, backend.into_output()).unwrap();
+        let parser_limit = scene.svg_bytes().len();
+        assert!(scene.outline_plan.count_bytes(320, 40).unwrap() > parser_limit);
+        crate::render::svg_backend::DERIVED_BUFFER_RESERVATIONS.with(|calls| calls.set(0));
+        let error = scene
+            .png_bytes_with_parser_limit(&PngOptions::default(), parser_limit)
+            .unwrap_err();
+        assert!(error.to_string().contains("parser input size"));
+        crate::render::svg_backend::DERIVED_BUFFER_RESERVATIONS
+            .with(|calls| assert_eq!(calls.get(), 0));
+        assert!(scene.outlined_svg.get().is_none());
+        assert!(scene.svg_with_text_as_paths().unwrap().len() > parser_limit);
+        assert!(scene.png_bytes(&PngOptions::default()).is_ok());
+    }
+
+    #[test]
+    fn png_parser_gate_uses_outlined_bytes_without_poisoning_svg() {
+        let scene = RenderedScene::new(10, 10, Some(finalized(10, 10))).unwrap();
+        let oversized = vec![b' '; MAX_CONVERSION_SCENE_BYTES + 1];
+        scene.outlined_svg.set(Ok(oversized)).unwrap();
+        assert!(scene.svg_bytes().len() < MAX_CONVERSION_SCENE_BYTES);
+        let error = scene.png_bytes(&PngOptions::default()).unwrap_err();
+        assert!(error.to_string().contains("parser input size"));
+        assert_eq!(
+            scene.outlined_svg_bytes().unwrap().len(),
+            MAX_CONVERSION_SCENE_BYTES + 1
+        );
+        assert!(scene.svg_bytes().starts_with(b"<svg"));
     }
 }

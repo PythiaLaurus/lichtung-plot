@@ -1,7 +1,10 @@
 //! Canonically ordered text and font-pair preparation requirements.
 
+use std::borrow::Cow;
+
 use crate::font::canonical::{
-    self, FamilyPreference, FontPairPreparationRequest, PreparedFontEnvironment, RequestedWeight,
+    self, CensusSource, FamilyPreference, FontPairPreparationRequest, PreparedFontEnvironment,
+    RequestedWeight,
 };
 use crate::layout::kernel::ComponentAddress;
 use crate::theme::TextAppearance;
@@ -39,14 +42,67 @@ pub(crate) struct PreparedTextRequirement {
     pub(crate) stack: Vec<FamilyPreference>,
     pub(crate) weight: TextWeight,
     pub(crate) pair_ordinal: u32,
+    source_work_admitted: bool,
 }
 
 impl PreparedTextRequirement {
-    pub(crate) fn new(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "admission receives the complete borrowed text identity"
+    )]
+    pub(crate) fn push_into<'a>(
+        requirements: &mut Vec<Self>,
+        address: ComponentAddress,
+        role: PreparedTextRole,
+        local_index: u32,
+        source: impl Into<CensusSource<'a>>,
+        generated_alphabet: &[char],
+        appearance: &TextAppearance,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), PreparedTextCensusError> {
+        #[cfg(not(test))]
+        if prepared_stage.is_none() {
+            return Err(PreparedTextCensusError::MissingPreparedStage);
+        }
+        if let Some(stage) = prepared_stage.as_deref_mut() {
+            let mut present = false;
+            for entry in requirements.iter() {
+                stage.font_resources().claim_work(1)?;
+                if entry.component_address == address {
+                    present = true;
+                    break;
+                }
+            }
+            if !present {
+                stage
+                    .claim_topology_slots(1)
+                    .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
+            }
+        }
+        reserve_census_vec(
+            requirements,
+            1,
+            "prepared text requirements",
+            prepared_stage.as_deref_mut(),
+        )?;
+        requirements.push(Self::new_with_stage(
+            address,
+            role,
+            local_index,
+            source,
+            generated_alphabet,
+            appearance,
+            prepared_stage,
+        )?);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new<'a>(
         component_address: ComponentAddress,
         text_role: PreparedTextRole,
         local_index: u32,
-        source: impl AsRef<str>,
+        source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
         appearance: &TextAppearance,
     ) -> Result<Self, PreparedTextCensusError> {
@@ -61,11 +117,11 @@ impl PreparedTextRequirement {
         )
     }
 
-    pub(crate) fn new_with_stage(
+    fn new_with_stage<'a>(
         component_address: ComponentAddress,
         text_role: PreparedTextRole,
         local_index: u32,
-        source: impl AsRef<str>,
+        source: impl Into<CensusSource<'a>>,
         generated_alphabet: &[char],
         appearance: &TextAppearance,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -73,14 +129,75 @@ impl PreparedTextRequirement {
         if generated_alphabet.windows(2).any(|pair| pair[0] >= pair[1]) {
             return Err(PreparedTextCensusError::GeneratedAlphabetOrder);
         }
-        let source = source.as_ref();
-        let mut retained_source = String::new();
-        reserve_census_string(
-            &mut retained_source,
-            source.len(),
-            "prepared text source",
-            prepared_stage.as_deref_mut(),
-        )?;
+        let source = source.into();
+        // Source work is admitted before either copying or formatting output.
+        if let Some(stage) = prepared_stage.as_deref_mut() {
+            let work = appearance
+                .stack
+                .len()
+                .checked_add(generated_alphabet.len())
+                .ok_or(PreparedTextCensusError::Arithmetic(
+                    "borrowed text census work",
+                ))?;
+            stage.font_resources().claim_work(
+                u64::try_from(work).map_err(|_| {
+                    PreparedTextCensusError::Arithmetic("borrowed text census work")
+                })?,
+            )?;
+        }
+        let (source, formatted) = match source {
+            CensusSource::Text(source) => {
+                if let Some(stage) = prepared_stage.as_deref_mut() {
+                    let work = source
+                        .chars()
+                        .count()
+                        .checked_add(canonical::selection_units(&source).count())
+                        .and_then(|work| work.checked_add(usize::from(source.contains('\u{00AD}'))))
+                        .ok_or(PreparedTextCensusError::Arithmetic(
+                            "borrowed text census work",
+                        ))?;
+                    stage
+                        .font_resources()
+                        .claim_work(u64::try_from(work).map_err(|_| {
+                            PreparedTextCensusError::Arithmetic("borrowed text census work")
+                        })?)?;
+                }
+                (source, false)
+            }
+            CensusSource::Formatted(arguments) => (
+                Cow::Owned(canonical::format_census_source(
+                    arguments,
+                    prepared_stage.as_deref_mut(),
+                )?),
+                true,
+            ),
+        };
+        let retained_source = match source {
+            Cow::Borrowed(source) => {
+                let mut retained = String::new();
+                reserve_census_string(
+                    &mut retained,
+                    source.len(),
+                    "prepared text source",
+                    prepared_stage.as_deref_mut(),
+                )?;
+                retained.push_str(source);
+                retained
+            }
+            Cow::Owned(mut source) => {
+                // Semantic display producers already own this string; transfer it,
+                // rather than allocating a second census copy.
+                if let Some(stage) = prepared_stage.as_deref_mut().filter(|_| !formatted) {
+                    stage
+                        .font_resources()
+                        .claim_bytes(source.capacity() as u64)?;
+                    stage
+                        .reserve_prepared_string(&mut source, 0, "prepared semantic text source")
+                        .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
+                }
+                source
+            }
+        };
         let mut retained_alphabet = Vec::new();
         reserve_census_vec(
             &mut retained_alphabet,
@@ -95,8 +212,8 @@ impl PreparedTextRequirement {
             "prepared font stack source",
             prepared_stage.as_deref_mut(),
         )?;
+        let source_work_admitted = prepared_stage.is_some();
         let stack = canonical::parse_family_stack_with_stage(&appearance.stack, prepared_stage)?;
-        retained_source.push_str(source);
         retained_alphabet.extend_from_slice(generated_alphabet);
         stack_source.push_str(&appearance.stack);
         Ok(Self {
@@ -109,7 +226,20 @@ impl PreparedTextRequirement {
             stack,
             weight: appearance.weight,
             pair_ordinal: u32::MAX,
+            source_work_admitted,
         })
+    }
+
+    fn scalar_occurrence_count(&self) -> Result<u64, PreparedTextCensusError> {
+        self.source
+            .chars()
+            .count()
+            .checked_add(usize::from(self.source.contains('\u{00AD}')))
+            .and_then(|count| count.checked_add(self.generated_alphabet.len()))
+            .and_then(|count| u64::try_from(count).ok())
+            .ok_or(PreparedTextCensusError::Arithmetic(
+                "prepared text scalar occurrences",
+            ))
     }
 }
 
@@ -168,7 +298,7 @@ impl PreparedTextCensus {
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
         scalar_presence: Option<&mut [u64]>,
     ) -> Result<Self, PreparedTextCensusError> {
-        requirements.sort_by(|left, right| {
+        requirements.sort_unstable_by(|left, right| {
             left.component_address
                 .canonical_text_cmp(&right.component_address)
                 .then_with(|| left.text_role.cmp(&right.text_role))
@@ -181,12 +311,6 @@ impl PreparedTextCensus {
         }) {
             return Err(PreparedTextCensusError::DuplicateIdentity);
         }
-        let mut retained_requirement_shells = if let Some(stage) = prepared_stage.as_deref_mut() {
-            Some(reserve_prepared_requirement_shells(&requirements, stage)?)
-        } else {
-            None
-        };
-
         let pair_count = requirements
             .iter()
             .enumerate()
@@ -284,10 +408,6 @@ impl PreparedTextCensus {
             pair.stack_source
                 .push_str(&requirements[requirement_index].stack_source);
         }
-        if let Some(mut retained) = retained_requirement_shells.take() {
-            fill_prepared_requirement_shells(&mut retained, &requirements)?;
-            requirements = retained;
-        }
 
         if pairs.len() != pair_count {
             return Err(PreparedTextCensusError::Arithmetic(
@@ -296,15 +416,8 @@ impl PreparedTextCensus {
         }
         let structural_addresses = Self::structural_address_count(&requirements)?;
         let scalar_occurrences = requirements.iter().try_fold(0_u128, |total, requirement| {
-            let source = u128::try_from(requirement.source.chars().count()).map_err(|_| {
-                PreparedTextCensusError::Arithmetic("prepared text scalar occurrences")
-            })?;
-            let generated = u128::try_from(requirement.generated_alphabet.len()).map_err(|_| {
-                PreparedTextCensusError::Arithmetic("prepared text scalar occurrences")
-            })?;
             total
-                .checked_add(source)
-                .and_then(|total| total.checked_add(generated))
+                .checked_add(u128::from(requirement.scalar_occurrence_count()?))
                 .ok_or(PreparedTextCensusError::Arithmetic(
                     "prepared text scalar occurrences",
                 ))
@@ -341,11 +454,14 @@ impl PreparedTextCensus {
         mut presence: Vec<u64>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<PreparedFontEnvironment, PreparedTextCensusError> {
-        let scalar_occurrences = self.scalar_occurrence_count()?;
         let discovery = PreparedFontEnvironment::reserve_system_discovery(prepared_stage)?;
-        prepared_stage
-            .font_resources()
-            .claim_work(scalar_occurrences)?;
+        for requirement in &self.requirements {
+            if !requirement.source_work_admitted {
+                prepared_stage
+                    .font_resources()
+                    .claim_work(requirement.scalar_occurrence_count()?)?;
+            }
+        }
         self.materialize_required_scalars(&mut presence, Some(prepared_stage))?;
         let environment = PreparedFontEnvironment::discover_system_with_prepared_resources(
             presence,
@@ -374,9 +490,12 @@ impl PreparedTextCensus {
             ));
         }
         let mut capacities = Vec::new();
-        capacities
-            .try_reserve_exact(self.pairs.len())
-            .map_err(|_| PreparedTextCensusError::Allocation("required pair scalar capacities"))?;
+        reserve_census_vec(
+            &mut capacities,
+            self.pairs.len(),
+            "required pair scalar capacities",
+            prepared_stage.as_deref_mut(),
+        )?;
         let mut unique_pair_scalars = 0_u128;
         for pair in &self.pairs {
             presence.fill(0);
@@ -461,7 +580,7 @@ impl PreparedTextCensus {
     fn prepare_pairs_in(
         &self,
         environment: &PreparedFontEnvironment,
-        prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<(), PreparedTextCensusError> {
         environment.prepare_pairs(
             self.pairs.iter().map(|pair| {
@@ -472,8 +591,15 @@ impl PreparedTextCensus {
                     &pair.required_scalars,
                 )
             }),
-            prepared_stage,
+            prepared_stage.as_deref_mut(),
         )?;
+        for requirement in &self.requirements {
+            environment.prepare_source_units(
+                requirement.pair_ordinal,
+                &requirement.source,
+                prepared_stage.as_deref_mut(),
+            )?;
+        }
         environment.seal_prepared_pairs()?;
         Ok(())
     }
@@ -486,6 +612,20 @@ fn reserve_census_vec<T>(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), PreparedTextCensusError> {
     if let Some(stage) = prepared_stage {
+        super::claim_text_generation(stage.generation_resources().claim_slots(additional as u128))
+            .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
+        let required = values
+            .len()
+            .checked_add(additional)
+            .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
+        if required > values.capacity() {
+            let bytes = required
+                .checked_mul(std::mem::size_of::<T>())
+                .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
+            stage.font_resources().claim_bytes(
+                u64::try_from(bytes).map_err(|_| PreparedTextCensusError::Arithmetic(payload))?,
+            )?;
+        }
         stage
             .reserve_prepared(values, additional, payload)
             .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))
@@ -503,6 +643,16 @@ fn reserve_census_string(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), PreparedTextCensusError> {
     if let Some(stage) = prepared_stage {
+        let required = value
+            .len()
+            .checked_add(additional)
+            .ok_or(PreparedTextCensusError::Arithmetic(payload))?;
+        if required > value.capacity() {
+            stage.font_resources().claim_bytes(
+                u64::try_from(required)
+                    .map_err(|_| PreparedTextCensusError::Arithmetic(payload))?,
+            )?;
+        }
         stage
             .reserve_prepared_string(value, additional, payload)
             .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))
@@ -544,83 +694,6 @@ fn reserve_family_stack_shell(
     Ok(retained)
 }
 
-fn reserve_prepared_requirement_shells(
-    source: &[PreparedTextRequirement],
-    stage: &mut crate::layout::kernel::PreparedStage<'_>,
-) -> Result<Vec<PreparedTextRequirement>, PreparedTextCensusError> {
-    let mut retained = Vec::new();
-    reserve_census_vec(
-        &mut retained,
-        source.len(),
-        "prepared text requirements",
-        Some(stage),
-    )?;
-    for requirement in source {
-        let mut retained_source = String::new();
-        reserve_census_string(
-            &mut retained_source,
-            requirement.source.len(),
-            "prepared text source",
-            Some(stage),
-        )?;
-        let mut retained_alphabet = Vec::new();
-        reserve_census_vec(
-            &mut retained_alphabet,
-            requirement.generated_alphabet.len(),
-            "prepared generated alphabet",
-            Some(stage),
-        )?;
-        retained_alphabet.resize(requirement.generated_alphabet.len(), '\0');
-        let mut stack_source = String::new();
-        reserve_census_string(
-            &mut stack_source,
-            requirement.stack_source.len(),
-            "prepared font stack source",
-            Some(stage),
-        )?;
-        retained.push(PreparedTextRequirement {
-            component_address: requirement
-                .component_address
-                .prepared_copy_shell(stage)
-                .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?,
-            text_role: requirement.text_role,
-            local_index: requirement.local_index,
-            source: retained_source,
-            generated_alphabet: retained_alphabet.into_boxed_slice(),
-            stack_source,
-            stack: reserve_family_stack_shell(&requirement.stack, Some(stage))?,
-            weight: requirement.weight,
-            pair_ordinal: u32::MAX,
-        });
-    }
-    Ok(retained)
-}
-
-fn fill_prepared_requirement_shells(
-    retained: &mut [PreparedTextRequirement],
-    source: &[PreparedTextRequirement],
-) -> Result<(), PreparedTextCensusError> {
-    if retained.len() != source.len() {
-        return Err(PreparedTextCensusError::Arithmetic(
-            "prepared text requirements",
-        ));
-    }
-    for (retained, source) in retained.iter_mut().zip(source) {
-        retained
-            .component_address
-            .fill_prepared_copy(&source.component_address)
-            .map_err(|error| PreparedTextCensusError::Reservation(error.to_string()))?;
-        retained.source.push_str(&source.source);
-        retained
-            .generated_alphabet
-            .copy_from_slice(&source.generated_alphabet);
-        retained.stack_source.push_str(&source.stack_source);
-        fill_family_stack_shell(&mut retained.stack, &source.stack)?;
-        retained.pair_ordinal = source.pair_ordinal;
-    }
-    Ok(())
-}
-
 fn reserve_required_scalar_capacities(
     requirements: &[PreparedTextRequirement],
     pairs: &mut [PreparedFontPairRequirement],
@@ -633,9 +706,12 @@ fn reserve_required_scalar_capacities(
         ));
     }
     let mut capacities = Vec::new();
-    capacities
-        .try_reserve_exact(pairs.len())
-        .map_err(|_| PreparedTextCensusError::Allocation("required pair scalar capacities"))?;
+    reserve_census_vec(
+        &mut capacities,
+        pairs.len(),
+        "required pair scalar capacities",
+        prepared_stage.as_deref_mut(),
+    )?;
     let mut unique_pair_scalars = 0_u128;
     for pair in pairs.iter() {
         presence.fill(0);
@@ -732,7 +808,6 @@ fn prepared_address_clone(
 #[expect(
     clippy::similar_names,
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     reason = "the closed text census keeps both axis policies and canonical producer order explicit"
 )]
 pub(crate) fn foundational_plot_requirements(
@@ -743,152 +818,191 @@ pub(crate) fn foundational_plot_requirements(
     include_caption: bool,
     filter_point_label_x_to_limits: bool,
     filter_point_label_y_to_limits: bool,
-    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<PreparedTextRequirement>, Error> {
-    use crate::layout::kernel::AddressRole;
-
     let mut requirements = Vec::new();
-    let title_address = prepared_address_child(
-        base,
-        AddressRole::RootTitle,
-        0,
-        prepared_stage.as_deref_mut(),
-    )?;
-    push_present(
-        &mut requirements,
-        title_address,
-        PreparedTextRole::Title,
-        plot.title_text(),
-        &theme.typography.title,
-        prepared_stage.as_deref_mut(),
-    )?;
-    let subtitle_address = prepared_address_child(
-        base,
-        AddressRole::RootSubtitle,
-        0,
-        prepared_stage.as_deref_mut(),
-    )?;
-    push_present(
-        &mut requirements,
-        subtitle_address,
-        PreparedTextRole::Subtitle,
-        plot.subtitle_text(),
-        &theme.typography.subtitle,
-        prepared_stage.as_deref_mut(),
-    )?;
-    if kind != PlotKind::Matrix {
-        let (x_title, y_title) = plot.resolved_axis_labels(kind);
-        let x_axis = prepared_address_child(
-            base,
-            AddressRole::AxisBottom,
-            0,
-            prepared_stage.as_deref_mut(),
-        )?;
-        let y_axis = prepared_address_child(
-            base,
-            AddressRole::AxisLeft,
-            0,
-            prepared_stage.as_deref_mut(),
-        )?;
-        if !x_title.is_empty() {
-            let address = prepared_address_clone(&x_axis, prepared_stage.as_deref_mut())?;
-            push_owned(
-                &mut requirements,
-                address,
-                PreparedTextRole::AxisTitle,
-                0,
-                x_title,
-                &[],
-                &theme.typography.axis_title,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
-        if !y_title.is_empty() {
-            let address = prepared_address_clone(&y_axis, prepared_stage.as_deref_mut())?;
-            push_owned(
-                &mut requirements,
-                address,
-                PreparedTextRole::AxisTitle,
-                0,
-                y_title,
-                &[],
-                &theme.typography.axis_title,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
-        push_axis_ticks(
-            &mut requirements,
-            &x_axis,
-            plot.explicit_x_ticks(),
-            automatic_category_labels(plot, kind, true)?,
-            (kind == PlotKind::Heatmap
-                && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
-                .then_some(HEATMAP_ELISION_ALPHABET),
-            &theme.typography.tick_label,
-            prepared_stage.as_deref_mut(),
-        )?;
-        push_axis_ticks(
-            &mut requirements,
-            &y_axis,
-            plot.explicit_y_ticks(),
-            automatic_category_labels(plot, kind, false)?,
-            (kind == PlotKind::Heatmap
-                && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
-                .then_some(HEATMAP_ELISION_ALPHABET),
-            &theme.typography.tick_label,
-            prepared_stage.as_deref_mut(),
-        )?;
-    }
-
-    let significance_appearance = theme
-        .typography
-        .effective_significance_label(plot.significance_mark_style_override());
-    for (index, annotation) in plot.significance_annotations().iter().enumerate() {
-        let address = prepared_address_child(
-            base,
-            AddressRole::Annotation,
-            u32::try_from(index)
-                .map_err(|_| Error::Render("significance census index overflowed".into()))?,
-            prepared_stage.as_deref_mut(),
-        )?;
-        push_owned(
-            &mut requirements,
-            address,
-            PreparedTextRole::SignificanceLabel,
-            0,
-            annotation.mark().glyph()?,
-            &[],
-            &significance_appearance,
-            prepared_stage.as_deref_mut(),
-        )?;
-    }
-    push_deferred_plot_requirements(
+    PreparedTextRequirement::append_plot(
         &mut requirements,
         plot,
         kind,
         theme,
         base,
+        include_caption,
         filter_point_label_x_to_limits,
         filter_point_label_y_to_limits,
-        prepared_stage.as_deref_mut(),
+        prepared_stage,
     )?;
-    if include_caption {
-        let caption_address = prepared_address_child(
+    Ok(requirements)
+}
+
+impl PreparedTextRequirement {
+    #[expect(
+        clippy::similar_names,
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "the closed producer traversal preserves axis policies and visible source identities"
+    )]
+    pub(crate) fn append_plot(
+        requirements: &mut Vec<Self>,
+        plot: &Plot,
+        kind: PlotKind,
+        theme: &crate::theme::ResolvedTheme,
+        base: &ComponentAddress,
+        include_caption: bool,
+        filter_point_label_x_to_limits: bool,
+        filter_point_label_y_to_limits: bool,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), Error> {
+        use crate::layout::kernel::AddressRole;
+
+        #[cfg(not(test))]
+        if prepared_stage.is_none() {
+            return Err(Error::Render(
+                PreparedTextCensusError::MissingPreparedStage.to_string(),
+            ));
+        }
+        let title_address = prepared_address_child(
             base,
-            AddressRole::RootCaption,
+            AddressRole::RootTitle,
             0,
             prepared_stage.as_deref_mut(),
         )?;
         push_present(
-            &mut requirements,
-            caption_address,
-            PreparedTextRole::Caption,
-            plot.caption_text(),
-            &theme.typography.caption,
-            prepared_stage,
+            requirements,
+            title_address,
+            PreparedTextRole::Title,
+            plot.title_text(),
+            &theme.typography.title,
+            prepared_stage.as_deref_mut(),
         )?;
+        let subtitle_address = prepared_address_child(
+            base,
+            AddressRole::RootSubtitle,
+            0,
+            prepared_stage.as_deref_mut(),
+        )?;
+        push_present(
+            requirements,
+            subtitle_address,
+            PreparedTextRole::Subtitle,
+            plot.subtitle_text(),
+            &theme.typography.subtitle,
+            prepared_stage.as_deref_mut(),
+        )?;
+        if kind != PlotKind::Matrix {
+            let (x_title, y_title) = plot.resolved_axis_labels(kind);
+            let x_axis = prepared_address_child(
+                base,
+                AddressRole::AxisBottom,
+                0,
+                prepared_stage.as_deref_mut(),
+            )?;
+            let y_axis = prepared_address_child(
+                base,
+                AddressRole::AxisLeft,
+                0,
+                prepared_stage.as_deref_mut(),
+            )?;
+            if !x_title.is_empty() {
+                let address = prepared_address_clone(&x_axis, prepared_stage.as_deref_mut())?;
+                push_owned(
+                    requirements,
+                    address,
+                    PreparedTextRole::AxisTitle,
+                    0,
+                    x_title,
+                    &[],
+                    &theme.typography.axis_title,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+            if !y_title.is_empty() {
+                let address = prepared_address_clone(&y_axis, prepared_stage.as_deref_mut())?;
+                push_owned(
+                    requirements,
+                    address,
+                    PreparedTextRole::AxisTitle,
+                    0,
+                    y_title,
+                    &[],
+                    &theme.typography.axis_title,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+            push_axis_ticks(
+                requirements,
+                &x_axis,
+                plot.explicit_x_ticks(),
+                automatic_category_labels(plot, kind, true)?,
+                (kind == PlotKind::Heatmap
+                    && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
+                    .then_some(HEATMAP_ELISION_ALPHABET),
+                &theme.typography.tick_label,
+                prepared_stage.as_deref_mut(),
+            )?;
+            push_axis_ticks(
+                requirements,
+                &y_axis,
+                plot.explicit_y_ticks(),
+                automatic_category_labels(plot, kind, false)?,
+                (kind == PlotKind::Heatmap
+                    && plot.heatmap_label_fit_spec() == crate::HeatmapLabelFit::Elide)
+                    .then_some(HEATMAP_ELISION_ALPHABET),
+                &theme.typography.tick_label,
+                prepared_stage.as_deref_mut(),
+            )?;
+        }
+
+        let significance_appearance = theme
+            .typography
+            .effective_significance_label(plot.significance_mark_style_override());
+        for (index, annotation) in plot.significance_annotations().iter().enumerate() {
+            let address = prepared_address_child(
+                base,
+                AddressRole::Annotation,
+                u32::try_from(index)
+                    .map_err(|_| Error::Render("significance census index overflowed".into()))?,
+                prepared_stage.as_deref_mut(),
+            )?;
+            push_owned(
+                requirements,
+                address,
+                PreparedTextRole::SignificanceLabel,
+                0,
+                annotation.mark().glyph()?,
+                &[],
+                &significance_appearance,
+                prepared_stage.as_deref_mut(),
+            )?;
+        }
+        push_deferred_plot_requirements(
+            requirements,
+            plot,
+            kind,
+            theme,
+            base,
+            filter_point_label_x_to_limits,
+            filter_point_label_y_to_limits,
+            prepared_stage.as_deref_mut(),
+        )?;
+        if include_caption {
+            let caption_address = prepared_address_child(
+                base,
+                AddressRole::RootCaption,
+                0,
+                prepared_stage.as_deref_mut(),
+            )?;
+            push_present(
+                requirements,
+                caption_address,
+                PreparedTextRole::Caption,
+                plot.caption_text(),
+                &theme.typography.caption,
+                prepared_stage,
+            )?;
+        }
+        Ok(())
     }
-    Ok(requirements)
 }
 
 #[expect(
@@ -931,7 +1045,7 @@ fn push_deferred_plot_requirements(
         )?;
     }
     if plot.has_facets() {
-        for label in crate::orchestrator::facet_text_census_labels(plot)? {
+        crate::orchestrator::facet_text_census_labels(plot, |label| {
             push_deferred_body(
                 requirements,
                 &body_address,
@@ -940,8 +1054,8 @@ fn push_deferred_plot_requirements(
                 &[],
                 &body,
                 prepared_stage.as_deref_mut(),
-            )?;
-        }
+            )
+        })?;
     }
     for layer in plot.point_layers() {
         if let Some(labels) = layer.label_values() {
@@ -1028,26 +1142,26 @@ fn push_deferred_plot_requirements(
                         .hue_col()
                         .ok_or_else(|| Error::Data(format!("{family}: hue column not set")))?;
                     if kind == PlotKind::Scatter {
-                        crate::data::observed_levels_for_finite_pairs(
+                        Cow::Owned(crate::data::observed_levels_for_finite_pairs(
                             plot.data(),
                             x,
                             y,
                             hue,
                             "scatter",
-                        )?
+                        )?)
                     } else {
-                        crate::data::observed_levels_for_retained_finite_pairs(
+                        Cow::Owned(crate::data::observed_levels_for_retained_finite_pairs(
                             plot.data(),
                             x,
                             y,
                             hue,
                             "marginal",
-                        )?
+                        )?)
                     }
                 } else {
-                    values.levels().to_vec()
+                    Cow::Borrowed(values.levels())
                 };
-                for value in &levels {
+                for value in levels.iter() {
                     push_deferred_body(
                         requirements,
                         &body_address,
@@ -1159,12 +1273,31 @@ fn push_deferred_plot_requirements(
         )
     {
         for panel in crate::orchestrator::facet_text_census_panels(plot, kind)? {
-            for source in specialized_text_census(
+            specialized_text_census(
                 panel.plot(),
                 kind,
                 panel.data(),
                 filter_point_label_x_to_limits,
-            )? {
+                |source| {
+                    push_deferred_body(
+                        requirements,
+                        &body_address,
+                        &mut body_index,
+                        source,
+                        &[],
+                        &body,
+                        prepared_stage.as_deref_mut(),
+                    )
+                },
+            )?;
+        }
+    } else {
+        specialized_text_census(
+            plot,
+            kind,
+            plot.data(),
+            filter_point_label_x_to_limits,
+            |source| {
                 push_deferred_body(
                     requirements,
                     &body_address,
@@ -1173,33 +1306,19 @@ fn push_deferred_plot_requirements(
                     &[],
                     &body,
                     prepared_stage.as_deref_mut(),
-                )?;
-            }
-        }
-    } else {
-        for source in
-            specialized_text_census(plot, kind, plot.data(), filter_point_label_x_to_limits)?
-        {
-            push_deferred_body(
-                requirements,
-                &body_address,
-                &mut body_index,
-                source,
-                &[],
-                &body,
-                prepared_stage.as_deref_mut(),
-            )?;
-        }
+                )
+            },
+        )?;
     }
 
     Ok(())
 }
 
-fn push_deferred_body(
+fn push_deferred_body<'a>(
     requirements: &mut Vec<PreparedTextRequirement>,
     body_address: &ComponentAddress,
     body_index: &mut u32,
-    source: impl AsRef<str>,
+    source: impl Into<CensusSource<'a>>,
     generated: &[char],
     appearance: &TextAppearance,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
@@ -1325,21 +1444,32 @@ fn legend_uses_pair_identity(plot: &Plot, kind: PlotKind) -> bool {
         )
 }
 
-fn legend_title_census(plot: &Plot, kind: PlotKind) -> Vec<String> {
+fn legend_title_census(plot: &Plot, kind: PlotKind) -> impl Iterator<Item = Cow<'_, str>> {
     if legend_uses_pair_identity(plot, kind) {
-        return vec![
-            plot.resolve_label(plot.group_name().expect("pair identity has a group")),
-            plot.resolve_label(plot.hue_name().expect("pair identity has a hue")),
-            " × ".to_owned(),
-        ];
-    }
-    let literal = matches!(kind, PlotKind::Dumbbell | PlotKind::Regression)
-        || (kind == PlotKind::Line && plot.hue_dimension_key().is_none());
-    vec![if literal {
-        "series".to_owned()
+        [
+            Some(Cow::Owned(plot.resolve_label(
+                plot.group_name().expect("pair identity has a group"),
+            ))),
+            Some(Cow::Owned(plot.resolve_label(
+                plot.hue_name().expect("pair identity has a hue"),
+            ))),
+            Some(Cow::Borrowed(" × ")),
+        ]
     } else {
-        plot.resolve_label(plot.legend_title_key())
-    }]
+        let literal = matches!(kind, PlotKind::Dumbbell | PlotKind::Regression)
+            || (kind == PlotKind::Line && plot.hue_dimension_key().is_none());
+        [
+            Some(if literal {
+                Cow::Borrowed("series")
+            } else {
+                Cow::Owned(plot.resolve_label(plot.legend_title_key()))
+            }),
+            None,
+            None,
+        ]
+    }
+    .into_iter()
+    .flatten()
 }
 
 fn specialized_text_census(
@@ -1347,30 +1477,21 @@ fn specialized_text_census(
     kind: PlotKind,
     data: crate::data::PlotData<'_>,
     filter_x_to_limits: bool,
-) -> Result<Vec<String>, Error> {
+    mut visit: impl FnMut(CensusSource<'_>) -> Result<(), Error>,
+) -> Result<(), Error> {
     use crate::data::DataColumn;
 
-    let mut sources = Vec::new();
     match kind {
         PlotKind::Heatmap => {
-            sources.push(plot.resolved_color_label());
-            let heatmap = crate::plots::heatmap::text_census(plot, data)?;
-            sources.extend(heatmap.colorbar_values);
-            sources.extend(heatmap.value_annotations);
-            if heatmap.has_missing {
-                sources.push("Missing".to_owned());
+            visit(plot.resolved_color_label().into())?;
+            crate::plots::heatmap::text_census(plot, data, &mut visit)?;
+            for annotation in plot.heatmap_null_row_annotations_spec() {
+                visit(annotation.text().into())?;
             }
-            sources.extend(
-                plot.heatmap_null_row_annotations_spec()
-                    .iter()
-                    .map(|annotation| annotation.text().to_owned()),
-            );
         }
         PlotKind::Beeswarm => {
-            sources.push(plot.resolved_color_label());
-            sources.extend(crate::plots::beeswarm::text_census_colorbar_values(
-                plot, data,
-            )?);
+            visit(plot.resolved_color_label().into())?;
+            crate::plots::beeswarm::text_census_colorbar_values(plot, data, &mut visit)?;
         }
         PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval => {
             let has_unavailable = data
@@ -1388,28 +1509,29 @@ fn specialized_text_census(
                             .any(|row| matches!(values.get(data.row_index(row)), Some(None)))
                     });
             if has_unavailable {
-                sources.push("Not estimable".to_owned());
+                visit("Not estimable".into())?;
             }
             if let Some(format) = plot.estimate_labels_spec() {
                 if let Ok(DataColumn::Numeric(values)) = data.column(crate::data::X) {
                     for row in 0..data.height() {
                         if let Some(Some(value)) = values.get(data.row_index(row)) {
-                            sources.push(format.format(value));
+                            visit(format_args!("{}", format.display(value)).into())?;
                         }
                     }
                 }
             }
         }
         PlotKind::Waterfall => {
-            sources.extend(crate::plots::waterfall::text_census_annotations(
+            crate::plots::waterfall::text_census_annotations(
                 plot,
                 data,
                 filter_x_to_limits,
-            )?);
+                &mut visit,
+            )?;
         }
         _ => {}
     }
-    Ok(sources)
+    Ok(())
 }
 
 fn push_present(
@@ -1453,7 +1575,7 @@ fn push_axis_ticks(
                 PreparedTextRole::TickLabel,
                 u32::try_from(index)
                     .map_err(|_| Error::Render("exact tick census index overflowed".into()))?,
-                tick.label.clone(),
+                &tick.label,
                 &[],
                 appearance,
                 prepared_stage.as_deref_mut(),
@@ -1516,17 +1638,17 @@ fn automatic_category_labels(
                         false
                     )
             );
-            let levels = values
-                .levels()
-                .iter()
-                .map(|value| {
-                    if normalized {
-                        crate::data::collapse_whitespace(value)
-                    } else {
-                        value.clone()
-                    }
-                })
-                .collect::<Vec<_>>();
+            let levels = if normalized {
+                Cow::Owned(
+                    values
+                        .levels()
+                        .iter()
+                        .map(|value| crate::data::collapse_whitespace(value))
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                Cow::Borrowed(values.levels())
+            };
             plot.resolve_label_domain(
                 if x_axis {
                     "x-axis categories"
@@ -1543,36 +1665,27 @@ fn automatic_category_labels(
     clippy::too_many_arguments,
     reason = "one census insertion keeps the complete structural text identity explicit"
 )]
-fn push_owned(
+fn push_owned<'a>(
     requirements: &mut Vec<PreparedTextRequirement>,
     address: ComponentAddress,
     role: PreparedTextRole,
     local_index: u32,
-    source: impl AsRef<str>,
+    source: impl Into<CensusSource<'a>>,
     generated_alphabet: &[char],
     appearance: &TextAppearance,
-    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), Error> {
-    reserve_census_vec(
+    PreparedTextRequirement::push_into(
         requirements,
-        1,
-        "prepared text requirements",
-        prepared_stage.as_deref_mut(),
+        address,
+        role,
+        local_index,
+        source,
+        generated_alphabet,
+        appearance,
+        prepared_stage,
     )
-    .map_err(|error| Error::Render(format!("prepared text census: {error}")))?;
-    requirements.push(
-        PreparedTextRequirement::new_with_stage(
-            address,
-            role,
-            local_index,
-            source,
-            generated_alphabet,
-            appearance,
-            prepared_stage,
-        )
-        .map_err(|error| Error::Render(format!("prepared text census: {error}")))?,
-    );
-    Ok(())
+    .map_err(|error| Error::Render(format!("prepared text census: {error}")))
 }
 
 const fn requested_weight(weight: TextWeight) -> RequestedWeight {
@@ -1592,8 +1705,15 @@ fn visit_pair_scalars(
         .iter()
         .filter(|requirement| requirement.pair_ordinal == pair_ordinal)
     {
+        let mut needs_hyphen = false;
         for scalar in requirement.source.chars() {
+            needs_hyphen |= scalar == '\u{00AD}';
             visit(scalar)?;
+        }
+        // A selected discretionary break paints this scalar in the owning pair.
+        // Keep its occurrence in admission even if an explicit alphabet repeats it.
+        if needs_hyphen {
+            visit('-')?;
         }
         for &scalar in &requirement.generated_alphabet {
             visit(scalar)?;
@@ -1604,6 +1724,8 @@ fn visit_pair_scalars(
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PreparedTextCensusError {
+    #[error("production text census requires the root prepared stage")]
+    MissingPreparedStage,
     #[error(transparent)]
     Stack(#[from] canonical::FamilyStackError),
     #[error(transparent)]
@@ -1627,6 +1749,346 @@ mod tests {
     use super::*;
     use crate::layout::kernel::AddressRole;
     use crate::render::backend::Rgba;
+
+    #[test]
+    fn soft_hyphen_census_derives_one_literal_per_requirement_in_the_owning_pair() {
+        let bold = appearance("Soft", TextWeight::Bold);
+        let normal = appearance("Soft", TextWeight::Normal);
+        let mut census = PreparedTextCensus::materialize(
+            vec![
+                requirement(
+                    ComponentAddress::root(),
+                    PreparedTextRole::Title,
+                    0,
+                    "A\u{00AD}\u{00AD}-",
+                    &['-'],
+                    &bold,
+                ),
+                requirement(
+                    ComponentAddress::root(),
+                    PreparedTextRole::Caption,
+                    0,
+                    "A\u{00AD}",
+                    &[],
+                    &bold,
+                ),
+                requirement(
+                    ComponentAddress::root(),
+                    PreparedTextRole::TickLabel,
+                    0,
+                    "A",
+                    &[],
+                    &normal,
+                ),
+            ],
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(census.counts.scalar_occurrences, 10);
+        let environment = PreparedFontEnvironment::synthetic_faces(&[("Soft", &['A', '-'])]);
+        census
+            .prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS])
+            .unwrap();
+        assert!(environment.prepared_pairs_are_sealed().unwrap());
+        assert_eq!(census.counts.unique_pair_scalars, 4);
+        let bold_pair = census
+            .pairs
+            .iter()
+            .find(|pair| pair.weight == TextWeight::Bold)
+            .unwrap();
+        assert_eq!(bold_pair.required_scalars, ['A', '\u{00AD}', '-']);
+        let normal_pair = census
+            .pairs
+            .iter()
+            .find(|pair| pair.weight == TextWeight::Normal)
+            .unwrap();
+        assert_eq!(normal_pair.required_scalars, ['A']);
+        let mut occurrences = Vec::new();
+        visit_pair_scalars(&census.requirements, bold_pair.pair_ordinal, |scalar| {
+            occurrences.push(scalar);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            occurrences.iter().filter(|scalar| **scalar == '-').count(),
+            4
+        );
+    }
+
+    #[test]
+    fn soft_hyphen_missing_visible_literal_is_fatal_during_census_selection() {
+        let mut census = PreparedTextCensus::materialize(
+            vec![requirement(
+                ComponentAddress::root(),
+                PreparedTextRole::Title,
+                0,
+                "A\u{00AD}AA",
+                &[],
+                &appearance("Test Sans", TextWeight::Bold),
+            )],
+            None,
+            None,
+        )
+        .unwrap();
+        let environment = PreparedFontEnvironment::synthetic();
+        let error = census
+            .prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS])
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            PreparedTextCensusError::Font(canonical::FontError::MissingGlyph {
+                pair_ordinal: 0,
+                scalar: 0x2D
+            })
+        ));
+        assert!(!environment.prepared_pairs_are_sealed().unwrap());
+    }
+
+    #[test]
+    fn soft_hyphen_borrowed_and_chunked_format_admission_include_derived_work_once() {
+        for formatted in [false, true] {
+            for alphabet in [&[][..], &['-'][..]] {
+                for refuse in [false, true] {
+                    crate::layout::plan_exact_root(
+                        320,
+                        240,
+                        |stage| {
+                            // Nine stack bytes, three source scalars/units, one derived
+                            // literal, and every explicit generated alphabet occurrence.
+                            let work = 16 + u64::try_from(alphabet.len()).unwrap();
+                            stage
+                                .font_resources()
+                                .claim_work(1_000_000 - work + u64::from(refuse))
+                                .unwrap();
+                            let appearance = appearance("Test Sans", TextWeight::Bold);
+                            let result = if formatted {
+                                PreparedTextRequirement::new_with_stage(
+                                    ComponentAddress::root(),
+                                    PreparedTextRole::Title,
+                                    0,
+                                    format_args!("{}{}{}", "A", '\u{00AD}', '\u{00AD}'),
+                                    alphabet,
+                                    &appearance,
+                                    Some(stage),
+                                )
+                            } else {
+                                PreparedTextRequirement::new_with_stage(
+                                    ComponentAddress::root(),
+                                    PreparedTextRole::Title,
+                                    0,
+                                    "A\u{00AD}\u{00AD}",
+                                    alphabet,
+                                    &appearance,
+                                    Some(stage),
+                                )
+                            };
+                            if refuse {
+                                assert!(matches!(
+                                    result,
+                                    Err(PreparedTextCensusError::Font(
+                                        canonical::FontError::Limit { .. }
+                                    ))
+                                ));
+                                assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
+                            } else {
+                                let requirement = result.unwrap();
+                                assert_eq!(requirement.source, "A\u{00AD}\u{00AD}");
+                                assert_eq!(
+                                    requirement.scalar_occurrence_count().unwrap(),
+                                    4 + u64::try_from(alphabet.len()).unwrap()
+                                );
+                                assert_eq!(
+                                    stage.font_resources().usage().unwrap().logical_work,
+                                    1_000_000
+                                );
+                            }
+                            Ok(())
+                        },
+                        |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                        |(), _, (), _| Ok(()),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn formatted_source_census_charges_the_same_source_work_and_bytes_once() {
+        for formatted in [false, true] {
+            crate::layout::plan_exact_root(
+                320,
+                240,
+                |stage| {
+                    let appearance = appearance("Test Sans", TextWeight::Normal);
+                    let format = crate::NumericLabelFormat::new(0)
+                        .unwrap()
+                        .suffix("\u{0301}")
+                        .unwrap();
+                    let mut requirements = Vec::new();
+                    let source = if formatted {
+                        PreparedTextRequirement::new_with_stage(
+                            ComponentAddress::root(),
+                            PreparedTextRole::Body,
+                            0,
+                            format_args!("{}", format.display(1.0)),
+                            &[],
+                            &appearance,
+                            Some(stage),
+                        )
+                    } else {
+                        PreparedTextRequirement::new_with_stage(
+                            ComponentAddress::root(),
+                            PreparedTextRole::Body,
+                            0,
+                            "1\u{0301}",
+                            &[],
+                            &appearance,
+                            Some(stage),
+                        )
+                    }
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                    assert_eq!(source.source, "1\u{0301}");
+                    assert_eq!(stage.font_resources().usage().unwrap().logical_work, 12);
+                    let expected_bytes =
+                        3 + 2 * "Test Sans".len() + std::mem::size_of::<FamilyPreference>();
+                    assert_eq!(
+                        stage.font_resources().usage().unwrap().font_bytes,
+                        expected_bytes as u128
+                    );
+                    requirements.push(source);
+                    let census = PreparedTextCensus::materialize(requirements, Some(stage), None)
+                        .map_err(|error| Error::Render(error.to_string()))?;
+                    assert_eq!(census.counts.scalar_occurrences, 2);
+                    Ok(())
+                },
+                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn staged_topology_is_admitted_before_requirement_storage_and_shared_addresses_count_once() {
+        crate::layout::plan_exact_root(
+            320,
+            240,
+            |stage| {
+                // The exact-root driver already owns one structural slot.
+                stage.claim_topology_slots(999_998)?;
+                let appearance = appearance("Test Sans", TextWeight::Normal);
+                let address = ComponentAddress::root();
+                let mut requirements = Vec::new();
+                for role in [PreparedTextRole::Title, PreparedTextRole::Subtitle] {
+                    PreparedTextRequirement::push_into(
+                        &mut requirements,
+                        address.clone(),
+                        role,
+                        0,
+                        "A",
+                        &[],
+                        &appearance,
+                        Some(stage),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                }
+                let other = address.child(AddressRole::RootCaption, 0)?;
+                let capacity = requirements.capacity();
+                let error = PreparedTextRequirement::push_into(
+                    &mut requirements,
+                    other,
+                    PreparedTextRole::Caption,
+                    0,
+                    "A",
+                    &[],
+                    &appearance,
+                    Some(stage),
+                )
+                .unwrap_err();
+                assert!(error.to_string().contains("topology slots limit"));
+                assert_eq!(requirements.len(), 2);
+                assert_eq!(requirements.capacity(), capacity);
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn borrowed_source_work_refusal_precedes_source_retention() {
+        crate::layout::plan_exact_root(
+            320,
+            240,
+            |stage| {
+                stage
+                    .font_resources()
+                    .claim_work(1_000_000)
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                let appearance = appearance("Test Sans", TextWeight::Normal);
+                let error = PreparedTextRequirement::new_with_stage(
+                    ComponentAddress::root(),
+                    PreparedTextRole::Title,
+                    0,
+                    "A\u{0301}",
+                    &[],
+                    &appearance,
+                    Some(stage),
+                )
+                .unwrap_err();
+                assert!(error.to_string().contains("logical work"));
+                assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn staged_materialization_moves_semantic_sources_without_a_second_census_copy() {
+        crate::layout::plan_exact_root(
+            320,
+            240,
+            |stage| {
+                let appearance = appearance("Test Sans", TextWeight::Normal);
+                let source = String::from("A\u{0301}");
+                let source_pointer = source.as_ptr();
+                let mut requirements = Vec::new();
+                PreparedTextRequirement::push_into(
+                    &mut requirements,
+                    ComponentAddress::root(),
+                    PreparedTextRole::Title,
+                    0,
+                    source,
+                    &[],
+                    &appearance,
+                    Some(stage),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                let storage_pointer = requirements.as_ptr();
+                assert_eq!(requirements[0].source.as_ptr(), source_pointer);
+                let work = stage.font_resources().usage().unwrap().logical_work;
+                assert_eq!(work, 2 + 1 + "Test Sans".len() as u128);
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let census =
+                    PreparedTextCensus::materialize(requirements, Some(stage), Some(&mut presence))
+                        .map_err(|error| Error::Render(error.to_string()))?;
+                assert_eq!(census.requirements.as_ptr(), storage_pointer);
+                assert_eq!(census.requirements[0].source.as_ptr(), source_pointer);
+                assert_eq!(census.counts.structural_addresses, 1);
+                assert_eq!(census.counts.scalar_occurrences, 2);
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+    }
 
     fn appearance(stack: &str, weight: TextWeight) -> TextAppearance {
         TextAppearance {
@@ -1792,6 +2254,47 @@ mod tests {
                 && requirement.source == "exact"
                 && requirement.generated_alphabet.is_empty()
         }));
+    }
+
+    #[test]
+    fn generated_metric_scalars_are_selected_and_missing_generated_coverage_is_fatal() {
+        let appearance = appearance("Test Sans", TextWeight::Normal);
+        for (generated, succeeds) in [(&['A'][..], true), (&['M'][..], false)] {
+            let mut census = PreparedTextCensus::materialize(
+                vec![requirement(
+                    ComponentAddress::root(),
+                    PreparedTextRole::Body,
+                    0,
+                    "",
+                    generated,
+                    &appearance,
+                )],
+                None,
+                None,
+            )
+            .unwrap();
+            let environment = PreparedFontEnvironment::synthetic();
+            let result = census.prepare_fonts_in(&environment, &mut vec![0; SCALAR_MAP_WORDS]);
+            if succeeds {
+                result.unwrap();
+                let stack = canonical::parse_family_stack("Test Sans").unwrap();
+                let pair = environment
+                    .prepared_pair(&stack, RequestedWeight::Normal)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    pair.selection_for_unit("A", 'A').unwrap(),
+                    canonical::ScalarFaceSelection::Face(pair.primary)
+                );
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(PreparedTextCensusError::Font(
+                        canonical::FontError::MissingGlyph { scalar: 0x4D, .. }
+                    ))
+                ));
+            }
+        }
     }
 
     #[test]

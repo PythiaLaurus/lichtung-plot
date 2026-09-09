@@ -18,6 +18,62 @@ fn default_metrics() -> BracketMetrics {
 }
 
 #[test]
+fn fit_diagnostic_retains_caller_slot_after_bracket_sorting() {
+    use crate::layout::fit::{FitKind, FitScope, PlanError};
+    use crate::layout::{AddressRole, ComponentAddress};
+    let theme = crate::Theme::Publication.resolve();
+    theme.prepare_font_environment().unwrap();
+    let style = SignificanceMarkStyle::default();
+    let label = theme.typography.effective_significance_label(Some(style));
+    let address = ComponentAddress::root()
+        .child(AddressRole::CanvasCell, 3)
+        .unwrap();
+    let scope = FitScope::new(&address, 7);
+    let result = plan_comparisons_with_label(
+        &[
+            comparison("c", "d", 0.000_01),
+            comparison("a", "b", 0.000_01),
+        ],
+        &categories(),
+        &[1.0, 2.0, 3.0, 4.0],
+        (0.0, 10.0),
+        None,
+        None,
+        PanelBox::new(50.0, 66.0, 40.0, 240.0),
+        LegendAnnotationConstraint::NoObstacle,
+        style,
+        &label,
+        &theme,
+        false,
+        &scope,
+    );
+    let Err(PlanError::Fit(failure)) = result else {
+        panic!("narrow bracket labels should miss")
+    };
+    assert_eq!(failure.reason.kind, FitKind::Text);
+    assert_eq!(
+        failure.reason.address,
+        address.child(AddressRole::Annotation, 0).unwrap()
+    );
+    assert_eq!(failure.reason.ordinal, 0);
+}
+
+#[test]
+fn projection_arithmetic_failure_is_not_a_line_placement_miss() {
+    let error = place_lines(
+        (-f64::MAX, f64::MAX),
+        panel(),
+        &[0.0],
+        &[16.0],
+        None,
+        0.0,
+        default_metrics(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("projection arithmetic"));
+}
+
+#[test]
 fn planner_packs_disjoint_spans_into_minimal_deterministic_levels() {
     let comparisons = vec![
         comparison("c", "d", 0.01),
@@ -254,6 +310,7 @@ fn planner_retains_the_exact_effective_significance_label() {
         &label,
         &plan_theme,
         true,
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
 

@@ -93,11 +93,11 @@ fn scatter_legend_avoids_upper_right_cluster_without_covering_graphics() {
         "scatter-cluster-legend",
     );
     assert!(parse_legend_rect(&svg).1 < 100.0);
-    assert_inside_legend_clear(&svg, parse_first_clip_rect(&svg), "scatter");
+    assert_outside_legend_clear(&svg, parse_first_clip_rect(&svg), "scatter");
 }
 
 #[test]
-fn regression_inside_legend_is_clear_and_hidden_by_default() {
+fn regression_automatic_legend_is_outside_and_hidden_by_default() {
     let x = NumericValues::new("x", [8.0, 8.4, 8.8, 9.2, 9.6, 1.0, 2.0, 3.0]);
     let y = NumericValues::new("y", [8.0, 8.5, 8.2, 9.0, 9.4, 1.0, 2.0, 1.5]);
     let regression = || Plot::regression(x.clone(), y.clone()).size(360, 260);
@@ -107,7 +107,7 @@ fn regression_inside_legend_is_clear_and_hidden_by_default() {
         regression().legend(LegendPolicy::Visible(LegendPosition::Auto)),
         "regression-visible-legend",
     );
-    assert_inside_legend_clear(&visible, parse_first_clip_rect(&visible), "regression");
+    assert_outside_legend_clear(&visible, parse_first_clip_rect(&visible), "regression");
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn translated_spectrum_legend_does_not_cover_graphics_or_axes() {
         .size(360, 260),
         "translated-spectrum-legend",
     );
-    assert_inside_legend_clear(&svg, parse_first_clip_rect(&svg), "spectrum line");
+    assert_outside_legend_clear(&svg, parse_first_clip_rect(&svg), "spectrum line");
 }
 
 fn grouped_bar(
@@ -165,7 +165,7 @@ fn grouped_bar_legends_do_not_cover_graphics_or_axes() {
     let count = NumericValues::new("count", [10.0, 8.0, 6.0, 7.0, 3.0, 4.0]);
     for (horizontal, name) in [(false, "bar"), (true, "horizontal-bar")] {
         let svg = render(grouped_bar(&group, &series, &count, horizontal), name);
-        assert_inside_legend_clear(&svg, parse_first_clip_rect(&svg), name);
+        assert_outside_legend_clear(&svg, parse_first_clip_rect(&svg), name);
     }
 }
 
@@ -182,7 +182,15 @@ fn horizontal_bar_long_ticks_clear_y_axis_label() {
     );
     let text = parse_text_elements(&svg);
     let axis = text_element(&text, "Locus and genotype");
-    let tick = text_element(&text, "locus_0 aa");
+    let tick = text_element(&text, "locus_0 AA");
+    for genotype in ["aa", "Aa", "AA"] {
+        let label = format!("locus_0 {genotype}");
+        assert_eq!(
+            text.iter().filter(|entry| entry.content == label).count(),
+            1
+        );
+        assert!(text_element(&text, &label).x >= tick.x);
+    }
     let axis_line = svg
         .lines()
         .find(|line| line.contains(">Locus and genotype</text>"))
@@ -255,7 +263,7 @@ fn grouped_distribution_legends_do_not_cover_graphics_or_axes() {
         ),
     ] {
         let svg = render(plot, name);
-        assert_inside_legend_clear(&svg, parse_first_clip_rect(&svg), name);
+        assert_outside_legend_clear(&svg, parse_first_clip_rect(&svg), name);
     }
 }
 

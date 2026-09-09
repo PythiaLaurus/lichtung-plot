@@ -1,7 +1,9 @@
 // This is the private T5a3 integration surface; later text planning consumes it.
 #![allow(dead_code)]
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
+use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -10,12 +12,18 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use fontdb::{Database, Family, Source, Stretch, Style, ID};
 use sha2::{Digest, Sha256};
+use unicode_properties::UnicodeGeneralCategory;
+use unicode_segmentation::UnicodeSegmentation;
 
 #[cfg(test)]
 thread_local! {
     pub(crate) static FONT_DISCOVERY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_PAIR_RESOLUTION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FONT_NORMALIZATION_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static FONT_SELECTION_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FONT_STACK_PARSE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_SHAPE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static SHAPED_GLYPH_RETAINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static FONT_OUTLINE_GLYPHS: std::cell::RefCell<Vec<(FaceIdentity, u16)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
@@ -25,8 +33,147 @@ const FONT_WORK_LIMIT: u64 = 1_000_000;
 const TEXT_GENERATION_LIMIT: u128 = 1_000_000;
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
 
+/// Census producers can lend text or defer formatting until root admission.
+pub(crate) enum CensusSource<'a> {
+    Text(Cow<'a, str>),
+    Formatted(std::fmt::Arguments<'a>),
+}
+
+impl<'a> From<Cow<'a, str>> for CensusSource<'a> {
+    fn from(source: Cow<'a, str>) -> Self {
+        Self::Text(source)
+    }
+}
+impl<'a> From<&'a str> for CensusSource<'a> {
+    fn from(source: &'a str) -> Self {
+        Self::Text(Cow::Borrowed(source))
+    }
+}
+impl<'a> From<&'a String> for CensusSource<'a> {
+    fn from(source: &'a String) -> Self {
+        Self::Text(Cow::Borrowed(source))
+    }
+}
+impl From<String> for CensusSource<'_> {
+    fn from(source: String) -> Self {
+        Self::Text(Cow::Owned(source))
+    }
+}
+impl<'a> From<std::fmt::Arguments<'a>> for CensusSource<'a> {
+    fn from(source: std::fmt::Arguments<'a>) -> Self {
+        Self::Formatted(source)
+    }
+}
+
+#[derive(Default)]
+struct CensusFormatCount {
+    bytes: usize,
+    scalars: u64,
+    units: u64,
+    previous: Option<char>,
+    unit_has_base: bool,
+    has_soft_hyphen: bool,
+}
+
+impl std::fmt::Write for CensusFormatCount {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        self.bytes = self.bytes.checked_add(text.len()).ok_or(std::fmt::Error)?;
+        for scalar in text.chars() {
+            self.scalars = self.scalars.checked_add(1).ok_or(std::fmt::Error)?;
+            self.has_soft_hyphen |= scalar == '\u{00AD}';
+            // Only attachment of a mark can extend a narrow selection unit.
+            // Its grapheme boundary depends on the adjacent pair (GB9/GB9a
+            // and control breaks), not RI/emoji/consonant lookbehind rules.
+            let attached = self.unit_has_base
+                && is_visible_mark(scalar)
+                && self.previous.is_some_and(|previous| {
+                    let mut pair = [0; 8];
+                    let first = previous.encode_utf8(&mut pair).len();
+                    let second = scalar.encode_utf8(&mut pair[first..]).len();
+                    std::str::from_utf8(&pair[..first + second])
+                        .expect("encoded scalars")
+                        .graphemes(true)
+                        .count()
+                        == 1
+                });
+            if !attached {
+                self.units = self.units.checked_add(1).ok_or(std::fmt::Error)?;
+                self.unit_has_base = !is_visible_mark(scalar) && !is_nonpainting_control(scalar);
+            }
+            self.previous = Some(scalar);
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn format_census_source(
+    arguments: std::fmt::Arguments<'_>,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<String, FontError> {
+    struct ReservedOutput<'a> {
+        output: &'a mut String,
+        length: usize,
+    }
+    impl std::fmt::Write for ReservedOutput<'_> {
+        fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            if text.len() > self.length.saturating_sub(self.output.len()) {
+                return Err(std::fmt::Error);
+            }
+            self.output.push_str(text);
+            Ok(())
+        }
+    }
+    #[cfg(not(test))]
+    if prepared_stage.is_none() {
+        return Err(FontError::Reservation(
+            "production census formatting requires the root prepared stage".into(),
+        ));
+    }
+    let mut count = CensusFormatCount::default();
+    count
+        .write_fmt(arguments)
+        .map_err(|_| FontError::Arithmetic("formatted census source count"))?;
+    let resources = prepared_stage
+        .as_ref()
+        .map_or_else(OperationFontResources::new, |stage| stage.font_resources());
+    resources.claim_work(
+        count
+            .scalars
+            .checked_add(count.units)
+            .and_then(|work| work.checked_add(u64::from(count.has_soft_hyphen)))
+            .ok_or(FontError::Arithmetic("formatted census source work"))?,
+    )?;
+    resources.claim_bytes(
+        u64::try_from(count.bytes)
+            .map_err(|_| FontError::Arithmetic("formatted census source bytes"))?,
+    )?;
+    let mut output = String::new();
+    reserve_string_prepared_or_local(
+        &mut output,
+        count.bytes,
+        "formatted census source",
+        prepared_stage,
+    )?;
+    ReservedOutput {
+        output: &mut output,
+        length: count.bytes,
+    }
+    .write_fmt(arguments)
+    .map_err(|_| FontError::Arithmetic("formatted census source materialization"))?;
+    if output.len() != count.bytes {
+        return Err(FontError::Arithmetic(
+            "formatted census source count/materialization mismatch",
+        ));
+    }
+    Ok(output)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum FontError {
+    #[error("text shaping output admission failed: {0:?}")]
+    ShapeAdmission(TextGenerationClaimError),
+    #[error(transparent)]
+    FamilyStack(#[from] FamilyStackError),
     #[error("{resource} limit of {limit} was exceeded")]
     Limit { resource: &'static str, limit: u64 },
     #[error("font preflight arithmetic overflow while calculating {0}")]
@@ -63,6 +210,10 @@ pub(crate) enum FontError {
     DuplicatePreparedPair { pair_ordinal: u32 },
     #[error("font pair {pair_ordinal} was prepared after the operation census was sealed")]
     PreparedPairAfterSeal { pair_ordinal: u32 },
+    #[error("font unit was not admitted in pair {pair_ordinal}")]
+    UnknownUnit { pair_ordinal: u32 },
+    #[error("unsupported text control U+{scalar:04X}")]
+    UnsupportedControl { scalar: u32 },
     #[error("face {identity:?} has invalid design metrics")]
     InvalidMetrics { identity: FaceIdentity },
     #[error("shape face {identity:?}: {reason}")]
@@ -114,17 +265,28 @@ impl ResourceLimits {
 #[derive(Debug)]
 struct FontBudget {
     resources: OperationFontResources,
+    normalized_stacks: Vec<NormalizedStack>,
+}
+
+#[derive(Debug)]
+struct NormalizedStack {
+    source: Vec<FamilyPreference>,
+    names: Vec<(String, bool)>,
 }
 
 impl FontBudget {
     fn new(limits: ResourceLimits) -> Self {
         Self {
             resources: OperationFontResources::with_limits(limits),
+            normalized_stacks: Vec::new(),
         }
     }
 
     fn from_resources(resources: OperationFontResources) -> Self {
-        Self { resources }
+        Self {
+            resources,
+            normalized_stacks: Vec::new(),
+        }
     }
 
     fn claim_discovery(&mut self, amount: u64) -> Result<(), FontError> {
@@ -367,12 +529,22 @@ pub(crate) fn parse_family_stack_with_stage(
     stack: &str,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<FamilyPreference>, FamilyStackError> {
+    #[cfg(test)]
+    FONT_STACK_PARSE_CALLS.with(|calls| calls.set(calls.get() + 1));
     if stack.trim().is_empty() {
         return Err(FamilyStackError::Empty);
     }
     let entry_count = stack.split(',').count();
     let mut parsed = Vec::new();
     if let Some(stage) = prepared_stage.as_deref_mut() {
+        let bytes = entry_count
+            .checked_mul(std::mem::size_of::<FamilyPreference>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or(FamilyStackError::Allocation("font stack byte extent"))?;
+        stage
+            .font_resources()
+            .claim_bytes(bytes)
+            .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
         stage
             .reserve_prepared(&mut parsed, entry_count, "prepared font stack entries")
             .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
@@ -390,13 +562,24 @@ pub(crate) fn parse_family_stack_with_stage(
         if entry.chars().any(char::is_control) {
             return Err(FamilyStackError::ControlCharacter { entry_index });
         }
-        let folded = entry.to_ascii_lowercase();
-        let preference = match folded.as_str() {
-            "serif" => FamilyPreference::Serif,
-            "sans-serif" => FamilyPreference::SansSerif,
-            "monospace" => FamilyPreference::Monospace,
-            "cursive" | "fantasy" | "system-ui" | "ui-serif" | "ui-sans-serif" | "ui-monospace"
-            | "ui-rounded" | "math" | "fangsong" => {
+        let preference = match entry {
+            name if name.eq_ignore_ascii_case("serif") => FamilyPreference::Serif,
+            name if name.eq_ignore_ascii_case("sans-serif") => FamilyPreference::SansSerif,
+            name if name.eq_ignore_ascii_case("monospace") => FamilyPreference::Monospace,
+            name if [
+                "cursive",
+                "fantasy",
+                "system-ui",
+                "ui-serif",
+                "ui-sans-serif",
+                "ui-monospace",
+                "ui-rounded",
+                "math",
+                "fangsong",
+            ]
+            .iter()
+            .any(|generic| name.eq_ignore_ascii_case(generic)) =>
+            {
                 return Err(FamilyStackError::UnsupportedGeneric {
                     entry_index,
                     name: entry.to_owned(),
@@ -405,6 +588,10 @@ pub(crate) fn parse_family_stack_with_stage(
             _ => {
                 let mut name = String::new();
                 if let Some(stage) = prepared_stage.as_deref_mut() {
+                    stage
+                        .font_resources()
+                        .claim_bytes(entry.len() as u64)
+                        .map_err(|error| FamilyStackError::Reservation(error.to_string()))?;
                     stage
                         .reserve_prepared_string(
                             &mut name,
@@ -477,6 +664,73 @@ pub(crate) struct ResolvedFontPair {
     pub(crate) provenance: PairProvenance,
     pub(crate) primary: FaceIdentity,
     pub(crate) selected_scalars: SelectedScalarFaces,
+    pub(crate) selected_units: Vec<SelectedFontUnit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SelectedFontUnit {
+    pub(crate) source: String,
+    pub(crate) face: Option<FaceIdentity>,
+}
+
+impl ResolvedFontPair {
+    pub(crate) fn selection_for_unit(
+        &self,
+        unit: &str,
+        scalar: char,
+    ) -> Result<ScalarFaceSelection, FontError> {
+        if unit.chars().count() > 1 && unit.chars().any(is_visible_mark) {
+            let retained = self
+                .selected_units
+                .iter()
+                .find(|entry| entry.source == unit)
+                .ok_or(FontError::UnknownUnit {
+                    pair_ordinal: self.provenance.pair_ordinal,
+                })?;
+            if let Some(face) = retained.face {
+                return Ok(ScalarFaceSelection::Face(face));
+            }
+        }
+        self.selected_scalars
+            .iter()
+            .find(|entry| entry.scalar == scalar)
+            .map(|entry| entry.selection)
+            .ok_or(FontError::MissingGlyph {
+                pair_ordinal: self.provenance.pair_ordinal,
+                scalar: scalar as u32,
+            })
+    }
+}
+
+fn is_visible_mark(scalar: char) -> bool {
+    matches!(
+        scalar.general_category(),
+        unicode_properties::GeneralCategory::NonspacingMark
+            | unicode_properties::GeneralCategory::SpacingMark
+            | unicode_properties::GeneralCategory::EnclosingMark
+    ) && !is_nonpainting_control(scalar)
+}
+
+/// Narrow base-plus-mark units, never whole emoji sequences or words.
+pub(crate) fn selection_units(source: &str) -> impl Iterator<Item = &str> {
+    source.graphemes(true).flat_map(|grapheme| {
+        let mut remaining = grapheme;
+        std::iter::from_fn(move || {
+            let first = remaining.chars().next()?;
+            let end = remaining
+                .char_indices()
+                .skip(1)
+                .find(|(_, scalar)| {
+                    !is_visible_mark(*scalar)
+                        || is_visible_mark(first)
+                        || is_nonpainting_control(first)
+                })
+                .map_or(remaining.len(), |(index, _)| index);
+            let (unit, rest) = remaining.split_at(end);
+            remaining = rest;
+            Some(unit)
+        })
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -565,13 +819,26 @@ pub(crate) struct ReservedDiscoveryRecords {
     records: Vec<DiscoveryRecord>,
 }
 
-struct OpenedFontFile {
-    root_ordinal: u32,
-    canonical_path: PathBuf,
+struct DiscoveryFontHandle {
     file: File,
-    length: usize,
-    modified: Option<std::time::SystemTime>,
-    bytes: Vec<u8>,
+}
+
+#[cfg(test)]
+thread_local! {
+    // Live handles, peak handles, opens, reads, retained files.
+    static DISCOVERY_HANDLES: std::cell::Cell<[usize; 5]> = const { std::cell::Cell::new([0; 5]) };
+    static DISCOVERY_AFTER_ADMISSION: std::cell::Cell<Option<fn(&Path)>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+impl Drop for DiscoveryFontHandle {
+    fn drop(&mut self) {
+        DISCOVERY_HANDLES.with(|state| {
+            let mut counts = state.get();
+            counts[0] -= 1;
+            state.set(counts);
+        });
+    }
 }
 
 #[derive(Debug)]
@@ -581,9 +848,19 @@ pub(crate) struct CanonicalFontCore {
     faces: Vec<FaceMetadata>,
     scalar_presence: Vec<u64>,
     prepared_pairs: Vec<PreparedPair>,
+    incremental_pairs: Vec<IncrementalPair>,
+    parsed_stacks: Vec<(String, Vec<FamilyPreference>)>,
     prepared_pairs_sealed: bool,
     generation_resources: OperationGenerationResources,
     budget: FontBudget,
+}
+
+#[derive(Debug)]
+struct IncrementalPair {
+    stack: Vec<FamilyPreference>,
+    weight: RequestedWeight,
+    candidates: Vec<CandidateFace>,
+    selected_scalars: Vec<SelectedScalarFace>,
 }
 
 #[derive(Debug, Clone)]
@@ -744,6 +1021,44 @@ impl OperationGenerationResources {
 }
 
 impl PreparedFontEnvironment {
+    pub(crate) fn parse_family_stack(
+        &self,
+        source: &str,
+    ) -> Result<Vec<FamilyPreference>, FontError> {
+        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
+        u32::try_from(source.len()).map_err(|_| FontError::Arithmetic("font stack input"))?;
+        for (key, parsed) in &core.parsed_stacks {
+            core.budget.resources.claim_work(source.len() as u64 + 1)?;
+            if key == source {
+                return copy_stack(parsed, &core.budget.resources);
+            }
+        }
+        let length = source.len() as u64;
+        core.budget.claim_work(
+            length
+                .checked_mul(3)
+                .ok_or(FontError::Arithmetic("font stack parsing"))?,
+        )?;
+        // Bound the parser's entry storage and both the ASCII generic check
+        // and retained name strings before invoking the first-party parser.
+        let bytes = (length + 1)
+            .checked_mul(std::mem::size_of::<FamilyPreference>() as u64)
+            .and_then(|bytes| bytes.checked_add(length * 2))
+            .ok_or(FontError::Arithmetic("font stack parsing bytes"))?;
+        core.budget.claim_bytes(bytes)?;
+        let parsed = parse_family_stack(source)?;
+        let retained = copy_stack(&parsed, &core.budget.resources)?;
+        let key = copy_name(source, &core.budget.resources)?;
+        let CanonicalFontCore {
+            parsed_stacks,
+            budget,
+            ..
+        } = &mut *core;
+        reserve_cached(parsed_stacks, 1, &budget.resources)?;
+        parsed_stacks.push((key, retained));
+        Ok(parsed)
+    }
+
     pub(crate) fn discover_system() -> Result<Self, FontError> {
         #[cfg(test)]
         FONT_DISCOVERY_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -819,6 +1134,15 @@ impl PreparedFontEnvironment {
             .map_err(|_| FontError::Synchronization)?
             .budget
             .claim_work(amount)
+    }
+
+    pub(crate) fn claim_unicode_bytes(&self, amount: u64) -> Result<(), FontError> {
+        self.core
+            .read()
+            .map_err(|_| FontError::Synchronization)?
+            .budget
+            .resources
+            .claim_bytes(amount)
     }
 
     pub(crate) fn claim_text_generation_slots(
@@ -933,6 +1257,101 @@ impl PreparedFontEnvironment {
         Ok(())
     }
 
+    pub(crate) fn prepare_source_units(
+        &self,
+        pair_ordinal: u32,
+        source: &str,
+        mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+    ) -> Result<(), FontError> {
+        let mut core = self.core.write().map_err(|_| FontError::Synchronization)?;
+        if core.prepared_pairs_sealed {
+            return Err(FontError::PreparedPairAfterSeal { pair_ordinal });
+        }
+        // Staged requirements admitted scalar/unit traversal before their source copy.
+        if prepared_stage.is_none() {
+            core.budget.claim_work(source.len() as u64)?;
+        }
+        let index = core
+            .prepared_pairs
+            .iter()
+            .position(|pair| pair.resolved.provenance.pair_ordinal == pair_ordinal)
+            .ok_or(FontError::MissingFamily { pair_ordinal })?;
+        for unit in selection_units(source)
+            .filter(|unit| unit.chars().count() > 1 && unit.chars().any(is_visible_mark))
+        {
+            let pair = &core.prepared_pairs[index].resolved;
+            core.budget.resources.claim_work(
+                (pair.selected_units.len() as u64)
+                    .checked_mul(unit.len() as u64 + 1)
+                    .ok_or(FontError::Arithmetic("font unit lookup"))?,
+            )?;
+            if pair.selected_units.iter().any(|entry| entry.source == unit) {
+                continue;
+            }
+            let mut selected = None;
+            for identity in &pair.provenance.candidates {
+                core.budget.resources.claim_work(core.faces.len() as u64)?;
+                let metadata = core
+                    .faces
+                    .iter()
+                    .find(|face| face.identity == *identity)
+                    .ok_or(FontError::InvalidMetrics {
+                        identity: *identity,
+                    })?;
+                let file = &core.files[metadata.file_ordinal];
+                let parsed =
+                    ttf_parser::Face::parse(&file.bytes, identity.face_index).map_err(|error| {
+                        FontError::ParseFace {
+                            path: file.canonical_path.clone(),
+                            index: identity.face_index,
+                            reason: error.to_string(),
+                        }
+                    })?;
+                let mut covered = true;
+                for scalar in unit.chars() {
+                    core.budget.resources.claim_work(1)?;
+                    #[cfg(test)]
+                    FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
+                    if !is_nonpainting_control(scalar) && parsed.glyph_index(scalar).is_none() {
+                        covered = false;
+                        break;
+                    }
+                }
+                if covered {
+                    selected = Some(*identity);
+                    break;
+                }
+            }
+            let mut retained = String::new();
+            core.budget.claim_bytes(unit.len() as u64)?;
+            if let Some(stage) = prepared_stage.as_deref_mut() {
+                stage
+                    .reserve_prepared_string(&mut retained, unit.len(), "font unit source")
+                    .map_err(|error| FontError::Reservation(error.to_string()))?;
+            } else {
+                retained
+                    .try_reserve_exact(unit.len())
+                    .map_err(|_| FontError::Allocation("font unit source"))?;
+            }
+            let resources = core.budget.resources.clone();
+            reserve_cached_with_stage(
+                &mut core.prepared_pairs[index].resolved.selected_units,
+                1,
+                &resources,
+                prepared_stage.as_deref_mut(),
+            )?;
+            retained.push_str(unit);
+            core.prepared_pairs[index]
+                .resolved
+                .selected_units
+                .push(SelectedFontUnit {
+                    source: retained,
+                    face: selected,
+                });
+        }
+        Ok(())
+    }
+
     pub(crate) fn prepared_pairs_are_sealed(&self) -> Result<bool, FontError> {
         Ok(self
             .core
@@ -972,12 +1391,23 @@ impl PreparedFontEnvironment {
         direction: ShapingDirection,
         script: rustybuzz::Script,
     ) -> Result<ShapedRun, FontError> {
+        self.shape_run_with_context(identity, text, direction, script, ShapingContext::default())
+    }
+
+    pub(crate) fn shape_run_with_context(
+        &self,
+        identity: FaceIdentity,
+        text: &str,
+        direction: ShapingDirection,
+        script: rustybuzz::Script,
+        context: ShapingContext<'_>,
+    ) -> Result<ShapedRun, FontError> {
         #[cfg(test)]
         FONT_SHAPE_CALLS.with(|calls| calls.set(calls.get() + 1));
         self.core
             .read()
             .map_err(|_| FontError::Synchronization)?
-            .shape_run(identity, text, direction, script)
+            .shape_run_with_context(identity, text, direction, script, context)
     }
 
     /// Extract one planned glyph from the exact retained face bytes.
@@ -1018,6 +1448,67 @@ impl PreparedFontEnvironment {
     pub(crate) fn synthetic() -> Self {
         Self {
             core: Arc::new(RwLock::new(tests::generated_core())),
+        }
+    }
+
+    /// Retain generated OpenType layout tables for shaping conformance tests.
+    #[cfg(test)]
+    pub(crate) fn synthetic_shaping_fonts(fonts: Vec<Vec<u8>>) -> Self {
+        let files = fonts
+            .into_iter()
+            .map(|bytes| {
+                let bytes = Arc::new(bytes);
+                RetainedFontFile {
+                    root_ordinal: 0,
+                    canonical_path: PathBuf::from("generated-shaping.ttf"),
+                    sha256: Sha256::digest(bytes.as_slice()).into(),
+                    bytes,
+                }
+            })
+            .collect();
+        Self {
+            core: Arc::new(RwLock::new(
+                CanonicalFontCore::from_retained(
+                    files,
+                    &HostGenericNames::default(),
+                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    scalar_presence_map().unwrap(),
+                    OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            )),
+        }
+    }
+
+    /// Real retained SFNT faces with caller-chosen family names and cmap scalars.
+    #[cfg(test)]
+    pub(crate) fn synthetic_faces(faces: &[(&str, &[char])]) -> Self {
+        let files = faces
+            .iter()
+            .map(|(family, coverage)| {
+                let mut coverage = coverage.to_vec();
+                coverage.sort_unstable();
+                coverage.dedup();
+                let bytes = Arc::new(tests::build_test_font_with_coverage(family, &coverage));
+                RetainedFontFile {
+                    root_ordinal: 0,
+                    canonical_path: PathBuf::from("retained-synthetic.ttf"),
+                    sha256: Sha256::digest(bytes.as_slice()).into(),
+                    bytes,
+                }
+            })
+            .collect();
+        Self {
+            core: Arc::new(RwLock::new(
+                CanonicalFontCore::from_retained(
+                    files,
+                    &HostGenericNames::default(),
+                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    scalar_presence_map().unwrap(),
+                    OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            )),
         }
     }
 }
@@ -1141,6 +1632,8 @@ impl CanonicalFontCore {
                 &self.database,
                 preparation.request.stack,
                 &mut preparation.resolved_names,
+                &mut self.budget,
+                prepared_stage.as_deref_mut(),
             )?;
             preparation.raw_candidate_count = count_candidate_occurrences(
                 &self.faces,
@@ -1267,6 +1760,8 @@ impl CanonicalFontCore {
                 &mut preparation.selected_scalars,
                 &mut preparation.probes,
                 |candidate, scalar| {
+                    #[cfg(test)]
+                    FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
                     let face = &faces[candidate.face_ordinal];
                     let file = &files[face.file_ordinal];
                     let parsed = ttf_parser::Face::parse(&file.bytes, face.identity.face_index)
@@ -1290,6 +1785,7 @@ impl CanonicalFontCore {
                     },
                     primary,
                     selected_scalars: SelectedScalarFaces(preparation.selected_scalars),
+                    selected_units: Vec::new(),
                 },
             });
         }
@@ -1314,6 +1810,10 @@ impl CanonicalFontCore {
         )
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "cache admission, incremental selection, and result copying remain ordered"
+    )]
     fn resolve_pair_with_stage(
         &mut self,
         pair_ordinal: u32,
@@ -1323,55 +1823,136 @@ impl CanonicalFontCore {
         charge_required_scalars: bool,
         mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
     ) -> Result<ResolvedFontPair, FontError> {
-        #[cfg(test)]
-        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
-        let candidates = canonical_candidates_with_stage(
-            &self.database,
-            &self.faces,
-            stack,
-            weight,
-            &mut self.budget,
-            prepared_stage.as_deref_mut(),
-        )?;
-        if candidates.is_empty() {
-            return Err(FontError::MissingFamily { pair_ordinal });
+        self.budget.claim_work(stack.len() as u64)?;
+        let key_work = stack_work(stack)?;
+        let mut cached_index = None;
+        for (index, cached) in self.incremental_pairs.iter().enumerate() {
+            self.budget.claim_work(key_work + 1)?;
+            if cached.weight == weight && cached.stack == stack {
+                cached_index = Some(index);
+                break;
+            }
         }
-
+        let index = if let Some(index) = cached_index {
+            index
+        } else {
+            #[cfg(test)]
+            FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(calls.get() + 1));
+            let candidates = canonical_candidates_with_stage(
+                &self.database,
+                &self.faces,
+                stack,
+                weight,
+                &mut self.budget,
+                prepared_stage.as_deref_mut(),
+            )?;
+            if candidates.is_empty() {
+                return Err(FontError::MissingFamily { pair_ordinal });
+            }
+            let retained_stack = copy_stack_with_stage(
+                stack,
+                &self.budget.resources,
+                prepared_stage.as_deref_mut(),
+            )?;
+            reserve_cached_with_stage(
+                &mut self.incremental_pairs,
+                1,
+                &self.budget.resources,
+                prepared_stage.as_deref_mut(),
+            )?;
+            let index = self.incremental_pairs.len();
+            self.incremental_pairs.push(IncrementalPair {
+                stack: retained_stack,
+                weight,
+                candidates,
+                selected_scalars: Vec::new(),
+            });
+            index
+        };
+        let cached = &mut self.incremental_pairs[index];
+        let mut missing = Vec::new();
+        if charge_required_scalars {
+            self.budget.claim_work(required_scalars.len() as u64)?;
+        }
+        for scalar in required_scalars {
+            self.budget
+                .claim_work((cached.selected_scalars.len() + missing.len()) as u64 + 1)?;
+            if !cached
+                .selected_scalars
+                .iter()
+                .any(|selected| selected.scalar == *scalar)
+                && !missing.contains(scalar)
+            {
+                reserve_cached_with_stage(
+                    &mut missing,
+                    1,
+                    &self.budget.resources,
+                    prepared_stage.as_deref_mut(),
+                )?;
+                missing.push(*scalar);
+            }
+        }
+        if !missing.is_empty() {
+            let files = &self.files;
+            let faces = &self.faces;
+            let selected = select_scalar_faces_with_stage(
+                pair_ordinal,
+                &cached.candidates,
+                &missing,
+                &mut self.scalar_presence,
+                &mut self.budget,
+                false,
+                prepared_stage.as_deref_mut(),
+                |candidate, scalar| {
+                    #[cfg(test)]
+                    FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
+                    let face = &faces[candidate.face_ordinal];
+                    let file = &files[face.file_ordinal];
+                    let parsed = ttf_parser::Face::parse(&file.bytes, face.identity.face_index)
+                        .map_err(|error| FontError::ParseFace {
+                            path: file.canonical_path.clone(),
+                            index: face.identity.face_index,
+                            reason: error.to_string(),
+                        })?;
+                    Ok(parsed.glyph_index(scalar).is_some())
+                },
+            )?;
+            reserve_cached_with_stage(
+                &mut cached.selected_scalars,
+                selected.len(),
+                &self.budget.resources,
+                prepared_stage.as_deref_mut(),
+            )?;
+            self.budget.claim_work(selected.len() as u64)?;
+            cached.selected_scalars.extend(selected);
+        }
+        // Return the operation's accumulated coverage. Copies are admitted;
+        // cached metadata and successful scalar selections are never recomputed.
         let mut provenance = Vec::new();
-        reserve_prepared_or_local(
+        reserve_cached_with_stage(
             &mut provenance,
-            candidates.len(),
-            "font provenance",
+            cached.candidates.len(),
+            &self.budget.resources,
             prepared_stage.as_deref_mut(),
         )?;
+        self.budget.claim_work(cached.candidates.len() as u64)?;
         provenance.extend(
-            candidates
+            cached
+                .candidates
                 .iter()
                 .map(|candidate| candidate.occurrence.identity),
         );
         let primary = provenance[0];
-        let files = &self.files;
-        let faces = &self.faces;
-        let selected_scalars = select_scalar_faces_with_stage(
-            pair_ordinal,
-            &candidates,
-            required_scalars,
-            &mut self.scalar_presence,
-            &mut self.budget,
-            charge_required_scalars,
+        let mut selected_scalars = Vec::new();
+        reserve_cached_with_stage(
+            &mut selected_scalars,
+            cached.selected_scalars.len(),
+            &self.budget.resources,
             prepared_stage,
-            |candidate, scalar| {
-                let face = &faces[candidate.face_ordinal];
-                let file = &files[face.file_ordinal];
-                let parsed = ttf_parser::Face::parse(&file.bytes, face.identity.face_index)
-                    .map_err(|error| FontError::ParseFace {
-                        path: file.canonical_path.clone(),
-                        index: face.identity.face_index,
-                        reason: error.to_string(),
-                    })?;
-                Ok(parsed.glyph_index(scalar).is_some())
-            },
         )?;
+        self.budget
+            .claim_work(cached.selected_scalars.len() as u64)?;
+        selected_scalars.extend_from_slice(&cached.selected_scalars);
 
         Ok(ResolvedFontPair {
             provenance: PairProvenance {
@@ -1380,6 +1961,7 @@ impl CanonicalFontCore {
                 candidates: provenance,
             },
             primary,
+            selected_units: Vec::new(),
             selected_scalars: SelectedScalarFaces(selected_scalars),
         })
     }
@@ -1391,6 +1973,17 @@ impl CanonicalFontCore {
         direction: ShapingDirection,
         script: rustybuzz::Script,
     ) -> Result<ShapedRun, FontError> {
+        self.shape_run_with_context(identity, text, direction, script, ShapingContext::default())
+    }
+
+    fn shape_run_with_context(
+        &self,
+        identity: FaceIdentity,
+        text: &str,
+        direction: ShapingDirection,
+        script: rustybuzz::Script,
+        context: ShapingContext<'_>,
+    ) -> Result<ShapedRun, FontError> {
         let metadata = self
             .faces
             .iter()
@@ -1400,7 +1993,7 @@ impl CanonicalFontCore {
                 reason: "identity is not retained",
             })?;
         let file = &self.files[metadata.file_ordinal];
-        shape_retained_run(file, metadata, text, direction, script)
+        shape_retained_run(file, metadata, text, direction, script, context, self)
     }
 
     pub(crate) fn face_metrics(&self, identity: FaceIdentity) -> Result<DesignMetrics, FontError> {
@@ -1495,20 +2088,14 @@ impl CanonicalFontCore {
         )?;
 
         for (file_ordinal, file) in files.iter().enumerate() {
-            let expected = ttf_parser::fonts_in_collection(&file.bytes).unwrap_or(1);
             let ids = database.load_font_source(Source::Binary(Arc::new(BinarySource(
                 Arc::clone(&file.bytes),
             ))));
-            if ids.len()
-                != usize::try_from(expected)
-                    .map_err(|_| FontError::Arithmetic("fontdb face count"))?
-            {
-                return Err(FontError::DatabaseLoad(file.canonical_path.clone()));
-            }
-
-            for (index, database_id) in ids.into_iter().enumerate() {
-                let index =
-                    u32::try_from(index).map_err(|_| FontError::Arithmetic("font face index"))?;
+            for database_id in ids {
+                let info = database
+                    .face(database_id)
+                    .ok_or_else(|| FontError::DatabaseLoad(file.canonical_path.clone()))?;
+                let index = info.index;
                 let parsed = ttf_parser::Face::parse(&file.bytes, index).map_err(|error| {
                     FontError::ParseFace {
                         path: file.canonical_path.clone(),
@@ -1516,12 +2103,6 @@ impl CanonicalFontCore {
                         reason: error.to_string(),
                     }
                 })?;
-                let info = database
-                    .face(database_id)
-                    .ok_or_else(|| FontError::DatabaseLoad(file.canonical_path.clone()))?;
-                if info.index != index {
-                    return Err(FontError::DatabaseLoad(file.canonical_path.clone()));
-                }
 
                 let names =
                     decode_family_names(&parsed, &mut budget, prepared_stage.as_deref_mut())?;
@@ -1554,6 +2135,8 @@ impl CanonicalFontCore {
             faces,
             scalar_presence,
             prepared_pairs: Vec::new(),
+            incremental_pairs: Vec::new(),
+            parsed_stacks: Vec::new(),
             prepared_pairs_sealed: false,
             generation_resources,
             budget,
@@ -1606,15 +2189,20 @@ fn decode_family_names(
     prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<Vec<NameOccurrence>, FontError> {
     let names = face.names();
-    let occurrence_count = names
-        .into_iter()
-        .filter(|record| {
-            matches!(
-                record.name_id,
-                ttf_parser::name_id::TYPOGRAPHIC_FAMILY | ttf_parser::name_id::FAMILY
-            ) && decodes_like_ttf_parser(record)
-        })
-        .count();
+    budget.claim_work(u64::from(names.len()))?;
+    let mut occurrence_count = 0;
+    for record in names {
+        if matches!(
+            record.name_id,
+            ttf_parser::name_id::TYPOGRAPHIC_FAMILY | ttf_parser::name_id::FAMILY
+        ) {
+            budget.claim_work(
+                u64::try_from(record.name.len())
+                    .map_err(|_| FontError::Arithmetic("font family name validation"))?,
+            )?;
+            occurrence_count += usize::from(decodes_like_ttf_parser(&record));
+        }
+    }
     budget.claim_work(
         u64::try_from(occurrence_count)
             .map_err(|_| FontError::Arithmetic("font family name occurrences"))?,
@@ -1626,17 +2214,28 @@ fn decode_family_names(
         "font family name occurrences",
         prepared_stage,
     )?;
+    budget.claim_work(u64::from(names.len()))?;
     for (record_ordinal, record) in names.into_iter().enumerate() {
         let rank = match record.name_id {
             ttf_parser::name_id::TYPOGRAPHIC_FAMILY => NameRank::TypographicFamily,
             ttf_parser::name_id::FAMILY => NameRank::LegacyFamily,
             _ => continue,
         };
+        // Admit the bounded UTF-16 decode before entering ttf-parser's
+        // allocator; normalization below separately charges its own passes.
+        let encoded_bytes = u64::try_from(record.name.len())
+            .map_err(|_| FontError::Arithmetic("font family name input"))?;
+        budget.claim_work(encoded_bytes)?;
+        budget.claim_bytes(
+            encoded_bytes
+                .checked_mul(3)
+                .ok_or(FontError::Arithmetic("font family name decode bytes"))?,
+        )?;
         let Some(value) = record.to_string() else {
             continue;
         };
         occurrences.push(NameOccurrence {
-            folded: super::unicode16::nfkc_casefold(&value),
+            folded: fold_family_name(&value, budget)?,
             value,
             rank,
             record_ordinal: u16::try_from(record_ordinal)
@@ -1687,10 +2286,24 @@ fn canonical_candidates_with_stage(
         "resolved font stack",
         prepared_stage.as_deref_mut(),
     )?;
-    resolve_stack_names_into(database, stack, &mut resolved_names)?;
+    resolve_stack_names_into(
+        database,
+        stack,
+        &mut resolved_names,
+        budget,
+        prepared_stage.as_deref_mut(),
+    )?;
 
     let count = count_candidate_occurrences(faces, &resolved_names, budget)?;
     let mut candidates = Vec::new();
+    budget.claim_bytes(
+        u64::try_from(
+            count
+                .checked_mul(std::mem::size_of::<CandidateFace>())
+                .ok_or(FontError::Arithmetic("cached candidate bytes"))?,
+        )
+        .map_err(|_| FontError::Arithmetic("cached candidate bytes"))?,
+    )?;
     reserve_prepared_or_local(
         &mut candidates,
         count,
@@ -1717,7 +2330,23 @@ fn resolve_stack_names_into(
     database: &Database,
     stack: &[FamilyPreference],
     resolved_names: &mut Vec<(String, bool)>,
+    budget: &mut FontBudget,
+    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
+    budget.claim_work(stack.len() as u64)?;
+    let key_work = stack_work(stack)?;
+    for cached in &budget.normalized_stacks {
+        budget.resources.claim_work(key_work)?;
+        if cached.source == stack {
+            for (name, generic) in &cached.names {
+                resolved_names.push((
+                    copy_name_with_stage(name, &budget.resources, prepared_stage.as_deref_mut())?,
+                    *generic,
+                ));
+            }
+            return Ok(());
+        }
+    }
     for family in stack {
         let (name, generic) = match family {
             FamilyPreference::Named(name) => (name.as_str(), false),
@@ -1725,14 +2354,152 @@ fn resolve_stack_names_into(
             FamilyPreference::SansSerif => (database.family_name(&Family::SansSerif), true),
             FamilyPreference::Monospace => (database.family_name(&Family::Monospace), true),
         };
-        resolved_names.push((super::unicode16::nfkc_casefold(name), generic));
+        resolved_names.push((fold_family_name(name, budget)?, generic));
     }
     if resolved_names.len() != stack.len() {
         return Err(FontError::Arithmetic(
             "resolved font stack count/materialization mismatch",
         ));
     }
+    let source = copy_stack_with_stage(stack, &budget.resources, prepared_stage.as_deref_mut())?;
+    let mut names = Vec::new();
+    reserve_cached_with_stage(
+        &mut names,
+        resolved_names.len(),
+        &budget.resources,
+        prepared_stage.as_deref_mut(),
+    )?;
+    for (name, generic) in resolved_names.iter() {
+        names.push((
+            copy_name_with_stage(name, &budget.resources, prepared_stage.as_deref_mut())?,
+            *generic,
+        ));
+    }
+    reserve_cached_with_stage(
+        &mut budget.normalized_stacks,
+        1,
+        &budget.resources,
+        prepared_stage,
+    )?;
+    budget
+        .normalized_stacks
+        .push(NormalizedStack { source, names });
     Ok(())
+}
+
+fn fold_family_name(value: &str, budget: &mut FontBudget) -> Result<String, FontError> {
+    #[cfg(test)]
+    FONT_NORMALIZATION_CALLS.with(|calls| calls.set(calls.get() + 1));
+    super::unicode16::nfkc_casefold(value, &mut |bytes, work| {
+        budget.claim_bytes(bytes)?;
+        budget.claim_work(work)
+    })
+}
+
+fn stack_work(stack: &[FamilyPreference]) -> Result<u64, FontError> {
+    stack.iter().try_fold(stack.len() as u64, |work, entry| {
+        work.checked_add(match entry {
+            FamilyPreference::Named(name) => name.len() as u64,
+            _ => 0,
+        })
+        .ok_or(FontError::Arithmetic("font stack comparison"))
+    })
+}
+
+fn reserve_cached<T>(
+    values: &mut Vec<T>,
+    additional: usize,
+    resources: &OperationFontResources,
+) -> Result<(), FontError> {
+    reserve_cached_with_stage(values, additional, resources, None)
+}
+
+fn reserve_cached_with_stage<T>(
+    values: &mut Vec<T>,
+    additional: usize,
+    resources: &OperationFontResources,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<(), FontError> {
+    let required = values
+        .len()
+        .checked_add(additional)
+        .ok_or(FontError::Arithmetic("font cache length"))?;
+    if required > values.capacity() {
+        let bytes = required
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or(FontError::Arithmetic("font cache bytes"))?;
+        resources.claim_bytes(
+            u64::try_from(bytes).map_err(|_| FontError::Arithmetic("font cache bytes"))?,
+        )?;
+        resources.claim_work(values.len() as u64)?;
+        reserve_prepared_or_local(values, additional, "operation font cache", prepared_stage)?;
+    }
+    Ok(())
+}
+
+fn copy_name(source: &str, resources: &OperationFontResources) -> Result<String, FontError> {
+    copy_name_with_stage(source, resources, None)
+}
+
+fn copy_name_with_stage(
+    source: &str,
+    resources: &OperationFontResources,
+    prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<String, FontError> {
+    resources.claim_work(source.len() as u64)?;
+    resources.claim_bytes(source.len() as u64)?;
+    let mut output = String::new();
+    reserve_string_prepared_or_local(
+        &mut output,
+        source.len(),
+        "cached font name",
+        prepared_stage,
+    )?;
+    output.push_str(source);
+    Ok(output)
+}
+
+fn copy_stack(
+    source: &[FamilyPreference],
+    resources: &OperationFontResources,
+) -> Result<Vec<FamilyPreference>, FontError> {
+    copy_stack_with_stage(source, resources, None)
+}
+
+fn copy_stack_with_stage(
+    source: &[FamilyPreference],
+    resources: &OperationFontResources,
+    mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
+) -> Result<Vec<FamilyPreference>, FontError> {
+    resources.claim_work(source.len() as u64)?;
+    let mut output = Vec::new();
+    reserve_cached_with_stage(
+        &mut output,
+        source.len(),
+        resources,
+        prepared_stage.as_deref_mut(),
+    )?;
+    for entry in source {
+        output.push(match entry {
+            FamilyPreference::Named(name) => {
+                let mut retained = String::new();
+                resources.claim_work(name.len() as u64)?;
+                resources.claim_bytes(name.len() as u64)?;
+                reserve_string_prepared_or_local(
+                    &mut retained,
+                    name.len(),
+                    "cached font name",
+                    prepared_stage.as_deref_mut(),
+                )?;
+                retained.push_str(name);
+                FamilyPreference::Named(retained)
+            }
+            FamilyPreference::Serif => FamilyPreference::Serif,
+            FamilyPreference::SansSerif => FamilyPreference::SansSerif,
+            FamilyPreference::Monospace => FamilyPreference::Monospace,
+        });
+    }
+    Ok(output)
 }
 
 fn materialize_candidate_occurrences(
@@ -1935,6 +2702,14 @@ fn scalar_selection_capacities(
     }
     presence.fill(0);
     for scalar in required_scalars {
+        if scalar.is_control()
+            && !is_nonrendering_mandatory_break(*scalar)
+            && !is_nonpainting_control(*scalar)
+        {
+            return Err(FontError::UnsupportedControl {
+                scalar: *scalar as u32,
+            });
+        }
         if charge_required_scalars {
             budget.claim_work(1)?;
         }
@@ -1947,15 +2722,26 @@ fn scalar_selection_capacities(
             .checked_add(word.count_ones() as usize)
             .ok_or(FontError::Arithmetic("required scalar count"))
     })?;
-    let mandatory_break_count = [
-        '\u{000A}', '\u{000B}', '\u{000C}', '\u{000D}', '\u{0085}', '\u{2028}', '\u{2029}',
-    ]
-    .into_iter()
-    .filter(|scalar| {
-        let value = *scalar as usize;
-        presence[value / u64::BITS as usize] & (1_u64 << (value % u64::BITS as usize)) != 0
-    })
-    .count();
+    let mandatory_break_count = presence
+        .iter()
+        .enumerate()
+        .map(|(word_index, word)| {
+            let mut bits = *word;
+            let mut count = 0;
+            while bits != 0 {
+                let value = word_index * u64::BITS as usize + bits.trailing_zeros() as usize;
+                if char::from_u32(u32::try_from(value).expect("Unicode scalar map index"))
+                    .is_some_and(|scalar| {
+                        is_nonrendering_mandatory_break(scalar) || is_nonpainting_control(scalar)
+                    })
+                {
+                    count += 1;
+                }
+                bits &= bits - 1;
+            }
+            count
+        })
+        .sum::<usize>();
     let rendering_scalar_count = scalar_count
         .checked_sub(mandatory_break_count)
         .ok_or(FontError::Arithmetic("rendering scalar count"))?;
@@ -2009,6 +2795,13 @@ where
             });
             continue;
         }
+        if is_nonpainting_control(scalar) {
+            selected.push(SelectedScalarFace {
+                scalar,
+                selection: ScalarFaceSelection::Face(candidates[0].occurrence.identity),
+            });
+            continue;
+        }
 
         for candidate in candidates {
             budget.claim_work(1)?;
@@ -2052,12 +2845,37 @@ pub(crate) const fn is_nonrendering_mandatory_break(scalar: char) -> bool {
     )
 }
 
+/// Unicode 16 Default_Ignorable_Code_Point plus bidi controls.
+pub(crate) const fn is_nonpainting_control(scalar: char) -> bool {
+    matches!(scalar as u32, 0x00AD | 0x034F | 0x061C | 0x115F..=0x1160
+        | 0x17B4..=0x17B5 | 0x180B..=0x180F | 0x200B..=0x200F
+        | 0x202A..=0x202E | 0x2060..=0x206F | 0x3164 | 0xFE00..=0xFE0F
+        | 0xFEFF | 0xFFA0 | 0xFFF0..=0xFFF8 | 0x1BCA0..=0x1BCA3
+        | 0x1D173..=0x1D17A | 0xE0000..=0xE0FFF)
+}
+
+/// Context is clipped to the selected line, not to a font/script item. Empty
+/// pre/post context denotes a real selected-line boundary (BOT/EOT).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ShapingContext<'a> {
+    pub(crate) pre: &'a str,
+    pub(crate) post: &'a str,
+    /// Run-local source byte of a selected U+00AD, rendered as U+002D.
+    pub(crate) soft_hyphen: Option<usize>,
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "context, third-party shaping, root admission, and first-party retention stay ordered"
+)]
 fn shape_retained_run(
     file: &RetainedFontFile,
     metadata: &FaceMetadata,
     text: &str,
     direction: ShapingDirection,
     script: rustybuzz::Script,
+    context: ShapingContext<'_>,
+    core: &CanonicalFontCore,
 ) -> Result<ShapedRun, FontError> {
     if text.chars().any(is_nonrendering_mandatory_break) {
         return Err(FontError::Shape {
@@ -2072,7 +2890,36 @@ fn shape_retained_run(
         },
     )?;
     let mut buffer = rustybuzz::UnicodeBuffer::new();
-    buffer.push_str(text);
+    if let Some(replacement) = context.soft_hyphen {
+        if !text
+            .get(replacement..)
+            .is_some_and(|suffix| suffix.starts_with('\u{ad}'))
+        {
+            return Err(FontError::Shape {
+                identity: metadata.identity,
+                reason: "invalid selected soft-hyphen source",
+            });
+        }
+        for (index, scalar) in text.char_indices() {
+            buffer.add(
+                if index == replacement { '-' } else { scalar },
+                u32::try_from(index)
+                    .map_err(|_| FontError::Arithmetic("shaping source cluster"))?,
+            );
+        }
+    } else {
+        buffer.push_str(text);
+    }
+    buffer.set_pre_context(context.pre);
+    buffer.set_post_context(context.post);
+    let mut flags = rustybuzz::BufferFlags::empty();
+    if context.pre.is_empty() {
+        flags |= rustybuzz::BufferFlags::BEGINNING_OF_TEXT;
+    }
+    if context.post.is_empty() {
+        flags |= rustybuzz::BufferFlags::END_OF_TEXT;
+    }
+    buffer.set_flags(flags);
     buffer.set_direction(direction.into());
     buffer.set_script(script);
     buffer.set_language(
@@ -2082,9 +2929,30 @@ fn shape_retained_run(
         })?,
     );
     let shaped = rustybuzz::shape(&face, &[], buffer);
+    let count = shaped.len() as u128;
+    core.generation_resources
+        .claim_work(count)
+        .map_err(FontError::ShapeAdmission)?;
+    core.generation_resources
+        .claim_slots(count)
+        .map_err(FontError::ShapeAdmission)?;
+    core.budget.resources.claim_bytes(
+        u64::try_from(
+            shaped
+                .len()
+                .checked_mul(size_of::<ShapedGlyph>())
+                .ok_or(FontError::Arithmetic("shaped glyph bytes"))?,
+        )
+        .map_err(|_| FontError::Arithmetic("shaped glyph bytes"))?,
+    )?;
     let mut glyphs = Vec::new();
     try_reserve_exact(&mut glyphs, shaped.len(), "shaped glyphs")?;
+    core.generation_resources
+        .claim_work(count)
+        .map_err(FontError::ShapeAdmission)?;
     for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+        #[cfg(test)]
+        SHAPED_GLYPH_RETAINS.with(|count| count.set(count.get() + 1));
         let glyph_id = u16::try_from(info.glyph_id).map_err(|_| FontError::Shape {
             identity: metadata.identity,
             reason: "shaper emitted an out-of-range glyph id",
@@ -2163,7 +3031,13 @@ fn discover_retained_files_with_stage(
                 });
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => {}
+            Err(source) => {
+                return Err(FontError::Io {
+                    operation: "inspect font root",
+                    path: root.path.clone(),
+                    source,
+                });
+            }
         }
     }
 
@@ -2175,12 +3049,20 @@ fn discover_retained_files_with_stage(
         cursor = cursor
             .checked_add(1)
             .ok_or(FontError::Arithmetic("discovery cursor"))?;
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            continue;
-        };
+        let metadata = fs::symlink_metadata(&path).map_err(|source| FontError::Io {
+            operation: "inspect discovered font entry",
+            path: path.clone(),
+            source,
+        })?;
         let file_type = metadata.file_type();
         let is_directory = if file_type.is_symlink() {
-            fs::metadata(&path).is_ok_and(|target| target.is_dir())
+            fs::metadata(&path)
+                .map_err(|source| FontError::Io {
+                    operation: "inspect discovered font target",
+                    path: path.clone(),
+                    source,
+                })?
+                .is_dir()
         } else {
             file_type.is_dir()
         };
@@ -2188,13 +3070,17 @@ fn discover_retained_files_with_stage(
             if file_type.is_symlink() {
                 continue;
             }
-            let Ok(entries) = fs::read_dir(&path) else {
-                continue;
-            };
+            let entries = fs::read_dir(&path).map_err(|source| FontError::Io {
+                operation: "read font directory",
+                path: path.clone(),
+                source,
+            })?;
             for entry in entries {
-                let Ok(entry) = entry else {
-                    continue;
-                };
+                let entry = entry.map_err(|source| FontError::Io {
+                    operation: "read font directory entry",
+                    path: path.clone(),
+                    source,
+                })?;
                 budget.claim_discovery(1)?;
                 if entry_prefix
                     .is_some_and(|prefix| !entry.file_name().to_string_lossy().starts_with(prefix))
@@ -2212,9 +3098,15 @@ fn discover_retained_files_with_stage(
     }
 
     for record in &mut discovered {
-        if !record.admit_file
-            || !fs::metadata(&record.path).is_ok_and(|metadata| metadata.is_file())
-        {
+        if !record.admit_file {
+            continue;
+        }
+        let metadata = fs::metadata(&record.path).map_err(|source| FontError::Io {
+            operation: "inspect discovered font target",
+            path: record.path.clone(),
+            source,
+        })?;
+        if !metadata.is_file() {
             record.admit_file = false;
             continue;
         }
@@ -2253,13 +3145,6 @@ fn discover_retained_files_with_stage(
             .then_with(|| native_path_cmp(&left.path, &right.path))
     });
 
-    let mut opened = Vec::new();
-    reserve_prepared_or_local(
-        &mut opened,
-        discovered.len(),
-        "opened font files",
-        prepared_stage.as_deref_mut(),
-    )?;
     let mut retained = Vec::new();
     reserve_prepared_or_local(
         &mut retained,
@@ -2274,11 +3159,23 @@ fn discover_retained_files_with_stage(
             path: canonical_path.clone(),
             source,
         })?;
-        let metadata_before = file.metadata().map_err(|source| FontError::Io {
+        let mut handle = DiscoveryFontHandle { file };
+        #[cfg(test)]
+        DISCOVERY_HANDLES.with(|state| {
+            let mut counts = state.get();
+            counts[0] += 1;
+            counts[1] = counts[1].max(counts[0]);
+            counts[2] += 1;
+            state.set(counts);
+        });
+        let metadata_before = handle.file.metadata().map_err(|source| FontError::Io {
             operation: "inspect font file",
             path: canonical_path.clone(),
             source,
         })?;
+        if !metadata_before.is_file() {
+            return Err(FontError::ChangedFile(canonical_path));
+        }
         let length = metadata_before.len();
         let modified_before = metadata_before.modified().ok();
         budget.claim_bytes(length)?;
@@ -2291,48 +3188,47 @@ fn discover_retained_files_with_stage(
             "retained font bytes",
             prepared_stage.as_deref_mut(),
         )?;
-        opened.push(OpenedFontFile {
-            root_ordinal: record.root_ordinal,
-            canonical_path,
-            file,
-            length,
-            modified: modified_before,
-            bytes,
+        #[cfg(test)]
+        DISCOVERY_AFTER_ADMISSION.with(|hook| {
+            if let Some(hook) = hook.take() {
+                hook(&canonical_path);
+            }
         });
-    }
-
-    for mut opened_file in opened {
-        let sha256 = read_exact_font_bytes(
-            &mut opened_file.file,
-            &opened_file.canonical_path,
-            opened_file.length,
-            &mut opened_file.bytes,
-        )?;
-        let metadata_after = opened_file
-            .file
-            .metadata()
-            .map_err(|source| FontError::Io {
-                operation: "reinspect font file",
-                path: opened_file.canonical_path.clone(),
-                source,
-            })?;
+        #[cfg(test)]
+        DISCOVERY_HANDLES.with(|state| {
+            let mut counts = state.get();
+            counts[3] += 1;
+            state.set(counts);
+        });
+        let sha256 = read_exact_font_bytes(&mut handle.file, &canonical_path, length, &mut bytes)?;
+        let metadata_after = handle.file.metadata().map_err(|source| FontError::Io {
+            operation: "reinspect font file",
+            path: canonical_path.clone(),
+            source,
+        })?;
         if metadata_after.len()
-            != u64::try_from(opened_file.length)
-                .map_err(|_| FontError::Arithmetic("font file length"))?
-            || opened_file.modified.is_some_and(|modified| {
+            != u64::try_from(length).map_err(|_| FontError::Arithmetic("font file length"))?
+            || modified_before.is_some_and(|modified| {
                 metadata_after
                     .modified()
                     .map_or(true, |current| current != modified)
             })
         {
-            return Err(FontError::ChangedFile(opened_file.canonical_path));
+            return Err(FontError::ChangedFile(canonical_path));
         }
         retained.push(RetainedFontFile {
-            root_ordinal: opened_file.root_ordinal,
-            canonical_path: opened_file.canonical_path,
-            bytes: Arc::new(opened_file.bytes),
+            root_ordinal: record.root_ordinal,
+            canonical_path,
+            bytes: Arc::new(bytes),
             sha256,
         });
+        #[cfg(test)]
+        DISCOVERY_HANDLES.with(|state| {
+            let mut counts = state.get();
+            counts[4] += 1;
+            state.set(counts);
+        });
+        drop(handle);
     }
     Ok(retained)
 }
@@ -2563,7 +3459,10 @@ enum FontConfigTask {
     not(any(target_os = "macos", target_os = "android", target_os = "redox"))
 ))]
 enum FontConfigRead {
-    Loaded(Vec<FontConfigDirective>),
+    Loaded {
+        parts: Vec<FontConfigDirective>,
+        complete: bool,
+    },
     Ignored,
 }
 
@@ -2592,7 +3491,7 @@ fn merge_fontconfig_root(
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<bool, FontError> {
-    let FontConfigRead::Loaded(parts) = read_bounded_fontconfig(
+    let FontConfigRead::Loaded { parts, complete } = read_bounded_fontconfig(
         config,
         config_path,
         false,
@@ -2669,7 +3568,8 @@ fn merge_fontconfig_root(
                 }
             }
             FontConfigTask::Merge { path, admitted } => {
-                if let FontConfigRead::Loaded(parts) = read_bounded_fontconfig(
+                // Upstream ignores included syntax failures, but keeps their valid prefix.
+                if let FontConfigRead::Loaded { parts, .. } = read_bounded_fontconfig(
                     config,
                     &path,
                     admitted,
@@ -2698,7 +3598,7 @@ fn merge_fontconfig_root(
             }
         }
     }
-    Ok(true)
+    Ok(complete)
 }
 
 #[cfg(all(
@@ -2712,8 +3612,18 @@ fn read_bounded_fontconfig(
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<FontConfigRead, FontError> {
-    let Ok(canonical_path) = fs::canonicalize(config_path) else {
-        return Ok(FontConfigRead::Ignored);
+    let canonical_path = match fs::canonicalize(config_path) {
+        Ok(path) => path,
+        Err(source) if !admitted && source.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(FontConfigRead::Ignored);
+        }
+        Err(source) => {
+            return Err(FontError::Io {
+                operation: "canonicalize fontconfig file",
+                path: config_path.to_path_buf(),
+                source,
+            });
+        }
     };
     if !admitted {
         budget.claim_discovery(1)?;
@@ -2723,7 +3633,10 @@ fn read_bounded_fontconfig(
             .map_err(|_| FontError::Arithmetic("fontconfig path deduplication"))?,
     )?;
     if config.files.contains(&canonical_path) {
-        return Ok(FontConfigRead::Ignored);
+        return Ok(FontConfigRead::Loaded {
+            parts: Vec::new(),
+            complete: true,
+        });
     }
     reserve_prepared_or_local(
         &mut config.files,
@@ -2743,7 +3656,7 @@ fn read_bounded_fontconfig(
         source,
     })?;
     if !metadata_before.is_file() {
-        return Ok(FontConfigRead::Ignored);
+        return Err(FontError::ChangedFile(canonical_path));
     }
     let length = metadata_before.len();
     let modified_before = metadata_before.modified().ok();
@@ -2784,8 +3697,9 @@ fn read_bounded_fontconfig(
         return Err(FontError::ChangedFile(canonical_path));
     }
 
+    drop(file);
     match parse_bounded_fontconfig(&source, config_path, budget, prepared_stage) {
-        Ok(parts) => Ok(FontConfigRead::Loaded(parts)),
+        Ok((parts, complete)) => Ok(FontConfigRead::Loaded { parts, complete }),
         Err(FontError::ParseFontConfig { .. }) => Ok(FontConfigRead::Ignored),
         Err(error) => Err(error),
     }
@@ -2800,7 +3714,7 @@ fn parse_bounded_fontconfig(
     config_path: &Path,
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
-) -> Result<Vec<FontConfigDirective>, FontError> {
+) -> Result<(Vec<FontConfigDirective>, bool), FontError> {
     if source.contains("<!ENTITY") {
         return Err(fontconfig_parse_error(
             config_path,
@@ -2877,11 +3791,11 @@ fn parse_bounded_fontconfig(
         match directive {
             Ok(Some(directive)) => directives.push(directive),
             Ok(None) => {}
-            Err(FontError::ParseFontConfig { .. }) => break,
+            Err(FontError::ParseFontConfig { .. }) => return Ok((directives, false)),
             Err(error) => return Err(error),
         }
     }
-    Ok(directives)
+    Ok((directives, true))
 }
 
 #[cfg(all(
@@ -2903,24 +3817,15 @@ fn parse_fontconfig_alias(
                     prepared_stage.as_deref_mut(),
                 )?;
             }
-            "prefer" => copy_fontconfig_families(
-                child,
-                config_path,
-                &mut alias.prefer,
-                prepared_stage.as_deref_mut(),
-            )?,
-            "accept" => copy_fontconfig_families(
-                child,
-                config_path,
-                &mut alias.accept,
-                prepared_stage.as_deref_mut(),
-            )?,
-            "default" => copy_fontconfig_families(
-                child,
-                config_path,
-                &mut alias.default,
-                prepared_stage.as_deref_mut(),
-            )?,
+            "prefer" => {
+                copy_fontconfig_families(child, &mut alias.prefer, prepared_stage.as_deref_mut())?;
+            }
+            "accept" => {
+                copy_fontconfig_families(child, &mut alias.accept, prepared_stage.as_deref_mut())?;
+            }
+            "default" => {
+                copy_fontconfig_families(child, &mut alias.default, prepared_stage.as_deref_mut())?;
+            }
             _ => {}
         }
     }
@@ -2933,7 +3838,6 @@ fn parse_fontconfig_alias(
 ))]
 fn copy_fontconfig_families(
     node: roxmltree::Node<'_, '_>,
-    config_path: &Path,
     destination: &mut Vec<String>,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
@@ -2951,8 +3855,9 @@ fn copy_fontconfig_families(
         .children()
         .filter(|child| child.is_element() && child.tag_name().name() == "family")
     {
+        let Some(text) = family.text() else { continue };
         destination.push(copy_fontconfig_string(
-            fontconfig_node_text(family, config_path)?,
+            text,
             "fontconfig alias preference",
             prepared_stage.as_deref_mut(),
         )?);
@@ -3062,14 +3967,23 @@ fn push_bounded_fontconfig_include(
     budget: &mut FontBudget,
     mut prepared_stage: Option<&mut crate::layout::kernel::PreparedStage<'_>>,
 ) -> Result<(), FontError> {
-    let Ok(metadata) = fs::metadata(include_path) else {
-        return Ok(());
+    let metadata = match fs::metadata(include_path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(FontError::Io {
+                operation: "inspect fontconfig include",
+                path: include_path.to_path_buf(),
+                source,
+            });
+        }
     };
     if metadata.is_file() {
+        budget.claim_discovery(1)?;
         reserve_prepared_or_local(tasks, 1, "fontconfig traversal", prepared_stage)?;
         tasks.push(FontConfigTask::Merge {
             path: include_path.to_path_buf(),
-            admitted: false,
+            admitted: true,
         });
         return Ok(());
     }
@@ -3077,19 +3991,27 @@ fn push_bounded_fontconfig_include(
         return Ok(());
     }
     budget.claim_discovery(1)?;
-    let Ok(entries) = fs::read_dir(include_path) else {
-        return Ok(());
-    };
+    let entries = fs::read_dir(include_path).map_err(|source| FontError::Io {
+        operation: "read fontconfig include directory",
+        path: include_path.to_path_buf(),
+        source,
+    })?;
     let mut paths = Vec::new();
     for entry in entries {
-        let Ok(entry) = entry else { continue };
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
+        let entry = entry.map_err(|source| FontError::Io {
+            operation: "read fontconfig include entry",
+            path: include_path.to_path_buf(),
+            source,
+        })?;
+        budget.claim_discovery(1)?;
+        let file_type = entry.file_type().map_err(|source| FontError::Io {
+            operation: "inspect fontconfig include entry",
+            path: entry.path(),
+            source,
+        })?;
         if !file_type.is_file() && !file_type.is_symlink() {
             continue;
         }
-        budget.claim_discovery(1)?;
         reserve_prepared_or_local(
             &mut paths,
             1,
@@ -3350,22 +4272,143 @@ mod tests {
     use super::*;
 
     #[test]
+    fn incremental_pairs_reuse_normalization_candidates_and_scalar_probes() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let shared = environment.clone();
+        FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
+        FONT_SELECTION_PROBES.with(|calls| calls.set(0));
+        FONT_STACK_PARSE_CALLS.with(|calls| calls.set(0));
+        let stack = environment.parse_family_stack("Test Sans").unwrap();
+        environment
+            .resolve_pair(0, &stack, RequestedWeight::Normal, &['A'])
+            .unwrap();
+        let resources = environment.core.read().unwrap().budget.resources.clone();
+        resources.claim_work(900_000).unwrap();
+        let before = resources.usage().unwrap().logical_work;
+        for ordinal in 1..=1000 {
+            let stack = shared.parse_family_stack("Test Sans").unwrap();
+            let pair = shared
+                .resolve_pair(ordinal, &stack, RequestedWeight::Normal, &['A', 'A'])
+                .unwrap();
+            assert_eq!(pair.provenance.pair_ordinal, ordinal);
+            assert_eq!(pair.selected_scalars.len(), 1);
+        }
+        let after = resources.usage().unwrap().logical_work;
+        assert!(after > before && after < 1_000_000);
+        FONT_STACK_PARSE_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 1));
+
+        let pair = shared
+            .resolve_pair(
+                1001,
+                &stack,
+                RequestedWeight::Normal,
+                &['A', ' ', '\n', 'A'],
+            )
+            .unwrap();
+        assert_eq!(pair.selected_scalars.len(), 3);
+        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 2));
+        shared
+            .resolve_pair(1002, &stack, RequestedWeight::Bold, &['A'])
+            .unwrap();
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
+        FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 3));
+        let used = resources.usage().unwrap().logical_work;
+        resources
+            .claim_work(u64::try_from(1_000_000 - used).unwrap())
+            .unwrap();
+        assert!(matches!(
+            shared.resolve_pair(1003, &stack, RequestedWeight::Normal, &['A']),
+            Err(FontError::Limit { .. })
+        ));
+    }
+
+    #[test]
+    fn sealed_census_reuses_one_normalization_per_stack_and_one_selection_per_pair() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let stack = parse_family_stack("Test Sans").unwrap();
+        FONT_NORMALIZATION_CALLS.with(|calls| calls.set(0));
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| calls.set(0));
+        FONT_SELECTION_PROBES.with(|calls| calls.set(0));
+        environment
+            .prepare_pairs(
+                [
+                    FontPairPreparationRequest::new(
+                        0,
+                        &stack,
+                        RequestedWeight::Normal,
+                        &['A', ' ', '\n'],
+                    ),
+                    FontPairPreparationRequest::new(1, &stack, RequestedWeight::Bold, &['A']),
+                ]
+                .into_iter(),
+                None,
+            )
+            .unwrap();
+        environment.seal_prepared_pairs().unwrap();
+        for _ in 0..1000 {
+            let pair = environment
+                .clone()
+                .prepared_pair(&stack, RequestedWeight::Normal)
+                .unwrap()
+                .unwrap();
+            assert_eq!(pair.selected_scalars.len(), 3);
+        }
+        FONT_NORMALIZATION_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+        FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
+        FONT_SELECTION_PROBES.with(|calls| assert_eq!(calls.get(), 3));
+        assert!(matches!(
+            environment.resolve_pair(0, &stack, RequestedWeight::Normal, &['A']),
+            Err(FontError::PreparedPairAfterSeal { .. })
+        ));
+    }
+
+    #[test]
+    fn family_normalization_propagates_shared_root_refusals() {
+        let resources = OperationFontResources::new();
+        let mut budget = FontBudget::from_resources(resources.clone());
+        resources.claim_work(FONT_WORK_LIMIT).unwrap();
+        assert!(matches!(
+            fold_family_name("Test Sans", &mut budget),
+            Err(FontError::Limit {
+                resource: "font-preflight logical work units",
+                ..
+            })
+        ));
+
+        let resources = OperationFontResources::new();
+        let mut budget = FontBudget::from_resources(resources.clone());
+        resources.claim_bytes(FONT_BYTE_LIMIT).unwrap();
+        assert!(matches!(
+            fold_family_name("Test Sans", &mut budget),
+            Err(FontError::Limit {
+                resource: "system-font bytes",
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn unicode_16_casefold_covers_ascii_compatibility_and_full_fold_cases() {
         assert_eq!(
-            super::super::unicode16::nfkc_casefold("NOTO Sans"),
+            super::super::unicode16::folded_for_test("NOTO Sans"),
             "noto sans"
         );
         assert_eq!(
-            super::super::unicode16::nfkc_casefold("Ｎｏｔｏ ﬃ"),
+            super::super::unicode16::folded_for_test("Ｎｏｔｏ ﬃ"),
             "noto ffi"
         );
         assert_eq!(
-            super::super::unicode16::nfkc_casefold("Straße"),
-            super::super::unicode16::nfkc_casefold("STRASSE")
+            super::super::unicode16::folded_for_test("Straße"),
+            super::super::unicode16::folded_for_test("STRASSE")
         );
         assert_eq!(
-            super::super::unicode16::nfkc_casefold("ΟΣ"),
-            super::super::unicode16::nfkc_casefold("ος")
+            super::super::unicode16::folded_for_test("ΟΣ"),
+            super::super::unicode16::folded_for_test("ος")
         );
     }
 
@@ -3436,6 +4479,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["serif", "sans-serif", "monospace"]
         );
+        let mut upstream = fontconfig_parser::FontConfig::default();
+        upstream.merge_config(&config_path).unwrap();
+        assert_eq!(config.dirs, upstream.dirs);
+        assert_eq!(config.aliases, upstream.aliases);
     }
 
     #[cfg(all(
@@ -3453,7 +4500,7 @@ mod tests {
         .unwrap();
 
         let mut config = BoundedFontConfig::default();
-        assert!(merge_fontconfig_root(
+        assert!(!merge_fontconfig_root(
             &mut config,
             &config_path,
             &mut FontBudget::new(ResourceLimits::PRODUCTION),
@@ -3463,6 +4510,307 @@ mod tests {
 
         assert_eq!(config.dirs.len(), 1);
         assert_eq!(config.dirs[0].path, Path::new("/first"));
+        let mut upstream = fontconfig_parser::FontConfig::default();
+        assert!(upstream.merge_config(&config_path).is_err());
+        assert_eq!(config.dirs, upstream.dirs);
+    }
+
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
+    ))]
+    #[test]
+    fn bounded_fontconfig_root_status_drives_fallback_like_locked_parser() {
+        let root = tempfile::tempdir().unwrap();
+        let local = root.path().join("local.conf");
+        let default = root.path().join("default.conf");
+        fs::write(&local, "<fontconfig><dir>/local</dir></fontconfig>").unwrap();
+        fs::write(&default, "<fontconfig><dir>/default</dir></fontconfig>").unwrap();
+        for source in [
+            None,
+            Some("<fontconfig><dir>/valid</dir></fontconfig>"),
+            Some("<fontconfig><dir>/prefix</dir><dir/><dir>/discarded</dir></fontconfig>"),
+            Some(
+                "<fontconfig><dir>/prefix</dir><include prefix=\"invalid\">bad</include></fontconfig>",
+            ),
+            Some("<fontconfig><dir>/prefix</dir><alias><family/></alias></fontconfig>"),
+            Some("<fontconfig><dir>/malformed</dir>"),
+            Some("<wrong-root/>"),
+        ] {
+            let user = root.path().join("user.conf");
+            if let Some(source) = source {
+                fs::write(&user, source).unwrap();
+            }
+            let mut config = BoundedFontConfig::default();
+            let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+            let mut upstream = fontconfig_parser::FontConfig::default();
+            let complete = merge_fontconfig_root(&mut config, &user, &mut budget, None).unwrap();
+            let upstream_complete = upstream.merge_config(&user).is_ok();
+            assert_eq!(complete, upstream_complete, "{source:?}");
+            assert_eq!(config.dirs, upstream.dirs, "{source:?}");
+            if !complete {
+                assert!(merge_fontconfig_root(&mut config, &local, &mut budget, None).unwrap());
+            }
+            if !upstream_complete {
+                upstream.merge_config(&local).unwrap();
+            }
+            assert!(merge_fontconfig_root(&mut config, &default, &mut budget, None).unwrap());
+            upstream.merge_config(&default).unwrap();
+            assert_eq!(config.dirs, upstream.dirs, "{source:?}");
+            assert_eq!(config.aliases, upstream.aliases, "{source:?}");
+            if source.is_some() {
+                // Canonical deduplication is successful even after the first parse failed.
+                assert!(merge_fontconfig_root(&mut config, &user, &mut budget, None).unwrap());
+                upstream.merge_config(&user).unwrap();
+                fs::remove_file(&user).unwrap();
+            }
+        }
+    }
+
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
+    ))]
+    #[test]
+    fn bounded_fontconfig_included_failures_do_not_fail_parent() {
+        let root = tempfile::tempdir().unwrap();
+        let includes = root.path().join("conf.d");
+        fs::create_dir(&includes).unwrap();
+        fs::write(
+            includes.join("10-partial.conf"),
+            "<fontconfig><dir>/included</dir><dir/><dir>/discarded</dir></fontconfig>",
+        )
+        .unwrap();
+        fs::write(
+            includes.join("20-malformed.conf"),
+            "<fontconfig><dir>/malformed</dir>",
+        )
+        .unwrap();
+        fs::write(
+            includes.join("30-last.conf"),
+            "<fontconfig><dir>/last</dir><include prefix=\"relative\">../fonts.conf</include></fontconfig>",
+        )
+        .unwrap();
+        for include in [
+            "conf.d/10-partial.conf",
+            "conf.d/20-malformed.conf",
+            "conf.d",
+            "absent",
+        ] {
+            let path = root.path().join("fonts.conf");
+            fs::write(&path, format!(
+                "<fontconfig><include prefix=\"relative\">{include}</include><dir>/parent</dir></fontconfig>"
+            )).unwrap();
+            let mut config = BoundedFontConfig::default();
+            assert!(merge_fontconfig_root(
+                &mut config,
+                &path,
+                &mut FontBudget::new(ResourceLimits::PRODUCTION),
+                None
+            )
+            .unwrap());
+            let mut upstream = fontconfig_parser::FontConfig::default();
+            upstream.merge_config(&path).unwrap();
+            assert_eq!(config.dirs, upstream.dirs, "{include}");
+        }
+    }
+
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
+    ))]
+    #[test]
+    fn bounded_fontconfig_empty_preferences_match_locked_parser() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("fonts.conf");
+        fs::write(&path,
+            "<fontconfig><alias><family>serif</family><prefer><family/><family>Preferred</family></prefer><accept><family/><family>Accepted</family></accept><default><family/><family>Default</family></default></alias><dir>/after</dir></fontconfig>"
+        ).unwrap();
+        let mut config = BoundedFontConfig::default();
+        assert!(merge_fontconfig_root(
+            &mut config,
+            &path,
+            &mut FontBudget::new(ResourceLimits::PRODUCTION),
+            None
+        )
+        .unwrap());
+        let mut upstream = fontconfig_parser::FontConfig::default();
+        upstream.merge_config(&path).unwrap();
+        assert_eq!(config.aliases, upstream.aliases);
+        assert_eq!(config.dirs, upstream.dirs);
+        assert_eq!(config.aliases[0].prefer, ["Preferred"]);
+    }
+
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
+    ))]
+    #[test]
+    fn bounded_fontconfig_missing_optional_paths_but_not_admitted_io_are_ignored() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("absent.conf");
+        let mut config = BoundedFontConfig::default();
+        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+        assert!(matches!(
+            read_bounded_fontconfig(&mut config, &path, false, &mut budget, None),
+            Ok(FontConfigRead::Ignored)
+        ));
+        assert!(matches!(
+            read_bounded_fontconfig(&mut config, &path, true, &mut budget, None),
+            Err(FontError::Io { .. })
+        ));
+        fs::write(&path, [0xff]).unwrap();
+        assert!(matches!(
+            merge_fontconfig_root(&mut config, &path, &mut budget, None),
+            Err(FontError::Io { .. })
+        ));
+
+        let includes = root.path().join("conf.d");
+        fs::create_dir(&includes).unwrap();
+        std::os::unix::fs::symlink(root.path().join("missing"), includes.join("broken.conf"))
+            .unwrap();
+        let parent = root.path().join("parent.conf");
+        fs::write(
+            &parent,
+            "<fontconfig><include prefix=\"relative\">conf.d</include></fontconfig>",
+        )
+        .unwrap();
+        assert!(matches!(
+            merge_fontconfig_root(&mut config, &parent, &mut budget, None),
+            Err(FontError::Io { .. })
+        ));
+    }
+
+    #[test]
+    fn discovery_retains_one_handle_at_a_time_and_closes_on_byte_refusal() {
+        let root = tempfile::tempdir().unwrap();
+        for (name, bytes) in [
+            ("a.ttf", b"first".as_slice()),
+            ("b.otf", b"second".as_slice()),
+        ] {
+            fs::write(root.path().join(name), bytes).unwrap();
+        }
+        let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
+        let limits = ResourceLimits {
+            discovery_entries: 8,
+            font_bytes: 11,
+            logical_work: 32,
+        };
+        DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
+        let files = discover_retained_files(&roots, &mut FontBudget::new(limits)).unwrap();
+        DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 2, 2, 2]));
+        for (file, source) in files
+            .iter()
+            .zip([b"first".as_slice(), b"second".as_slice()])
+        {
+            assert_eq!(file.bytes.as_slice(), source);
+            assert_eq!(file.sha256, <[u8; 32]>::from(Sha256::digest(source)));
+        }
+        DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
+        let mut budget = FontBudget::new(ResourceLimits {
+            font_bytes: 5,
+            ..limits
+        });
+        assert!(matches!(
+            discover_retained_files(&roots, &mut budget),
+            Err(FontError::Limit { .. })
+        ));
+        DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 2, 1, 1]));
+        assert_eq!(budget.resources.usage().unwrap().font_bytes, 5);
+    }
+
+    #[test]
+    fn discovery_closes_handle_on_observed_file_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("a.ttf");
+        fs::write(root.path().join("b.ttf"), b"unopened").unwrap();
+        let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
+        let limits = ResourceLimits {
+            discovery_entries: 8,
+            font_bytes: 32,
+            logical_work: 32,
+        };
+        for hook in [
+            (|path: &Path| fs::write(path, b"x").unwrap()) as fn(&Path),
+            (|path: &Path| fs::write(path, b"longer than admitted").unwrap()) as fn(&Path),
+        ] {
+            fs::write(&path, b"original").unwrap();
+            DISCOVERY_HANDLES.with(|state| state.set([0; 5]));
+            DISCOVERY_AFTER_ADMISSION.with(|state| state.set(Some(hook)));
+            assert!(
+                matches!(discover_retained_files(&roots, &mut FontBudget::new(limits)),
+                Err(FontError::ChangedFile(changed)) if changed == fs::canonicalize(&path).unwrap())
+            );
+            DISCOVERY_HANDLES.with(|state| assert_eq!(state.get(), [0, 1, 1, 1, 0]));
+        }
+    }
+
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "android", target_os = "redox"))
+    ))]
+    #[test]
+    fn bounded_fontconfig_parser_capacity_and_entity_rejection_are_explicit() {
+        let path = Path::new("fixture.conf");
+        let source = "<fontconfig><dir salt=\"s\">/fonts</dir></fontconfig>";
+        let capacity = 2 * source.bytes().filter(|byte| *byte == b'<').count()
+            + source.bytes().filter(|byte| *byte == b'=').count()
+            + 1;
+        let limits = ResourceLimits {
+            discovery_entries: 1,
+            font_bytes: 0,
+            logical_work: capacity as u64 + 1,
+        };
+        let mut budget = FontBudget::new(limits);
+        let (parts, complete) = parse_bounded_fontconfig(source, path, &mut budget, None).unwrap();
+        assert!(complete);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(
+            budget.resources.usage().unwrap().logical_work,
+            capacity as u128 + 1
+        );
+        assert!(matches!(
+            parse_bounded_fontconfig(
+                source,
+                path,
+                &mut FontBudget::new(ResourceLimits {
+                    logical_work: capacity as u64 - 1,
+                    ..limits
+                }),
+                None
+            ),
+            Err(FontError::Limit {
+                resource: "font-preflight logical work units",
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_bounded_fontconfig(
+                "<!DOCTYPE fontconfig [<!ENTITY path '/fonts'>]><fontconfig><dir>&path;</dir></fontconfig>",
+                path,
+                &mut FontBudget::new(ResourceLimits::PRODUCTION),
+                None
+            ),
+            Err(FontError::ParseFontConfig { .. })
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discovery_distinguishes_missing_roots_from_entry_io_failures() {
+        let root = tempfile::tempdir().unwrap();
+        let mut budget = FontBudget::new(ResourceLimits::PRODUCTION);
+        let roots = ordinal_roots(vec![root.path().join("missing")], None).unwrap();
+        assert!(discover_retained_files(&roots, &mut budget)
+            .unwrap()
+            .is_empty());
+        std::os::unix::fs::symlink(root.path().join("absent"), root.path().join("broken.ttf"))
+            .unwrap();
+        let roots = ordinal_roots(vec![root.path().to_path_buf()], None).unwrap();
+        assert!(matches!(
+            discover_retained_files(&roots, &mut budget),
+            Err(FontError::Io { .. })
+        ));
     }
 
     #[cfg(all(
@@ -3514,6 +4862,8 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let includes = root.path().join("conf.d");
         fs::create_dir(&includes).unwrap();
+        // Even an entry that is not a configuration file consumes admission.
+        fs::create_dir(includes.join("ignored-directory")).unwrap();
         for name in ["10.conf", "20.conf"] {
             fs::write(
                 includes.join(name),
@@ -3528,7 +4878,7 @@ mod tests {
         )
         .unwrap();
         let limits = ResourceLimits {
-            discovery_entries: 6,
+            discovery_entries: 7,
             font_bytes: 1_024,
             logical_work: 1_024,
         };
@@ -3545,7 +4895,7 @@ mod tests {
             })
         ));
         let exact = ResourceLimits {
-            discovery_entries: 7,
+            discovery_entries: 8,
             ..limits
         };
         assert!(merge_fontconfig_root(
@@ -3690,6 +5040,13 @@ mod tests {
 
     #[test]
     fn retained_font_read_rejects_short_and_never_reads_past_admitted_length() {
+        struct FailedRead;
+        impl Read for FailedRead {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("injected admitted read failure"))
+            }
+        }
+
         let path = Path::new("changing-test.ttf");
         let mut short = std::io::Cursor::new([1_u8, 2]);
         let mut bytes = Vec::with_capacity(3);
@@ -3705,6 +5062,14 @@ mod tests {
         assert_eq!(bytes, [1, 2]);
         assert_eq!(growing.position(), 2);
         assert_eq!(digest, expected);
+
+        assert!(matches!(
+            read_exact_font_bytes(&mut FailedRead, path, 1, &mut Vec::with_capacity(1)),
+            Err(FontError::Io {
+                operation: "read font file",
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -3963,7 +5328,9 @@ mod tests {
             .unwrap();
 
         let after = environment.resource_usage().unwrap().logical_work;
-        assert_eq!(after - before, 20);
+        // 20 resolution units, one 570-unit normalization, and 40 units
+        // for admitted cache keys, retention, and the second weight's copy.
+        assert_eq!(after - before, 20 + 570 + 40);
         FONT_PAIR_RESOLUTION_CALLS.with(|calls| assert_eq!(calls.get(), 2));
         let core = environment.core.read().unwrap();
         assert_eq!(
@@ -4073,7 +5440,7 @@ mod tests {
     fn host_database_generic_smoke() {
         let mut core = CanonicalFontCore::discover_system().unwrap();
         let family =
-            super::super::unicode16::nfkc_casefold(core.database.family_name(&Family::SansSerif));
+            super::super::unicode16::folded_for_test(core.database.family_name(&Family::SansSerif));
         let matches = core
             .faces
             .iter()
@@ -4138,7 +5505,7 @@ mod tests {
             database_id: ID::dummy(),
             names: vec![NameOccurrence {
                 value: name.into(),
-                folded: super::super::unicode16::nfkc_casefold(name),
+                folded: super::super::unicode16::folded_for_test(name),
                 rank: NameRank::TypographicFamily,
                 record_ordinal: 0,
             }],
@@ -4171,9 +5538,290 @@ mod tests {
         .unwrap()
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn formatted_census_counts_units_across_write_boundaries() {
+        for mark in (0..=0x10_FFFF)
+            .filter_map(char::from_u32)
+            .filter(|scalar| is_visible_mark(*scalar))
+        {
+            for base in [
+                'A',
+                '\n',
+                '\u{0301}',
+                '\u{0600}',
+                '\u{0915}',
+                '\u{200D}',
+                '\u{1F469}',
+            ] {
+                let source = format!("{base}{mark}\u{0301}");
+                let mut count = CensusFormatCount::default();
+                for scalar in source.chars() {
+                    write!(&mut count, "{scalar}").unwrap();
+                }
+                assert_eq!(count.bytes, source.len());
+                assert_eq!(count.scalars, 3);
+                assert_eq!(
+                    usize::try_from(count.units).unwrap(),
+                    selection_units(&source).count(),
+                    "{source:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn formatted_census_admits_work_and_bytes_before_output_writes() {
+        struct Observed<'a>(&'a std::cell::Cell<usize>);
+        impl std::fmt::Display for Observed<'_> {
+            fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.set(self.0.get() + 1);
+                output.write_str("A")?;
+                output.write_str("\u{0301}")
+            }
+        }
+        for refusal in [None, Some("work"), Some("bytes")] {
+            crate::layout::plan_exact_root(
+                320,
+                240,
+                |stage| {
+                    if refusal == Some("work") {
+                        stage.font_resources().claim_work(FONT_WORK_LIMIT).unwrap();
+                    } else if refusal == Some("bytes") {
+                        stage.font_resources().claim_bytes(FONT_BYTE_LIMIT).unwrap();
+                    }
+                    let writes = std::cell::Cell::new(0);
+                    let result =
+                        format_census_source(format_args!("{}", Observed(&writes)), Some(stage));
+                    if refusal.is_some() {
+                        assert!(matches!(result, Err(FontError::Limit { .. })));
+                        assert_eq!(
+                            writes.get(),
+                            1,
+                            "only the allocation-free count pass may run"
+                        );
+                    } else {
+                        assert_eq!(result.unwrap(), "A\u{0301}");
+                        assert_eq!(writes.get(), 2);
+                        let usage = stage.font_resources().usage().unwrap();
+                        assert_eq!(usage.font_bytes, 3);
+                        assert_eq!(usage.logical_work, 3);
+                    }
+                    Ok(())
+                },
+                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one retained environment exercises complete and split unit selections after sealing"
+    )]
+    fn retained_units_prefer_complete_faces_without_changing_scalar_or_primary_selection() {
+        let files = [
+            ("Base", vec!['A']),
+            ("Complete", vec!['A', '\u{0301}']),
+            ("Mark", vec!['\u{0301}']),
+        ]
+        .into_iter()
+        .map(|(family, coverage)| {
+            let bytes = Arc::new(build_test_font_with_coverage(family, &coverage));
+            RetainedFontFile {
+                root_ordinal: 0,
+                canonical_path: PathBuf::from("never-on-disk.ttf"),
+                sha256: Sha256::digest(bytes.as_slice()).into(),
+                bytes,
+            }
+        })
+        .collect();
+        let environment = PreparedFontEnvironment {
+            core: Arc::new(RwLock::new(
+                CanonicalFontCore::from_retained(
+                    files,
+                    &HostGenericNames::default(),
+                    FontBudget::new(ResourceLimits::PRODUCTION),
+                    scalar_presence_map(),
+                    OperationGenerationResources::new(),
+                )
+                .unwrap(),
+            )),
+        };
+        let complete = parse_family_stack("Base, Complete").unwrap();
+        let split = parse_family_stack("Base, Mark").unwrap();
+        environment
+            .prepare_pairs(
+                [
+                    FontPairPreparationRequest::new(
+                        0,
+                        &complete,
+                        RequestedWeight::Normal,
+                        &['A', '\u{0301}', '\u{200D}', '\u{FE0F}'],
+                    ),
+                    FontPairPreparationRequest::new(
+                        1,
+                        &split,
+                        RequestedWeight::Normal,
+                        &['A', '\u{0301}'],
+                    ),
+                ]
+                .into_iter(),
+                None,
+            )
+            .unwrap();
+        for ordinal in 0..2 {
+            environment
+                .prepare_source_units(ordinal, "A A\u{0301}", None)
+                .unwrap();
+        }
+        environment.seal_prepared_pairs().unwrap();
+        let pair = environment
+            .prepared_pair(&complete, RequestedWeight::Normal)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pair.selection_for_unit("A", 'A').unwrap(),
+            ScalarFaceSelection::Face(pair.primary)
+        );
+        let unit_face = pair.provenance.candidates[1];
+        for scalar in ['A', '\u{0301}'] {
+            assert_eq!(
+                pair.selection_for_unit("A\u{0301}", scalar).unwrap(),
+                ScalarFaceSelection::Face(unit_face)
+            );
+        }
+        assert!(matches!(
+            pair.selection_for_unit("A\u{0301}\u{0301}", 'A'),
+            Err(FontError::UnknownUnit { .. })
+        ));
+        assert!(matches!(
+            environment.prepare_source_units(0, "A\u{0301}", None),
+            Err(FontError::PreparedPairAfterSeal { .. })
+        ));
+        let split_pair = environment
+            .prepared_pair(&split, RequestedWeight::Normal)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            split_pair.selection_for_unit("A\u{0301}", 'A').unwrap(),
+            ScalarFaceSelection::Face(split_pair.primary)
+        );
+        assert_eq!(
+            split_pair
+                .selection_for_unit("A\u{0301}", '\u{0301}')
+                .unwrap(),
+            ScalarFaceSelection::Face(split_pair.provenance.candidates[1])
+        );
+        environment
+            .shape_run(
+                unit_face,
+                "A\u{0301}",
+                ShapingDirection::LeftToRight,
+                rustybuzz::script::LATIN,
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn units_are_narrow_and_controls_do_not_require_nominal_coverage() {
+        assert_eq!(
+            selection_units("A\u{0301}B\u{0301}\u{200D}A\u{FE0F}").collect::<Vec<_>>(),
+            ["A\u{0301}", "B\u{0301}", "\u{200D}", "A", "\u{FE0F}"]
+        );
+        let mut core = generated_core();
+        let stack = parse_family_stack("Test Sans").unwrap();
+        core.resolve_pair(
+            0,
+            &stack,
+            RequestedWeight::Normal,
+            &['\n', '\u{200C}', '\u{200D}', '\u{FE0F}', '\u{2067}'],
+            true,
+        )
+        .unwrap();
+        assert!(matches!(
+            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\u{0301}'], true),
+            Err(FontError::MissingGlyph { .. })
+        ));
+        assert!(matches!(
+            core.resolve_pair(0, &stack, RequestedWeight::Normal, &['\t'], true),
+            Err(FontError::UnsupportedControl { .. })
+        ));
+    }
+
+    #[test]
+    fn decoder_may_admit_zero_faces_from_a_retained_file() {
+        let mut files = generated_core().files;
+        files.push(RetainedFontFile {
+            root_ordinal: 0,
+            canonical_path: PathBuf::from("unsupported.ttf"),
+            bytes: Arc::new(vec![0; 16]),
+            sha256: [0; 32],
+        });
+        let core = CanonicalFontCore::from_retained(
+            files,
+            &HostGenericNames::default(),
+            FontBudget::new(ResourceLimits::PRODUCTION),
+            scalar_presence_map(),
+            OperationGenerationResources::new(),
+        )
+        .unwrap();
+        assert_eq!(core.faces.len(), 1);
+    }
+
+    #[test]
+    fn partial_collection_preserves_actual_decoder_face_index() {
+        let mut font = build_test_font();
+        let tables = usize::from(u16::from_be_bytes(font[4..6].try_into().unwrap()));
+        for table in 0..tables {
+            let position = 12 + table * 16 + 8;
+            let offset = u32::from_be_bytes(font[position..position + 4].try_into().unwrap());
+            set_u32(&mut font, position, offset + 32);
+        }
+        let mut collection = b"ttcf".to_vec();
+        push_u32(&mut collection, 0x0001_0000);
+        push_u32(&mut collection, 2);
+        push_u32(&mut collection, 20);
+        push_u32(&mut collection, 32);
+        collection.extend_from_slice(&[0; 12]);
+        collection.extend_from_slice(&font);
+        let bytes = Arc::new(collection);
+        let core = CanonicalFontCore::from_retained(
+            vec![RetainedFontFile {
+                root_ordinal: 0,
+                canonical_path: PathBuf::from("partial.ttc"),
+                sha256: Sha256::digest(bytes.as_slice()).into(),
+                bytes,
+            }],
+            &HostGenericNames::default(),
+            FontBudget::new(ResourceLimits::PRODUCTION),
+            scalar_presence_map(),
+            OperationGenerationResources::new(),
+        )
+        .unwrap();
+        assert_eq!(core.faces.len(), 1);
+        assert_eq!(core.faces[0].identity.face_index, 1);
+        assert_eq!(
+            core.database.face(core.faces[0].database_id).unwrap().index,
+            1
+        );
+        core.shape_run(
+            core.faces[0].identity,
+            "A",
+            ShapingDirection::LeftToRight,
+            rustybuzz::script::LATIN,
+        )
+        .unwrap();
+    }
+
     fn build_test_font() -> Vec<u8> {
-        let family = utf16_be("Test Sans");
+        build_test_font_with_coverage("Test Sans", &[' ', 'A', '\u{05D0}'])
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub(super) fn build_test_font_with_coverage(family_name: &str, coverage: &[char]) -> Vec<u8> {
+        let family = utf16_be(family_name);
         let postscript = utf16_be("TestSans-Regular");
         let mut name = Vec::new();
         push_u16(&mut name, 0);
@@ -4197,32 +5845,18 @@ mod tests {
         push_u16(&mut cmap, 0);
         push_u16(&mut cmap, 1);
         push_u16(&mut cmap, 3);
-        push_u16(&mut cmap, 1);
+        push_u16(&mut cmap, 10);
         push_u32(&mut cmap, 12);
-        push_u16(&mut cmap, 4);
-        push_u16(&mut cmap, 48);
+        push_u16(&mut cmap, 12);
         push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 8);
-        push_u16(&mut cmap, 8);
-        push_u16(&mut cmap, 2);
-        push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 0x0020);
-        push_u16(&mut cmap, 0x0041);
-        push_u16(&mut cmap, 0x05D0);
-        push_u16(&mut cmap, 0xFFFF);
-        push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 0x0020);
-        push_u16(&mut cmap, 0x0041);
-        push_u16(&mut cmap, 0x05D0);
-        push_u16(&mut cmap, 0xFFFF);
-        push_u16(&mut cmap, 0xFFE2);
-        push_u16(&mut cmap, 0xFFC0);
-        push_u16(&mut cmap, 0xFA31);
-        push_u16(&mut cmap, 1);
-        push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 0);
-        push_u16(&mut cmap, 0);
+        push_u32(&mut cmap, u32::try_from(16 + coverage.len() * 12).unwrap());
+        push_u32(&mut cmap, 0);
+        push_u32(&mut cmap, u32::try_from(coverage.len()).unwrap());
+        for scalar in coverage {
+            push_u32(&mut cmap, *scalar as u32);
+            push_u32(&mut cmap, *scalar as u32);
+            push_u32(&mut cmap, if *scalar == ' ' { 2 } else { 1 });
+        }
 
         let mut head = vec![0_u8; 54];
         set_u32(&mut head, 0, 0x0001_0000);
