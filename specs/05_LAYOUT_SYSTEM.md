@@ -19,12 +19,14 @@ records the decisions and documentation review. Broad public constraints remain
 deferred to DF6 review at T7 closure; new text controls remain deferred to DF5
 review at T6 entry. Neither checkpoint is a promise to implement those extensions.
 
-Post-T5a3 work is recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p. Corpus-history
-removal is authorized, while its replacement test workflow and proposed efficiency
-changes have an explicit user-review gate. Those proposals do not yet replace
-the root-round, capture, resource-accounting, tick, or line-fit rules below.
-No history rewrite, runtime optimization, or extra public mode follows merely
-from recording a proposal.
+Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
+(PF1-PF7). The amendments below approve external conformance data, effective-
+feedback fixed-point completion with dirty reuse, single producer capture, and
+coarse resource accounting. Runtime implementation remains pending in p2/p3/p4/p6;
+p1 test/history migration and p5 evaluation are IN PROGRESS, not complete.
+PF6 permits deduplication only with the exact selected tick list preserved; PF5
+admits evaluation/reporting, not a global font cache. PF7 keeps current line
+extension; alternative behavior is deferred to DF10 review at T7 closure.
 
 Parents allocate space. A child returns ONE measured immutable local plan or a
 typed fit miss under that allocation. Intrinsic summaries inform allocation but
@@ -339,6 +341,13 @@ tables/algorithms are permitted; bespoke first-party Unicode algorithms are not
 required. Any shaper whose internal tables differ must be patched or supplied a
 tested compatible classification path before it satisfies this target.
 
+PF1 supersedes full-corpus repository/package storage requirements: keep focused,
+independently expected default tests, runtime tables, hashes, provenance, and
+licenses. Full conformance uses explicitly invoked ignored tests against externally
+supplied official Unicode 16 data, hash-verified before parsing; missing or mismatched
+data fails. No automatic download, provisioning, or hidden cache lookup is added.
+Historical full packaged runs remain true evidence, not fresh-checkout coverage.
+
 Use the locked `rustybuzz 0.20.1` shaping profile, language `und`, default
 variation coordinates, empty caller feature list, and required/default OpenType
 features, subject to that coherent-data requirement. Resolve Common/Inherited
@@ -420,6 +429,9 @@ Otherwise apply this deterministic locally greedy policy from paragraph start:
    shaping/checking its complete line exactly. Extend while each next line fits;
    STOP at the first exact nonfit or paragraph end. Keep the last fitting line,
    then resume forward proposal scanning at its ending source boundary.
+
+PF7 accepts keeping this extension policy unchanged. Removing extension is not
+admitted; DF10 reviews it at T7 closure only if measured benefit justifies review.
 
 Within one line-start trial sequence, reuse an already tested endpoint result;
 in particular, a failed endpoint encountered during retreat stops later extension
@@ -573,6 +585,12 @@ The explicit resource/entity restrictions above take precedence over unbounded
 upstream parsing; matching the unrestricted parser is not claimed outside them.
 
 ## Axes And Ticks
+
+PF6 admits output-preserving deduplication of identical complete candidate lists
+and repeated label measurements in identical contexts, preserving the exact
+selected positions and label bytes. Runtime work is pending. It does not admit
+first-fit replacement of the current greatest-count selection or alter the native
+source policy below, whose implementation remains assigned to T5a5.
 
 Each axis measures at its one assigned panel-parallel span and returns one tick
 plan plus required perpendicular gutter. The parent owns panel size. Initial
@@ -1013,11 +1031,14 @@ ticks, guide slots, tracks, and reservations needed to interpret retained data.
 It excludes cumulative operational counters and cache-hit statistics. Compare
 exact normalized structural content, not hashes alone or epsilon distances.
 
-Equality with immediately previous COMPLETE state converges only if there are
-no remaining misses and all painted ink lies within the root. An unchanged
-provisional miss becomes its terminal fit error. A nonadjacent repeated state
-fails immediately; a changed eighth state fails for exhaustion. Thus successful
-convergence takes two through eight rounds. Never publish a previous best plan.
+PF2's accepted target (runtime pending) converges when effective outgoing feedback
+equals consumed feedback, no misses remain, and the complete immutable plan has
+passed semantic, geometry, containment, and root-ink validation. An empty request
+list alone is insufficient. An unchanged provisional miss becomes its terminal
+fit error. Retain exact state comparison for cycle detection: a nonadjacent
+repeated state fails immediately; a nonconverged eighth round fails for exhaustion.
+Successful convergence takes one through eight rounds, with no mandatory duplicate
+measurement. Never publish a previous best plan.
 
 Optional root-local caching stores one outcome per full normalized constraint,
 assigned geometry/obstacle context, prepared input, and consumed feedback subtree,
@@ -1026,9 +1047,24 @@ invalidate reuse. Cache hits charge call attempts but not repeated producer work
 cached diagnostic identity is unchanged. Admit and fallibly grow entries as used,
 not one million slots up front. No cache survives root completion/failure.
 
+PF2 requires dirty dependency propagation and reuse of unchanged child outcomes;
+remeasure affected owners when effective inputs change. Audit every invalidation
+edge and mutable cache's output independence. Reuse is not a cache-purity assumption
+derived from Rust traits or an unchanged request list.
+
 ## Resources And Lifecycle
 
-The independent inclusive resource envelope is:
+PF4 accepts coarse cumulative input, glyph/record, byte, and expensive-operation
+counters with reasonable, evidence-justified limits instead of routine per-rule,
+hash, and copy prices. Runtime implementation is pending. Before code changes, PF4
+implementation must document the exact replacement table, units, numeric limits,
+charge points, workload rationale, and failure precedence for approval; no new
+numbers are invented here. The legacy accounting table and fine-grained rules below
+are superseded as the target where PF4 replaces them, not already changed runtime
+behavior. Checked arithmetic, fallible admission, bounded feedback/placement, and
+PNG-local gates remain mandatory; counters are not CPU time or RSS.
+
+The pre-PF4 independent inclusive resource envelope is:
 
 | Resource | Limit |
 | --- | ---: |
@@ -1140,6 +1176,10 @@ Root lifecycle order is:
    hypothetical PNG viability or PNG-derived byte gates to the shared plan.
 6. Freeze root plan, glyph IDs, origins/positions, advances, bounds, face identities,
    and immutable same-byte face sources needed for later outline extraction.
+   PF3's accepted target (runtime pending) captures each producer once with
+   checked incremental admission and fallible bounded growth during planning,
+   before final canonical storage reservation. Never rerun a producer to size it.
+   Count from the captured immutable commands; capture is not final backend draw.
    Count canonical serialization tokens; reserve final plan/scene storage,
    canonical SVG buffer, and serializer scratch before any final validation
    backend begins. Eager extraction of every glyph path is not required.

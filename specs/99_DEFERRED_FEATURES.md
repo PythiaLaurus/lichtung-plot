@@ -151,3 +151,19 @@ performance/resource comparisons with bounded local recovery, semantic
 completeness, determinism, and a coherent replacement contract. Obtain the
 user-approved disposition; historical search achievements do not authorize a
 dormant solver or runtime strategy switch.
+
+## DF10: Stop At First Fitting Line Proposal
+
+Removing exact next-endpoint line extension remains excluded. PF7 accepts KEEP
+of the current extension policy; T5a3p7 is complete as a disposition only, not a
+wrapping implementation change. No strategy switch or alternate wrapping mode
+is reserved.
+
+**Review checkpoint**: T7 CLOSURE, before successor planning.
+
+**Evidence and decision**: Use post-p2/p3/p4/p6 release measurements to establish
+whether avoiding extension has meaningful benefit. Compare exact line endpoints,
+caption heights, tight-height fit failures, bidi, soft hyphens, and retained glyph
+geometry. Revisit only if benefit justifies the wrapping/fit tradeoff; otherwise
+record rejection or explicit re-deferral. Any admission requires user acceptance
+of changed wrapping and a new approved phase under the process above.

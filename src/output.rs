@@ -38,7 +38,11 @@ impl Output {
     /// preserved exactly; otherwise `.svg` is appended without interpreting an
     /// existing extension.
     pub fn svg(self, path: impl AsRef<Path>) -> Result<Self, Error> {
+        #[cfg(test)]
+        let timer = crate::orchestrator::measurements::Timer::new(5);
         let bytes = self.scene.svg_with_text_as_paths()?;
+        #[cfg(test)]
+        drop(timer);
         let path = complete_suffix(path.as_ref(), ".svg")?;
         crate::orchestrator::write_atomic(&path, &bytes)?;
         Ok(self)
@@ -88,7 +92,11 @@ impl Output {
         path: impl AsRef<Path>,
         options: PngOptions,
     ) -> Result<Self, Error> {
+        #[cfg(test)]
+        let timer = crate::orchestrator::measurements::Timer::new(6);
         let bytes = self.scene.png_bytes(&options)?;
+        #[cfg(test)]
+        drop(timer);
         let path = complete_suffix(path.as_ref(), ".png")?;
         crate::orchestrator::write_atomic(&path, &bytes)?;
         Ok(self)

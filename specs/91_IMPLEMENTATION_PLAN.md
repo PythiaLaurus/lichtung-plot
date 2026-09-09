@@ -220,15 +220,15 @@ The approved theme and layout targets follow these rules:
 | T5a3d | Resource and lifecycle closure | COMPLETE |
 | T5a3e | Producer and SVG/PNG regressions | COMPLETE |
 | T5a3f | Independent closure and performance evidence | COMPLETE |
-| T5a3p | Post-T5a3 repository hygiene and publication efficiency | BLOCKED |
-| T5a3p0 | Follow-up behavior review and selected-work admission | BLOCKED |
-| T5a3p1 | Remove full Unicode corpora from unpublished history | PENDING |
-| T5a3p2 | Avoid unchanged root and child measurement | BLOCKED |
-| T5a3p3 | Capture producers once | BLOCKED |
-| T5a3p4 | Simplify resource admission accounting | BLOCKED |
-| T5a3p5 | Evaluate repeated font setup | BLOCKED |
-| T5a3p6 | Avoid duplicate automatic-tick work | BLOCKED |
-| T5a3p7 | Review speculative line extension | BLOCKED |
+| T5a3p | Post-T5a3 repository hygiene and publication efficiency | IN PROGRESS |
+| T5a3p0 | Follow-up behavior review and selected-work admission | COMPLETE |
+| T5a3p1 | Remove full Unicode corpora from unpublished history | IN PROGRESS |
+| T5a3p2 | Avoid unchanged root and child measurement | PENDING |
+| T5a3p3 | Capture producers once | PENDING |
+| T5a3p4 | Simplify resource admission accounting | PENDING |
+| T5a3p5 | Evaluate repeated font setup | IN PROGRESS |
+| T5a3p6 | Avoid duplicate automatic-tick work | PENDING |
+| T5a3p7 | Review speculative line extension | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -3502,7 +3502,7 @@ Original intended title: `test(layout): close typography repair and scaling evid
 
 ### T5a3p: Post-T5a3 Repository Hygiene And Publication Efficiency
 
-**Status**: BLOCKED
+**Status**: IN PROGRESS
 
 Dependencies: completed T5a3; T5a3p0 records the user's follow-up decisions.
 
@@ -3513,11 +3513,12 @@ costs without reopening accurate shaping, complete content, or immutable replay.
 It is not a global optimizer, a new public layout mode, or permission to change
 fonts, shrink text, drop labels, or overwrite exact caller dimensions to save work.
 
-The user explicitly authorized removing the full Unicode corpus from Git history
-before publication. Other recommendations below await the requested behavior
-review. This documentation revision performs no history rewrite, deletion, runtime
-change, benchmark, or push. Proposals do not silently override the current
-algorithms in `05_LAYOUT_SYSTEM.md`.
+The user accepted PF1-PF7 below, including full-corpus history removal and the
+external-data test workflow. `05_LAYOUT_SYSTEM.md` records the minimal accepted
+policy amendments; approval is not runtime completion. P1 tests/history work and
+p5 evaluation are in progress; p2/p3/p4/p6 runtime implementation remains pending.
+This documentation revision performs no tests, compilation, history rewrite,
+runtime change, benchmark, Git commit, or push.
 
 **Publication gate:** do not push the current branch or any ref containing the
 corpus ancestry. T5a3p1 must prove that corpus paths and original blobs are absent
@@ -3527,30 +3528,26 @@ a push or force-push.
 
 #### T5a3p0: Follow-Up Behavior Review And Selected-Work Admission
 
-**Status**: BLOCKED -- awaiting user review of these examples and recommendations.
+**Status**: COMPLETE (agreement record only)
 
-| ID / stage | Current behavior and example | Proposed outcome | Review status |
+| ID / stage | Baseline behavior and example | Accepted outcome | Agreement |
 | --- | --- | --- | --- |
-| PF1 / p1 | Six full upstream test corpora occupy 639,054 lines / 16,821,506 bytes and remain in branch history even after a hypothetical forward deletion | Remove them from unpublished ancestry and future packages; keep focused default tests, small provenance/license records, and explicitly supplied external full-conformance data. Plot output is unchanged | History removal authorized; confirm replacement test workflow |
-| PF2 / p2 | A complete valid scatter layout with unchanged effective feedback still needs a second whole-root measurement to establish repeated observations | Finish that stable result without duplicate measurement; remeasure affected owners only when an effective dependency changes. Keep bounded convergence for genuinely changing layouts | PROPOSED: recommend |
-| PF3 / p3 | Scene capture invokes the producer once to count commands and again to retain them, before validation and output | Capture once with bounded fallible growth, then count/validate/serialize the frozen commands. Preserve publication failures and output | PROPOSED: recommend |
-| PF4 / p4 | The recorded 200-word caption consumes 223,501 synthetic work units; 137,504 are fixed Unicode allowances, not measured CPU operations | Replace routine fine-grained prices with understandable input, glyph/record, byte, and expensive-operation limits. Preserve exact output; resource refusal boundaries can intentionally change | PROPOSED: recommend the simpler policy, with limits justified by evidence |
-| PF5 / p5 | Each separate Plot operation prepares a font environment; recorded debug setup was about 0.6 seconds, separate from caption layout | Measure real release-mode setup first and optimize within an operation. No cross-operation font reuse without a separate freshness/lifetime decision | PROPOSED: recommend evaluation only; no global cache now |
-| PF6 / p6 | Automatic ticks may measure the same candidate label twice and evaluate duplicate lists while choosing the fitting list with the greatest count | Deduplicate identical lists and reuse each label measurement while preserving the selected tick list. First-fit instead of greatest-count selection is a separate optional visual change | PROPOSED: recommend output-preserving deduplication only initially |
-| PF7 / p7 | A proposed caption line is shaped to fit, then the next legal endpoint is tested to fill it further; the recorded 20-line caption took 40 shape calls, not 40 paragraph layouts | Optional: freeze the first exactly fitting proposal after necessary retreat, without speculative extension. It can make lines shorter, text taller, and tight figures fail | PROPOSED: recommend keeping current filling initially; evaluate after larger no-visual-change savings |
+| PF1 / p1 | Six full upstream test corpora occupy 639,054 lines / 16,821,506 bytes and remain in branch history after forward deletion | External official hash-verified data for explicitly invoked ignored full-conformance tests; focused default tests and small provenance/license records. Remove full corpora from ancestry/packages while preserving all later code | ACCEPTED; tests/history IN PROGRESS |
+| PF2 / p2 | Stable valid scatter still requires a second root measurement | Stop at unchanged effective feedback with no misses and a complete validated immutable plan; dirty dependency reuse, not a cache-purity assumption | ACCEPTED; runtime PENDING |
+| PF3 / p3 | Producer runs once to count and again to retain commands | Single capture with admitted incremental fallible growth during planning; count frozen commands and reserve final canonical storage before Null | ACCEPTED; runtime PENDING |
+| PF4 / p4 | Caption charges 223,501 synthetic units, including 137,504 fixed Unicode allowances | Coarse resource counters and reasonable evidence-justified limits; exact replacement table/units documented for approval before code, not invented here | ACCEPTED policy; runtime PENDING |
+| PF5 / p5 | Separate roots repeat font setup; about 0.6 seconds was a debug observation | Release evaluation and before/after report, no global font cache | ACCEPTED; evaluation IN PROGRESS |
+| PF6 / p6 | Duplicate automatic lists/label queries under greatest-count selection | Deduplication ONLY, preserving the exact selected tick list and label bytes; no first-fit change | ACCEPTED; runtime PENDING |
+| PF7 / p7 | Exact next-endpoint extension fills lines; 20 lines took 40 shape calls, not 40 paragraph layouts | KEEP current extension; revisit only later if meaningful benefit, via DF10 at T7 closure | ACCEPTED; disposition COMPLETE, no runtime change |
 
-For each PF item, record agreement, amended behavior, or an explicit deferral
-with a next milestone. History removal is not submitted for permission a second
-time; its test-data arrangement is presented to expose the coverage difference.
-Recommendations are not accepted by silence. Deferred work is not called
-implemented, and no new public strategy/quality knob is added.
-
-Resolve PF1's test workflow and the other dispositions before selecting the
-implementation sequence. Preserve already accepted strict wrapping, font coverage,
-exact dimensions, and explicit placement. If fewer-tick or earlier-line-break
-behavior is admitted, document the output difference and tests before coding.
-Update `05` and the active ownership overlay with each admitted change; do not
-retain old and new algorithms behind a runtime selector.
+These are explicit user agreements, not acceptance by silence. PF1 supersedes
+earlier full-corpus repository/package preservation requirements in this plan and
+`05`; historical full-run and package observations remain true for their recorded
+trees. Fresh-checkout defaults will not claim full official coverage. Preserve
+strict wrapping, font coverage, exact dimensions, explicit placement, and all later
+code during cleanup. No fewer-tick or earlier-line-break behavior is admitted.
+Update implementation evidence and the ownership overlay when the respective work
+lands; retain no old/new runtime selector. P0 completion certifies agreement only.
 
 **Shared evidence gate for p2-p7:** benchmark identical representative inputs in
 release mode before changing algorithms. Include a simple scatter, long-label
@@ -3563,19 +3560,78 @@ trials, with clearly identified byte/record claims or measured memory. Synthetic
 admission scores are not CPU timings, operation counts, or peak RSS. No new
 speedup percentage or replacement limit is accepted without those records.
 
-Prioritize output-preserving p2/p3/p6 and accounting simplification p4. P5 and p7
-are evaluation checkpoints, not automatic cache or wrapping redesigns. Each
+Prioritize output-preserving p2/p3/p6 and accounting simplification p4. P5 is an
+evaluation checkpoint; p7 is a completed KEEP disposition, not a redesign. Each
 accepted change gets its own logical commit and verification; split further
 before coding if shared interfaces prevent a coherent reviewable change.
 
+**Release baseline (evaluation evidence, not optimized runtime):** supplied records
+`/tmp/opencode/publication-efficiency-summary.csv` and
+`/tmp/opencode/publication-efficiency-baseline.log`. Conditions: AMD Ryzen 9 7950X3D,
+Linux, Rust 1.96, optimized release, one test thread, three runs, no warmup;
+OS/filesystem cache state uncontrolled. SVG is outlined; PNG uses source-balanced
+preview. Test source: `src/orchestrator/tests/publication_efficiency.rs`, ignored
+test `orchestrator::tests::publication_efficiency::publication_efficiency_measurements`.
+Reproduction command (not run by this docs update):
+
+```sh
+cargo test --locked --offline --release --lib orchestrator::tests::publication_efficiency::publication_efficiency_measurements -- --ignored --nocapture --test-threads=1
+```
+
+Times below are milliseconds, rounded to three decimals; all stage columns are
+medians. Root preparation includes fonts and other preparation, not font-only
+setup. Stage medians need not sum to the median total. Publication is distinct
+from SVG replay/serialization and format conversion.
+
+| Case | Min total | Median total | Prepare incl. fonts | Root measure | Capture | Null | Publication | SVG outline | PNG raster/encode | SVG replay/serialize |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| scatter100 | 36.899 | 46.408 | 28.343 | 0.678 | 0.190 | 0.041 | 0.262 | 0.307 | 16.533 | 0.117 |
+| long_label_bar | 30.846 | 31.785 | 18.821 | 0.690 | 0.104 | 0.018 | 0.249 | 1.016 | 10.172 | 0.050 |
+| caption200_1para | 81.361 | 81.485 | 18.783 | 4.704 | 0.189 | 0.043 | 0.664 | 10.683 | 46.183 | 0.138 |
+| caption200_3para | 82.258 | 82.909 | 18.681 | 4.741 | 0.192 | 0.043 | 0.661 | 10.812 | 47.663 | 0.137 |
+| facets2x2 | 45.416 | 46.238 | 19.104 | 2.540 | 0.466 | 0.081 | 0.483 | 0.989 | 22.380 | 0.239 |
+| mixed_canvas | 46.197 | 47.232 | 18.933 | 2.642 | 0.276 | 0.058 | 0.513 | 1.217 | 23.213 | 0.170 |
+| matrix4 | 72.374 | 72.537 | 19.190 | 3.565 | 1.457 | 0.396 | 0.574 | 0.847 | 45.314 | 1.111 |
+| separate10 | 385.529 | 386.541 | 226.153 | 6.711 | 1.827 | 0.405 | 2.686 | 2.852 | 137.740 | 1.262 |
+| reuse10 | 149.227 | 150.995 | 18.914 | 0.725 | 0.181 | 0.041 | 2.087 | 0.306 | 127.901 | 0.131 |
+
+| Case | Roots | Root rounds | Producer invocations | Font shape calls |
+| --- | ---: | ---: | ---: | ---: |
+| scatter100 | 1 | 2 | 2 | 9 |
+| long_label_bar | 1 | 2 | 2 | 11 |
+| caption200_1para | 1 | 2 | 2 | 35 |
+| caption200_3para | 1 | 2 | 2 | 37 |
+| facets2x2 | 1 | 3 | 2 | 13 |
+| mixed_canvas | 1 | 3 | 2 | 79 |
+| matrix4 | 1 | 2 | 2 | 13 |
+| separate10 | 10 | 20 | 20 | 90 |
+| reuse10 | 1 | 2 | 2 | 9 |
+
+Each root has one capture and one Null validation in this baseline, but two
+producer invocations. The log records SVG/PNG/decoded hashes, sizes, and PNG
+geometry; the recorded test passed once with 670 filtered tests. This is not a
+new full-suite run, a memory measurement, or an after-optimization report.
+The font probe's first sample separates fresh-environment setup **18.510 ms**,
+first query **0.204 ms**, new query **0.093 ms**, and repeated-query hit
+**0.000918 ms**. The earlier caption investigation's roughly **0.6 s cold setup**
+was debug-only, not release root preparation or evidence of a measured speedup.
+P5's evaluation baseline is done; its after-report and conclusion remain pending.
+
 #### T5a3p1: Remove Full Unicode Corpora From Unpublished History
 
-**Status**: PENDING
+**Status**: IN PROGRESS (test migration and history cleanup; closure pending)
 
-History removal is explicitly authorized. Confirm the external-data testing
-arrangement at p0, then complete this before publication of the branch. The
+History removal and the external-data testing arrangement are explicitly accepted
+at p0; complete this before publication of the branch. The
 original introduction is `996f44a`; its parent is `35fc235`. These are historical
 anchors, not a promise that refs or remote state remain unchanged.
+
+The primary confirmed actual remote `main` via HTTPS at `4b38de4...`; SSH port 22
+timed out. That read-only remote/SSH limitation does not block the authorized local
+rewrite and does not authorize publication. No push is requested. Preserve all
+later code, not only the original corpus-introduction tree. Keep old commit IDs
+throughout the evidence until the primary rewrites history; then record the
+old-to-new mapping and update references. No rewrite or mapping is claimed here.
 
 Remove exactly these full fixtures, including their historical blobs:
 
@@ -3597,8 +3653,9 @@ tests/fixtures/unicode16/NormalizationTest.txt
   sufficient; no Python files, `tools/`, or runtime dependency is needed.
 - Migrate all six corpus-reading tests, retained-artifact checksums, and offline
   regeneration together. Default tests keep focused independently expected cases,
-  version checks, and retained-table integrity. Full conformance explicitly reads
-  an external Unicode 16 directory and validates source hashes before parsing.
+  version checks, and retained-table integrity. Ignored, explicitly invoked full
+  conformance tests read an external official Unicode 16 directory and validate
+  source hashes before parsing.
   Invoking it with missing/mismatched data fails, not silently succeeds.
 - Stop regeneration from writing corpora into the repository. Keep necessary
   runtime tables, provenance/license, and table regeneration. Do not substitute
@@ -3618,16 +3675,18 @@ tests/fixtures/unicode16/NormalizationTest.txt
 
 #### T5a3p2: Avoid Unchanged Root And Child Measurement
 
-**Status**: BLOCKED -- PF2 approval and the p0 baseline are required.
+**Status**: PENDING (PF2 accepted; baseline recorded; runtime implementation pending)
 
 Current owners: `src/layout/kernel.rs` and `src/layout/kernel/feedback.rs`.
 The driver compares recorded round states and requires at least two successful
 rounds. It has no general subtree-result cache.
 
-Proposed fix: accept a complete validated plan when effective outgoing feedback
+Accepted fix: accept a complete validated immutable plan when effective outgoing feedback
 equals consumed feedback and no misses remain. An empty request list alone is
 not success. Propagate changed gutter, shared-alignment, owned-ink, and domain
 dependencies; reuse unchanged results rather than remeasure unrelated siblings.
+Successful completion takes one through eight rounds, not a mandatory two;
+dirty reuse requires explicit invalidation, not an assumption of cache purity.
 Retain containment checks, determinism, cycle detection, and the maximum bound
 for genuinely changing feedback.
 
@@ -3640,12 +3699,12 @@ do not assume a function's Rust trait proves purity.
 
 #### T5a3p3: Capture Producers Once
 
-**Status**: BLOCKED -- PF3 approval and the p0 baseline are required.
+**Status**: PENDING (PF3 accepted; baseline recorded; runtime implementation pending)
 
 Current owners: `capture_text_replay_plan` in `src/orchestrator/backend.rs` and
 producer calls in `src/orchestrator/lifecycle.rs`/Canvas.
 
-Proposed fix: retain commands during one producer traversal with bounded fallible
+Accepted fix: retain commands during one producer traversal with bounded fallible
 growth, then count canonical output from those immutable commands. This changes
 planning/capture admission, not the requirement to reserve canonical output
 storage before final Null/concrete execution. Preserve glyph plans, scope balance,
@@ -3659,14 +3718,14 @@ and retained storage. Never execute the producer again just to size that storage
 
 #### T5a3p4: Simplify Resource Admission Accounting
 
-**Status**: BLOCKED -- PF4 approval and the p0 baseline are required.
+**Status**: PENDING (PF4 policy accepted; runtime implementation pending)
 
 Current owners: font generation ledgers, Unicode admission callbacks, text
 planning, and cache accounting. In the recorded caption, fixed line-break
 allowances charge `420*64 + 420*8 + 419*256 = 137504` units. These conservative
 allowances are not measured CPU instructions or separate layouts.
 
-Proposed fix: retain checked input sizes, glyph/record counts, font/source bytes,
+Accepted fix: retain checked input sizes, glyph/record counts, font/source bytes,
 fallible allocation, and bounded feedback/placement. Use coarse cumulative guards
 for expensive shaping/collision work and remaining variable/quadratic normalization.
 Remove routine per-rule/hash/copy prices and unnecessary per-claim synchronization.
@@ -3677,14 +3736,16 @@ Example: a physically fitting caption should not be rejected solely because fixe
 Unicode-rule allowances exhaust a synthetic score. Truly excessive text, glyph
 expansion, packing, or allocation still fails explicitly. Exact output for already
 admitted inputs must remain unchanged; admission/refusal boundaries can change.
-Before implementation, document each replacement limit's units, measured workload
-rationale, charge point, and failure precedence. The user need not choose arbitrary
-numeric constants. Test normal workloads and pathological refusal, not merely a
-lower reported score.
+Before code changes, PF4 implementation must document the exact replacement table
+for approval: each counter's units, numeric limit, measured workload rationale,
+charge point, and failure precedence. Reasonable limits are accepted in principle;
+this agreement does not invent their numbers or claim they already exist at
+runtime. The user need not choose arbitrary constants. Test normal workloads and
+pathological refusal, not merely a lower reported score.
 
 #### T5a3p5: Evaluate Repeated Font Setup
 
-**Status**: BLOCKED -- PF5 evaluation approval is required.
+**Status**: IN PROGRESS (evaluation baseline done; after-report/conclusion pending)
 
 Current setup is shared within a root and across chained Output publications,
 but separate Plot operations prepare fonts separately. Recorded setup of roughly
@@ -3702,15 +3763,16 @@ retained. No timing improvement is promised for this evaluation-only stage.
 
 #### T5a3p6: Avoid Duplicate Automatic-Tick Work
 
-**Status**: BLOCKED -- PF6 approval and the p0 baseline are required.
+**Status**: PENDING (PF6 deduplication ONLY accepted; runtime implementation pending)
 
 Current owner: `src/layout/panel/range_ticks.rs`. The active code tries several
 target-derived lists and retains the fitting list with greatest count; some
 label-size requests are duplicated. This is not the future native T5a5 source
 algorithm or an unbounded search.
 
-Recommended fix: deduplicate identical complete lists and measure each distinct
-label once per relevant font/constraint context; preserve the selected list.
+Accepted fix: deduplicate identical complete lists and measure each distinct
+label once per relevant font/constraint context; preserve the exact selected list,
+including positions, label bytes, order, and selection tie behavior.
 Example: measuring `0,2,4,6,8,10` twice becomes one measurement with identical tick
 positions. Keep uniqueness, finite-number and containment checks; exact caller
 ticks remain untouched.
@@ -3722,24 +3784,24 @@ and measured benefit; do not include it silently in deduplication or preempt T5a
 
 #### T5a3p7: Review Speculative Line Extension
 
-**Status**: BLOCKED -- PF7 disposition is required.
+**Status**: COMPLETE (KEEP disposition only; no runtime change)
 
 Current owner: `src/layout/text.rs`. Paragraph analysis proposes an endpoint;
 exact shaping retreats if necessary, then tests following legal endpoints to fill
 the line. The recorded 20-line/40-shape-call workload is not 40 paragraphs.
 Exact glyphs, bidi, soft hyphens, and ink-fit checks remain useful.
 
-Optional fix: freeze the first exactly fitting proposal after necessary retreat,
+Excluded alternative: freeze the first exactly fitting proposal after necessary retreat,
 without extending it. Illustrative difference: a word fitting on the current line
 may instead move to the next one. A caption can become taller, and tight exact
 height can fail where current filling succeeds. No character, font size, direction,
 or explicit break changes; additive word estimates do not replace final shaping.
 
-Recommendation: retain current filling during the first output-preserving
-optimizations. Review this option after p2/p3/p4/p6 measurements and before the
-follow-up closes. Admit only with user acceptance of wrapping/fit differences and
-evidence that the saving matters. Otherwise record deferral with the next review
-at T7 closure, not a new wrapping mode.
+Accepted disposition: KEEP current line extension. Revisit only later if measured
+benefit justifies the wrapping/fit tradeoff, under new DF10 in `99_DEFERRED_FEATURES.md`
+at T7 CLOSURE after p2/p3/p4/p6 evidence. This closes p7's disposition, not an
+implementation or a new wrapping mode; no additional p7 review blocks this
+follow-up's closure. Admission would require separate user approval and a new phase.
 
 **Completion gate:** p0 records every disposition; p1 completes authorized history
 cleanup; every approved implementation supplies focused tests, release before/
@@ -3747,7 +3809,7 @@ after evidence, strict Clippy and `just verify`, inspected authorized output
 changes, and a commit. Evaluation-only work records its user-reviewed outcome or
 next checkpoint. Do not weaken tests merely to accept a faster result. Only then
 may T5a4 start. Prior T5a3 evidence stays historical and executed, but does not
-certify these new proposals.
+certify these accepted but pending implementations.
 
 ### T5a4: Root Title-Block Plans
 
@@ -4636,7 +4698,12 @@ Acceptance:
   requires user-approved admission with a new approved phase, rejection with
   reason, or re-deferral to a new explicit milestone checkpoint. This is review,
   not an implementation promise or automatic expansion of T6/T7.
-- Audit all DF1-DF9 entry/closure dispositions and user approvals. Remove admitted
+- CLOSURE gate, before successor planning: review DF10's deferred removal of line
+  extension against post-p2/p3/p4/p6 release evidence. Revisit only if meaningful
+  benefit justifies the wrapping/fit tradeoff; record user-approved admission with
+  a new phase, rejection with reason, or re-deferral to an explicit new checkpoint.
+  PF7's KEEP disposition remains in force; DF1-DF9 checkpoints are unchanged.
+- Audit all DF1-DF10 entry/closure dispositions and user approvals. Remove admitted
   features from `99` on approved planning, not code completion; only implementation
   makes the corresponding current contracts change. Every still-deferred item
   retains an explicit checkpoint, including any user-approved replacement gate.

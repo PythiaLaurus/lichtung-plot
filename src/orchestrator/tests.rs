@@ -24,6 +24,8 @@ mod facets;
 mod focused_plot_options;
 #[path = "tests/lifecycle.rs"]
 mod lifecycle;
+#[path = "tests/publication_efficiency.rs"]
+mod publication_efficiency;
 #[path = "tests/specialized.rs"]
 mod specialized;
 #[path = "tests/validation.rs"]

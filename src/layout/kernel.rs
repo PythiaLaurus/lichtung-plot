@@ -681,7 +681,11 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         reservations: &mut reservations,
     };
     prepared_stage.claim_topology_slots(1)?;
+    #[cfg(test)]
+    let preparation_timer = crate::orchestrator::measurements::Timer::new(0);
     let prepared = prepare(&mut prepared_stage)?;
+    #[cfg(test)]
+    drop(preparation_timer);
 
     reservations.phase = ReservationStage::Measured;
     #[cfg(test)]
@@ -703,7 +707,11 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         )?;
         round.observe_number(f64::from(width))?;
         round.observe_number(f64::from(height))?;
+        #[cfg(test)]
+        let measurement_timer = crate::orchestrator::measurements::Timer::new(1);
         let result = measure(&prepared, assigned, &mut round)?;
+        #[cfg(test)]
+        drop(measurement_timer);
         result.size.validate_dimensions(width, height)?;
         let state = round.finish()?;
         if let Some(error) = state.terminal_error() {

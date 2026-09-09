@@ -275,6 +275,8 @@ impl TextReplayPlan {
     ) -> Result<(), Error> {
         #[cfg(test)]
         TEXT_REPLAY_SESSIONS.with(|calls| calls.set(calls.get() + 1));
+        #[cfg(test)]
+        let _timer = super::measurements::Timer::new(7);
         backend.begin(width, height)?;
         let replayed = self.replay_open(backend);
         let ended = backend.end();
@@ -879,16 +881,22 @@ pub(crate) fn capture_text_replay_plan(
     final_stage: &mut crate::layout::kernel::FinalStage<'_>,
     mut capture: impl FnMut(&mut dyn Backend) -> Result<(), Error>,
 ) -> Result<TextReplayPlan, Error> {
+    #[cfg(test)]
+    let _timer = super::measurements::Timer::new(2);
     let mut counter = CallCountingBackend::default();
     if width == 0 || height == 0 {
         return Err(Error::Render(
             "prepared scene dimensions must be positive".into(),
         ));
     }
+    #[cfg(test)]
+    super::measurements::producer();
     capture(&mut counter)?;
     let call_count = counter.call_count;
 
     let mut backend = TextPlanningBackend::new(theme, call_count, final_stage)?;
+    #[cfg(test)]
+    super::measurements::producer();
     capture(&mut backend)?;
     if backend.calls.len() != call_count {
         return Err(Error::Render(format!(
@@ -1422,6 +1430,8 @@ pub(crate) fn validate_text_replay_plan(
     plan: &TextReplayPlan,
     scope: &str,
 ) -> Result<(), Error> {
+    #[cfg(test)]
+    let _timer = super::measurements::Timer::new(3);
     let mut storage = plan
         .storage
         .try_borrow_mut()

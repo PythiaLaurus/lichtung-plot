@@ -372,6 +372,8 @@ fn windows_stem_eq(stem: &[u16], expected: &str) -> bool {
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    #[cfg(test)]
+    let _timer = super::measurements::Timer::new(4);
     stage_and_publish(path, |staged| staged.write_all(bytes).map_err(Error::Io))
 }
 

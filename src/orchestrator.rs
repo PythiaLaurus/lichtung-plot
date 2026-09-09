@@ -11,6 +11,8 @@ mod backend;
 mod facets;
 mod layers;
 mod lifecycle;
+#[cfg(test)]
+pub(crate) mod measurements;
 mod output;
 mod validation;
 
