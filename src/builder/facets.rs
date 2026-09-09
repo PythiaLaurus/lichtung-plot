@@ -90,6 +90,27 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.resolved_facet_x_range
     }
 
+    /// Compare the computed inputs that Canvas/facet coordination can replace.
+    /// All other source configuration is immutable for a root-local child owner.
+    pub(crate) fn same_composed_inputs(&self, other: &Self) -> bool {
+        let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
+        self.x_axis_spec == other.x_axis_spec
+            && self.y_axis_spec == other.y_axis_spec
+            && range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
+            && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
+            && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
+            && self.global_hue_levels == other.global_hue_levels
+            && self.global_group_levels == other.global_group_levels
+            && self.global_collective_pairs == other.global_collective_pairs
+            && self.global_line_condition_levels == other.global_line_condition_levels
+            && self.axis_text_measured == other.axis_text_measured
+            && self.composed_axis_text_measured == other.composed_axis_text_measured
+            && self.y_tick_labels_visible == other.y_tick_labels_visible
+            && self.render_scope == other.render_scope
+            && self.legend_policy == other.legend_policy
+            && (self.width, self.height) == (other.width, other.height)
+    }
+
     pub(crate) fn with_global_hue_levels(mut self, levels: Vec<String>) -> Self {
         self.global_hue_levels = Some(levels);
         self

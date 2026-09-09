@@ -164,6 +164,7 @@ impl PlotPlan {
     ) -> Result<Self, Error> {
         #[cfg(test)]
         super::PLOT_PLAN_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let mut children = crate::decorations::plan::children::ChildPlans::facets(source);
         let root = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
@@ -218,6 +219,7 @@ impl PlotPlan {
                         kind,
                         &prepared.theme,
                         round,
+                        &mut children,
                     )?))
                 } else {
                     PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
@@ -227,6 +229,7 @@ impl PlotPlan {
                         round,
                     )?))
                 };
+                children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |prepared, assigned, layout, final_stage| {
@@ -394,6 +397,7 @@ impl Plot {
         PlotPlan::new(self, kind)?.render(backend)
     }
 
+    #[cfg(test)]
     pub(crate) fn preflight_panel(
         &self,
         kind: PlotKind,
@@ -435,29 +439,6 @@ impl Plot {
                 backend,
             ))
         })
-    }
-
-    pub(crate) fn preflight_hue_levels(
-        &self,
-        kind: PlotKind,
-        panel: crate::layout::PanelBox,
-        theme: &ResolvedTheme,
-    ) -> Result<Vec<String>, Error> {
-        let result = self.preflight_panel(kind, panel, theme)?;
-        let Some(field) = self.hue_dimension_key() else {
-            return Ok(Vec::new());
-        };
-        Ok(result
-            .legend_entries
-            .iter()
-            .fold(Vec::new(), |mut levels, entry| {
-                if let Some(value) = entry.coordinated_hue_value_for(field) {
-                    if !levels.iter().any(|level| level == value) {
-                        levels.push(value.to_owned());
-                    }
-                }
-                levels
-            }))
     }
 
     pub(crate) fn configured_source_rows(&self) -> Result<Option<&[usize]>, Error> {

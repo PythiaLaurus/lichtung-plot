@@ -510,7 +510,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
         |(), _, _, _| Ok(()),
     )
     .unwrap();
-    assert!(calls >= 3);
+    assert!(calls >= 2);
     let narrow = PanelBox::new(cell.x0 + 40.0, cell.x1, cell.y0, cell.y1);
     let result = plan_panel(
         &source,
@@ -646,7 +646,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
         );
         {
             let root = result.unwrap();
-            assert!((2..=8).contains(&calls));
+            assert!((1..=8).contains(&calls));
             let plan = root.plan();
             let legend = plan.legend.as_ref().unwrap();
             assert!(!legend_fits_panel(
@@ -1067,7 +1067,7 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
 
     assert!(plan.planned_x_limits().is_some());
     assert!(
-        (3..=8).contains(&crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get))
+        (2..=8).contains(&crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get))
     );
     assert!(rightmost_point < legend.left);
 }

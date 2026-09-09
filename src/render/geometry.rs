@@ -1060,12 +1060,20 @@ mod tests {
             .unwrap();
         producer.end().unwrap();
         let mut calls = 0;
+        let mut observations = None;
         crate::layout::plan_exact_root(
             100,
             100,
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
+                let owner = crate::layout::ComponentAddress::root();
+                round.request_insets(
+                    &owner,
+                    &owner,
+                    crate::layout::kernel::FeedbackKind::OwnedInk,
+                    [1.0; 4],
+                )?;
                 let mut geometry = begun_backend();
                 geometry.begin_clip(PanelBox::new(0.0, 1.0, 0.0, 1.0))?;
                 geometry.draw_planned_text(
@@ -1079,13 +1087,19 @@ mod tests {
                 geometry.end_clip()?;
                 geometry.end()?;
                 assert!(geometry.bounds().is_empty());
+                let start = round.child_checkpoint();
                 geometry.observe_feedback(round)?;
+                let current = round.retain_child_feedback(start)?.unwrap();
+                if let Some(previous) = &observations {
+                    assert_ne!(&current, previous);
+                }
+                observations = Some(current);
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))
             },
             |(), _, (), _| Ok(()),
         )
         .unwrap();
-        assert_eq!(calls, 3);
+        assert_eq!(calls, 2);
     }
 
     #[test]
@@ -1166,7 +1180,7 @@ mod tests {
             );
             if declared && requested_axis == FeedbackKind::AutomaticDomainX {
                 assert!(root.is_ok());
-                assert_eq!(calls, 3);
+                assert_eq!(calls, 2);
             } else {
                 assert!(root
                     .err()

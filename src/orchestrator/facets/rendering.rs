@@ -37,7 +37,8 @@ pub(super) fn render_scene(
     shared_plot: &Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
-    panel_plans: &[PanelPlan],
+    panel_plans: &[std::sync::Arc<PanelPlan>],
+    outside_legend: Option<&crate::decorations::plan::ResolvedLegend>,
     strip_text: &[PlacedText],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::CanvasLayout,
@@ -59,7 +60,9 @@ pub(super) fn render_scene(
         crate::decorations::apply::apply_grid(&panel_plot, &panel_plan.result, theme, backend)?;
     }
 
-    for ((facet, panel_plan), strip) in panels.iter().zip(panel_plans).zip(strip_text) {
+    for (index, ((facet, panel_plan), strip)) in
+        panels.iter().zip(panel_plans).zip(strip_text).enumerate()
+    {
         let panel_plot = shared_plot
             .clone()
             .with_render_scope(facet.render_scope())
@@ -81,7 +84,11 @@ pub(super) fn render_scene(
         crate::decorations::apply::apply_axes(&panel_plot, panel_plan, theme, backend)?;
         crate::decorations::apply::apply_planned_legend(
             &panel_plot,
-            panel_plan.legend.as_ref(),
+            if index == 0 {
+                outside_legend.or(panel_plan.legend.as_ref())
+            } else {
+                panel_plan.legend.as_ref()
+            },
             backend,
         )?;
         draw_facet_strip(facet, strip, backend)?;

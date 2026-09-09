@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendEntry};
+use crate::decorations::plan::children::MeasurementPhase;
 use crate::decorations::title_block::TitleBlock;
 use crate::layout::canvas::{PanelRequirements, PANEL_HEADER_GAP};
 use crate::layout::fit::{FitFailure, FitScope};
@@ -49,7 +50,7 @@ struct PlannedCanvasPanel {
     index: usize,
     kind: PlotKind,
     canvas_cell: PanelBox,
-    panel_plan: crate::decorations::plan::PanelPlan,
+    panel_plan: Arc<crate::decorations::plan::PanelPlan>,
     header: Vec<crate::render::backend::PlacedText>,
 }
 
@@ -74,12 +75,177 @@ struct PreparedCanvasRound {
     canvas_layout: CanvasLayout,
     plots: Vec<Option<Plot>>,
     shared_legend: Option<(String, Arc<[LegendEntry]>)>,
-    body_probes: Vec<Option<crate::spec::PlotRenderResult>>,
+    body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
 }
 
 #[cfg(test)]
 mod d1_tests {
     use super::*;
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the production regression compares whole cached and uncached root lifecycles"
+    )]
+    fn dirty_canvas_child_reuses_the_unchanged_neighbor_with_exact_output() {
+        use crate::decorations::plan::children::{
+            ChildPlans, CHILD_MEASUREMENTS, DISABLE_CHILD_REUSE,
+        };
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .x_ticks(vec![
+            crate::layout::AxisTick::new(0.0, "zero"),
+            crate::layout::AxisTick::new(1.0, "one"),
+        ])
+        .panel_text_annotation(
+            crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "annotation").unwrap(),
+        )
+        .legend(crate::LegendPolicy::Hidden);
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot.clone())
+            .unwrap()
+            .panel(0, 1, plot)
+            .unwrap()
+            .size(1200, 800);
+        let owner = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::CanvasCell, 0)
+            .unwrap();
+        let neighbor = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::CanvasCell, 1)
+            .unwrap();
+        let mut expected = None;
+        for disabled in [true, false] {
+            DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
+            CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
+            let themes = Arc::new(ResolvedCanvasThemes::new(canvas.theme, &canvas.panels));
+            let mut children = ChildPlans::canvas(&canvas);
+            let mut calls = 0;
+            let mut retained_neighbor = None;
+            let root = crate::layout::plan_exact_root(
+                canvas.width,
+                canvas.height,
+                |stage| {
+                    let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
+                    themes.prepare_font_environment(&mut census, presence, stage)
+                },
+                |(), assigned, round| {
+                    calls += 1;
+                    let plan = canvas.build_canvas_plan(
+                        Arc::clone(&themes),
+                        assigned,
+                        round,
+                        &mut children,
+                    )?;
+                    if calls == 2 {
+                        retained_neighbor = Some(Arc::clone(&plan.panels[1].panel_plan));
+                        round.request_domain(
+                            &owner,
+                            &owner,
+                            FeedbackKind::AutomaticDomainX,
+                            (-1.0, 2.0),
+                        )?;
+                    } else if calls == 3 {
+                        assert_eq!(
+                            Arc::ptr_eq(
+                                retained_neighbor.as_ref().unwrap(),
+                                &plan.panels[1].panel_plan
+                            ),
+                            !disabled
+                        );
+                    }
+                    children.finish_round(round);
+                    Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+                },
+                |(), assigned, plan, stage| {
+                    let (width, height) = assigned.dimensions();
+                    let panels = plan
+                        .panels
+                        .iter()
+                        .map(|panel| {
+                            let plan = &panel.panel_plan;
+                            let layout = &plan.result.layout;
+                            let bounds = layout.projection.panel_box();
+                            (
+                                plan.panel_box,
+                                layout.projection.x_range(),
+                                layout.projection.y_range(),
+                                layout.x_axis.ticks.clone(),
+                                layout.y_axis.ticks.clone(),
+                                plan.result
+                                    .panel_text
+                                    .iter()
+                                    .map(|annotation| {
+                                        (
+                                            annotation.bounds_in(bounds),
+                                            annotation.placement_in(bounds),
+                                            annotation.text_plan.clone(),
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let replay = crate::orchestrator::capture_text_replay_plan(
+                        width,
+                        height,
+                        "child reuse test",
+                        themes.root(),
+                        stage,
+                        |backend| canvas.render_planned_canvas(&plan, width, height, backend),
+                    )?;
+                    crate::orchestrator::validate_text_replay_plan(
+                        width,
+                        height,
+                        &replay,
+                        "child reuse test",
+                    )?;
+                    let text = replay
+                        .retained_text()
+                        .into_iter()
+                        .map(|(placement, text)| (placement, text.clone()))
+                        .collect::<Vec<_>>();
+                    for source in ["annotation", "zero", "one"] {
+                        assert!(text.iter().any(|(_, plan)| plan.source == source));
+                    }
+                    let mut svg = replay.take_svg_backend()?;
+                    replay.replay(width, height, &mut svg, "child reuse test")?;
+                    Ok((svg.into_bytes()?, text, panels))
+                },
+            )
+            .unwrap();
+            DISABLE_CHILD_REUSE.with(|value| value.set(false));
+            assert_eq!(calls, 3);
+            CHILD_MEASUREMENTS.with(|events| {
+                let events = events.borrow();
+                for phase in ["layout", "panel"] {
+                    assert_eq!(
+                        events
+                            .iter()
+                            .filter(|(address, stage)| address == &owner && *stage == phase)
+                            .count(),
+                        3,
+                        "dirty {phase}"
+                    );
+                    assert_eq!(
+                        events
+                            .iter()
+                            .filter(|(address, stage)| address == &neighbor && *stage == phase)
+                            .count(),
+                        if disabled { 3 } else { 2 },
+                        "neighbor {phase}"
+                    );
+                }
+            });
+            if let Some(expected) = &expected {
+                assert_eq!(root.plan(), expected);
+            } else {
+                expected = Some(root.plan().clone());
+            }
+        }
+    }
 
     #[test]
     fn canvas_producer_plans_survive_first_capture_without_shaping() {
@@ -123,7 +289,12 @@ mod d1_tests {
                 |(), assigned, round| {
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned,
-                        canvas.build_canvas_plan(Arc::clone(&themes), assigned, round)?,
+                        canvas.build_canvas_plan(
+                            Arc::clone(&themes),
+                            assigned,
+                            round,
+                            &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
+                        )?,
                     ))
                 },
                 |(), assigned, plan, stage| {
@@ -214,7 +385,12 @@ mod d1_tests {
             |(), assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    canvas.build_canvas_plan(Arc::clone(&themes), assigned, round)?,
+                    canvas.build_canvas_plan(
+                        Arc::clone(&themes),
+                        assigned,
+                        round,
+                        &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
+                    )?,
                 ))
             },
             |(), _, plan, _| Ok(plan),
@@ -890,6 +1066,7 @@ impl Canvas {
         crate::layout::FrozenRoot<crate::orchestrator::TextReplayPlan, PreparedCanvasInputs>,
         Error,
     > {
+        let mut children = crate::decorations::plan::children::ChildPlans::canvas(self);
         let root = crate::layout::plan_exact_root(
             self.width,
             self.height,
@@ -914,7 +1091,13 @@ impl Canvas {
                 })
             },
             |prepared, assigned, round| {
-                let plan = self.build_canvas_plan(Arc::clone(&prepared.themes), assigned, round)?;
+                let plan = self.build_canvas_plan(
+                    Arc::clone(&prepared.themes),
+                    assigned,
+                    round,
+                    &mut children,
+                )?;
+                children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, Box::new(plan)))
             },
             |_, assigned, plan, final_stage| {
@@ -1140,10 +1323,11 @@ impl Canvas {
         themes: Arc<ResolvedCanvasThemes>,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
+        children: &mut crate::decorations::plan::children::ChildPlans,
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
-        let prepared = self.prepare_canvas_round(themes, assigned, round)?;
+        let prepared = self.prepare_canvas_round(themes, assigned, round, children)?;
         let mut compact_changes = true;
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return match self.build_canvas_attempt(
@@ -1152,6 +1336,7 @@ impl Canvas {
                 round,
                 None,
                 &mut compact_changes,
+                children,
             )? {
                 FitOutcome::Measured(plan) => Ok(plan),
                 FitOutcome::Miss(reason) => Err(reason.into_error()),
@@ -1189,6 +1374,7 @@ impl Canvas {
                     round,
                     Some((edge, compact)),
                     &mut compact_changes,
+                    children,
                 )?;
                 match outcome {
                     FitOutcome::Measured(plan) => match round.finish_trial(checkpoint) {
@@ -1221,6 +1407,7 @@ impl Canvas {
         themes: Arc<ResolvedCanvasThemes>,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
+        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
     ) -> Result<PreparedCanvasRound, Error> {
         let (width, height) = assigned.dimensions();
         #[cfg(test)]
@@ -1248,7 +1435,7 @@ impl Canvas {
         let full_outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
         let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            self.canvas_hue_groups(full_outer, &themes)?
+            self.canvas_hue_groups(full_outer, &themes, children, round)?
         } else {
             Vec::new()
         };
@@ -1276,7 +1463,7 @@ impl Canvas {
             })
             .collect::<Vec<_>>();
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::preflight_shared_legend(&plots, &themes, full_outer)?
+            Self::preflight_shared_legend(&plots, &themes, full_outer, children, round)?
         } else {
             (None, Vec::new())
         };
@@ -1301,6 +1488,7 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         guide_trial: Option<(crate::LegendPosition, bool)>,
         compact_changes: &mut bool,
+        children: &mut crate::decorations::plan::children::ChildPlans,
     ) -> Result<crate::layout::fit::FitOutcome<CanvasPlan>, Error> {
         use crate::layout::fit::{self, FitOutcome};
         let root_address = crate::layout::ComponentAddress::root();
@@ -1453,8 +1641,14 @@ impl Canvas {
                     "shared-category-label-validation",
                     expected_theme,
                 );
-                let expected =
-                    plot_category_domain(first, provisional[first_index], expected_theme)?;
+                let expected = plot_category_domain(
+                    first,
+                    provisional[first_index],
+                    expected_theme,
+                    children,
+                    first_index,
+                    round,
+                )?;
                 for column in 1..self.columns {
                     let index = first_index + column;
                     let plot = plots[index].as_ref().ok_or_else(|| {
@@ -1467,7 +1661,15 @@ impl Canvas {
                         .expect("configured canvas panel has a resolved theme");
                     #[cfg(test)]
                     record_canvas_theme(index, "shared-category-label-validation", theme);
-                    if plot_category_domain(plot, provisional[index], theme)? != expected {
+                    if plot_category_domain(
+                        plot,
+                        provisional[index],
+                        theme,
+                        children,
+                        index,
+                        round,
+                    )? != expected
+                    {
                         return Err(Error::Data(format!(
                             "canvas row {row} category domains differ across panels"
                         )));
@@ -1481,13 +1683,19 @@ impl Canvas {
             let mut domains = vec![None; plots.len()];
             for (index, plot) in plots.iter().enumerate() {
                 let Some(plot) = plot else { continue };
-                let kind = plot.kind();
                 let theme = themes
                     .plot(index)
                     .expect("configured canvas panel has a resolved theme");
                 #[cfg(test)]
                 record_canvas_theme(index, "grouped-x-range-plan", theme);
-                let result = plot.preflight_panel(kind, provisional[index], theme)?;
+                let result = children.canvas_probe(
+                    plot,
+                    provisional[index],
+                    theme,
+                    index,
+                    MeasurementPhase::Range,
+                    round,
+                )?;
                 let address = crate::layout::ComponentAddress::root().child(
                     crate::layout::AddressRole::CanvasCell,
                     u32::try_from(index)
@@ -1626,11 +1834,21 @@ impl Canvas {
                     FitFailure::retain_least(&mut child_miss, reason);
                 }
             }
-            let result = match plot.preflight_measurement(
-                kind,
-                cells[index],
-                theme,
-                &scope.child(crate::layout::AddressRole::CanvasCell, index)?,
+            let child_scope = scope.child(crate::layout::AddressRole::CanvasCell, index)?;
+            let owner = crate::layout::ComponentAddress::root().child(
+                crate::layout::AddressRole::CanvasCell,
+                u32::try_from(index)
+                    .map_err(|_| Error::Render("canvas address overflowed".into()))?,
+            )?;
+            let context = crate::spec::PlotRenderContext::new(plot.data(), cells[index], theme)
+                .with_fit_scope(&child_scope);
+            let result = match children.measure(
+                plot,
+                context,
+                &owner,
+                MeasurementPhase::Layout,
+                round,
+                || plot.preflight_measurement(kind, cells[index], theme, &child_scope),
             )? {
                 FitOutcome::Measured(result) => result,
                 FitOutcome::Miss(failure) => {
@@ -1994,9 +2212,14 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
-            let panel_plan = match crate::decorations::plan::plan_panel(
-                plot, kind, cell, role, theme, round, &address,
-            )? {
+            let source_rows = plot.configured_source_rows()?;
+            let context = source_rows.map_or_else(
+                || crate::spec::PlotRenderContext::new(plot.data(), cell, theme),
+                |rows| {
+                    crate::spec::PlotRenderContext::with_source_rows(plot.data(), rows, cell, theme)
+                },
+            );
+            let panel_plan = match children.plan(plot, role, context, None, round, &address)? {
                 FitOutcome::Measured(plan) => plan,
                 FitOutcome::Miss(failure) => {
                     FitFailure::retain_least(&mut child_miss, failure);
@@ -2193,6 +2416,8 @@ impl Canvas {
         &self,
         panel: PanelBox,
         themes: &ResolvedCanvasThemes,
+        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+        round: &crate::layout::kernel::FeedbackRound,
     ) -> Result<Vec<(String, Vec<String>)>, Error> {
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
         for (index, plot) in self.panels.iter().enumerate() {
@@ -2207,13 +2432,13 @@ impl Canvas {
             let Some(dimension) = plot.hue_dimension_key() else {
                 continue;
             };
-            let kind = plot.kind();
             let theme = themes
                 .plot(index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-hue-discovery", theme);
-            let observed = plot.preflight_hue_levels(kind, panel, theme)?;
+            let observed =
+                children.canvas_probe(&plot, panel, theme, index, MeasurementPhase::Hue, round)?;
             let levels =
                 if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
                     levels
@@ -2222,9 +2447,11 @@ impl Canvas {
                     groups.push((dimension.to_owned(), Vec::new()));
                     &mut groups[index].1
                 };
-            for level in observed {
-                if !levels.contains(&level) {
-                    levels.push(level);
+            for entry in &observed.legend_entries {
+                if let Some(level) = entry.coordinated_hue_value_for(dimension) {
+                    if !levels.iter().any(|value| value == level) {
+                        levels.push(level.to_owned());
+                    }
                 }
             }
         }
@@ -2239,10 +2466,12 @@ impl Canvas {
         plots: &[Option<Plot>],
         themes: &ResolvedCanvasThemes,
         panel: PanelBox,
+        children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+        round: &crate::layout::kernel::FeedbackRound,
     ) -> Result<
         (
             Option<(String, Vec<LegendEntry>)>,
-            Vec<Option<crate::spec::PlotRenderResult>>,
+            Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
         ),
         Error,
     > {
@@ -2257,7 +2486,6 @@ impl Canvas {
         probes.resize_with(plots.len(), || None);
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let kind = plot.kind();
             let selection = themes
                 .plot_selection(index)
                 .expect("configured canvas panel has a resolved theme");
@@ -2272,7 +2500,14 @@ impl Canvas {
                     record_shared_legend_theme(index, selection);
                 }
             }
-            let result = plot.preflight_panel(kind, panel, theme)?;
+            let result = children.canvas_probe(
+                plot,
+                panel,
+                theme,
+                index,
+                MeasurementPhase::Legend,
+                round,
+            )?;
             if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
                 entries.extend(result.legend_entries.iter().cloned());
             }
@@ -2298,6 +2533,9 @@ fn plot_category_domain(
     plot: &Plot,
     panel: PanelBox,
     theme: &crate::theme::ResolvedTheme,
+    children: &mut crate::decorations::plan::children::ChildPlans<'_>,
+    index: usize,
+    round: &crate::layout::kernel::FeedbackRound,
 ) -> Result<Vec<String>, Error> {
     let kind = plot.kind();
     if !matches!(
@@ -2308,19 +2546,20 @@ fn plot_category_domain(
             "shared category labels are supported only by horizontal bar families".into(),
         ));
     }
-    let result = plot.preflight_panel(kind, panel, theme)?;
+    let result =
+        children.canvas_probe(plot, panel, theme, index, MeasurementPhase::Category, round)?;
     if result.y_domain != AxisDomain::Categorical {
         return Err(Error::Data(
             "shared category labels require a categorical y-axis".into(),
         ));
     }
-    Ok(result.y_tick_keys.unwrap_or_else(|| {
+    Ok(result.y_tick_keys.clone().unwrap_or_else(|| {
         result
             .layout
             .y_axis
             .ticks
-            .into_iter()
-            .map(|tick| tick.label)
+            .iter()
+            .map(|tick| tick.label.clone())
             .collect()
     }))
 }

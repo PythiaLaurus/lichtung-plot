@@ -176,6 +176,10 @@ pub(crate) struct LegendEntry {
 }
 
 impl LegendEntry {
+    pub(crate) fn same_child_input(&self, other: &Self) -> bool {
+        self.exact_eq(other) && self.contributes_hue_level == other.contributes_hue_level
+    }
+
     fn new(identity: LegendIdentity, glyph: LegendGlyph) -> Self {
         Self {
             identity,
@@ -1352,12 +1356,20 @@ mod tests {
             legend.compute_box_height().to_bits(),
         ];
         let mut calls = 0;
+        let mut observations = None;
         crate::layout::plan_exact_root(
             640,
             480,
             |_| Ok(()),
             |(), assigned, round| {
                 calls += 1;
+                let owner = crate::layout::ComponentAddress::root();
+                round.request_insets(
+                    &owner,
+                    &owner,
+                    crate::layout::kernel::FeedbackKind::OwnedInk,
+                    [1.0; 4],
+                )?;
                 if calls == 2 {
                     std::sync::Arc::make_mut(&mut legend.entries)[1]
                         .glyph
@@ -1373,13 +1385,19 @@ mod tests {
                         legend.compute_box_height().to_bits()
                     ]
                 );
+                let start = round.child_checkpoint();
                 legend.observe_feedback(round)?;
+                let current = round.retain_child_feedback(start)?.unwrap();
+                if let Some(previous) = &observations {
+                    assert_ne!(&current, previous);
+                }
+                observations = Some(current);
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))
             },
             |(), _, (), _| Ok(()),
         )
         .unwrap();
-        assert_eq!(calls, 3);
+        assert_eq!(calls, 2);
     }
 
     #[test]

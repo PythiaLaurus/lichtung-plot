@@ -105,7 +105,8 @@ pub(crate) fn text_census_panels(
 pub(super) struct FacetPlan {
     plot: Plot,
     panels: Vec<data::FacetPanel>,
-    panel_plans: Vec<crate::decorations::plan::PanelPlan>,
+    panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
+    outside_legend: Option<ResolvedLegend>,
     horizontal_axis_label: Option<String>,
     vertical_axis_label: Option<String>,
     canvas_layout: crate::layout::CanvasLayout,
@@ -126,6 +127,7 @@ impl FacetPlan {
         kind: PlotKind,
         theme: &ResolvedTheme,
         round: &mut crate::layout::kernel::FeedbackRound,
+        children: &mut crate::decorations::plan::children::ChildPlans,
     ) -> Result<Self, Error> {
         if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
@@ -172,7 +174,7 @@ impl FacetPlan {
             "facet panel preflight",
             |backend| {
                 legend::preflight_coordinated_panels(
-                    source, base_plot, kind, &panels, theme, backend,
+                    source, base_plot, kind, &panels, theme, backend, children, round,
                 )
             },
         )?;
@@ -377,6 +379,7 @@ impl FacetPlan {
                             &provisional,
                             outside,
                             &scope,
+                            children,
                         )
                     },
                 )?;
@@ -391,11 +394,12 @@ impl FacetPlan {
                     shared_plot.clone(),
                     kind,
                     &panels,
-                    outside_legend,
+                    outside_legend.is_some(),
                     &legend_entries,
                     facet_scales,
                     theme,
                     round,
+                    children,
                 )? {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
@@ -434,6 +438,7 @@ impl FacetPlan {
                     plot: planned_plot,
                     panels,
                     panel_plans,
+                    outside_legend,
                     horizontal_axis_label,
                     vertical_axis_label,
                     canvas_layout,
@@ -473,10 +478,15 @@ impl FacetPlan {
         round.observe_number(self.shared_axis_origin.0)?;
         round.observe_number(self.shared_axis_origin.1)?;
         round.observe_count(self.panel_plans.len())?;
-        for plan in &self.panel_plans {
+        for (index, plan) in self.panel_plans.iter().enumerate() {
             round.observe_box(plan.panel_box)?;
-            round.observe_count(usize::from(plan.legend.is_some()))?;
-            if let Some(legend) = &plan.legend {
+            let legend = if index == 0 {
+                self.outside_legend.as_ref().or(plan.legend.as_ref())
+            } else {
+                plan.legend.as_ref()
+            };
+            round.observe_count(usize::from(legend.is_some()))?;
+            if let Some(legend) = legend {
                 legend.observe_feedback(round)?;
             }
         }
@@ -496,6 +506,7 @@ impl FacetPlan {
             kind,
             &self.panels,
             &self.panel_plans,
+            self.outside_legend.as_ref(),
             &self.strip_text,
             &self.shared_axis_text,
             &self.canvas_layout,
@@ -561,6 +572,197 @@ mod feedback_tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the production regression compares free and fixed scales through complete cached and uncached roots"
+    )]
+    fn dirty_facet_child_reuses_only_independent_neighbors_with_exact_output() {
+        use crate::decorations::plan::children::{
+            ChildPlans, CHILD_MEASUREMENTS, DISABLE_CHILD_REUSE,
+        };
+        use crate::layout::{AddressRole, ComponentAddress};
+        let owner = ComponentAddress::root()
+            .child(AddressRole::FacetCell, 0)
+            .unwrap();
+        let neighbor = ComponentAddress::root()
+            .child(AddressRole::FacetCell, 1)
+            .unwrap();
+        for scales in [FacetScales::Free, FacetScales::Fixed] {
+            let source = Plot::scatter(
+                crate::NumericValues::new("x", [0.0, 1.0, 0.0, 1.0]),
+                crate::NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
+            )
+            .facet(
+                crate::FacetSpec::column(
+                    crate::CategoryValues::new("facet", ["first", "first", "second", "second"])
+                        .unwrap(),
+                )
+                .scales(scales),
+            )
+            .x_ticks(vec![
+                crate::layout::AxisTick::new(0.0, "zero"),
+                crate::layout::AxisTick::new(1.0, "one"),
+            ])
+            .panel_text_annotation(
+                crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "annotation").unwrap(),
+            )
+            .legend(crate::LegendPolicy::Hidden)
+            .size(1200, 800)
+            .erase();
+            let mut expected = None;
+            for disabled in [true, false] {
+                DISABLE_CHILD_REUSE.with(|value| value.set(disabled));
+                CHILD_MEASUREMENTS.with(|events| events.borrow_mut().clear());
+                let theme = crate::Theme::Publication.resolve();
+                let mut children = ChildPlans::facets(&source);
+                let mut calls = 0;
+                let mut retained_neighbor = None;
+                let root = crate::layout::plan_exact_root(
+                    source.width(),
+                    source.height(),
+                    |stage| {
+                        let requirements = crate::layout::foundational_plot_requirements(
+                            &source,
+                            PlotKind::Scatter,
+                            &theme,
+                            &ComponentAddress::root(),
+                            true,
+                            true,
+                            true,
+                            Some(stage),
+                        )?;
+                        let mut presence = stage.reserve_scalar_presence_map()?;
+                        let mut census = crate::layout::PreparedTextCensus::materialize(
+                            requirements,
+                            Some(stage),
+                            Some(&mut presence),
+                        )
+                        .map_err(|error| Error::Render(error.to_string()))?;
+                        theme.prepare_font_environment_from_census(&mut census, presence, stage)
+                    },
+                    |(), assigned, round| {
+                        calls += 1;
+                        let plan = FacetPlan::new(
+                            &source,
+                            PlotKind::Scatter,
+                            &theme,
+                            round,
+                            &mut children,
+                        )?;
+                        if calls == 2 {
+                            retained_neighbor = Some(std::sync::Arc::clone(&plan.panel_plans[1]));
+                            round.request_domain(
+                                &owner,
+                                &owner,
+                                crate::layout::kernel::FeedbackKind::AutomaticDomainX,
+                                (-1.0, 2.0),
+                            )?;
+                        } else if calls == 3 {
+                            assert_eq!(
+                                std::sync::Arc::ptr_eq(
+                                    retained_neighbor.as_ref().unwrap(),
+                                    &plan.panel_plans[1]
+                                ),
+                                !disabled && scales == FacetScales::Free
+                            );
+                        }
+                        children.finish_round(round);
+                        Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+                    },
+                    |(), assigned, plan, stage| {
+                        let (width, height) = assigned.dimensions();
+                        let panels = plan
+                            .panel_plans
+                            .iter()
+                            .map(|panel| {
+                                let layout = &panel.result.layout;
+                                let bounds = layout.projection.panel_box();
+                                (
+                                    panel.panel_box,
+                                    layout.projection.x_range(),
+                                    layout.projection.y_range(),
+                                    layout.x_axis.ticks.clone(),
+                                    layout.y_axis.ticks.clone(),
+                                    panel
+                                        .result
+                                        .panel_text
+                                        .iter()
+                                        .map(|annotation| {
+                                            (
+                                                annotation.bounds_in(bounds),
+                                                annotation.placement_in(bounds),
+                                                annotation.text_plan.clone(),
+                                            )
+                                        })
+                                        .collect::<Vec<_>>(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        let replay = crate::orchestrator::capture_text_replay_plan(
+                            width,
+                            height,
+                            "facet child reuse test",
+                            &theme,
+                            stage,
+                            |backend| plan.render(&source, PlotKind::Scatter, &theme, backend),
+                        )?;
+                        crate::orchestrator::validate_text_replay_plan(
+                            width,
+                            height,
+                            &replay,
+                            "facet child reuse test",
+                        )?;
+                        let text = replay
+                            .retained_text()
+                            .into_iter()
+                            .map(|(placement, text)| (placement, text.clone()))
+                            .collect::<Vec<_>>();
+                        for source in ["annotation", "zero", "one"] {
+                            assert!(text.iter().any(|(_, plan)| plan.source == source));
+                        }
+                        let mut svg = replay.take_svg_backend()?;
+                        replay.replay(width, height, &mut svg, "facet child reuse test")?;
+                        Ok((svg.into_bytes()?, text, panels))
+                    },
+                )
+                .unwrap();
+                DISABLE_CHILD_REUSE.with(|value| value.set(false));
+                assert_eq!(calls, 3);
+                CHILD_MEASUREMENTS.with(|events| {
+                    let events = events.borrow();
+                    for phase in ["probe", "layout", "panel"] {
+                        assert_eq!(
+                            events
+                                .iter()
+                                .filter(|(address, stage)| address == &owner && *stage == phase)
+                                .count(),
+                            3,
+                            "dirty {phase}"
+                        );
+                        assert_eq!(
+                            events
+                                .iter()
+                                .filter(|(address, stage)| address == &neighbor && *stage == phase)
+                                .count(),
+                            if disabled || (scales == FacetScales::Fixed && phase != "probe") {
+                                3
+                            } else {
+                                2
+                            },
+                            "neighbor {phase}"
+                        );
+                    }
+                });
+                if let Some(expected) = &expected {
+                    assert_eq!(root.plan(), expected);
+                } else {
+                    expected = Some(root.plan().clone());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn facet_producer_plans_survive_first_capture_without_shaping() {
         let text = format!(
             "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
@@ -604,7 +806,13 @@ mod feedback_tests {
             |(), assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    FacetPlan::new(&source, PlotKind::Scatter, &theme, round)?,
+                    FacetPlan::new(
+                        &source,
+                        PlotKind::Scatter,
+                        &theme,
+                        round,
+                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                    )?,
                 ))
             },
             |(), assigned, plan, stage| {
@@ -700,18 +908,20 @@ mod feedback_tests {
             |(), assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    FacetPlan::new(&source, PlotKind::Scatter, &theme, round)?,
+                    FacetPlan::new(
+                        &source,
+                        PlotKind::Scatter,
+                        &theme,
+                        round,
+                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                    )?,
                 ))
             },
             |(), _, plan, _| Ok(plan),
         )
         .unwrap();
         let plan = root.plan();
-        let guide = plan
-            .panel_plans
-            .iter()
-            .find_map(|panel| panel.legend.as_ref())
-            .unwrap();
+        let guide = plan.outside_legend.as_ref().unwrap();
         assert!(plan
             .panels
             .iter()
@@ -749,11 +959,12 @@ mod feedback_tests {
                         source.clone(),
                         PlotKind::Scatter,
                         &panels[..1],
-                        None,
-                        &[],
+                        false,
+                        &std::sync::Arc::from([]),
                         FacetScales::Free,
                         &theme,
-                        round
+                        round,
+                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                     )?,
                     FitOutcome::Miss(_)
                 ));
@@ -761,11 +972,12 @@ mod feedback_tests {
                     source.clone(),
                     PlotKind::Scatter,
                     &panels,
-                    None,
-                    &[],
+                    false,
+                    &std::sync::Arc::from([]),
                     FacetScales::Free,
                     &theme,
                     round,
+                    &mut crate::decorations::plan::children::ChildPlans::facets(&source),
                 )?;
                 Ok(crate::layout::MeasuredLayout::new(assigned, ()))
             },
@@ -800,7 +1012,13 @@ mod feedback_tests {
             |(), assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
-                    FacetPlan::new(&source, PlotKind::Scatter, &theme, round)?,
+                    FacetPlan::new(
+                        &source,
+                        PlotKind::Scatter,
+                        &theme,
+                        round,
+                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                    )?,
                 ))
             },
             |(), _, plan, _| {
@@ -810,7 +1028,7 @@ mod feedback_tests {
         )
         .unwrap();
         let mut plan = arranged.unwrap();
-        assert!(plan.panel_plans.iter().any(|panel| panel.legend.is_some()));
+        assert!(plan.outside_legend.is_some());
         for change_legend in [true, false] {
             let mut calls = 0;
             crate::layout::plan_exact_root(
@@ -819,13 +1037,16 @@ mod feedback_tests {
                 |_| Ok(()),
                 |(), assigned, round| {
                     calls += 1;
+                    let owner = crate::layout::ComponentAddress::root();
+                    round.request_insets(
+                        &owner,
+                        &owner,
+                        crate::layout::kernel::FeedbackKind::OwnedInk,
+                        [1.0; 4],
+                    )?;
                     if calls == 2 {
                         if change_legend {
-                            let legend = plan
-                                .panel_plans
-                                .iter_mut()
-                                .find_map(|panel| panel.legend.as_mut())
-                                .unwrap();
+                            let legend = plan.outside_legend.as_mut().unwrap();
                             legend.bounds = legend.bounds.translated(1.0, 0.0);
                         } else {
                             plan.shared_axis_origin.0 += 1.0;
@@ -837,7 +1058,10 @@ mod feedback_tests {
                 |(), _, (), _| Ok(()),
             )
             .unwrap();
-            assert_eq!(calls, 3, "post-install parent state must be compared");
+            assert_eq!(
+                calls, 2,
+                "current post-install parent state is validated without a duplicate round"
+            );
         }
     }
 }

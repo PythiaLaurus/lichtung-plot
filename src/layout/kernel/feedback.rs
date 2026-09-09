@@ -22,7 +22,6 @@ enum FeedbackValue {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-#[cfg_attr(test, derive(Clone))]
 struct FeedbackEntry {
     target: ComponentAddress,
     kind: FeedbackKind,
@@ -95,7 +94,7 @@ pub(super) struct RoundState {
     consumed: Vec<FeedbackEntry>,
     next: Vec<FeedbackEntry>,
     requests: Vec<std::sync::Arc<FeedbackRequest>>,
-    observations: Vec<Observation>,
+    observations: Vec<std::sync::Arc<Observation>>,
     misses: Vec<FitMiss>,
 }
 
@@ -105,7 +104,21 @@ pub(crate) struct FeedbackRound {
     resources: crate::font::canonical::OperationGenerationResources,
     ordinal: usize,
     guide_trials: Vec<(ComponentAddress, u8, u32)>,
+    guide_events: Vec<(ComponentAddress, u8, u32)>,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ChildFeedbackInputs(Vec<FeedbackEntry>);
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ChildFeedback {
+    observations: Vec<std::sync::Arc<Observation>>,
+    requests: Vec<std::sync::Arc<FeedbackRequest>>,
+    guide_events: Vec<(ComponentAddress, u8, u32)>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ChildCheckpoint(usize, usize, usize, usize);
 
 pub(crate) struct TrialCheckpoint {
     observations: usize,
@@ -157,6 +170,140 @@ fn copy_address(
 }
 
 impl FeedbackRound {
+    pub(crate) fn child_inputs(
+        &self,
+        owners: &[ComponentAddress],
+    ) -> Result<ChildFeedbackInputs, Error> {
+        let mut entries = Vec::new();
+        for entry in &self.state.consumed {
+            if owners.iter().any(|owner| entry.target.is_within(owner))
+                && entry.value != FeedbackValue::Insets([0; 4])
+            {
+                self.resources.claim_slots(1).map_err(claim_error)?;
+                reserve(&mut entries, 1)?;
+                entries.push(FeedbackEntry {
+                    target: copy_address(&self.resources, &entry.target)?,
+                    kind: entry.kind,
+                    value: entry.value.clone(),
+                });
+            }
+        }
+        Ok(ChildFeedbackInputs(entries))
+    }
+
+    pub(crate) fn child_stable(&self, owners: &[ComponentAddress]) -> bool {
+        let relevant = |entry: &&FeedbackEntry| {
+            owners.iter().any(|owner| entry.target.is_within(owner))
+                && entry.value != FeedbackValue::Insets([0; 4])
+        };
+        let consumed = self.state.consumed.iter().filter(relevant);
+        let next = self.state.next.iter().filter(relevant);
+        // next is not sorted until the round finishes.
+        consumed.clone().count() == next.clone().count()
+            && consumed
+                .clone()
+                .all(|entry| next.clone().any(|other| entry == other))
+            && !self.state.misses.iter().any(|miss| {
+                owners
+                    .iter()
+                    .any(|owner| miss.failure.reason.address.is_within(owner))
+            })
+    }
+
+    pub(crate) fn child_inputs_equal(
+        &self,
+        inputs: &ChildFeedbackInputs,
+        owners: &[ComponentAddress],
+    ) -> bool {
+        self.state
+            .consumed
+            .iter()
+            .filter(|entry| {
+                owners.iter().any(|owner| entry.target.is_within(owner))
+                    && entry.value != FeedbackValue::Insets([0; 4])
+            })
+            .eq(&inputs.0)
+    }
+
+    pub(crate) fn child_checkpoint(&self) -> ChildCheckpoint {
+        ChildCheckpoint(
+            self.state.observations.len(),
+            self.state.requests.len(),
+            self.state.misses.len(),
+            self.guide_events.len(),
+        )
+    }
+
+    pub(crate) fn retain_child_feedback(
+        &self,
+        start: ChildCheckpoint,
+    ) -> Result<Option<ChildFeedback>, Error> {
+        if self.state.misses.len() != start.2
+            || self.state.requests[start.1..].iter().any(|request| {
+                self.state
+                    .consumed
+                    .iter()
+                    .find(|entry| {
+                        entry.target == request.entry.target && entry.kind == request.entry.kind
+                    })
+                    .map_or(
+                        request.entry.value != FeedbackValue::Insets([0; 4]),
+                        |entry| entry.value != request.entry.value,
+                    )
+            })
+        {
+            return Ok(None);
+        }
+        let mut observations = Vec::new();
+        let mut requests = Vec::new();
+        let mut guide_events = Vec::new();
+        self.resources
+            .claim_slots(
+                (self.state.observations.len() - start.0 + self.state.requests.len() - start.1
+                    + self.guide_events.len()
+                    - start.3) as u128,
+            )
+            .map_err(claim_error)?;
+        reserve(&mut observations, self.state.observations.len() - start.0)?;
+        reserve(&mut requests, self.state.requests.len() - start.1)?;
+        reserve(&mut guide_events, self.guide_events.len() - start.3)?;
+        observations.extend(self.state.observations[start.0..].iter().cloned());
+        requests.extend(self.state.requests[start.1..].iter().cloned());
+        for (owner, maximum, ordinal) in &self.guide_events[start.3..] {
+            guide_events.push((copy_address(&self.resources, owner)?, *maximum, *ordinal));
+        }
+        Ok(Some(ChildFeedback {
+            observations,
+            requests,
+            guide_events,
+        }))
+    }
+
+    pub(crate) fn replay_child(&mut self, child: &ChildFeedback) -> Result<(), Error> {
+        for (owner, maximum, ordinal) in &child.guide_events {
+            self.claim_guide_trial(owner, *maximum, *ordinal)?;
+        }
+        for observation in &child.observations {
+            self.admit_observation()?;
+            self.state
+                .observations
+                .push(std::sync::Arc::clone(observation));
+        }
+        for request in &child.requests {
+            // request() also observes its source; that observation is already in
+            // the retained stream. Recreate only the current-round request here.
+            let count = self.state.observations.len();
+            self.request(
+                &request.source,
+                &request.entry.target,
+                request.entry.kind,
+                request.entry.value.clone(),
+            )?;
+            self.state.observations.truncate(count);
+        }
+        Ok(())
+    }
+
     pub(crate) fn attempt_ordinal(&self, address: &ComponentAddress) -> u32 {
         self.guide_trials
             .iter()
@@ -186,6 +333,10 @@ impl FeedbackRound {
             self.guide_trials
                 .push((copy_address(&self.resources, owner)?, 1, ordinal));
         }
+        self.resources.claim_slots(1).map_err(claim_error)?;
+        reserve(&mut self.guide_events, 1)?;
+        self.guide_events
+            .push((copy_address(&self.resources, owner)?, maximum, ordinal));
         Ok(())
     }
 
@@ -239,7 +390,16 @@ impl FeedbackRound {
         values: [f64; 4],
     ) -> Result<(), Error> {
         self.request_insets(address, address, FeedbackKind::AxisGutter, values)?;
-        self.state.consumed.clone_from(&self.state.next);
+        self.state.consumed = self
+            .state
+            .next
+            .iter()
+            .map(|entry| FeedbackEntry {
+                target: entry.target.clone(),
+                kind: entry.kind,
+                value: entry.value.clone(),
+            })
+            .collect();
         self.state.requests.clear();
         Ok(())
     }
@@ -280,6 +440,7 @@ impl FeedbackRound {
             resources,
             ordinal,
             guide_trials: Vec::new(),
+            guide_events: Vec::new(),
         })
     }
 
@@ -287,13 +448,17 @@ impl FeedbackRound {
         self.resources.claim_work(1).map_err(claim_error)?;
         self.admit_observation()?;
         let address = copy_address(&self.resources, address)?;
-        self.state.observations.push(Observation::Address(address));
+        self.state
+            .observations
+            .push(std::sync::Arc::new(Observation::Address(address)));
         Ok(())
     }
 
     fn observe(&mut self, observation: Observation) -> Result<(), Error> {
         self.admit_observation()?;
-        self.state.observations.push(observation);
+        self.state
+            .observations
+            .push(std::sync::Arc::new(observation));
         Ok(())
     }
 
@@ -393,7 +558,7 @@ impl FeedbackRound {
         self.admit_observation()?;
         self.state
             .observations
-            .push(Observation::TextPlan(plan.clone()));
+            .push(std::sync::Arc::new(Observation::TextPlan(plan.clone())));
         Ok(())
     }
 
@@ -413,7 +578,9 @@ impl FeedbackRound {
         text.try_reserve_exact(value.len())
             .map_err(|error| Error::Render(format!("feedback string allocation: {error}")))?;
         text.push_str(value);
-        self.state.observations.push(Observation::Text(text));
+        self.state
+            .observations
+            .push(std::sync::Arc::new(Observation::Text(text)));
         Ok(())
     }
 
@@ -754,6 +921,16 @@ impl FeedbackRound {
 }
 
 impl RoundState {
+    pub(super) fn feedback_unchanged(&self) -> bool {
+        // Insets default to zero when absent; domains default to None. Both
+        // vectors are in canonical target/kind order after finishing a round.
+        let effective = |entry: &&FeedbackEntry| entry.value != FeedbackValue::Insets([0; 4]);
+        self.consumed
+            .iter()
+            .filter(effective)
+            .eq(self.next.iter().filter(effective))
+    }
+
     pub(super) fn terminal_error(&self) -> Option<Error> {
         self.state_error(false)
     }
@@ -846,6 +1023,68 @@ impl FrameRequirements {
 mod tests {
     use super::*;
 
+    #[test]
+    fn child_replay_retains_exact_observations_but_reissues_current_round_requests() {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let owner = ComponentAddress::root()
+            .child(super::super::AddressRole::CanvasCell, 0)
+            .unwrap();
+        let mut seed = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        seed.request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
+            .unwrap();
+        let seed = seed.finish().unwrap();
+        let mut original = FeedbackRound::new(Some(&seed), resources.clone(), 1).unwrap();
+        let start = original.child_checkpoint();
+        original.claim_guide_trial(&owner, 2, 0).unwrap();
+        original.claim_guide_trial(&owner, 2, 1).unwrap();
+        original.observe_text(&text_plan()).unwrap();
+        original
+            .observe_box(PanelBox::new(1.0, 9.0, 2.0, 8.0))
+            .unwrap();
+        original
+            .request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
+            .unwrap();
+        let retained = original.retain_child_feedback(start).unwrap().unwrap();
+        let state = original.finish().unwrap();
+        let mut replay = FeedbackRound::new(Some(&state), resources, 2).unwrap();
+        replay.replay_child(&retained).unwrap();
+        assert!(!std::sync::Arc::ptr_eq(
+            &state.requests[0],
+            &replay.state.requests[0]
+        ));
+        assert!(std::sync::Arc::ptr_eq(
+            &state.observations[0],
+            &replay.state.observations[0]
+        ));
+        assert_eq!(replay.attempt_ordinal(&owner), 1);
+        assert!(replay
+            .claim_guide_trial(&owner, 2, 2)
+            .unwrap_err()
+            .to_string()
+            .contains("planning limit"));
+        assert_eq!(state, replay.finish().unwrap());
+    }
+
+    #[test]
+    fn changed_requests_and_provisional_misses_cannot_be_retained_as_child_results() {
+        let owner = ComponentAddress::root();
+        let mut round = FeedbackRound::new(
+            None,
+            crate::font::canonical::OperationGenerationResources::new(),
+            0,
+        )
+        .unwrap();
+        let start = round.child_checkpoint();
+        let request = round
+            .request_insets(&owner, &owner, FeedbackKind::AxisGutter, [1.0; 4])
+            .unwrap();
+        assert!(round.retain_child_feedback(start).unwrap().is_none());
+        round
+            .miss(&owner, FitKind::Tick, &[request], "unresolved")
+            .unwrap();
+        assert!(round.retain_child_feedback(start).unwrap().is_none());
+    }
+
     fn text_plan() -> ResolvedTextPlan {
         crate::font::canonical::PreparedFontEnvironment::synthetic()
             .plan_text(crate::layout::TextPlanInput {
@@ -908,7 +1147,7 @@ mod tests {
             } else {
                 round.observe_text(&plan).unwrap();
             }
-            let [Observation::TextPlan(retained)] = round.state.observations.as_slice() else {
+            let Observation::TextPlan(retained) = round.state.observations[0].as_ref() else {
                 panic!("one shared text observation")
             };
             assert!(retained.shares_payload(&plan));
@@ -916,6 +1155,75 @@ mod tests {
             assert!(round.observe_text_block(&block).is_err());
             assert_eq!(round.state.observations.len(), 1);
         }
+    }
+
+    #[test]
+    fn effective_feedback_uses_getter_defaults_not_request_or_observation_identity() {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let address = ComponentAddress::root();
+        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        for kind in [
+            FeedbackKind::AxisGutter,
+            FeedbackKind::SharedAlignment,
+            FeedbackKind::OwnedInk,
+        ] {
+            assert!(round
+                .request_insets(&address, &address, kind, [-0.0; 4])
+                .unwrap()
+                .is_none());
+        }
+        let mut state = round.finish().unwrap();
+        assert!(!state.requests.is_empty());
+        assert!(state.feedback_unchanged());
+        // Explicit zeros are also equivalent to an absent consumed entry.
+        state.next.push(FeedbackEntry {
+            target: address.clone(),
+            kind: FeedbackKind::AxisGutter,
+            value: FeedbackValue::Insets([0; 4]),
+        });
+        assert!(state.feedback_unchanged());
+        let mut round = FeedbackRound::new(Some(&state), resources, 1).unwrap();
+        round
+            .observe_string("different current observations")
+            .unwrap();
+        assert!(round.state.feedback_unchanged());
+        round
+            .request_domain(
+                &address,
+                &address,
+                FeedbackKind::AutomaticDomainX,
+                (0.0, 1.0),
+            )
+            .unwrap();
+        assert!(!round.finish().unwrap().feedback_unchanged());
+    }
+
+    #[test]
+    fn unchanged_effective_feedback_does_not_clear_a_provisional_miss() {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let address = ComponentAddress::root();
+        let mut round = FeedbackRound::new(None, resources, 0).unwrap();
+        let request = round
+            .request_insets(&address, &address, FeedbackKind::AxisGutter, [1.0; 4])
+            .unwrap();
+        round
+            .miss(
+                &address,
+                FitKind::Tick,
+                &[request],
+                "unresolved current ink",
+            )
+            .unwrap();
+        // Exercise the driver's guard even if net feedback returns to its input.
+        round.state.next.clear();
+        let state = round.finish().unwrap();
+        assert!(state.feedback_unchanged());
+        assert!(state.terminal_error().is_none());
+        assert!(state
+            .unchanged_error()
+            .unwrap()
+            .to_string()
+            .contains("unresolved current ink"));
     }
 
     #[test]

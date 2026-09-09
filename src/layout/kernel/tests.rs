@@ -49,7 +49,7 @@ fn binary64_quantum_rounding_is_exact_for_edges_and_ties() {
 }
 
 #[test]
-fn exact_root_prepares_once_measures_twice_and_finalizes_once_with_assigned_dimensions() {
+fn exact_root_prepares_measures_and_finalizes_once_with_assigned_dimensions() {
     let prepares = Cell::new(0);
     let measures = Cell::new(0);
     let finalizes = Cell::new(0);
@@ -81,7 +81,7 @@ fn exact_root_prepares_once_measures_twice_and_finalizes_once_with_assigned_dime
         },
     )
     .unwrap();
-    assert_eq!((prepares.get(), measures.get(), finalizes.get()), (1, 2, 1));
+    assert_eq!((prepares.get(), measures.get(), finalizes.get()), (1, 1, 1));
     assert_eq!(root.dimensions(), (317, 211));
     assert_eq!(*root.prepared(), 23);
     assert_eq!(**root.plan(), 17);
@@ -176,10 +176,7 @@ fn actual_reservation_stages_refuse_before_the_next_callback() {
         assert!(
             matches!(result, Err(Error::Render(ref message)) if message.contains(&format!("reservation stage {}", stage.number())))
         );
-        assert_eq!(
-            measures.get(),
-            2 * u8::from(stage == ReservationStage::Final)
-        );
+        assert_eq!(measures.get(), u8::from(stage == ReservationStage::Final));
         assert_eq!(finalizes.get(), 0);
     }
 }
@@ -263,7 +260,7 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
             assignments.push(panel);
             round.begin_owner(&address)?;
             round.observe_box(panel)?;
-            let next = [(consumed[0] + 1.0).min(6.0), 0.0, 0.0, 0.0];
+            let next = [(consumed[0] + 1.0).min(7.0), 0.0, 0.0, 0.0];
             if let Some(request) =
                 round.request_insets(&address, &address, FeedbackKind::AxisGutter, next)?
             {
@@ -280,9 +277,9 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
     )
     .unwrap();
     assert_eq!(assignments.len(), 8);
-    assert!(assignments[..7].windows(2).all(|pair| pair[0] != pair[1]));
-    assert_eq!(assignments[6], assignments[7]);
-    assert_eq!(root.plan().x0.to_bits(), 8.0_f64.to_bits());
+    assert!(assignments.windows(2).all(|pair| pair[0] != pair[1]));
+    assert_eq!(*root.plan(), assignments[7]);
+    assert_eq!(root.plan().x0.to_bits(), 9.0_f64.to_bits());
 }
 
 #[test]
@@ -461,7 +458,80 @@ fn feedback_admission_refuses_before_measurement_or_finalization() {
 }
 
 #[test]
-fn changed_owner_geometry_is_not_reused_on_equal_feedback() {
+fn changed_feedback_remeasures_and_freezes_the_current_plan_for_every_input_kind() {
+    for kind in [
+        FeedbackKind::AxisGutter,
+        FeedbackKind::SharedAlignment,
+        FeedbackKind::OwnedInk,
+        FeedbackKind::AutomaticDomainX,
+        FeedbackKind::AutomaticDomainY,
+    ] {
+        let address = ComponentAddress::root();
+        let mut consumed_inputs = Vec::new();
+        let measured_address = Cell::new(std::ptr::null::<bool>());
+        let root = plan_exact_root(
+            100,
+            100,
+            |_| Ok(()),
+            |(), assigned, round| {
+                let consumed = match kind {
+                    FeedbackKind::AutomaticDomainX | FeedbackKind::AutomaticDomainY => {
+                        let consumed = round.domain(&address, kind).is_some();
+                        round.request_domain(&address, &address, kind, (-1.0, 2.0))?;
+                        consumed
+                    }
+                    _ => {
+                        let consumed = round.insets(&address, kind)[0] > 0.0;
+                        round.request_insets(&address, &address, kind, [1.0, 0.0, 0.0, 0.0])?;
+                        consumed
+                    }
+                };
+                consumed_inputs.push(consumed);
+                // Even with no fit miss, changed inputs require a fresh plan.
+                let plan = Box::new(consumed);
+                measured_address.set(std::ptr::from_ref(plan.as_ref()));
+                Ok(MeasuredLayout::new(assigned, plan))
+            },
+            |(), _, plan, _| {
+                assert_eq!(std::ptr::from_ref(plan.as_ref()), measured_address.get());
+                Ok(plan)
+            },
+        )
+        .unwrap();
+        assert_eq!(consumed_inputs, [false, true], "{kind:?}");
+        assert!(**root.plan());
+        assert_eq!(
+            std::ptr::from_ref(root.plan().as_ref()),
+            measured_address.get()
+        );
+    }
+}
+
+#[test]
+fn empty_requests_do_not_accept_an_actual_ink_miss() {
+    let mut calls = 0;
+    let result = plan_exact_root(
+        100,
+        100,
+        |_| Ok(()),
+        |(), assigned, round| {
+            calls += 1;
+            round.miss(
+                &ComponentAddress::root(),
+                FitKind::OverlayCollision,
+                &[],
+                "actual ink exceeds assigned frame",
+            )?;
+            Ok(MeasuredLayout::new(assigned, ()))
+        },
+        |(), _, (), _| -> Result<(), Error> { panic!("unvalidated ink finalized") },
+    );
+    assert_eq!(calls, 1);
+    assert!(result.err().unwrap().to_string().contains("actual ink"));
+}
+
+#[test]
+fn current_complete_plan_is_accepted_without_probing_callback_purity() {
     let mut calls = 0;
     let root = plan_exact_root(
         100,
@@ -477,6 +547,6 @@ fn changed_owner_geometry_is_not_reused_on_equal_feedback() {
         |(), _, panel, _| Ok(panel),
     )
     .unwrap();
-    assert_eq!(calls, 3);
-    assert_eq!(root.plan().x0.to_bits(), 2.0_f64.to_bits());
+    assert_eq!(calls, 1);
+    assert_eq!(root.plan().x0.to_bits(), 1.0_f64.to_bits());
 }

@@ -5,7 +5,8 @@ use crate::Error;
 use super::data::FacetPanel;
 use super::rendering::facet_label;
 use crate::builder::Plot;
-use crate::decorations::plan::{LegendRole, PanelPlan, ResolvedLegend};
+use crate::decorations::plan::children::MeasurementPhase;
+use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
@@ -182,10 +183,11 @@ pub(super) fn layout_panels(
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
     round: &mut FeedbackRound,
-    probes: &[crate::spec::PlotRenderResult],
+    probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
     probe_cells: &[PanelBox],
     containing_trial: bool,
     scope: &crate::layout::fit::FitScope,
+    children: &mut crate::decorations::plan::children::ChildPlans,
 ) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
@@ -269,18 +271,38 @@ pub(super) fn layout_panels(
             }
         }
         let cell_scope = scope.child(AddressRole::FacetCell, index)?;
-        let result = match fit::outcome(
-            panel_plot.measure_panel(
-                kind,
-                PlotRenderContext::new(
-                    crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
-                    cells[facet.row * columns + facet.column],
-                    theme,
+        let context = PlotRenderContext::new(
+            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            cell,
+            theme,
+        )
+        .with_facet_scales(facet_scales)
+        .with_fit_scope(&cell_scope);
+        let result = match children.measure(
+            &panel_plot,
+            context,
+            &domain_address,
+            MeasurementPhase::Layout,
+            round,
+            || {
+                fit::outcome(
+                    panel_plot.measure_panel(
+                        kind,
+                        PlotRenderContext::new(
+                            crate::data::PlotData::with_rows(
+                                &panel_plot,
+                                &facet.rows,
+                                &facet.source_rows,
+                            ),
+                            cells[facet.row * columns + facet.column],
+                            theme,
+                        )
+                        .with_facet_scales(facet_scales)
+                        .with_fit_scope(&cell_scope),
+                        backend,
+                    ),
                 )
-                .with_facet_scales(facet_scales)
-                .with_fit_scope(&cell_scope),
-                backend,
-            ),
+            },
         )? {
             FitOutcome::Measured(result) => result,
             FitOutcome::Miss(failure) => {
@@ -379,23 +401,25 @@ pub(super) fn feedback_plot(
 
 #[expect(
     clippy::too_many_arguments,
+    clippy::type_complexity,
     reason = "one facet round carries shared-domain and parent feedback explicitly"
 )]
 pub(super) fn plan_panels(
     plot: Plot,
     kind: PlotKind,
     panels: &[FacetPanel],
-    outside_legend: Option<ResolvedLegend>,
-    legend_entries: &[crate::decorations::legend::LegendEntry],
+    outside_legend: bool,
+    legend_entries: &std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
     facet_scales: FacetScales,
     theme: &ResolvedTheme,
     round: &mut FeedbackRound,
-) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<PanelPlan>)>, Error> {
+    children: &mut crate::decorations::plan::children::ChildPlans,
+) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     let mut panel_plans = Vec::new();
     panel_plans
         .try_reserve_exact(panels.len())
         .map_err(|_| Error::Render("facet panel plan reservation failed".into()))?;
-    let mut legend_owner = outside_legend.is_none();
+    let mut legend_owner = !outside_legend;
     let mut child_miss = None;
     for (index, facet) in panels.iter().enumerate() {
         let panel_plot = plot
@@ -413,19 +437,19 @@ pub(super) fn plan_panels(
             theme,
         )
         .with_facet_scales(facet_scales);
-        let plan = match crate::decorations::plan::plan_panel_with_context(
+        let address = ComponentAddress::root().child(
+            AddressRole::FacetCell,
+            u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
+        )?;
+        let outcome = children.plan(
             &panel_plot,
-            kind,
             role,
             context,
             (role == LegendRole::Panel).then_some(legend_entries),
             round,
-            &ComponentAddress::root().child(
-                AddressRole::FacetCell,
-                u32::try_from(index)
-                    .map_err(|_| Error::Render("facet address overflowed".into()))?,
-            )?,
-        )? {
+            &address,
+        )?;
+        let plan = match outcome {
             crate::layout::fit::FitOutcome::Measured(plan) => plan,
             crate::layout::fit::FitOutcome::Miss(failure) => {
                 crate::layout::fit::FitFailure::retain_least(&mut child_miss, failure);
@@ -444,9 +468,6 @@ pub(super) fn plan_panels(
     }
     if let Some(failure) = child_miss {
         return Ok(crate::layout::fit::FitOutcome::Miss(failure));
-    }
-    if let (Some(legend), Some(plan)) = (outside_legend, panel_plans.first_mut()) {
-        plan.legend = Some(legend);
     }
     Ok(crate::layout::fit::FitOutcome::Measured((
         plot,

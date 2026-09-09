@@ -494,7 +494,6 @@ struct PlannedBracketCall {
 }
 
 pub(super) struct TextPlanningBackend<'a, 'b> {
-    recorder: CallCountingBackend,
     font_environment: PreparedFontEnvironment,
     operation_default_stack: String,
     calls: Vec<PlannedCall>,
@@ -504,29 +503,22 @@ pub(super) struct TextPlanningBackend<'a, 'b> {
 impl<'a, 'b> TextPlanningBackend<'a, 'b> {
     fn new(
         theme: &crate::theme::ResolvedTheme,
-        call_count: usize,
         final_stage: &'a mut crate::layout::kernel::FinalStage<'b>,
     ) -> Result<Self, Error> {
         #[cfg(test)]
         TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(calls.get() + 1));
-        let mut calls = Vec::new();
-        final_stage.reserve_final(&mut calls, call_count, "prepared scene calls")?;
         let mut stack = Vec::new();
-        final_stage.reserve_final(
+        final_stage.reserve_capture(
             &mut stack,
             theme.font_family.len(),
             "prepared default font stack",
         )?;
         stack.extend_from_slice(theme.font_family.as_bytes());
         Ok(Self {
-            recorder: CallCountingBackend {
-                call_count: 0,
-                limit: call_count,
-            },
             font_environment: theme.prepared_font_environment()?.clone(),
             operation_default_stack: String::from_utf8(stack)
                 .map_err(|error| Error::Render(format!("prepared default font stack: {error}")))?,
-            calls,
+            calls: Vec::new(),
             final_stage,
         })
     }
@@ -694,7 +686,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
     fn copy_slice<T: Copy>(&mut self, source: &[T], payload: &str) -> Result<Vec<T>, Error> {
         let mut values = Vec::new();
         self.final_stage
-            .reserve_final(&mut values, source.len(), payload)?;
+            .reserve_capture(&mut values, source.len(), payload)?;
         values.extend_from_slice(source);
         Ok(values)
     }
@@ -702,6 +694,13 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
     fn copy_string(&mut self, source: &str, payload: &str) -> Result<String, Error> {
         String::from_utf8(self.copy_slice(source.as_bytes(), payload)?)
             .map_err(|error| Error::Render(format!("{payload}: {error}")))
+    }
+
+    fn claim_call(&mut self) -> Result<(), Error> {
+        // Admit and reserve the command before copying payloads or shaping raw text.
+        self.final_stage.claim_capture_call()?;
+        self.final_stage
+            .reserve_capture(&mut self.calls, 1, "prepared scene calls")
     }
 
     fn copy_bracket(
@@ -737,36 +736,29 @@ const fn alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
     }
 }
 
-struct CallCountingBackend {
-    call_count: usize,
-    limit: usize,
-}
-
-impl Default for CallCountingBackend {
-    fn default() -> Self {
-        Self {
-            call_count: 0,
-            limit: usize::MAX,
-        }
+pub(crate) fn capture_text_replay_plan(
+    width: u32,
+    height: u32,
+    _scope: &str,
+    theme: &crate::theme::ResolvedTheme,
+    final_stage: &mut crate::layout::kernel::FinalStage<'_>,
+    capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
+) -> Result<TextReplayPlan, Error> {
+    #[cfg(test)]
+    let _timer = super::measurements::Timer::new(2);
+    if width == 0 || height == 0 {
+        return Err(Error::Render(
+            "prepared scene dimensions must be positive".into(),
+        ));
     }
+    let mut backend = TextPlanningBackend::new(theme, final_stage)?;
+    #[cfg(test)]
+    super::measurements::producer();
+    capture(&mut backend)?;
+    backend.into_plan(width, height)
 }
 
-impl CallCountingBackend {
-    fn claim_call(&mut self) -> Result<(), Error> {
-        if self.call_count >= self.limit {
-            return Err(Error::Render(
-                "prepared scene exceeded counted call storage before retention".into(),
-            ));
-        }
-        self.call_count = self
-            .call_count
-            .checked_add(1)
-            .ok_or_else(|| Error::Render("prepared scene call count overflowed".into()))?;
-        Ok(())
-    }
-}
-
-impl Backend for CallCountingBackend {
+impl Backend for TextPlanningBackend<'_, '_> {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         if width == 0 || height == 0 {
             return Err(Error::Render(
@@ -776,170 +768,34 @@ impl Backend for CallCountingBackend {
         Ok(())
     }
 
-    fn begin_layer(&mut self, _name: &str) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn begin_layer_with_role(&mut self, _name: &str, _role: LayerRole) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn end_layer(&mut self) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn begin_clip(&mut self, _region: PanelBox) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn end_clip(&mut self) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_surface(
-        &mut self,
-        _bounds: PanelBox,
-        _paint: Rgba,
-        _role: SurfaceRole,
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_scatter(&mut self, _points: &[Point2D], _style: &PointStyle) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_line(&mut self, _points: &[Point2D], _style: &LineStyle) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_polygon(&mut self, _points: &[Point2D], _style: &FillStyle) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_linear_gradient(
-        &mut self,
-        _bounds: PanelBox,
-        _start: Point2D,
-        _end: Point2D,
-        _stops: &[GradientStop],
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_text(
-        &mut self,
-        _position: Point2D,
-        _text: &str,
-        _style: &TextStyle,
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_planned_text(
-        &mut self,
-        _placement: PlannedTextPlacement,
-        _plan: &ResolvedTextPlan,
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_rounded_rect(
-        &mut self,
-        _x: f64,
-        _y: f64,
-        _width: f64,
-        _height: f64,
-        _radius: f64,
-        _style: &FillStyle,
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_bracket(
-        &mut self,
-        _bracket: &SignificanceBracket,
-        _style: &BracketStyle,
-    ) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn draw_planned_bracket(&mut self, _call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
-        self.claim_call()
-    }
-
-    fn end(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
-pub(crate) fn capture_text_replay_plan(
-    width: u32,
-    height: u32,
-    scope: &str,
-    theme: &crate::theme::ResolvedTheme,
-    final_stage: &mut crate::layout::kernel::FinalStage<'_>,
-    mut capture: impl FnMut(&mut dyn Backend) -> Result<(), Error>,
-) -> Result<TextReplayPlan, Error> {
-    #[cfg(test)]
-    let _timer = super::measurements::Timer::new(2);
-    let mut counter = CallCountingBackend::default();
-    if width == 0 || height == 0 {
-        return Err(Error::Render(
-            "prepared scene dimensions must be positive".into(),
-        ));
-    }
-    #[cfg(test)]
-    super::measurements::producer();
-    capture(&mut counter)?;
-    let call_count = counter.call_count;
-
-    let mut backend = TextPlanningBackend::new(theme, call_count, final_stage)?;
-    #[cfg(test)]
-    super::measurements::producer();
-    capture(&mut backend)?;
-    if backend.calls.len() != call_count {
-        return Err(Error::Render(format!(
-            "{scope}: counted {call_count} prepared scene calls but materialized {}",
-            backend.calls.len()
-        )));
-    }
-    backend.into_plan(width, height)
-}
-
-impl Backend for TextPlanningBackend<'_, '_> {
-    fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.recorder.begin(width, height)
-    }
-
     fn begin_layer(&mut self, name: &str) -> Result<(), Error> {
-        self.recorder.begin_layer(name)?;
+        self.claim_call()?;
         let name = self.copy_string(name, "prepared layer name")?;
         self.calls.push(PlannedCall::BeginLayer(name));
         Ok(())
     }
 
     fn begin_layer_with_role(&mut self, name: &str, role: LayerRole) -> Result<(), Error> {
-        self.recorder.begin_layer_with_role(name, role)?;
+        self.claim_call()?;
         let name = self.copy_string(name, "prepared layer name")?;
         self.calls.push(PlannedCall::BeginLayerWithRole(name, role));
         Ok(())
     }
 
     fn end_layer(&mut self) -> Result<(), Error> {
-        self.recorder.end_layer()?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::EndLayer);
         Ok(())
     }
 
     fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
-        self.recorder.begin_clip(region)?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::BeginClip(region));
         Ok(())
     }
 
     fn end_clip(&mut self) -> Result<(), Error> {
-        self.recorder.end_clip()?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::EndClip);
         Ok(())
     }
@@ -950,7 +806,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
         paint: Rgba,
         role: SurfaceRole,
     ) -> Result<(), Error> {
-        self.recorder.draw_surface(bounds, paint, role)?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::Surface {
             bounds,
             paint,
@@ -960,7 +816,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
-        self.recorder.draw_scatter(points, style)?;
+        self.claim_call()?;
         let points = self.copy_slice(points, "prepared scatter points")?;
         self.calls.push(PlannedCall::Scatter {
             points,
@@ -970,7 +826,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
-        self.recorder.draw_line(points, style)?;
+        self.claim_call()?;
         let points = self.copy_slice(points, "prepared line points")?;
         self.calls.push(PlannedCall::Line {
             points,
@@ -980,7 +836,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_polygon(&mut self, points: &[Point2D], style: &FillStyle) -> Result<(), Error> {
-        self.recorder.draw_polygon(points, style)?;
+        self.claim_call()?;
         let points = self.copy_slice(points, "prepared polygon points")?;
         self.calls.push(PlannedCall::Polygon {
             points,
@@ -996,8 +852,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
         end: Point2D,
         stops: &[GradientStop],
     ) -> Result<(), Error> {
-        self.recorder
-            .draw_linear_gradient(bounds, start, end, stops)?;
+        self.claim_call()?;
         let stops = self.copy_slice(stops, "prepared gradient stops")?;
         self.calls.push(PlannedCall::LinearGradient {
             bounds,
@@ -1009,7 +864,8 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
-        self.recorder.draw_text(position, text, style)?;
+        self.claim_call()?;
+        backend::validate_text(position, style)?;
         let placement = PlannedTextPlacement::middle(position, style.anchor, style.rotation);
         let plan = self.plan_text(
             text,
@@ -1028,7 +884,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
-        self.recorder.draw_planned_text(placement, plan)?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::PlannedText(PlannedTextCall {
             placement,
             plan: plan.clone(),
@@ -1045,8 +901,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
         radius: f64,
         style: &FillStyle,
     ) -> Result<(), Error> {
-        self.recorder
-            .draw_rounded_rect(x, y, width, height, radius, style)?;
+        self.claim_call()?;
         self.calls.push(PlannedCall::RoundedRect {
             x,
             y,
@@ -1063,7 +918,8 @@ impl Backend for TextPlanningBackend<'_, '_> {
         bracket: &SignificanceBracket,
         style: &BracketStyle,
     ) -> Result<(), Error> {
-        self.recorder.draw_bracket(bracket, style)?;
+        self.claim_call()?;
+        backend::validate_bracket(bracket, style)?;
         let label = self.plan_raw_bracket(bracket, style)?;
         let (bracket, style) = self.copy_bracket(bracket, style)?;
         self.calls.push(PlannedCall::RawBracket(PlannedBracketCall {
@@ -1075,7 +931,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
-        self.recorder.draw_planned_bracket(call)?;
+        self.claim_call()?;
         let (bracket, style) = self.copy_bracket(call.bracket, call.style)?;
         self.calls
             .push(PlannedCall::PlannedBracket(PlannedBracketCall {
@@ -1087,7 +943,7 @@ impl Backend for TextPlanningBackend<'_, '_> {
     }
 
     fn end(&mut self) -> Result<(), Error> {
-        self.recorder.end()
+        Ok(())
     }
 }
 
@@ -1709,7 +1565,7 @@ mod tests {
 
     fn capture_test_plan(
         theme: &crate::theme::ResolvedTheme,
-        mut capture: impl FnMut(&mut dyn Backend) -> Result<(), Error>,
+        capture: impl FnOnce(&mut dyn Backend) -> Result<(), Error>,
     ) -> crate::layout::FrozenRoot<TextReplayPlan> {
         crate::layout::plan_exact_root(
             100,
@@ -1718,14 +1574,7 @@ mod tests {
             |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
             |(), assigned, (), final_stage| {
                 let (width, height) = assigned.dimensions();
-                capture_text_replay_plan(
-                    width,
-                    height,
-                    "test capture",
-                    theme,
-                    final_stage,
-                    &mut capture,
-                )
+                capture_text_replay_plan(width, height, "test capture", theme, final_stage, capture)
             },
         )
         .unwrap()
@@ -2065,13 +1914,24 @@ mod tests {
         let style = replay_text_style(&theme);
         let position = Point2D::new(40.0, 60.0);
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let source = String::from("captured text");
+        let mut captures = 0;
         let plan = capture_test_plan(&theme, |backend| {
-            backend.draw_text(position, "captured text", &style)
+            captures += 1;
+            let result = backend.draw_text(position, &source, &style);
+            drop(source); // The producer is genuinely FnOnce; replay owns its source.
+            result
         });
         let plan = plan.plan();
+        assert_eq!(captures, 1);
+        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+        assert!(shapes > 0);
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        validate_text_replay_plan(100, 100, plan, "single capture").unwrap();
 
         assert_eq!(plan.call_count(), 1);
+        assert_eq!(plan.calls.capacity(), 1);
         for replay_plan in [plan, plan] {
             SVG_RAW_TEXT_CALLS.with(|calls| calls.set(0));
             SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(0));
@@ -2083,14 +1943,50 @@ mod tests {
 
             SVG_RAW_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 0));
             SVG_PLANNED_TEXT_CALLS.with(|calls| assert_eq!(calls.get(), 1));
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shapes));
         }
     }
 
     #[test]
-    fn capture_rejects_extra_calls_before_retaining_or_shaping_the_payload() {
+    fn capture_call_limit_uses_shared_root_admission_before_shaping() {
+        let theme = crate::Theme::Publication.resolve();
+        let mut captures = 0;
+        NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+        let result = crate::layout::plan_exact_root(
+            100,
+            100,
+            |stage| Ok(stage.generation_resources()),
+            |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |resources, _, (), final_stage| {
+                capture_text_replay_plan(100, 100, "call limit", &theme, final_stage, |backend| {
+                    captures += 1;
+                    let (used, _) = resources.usage().unwrap();
+                    resources.claim_slots(1_000_000 - used).unwrap();
+                    let mut invalid = replay_text_style(&theme);
+                    invalid.font_size = 0;
+                    backend.draw_text(Point2D::new(0.0, 0.0), "not shaped", &invalid)
+                })
+            },
+        );
+        let Err(error) = result else {
+            panic!("capture must respect prior root resource claims");
+        };
+        assert!(
+            error.to_string().contains("prepared scene call admission"),
+            "{error}"
+        );
+        assert_eq!(captures, 1);
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+    }
+
+    #[test]
+    fn capture_append_refusal_precedes_payload_shaping() {
         let theme = crate::Theme::Publication.resolve();
         let mut pass = 0;
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_exact_root(
             100,
             100,
@@ -2100,25 +1996,69 @@ mod tests {
                 capture_text_replay_plan(
                     100,
                     100,
-                    "extra call test",
+                    "append refusal test",
                     &theme,
                     final_stage,
                     |backend| {
                         pass += 1;
-                        if pass == 2 {
-                            let mut invalid = replay_text_style(&theme);
-                            invalid.font_size = 0;
-                            backend.draw_text(Point2D::new(0.0, 0.0), "not shaped", &invalid)?;
-                        }
-                        Ok(())
+                        crate::layout::kernel::force_reservation_failure(
+                            crate::layout::kernel::ReservationStage::Final,
+                        );
+                        let mut invalid = replay_text_style(&theme);
+                        invalid.font_size = 0;
+                        backend.draw_text(Point2D::new(0.0, 0.0), "not shaped", &invalid)
                     },
                 )
             },
         );
         let Err(error) = result else {
-            panic!("capture must reject a call absent from counting");
+            panic!("capture must refuse append before shaping");
         };
-        assert!(error.to_string().contains("before retention"));
+        assert!(
+            error.to_string().contains("prepared scene calls"),
+            "{error}"
+        );
+        assert_eq!(pass, 1);
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+    }
+
+    #[test]
+    fn capture_payload_bytes_use_the_shared_root_limit() {
+        let theme = crate::Theme::Publication.resolve();
+        let mut captures = 0;
+        NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+        let result = crate::layout::plan_exact_root(
+            100,
+            100,
+            |stage| Ok(stage.font_resources()),
+            |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |resources, _, (), final_stage| {
+                capture_text_replay_plan(100, 100, "byte limit", &theme, final_stage, |backend| {
+                    captures += 1;
+                    for _ in 0..3 {
+                        backend.draw_surface(
+                            PanelBox::new(0.0, 10.0, 0.0, 10.0),
+                            (0, 0, 0).into(),
+                            SurfaceRole::CanvasRoot,
+                        )?;
+                    }
+                    let used = u64::try_from(resources.usage().unwrap().font_bytes).unwrap();
+                    resources.claim_bytes(536_870_912 - used).unwrap();
+                    backend
+                        .draw_scatter(&[Point2D::new(1.0, 2.0)], &PointStyle::plain((0, 0, 0), 1))
+                })
+            },
+        );
+        let Err(error) = result else {
+            panic!("capture must admit payload bytes before copying");
+        };
+        assert!(
+            error.to_string().contains("prepared scatter points"),
+            "{error}"
+        );
+        assert!(error.to_string().contains("system-font bytes"), "{error}");
+        assert_eq!(captures, 1);
         NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
     }
 
@@ -2146,11 +2086,18 @@ mod tests {
                         final_stage,
                         |backend| {
                             pass += 1;
-                            if pass == 2 {
-                                crate::layout::kernel::force_reservation_failure(
-                                    crate::layout::kernel::ReservationStage::Final,
-                                );
+                            // Leave one admitted command slot available, so refusal
+                            // exercises the payload allocation rather than call growth.
+                            for _ in 0..3 {
+                                backend.draw_surface(
+                                    PanelBox::new(0.0, 10.0, 0.0, 10.0),
+                                    (0, 0, 0).into(),
+                                    SurfaceRole::CanvasRoot,
+                                )?;
                             }
+                            crate::layout::kernel::force_reservation_failure(
+                                crate::layout::kernel::ReservationStage::Final,
+                            );
                             match payload {
                                 "prepared layer name" => {
                                     backend.begin_layer("retained name")?;
@@ -2178,6 +2125,7 @@ mod tests {
                 panic!("capture payload reservation must refuse");
             };
             assert!(error.to_string().contains(payload), "{error}");
+            assert_eq!(pass, 1);
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
         }
     }

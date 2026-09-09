@@ -16,6 +16,8 @@ use crate::spec::{
 };
 use crate::Plot;
 
+pub(crate) mod children;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LegendRole {
     Panel,

@@ -4,10 +4,15 @@ use crate::Error;
 
 use super::data::{stable_levels, FacetPanel};
 use crate::builder::Plot;
+use crate::decorations::plan::children::MeasurementPhase;
 use crate::render::backend::Backend;
 use crate::spec::{AxisDomain, LegendPolicy, PlotKind, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "root-local child reuse keeps computed hue inputs explicit"
+)]
 pub(super) fn preflight_coordinated_panels(
     source: &Plot,
     base_plot: Plot,
@@ -15,17 +20,43 @@ pub(super) fn preflight_coordinated_panels(
     panels: &[FacetPanel],
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-) -> Result<(Plot, Vec<PlotRenderResult>), Error> {
+    children: &mut crate::decorations::plan::children::ChildPlans,
+    round: &crate::layout::kernel::FeedbackRound,
+) -> Result<(Plot, Vec<std::sync::Arc<PlotRenderResult>>), Error> {
     let facet_scales = source.facet_scales_spec();
-    let preflight = preflight_panels(&base_plot, kind, panels, facet_scales, theme, backend)?;
+    let preflight = preflight_panels(
+        &base_plot,
+        kind,
+        panels,
+        facet_scales,
+        theme,
+        backend,
+        children,
+        round,
+        MeasurementPhase::Probe,
+    )?;
     if source.hue_dimension_key().is_none() {
         return Ok((base_plot, preflight));
     }
     let base_plot = coordinate_hue_levels(source, base_plot, &preflight)?;
-    let preflight = preflight_panels(&base_plot, kind, panels, facet_scales, theme, backend)?;
+    let preflight = preflight_panels(
+        &base_plot,
+        kind,
+        panels,
+        facet_scales,
+        theme,
+        backend,
+        children,
+        round,
+        MeasurementPhase::Hue,
+    )?;
     Ok((base_plot, preflight))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "root-local child reuse keeps computed hue inputs explicit"
+)]
 fn preflight_panels(
     base_plot: &Plot,
     kind: PlotKind,
@@ -33,24 +64,34 @@ fn preflight_panels(
     facet_scales: crate::FacetScales,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-) -> Result<Vec<PlotRenderResult>, Error> {
+    children: &mut crate::decorations::plan::children::ChildPlans,
+    round: &crate::layout::kernel::FeedbackRound,
+    phase: MeasurementPhase,
+) -> Result<Vec<std::sync::Arc<PlotRenderResult>>, Error> {
     let mut preflight = Vec::with_capacity(panels.len());
-    for facet in panels {
+    for (index, facet) in panels.iter().enumerate() {
         let panel_plot = base_plot
             .clone()
             .with_render_scope(facet.render_scope())
             .with_significance_subset(facet.significance_selectors());
+        let context = PlotRenderContext::new(
+            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            facet.panel,
+            theme,
+        )
+        .with_facet_scales(facet_scales);
+        let owner = crate::layout::ComponentAddress::root().child(
+            crate::layout::AddressRole::FacetCell,
+            u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
+        )?;
+        let result = children.measure(&panel_plot, context, &owner, phase, round, || {
+            panel_plot
+                .render_panel(kind, context, backend)
+                .map(crate::layout::fit::FitOutcome::Measured)
+        })?;
         preflight.push(
-            panel_plot.render_panel(
-                kind,
-                PlotRenderContext::new(
-                    crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
-                    facet.panel,
-                    theme,
-                )
-                .with_facet_scales(facet_scales),
-                backend,
-            )?,
+            crate::layout::fit::measured(Ok(result))
+                .map_err(crate::layout::fit::PlanError::into_error)?,
         );
     }
     Ok(preflight)
@@ -59,7 +100,7 @@ fn preflight_panels(
 fn coordinate_hue_levels(
     source: &Plot,
     mut base_plot: Plot,
-    preflight: &[PlotRenderResult],
+    preflight: &[std::sync::Arc<PlotRenderResult>],
 ) -> Result<Plot, Error> {
     if let Some(hue_field) = source.hue_dimension_key() {
         let rendered_levels = stable_levels(
@@ -91,7 +132,7 @@ fn coordinate_hue_levels(
 pub(super) fn shared_legend_entries(
     source: &Plot,
     shared_plot: &Plot,
-    preflight: &[PlotRenderResult],
+    preflight: &[std::sync::Arc<PlotRenderResult>],
 ) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
     let mut entries = if source.legend_policy_spec() == LegendPolicy::Hidden {
         Vec::new()
@@ -131,7 +172,7 @@ pub(super) fn shared_legend_entries(
 }
 
 pub(super) fn resolve_shared_facet_axis(
-    results: &[PlotRenderResult],
+    results: &[std::sync::Arc<PlotRenderResult>],
     shared: bool,
     x_axis: bool,
 ) -> Result<Option<(f64, f64)>, Error> {

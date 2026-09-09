@@ -292,6 +292,25 @@ pub(crate) struct ComponentAddress {
 }
 
 impl ComponentAddress {
+    pub(crate) fn leaf_role(&self) -> AddressRole {
+        self.descendants
+            .last()
+            .map_or(self.root.role, |segment| segment.role)
+    }
+
+    pub(crate) fn under_grid(&self, grid: AddressRole) -> Result<Self, Error> {
+        let [leaf] = self.descendants.as_ref() else {
+            return Err(Error::Render(
+                "child owner must be one root-local cell".into(),
+            ));
+        };
+        Self::root()
+            .child(grid, 0)?
+            .child(leaf.role, leaf.slot_index)
+    }
+    fn is_within(&self, owner: &Self) -> bool {
+        self.root == owner.root && self.descendants.starts_with(&owner.descendants)
+    }
     pub(crate) fn root() -> Self {
         Self {
             root: AddressSegment {
@@ -476,9 +495,42 @@ impl PreparedStage<'_> {
 
 pub(crate) struct FinalStage<'a> {
     reservations: &'a mut ReservationDriver,
+    resources: &'a ResourceState,
 }
 
 impl FinalStage<'_> {
+    pub(crate) fn claim_capture_call(&self) -> Result<(), Error> {
+        self.resources
+            .generation_resources
+            .claim_slots(1)
+            .map_err(|error| Error::Render(format!("prepared scene call admission: {error:?}")))
+    }
+
+    pub(crate) fn reserve_capture<T>(
+        &mut self,
+        values: &mut Vec<T>,
+        additional: usize,
+        payload: &str,
+    ) -> Result<(), Error> {
+        let needed = values
+            .len()
+            .checked_add(additional)
+            .ok_or_else(|| Error::Render(format!("{payload}: capture length overflow")))?;
+        if needed <= values.capacity() {
+            return Ok(());
+        }
+        let capacity = needed.max(values.capacity().saturating_mul(2));
+        let bytes = (capacity - values.capacity())
+            .checked_mul(std::mem::size_of::<T>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render(format!("{payload}: capture byte count overflow")))?;
+        self.resources
+            .font_resources
+            .claim_bytes(bytes)
+            .map_err(|error| Error::Render(format!("{payload}: {error}")))?;
+        self.reserve_final(values, capacity - values.len(), payload)
+    }
+
     pub(crate) fn reserve_final<T>(
         &mut self,
         values: &mut Vec<T>,
@@ -626,6 +678,7 @@ impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
 
 mod feedback;
 pub(crate) use feedback::TrialOutcome;
+pub(crate) use feedback::{ChildFeedback, ChildFeedbackInputs};
 pub(crate) use feedback::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 
 pub(crate) fn compact_half_width(width: f64, gap: f64) -> Result<Option<f64>, Error> {
@@ -717,7 +770,9 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         if let Some(error) = state.terminal_error() {
             return Err(error);
         }
-        if history.last() == Some(&state) {
+        // Measure and validate the current assignment before accepting its plan.
+        // Observation equality would require an unconditional duplicate pass.
+        if state.feedback_unchanged() {
             if let Some(error) = state.unchanged_error() {
                 return Err(error);
             }
@@ -759,6 +814,7 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     let mut allocation = Vec::new();
     let mut final_stage = FinalStage {
         reservations: &mut reservations,
+        resources: &resources,
     };
     final_stage.reserve_final(&mut allocation, 1, "frozen exact-root plan")?;
     let plan = finalize(&prepared, assigned, measured.plan, &mut final_stage)?;

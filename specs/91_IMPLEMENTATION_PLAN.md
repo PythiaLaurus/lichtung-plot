@@ -223,8 +223,8 @@ The approved theme and layout targets follow these rules:
 | T5a3p | Post-T5a3 repository hygiene and publication efficiency | IN PROGRESS |
 | T5a3p0 | Follow-up behavior review and selected-work admission | COMPLETE |
 | T5a3p1 | Remove full Unicode corpora from unpublished history | COMPLETE |
-| T5a3p2 | Avoid unchanged root and child measurement | PENDING |
-| T5a3p3 | Capture producers once | PENDING |
+| T5a3p2 | Avoid unchanged root and child measurement | COMPLETE |
+| T5a3p3 | Capture producers once | COMPLETE |
 | T5a3p4 | Simplify resource admission accounting | PENDING |
 | T5a3p5 | Evaluate repeated font setup | IN PROGRESS |
 | T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
@@ -3707,11 +3707,25 @@ tests/fixtures/unicode16/NormalizationTest.txt
 
 #### T5a3p2: Avoid Unchanged Root And Child Measurement
 
-**Status**: PENDING (PF2 accepted; baseline recorded; runtime implementation pending)
+**Status**: COMPLETE
+
+The root now accepts complete, miss-free plans at an effective feedback fixed
+point without a duplicate round. Stable roots measure once; the release facet
+and mixed-Canvas cases require two rounds instead of three. Concrete root-local
+child reuse in `src/decorations/plan/children.rs` keys exact assigned geometry,
+computed input policy, appearance, and relevant feedback. Unresolved or changing
+results cannot become reusable next-round entries. Reuse replays observations,
+fresh requests, and guide-trial accounting, not stale round-local handles.
+Production cached/uncached Canvas and facet regressions preserve exact output,
+glyph plans/placements, ticks/domains, and annotation geometry. An independently
+changed cell reduces panel planning from three calls to two while keeping the
+neighbor's same plan allocation; shared-domain changes invalidate both children.
+Scoped independent review found no blocker. Full verification passed, and all
+nine release workloads match baseline SVG, PNG-file, and decoded-pixel hashes.
 
 Current owners: `src/layout/kernel.rs` and `src/layout/kernel/feedback.rs`.
-The driver compares recorded round states and requires at least two successful
-rounds. It has no general subtree-result cache.
+Before PF2 the driver required at least two successful rounds and had no child
+reuse. No general-purpose public cache API was introduced by the correction.
 
 Accepted fix: accept a complete validated immutable plan when effective outgoing feedback
 equals consumed feedback and no misses remain. An empty request list alone is
@@ -3731,7 +3745,19 @@ do not assume a function's Rust trait proves purity.
 
 #### T5a3p3: Capture Producers Once
 
-**Status**: PENDING (PF3 accepted; baseline recorded; runtime implementation pending)
+**Status**: COMPLETE
+
+`CallCountingBackend` is removed. Capture accepts a single `FnOnce` producer and
+uses bounded fallible command/payload growth under the same root record/byte
+ledgers. Canonical output counting still traverses frozen commands and reserves
+real buffers/scratch before final Null validation. Capture refusal, scope/style
+validation, cleanup, and output reuse tests pass. The release benchmark records
+one producer invocation per root with baseline-identical SVG/PNG/pixels.
+The integrated gate passed 677 library tests (eight explicit opt-ins ignored),
+all integration/snapshot suites, strict Clippy, docs, and package verification.
+PF2/PF3's shared root/capture interfaces and lifecycle count assertions are
+committed together; PF6 is the separate tick-only change. No finer-grained commit
+history is claimed or manufactured with compatibility routes.
 
 Current owners: `capture_text_replay_plan` in `src/orchestrator/backend.rs` and
 producer calls in `src/orchestrator/lifecycle.rs`/Canvas.
