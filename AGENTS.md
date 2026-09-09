@@ -42,6 +42,10 @@ subagent; a successful non-linting build is not a substitute for strict Clippy.
 Use Conventional Commits with mandatory scopes. Keep commits to one logical
 change.
 
+Before any Git push, satisfy the T5a3p1 corpus-history cleanup gate in
+`specs/91_IMPLEMENTATION_PLAN.md`. Do not publish a ref that retains the full
+Unicode conformance corpus in its ancestry; a forward deletion is insufficient.
+
 After achieving a phased objective, commit the completed work before moving on.
 Do not leave finished work uncommitted unless the user explicitly asks not to
 commit.

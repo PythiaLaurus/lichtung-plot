@@ -19,6 +19,13 @@ records the decisions and documentation review. Broad public constraints remain
 deferred to DF6 review at T7 closure; new text controls remain deferred to DF5
 review at T6 entry. Neither checkpoint is a promise to implement those extensions.
 
+Post-T5a3 work is recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p. Corpus-history
+removal is authorized, while its replacement test workflow and proposed efficiency
+changes have an explicit user-review gate. Those proposals do not yet replace
+the root-round, capture, resource-accounting, tick, or line-fit rules below.
+No history rewrite, runtime optimization, or extra public mode follows merely
+from recording a proposal.
+
 Parents allocate space. A child returns ONE measured immutable local plan or a
 typed fit miss under that allocation. Intrinsic summaries inform allocation but
 are not collections of constrained layouts. Explicit, bounded local attempts

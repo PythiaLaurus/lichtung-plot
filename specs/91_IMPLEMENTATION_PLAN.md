@@ -220,6 +220,15 @@ The approved theme and layout targets follow these rules:
 | T5a3d | Resource and lifecycle closure | COMPLETE |
 | T5a3e | Producer and SVG/PNG regressions | COMPLETE |
 | T5a3f | Independent closure and performance evidence | COMPLETE |
+| T5a3p | Post-T5a3 repository hygiene and publication efficiency | BLOCKED |
+| T5a3p0 | Follow-up behavior review and selected-work admission | BLOCKED |
+| T5a3p1 | Remove full Unicode corpora from unpublished history | PENDING |
+| T5a3p2 | Avoid unchanged root and child measurement | BLOCKED |
+| T5a3p3 | Capture producers once | BLOCKED |
+| T5a3p4 | Simplify resource admission accounting | BLOCKED |
+| T5a3p5 | Evaluate repeated font setup | BLOCKED |
+| T5a3p6 | Avoid duplicate automatic-tick work | BLOCKED |
+| T5a3p7 | Review speculative line extension | BLOCKED |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -3491,13 +3500,263 @@ earlier observations rather than newly generated expectations.
 
 Original intended title: `test(layout): close typography repair and scaling evidence`.
 
+### T5a3p: Post-T5a3 Repository Hygiene And Publication Efficiency
+
+**Status**: BLOCKED
+
+Dependencies: completed T5a3; T5a3p0 records the user's follow-up decisions.
+
+T5a3's preceding completion and measurements remain evidence of the implemented
+contract, not proof that its repository size, repeated work, or accounting model
+are proportionate to publication-ready plotting. This follow-up addresses those
+costs without reopening accurate shaping, complete content, or immutable replay.
+It is not a global optimizer, a new public layout mode, or permission to change
+fonts, shrink text, drop labels, or overwrite exact caller dimensions to save work.
+
+The user explicitly authorized removing the full Unicode corpus from Git history
+before publication. Other recommendations below await the requested behavior
+review. This documentation revision performs no history rewrite, deletion, runtime
+change, benchmark, or push. Proposals do not silently override the current
+algorithms in `05_LAYOUT_SYSTEM.md`.
+
+**Publication gate:** do not push the current branch or any ref containing the
+corpus ancestry. T5a3p1 must prove that corpus paths and original blobs are absent
+from the intended published ancestry. A forward deletion, passing tests, or
+completion of another phase does not satisfy this gate. Cleanup does not authorize
+a push or force-push.
+
+#### T5a3p0: Follow-Up Behavior Review And Selected-Work Admission
+
+**Status**: BLOCKED -- awaiting user review of these examples and recommendations.
+
+| ID / stage | Current behavior and example | Proposed outcome | Review status |
+| --- | --- | --- | --- |
+| PF1 / p1 | Six full upstream test corpora occupy 639,054 lines / 16,821,506 bytes and remain in branch history even after a hypothetical forward deletion | Remove them from unpublished ancestry and future packages; keep focused default tests, small provenance/license records, and explicitly supplied external full-conformance data. Plot output is unchanged | History removal authorized; confirm replacement test workflow |
+| PF2 / p2 | A complete valid scatter layout with unchanged effective feedback still needs a second whole-root measurement to establish repeated observations | Finish that stable result without duplicate measurement; remeasure affected owners only when an effective dependency changes. Keep bounded convergence for genuinely changing layouts | PROPOSED: recommend |
+| PF3 / p3 | Scene capture invokes the producer once to count commands and again to retain them, before validation and output | Capture once with bounded fallible growth, then count/validate/serialize the frozen commands. Preserve publication failures and output | PROPOSED: recommend |
+| PF4 / p4 | The recorded 200-word caption consumes 223,501 synthetic work units; 137,504 are fixed Unicode allowances, not measured CPU operations | Replace routine fine-grained prices with understandable input, glyph/record, byte, and expensive-operation limits. Preserve exact output; resource refusal boundaries can intentionally change | PROPOSED: recommend the simpler policy, with limits justified by evidence |
+| PF5 / p5 | Each separate Plot operation prepares a font environment; recorded debug setup was about 0.6 seconds, separate from caption layout | Measure real release-mode setup first and optimize within an operation. No cross-operation font reuse without a separate freshness/lifetime decision | PROPOSED: recommend evaluation only; no global cache now |
+| PF6 / p6 | Automatic ticks may measure the same candidate label twice and evaluate duplicate lists while choosing the fitting list with the greatest count | Deduplicate identical lists and reuse each label measurement while preserving the selected tick list. First-fit instead of greatest-count selection is a separate optional visual change | PROPOSED: recommend output-preserving deduplication only initially |
+| PF7 / p7 | A proposed caption line is shaped to fit, then the next legal endpoint is tested to fill it further; the recorded 20-line caption took 40 shape calls, not 40 paragraph layouts | Optional: freeze the first exactly fitting proposal after necessary retreat, without speculative extension. It can make lines shorter, text taller, and tight figures fail | PROPOSED: recommend keeping current filling initially; evaluate after larger no-visual-change savings |
+
+For each PF item, record agreement, amended behavior, or an explicit deferral
+with a next milestone. History removal is not submitted for permission a second
+time; its test-data arrangement is presented to expose the coverage difference.
+Recommendations are not accepted by silence. Deferred work is not called
+implemented, and no new public strategy/quality knob is added.
+
+Resolve PF1's test workflow and the other dispositions before selecting the
+implementation sequence. Preserve already accepted strict wrapping, font coverage,
+exact dimensions, and explicit placement. If fewer-tick or earlier-line-break
+behavior is admitted, document the output difference and tests before coding.
+Update `05` and the active ownership overlay with each admitted change; do not
+retain old and new algorithms behind a runtime selector.
+
+**Shared evidence gate for p2-p7:** benchmark identical representative inputs in
+release mode before changing algorithms. Include a simple scatter, long-label
+bar, 200-word single/multi-paragraph captions, facet grid, mixed Canvas, Matrix,
+and separate-plot versus same-Output reuse. Separate font setup, planning,
+producer capture, validation, serialization, and publication times. Distinguish
+the first plot in a process from a new text query after font preparation; do not
+claim to control cold filesystem caches. Record elapsed time and actual calls/
+trials, with clearly identified byte/record claims or measured memory. Synthetic
+admission scores are not CPU timings, operation counts, or peak RSS. No new
+speedup percentage or replacement limit is accepted without those records.
+
+Prioritize output-preserving p2/p3/p6 and accounting simplification p4. P5 and p7
+are evaluation checkpoints, not automatic cache or wrapping redesigns. Each
+accepted change gets its own logical commit and verification; split further
+before coding if shared interfaces prevent a coherent reviewable change.
+
+#### T5a3p1: Remove Full Unicode Corpora From Unpublished History
+
+**Status**: PENDING
+
+History removal is explicitly authorized. Confirm the external-data testing
+arrangement at p0, then complete this before publication of the branch. The
+original introduction is `996f44a`; its parent is `35fc235`. These are historical
+anchors, not a promise that refs or remote state remain unchanged.
+
+Remove exactly these full fixtures, including their historical blobs:
+
+```text
+tests/fixtures/unicode16/BidiCharacterTest.txt
+tests/fixtures/unicode16/BidiTest.txt
+tests/fixtures/unicode16/DerivedNormalizationProps.txt
+tests/fixtures/unicode16/GraphemeBreakTest.txt
+tests/fixtures/unicode16/LineBreakTest.txt
+tests/fixtures/unicode16/NormalizationTest.txt
+```
+
+- Inspect current refs, worktrees, index, worktree changes, and actual remote tip
+  before rewriting; guard ref updates against unexpected changes. Preserve
+  unrelated work and the published base. Do not automatically stash/reset edits.
+- Rewrite only the affected unpublished suffix, preserving repair code, intended
+  snapshots, and small metadata. Do not create an in-Git backup branch or tag
+  retaining unwanted ancestry. Native noninteractive Git reconstruction is
+  sufficient; no Python files, `tools/`, or runtime dependency is needed.
+- Migrate all six corpus-reading tests, retained-artifact checksums, and offline
+  regeneration together. Default tests keep focused independently expected cases,
+  version checks, and retained-table integrity. Full conformance explicitly reads
+  an external Unicode 16 directory and validates source hashes before parsing.
+  Invoking it with missing/mismatched data fails, not silently succeeds.
+- Stop regeneration from writing corpora into the repository. Keep necessary
+  runtime tables, provenance/license, and table regeneration. Do not substitute
+  a compressed repository blob or hidden dependency-cache lookup; add no automatic
+  download or provisioning.
+- Verify rewritten trees differ only by intended removals and consumer/doc
+  migrations. Prove corpus paths and original blob IDs are absent from every ref
+  intended for publication. Recheck remote state before any later user-requested
+  push; no force-push is assumed.
+- Reflogs/unreachable local objects are not sent by a normal branch push.
+  Distinguish this from physical erasure; do not clear unrelated recovery history
+  or run aggressive garbage collection before validating rewrite/rollback safety.
+- Update coverage/package claims. Preserve prior full-run observations as
+  historical evidence, not a claim that fresh checkouts still run the whole
+  corpus. Verify default tests, strict Clippy, packaging, and explicit external
+  conformance with valid data before closing this stage.
+
+#### T5a3p2: Avoid Unchanged Root And Child Measurement
+
+**Status**: BLOCKED -- PF2 approval and the p0 baseline are required.
+
+Current owners: `src/layout/kernel.rs` and `src/layout/kernel/feedback.rs`.
+The driver compares recorded round states and requires at least two successful
+rounds. It has no general subtree-result cache.
+
+Proposed fix: accept a complete validated plan when effective outgoing feedback
+equals consumed feedback and no misses remain. An empty request list alone is
+not success. Propagate changed gutter, shared-alignment, owned-ink, and domain
+dependencies; reuse unchanged results rather than remeasure unrelated siblings.
+Retain containment checks, determinism, cycle detection, and the maximum bound
+for genuinely changing feedback.
+
+Example: if a title, plot, and right legend fit and return unchanged requirements,
+their second identical measurement disappears. If a wider y-axis gutter changes
+panel width, affected labels and body are remeasured; checks are not skipped.
+Require identical successful output/semantic content on the baseline suite and a
+test for each invalidation edge. Audit mutable caches for output independence;
+do not assume a function's Rust trait proves purity.
+
+#### T5a3p3: Capture Producers Once
+
+**Status**: BLOCKED -- PF3 approval and the p0 baseline are required.
+
+Current owners: `capture_text_replay_plan` in `src/orchestrator/backend.rs` and
+producer calls in `src/orchestrator/lifecycle.rs`/Canvas.
+
+Proposed fix: retain commands during one producer traversal with bounded fallible
+growth, then count canonical output from those immutable commands. This changes
+planning/capture admission, not the requirement to reserve canonical output
+storage before final Null/concrete execution. Preserve glyph plans, scope balance,
+invalid-input rejection, cleanup, and failure-atomic publication.
+
+Example: a line-plot producer currently runs once for command counts and again
+to retain commands. Afterward it runs once; validation and SVG serialization
+consume retained commands. Those passes are not removed merely because they are
+called validation. Compare exact SVG/decoded PNG, producer calls, refusal timing,
+and retained storage. Never execute the producer again just to size that storage.
+
+#### T5a3p4: Simplify Resource Admission Accounting
+
+**Status**: BLOCKED -- PF4 approval and the p0 baseline are required.
+
+Current owners: font generation ledgers, Unicode admission callbacks, text
+planning, and cache accounting. In the recorded caption, fixed line-break
+allowances charge `420*64 + 420*8 + 419*256 = 137504` units. These conservative
+allowances are not measured CPU instructions or separate layouts.
+
+Proposed fix: retain checked input sizes, glyph/record counts, font/source bytes,
+fallible allocation, and bounded feedback/placement. Use coarse cumulative guards
+for expensive shaping/collision work and remaining variable/quadratic normalization.
+Remove routine per-rule/hash/copy prices and unnecessary per-claim synchronization.
+Do not simply disable protection, raise a magic quota, reset counters per call,
+or substitute timeouts for deterministic fit semantics.
+
+Example: a physically fitting caption should not be rejected solely because fixed
+Unicode-rule allowances exhaust a synthetic score. Truly excessive text, glyph
+expansion, packing, or allocation still fails explicitly. Exact output for already
+admitted inputs must remain unchanged; admission/refusal boundaries can change.
+Before implementation, document each replacement limit's units, measured workload
+rationale, charge point, and failure precedence. The user need not choose arbitrary
+numeric constants. Test normal workloads and pathological refusal, not merely a
+lower reported score.
+
+#### T5a3p5: Evaluate Repeated Font Setup
+
+**Status**: BLOCKED -- PF5 evaluation approval is required.
+
+Current setup is shared within a root and across chained Output publications,
+but separate Plot operations prepare fonts separately. Recorded setup of roughly
+0.6 seconds and caption querying of roughly 0.11 seconds are debug observations,
+not release end-to-end promises.
+
+Example: ten independent figures repeat font setup; ten formats from one Output
+already reuse its scene. Measure that distinction in release mode. First optimize
+within the existing lifetime; add no permanent process/global cache or public
+context object here. Cross-operation reuse can delay observation of installed-font
+changes and retain memory longer. If release evidence justifies it, present
+freshness, invalidation, memory, and lifetime choices before separate admission.
+Conclude the review before this follow-up closes, even if current freshness is
+retained. No timing improvement is promised for this evaluation-only stage.
+
+#### T5a3p6: Avoid Duplicate Automatic-Tick Work
+
+**Status**: BLOCKED -- PF6 approval and the p0 baseline are required.
+
+Current owner: `src/layout/panel/range_ticks.rs`. The active code tries several
+target-derived lists and retains the fitting list with greatest count; some
+label-size requests are duplicated. This is not the future native T5a5 source
+algorithm or an unbounded search.
+
+Recommended fix: deduplicate identical complete lists and measure each distinct
+label once per relevant font/constraint context; preserve the selected list.
+Example: measuring `0,2,4,6,8,10` twice becomes one measurement with identical tick
+positions. Keep uniqueness, finite-number and containment checks; exact caller
+ticks remain untouched.
+
+An optional first-fitting rule might stop at a readable four-tick list instead
+of examining a later fitting five-tick list. This illustrates a possible difference,
+not a measured result for a particular dataset. It requires separate user approval
+and measured benefit; do not include it silently in deduplication or preempt T5a5.
+
+#### T5a3p7: Review Speculative Line Extension
+
+**Status**: BLOCKED -- PF7 disposition is required.
+
+Current owner: `src/layout/text.rs`. Paragraph analysis proposes an endpoint;
+exact shaping retreats if necessary, then tests following legal endpoints to fill
+the line. The recorded 20-line/40-shape-call workload is not 40 paragraphs.
+Exact glyphs, bidi, soft hyphens, and ink-fit checks remain useful.
+
+Optional fix: freeze the first exactly fitting proposal after necessary retreat,
+without extending it. Illustrative difference: a word fitting on the current line
+may instead move to the next one. A caption can become taller, and tight exact
+height can fail where current filling succeeds. No character, font size, direction,
+or explicit break changes; additive word estimates do not replace final shaping.
+
+Recommendation: retain current filling during the first output-preserving
+optimizations. Review this option after p2/p3/p4/p6 measurements and before the
+follow-up closes. Admit only with user acceptance of wrapping/fit differences and
+evidence that the saving matters. Otherwise record deferral with the next review
+at T7 closure, not a new wrapping mode.
+
+**Completion gate:** p0 records every disposition; p1 completes authorized history
+cleanup; every approved implementation supplies focused tests, release before/
+after evidence, strict Clippy and `just verify`, inspected authorized output
+changes, and a commit. Evaluation-only work records its user-reviewed outcome or
+next checkpoint. Do not weaken tests merely to accept a faster result. Only then
+may T5a4 start. Prior T5a3 evidence stays historical and executed, but does not
+certify these new proposals.
+
 ### T5a4: Root Title-Block Plans
 
 **Status**: PENDING
 
 Dependencies: completed revised T5a1/T5a1r and T5a3 through T5a3f. Their repair
 gate is satisfied by the integrated verification, not merely historical commits.
-T5a4 remains PENDING and has not started; this closure does not implement its scope.
+The post-T5a3 T5a3p disposition/implementation gate above must also close before
+starting. T5a4 remains PENDING; prior closure does not implement its scope.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.
