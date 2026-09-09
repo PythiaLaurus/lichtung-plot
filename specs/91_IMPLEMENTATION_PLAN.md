@@ -222,7 +222,7 @@ The approved theme and layout targets follow these rules:
 | T5a3f | Independent closure and performance evidence | COMPLETE |
 | T5a3p | Post-T5a3 repository hygiene and publication efficiency | IN PROGRESS |
 | T5a3p0 | Follow-up behavior review and selected-work admission | COMPLETE |
-| T5a3p1 | Remove full Unicode corpora from unpublished history | IN PROGRESS |
+| T5a3p1 | Remove full Unicode corpora from unpublished history | COMPLETE |
 | T5a3p2 | Avoid unchanged root and child measurement | PENDING |
 | T5a3p3 | Capture producers once | PENDING |
 | T5a3p4 | Simplify resource admission accounting | PENDING |
@@ -3619,21 +3619,53 @@ P5's evaluation baseline is done; its after-report and conclusion remain pending
 
 #### T5a3p1: Remove Full Unicode Corpora From Unpublished History
 
-**Status**: IN PROGRESS (test migration and history cleanup; closure pending)
+**Status**: COMPLETE
 
-History removal and the external-data testing arrangement are explicitly accepted
-at p0; complete this before publication of the branch. The
-original introduction is `996f44a`; its parent is `35fc235`. These are historical
-anchors, not a promise that refs or remote state remain unchanged.
+The consumer migration and localized history rewrite are complete. Default
+verification passed with 663 library tests and eight explicit opt-in tests
+ignored (six external corpus consumers, regeneration, and the release benchmark),
+all integration/snapshot targets, strict Clippy, rustdoc, and package verification.
+The external conformance consumers were separately run against hash-verified
+original sources; all six passed. Missing/mismatched inputs failed explicitly.
+Regeneration check and write modes validated 11 original members and produced
+only five retained outputs; neither recreated the corpora. Package size fell from
+21.5 MiB to 5.5 MiB (1.2 MiB compressed, including the release measurement harness).
 
-The primary confirmed actual remote `main` via HTTPS at `4b38de4...`; SSH port 22
-timed out. That read-only remote/SSH limitation does not block the authorized local
-rewrite and does not authorize publication. No push is requested. Preserve all
-later code, not only the original corpus-introduction tree. Keep old commit IDs
-throughout the evidence until the primary rewrites history; then record the
-old-to-new mapping and update references. No rewrite or mapping is claimed here.
+Before rewriting, HTTPS confirmed server `main` at
+`4b38de440f4ee684662a05f97a84c43e38114f17`; SSH port 22 timed out. No remote ref
+or configuration changed and no push occurred. Native Git reconstructed only
+the six-commit unpublished suffix after unchanged `35fc235`, preserving original
+author/committer metadata and message bytes. Every mapped tree was checked to
+differ solely by removal of the six corpus paths where present:
 
-Remove exactly these full fixtures, including their historical blobs:
+| Original local commit | Clean replacement |
+| --- | --- |
+| `996f44a` | `22965ff` |
+| `c97c1cb` | `8d1db56` |
+| `0e70bdf` | `c8d51b6` |
+| `b8fe313` | `12ec81e` |
+| `77d8bf2` | `65f3cf4` |
+| `b6f8321` | `e8764ae` |
+
+The later typography, layout, snapshot, documentation, measurement, and consumer
+migration work was not dropped. The final tree stayed exactly
+`5a3ce6dcbd8eedadfe807ac1586cfc148d2360f8` before and after rewriting because the
+consumer-migration tip already lacked the corpora. Updating `main` used an
+expected-old-OID guard. All earlier commits and `origin/main` are unchanged.
+Earlier hashes elsewhere in this document identify pre-rewrite history; the
+table supplies their replacements, not a second code route.
+
+`git log --all -- <six corpus paths>` returned no history, and all six original
+blob IDs were absent from `git rev-list --objects --all`. No backup refs were
+created. The worktree and index remained clean. Old recovery objects may remain
+locally through reflogs; they are not reachable from publishable refs and are not
+sent by a normal branch push. Unrelated reflogs were not expired and no aggressive
+garbage collection was run. This closes the corpus-ancestry gate, not permission
+to push; later publication must still check current refs/server.
+
+The completed procedure preserved all later code, not only the original corpus
+introduction. Its acceptance criteria below remain recorded for auditing. These
+six full fixtures and their historical blobs were removed from publishable history:
 
 ```text
 tests/fixtures/unicode16/BidiCharacterTest.txt
