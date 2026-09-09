@@ -3199,12 +3199,15 @@ shared font-plan, preparation-unit census, producer, and replay interfaces made
 the final r2-r4/a1-f source migration coupled. Their acceptance obligations are
 discharged by this same atomic verified bundle, not by invented per-stage commits.
 The `Original intended title` lines retain the planned partition for provenance;
-they are intended subjects, not actual commit history. Planned source-bundle
-subject: `fix(typography): close retained text and root planning`.
-No bundle commit hash or completed source-bundle commit is asserted here. The
-primary may put the Unicode data fixtures in a separate data commit; none is
-invented or assigned a hash here. Intentional snapshots belong with their source
-correction. The migrated current APIs replace their predecessors; no dormant
+they are intended subjects, not actual commit history. Source implementation and
+its inspected snapshots landed in `c97c1cb` (`fix(typography): close retained text
+and root planning`); official data, source/output hashes, license, and fixture
+provenance landed separately in `996f44a` (`test(unicode): retain official Unicode
+16 conformance data`). Final `just verify` also passed after restoring the longer
+original Beeswarm and HorizontalBar snapshot inputs. The explicit Rust-only
+regeneration check passed separately against the official archive and extracted
+members, with 11 byte-identical outputs. The migrated current APIs replace their
+predecessors; no dormant
 compatibility selector, alternate root representation, or old wrapping strategy
 is retained to make a partial partition compile.
 
