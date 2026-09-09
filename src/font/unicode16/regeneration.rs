@@ -353,19 +353,6 @@ fn regenerate_unicode16() {
     ] {
         outputs.insert(path.to_owned(), formatted(&source, root));
     }
-    for name in SOURCES {
-        if name.ends_with("Test.txt") || *name == "DerivedNormalizationProps.txt" {
-            let mut compact = String::new();
-            for line in sources[name].lines() {
-                let body = line.split('#').next().unwrap().trim();
-                if !body.is_empty() {
-                    writeln!(compact, "{body}").unwrap();
-                }
-            }
-            let leaf = Path::new(name).file_name().unwrap().to_str().unwrap();
-            outputs.insert(format!("tests/fixtures/unicode16/{leaf}"), compact);
-        }
-    }
     outputs.insert(
         "tests/fixtures/unicode16/ReadMe.txt".to_owned(),
         sources["ReadMe.txt"].clone(),
@@ -390,8 +377,17 @@ fn regenerate_unicode16() {
         }
         eprintln!("{:x}  {path}", Sha256::digest(content.as_bytes()));
     }
-    assert_eq!(outputs.len(), 11);
-    eprintln!("{} validated source members; {} {} outputs (three tables, six fixtures, ReadMe, SHA256SUMS)", sources.len(), outputs.len(), if write { "regenerated" } else { "byte-identical" });
+    assert_eq!(outputs.len(), 5);
+    eprintln!(
+        "{} validated source members; {} {} outputs (three tables, ReadMe, SHA256SUMS)",
+        sources.len(),
+        outputs.len(),
+        if write {
+            "regenerated"
+        } else {
+            "byte-identical"
+        }
+    );
 }
 
 #[test]

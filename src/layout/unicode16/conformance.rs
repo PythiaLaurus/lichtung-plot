@@ -1,14 +1,7 @@
 use unicode_bidi::{BidiInfo, Level};
 use unicode_segmentation::UnicodeSegmentation;
 
-fn fixture(name: &str) -> String {
-    std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/unicode16")
-            .join(name),
-    )
-    .unwrap()
-}
+use crate::font::unicode16_source as fixture;
 
 fn check_bidi(
     text: &str,
@@ -53,10 +46,11 @@ fn check_bidi(
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn official_bidi_characters() {
     let mut count = 0;
     for (line, row) in fixture("BidiCharacterTest.txt").lines().enumerate() {
-        let fields: Vec<_> = row.split(';').collect();
+        let fields: Vec<_> = row.split(';').map(str::trim).collect();
         let text: String = fields[0]
             .split_whitespace()
             .map(|cp| char::from_u32(u32::from_str_radix(cp, 16).unwrap()).unwrap())
@@ -83,6 +77,7 @@ fn official_bidi_characters() {
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn official_bidi_classes() {
     let source = fixture("BidiTest.txt");
     let mut levels = "";
@@ -147,6 +142,42 @@ fn official_bidi_classes() {
 }
 
 #[test]
+fn focused_bidi_and_graphemes() {
+    check_bidi("a\u{05D0}\u{05D1}b", None, Some(0), "0 1 1 0", "0 2 1 3");
+    check_bidi("\u{05D0}12", None, Some(1), "1 2 2", "1 2 0");
+    check_bidi(
+        "a\u{202E}bc\u{202C}d",
+        None,
+        Some(0),
+        "0 x 1 1 x 0",
+        "0 3 2 5",
+    );
+    check_bidi(
+        "a\u{2067}\u{05D0}\u{05D1}\u{2069}b",
+        None,
+        Some(0),
+        "0 0 1 1 0 0",
+        "0 1 3 2 4 5",
+    );
+    for (text, expected) in [
+        ("a\u{0301}b", vec![0, 3, 4]),
+        ("\r\na", vec![0, 2, 3]),
+        ("\u{1F469}\u{200D}\u{1F52C}", vec![0, 11]),
+        ("\u{1F1E6}\u{1F1E7}\u{1F1E8}", vec![0, 8, 12]),
+        ("\u{0915}\u{094D}\u{0915}", vec![0, 9]),
+    ] {
+        assert_eq!(
+            text.grapheme_indices(true)
+                .map(|(offset, _)| offset)
+                .chain([text.len()])
+                .collect::<Vec<_>>(),
+            expected,
+            "{text:?}"
+        );
+    }
+}
+
+#[test]
 fn unicode_16_lb25_closing_punctuation_does_not_extend_digits() {
     use super::BreakOpportunity::{Allowed, Mandatory};
     // UAX #14 revision 53, LB25: NU (SY | IS)* x NU has no optional
@@ -184,10 +215,11 @@ fn unicode_16_lb8a_only_protects_the_immediate_zwj_boundary() {
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn official_breaks() {
     for (name, grapheme, expected_count) in [
-        ("GraphemeBreakTest.txt", true, 1093),
-        ("LineBreakTest.txt", false, 16672),
+        ("auxiliary/GraphemeBreakTest.txt", true, 1093),
+        ("auxiliary/LineBreakTest.txt", false, 16672),
     ] {
         let mut count = 0;
         let mut skipped = 0;

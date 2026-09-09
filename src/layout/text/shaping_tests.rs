@@ -147,12 +147,9 @@ fn typography_performance_evidence_and_root_cache_budgets() {
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii_runs() {
-    let fixture = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/unicode16/LineBreakTest.txt"),
-    )
-    .unwrap();
+    let fixture = crate::font::unicode16_source("auxiliary/LineBreakTest.txt");
     let mut cases = 0;
     for (row, source) in fixture.lines().enumerate() {
         for expansion in [1, 5] {
@@ -193,6 +190,33 @@ fn contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii
         cases += 1;
     }
     assert_eq!(cases, 16_672);
+}
+
+#[test]
+fn contracted_line_break_analysis_has_independent_ascii_expectations() {
+    use crate::layout::unicode16::BreakOpportunity::{Allowed, Mandatory};
+    for (text, expected) in [
+        ("Alphabet", vec![(8, Mandatory)]),
+        ("Alpha Beta", vec![(6, Allowed), (10, Mandatory)]),
+        ("Alpha-Beta", vec![(6, Allowed), (10, Mandatory)]),
+        ("Alpha\r\nBeta", vec![(7, Mandatory), (11, Mandatory)]),
+        ("Alpha\u{0308}Beta", vec![(11, Mandatory)]),
+        ("Alpha\u{200B}Beta", vec![(8, Allowed), (12, Mandatory)]),
+        ("Alpha\u{00A0}Beta", vec![(11, Mandatory)]),
+        (
+            "Alpha 1}2 Beta",
+            vec![(6, Allowed), (8, Allowed), (10, Allowed), (14, Mandatory)],
+        ),
+    ] {
+        let bytes = canonical::OperationFontResources::new();
+        let work = canonical::OperationGenerationResources::new();
+        let actual = paragraph_linebreaks(text, &mut |count, steps| {
+            bytes.claim_bytes(count)?;
+            claim_text_generation(work.claim_work(u128::from(steps)))
+        })
+        .unwrap();
+        assert_eq!(actual, expected, "{text:?}");
+    }
 }
 
 #[test]

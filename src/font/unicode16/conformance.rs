@@ -24,12 +24,16 @@ fn normalize(value: &str) -> String {
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn official_nfc() {
     let mut count = 0;
     let mut failures = Vec::new();
     let mut part1 = false;
     let mut listed = std::collections::HashSet::new();
-    for (line, row) in fixture("NormalizationTest.txt").lines().enumerate() {
+    for (line, row) in crate::font::unicode16_source("NormalizationTest.txt")
+        .lines()
+        .enumerate()
+    {
         if row.starts_with('@') {
             part1 = row == "@Part1";
             continue;
@@ -63,10 +67,11 @@ fn official_nfc() {
 }
 
 #[test]
+#[ignore = "requires LICHTUNG_UNICODE16_SOURCE_DIR with hash-verified original Unicode 16 sources"]
 fn official_nfkc_casefold() {
     let mut count = 0;
     let mut mapped = std::collections::HashSet::new();
-    for row in fixture("DerivedNormalizationProps.txt").lines() {
+    for row in crate::font::unicode16_source("DerivedNormalizationProps.txt").lines() {
         let fields: Vec<_> = row.split(';').map(str::trim).collect();
         if fields[1] != "NFKC_CF" {
             continue;
@@ -90,6 +95,29 @@ fn official_nfkc_casefold() {
             let input = scalar.to_string();
             assert_eq!(super::folded_for_test(&input), input);
         }
+    }
+}
+
+#[test]
+fn focused_nfc_and_casefold() {
+    // Literal expectations cover ordering, blocking, Hangul, and mapping boundaries.
+    for (input, expected) in [
+        ("A\u{030A}", "\u{00C5}"),
+        ("a\u{0315}\u{0300}", "\u{00E0}\u{0315}"),
+        ("A\u{0305}\u{030A}", "A\u{0305}\u{030A}"),
+        ("\u{1100}\u{1161}\u{11A8}", "\u{AC01}"),
+        ("\u{0344}", "\u{0308}\u{0301}"),
+    ] {
+        assert_eq!(normalize(input), expected, "{input:?}");
+    }
+    for (input, expected) in [
+        ("Stra\u{00DF}e", "strasse"),
+        ("\u{FF21}\u{030A}", "\u{00E5}"),
+        ("A\u{034F}\u{030A}", "\u{00E5}"),
+        ("\u{FB03}", "ffi"),
+        ("\u{03A3}\u{03C2}", "\u{03C3}\u{03C3}"),
+    ] {
+        assert_eq!(super::folded_for_test(input), expected, "{input:?}");
     }
 }
 
