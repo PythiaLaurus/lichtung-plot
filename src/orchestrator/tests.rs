@@ -16,6 +16,8 @@ use crate::{
 
 #[path = "tests/artifacts.rs"]
 mod artifacts;
+#[path = "../../tests/benchmarks/suite.rs"]
+mod benchmarks;
 #[path = "tests/data_contracts.rs"]
 mod data_contracts;
 #[path = "tests/facets.rs"]
@@ -24,8 +26,6 @@ mod facets;
 mod focused_plot_options;
 #[path = "tests/lifecycle.rs"]
 mod lifecycle;
-#[path = "tests/publication_efficiency.rs"]
-mod publication_efficiency;
 #[path = "tests/specialized.rs"]
 mod specialized;
 #[path = "tests/validation.rs"]

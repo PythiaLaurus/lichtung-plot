@@ -11,6 +11,9 @@ use crate::spec::{FacetScales, PlotRenderContext, PlotRenderResult};
 use crate::{Error, Plot};
 
 #[cfg(test)]
+use crate::orchestrator::measurements::{child_cache, Counter};
+
+#[cfg(test)]
 thread_local! {
     pub(crate) static DISABLE_CHILD_REUSE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     pub(crate) static CHILD_MEASUREMENTS: std::cell::RefCell<Vec<(ComponentAddress, &'static str)>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -217,10 +220,14 @@ impl<'a> ChildPlans<'a> {
                     .claim_processing_visits(1)
                     .map_err(|error| Error::Render(format!("child lookup visits: {error:?}")))?;
                 if entry.phase == phase && entry.inputs.matches(plot, context, owner, round) {
+                    #[cfg(test)]
+                    child_cache(owner, phase.label(), Counter::ChildCacheHit);
                     return Ok(FitOutcome::Measured(Arc::clone(&entry.result)));
                 }
             }
         }
+        #[cfg(test)]
+        child_cache(owner, phase.label(), Counter::ChildCacheMiss);
         #[cfg(test)]
         CHILD_MEASUREMENTS.with(|events| events.borrow_mut().push((owner.clone(), phase.label())));
         let result = match measure()? {
@@ -276,11 +283,17 @@ impl<'a> ChildPlans<'a> {
                     }
                     && entry.inputs.matches(plot, context, owner, round)
                 {
+                    #[cfg(test)]
+                    child_cache(owner, "panel", Counter::ChildCacheHit);
                     round.replay_child(&entry.feedback)?;
+                    #[cfg(test)]
+                    child_cache(owner, "panel", Counter::ChildFeedbackReplay);
                     return Ok(FitOutcome::Measured(Arc::clone(&entry.result)));
                 }
             }
         }
+        #[cfg(test)]
+        child_cache(owner, "panel", Counter::ChildCacheMiss);
         #[cfg(test)]
         CHILD_MEASUREMENTS.with(|events| events.borrow_mut().push((owner.clone(), "panel")));
         let checkpoint = round.child_checkpoint();

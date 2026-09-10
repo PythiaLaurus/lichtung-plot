@@ -1359,6 +1359,12 @@ impl PreparedFontEnvironment {
                     core.budget.resources.claim_visits(1)?;
                     #[cfg(test)]
                     FONT_SELECTION_PROBES.with(|calls| calls.set(calls.get() + 1));
+                    #[cfg(test)]
+                    if !is_nonpainting_control(scalar) {
+                        crate::orchestrator::measurements::count(
+                            crate::orchestrator::measurements::Counter::FontUnitProbe,
+                        );
+                    }
                     if !is_nonpainting_control(scalar) && parsed.glyph_index(scalar).is_none() {
                         covered = false;
                         break;
@@ -1813,6 +1819,10 @@ impl CanonicalFontCore {
                             index: face.identity.face_index,
                             reason: error.to_string(),
                         })?;
+                    #[cfg(test)]
+                    crate::orchestrator::measurements::count(
+                        crate::orchestrator::measurements::Counter::FontScalarProbe,
+                    );
                     Ok(parsed.glyph_index(scalar).is_some())
                 },
             )?;
@@ -1962,6 +1972,10 @@ impl CanonicalFontCore {
                             index: face.identity.face_index,
                             reason: error.to_string(),
                         })?;
+                    #[cfg(test)]
+                    crate::orchestrator::measurements::count(
+                        crate::orchestrator::measurements::Counter::FontScalarProbe,
+                    );
                     Ok(parsed.glyph_index(scalar).is_some())
                 },
             )?;

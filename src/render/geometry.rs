@@ -192,6 +192,10 @@ impl GeometryBackend {
             .peekable();
         let mut overlap = 0.0;
         for (index, bounds) in self.bounds.iter().enumerate() {
+            #[cfg(test)]
+            crate::orchestrator::measurements::count(
+                crate::orchestrator::measurements::Counter::GeometryOverlapScan,
+            );
             let placed = if text
                 .peek()
                 .is_some_and(|text| text.bounds_index == Some(index))

@@ -220,5 +220,9 @@ pub(crate) fn measure_plans(
 }
 
 fn rectangles_overlap(left: PanelBox, right: PanelBox) -> bool {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AnnotationOverlapComparison,
+    );
     left.x0 < right.x1 && left.x1 > right.x0 && left.y0 < right.y1 && left.y1 > right.y0
 }

@@ -232,8 +232,15 @@ impl FacetPlan {
                     .map_err(|_| Error::Render("facet guide ordinal overflowed".into()))?;
                 let scope = FitScope::new(&crate::layout::ComponentAddress::root(), ordinal);
                 let guide_scope = FitScope::new(&owner, ordinal);
+                #[cfg(test)]
+                let mut guide_trial = None;
                 let (reserved_outer, mut outside_legend) = if outside {
                     round.claim_guide_trial(&owner, if automatic { 8 } else { 2 }, ordinal)?;
+                    #[cfg(test)]
+                    {
+                        guide_trial =
+                            Some(super::measurements::GuideTrial::new(&owner, edge, compact));
+                    }
                     let horizontal = matches!(
                         edge,
                         LegendPosition::OutsideTopLeft
@@ -267,10 +274,18 @@ impl FacetPlan {
                     )? {
                         FitOutcome::Measured(guide) => guide,
                         FitOutcome::Miss(reason) => {
+                            #[cfg(test)]
+                            if let Some(trial) = &guide_trial {
+                                trial.reject();
+                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                             continue;
                         }
                     };
+                    #[cfg(test)]
+                    if let Some(trial) = &guide_trial {
+                        trial.body();
+                    }
                     match crate::decorations::plan::place_outside_legend(
                         guide,
                         edge,
@@ -280,6 +295,10 @@ impl FacetPlan {
                     )? {
                         FitOutcome::Measured((panel, guide)) => (panel, Some(guide)),
                         FitOutcome::Miss(reason) => {
+                            #[cfg(test)]
+                            if let Some(trial) = &guide_trial {
+                                trial.reject();
+                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                             continue;
                         }
@@ -315,6 +334,10 @@ impl FacetPlan {
                             )? {
                                 FitOutcome::Measured(plan) => lines[index] = plan.lines.len(),
                                 FitOutcome::Miss(reason) => {
+                                    #[cfg(test)]
+                                    if let Some(trial) = &guide_trial {
+                                        trial.reject();
+                                    }
                                     FitFailure::retain_least(&mut first_miss, reason);
                                     continue 'trial;
                                 }
@@ -339,6 +362,10 @@ impl FacetPlan {
                                     "shared facet titles leave insufficient assigned grid space",
                                 ),
                         );
+                        #[cfg(test)]
+                        if let Some(trial) = &guide_trial {
+                            trial.reject();
+                        }
                         continue;
                     }
                 }
@@ -384,6 +411,10 @@ impl FacetPlan {
                     },
                 )?;
                 if let FitOutcome::Miss(reason) = measured {
+                    #[cfg(test)]
+                    if let Some(trial) = &guide_trial {
+                        trial.reject();
+                    }
                     round.record_failure(reason)?;
                     if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
                         FitFailure::retain_least(&mut first_miss, reason);
@@ -403,6 +434,10 @@ impl FacetPlan {
                 )? {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
+                        #[cfg(test)]
+                        if let Some(trial) = &guide_trial {
+                            trial.reject();
+                        }
                         round.record_failure(failure)?;
                         if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, failure);
@@ -410,12 +445,27 @@ impl FacetPlan {
                         continue;
                     }
                 };
+                #[cfg(test)]
+                let guide_outcome;
                 match round.finish_trial(checkpoint) {
                     TrialOutcome::Miss(reason) => {
+                        #[cfg(test)]
+                        if let Some(trial) = &guide_trial {
+                            trial.reject();
+                        }
                         FitFailure::retain_least(&mut first_miss, reason);
                         continue;
                     }
-                    TrialOutcome::Fit | TrialOutcome::Provisional => {}
+                    _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
+                        #[cfg(test)]
+                        #[expect(
+                            clippy::used_underscore_binding,
+                            reason = "outcome is observed only in tests"
+                        )]
+                        {
+                            guide_outcome = _outcome;
+                        }
+                    }
                 }
                 let mut strip_text = Vec::new();
                 crate::render::backend::reserve_text_records(
@@ -446,6 +496,10 @@ impl FacetPlan {
                     shared_axis_origin,
                 };
                 plan.observe_arranged(theme, round)?;
+                #[cfg(test)]
+                if let Some(trial) = &guide_trial {
+                    trial.complete(&guide_outcome);
+                }
                 return Ok(plan);
             }
         }

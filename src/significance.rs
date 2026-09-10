@@ -862,6 +862,10 @@ fn place_lines(
         annotation_ceiling.unwrap_or(panel.y1).min(panel.y1) - metrics.panel_padding;
     let mut lines = Vec::with_capacity(level_maxima.len());
     for (level, maximum) in level_maxima.iter().enumerate() {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::SignificanceLevelCheck,
+        );
         let offset = *maximum - range.0;
         let span = range.1 - range.0;
         if !offset.is_finite() || !span.is_finite() || span <= 0.0 {
@@ -914,6 +918,10 @@ fn expand_upper_limit(
     let mut passing_upper = range.1;
     let mut span = (range.1 - lower).max(f64::EPSILON);
     let passing_lines = loop {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::SignificanceRangeGrowth,
+        );
         passing_upper = passing_upper
             .max(
                 level_maxima
@@ -945,6 +953,10 @@ fn expand_upper_limit(
 
     let mut lines = passing_lines;
     for _ in 0..64 {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::SignificanceBisection,
+        );
         let midpoint = f64::midpoint(failing_upper, passing_upper);
         if let Some(candidate) = place_lines(
             (lower, midpoint),
@@ -990,6 +1002,10 @@ fn fit_data_below_ceiling(
     let mut passing_upper = range.1;
     let mut span = range.1 - range.0;
     loop {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::SignificanceRangeGrowth,
+        );
         passing_upper = passing_upper.max(maximum) + span;
         if !passing_upper.is_finite() {
             return Err(render_error(
@@ -1004,6 +1020,10 @@ fn fit_data_below_ceiling(
     }
     for _ in 0..64 {
         let midpoint = f64::midpoint(failing_upper, passing_upper);
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::SignificanceBisection,
+        );
         if fits(midpoint) {
             passing_upper = midpoint;
         } else {

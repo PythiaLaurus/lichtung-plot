@@ -229,7 +229,7 @@ The approved theme and layout targets follow these rules:
 | T5a3p5 | Evaluate repeated font setup | COMPLETE |
 | T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
 | T5a3p7 | Review speculative line extension | COMPLETE |
-| T5a3q | Local-search benchmark coverage and placement comparisons | IN PROGRESS |
+| T5a3q | Local-search benchmark coverage and placement comparisons | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -3985,7 +3985,7 @@ certifies this follow-up. No push is requested or performed.
 
 ### T5a3q: Local-Search Benchmark Coverage And Placement Comparisons
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: completed T5a3p; user approval of `tests/benchmarks/` and measurement
 of the remaining local choices. This stage measures existing behavior; it does
@@ -4062,15 +4062,47 @@ their deterministic work accurately rather than invent candidate counts.
 
 Commit: `test(perf): cover local search and legend placement costs`.
 
+#### Completion Evidence
+
+The harness now lives in `tests/benchmarks/`, with the nine original no-guide
+controls unchanged and focused legend, annotation, text, and font modules.
+See `docs/local-search-benchmarks.md` for reproduction conditions, measured
+minima/medians/maxima, real search/cache counts, output comparisons, observer
+overhead, and prioritized recommendations. All 10 explicit ignored release
+measurement tests passed. `just verify` passed strict Clippy, 695 library tests
+(17 ignored), 441 integration tests including five unchanged snapshots, API docs,
+and package verification (207 files). All 27 original control hashes match.
+
+Coverage is bounded by the current API, not expanded to manufacture comparisons:
+populated public panel guides cannot reach automatic inside-corner selection,
+so inside fixtures verify fixed-corner clearance and actual geometry/annotation
+comparisons; Canvas exposes no explicit shared-edge selector. End-to-end shared
+fixtures record zero cache hits, with controlled identical-input child tests
+separately proving cache hits and feedback replay. Font observer activation is
+measured, not production zero-hook or whole-render instrumentation overhead.
+The root timer now includes complete feedback rounds, excluding finalization;
+historical root-stage timings are not directly comparable. These limitations
+are reported rather than assigned fabricated counts or new product behavior.
+
+The old baseline source/test paths above describe their historical location.
+For an isolated current baseline process, run:
+
+```sh
+cargo test --release --locked --offline --lib benchmarks::publication_efficiency_measurements -- --ignored --nocapture --test-threads=1
+```
+
+The all-groups command does not make the control's first scatter the process's
+first font environment. T5a4 remains pending; this stage changes no rendering
+algorithm, font policy, public API, snapshot, or deferred-feature decision.
+
 ### T5a4: Root Title-Block Plans
 
 **Status**: PENDING
 
 Dependencies: completed revised T5a1/T5a1r and T5a3 through T5a3f. Their repair
 gate is satisfied by the integrated verification, not merely historical commits.
-The post-T5a3 T5a3p gate is complete. T5a3q's requested benchmark coverage must
-also close before starting. T5a4 remains PENDING; prior closure does not implement
-its scope.
+The post-T5a3 T5a3p and T5a3q gates are complete. T5a4 remains PENDING; prior
+closure does not implement its scope.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.

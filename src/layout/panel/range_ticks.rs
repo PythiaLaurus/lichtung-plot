@@ -168,6 +168,10 @@ fn automatic_numeric_ticks_with_policy(
     let mut metric_count = 0;
 
     for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::TickSource,
+        );
         let positions = nice_ticks(range.0, range.1, target);
         if positions.len() < 2 {
             continue;
@@ -190,6 +194,10 @@ fn automatic_numeric_ticks_with_policy(
             continue;
         }
         let index = candidate_count;
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::TickDistinctList,
+        );
         candidates[index] = ticks;
         candidate_count += 1;
         let ticks = &candidates[index];
@@ -200,6 +208,10 @@ fn automatic_numeric_ticks_with_policy(
             {
                 return Ok(*dimensions);
             }
+            #[cfg(test)]
+            crate::orchestrator::measurements::count(
+                crate::orchestrator::measurements::Counter::TickMetricLookup,
+            );
             let dimensions = tick_text_size(theme, label, legacy)?;
             metrics[metric_count] = (index, tick_index, dimensions);
             metric_count += 1;

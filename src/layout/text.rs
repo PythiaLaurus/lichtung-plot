@@ -1146,6 +1146,9 @@ fn select_line(
         TEXT_WORK.with(|work| {
             work.update(|mut work| {
                 work.proposal_visits += 1;
+                crate::orchestrator::measurements::count(
+                    crate::orchestrator::measurements::Counter::TextProposalVisit,
+                );
                 work
             });
         });
@@ -1226,6 +1229,9 @@ fn exact_line_width(
     TEXT_WORK.with(|work| {
         work.update(|mut work| {
             work.exact_trials += 1;
+            crate::orchestrator::measurements::count(
+                crate::orchestrator::measurements::Counter::TextExactTrial,
+            );
             work
         });
     });

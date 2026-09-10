@@ -1366,6 +1366,10 @@ impl Canvas {
                         .map_err(|_| Error::Render("Canvas guide ordinal overflowed".into()))?,
                 )?;
                 let checkpoint = round.begin_trial()?;
+                #[cfg(test)]
+                let guide_trial = prepared.shared_legend.as_ref().map(|_| {
+                    crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact)
+                });
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
                 let outcome = self.build_canvas_attempt(
@@ -1378,12 +1382,30 @@ impl Canvas {
                 )?;
                 match outcome {
                     FitOutcome::Measured(plan) => match round.finish_trial(checkpoint) {
-                        TrialOutcome::Fit | TrialOutcome::Provisional => return Ok(plan),
+                        _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
+                            #[cfg(test)]
+                            #[expect(
+                                clippy::used_underscore_binding,
+                                reason = "outcome is observed only in tests"
+                            )]
+                            if let Some(trial) = &guide_trial {
+                                trial.complete(&_outcome);
+                            }
+                            return Ok(plan);
+                        }
                         TrialOutcome::Miss(reason) => {
+                            #[cfg(test)]
+                            if let Some(trial) = &guide_trial {
+                                trial.reject();
+                            }
                             FitFailure::retain_least(&mut first_miss, reason);
                         }
                     },
                     FitOutcome::Miss(reason) => {
+                        #[cfg(test)]
+                        if let Some(trial) = &guide_trial {
+                            trial.reject();
+                        }
                         round.record_failure(reason)?;
                         if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
                             FitFailure::retain_least(&mut first_miss, reason);
@@ -1540,6 +1562,8 @@ impl Canvas {
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
             let w = legend.compute_box_width();
+            #[cfg(test)]
+            crate::orchestrator::measurements::guide_body();
             let h = legend.compute_box_height();
             let (left, bottom) = match edge {
                 crate::LegendPosition::OutsideRight => {

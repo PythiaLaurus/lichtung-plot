@@ -1189,6 +1189,10 @@ fn fitted_label(theme: &ResolvedTheme, label: &str, maximum_width: f64) -> Resul
         let mut candidate = fitted.clone();
         candidate.push_str(grapheme);
         candidate.push_str(ELLIPSIS);
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::HeatmapPrefixTrial,
+        );
         if text_width(&candidate)? > maximum_width {
             break;
         }

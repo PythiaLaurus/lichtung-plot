@@ -127,6 +127,10 @@ pub(crate) fn render(
     let label_line_height = theme.typography.axis_title.line_height();
     let mut resolved_layout = None;
     for _ in 0..8 {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::MatrixLayoutPass,
+        );
         let column_blocks = display_cols
             .iter()
             .map(|label| {

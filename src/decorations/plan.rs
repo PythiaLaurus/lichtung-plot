@@ -246,6 +246,9 @@ pub(crate) fn plan_panel_with_context(
                 u32::try_from(edge_index * 2 + usize::from(compact))
                     .map_err(|_| Error::Render("guide attempt ordinal overflowed".into()))?,
             );
+            #[cfg(test)]
+            let guide_trial =
+                crate::orchestrator::measurements::GuideTrial::new(address, edge, compact);
             let mut guide_scope =
                 scope.child(crate::decorations::legend::address_role(position), 0)?;
             guide_scope.ordinal = scope.ordinal;
@@ -284,10 +287,14 @@ pub(crate) fn plan_panel_with_context(
                 FitOutcome::Measured(guide) => guide,
                 FitOutcome::Miss(reason) => {
                     FitFailure::retain_least(&mut first_miss, reason);
+                    #[cfg(test)]
+                    guide_trial.reject();
                     continue;
                 }
             };
             let requirements = frame_requirements(Some(&guide), edge);
+            #[cfg(test)]
+            guide_trial.body();
             let mut assigned_gutters = gutters;
             for (gutter, reserve) in assigned_gutters.iter_mut().zip(ink) {
                 *gutter += reserve;
@@ -296,6 +303,8 @@ pub(crate) fn plan_panel_with_context(
                 FitOutcome::Measured(panel) => panel,
                 FitOutcome::Miss(reason) => {
                     FitFailure::retain_least(&mut first_miss, reason);
+                    #[cfg(test)]
+                    guide_trial.reject();
                     continue;
                 }
             };
@@ -308,6 +317,8 @@ pub(crate) fn plan_panel_with_context(
                 &scope,
             )? {
                 FitFailure::retain_least(&mut first_miss, reason);
+                #[cfg(test)]
+                guide_trial.reject();
                 continue;
             }
             let checkpoint = round.begin_trial()?;
@@ -328,6 +339,8 @@ pub(crate) fn plan_panel_with_context(
             let plan = match outcome {
                 FitOutcome::Measured(plan) => plan,
                 FitOutcome::Miss(failure) => {
+                    #[cfg(test)]
+                    guide_trial.reject();
                     round.record_failure(failure)?;
                     if let TrialOutcome::Miss(failure) = round.finish_trial(checkpoint) {
                         FitFailure::retain_least(&mut first_miss, failure);
@@ -336,10 +349,18 @@ pub(crate) fn plan_panel_with_context(
                 }
             };
             match round.finish_trial(checkpoint) {
-                TrialOutcome::Fit | TrialOutcome::Provisional => {
-                    return Ok(FitOutcome::Measured(plan))
+                _outcome @ (TrialOutcome::Fit | TrialOutcome::Provisional) => {
+                    #[cfg(test)]
+                    #[expect(
+                        clippy::used_underscore_binding,
+                        reason = "outcome is observed only in tests"
+                    )]
+                    guide_trial.complete(&_outcome);
+                    return Ok(FitOutcome::Measured(plan));
                 }
                 TrialOutcome::Miss(reason) => {
+                    #[cfg(test)]
+                    guide_trial.reject();
                     FitFailure::retain_least(&mut first_miss, reason);
                 }
             }
@@ -370,6 +391,10 @@ pub(crate) fn check_assigned_body(
     scope: &FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
     use crate::layout::fit::{self, FitOutcome};
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::GuideBodyCheck,
+    );
     let old = discovered.layout.projection.panel_box();
     let width = assigned.width() - (cell.width() - old.width());
     let height = assigned.height() - (cell.height() - old.height());
@@ -917,6 +942,10 @@ fn plan_panel_attempt(
             let candidates = legend.legend.inside_candidates(next_axes.as_tuple());
             let preferred = auto_candidate_index.expect("automatic preferred attempt");
             for offset in 0..candidates.len() {
+                #[cfg(test)]
+                crate::orchestrator::measurements::count(
+                    crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+                );
                 let bounds = candidates[(preferred + offset) % candidates.len()];
                 if legend_fits_panel(bounds, next_axes)
                     && annotations
@@ -948,6 +977,10 @@ fn plan_panel_attempt(
         if is_outside(position) {
             if let Some(chrome) = &chrome {
                 for ink in chrome.bounds() {
+                    #[cfg(test)]
+                    crate::orchestrator::measurements::count(
+                        crate::orchestrator::measurements::Counter::GeometryOverlapScan,
+                    );
                     let overlaps =
                         |left: f64, right: f64, bottom: f64, top: f64, guide: LegendBox| {
                             left < guide.right
@@ -1327,6 +1360,10 @@ fn top_right_clearance(
         .enumerate()
         .skip(current_candidate)
     {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+        );
         if crate::decorations::panel_text::conflicting_legend_corner(
             plot,
             &result.layout,
@@ -1401,6 +1438,10 @@ fn lowest_overlap_clearance(
 
     let mut best = None;
     for (candidate_index, bounds) in candidates.into_iter().enumerate() {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+        );
         if !legend_fits_panel(bounds, result.layout.projection.panel_box())
             || crate::decorations::panel_text::conflicting_legend_corner(
                 plot,
@@ -1554,6 +1595,10 @@ fn overlap_score_within_panel(
     geometry
         .iter()
         .filter_map(|bounds| {
+            #[cfg(test)]
+            crate::orchestrator::measurements::count(
+                crate::orchestrator::measurements::Counter::GeometryOverlapScan,
+            );
             let clipped = crate::render::geometry::GeometryBox {
                 left: bounds.left.max(panel.x0),
                 right: bounds.right.min(panel.x1),
@@ -1677,6 +1722,10 @@ fn auto_candidate_avoiding_panel_text(
         crate::decorations::panel_text::measure_plans(plot, &result.layout, theme, scope)?;
     let candidates = legend.inside_candidates(panel.as_tuple());
     for offset in 0..candidates.len() {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+        );
         let index = (preferred + offset) % candidates.len();
         if annotations
             .iter()
@@ -1759,6 +1808,15 @@ fn initial_auto_candidate(
                 .iter()
                 .enumerate()
                 .min_by(|(_, left), (_, right)| {
+                    #[cfg(test)]
+                    {
+                        crate::orchestrator::measurements::count(
+                            crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+                        );
+                        crate::orchestrator::measurements::count(
+                            crate::orchestrator::measurements::Counter::InsideLegendCandidate,
+                        );
+                    }
                     overlap_score_within_panel(**left, geometry, margin, panel).total_cmp(
                         &overlap_score_within_panel(**right, geometry, margin, panel),
                     )
