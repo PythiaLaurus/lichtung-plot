@@ -75,6 +75,15 @@ outside this crate.
 
 ## Development
 
+Font and text processing share one cumulative root limit of 1,000,000 actual
+processing visits. Record and byte admission are independent: copying or hashing
+key bytes does not carry a synthetic processing price. Searches through variable
+candidate, guide-owner, and retained-face lists still admit each examined entry
+before comparison, including the terminating match. See
+[resource admission and release evidence](docs/resource-admission.md) for the
+numeric contract, refusal behavior, 2,048-word workload, and nine-case output and
+timing comparison. Counters are not CPU time or resident memory measurements.
+
 The repository pins its Rust toolchain and tracks `Cargo.lock`. Run the complete
 read-only verification before committing:
 

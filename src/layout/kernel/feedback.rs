@@ -140,7 +140,20 @@ fn number(value: f64) -> Result<u64, Error> {
     Ok(if value == 0.0 { 0 } else { value.to_bits() })
 }
 
-fn reserve<T>(values: &mut Vec<T>, count: usize) -> Result<(), Error> {
+fn reserve<T>(
+    resources: &crate::font::canonical::OperationGenerationResources,
+    values: &mut Vec<T>,
+    count: usize,
+) -> Result<(), Error> {
+    if count > values.capacity() - values.len() {
+        let bytes = values
+            .len()
+            .checked_add(count)
+            .and_then(|capacity| capacity.checked_mul(std::mem::size_of::<T>()))
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("feedback storage overflow".into()))?;
+        resources.claim_bytes(bytes).map_err(claim_error)?;
+    }
     values
         .try_reserve_exact(count)
         .map_err(|error| Error::Render(format!("layout feedback allocation failed: {error}")))
@@ -157,11 +170,8 @@ fn copy_address(
     resources
         .claim_slots(address.descendants.len() as u128)
         .map_err(claim_error)?;
-    resources
-        .claim_work(address.descendants.len() as u128)
-        .map_err(claim_error)?;
     let mut descendants = Vec::new();
-    reserve(&mut descendants, address.descendants.len())?;
+    reserve(resources, &mut descendants, address.descendants.len())?;
     descendants.extend_from_slice(&address.descendants);
     Ok(ComponentAddress {
         root: address.root,
@@ -180,7 +190,7 @@ impl FeedbackRound {
                 && entry.value != FeedbackValue::Insets([0; 4])
             {
                 self.resources.claim_slots(1).map_err(claim_error)?;
-                reserve(&mut entries, 1)?;
+                reserve(&self.resources, &mut entries, 1)?;
                 entries.push(FeedbackEntry {
                     target: copy_address(&self.resources, &entry.target)?,
                     kind: entry.kind,
@@ -264,9 +274,21 @@ impl FeedbackRound {
                     - start.3) as u128,
             )
             .map_err(claim_error)?;
-        reserve(&mut observations, self.state.observations.len() - start.0)?;
-        reserve(&mut requests, self.state.requests.len() - start.1)?;
-        reserve(&mut guide_events, self.guide_events.len() - start.3)?;
+        reserve(
+            &self.resources,
+            &mut observations,
+            self.state.observations.len() - start.0,
+        )?;
+        reserve(
+            &self.resources,
+            &mut requests,
+            self.state.requests.len() - start.1,
+        )?;
+        reserve(
+            &self.resources,
+            &mut guide_events,
+            self.guide_events.len() - start.3,
+        )?;
         observations.extend(self.state.observations[start.0..].iter().cloned());
         requests.extend(self.state.requests[start.1..].iter().cloned());
         for (owner, maximum, ordinal) in &self.guide_events[start.3..] {
@@ -304,11 +326,14 @@ impl FeedbackRound {
         Ok(())
     }
 
-    pub(crate) fn attempt_ordinal(&self, address: &ComponentAddress) -> u32 {
-        self.guide_trials
-            .iter()
-            .find(|(owner, _, _)| owner == address)
-            .map_or(0, |(_, _, ordinal)| *ordinal)
+    pub(crate) fn attempt_ordinal(&self, address: &ComponentAddress) -> Result<u32, Error> {
+        for (owner, _, ordinal) in &self.guide_trials {
+            self.resources.claim_visits(1).map_err(claim_error)?;
+            if owner == address {
+                return Ok(*ordinal);
+            }
+        }
+        Ok(0)
     }
     pub(crate) fn claim_guide_trial(
         &mut self,
@@ -316,12 +341,15 @@ impl FeedbackRound {
         maximum: u8,
         ordinal: u32,
     ) -> Result<(), Error> {
-        self.resources.claim_work(1).map_err(claim_error)?;
-        if let Some((_, used, current)) = self
-            .guide_trials
-            .iter_mut()
-            .find(|(address, _, _)| address == owner)
-        {
+        let mut found = None;
+        for entry in &mut self.guide_trials {
+            self.resources.claim_visits(1).map_err(claim_error)?;
+            if entry.0 == *owner {
+                found = Some(entry);
+                break;
+            }
+        }
+        if let Some((_, used, current)) = found {
             if *used >= maximum {
                 return Err(Error::Render(format!("guide planning limit of {maximum} edge/flow trials per owner per root round exceeded")));
             }
@@ -329,12 +357,12 @@ impl FeedbackRound {
             *current = ordinal;
         } else {
             self.resources.claim_slots(1).map_err(claim_error)?;
-            reserve(&mut self.guide_trials, 1)?;
+            reserve(&self.resources, &mut self.guide_trials, 1)?;
             self.guide_trials
                 .push((copy_address(&self.resources, owner)?, 1, ordinal));
         }
         self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&mut self.guide_events, 1)?;
+        reserve(&self.resources, &mut self.guide_events, 1)?;
         self.guide_events
             .push((copy_address(&self.resources, owner)?, maximum, ordinal));
         Ok(())
@@ -345,7 +373,7 @@ impl FeedbackRound {
         self.resources
             .claim_slots(self.state.next.len() as u128)
             .map_err(claim_error)?;
-        reserve(&mut next, self.state.next.len())?;
+        reserve(&self.resources, &mut next, self.state.next.len())?;
         for entry in &self.state.next {
             next.push(FeedbackEntry {
                 target: copy_address(&self.resources, &entry.target)?,
@@ -414,8 +442,8 @@ impl FeedbackRound {
             resources
                 .claim_slots((previous.next.len() as u128) * 2)
                 .map_err(claim_error)?;
-            reserve(&mut consumed, previous.next.len())?;
-            reserve(&mut next, previous.next.len())?;
+            reserve(&resources, &mut consumed, previous.next.len())?;
+            reserve(&resources, &mut next, previous.next.len())?;
             for entry in &previous.next {
                 consumed.push(FeedbackEntry {
                     target: copy_address(&resources, &entry.target)?,
@@ -445,7 +473,6 @@ impl FeedbackRound {
     }
 
     pub(crate) fn begin_owner(&mut self, address: &ComponentAddress) -> Result<(), Error> {
-        self.resources.claim_work(1).map_err(claim_error)?;
         self.admit_observation()?;
         let address = copy_address(&self.resources, address)?;
         self.state
@@ -464,8 +491,10 @@ impl FeedbackRound {
 
     fn admit_observation(&mut self) -> Result<(), Error> {
         self.resources.claim_slots(1).map_err(claim_error)?;
-        self.resources.claim_work(1).map_err(claim_error)?;
-        reserve(&mut self.state.observations, 1)?;
+        self.resources
+            .claim_bytes(std::mem::size_of::<Observation>() as u64)
+            .map_err(claim_error)?;
+        reserve(&self.resources, &mut self.state.observations, 1)?;
         Ok(())
     }
 
@@ -571,7 +600,7 @@ impl FeedbackRound {
 
     pub(crate) fn observe_string(&mut self, value: &str) -> Result<(), Error> {
         self.resources
-            .claim_work(value.len() as u128)
+            .claim_bytes(u64::try_from(value.len()).map_err(claim_error)?)
             .map_err(claim_error)?;
         self.admit_observation()?;
         let mut text = String::new();
@@ -792,7 +821,7 @@ impl FeedbackRound {
             ));
         }
         self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&mut self.state.requests, 1)?;
+        reserve(&self.resources, &mut self.state.requests, 1)?;
         let id = FeedbackRequestId {
             index: self.state.requests.len(),
             round: self.ordinal,
@@ -831,7 +860,7 @@ impl FeedbackRound {
             entry.value = value;
         } else {
             self.resources.claim_slots(1).map_err(claim_error)?;
-            reserve(&mut self.state.next, 1)?;
+            reserve(&self.resources, &mut self.state.next, 1)?;
             self.state.next.push(FeedbackEntry {
                 target: copy_address(&self.resources, target)?,
                 kind,
@@ -852,11 +881,11 @@ impl FeedbackRound {
             .claim_slots(1 + requests.len() as u128)
             .map_err(claim_error)?;
         self.resources
-            .claim_work(requests.len() as u128)
+            .claim_visits(requests.len() as u128)
             .map_err(claim_error)?;
-        reserve(&mut self.state.misses, 1)?;
+        reserve(&self.resources, &mut self.state.misses, 1)?;
         let mut feedback = Vec::new();
-        reserve(&mut feedback, requests.len())?;
+        reserve(&self.resources, &mut feedback, requests.len())?;
         for id in requests.iter().flatten() {
             let request = self
                 .state
@@ -873,11 +902,7 @@ impl FeedbackRound {
             }
             feedback.push(std::sync::Arc::clone(request));
         }
-        let ordinal = self
-            .guide_trials
-            .iter()
-            .find(|(owner, _, _)| owner == address)
-            .map_or(0, |(_, _, ordinal)| *ordinal);
+        let ordinal = self.attempt_ordinal(address)?;
         self.state.misses.push(FitMiss {
             failure: FitFailure {
                 reason: FitReason {
@@ -894,7 +919,7 @@ impl FeedbackRound {
 
     pub(crate) fn record_failure(&mut self, failure: FitFailure) -> Result<(), Error> {
         self.resources.claim_slots(1).map_err(claim_error)?;
-        reserve(&mut self.state.misses, 1)?;
+        reserve(&self.resources, &mut self.state.misses, 1)?;
         self.state.misses.push(FitMiss {
             failure,
             feedback: Vec::new(),
@@ -904,7 +929,7 @@ impl FeedbackRound {
 
     pub(super) fn finish(mut self) -> Result<RoundState, Error> {
         self.resources
-            .claim_work((self.state.next.len() + self.state.misses.len()) as u128)
+            .claim_visits((self.state.next.len() + self.state.misses.len()) as u128)
             .map_err(claim_error)?;
         self.state
             .next
@@ -1024,6 +1049,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn guide_lookups_charge_examined_entries_and_refuse_before_mutation() {
+        let owners = [0, 1, 2, 3].map(|slot| {
+            ComponentAddress::root()
+                .child(super::super::AddressRole::CanvasCell, slot)
+                .unwrap()
+        });
+        for target in [0, 2, 3] {
+            let examined = (target + 1).min(3) as u128;
+            for remaining in [0, examined - 1, examined] {
+                let resources = crate::font::canonical::OperationGenerationResources::new();
+                let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+                for (index, owner) in owners[..3].iter().enumerate() {
+                    let before = resources.usage().unwrap().1;
+                    round.claim_guide_trial(owner, 8, 0).unwrap();
+                    assert_eq!(resources.usage().unwrap().1 - before, index as u128);
+                }
+                let before = resources.usage().unwrap().1;
+                assert_eq!(round.attempt_ordinal(&owners[target]).unwrap(), 0);
+                assert_eq!(resources.usage().unwrap().1 - before, examined);
+                resources
+                    .claim_visits(1_000_000 - resources.usage().unwrap().1 - remaining)
+                    .unwrap();
+                let records = resources.usage().unwrap().0;
+                let trials = round.guide_trials.clone();
+                let events = round.guide_events.clone();
+                let capacities = (round.guide_trials.capacity(), round.guide_events.capacity());
+                let result = round.claim_guide_trial(&owners[target], 8, 1);
+                if remaining == examined {
+                    result.unwrap();
+                } else {
+                    assert!(result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("root processing visits"));
+                    assert_eq!(round.guide_trials, trials);
+                    assert_eq!(round.guide_events, events);
+                    assert_eq!(resources.usage().unwrap().0, records);
+                    assert_eq!(
+                        (round.guide_trials.capacity(), round.guide_events.capacity()),
+                        capacities
+                    );
+                }
+                assert_eq!(resources.usage().unwrap().1, 1_000_000);
+                assert!(round
+                    .attempt_ordinal(&owners[0])
+                    .unwrap_err()
+                    .to_string()
+                    .contains("root processing visits"));
+            }
+        }
+    }
+
+    #[test]
     fn child_replay_retains_exact_observations_but_reissues_current_round_requests() {
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let owner = ComponentAddress::root()
@@ -1056,7 +1134,7 @@ mod tests {
             &state.observations[0],
             &replay.state.observations[0]
         ));
-        assert_eq!(replay.attempt_ordinal(&owner), 1);
+        assert_eq!(replay.attempt_ordinal(&owner).unwrap(), 1);
         assert!(replay
             .claim_guide_trial(&owner, 2, 2)
             .unwrap_err()

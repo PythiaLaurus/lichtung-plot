@@ -256,9 +256,6 @@ pub(crate) fn render(
         .claim_text_generation_slots(cache_records as u128)
         .map_err(|error| Error::Render(format!("matrix tick cache: {error:?}")))?;
     environment
-        .claim_text_generation_work(cache_records as u128)
-        .map_err(|error| Error::Render(format!("matrix tick cache: {error:?}")))?;
-    environment
         .claim_unicode_bytes(
             u64::try_from(cache_bytes)
                 .map_err(|_| Error::Render("matrix tick cache bytes overflow".into()))?,
@@ -541,15 +538,12 @@ fn matrix_ticks<'a>(
 ) -> Result<&'a [layout::AxisTick], Error> {
     let environment = theme.prepared_font_environment()?;
     environment
-        .claim_text_generation_work(1)
+        .claim_processing_visits(1)
         .map_err(|error| Error::Render(format!("matrix tick lookup: {error:?}")))?;
     if cached.is_none() {
         let ticks = layout::automatic_numeric_ticks_legacy(range, projection, side, theme)?;
         environment
             .claim_text_generation_slots(ticks.len() as u128)
-            .map_err(|error| Error::Render(format!("matrix tick retention: {error:?}")))?;
-        environment
-            .claim_text_generation_work(ticks.len() as u128)
             .map_err(|error| Error::Render(format!("matrix tick retention: {error:?}")))?;
         let bytes = ticks.iter().try_fold(
             ticks
@@ -583,9 +577,6 @@ fn copy_ticks(
     environment
         .claim_text_generation_slots(ticks.len() as u128)
         .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
-    environment
-        .claim_text_generation_work(ticks.len() as u128)
-        .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
     let text_bytes = ticks.iter().try_fold(0_usize, |bytes, tick| {
         bytes
             .checked_add(tick.label.len())
@@ -596,9 +587,6 @@ fn copy_ticks(
         .checked_mul(size_of::<layout::AxisTick>())
         .and_then(|bytes| bytes.checked_add(text_bytes))
         .ok_or_else(|| Error::Render("matrix outer tick bytes overflow".into()))?;
-    environment
-        .claim_text_generation_work(ticks.len() as u128 + text_bytes as u128)
-        .map_err(|error| Error::Render(format!("matrix outer ticks: {error:?}")))?;
     environment
         .claim_unicode_bytes(
             u64::try_from(bytes)
@@ -624,10 +612,8 @@ fn copy_ticks(
 fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
     let theme = crate::Theme::Publication.resolve();
     let environment = theme.prepared_font_environment().unwrap();
-    let resources = crate::font::canonical::OperationGenerationResources::new();
-    environment
-        .share_generation_resources(resources.clone())
-        .unwrap();
+    let resources = environment.generation_resources();
+    environment.share_generation_resources(&resources).unwrap();
     let range = (0.0, 10.0);
     let original = layout::Projection::new(range, range, (10.25, 210.75, 20.25, 220.75));
     for (side, translated) in [

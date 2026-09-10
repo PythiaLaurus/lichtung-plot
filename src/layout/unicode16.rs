@@ -93,11 +93,9 @@ pub(super) fn linebreaks(
     claim: &mut impl FnMut(u64, u64) -> Result<(), TextPlanError>,
 ) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError> {
     u32::try_from(value.len()).map_err(|_| TextPlanError::Arithmetic("Unicode input length"))?;
-    claim(0, value.len() as u64)?;
+    claim(0, value.chars().count() as u64)?;
     let mut scalars: Vec<Scalar> = Vec::new();
     for (offset, scalar) in value.char_indices() {
-        // Bounds all table comparisons and LB1/LB9/LB10 processing.
-        claim(0, 64)?;
         let codepoint = scalar as u32;
         let original = line_break_class(codepoint);
         let class = match original {
@@ -149,8 +147,8 @@ pub(super) fn linebreaks(
     let mut non_space = None;
     let mut numeric = false;
     let mut odd_regional_run = false;
+    claim(0, scalars.len() as u64)?;
     for (index, scalar) in scalars.iter_mut().enumerate() {
-        claim(0, 8)?;
         if scalar.class != Class::SP {
             non_space = Some(index);
         }
@@ -163,16 +161,13 @@ pub(super) fn linebreaks(
     }
 
     let mut breaks = Vec::new();
+    claim(0, scalars.len().saturating_sub(1) as u64)?;
     for boundary in 1..scalars.len() {
-        // Contexts are O(1); 256 bounds the primitive class/property
-        // comparisons in the entire rule cascade, including lookahead.
-        claim(0, 256)?;
         if let Some(opportunity) = opportunity_at(&scalars, boundary) {
             reserve(&mut breaks, 1, claim)?;
             breaks.push((scalars[boundary].offset, opportunity));
         }
     }
-    claim(0, 1)?;
     reserve(&mut breaks, 1, claim)?;
     breaks.push((value.len(), BreakOpportunity::Mandatory));
     Ok(breaks)
@@ -200,7 +195,7 @@ pub(super) fn reserve<T>(
             .ok_or(TextPlanError::Arithmetic("Unicode vector bytes"))?;
         claim(
             u64::try_from(bytes).map_err(|_| TextPlanError::Arithmetic("Unicode vector bytes"))?,
-            values.len() as u64,
+            0,
         )?;
         values
             .try_reserve_exact(target - values.len())
@@ -214,7 +209,7 @@ fn breaks_for_test(value: &str) -> Vec<(usize, BreakOpportunity)> {
     let resources = crate::font::canonical::OperationFontResources::new();
     linebreaks(value, &mut |bytes, work| {
         resources.claim_bytes(bytes)?;
-        resources.claim_work(work)?;
+        resources.claim_visits(work)?;
         Ok(())
     })
     .unwrap()

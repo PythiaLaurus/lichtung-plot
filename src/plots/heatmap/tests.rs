@@ -75,7 +75,7 @@ fn census_stops_on_first_admission_refusal_without_formatting_later_values() {
         320,
         240,
         |stage| {
-            stage.font_resources().claim_work(1_000_000).unwrap();
+            stage.font_resources().claim_visits(1_000_000).unwrap();
             let mut visits = 0;
             let result = text_census(&source, source.data(), |source| {
                 visits += 1;
@@ -86,7 +86,10 @@ fn census_stops_on_first_admission_refusal_without_formatting_later_values() {
                     .map(|_| ())
                     .map_err(|error| Error::Render(error.to_string()))
             });
-            assert!(result.unwrap_err().to_string().contains("logical work"));
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("root processing visits"));
             assert_eq!(visits, 1);
             assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
             Ok(())

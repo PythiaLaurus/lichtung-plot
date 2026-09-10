@@ -223,20 +223,19 @@ fn preparation_retains_shared_font_and_generation_resources_and_topology_limit()
         .to_string()
         .contains("limit of 1000000"));
     let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
-    environment
-        .share_generation_resources(stage.generation_resources())
-        .unwrap();
+    assert!(environment
+        .share_generation_resources(&stage.generation_resources())
+        .is_err());
     let shared = stage.generation_resources();
-    environment
-        .claim_text_generation_slots(TOPOLOGY_SLOT_LIMIT - 1)
-        .unwrap();
+    let font = stage.font_resources();
+    let clone = font.generation_resources();
+    clone.claim_slots(TOPOLOGY_SLOT_LIMIT - 1).unwrap();
     shared.claim_slots(1).unwrap();
-    assert!(environment.claim_text_generation_slots(1).is_err());
-    environment
-        .claim_text_generation_work(TOPOLOGY_SLOT_LIMIT - 1)
+    assert!(clone.claim_slots(1).is_err());
+    font.claim_visits(u64::try_from(TOPOLOGY_SLOT_LIMIT - 1).unwrap())
         .unwrap();
-    shared.claim_work(1).unwrap();
-    assert!(environment.claim_text_generation_work(1).is_err());
+    shared.claim_visits(1).unwrap();
+    assert!(font.claim_visits(1).is_err());
 }
 
 #[test]

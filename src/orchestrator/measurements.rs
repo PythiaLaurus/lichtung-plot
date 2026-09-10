@@ -18,6 +18,10 @@ pub(crate) struct Observations {
     pub times: [Duration; 8],
     pub calls: [usize; 8],
     pub producers: usize,
+    pub records: u128,
+    pub visits: u128,
+    pub bytes: u128,
+    resources: Vec<crate::font::canonical::OperationFontResources>,
 }
 
 thread_local! {
@@ -29,7 +33,22 @@ pub(crate) fn start() {
 }
 
 pub(crate) fn finish() -> Observations {
-    ACTIVE.with(|active| active.borrow_mut().take().unwrap())
+    let mut observation = ACTIVE.with(|active| active.borrow_mut().take().unwrap());
+    for resources in observation.resources.drain(..) {
+        let usage = resources.usage().unwrap();
+        observation.records += resources.generation_resources().usage().unwrap().0;
+        observation.visits += usage.processing_visits;
+        observation.bytes += usage.font_bytes;
+    }
+    observation
+}
+
+pub(crate) fn resources(resources: crate::font::canonical::OperationFontResources) {
+    ACTIVE.with(|active| {
+        if let Some(observation) = active.borrow_mut().as_mut() {
+            observation.resources.push(resources);
+        }
+    });
 }
 
 pub(crate) fn producer() {

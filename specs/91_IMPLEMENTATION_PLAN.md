@@ -220,13 +220,13 @@ The approved theme and layout targets follow these rules:
 | T5a3d | Resource and lifecycle closure | COMPLETE |
 | T5a3e | Producer and SVG/PNG regressions | COMPLETE |
 | T5a3f | Independent closure and performance evidence | COMPLETE |
-| T5a3p | Post-T5a3 repository hygiene and publication efficiency | IN PROGRESS |
+| T5a3p | Post-T5a3 repository hygiene and publication efficiency | COMPLETE |
 | T5a3p0 | Follow-up behavior review and selected-work admission | COMPLETE |
 | T5a3p1 | Remove full Unicode corpora from unpublished history | COMPLETE |
 | T5a3p2 | Avoid unchanged root and child measurement | COMPLETE |
 | T5a3p3 | Capture producers once | COMPLETE |
-| T5a3p4 | Simplify resource admission accounting | PENDING |
-| T5a3p5 | Evaluate repeated font setup | IN PROGRESS |
+| T5a3p4 | Simplify resource admission accounting | COMPLETE |
+| T5a3p5 | Evaluate repeated font setup | COMPLETE |
 | T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
 | T5a3p7 | Review speculative line extension | COMPLETE |
 | T5a4 | Root title-block plans | PENDING |
@@ -3502,7 +3502,7 @@ Original intended title: `test(layout): close typography repair and scaling evid
 
 ### T5a3p: Post-T5a3 Repository Hygiene And Publication Efficiency
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: completed T5a3; T5a3p0 records the user's follow-up decisions.
 
@@ -3515,8 +3515,15 @@ fonts, shrink text, drop labels, or overwrite exact caller dimensions to save wo
 
 The user accepted PF1-PF7 below, including full-corpus history removal and the
 external-data test workflow. `05_LAYOUT_SYSTEM.md` records the minimal accepted
-policy amendments; approval is not runtime completion. P1 tests/history work and
-p5 evaluation are in progress; p2/p3/p4/p6 runtime implementation remains pending.
+policy amendments; approval is not runtime completion. P1 is complete; PF2/PF3
+are committed in `5c0acdf`, PF6 in `23db99f`. PF4 implementation, primary integrated
+verification, independent recheck, and final comparison review are complete. PF5
+is complete as evaluation/reporting with existing font freshness retained; PF7's
+KEEP disposition is complete. All p0-p7 technical and disposition gates are
+satisfied. T5a4 and later phases remain PENDING and have not started.
+The primary's PF4 closure commit is not yet assigned an ID; intended subject:
+`refactor(layout): use coarse shared processing admission`. This completion record
+does not claim that commit has already occurred or authorize successor work/push.
 This documentation revision performs no tests, compilation, history rewrite,
 runtime change, benchmark, Git commit, or push.
 
@@ -3532,12 +3539,12 @@ a push or force-push.
 
 | ID / stage | Baseline behavior and example | Accepted outcome | Agreement |
 | --- | --- | --- | --- |
-| PF1 / p1 | Six full upstream test corpora occupy 639,054 lines / 16,821,506 bytes and remain in branch history after forward deletion | External official hash-verified data for explicitly invoked ignored full-conformance tests; focused default tests and small provenance/license records. Remove full corpora from ancestry/packages while preserving all later code | ACCEPTED; tests/history IN PROGRESS |
-| PF2 / p2 | Stable valid scatter still requires a second root measurement | Stop at unchanged effective feedback with no misses and a complete validated immutable plan; dirty dependency reuse, not a cache-purity assumption | ACCEPTED; runtime PENDING |
-| PF3 / p3 | Producer runs once to count and again to retain commands | Single capture with admitted incremental fallible growth during planning; count frozen commands and reserve final canonical storage before Null | ACCEPTED; runtime PENDING |
-| PF4 / p4 | Caption charges 223,501 synthetic units, including 137,504 fixed Unicode allowances | Coarse resource counters and reasonable evidence-justified limits; exact replacement table/units documented for approval before code, not invented here | ACCEPTED policy; runtime PENDING |
-| PF5 / p5 | Separate roots repeat font setup; about 0.6 seconds was a debug observation | Release evaluation and before/after report, no global font cache | ACCEPTED; evaluation IN PROGRESS |
-| PF6 / p6 | Duplicate automatic lists/label queries under greatest-count selection | Deduplication ONLY, preserving the exact selected tick list and label bytes; no first-fit change | ACCEPTED; runtime PENDING |
+| PF1 / p1 | Prior full upstream corpora occupied 639,054 lines / 16,821,506 bytes; forward deletion alone retained ancestry | External official hash-verified data for explicitly invoked ignored full-conformance tests; focused default tests and small provenance/license records. Remove full corpora from ancestry/packages while preserving all later code | COMPLETE; per-stage cleanup evidence below |
+| PF2 / p2 | Prior stable scatter required a second root measurement | Stop at unchanged effective feedback with no misses and a complete validated immutable plan; dirty dependency reuse, not a cache-purity assumption | COMPLETE; `5c0acdf` |
+| PF3 / p3 | Prior producer ran once to count and again to retain commands | Single capture with admitted incremental fallible growth during planning; count frozen commands and reserve final canonical storage before Null | COMPLETE; `5c0acdf` |
+| PF4 / p4 | Prior caption charged 223,501 synthetic units, including 137,504 fixed Unicode allowances | One shared actual-processing-visits ledger; exact replacement contract documented before implementation | COMPLETE; final verification and independent recheck passed |
+| PF5 / p5 | Separate roots repeat font setup; about 0.6 seconds was a debug observation | Release evaluation and before/after report, no global font cache | COMPLETE; retain operation-local freshness and same-Output reuse |
+| PF6 / p6 | Prior duplicate automatic lists/label queries under greatest-count selection | Deduplication ONLY, preserving the exact selected tick list and label bytes; no first-fit change | COMPLETE; `23db99f` |
 | PF7 / p7 | Exact next-endpoint extension fills lines; 20 lines took 40 shape calls, not 40 paragraph layouts | KEEP current extension; revisit only later if meaningful benefit, via DF10 at T7 closure | ACCEPTED; disposition COMPLETE, no runtime change |
 
 These are explicit user agreements, not acceptance by silence. PF1 supersedes
@@ -3615,7 +3622,8 @@ The font probe's first sample separates fresh-environment setup **18.510 ms**,
 first query **0.204 ms**, new query **0.093 ms**, and repeated-query hit
 **0.000918 ms**. The earlier caption investigation's roughly **0.6 s cold setup**
 was debug-only, not release root preparation or evidence of a measured speedup.
-P5's evaluation baseline is done; its after-report and conclusion remain pending.
+P5's baseline and final evaluation/report are complete; the final comparison and
+retained-freshness disposition are recorded below and in `docs/resource-admission.md`.
 
 #### T5a3p1: Remove Full Unicode Corpora From Unpublished History
 
@@ -3654,6 +3662,12 @@ consumer-migration tip already lacked the corpora. Updating `main` used an
 expected-old-OID guard. All earlier commits and `origin/main` are unchanged.
 Earlier hashes elsewhere in this document identify pre-rewrite history; the
 table supplies their replacements, not a second code route.
+
+Final history proof is recorded by `51d3b23`: all six original corpus blobs are
+unreachable from all refs, and the mapped repair trees were preserved. The clean
+source-consumer tip is `e8764ae` (historical original `b6f8321`); the clean baseline
+is `65f3cf4` (historical original `77d8bf2`). Old IDs remain explicit historical
+evidence via the mapping above, not current ref identities. No push occurred.
 
 `git log --all -- <six corpus paths>` returned no history, and all six original
 blob IDs were absent from `git rev-list --objects --all`. No backup refs were
@@ -3722,6 +3736,7 @@ changed cell reduces panel planning from three calls to two while keeping the
 neighbor's same plan allocation; shared-domain changes invalidate both children.
 Scoped independent review found no blocker. Full verification passed, and all
 nine release workloads match baseline SVG, PNG-file, and decoded-pixel hashes.
+Committed with PF3 in `5c0acdf`.
 
 Current owners: `src/layout/kernel.rs` and `src/layout/kernel/feedback.rs`.
 Before PF2 the driver required at least two successful rounds and had no child
@@ -3756,7 +3771,7 @@ one producer invocation per root with baseline-identical SVG/PNG/pixels.
 The integrated gate passed 677 library tests (eight explicit opt-ins ignored),
 all integration/snapshot suites, strict Clippy, docs, and package verification.
 PF2/PF3's shared root/capture interfaces and lifecycle count assertions are
-committed together; PF6 is the separate tick-only change. No finer-grained commit
+committed together in `5c0acdf`; PF6 is the separate tick-only change `23db99f`. No finer-grained commit
 history is claimed or manufactured with compatibility routes.
 
 Current owners: `capture_text_replay_plan` in `src/orchestrator/backend.rs` and
@@ -3768,20 +3783,93 @@ planning/capture admission, not the requirement to reserve canonical output
 storage before final Null/concrete execution. Preserve glyph plans, scope balance,
 invalid-input rejection, cleanup, and failure-atomic publication.
 
-Example: a line-plot producer currently runs once for command counts and again
-to retain commands. Afterward it runs once; validation and SVG serialization
+Prior example: a line-plot producer ran once for command counts and again
+to retain commands. It now runs once; validation and SVG serialization
 consume retained commands. Those passes are not removed merely because they are
 called validation. Compare exact SVG/decoded PNG, producer calls, refusal timing,
 and retained storage. Never execute the producer again just to size that storage.
 
 #### T5a3p4: Simplify Resource Admission Accounting
 
-**Status**: PENDING (PF4 policy accepted; runtime implementation pending)
+**Status**: COMPLETE
+
+Final implementation/evidence following PF2/PF3 `5c0acdf` and PF6 `23db99f` is
+recorded in `docs/resource-admission.md`. Primary `just verify` passed in
+`/tmp/opencode/pf4-final-verify.log`: 685 library tests passed, eight opt-ins ignored,
+all 441 integration tests including five snapshots passed, strict locked/offline
+all-target Clippy and rustdoc passed, and package verification passed with 202
+files, 5.6 MiB uncompressed and 1.2 MiB compressed. Separately invoked external
+official Unicode tests all passed; ignored defaults do not claim full conformance.
+Independent review `ses_f793c53d9ffedekZJtzvGR365p` rechecked and closed both
+byte-admission and variable-list-visit findings, with no new blocker.
+The intended primary commit subject is
+`refactor(layout): use coarse shared processing admission`; no PF4 commit hash
+is invented before that commit.
+
+- Font resources own the same generation ledger from operation creation. Removed
+  the independent font logical-work counter and generation-work prices, with no
+  alias counters. Rebinding a prepared environment to a different ledger refuses
+  without changing consumption; ordinary clones retain the existing ledger.
+- Fixed Unicode search/rule prices and hash/copy/materialization charges are
+  removed. Variable ordering, candidate/list visits, and collision pairs remain
+  guarded. Rustybuzz input includes only its actual five-scalar contexts, before
+  buffer/shaping; actual output records/bytes precede first-party glyph copying.
+- Cache, producer, and feedback storage retains record/byte admission. Child
+  keys copy only concrete parent-replaceable values using the existing root
+  environment, not full Plots or fresh quotas; equality behavior is preserved.
+- Independent review corrections admit prefix/cluster and positioned-text byte
+  capacity before reservation. Guide trial/ordinal searches and all retained-face
+  shaping/metrics/outline searches charge actual examined entries before
+  comparison, not one flat lookup price. Four focused regressions prove byte
+  refusal before allocation and visit refusal before mutation/engine callbacks.
+- Strict offline locked all-target Clippy passes. Full library: 685 passed,
+  eight ignored. All four focused review regressions pass. All six external
+  official Unicode tests passed using the
+  existing local UCD, without fixture changes or corpus reintroduction.
+- Release publication benchmark: all nine SVG/PNG/decoded-RGBA8 hash sets match
+  the preserved baseline, with unchanged shaping-call counts. Full numeric
+  timings and actual admission counts are in `docs/resource-admission.md`.
+- The 2,048-word workload succeeds cold and on reflow, finishing at 709,818 root
+  processing visits and 253,693 records. The public finite-box SVG case also
+  succeeds. Fewer accounting units are not claimed as a CPU speed improvement.
+- Primary integrated verification and independent recheck are complete. The docs
+  closure performs no new test/build, commit, network provisioning, or history
+  rewrite; it introduces no global cache or font-freshness change.
+
+Concrete pre-code contract: `05_LAYOUT_SYSTEM.md`, Resources And Lifecycle,
+now specifies one cumulative `1_000_000` actual-processing-visits ledger shared
+from root creation across font/text budgets and clones. Count real scalar pass
+inputs, normalization nodes and actual quadratic preceding comparisons,
+candidate/unit/endpoint/list visits, and collision pairs. Remove fixed Unicode
+search/rule allowances and hash/copy/materialization prices; glyph output claims
+actual records/bytes before copying, not processing twice. Canonical Rustybuzz
+input admission includes at most five trailing pre-context and five leading
+post-context scalars consumed by locked Rustybuzz `0.20.1`, and occurs before
+buffer/shaping. Sharing must preserve consumed quotas;
+cache copying must not reset them, and replay record accounting stays independent.
+
+Keep inclusive records/topology/calls/cache/discovery limits of `1_000_000`, the
+`536_870_912` byte limit, `8` root rounds and `8` guide trials, optional exact-cache
+stop at `256`, and PNG-only `32_768` axis, `100_000_000` pixels, `67_108_864` parser
+bytes. Checked arithmetic precedes admission and fallible reservation; typed
+refusals remain terminal. Reuse existing resource handles, use fewer than roughly
+five helpers, and add no framework/public API or global cache. Preserve equality
+fallback, algorithms, PF7 filling, Unicode fixtures, and successful output.
+
+Acceptance evidence must replace synthetic-score assertions with actual input,
+glyph/order/collision caps and a fitting 2,048-word positive case; run focused and
+full library tests, strict offline locked all-target Clippy, and release benchmarks
+checking all nine preserved output hash sets. Report actual visits/records apart
+from timings in release evidence; reduced units alone imply no CPU improvement.
+The external full Unicode fixtures remain opt-in. The primary's final verification
+above satisfies the integrated gate; no new history rewrite or test run follows
+from recording closure. The final report preserves all nine cases' raw counters,
+before/after timings, and 27 matching SVG/PNG/decoded-RGBA8 baseline hashes.
 
 Current owners: font generation ledgers, Unicode admission callbacks, text
-planning, and cache accounting. In the recorded caption, fixed line-break
-allowances charge `420*64 + 420*8 + 419*256 = 137504` units. These conservative
-allowances are not measured CPU instructions or separate layouts.
+planning, and cache accounting. In the prior recorded caption, fixed line-break
+allowances charged `420*64 + 420*8 + 419*256 = 137504` units. These superseded
+prices are historical evidence, not current policy, CPU instructions, or layouts.
 
 Accepted fix: retain checked input sizes, glyph/record counts, font/source bytes,
 fallible allocation, and bounded feedback/placement. Use coarse cumulative guards
@@ -3794,16 +3882,28 @@ Example: a physically fitting caption should not be rejected solely because fixe
 Unicode-rule allowances exhaust a synthetic score. Truly excessive text, glyph
 expansion, packing, or allocation still fails explicitly. Exact output for already
 admitted inputs must remain unchanged; admission/refusal boundaries can change.
-Before code changes, PF4 implementation must document the exact replacement table
-for approval: each counter's units, numeric limit, measured workload rationale,
-charge point, and failure precedence. Reasonable limits are accepted in principle;
-this agreement does not invent their numbers or claim they already exist at
-runtime. The user need not choose arbitrary constants. Test normal workloads and
-pathological refusal, not merely a lower reported score.
+The concrete replacement table above and in spec 05 satisfies the pre-code
+documentation gate: units, numeric limits, charge points, workload rationale, and
+failure precedence are explicit. Final runtime and measured workload evidence,
+primary verification, and independent recheck close this stage. Both normal
+workloads and pathological refusal passed, not merely a lower reported score.
 
 #### T5a3p5: Evaluate Repeated Font Setup
 
-**Status**: IN PROGRESS (evaluation baseline done; after-report/conclusion pending)
+**Status**: COMPLETE (evaluation/report; no global cache or freshness change)
+
+The final nine-case before/after table in `docs/resource-admission.md` preserves
+all 27 baseline output hashes and unchanged shaping counts. Fresh font setup
+median is 21.022727 ms versus baseline 18.510384 ms; root preparation includes
+other work and is not a font-only measurement. First/new/repeated-query medians
+are 0.286900/0.145248/0.001099 ms versus 0.203697/0.092979/0.000918 ms.
+Three release runs, one thread, no warmup, and uncontrolled OS caches/scheduling
+yield noisy wall timings, not CPU measurements or isolated causal speed claims.
+The retained 1,312.165787 ms caption sample includes 1,231.117979 ms in publication,
+a large publication/I/O outlier whose cause was not isolated; no sample was dropped.
+Final disposition: retain operation-local preparation, same-Output reuse, and
+existing installed-font freshness/lifetime. No cross-operation/global cache is
+admitted. Source parameters, text, and PF7 line extension are unchanged.
 
 Current setup is shared within a root and across chained Output publications,
 but separate Plot operations prepare fonts separately. Recorded setup of roughly
@@ -3816,8 +3916,8 @@ within the existing lifetime; add no permanent process/global cache or public
 context object here. Cross-operation reuse can delay observation of installed-font
 changes and retain memory longer. If release evidence justifies it, present
 freshness, invalidation, memory, and lifetime choices before separate admission.
-Conclude the review before this follow-up closes, even if current freshness is
-retained. No timing improvement is promised for this evaluation-only stage.
+This review is concluded with current freshness retained. No timing improvement
+is promised for this evaluation-only stage.
 
 #### T5a3p6: Avoid Duplicate Automatic-Tick Work
 
@@ -3831,10 +3931,11 @@ lists with 726 size-helper calls instead of 3,468. Five identical sources requir
 two calls instead of 20; different lists sharing labels require five instead of
 30. These are lookup counts, not timing or shaping counts. All 30 panel tests,
 strict Clippy, and the integrated `just verify` gate passed without snapshot changes.
+Committed in `23db99f`.
 
 Current owner: `src/layout/panel/range_ticks.rs`. The active code tries several
-target-derived lists and retains the fitting list with greatest count; some
-label-size requests are duplicated. This is not the future native T5a5 source
+target-derived lists and retains the fitting list with greatest count; the prior
+duplicate label-size requests are now reused. This is not the future native T5a5 source
 algorithm or an unbounded search.
 
 Accepted fix: deduplicate identical complete lists and measure each distinct
@@ -3870,13 +3971,16 @@ at T7 CLOSURE after p2/p3/p4/p6 evidence. This closes p7's disposition, not an
 implementation or a new wrapping mode; no additional p7 review blocks this
 follow-up's closure. Admission would require separate user approval and a new phase.
 
-**Completion gate:** p0 records every disposition; p1 completes authorized history
-cleanup; every approved implementation supplies focused tests, release before/
-after evidence, strict Clippy and `just verify`, inspected authorized output
-changes, and a commit. Evaluation-only work records its user-reviewed outcome or
-next checkpoint. Do not weaken tests merely to accept a faster result. Only then
-may T5a4 start. Prior T5a3 evidence stays historical and executed, but does not
-certify these accepted but pending implementations.
+**Completion gate satisfied:** p0 records every accepted disposition; p1 supplies
+the all-ref corpus-history proof; p2/p3/p6 have their recorded commits; p4 supplies
+final focused/full verification, independent recheck, unchanged output hashes,
+and before/after evidence; p5 concludes evaluation with unchanged freshness;
+p7 retains line extension with DF10 review at T7 CLOSURE. No tests were weakened
+to accept a faster result. The primary will record the PF4 closure commit under
+the intended subject above; no ID or completed commit is claimed in advance.
+T5a4 and later phases remain PENDING, not started by this closure. Historical
+T5a3 evidence and old mapped IDs remain historical; the final evidence above
+certifies this follow-up. No push is requested or performed.
 
 ### T5a4: Root Title-Block Plans
 

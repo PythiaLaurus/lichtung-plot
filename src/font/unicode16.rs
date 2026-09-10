@@ -20,23 +20,19 @@ pub(super) fn nfkc_casefold(
     claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
 ) -> Result<String, FontError> {
     u32::try_from(value.len()).map_err(|_| FontError::Arithmetic("Unicode input length"))?;
-    claim(0, value.len() as u64)?;
+    claim(0, value.chars().count() as u64)?;
     let mut mapped = String::new();
     for scalar in value.chars() {
         let codepoint = scalar as u32;
-        let replacement = search(
-            NFKC_CASEFOLD,
-            |(start, end, _)| {
-                if *end < codepoint {
-                    Ordering::Less
-                } else if *start > codepoint {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
-            },
-            claim,
-        )?;
+        let replacement = search(NFKC_CASEFOLD, |(start, end, _)| {
+            if *end < codepoint {
+                Ordering::Less
+            } else if *start > codepoint {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
         if let Ok(index) = replacement {
             append(&mut mapped, NFKC_CASEFOLD[index].2, claim)?;
         } else {
@@ -46,22 +42,17 @@ pub(super) fn nfkc_casefold(
     nfc::normalize(&mapped, claim)
 }
 
-fn search<T>(
-    table: &[T],
-    mut compare: impl FnMut(&T) -> Ordering,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<Result<usize, usize>, FontError> {
+fn search<T>(table: &[T], mut compare: impl FnMut(&T) -> Ordering) -> Result<usize, usize> {
     let (mut low, mut high) = (0, table.len());
     while low < high {
-        claim(0, 1)?;
         let middle = low + (high - low) / 2;
         match compare(&table[middle]) {
             Ordering::Less => low = middle + 1,
             Ordering::Greater => high = middle,
-            Ordering::Equal => return Ok(Ok(middle)),
+            Ordering::Equal => return Ok(middle),
         }
     }
-    Ok(Err(low))
+    Err(low)
 }
 
 fn reserve<T>(
@@ -84,11 +75,10 @@ fn reserve<T>(
         let bytes = target
             .checked_mul(std::mem::size_of::<T>())
             .ok_or(FontError::Arithmetic("Unicode vector bytes"))?;
-        // Charge the complete replacement allocation, including coexistence
-        // with the old buffer, and its potential copy before reserving.
+        // Admit the complete replacement allocation, including coexistence.
         claim(
             u64::try_from(bytes).map_err(|_| FontError::Arithmetic("Unicode vector bytes"))?,
-            values.len() as u64,
+            0,
         )?;
         values
             .try_reserve_exact(target - values.len())
@@ -107,7 +97,6 @@ fn append(
         .checked_add(value.len())
         .ok_or(FontError::Arithmetic("Unicode string length"))?;
     u32::try_from(required).map_err(|_| FontError::Arithmetic("Unicode string length"))?;
-    claim(0, value.len() as u64)?;
     if required > output.capacity() {
         let target = required.max(
             output
@@ -115,7 +104,7 @@ fn append(
                 .checked_mul(2)
                 .ok_or(FontError::Arithmetic("Unicode string capacity"))?,
         );
-        claim(target as u64, output.len() as u64)?;
+        claim(target as u64, 0)?;
         output
             .try_reserve_exact(target - output.len())
             .map_err(|_| FontError::Allocation("Unicode string"))?;
@@ -129,7 +118,7 @@ pub(super) fn folded_for_test(value: &str) -> String {
     let resources = super::canonical::OperationFontResources::new();
     nfkc_casefold(value, &mut |bytes, work| {
         resources.claim_bytes(bytes)?;
-        resources.claim_work(work)
+        resources.claim_visits(work)
     })
     .unwrap()
 }

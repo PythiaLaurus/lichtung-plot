@@ -183,7 +183,7 @@ impl GeometryBackend {
         screen_text: impl Fn(&ResolvedTextPlan) -> Option<PlannedTextPlacement>,
     ) -> Result<f64, Error> {
         self.font_environment
-            .claim_text_generation_work(self.bounds.len() as u128 + self.text.len() as u128)
+            .claim_processing_visits(self.bounds.len() as u128 + self.text.len() as u128)
             .map_err(|error| Error::Render(format!("assignment feedback work: {error:?}")))?;
         let mut text = self
             .text
@@ -258,12 +258,23 @@ impl GeometryBackend {
         next: &crate::layout::Projection,
         declared: impl Iterator<Item = &'a ResolvedTextPlan> + Clone,
     ) -> Result<bool, Error> {
-        let count = declared.clone().count() as u128;
-        self.font_environment
-            .claim_text_generation_work(count * self.text.len() as u128 + 1)
-            .map_err(|error| Error::Render(format!("annotation feedback work: {error:?}")))?;
         for text in &self.text {
-            if !declared.clone().any(|plan| plan == &text.plan) {
+            self.font_environment
+                .claim_processing_visits(1)
+                .map_err(|error| Error::Render(format!("annotation feedback visits: {error:?}")))?;
+            let mut found = false;
+            for plan in declared.clone() {
+                self.font_environment
+                    .claim_processing_visits(1)
+                    .map_err(|error| {
+                        Error::Render(format!("annotation feedback visits: {error:?}"))
+                    })?;
+                if plan == &text.plan {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
                 continue;
             }
             let Some(ink) = planned_text_ink_bounds(
@@ -332,15 +343,10 @@ impl GeometryBackend {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
+        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
         self.font_environment
-            .claim_text_generation_slots(1)
+            .claim_processing_visits(self.clips.len() as u128)
             .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
-        self.font_environment
-            .claim_text_generation_work(1 + self.clips.len() as u128)
-            .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
-        self.text
-            .try_reserve_exact(1)
-            .map_err(|error| Error::Render(format!("geometry text allocation: {error}")))?;
         let clip = self.clips.iter().copied().reduce(|a, b| {
             let left = a.x0.max(b.x0);
             let bottom = a.y0.max(b.y0);
@@ -1026,6 +1032,78 @@ impl Backend for GeometryBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn geometry_text_bytes_refuse_before_allocation_or_clip_processing() {
+        let mut geometry = begun_backend();
+        let plan = geometry
+            .plan_raw_text(
+                "A",
+                &test_text_style(),
+                PhysicalTextAlignment::Start,
+                "test",
+            )
+            .unwrap();
+        geometry.clips.push(PanelBox::new(0.0, 100.0, 0.0, 100.0));
+        let before = geometry.font_environment.resource_usage().unwrap();
+        geometry
+            .font_environment
+            .claim_unicode_bytes(u64::try_from(536_870_912 - before.font_bytes).unwrap())
+            .unwrap();
+        assert_eq!(geometry.text.capacity(), 0);
+        let placement =
+            PlannedTextPlacement::middle(Point2D::new(10.0, 10.0), TextAnchor::Start, 0.0);
+        assert!(geometry
+            .record_text(placement, &plan)
+            .unwrap_err()
+            .to_string()
+            .contains("system-font bytes"));
+        assert_eq!(geometry.text.capacity(), 0);
+        assert!(geometry.text.is_empty());
+        assert_eq!(
+            geometry
+                .font_environment
+                .resource_usage()
+                .unwrap()
+                .processing_visits,
+            before.processing_visits
+        );
+    }
+
+    #[test]
+    fn collision_pairs_share_the_font_processing_cap() {
+        let mut geometry = begun_backend();
+        let bounds = GeometryBox {
+            left: 1.0,
+            right: 2.0,
+            bottom: 1.0,
+            top: 2.0,
+            weight: 1.0,
+        };
+        geometry.bounds = vec![bounds; 2];
+        let environment = &geometry.font_environment;
+        let used = environment.resource_usage().unwrap().processing_visits;
+        environment
+            .claim_processing_visits(1_000_000 - used - 2)
+            .unwrap();
+        let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+        assert_eq!(
+            geometry
+                .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
+                .unwrap()
+                .to_bits(),
+            2.0_f64.to_bits()
+        );
+        assert_eq!(
+            environment.resource_usage().unwrap().processing_visits,
+            1_000_000
+        );
+        assert!(geometry
+            .overlap_after_assignment(panel, panel, bounds, 0.0, |_| None)
+            .unwrap_err()
+            .to_string()
+            .contains("root processing visits"));
+    }
 
     fn test_text_style() -> TextStyle {
         TextStyle {

@@ -784,9 +784,6 @@ impl<'a> PlotRenderContext<'a> {
                 .map_err(|_| Error::Render("producer lookup allocation failed".into()))?;
             for text in frozen {
                 let owner = text.plan.style.provenance.owner.as_str();
-                environment
-                    .claim_text_generation_work((owner.len() + text.plan.source.len() + 1) as u128)
-                    .map_err(|error| Error::Render(format!("producer lookup work: {error:?}")))?;
                 lookup
                     .entry((owner, text.plan.source.as_str()))
                     .or_insert(&text.plan);
@@ -824,10 +821,6 @@ impl ProducerText<'_> {
         measure: impl FnOnce() -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError>,
     ) -> Result<crate::layout::ResolvedTextPlan, crate::layout::fit::PlanError> {
         if self.frozen.is_some() {
-            self.environment
-                .prepared_font_environment()?
-                .claim_text_generation_work((source.len() + owner.len() + 1) as u128)
-                .map_err(|error| Error::Render(format!("retained producer lookup: {error:?}")))?;
             return self
                 .lookup
                 .get(&(owner, source))

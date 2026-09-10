@@ -1493,7 +1493,7 @@ impl Canvas {
         use crate::layout::fit::{self, FitOutcome};
         let root_address = crate::layout::ComponentAddress::root();
         let guide_owner = root_address.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
-        let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner));
+        let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner)?);
         let guide_scope = FitScope::new(&guide_owner, scope.ordinal);
         let (width, height) = assigned.dimensions();
         let themes = Arc::clone(&prepared.themes);

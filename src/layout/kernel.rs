@@ -414,10 +414,13 @@ struct ResourceState {
 
 impl ResourceState {
     fn new() -> Self {
+        let font_resources = crate::font::canonical::OperationFontResources::new();
+        #[cfg(test)]
+        crate::orchestrator::measurements::resources(font_resources.clone());
         Self {
             topology_slots: 0,
-            generation_resources: crate::font::canonical::OperationGenerationResources::new(),
-            font_resources: crate::font::canonical::OperationFontResources::new(),
+            generation_resources: font_resources.generation_resources(),
+            font_resources,
         }
     }
 }

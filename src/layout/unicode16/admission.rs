@@ -75,7 +75,7 @@ fn long_backward_contexts_have_linear_admitted_work() {
             let mut admitted_work = 0;
             linebreaks(&input, &mut |bytes, work| {
                 resources.claim_bytes(bytes)?;
-                resources.claim_work(work)?;
+                resources.claim_visits(work)?;
                 admitted_work += work;
                 Ok(())
             })
@@ -87,18 +87,14 @@ fn long_backward_contexts_have_linear_admitted_work() {
 }
 
 #[test]
-fn property_comparison_allowance_covers_the_pinned_tables() {
-    let comparisons: u32 = [
-        super::data::LINE_BREAK.len(),
-        super::data::MARK.len(),
-        super::data::EAST_ASIAN.len(),
-        super::data::INITIAL_PUNCTUATION.len(),
-        super::data::FINAL_PUNCTUATION.len(),
-        super::data::UNASSIGNED_EXTENDED_PICTOGRAPHIC.len(),
-    ]
-    .into_iter()
-    .map(|length| length.ilog2() + 2)
-    .sum();
-    // Remaining allowance covers fixed LB1/LB9/LB10 dispatch decisions.
-    assert!(comparisons + 12 <= 64);
+fn visits_count_scalar_passes_not_bytes_or_fixed_rules() {
+    for input in ["abc", "一二三"] {
+        let mut visits = 0;
+        linebreaks(input, &mut |_, count| {
+            visits += count;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(visits, 3 + 3 + 2);
+    }
 }

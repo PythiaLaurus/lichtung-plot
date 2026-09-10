@@ -439,9 +439,6 @@ pub(crate) fn reserve_text_records<T>(
     environment
         .claim_text_generation_slots(additional as u128)
         .map_err(|error| Error::Render(format!("producer text slots: {error:?}")))?;
-    environment
-        .claim_text_generation_work(additional as u128)
-        .map_err(|error| Error::Render(format!("producer text work: {error:?}")))?;
     if additional > records.capacity() - records.len() {
         let capacity = records
             .len()
@@ -456,9 +453,6 @@ pub(crate) fn reserve_text_records<T>(
         environment
             .claim_unicode_bytes(bytes)
             .map_err(|error| Error::Render(format!("producer text bytes: {error}")))?;
-        environment
-            .claim_text_generation_work(records.len() as u128)
-            .map_err(|error| Error::Render(format!("producer text relocation: {error:?}")))?;
         records
             .try_reserve_exact(capacity - records.len())
             .map_err(|_| Error::Render("producer text allocation failed".into()))?;
@@ -1070,17 +1064,19 @@ mod tests {
     #[test]
     fn producer_record_storage_refuses_before_allocating() {
         use crate::font::canonical::PreparedFontEnvironment;
-        for resource in ["slots", "work", "bytes"] {
+        for resource in ["slots", "bytes"] {
             let environment = PreparedFontEnvironment::synthetic();
-            match resource {
-                "slots" => environment.claim_text_generation_slots(1_000_000).unwrap(),
-                "work" => environment.claim_text_generation_work(1_000_000).unwrap(),
-                _ => {
-                    let used = environment.resource_usage().unwrap().font_bytes;
-                    environment
-                        .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
-                        .unwrap();
-                }
+            if resource == "slots" {
+                environment
+                    .claim_text_generation_slots(
+                        1_000_000 - environment.generation_resources().usage().unwrap().0,
+                    )
+                    .unwrap();
+            } else {
+                let used = environment.resource_usage().unwrap().font_bytes;
+                environment
+                    .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap())
+                    .unwrap();
             }
             let mut records = Vec::<super::PlacedText>::new();
             assert!(
@@ -1089,6 +1085,18 @@ mod tests {
             );
             assert_eq!(records.capacity(), 0);
         }
+        let environment = PreparedFontEnvironment::synthetic();
+        environment
+            .claim_processing_visits(
+                1_000_000 - environment.resource_usage().unwrap().processing_visits,
+            )
+            .unwrap();
+        let mut records = Vec::<super::PlacedText>::new();
+        super::reserve_text_records(&mut records, 1, &environment).unwrap();
+        assert!(
+            records.capacity() >= 1,
+            "record retention has no processing price"
+        );
     }
     use super::*;
 

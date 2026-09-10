@@ -516,6 +516,24 @@ struct CategoryOrders {
     y: CategoryOrder,
 }
 
+/// Only the values that parent coordination may replace for a fixed child owner.
+pub(crate) struct ComposedInputs {
+    x_axis_spec: AxisSpec,
+    y_axis_spec: AxisSpec,
+    resolved_facet_x_range: Option<(f64, f64)>,
+    global_hue_levels: Option<Vec<String>>,
+    global_group_levels: Option<Vec<String>>,
+    global_collective_pairs: Option<Vec<crate::data::CollectivePair>>,
+    global_line_condition_levels: Option<Vec<String>>,
+    axis_text_measured: bool,
+    composed_axis_text_measured: bool,
+    y_tick_labels_visible: bool,
+    render_scope: Option<String>,
+    legend_policy: LegendPolicy,
+    width: u32,
+    height: u32,
+}
+
 impl Plot<crate::kind::Any> {
     fn new<K: crate::kind::Marker>(input: PlotInput, kind: PlotKind) -> Plot<K> {
         Plot {

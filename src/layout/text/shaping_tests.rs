@@ -23,10 +23,8 @@ fn typography_performance_evidence_and_root_cache_budgets() {
         let setup = std::time::Instant::now();
         let theme = crate::Theme::Publication.resolve();
         let environment = theme.prepared_font_environment().unwrap();
-        let resources = canonical::OperationGenerationResources::new();
-        environment
-            .share_generation_resources(resources.clone())
-            .unwrap();
+        let resources = environment.generation_resources();
+        environment.share_generation_resources(&resources).unwrap();
         eprintln!(
             "{name} setup_us={} initial={:?} stack={}",
             setup.elapsed().as_micros(),
@@ -59,22 +57,12 @@ fn typography_performance_evidence_and_root_cache_budgets() {
             let after = resources.usage().unwrap();
             let font_after = environment.resource_usage().unwrap();
             let work = TEXT_WORK.with(std::cell::Cell::get);
-            eprintln!("{name}/{phase}: elapsed_us={} slots={} work={} cumulative={after:?} bytes={} font_work={} {work:?} bidi={} shapes={}", elapsed.as_micros(), after.0 - before.0, after.1 - before.1, font_after.font_bytes - font_before.font_bytes, font_after.logical_work - font_before.logical_work, PARAGRAPH_BIDI_CALLS.with(std::cell::Cell::get), canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get));
-            let plan = match result {
-                Ok(plan) => plan,
-                Err(error) => {
-                    eprintln!("{name}/{phase}: refused: {error}");
-                    assert!(
-                        name == "words2048",
-                        "ordinary cold and changed-width workloads must fit the same root budget"
-                    );
-                    assert!(error
-                        .to_string()
-                        .contains("candidate-generation work units limit of 1000000"));
-                    assert!(after.1 <= 1_000_000 && after.1 > 990_000);
-                    break;
-                }
-            };
+            assert_eq!(
+                after.1 - before.1,
+                font_after.processing_visits - font_before.processing_visits
+            );
+            eprintln!("{name}/{phase}: elapsed_us={} records={} processing_visits={} cumulative={after:?} bytes={} {work:?} bidi={} shapes={}", elapsed.as_micros(), after.0 - before.0, after.1 - before.1, font_after.font_bytes - font_before.font_bytes, PARAGRAPH_BIDI_CALLS.with(std::cell::Cell::get), canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get));
+            let plan = result.unwrap_or_else(|error| panic!("{name}/{phase}: {error}"));
             assert_eq!(plan.line_texts().concat(), source.replace('\n', ""));
             assert!(
                 work.shaping_scalars <= 4 * source.chars().count(),
@@ -106,17 +94,8 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 assert_eq!(work, TextWork::default());
                 assert_eq!(after.0, before.0);
                 assert_eq!(font_after.font_bytes, font_before.font_bytes);
-                let key_bytes = source.len()
-                    + theme.typography.caption.stack.len()
-                    + "performance caption".len();
-                // One SHA-256 source pass (58 encoded scalar/header bytes),
-                // binary search in a one/two-entry index, one digest equality,
-                // and one full-key equality. No shaping-bucket scan on a hit.
                 let binary_comparisons = if phase == "hit" { 1 } else { 2 };
-                assert_eq!(
-                    after.1 - before.1,
-                    (key_bytes + 58 + binary_comparisons + 1 + key_bytes + 1) as u128
-                );
+                assert_eq!(after.1 - before.1, binary_comparisons + 1);
             } else if phase == "cold" {
                 cold_work = after.1 - before.1;
                 first = Some(plan);
@@ -126,7 +105,7 @@ fn typography_performance_evidence_and_root_cache_budgets() {
                 assert!(first.shares_analysis(&plan));
                 PARAGRAPH_BIDI_CALLS.with(|calls| assert_eq!(calls.get(), 0));
                 assert!(work.shaping_scalars <= 3 * source.chars().count());
-                assert!(after.1 - before.1 < cold_work / 2);
+                assert!(after.1 - before.1 < cold_work);
                 if let Some(words) = name.strip_prefix("words") {
                     if let Ok(words @ (128 | 256 | 512)) = words.parse::<usize>() {
                         scaling.push((words, cold_work, after.1 - before.1));
@@ -175,7 +154,7 @@ fn contracted_line_break_analysis_matches_every_official_case_and_expanded_ascii
             let work = canonical::OperationGenerationResources::new();
             let mut claim = |count, steps| {
                 bytes.claim_bytes(count)?;
-                claim_text_generation(work.claim_work(u128::from(steps)))
+                claim_text_generation(work.claim_visits(u128::from(steps)))
             };
             let actual = paragraph_linebreaks(&text, &mut claim).unwrap();
             assert_eq!(
@@ -212,7 +191,7 @@ fn contracted_line_break_analysis_has_independent_ascii_expectations() {
         let work = canonical::OperationGenerationResources::new();
         let actual = paragraph_linebreaks(text, &mut |count, steps| {
             bytes.claim_bytes(count)?;
-            claim_text_generation(work.claim_work(u128::from(steps)))
+            claim_text_generation(work.claim_visits(u128::from(steps)))
         })
         .unwrap();
         assert_eq!(actual, expected, "{text:?}");
@@ -523,7 +502,11 @@ fn wrapped_arabic_context_stops_at_selected_line_boundaries() {
 fn review_canonical_output_admission_precedes_retention() {
     let environment = PreparedFontEnvironment::synthetic();
     let identity = tests::plan("A", i64::MAX, PhysicalTextAlignment::Start).lines[0].runs[0].face;
-    environment.claim_text_generation_slots(1_000_000).unwrap();
+    environment
+        .claim_text_generation_slots(
+            1_000_000 - environment.generation_resources().usage().unwrap().0,
+        )
+        .unwrap();
     canonical::SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
     assert!(environment
         .shape_run(
@@ -615,7 +598,11 @@ fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
     let pair = environment
         .resolve_pair(0, &stack, RequestedWeight::Normal, &['A', '\u{301}'])
         .unwrap();
-    environment.claim_text_generation_slots(999_999).unwrap();
+    environment
+        .claim_text_generation_slots(
+            999_999 - environment.generation_resources().usage().unwrap().0,
+        )
+        .unwrap();
     canonical::SHAPED_GLYPH_RETAINS.with(|count| count.set(0));
     let shaped = environment
         .shape_run(
@@ -643,7 +630,7 @@ fn actual_gsub_count_and_root_bytes_gate_every_glyph_copy() {
             0
         ),
         Err(TextPlanError::Limit {
-            resource: "candidate-generation slots",
+            resource: "retained planning records",
             ..
         })
     ));

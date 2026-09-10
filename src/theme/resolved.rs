@@ -122,7 +122,7 @@ impl TextQueryCache {
         let (mut low, mut high) = (0, index.len());
         while low < high {
             environment
-                .claim_text_generation_work(1)
+                .claim_processing_visits(1)
                 .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             let middle = low + (high - low) / 2;
             if index[middle].fingerprint < fingerprint {
@@ -146,22 +146,11 @@ impl TextQueryCache {
         let start = Self::lower_bound(index, fingerprint, environment)?;
         for candidate in &index[start..] {
             environment
-                .claim_text_generation_work(1)
+                .claim_processing_visits(1)
                 .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             if candidate.fingerprint != fingerprint {
                 break;
             }
-            let comparison_work = input.source.len() as u128
-                + input.stack.len() as u128
-                + 1
-                + if exact {
-                    input.provenance.owner.len() as u128
-                } else {
-                    0
-                };
-            environment
-                .claim_text_generation_work(comparison_work)
-                .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
             let query = &self.entries[candidate.entry];
             if query.matches_shaping(input, prepared_only)
                 && (!exact
@@ -195,9 +184,6 @@ impl TextQueryCache {
         environment
             .claim_unicode_bytes(bytes)
             .map_err(|error| Error::Render(format!("text query cache: {error}")))?;
-        environment
-            .claim_text_generation_work(values.len() as u128)
-            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
         values
             .try_reserve_exact(capacity - values.len())
             .map_err(|_| Error::Render("cannot reserve text query cache".into()))
@@ -211,7 +197,7 @@ impl TextQueryCache {
         let (mut low, mut high) = (0, index.len());
         while low < high {
             environment
-                .claim_text_generation_work(1)
+                .claim_processing_visits(1)
                 .map_err(|error| Error::Render(format!("text query index: {error:?}")))?;
             let middle = low + (high - low) / 2;
             if index[middle] < value {
@@ -220,9 +206,6 @@ impl TextQueryCache {
                 high = middle;
             }
         }
-        environment
-            .claim_text_generation_work((index.len() - low) as u128 + 1)
-            .map_err(|error| Error::Render(format!("text query index: {error:?}")))?;
         Ok(low)
     }
 }
@@ -307,15 +290,6 @@ impl CachedTextQuery {
         (shaping, hash.finalize().into())
     }
 
-    fn hash_work(input: &TextPlanInput<'_>, preferred_lines: Option<usize>) -> u128 {
-        // Exact encoded lengths: three string lengths, all scalar fields and
-        // tags, and the optional preferred-line count. Source bytes hash once.
-        input.source.len() as u128
-            + input.stack.len() as u128
-            + input.provenance.owner.len() as u128
-            + 58
-            + if preferred_lines.is_some() { 8 } else { 0 }
-    }
     fn matches_shaping(&self, input: &TextPlanInput<'_>, prepared_only: bool) -> bool {
         self.source == input.source
             && self.appearance.stack == input.stack
@@ -723,9 +697,6 @@ impl ResolvedTheme {
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
         let environment = self.prepared_font_environment()?;
-        environment
-            .claim_text_generation_work(CachedTextQuery::hash_work(input, preferred_lines))
-            .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
         let (shaping_fingerprint, fingerprint) =
             CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
         let key = (input, preferred_lines, prepared_only);
@@ -737,15 +708,12 @@ impl ResolvedTheme {
         {
             let query = &cache.entries[index];
             environment
-                .claim_text_generation_work(1)
+                .claim_processing_visits(1)
                 .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
-            if query.matches_width(input.maximum_width_quanta) {
-                environment
-                    .claim_text_generation_work(input.provenance.owner.len() as u128 + 1)
-                    .map_err(|error| Error::Render(format!("text query lookup: {error:?}")))?;
-                if query.matches_presentation(input, preferred_lines) {
-                    return Ok(Some(query.result.clone()));
-                }
+            if query.matches_width(input.maximum_width_quanta)
+                && query.matches_presentation(input, preferred_lines)
+            {
+                return Ok(Some(query.result.clone()));
             }
             if let CachedTextResult::Plan(plan) = &query.result {
                 return Ok(Some(CachedTextResult::Reflow(plan.clone())));
@@ -777,9 +745,6 @@ impl ResolvedTheme {
             .checked_add(input.stack.len())
             .and_then(|bytes| bytes.checked_add(input.provenance.owner.len()))
             .ok_or_else(|| Error::Render("text query cache byte count overflow".into()))?;
-        environment
-            .claim_text_generation_work(CachedTextQuery::hash_work(input, preferred_lines))
-            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
         let (shaping_fingerprint, fingerprint) =
             CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
         let key = (input, preferred_lines, prepared_only);
@@ -795,9 +760,6 @@ impl ResolvedTheme {
                 .is_none();
         environment
             .claim_text_generation_slots(2 + u128::from(new_shaping))
-            .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
-        environment
-            .claim_text_generation_work(key_bytes as u128 + 1)
             .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
         environment
             .claim_unicode_bytes(
@@ -2000,10 +1962,8 @@ mod tests {
             .set(Ok(PreparedFontEnvironment::synthetic()))
             .unwrap();
         let environment = root.prepared_font_environment().unwrap();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        environment
-            .share_generation_resources(resources.clone())
-            .unwrap();
+        let resources = environment.generation_resources();
+        environment.share_generation_resources(&resources).unwrap();
         let mut appearance = root.typography.caption.clone();
         appearance.stack = "Test Sans".into();
         appearance.font_size = 10;
@@ -2062,12 +2022,7 @@ mod tests {
             .unwrap();
         assert!(first.unwrap().shares_payload(&hit));
         let after = resources.usage().unwrap();
-        let equality_work =
-            (input.source.len() + input.stack.len() + input.provenance.owner.len() + 1) as u128;
-        assert_eq!(
-            after.1 - before.1,
-            CachedTextQuery::hash_work(&input, None) + comparisons + 1 + equality_work
-        );
+        assert_eq!(after.1 - before.1, comparisons + 1);
         assert_eq!(after.0, before.0);
         assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
 
@@ -2103,12 +2058,9 @@ mod tests {
                 .unwrap(),
             Some(expected)
         );
-        let equality_work =
-            (collision.source.len() + collision.stack.len() + collision.provenance.owner.len() + 1)
-                as u128;
         assert_eq!(
             resources.usage().unwrap().1 - before,
-            8 + cache.exact.len() as u128 * (equality_work + 1)
+            8 + cache.exact.len() as u128
         );
         let before = resources.usage().unwrap().1;
         assert_eq!(
@@ -2123,10 +2075,7 @@ mod tests {
                 .unwrap(),
             Some(expected)
         );
-        assert_eq!(
-            resources.usage().unwrap().1 - before,
-            4 + 2 * (collision.source.len() + collision.stack.len() + 1) as u128
-        );
+        assert_eq!(resources.usage().unwrap().1 - before, 4);
         let mut wrong_provenance = collision.clone();
         wrong_provenance.provenance.pair_ordinal += 1;
         assert!(cache

@@ -1,4 +1,4 @@
-use super::Plot;
+use super::{ComposedInputs, Plot};
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
@@ -92,7 +92,7 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Compare the computed inputs that Canvas/facet coordination can replace.
     /// All other source configuration is immutable for a root-local child owner.
-    pub(crate) fn same_composed_inputs(&self, other: &Self) -> bool {
+    pub(crate) fn same_composed_inputs(&self, other: &ComposedInputs) -> bool {
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
         self.x_axis_spec == other.x_axis_spec
             && self.y_axis_spec == other.y_axis_spec
@@ -109,6 +109,98 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.render_scope == other.render_scope
             && self.legend_policy == other.legend_policy
             && (self.width, self.height) == (other.width, other.height)
+    }
+
+    pub(crate) fn retain_composed_inputs(
+        &self,
+        environment: &crate::font::canonical::PreparedFontEnvironment,
+    ) -> Result<ComposedInputs, crate::Error> {
+        let copy = |source: &str| -> Result<String, crate::Error> {
+            environment
+                .claim_unicode_bytes(
+                    u64::try_from(source.len())
+                        .map_err(|_| crate::Error::Render("child input bytes overflow".into()))?,
+                )
+                .map_err(|error| crate::Error::Render(error.to_string()))?;
+            let mut value = String::new();
+            value
+                .try_reserve_exact(source.len())
+                .map_err(|error| crate::Error::Render(error.to_string()))?;
+            value.push_str(source);
+            Ok(value)
+        };
+        let mut axes = [
+            crate::layout::AxisSpec::default(),
+            crate::layout::AxisSpec::default(),
+        ];
+        for (target, source) in axes.iter_mut().zip([&self.x_axis_spec, &self.y_axis_spec]) {
+            target.limits = source.limits;
+            if let Some(ticks) = &source.exact_ticks {
+                let mut retained = Vec::new();
+                crate::render::backend::reserve_text_records(
+                    &mut retained,
+                    ticks.len(),
+                    environment,
+                )?;
+                for tick in ticks {
+                    retained.push(crate::AxisTick {
+                        position: tick.position,
+                        label: copy(&tick.label)?,
+                    });
+                }
+                target.exact_ticks = Some(retained);
+            }
+        }
+        let mut levels = [None, None, None];
+        for (target, source) in levels.iter_mut().zip([
+            &self.global_hue_levels,
+            &self.global_group_levels,
+            &self.global_line_condition_levels,
+        ]) {
+            if let Some(source) = source {
+                let mut retained = Vec::new();
+                crate::render::backend::reserve_text_records(
+                    &mut retained,
+                    source.len(),
+                    environment,
+                )?;
+                for value in source {
+                    retained.push(copy(value)?);
+                }
+                *target = Some(retained);
+            }
+        }
+        let pairs = if let Some(source) = &self.global_collective_pairs {
+            let mut retained = Vec::new();
+            crate::render::backend::reserve_text_records(&mut retained, source.len(), environment)?;
+            for pair in source {
+                retained.push(crate::data::CollectivePair {
+                    group: pair.group.as_deref().map(&copy).transpose()?,
+                    hue: pair.hue.as_deref().map(&copy).transpose()?,
+                });
+            }
+            Some(retained)
+        } else {
+            None
+        };
+        let [x_axis_spec, y_axis_spec] = axes;
+        let [global_hue_levels, global_group_levels, global_line_condition_levels] = levels;
+        Ok(ComposedInputs {
+            x_axis_spec,
+            y_axis_spec,
+            global_hue_levels,
+            global_group_levels,
+            global_line_condition_levels,
+            global_collective_pairs: pairs,
+            resolved_facet_x_range: self.resolved_facet_x_range,
+            axis_text_measured: self.axis_text_measured,
+            composed_axis_text_measured: self.composed_axis_text_measured,
+            y_tick_labels_visible: self.y_tick_labels_visible,
+            render_scope: self.render_scope.as_deref().map(copy).transpose()?,
+            legend_policy: self.legend_policy,
+            width: self.width,
+            height: self.height,
+        })
     }
 
     pub(crate) fn with_global_hue_levels(mut self, levels: Vec<String>) -> Self {

@@ -18,7 +18,7 @@ pub(super) fn normalize(
     claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
 ) -> Result<String, FontError> {
     u32::try_from(value.len()).map_err(|_| FontError::Arithmetic("NFC input length"))?;
-    claim(0, value.len() as u64)?;
+    claim(0, value.chars().count() as u64)?;
     let mut decomposed = Vec::new();
     for scalar in value.chars() {
         decompose(scalar, &mut decomposed, claim)?;
@@ -41,7 +41,14 @@ fn decompose(
     let codepoint = scalar as u32;
     if (S_BASE..S_BASE + S_COUNT).contains(&codepoint) {
         let syllable = codepoint - S_BASE;
-        claim(0, 3)?;
+        claim(
+            0,
+            if syllable.is_multiple_of(T_COUNT) {
+                2
+            } else {
+                3
+            },
+        )?;
         reserve(output, 3, claim)?;
         output.push(char::from_u32(L_BASE + syllable / N_COUNT).expect("valid Hangul jamo"));
         output.push(
@@ -54,11 +61,9 @@ fn decompose(
         return Ok(());
     }
 
-    if let Ok(index) = search(
-        CANONICAL_DECOMPOSITION,
-        |&(candidate, _)| candidate.cmp(&codepoint),
-        claim,
-    )? {
+    if let Ok(index) = search(CANONICAL_DECOMPOSITION, |&(candidate, _)| {
+        candidate.cmp(&codepoint)
+    }) {
         for part in CANONICAL_DECOMPOSITION[index].1.chars() {
             decompose(part, output, claim)?;
         }
@@ -75,7 +80,7 @@ fn canonical_order(
 ) -> Result<(), FontError> {
     for index in 1..scalars.len() {
         claim(0, 1)?;
-        let class = canonical_combining_class(scalars[index], claim)?;
+        let class = canonical_combining_class(scalars[index]);
         if class == 0 {
             continue;
         }
@@ -83,11 +88,10 @@ fn canonical_order(
         let mut insertion = index;
         while insertion > 0 {
             claim(0, 1)?;
-            let preceding_class = canonical_combining_class(scalars[insertion - 1], claim)?;
+            let preceding_class = canonical_combining_class(scalars[insertion - 1]);
             if preceding_class == 0 || preceding_class <= class {
                 break;
             }
-            claim(0, 1)?;
             scalars.swap(insertion - 1, insertion);
             insertion -= 1;
         }
@@ -106,10 +110,10 @@ fn recompose(
     for index in 0..decomposed.len() {
         claim(0, 1)?;
         let scalar = decomposed[index];
-        let class = canonical_combining_class(scalar, claim)?;
+        let class = canonical_combining_class(scalar);
         if let Some(starter_index) = starter {
             if last_class == 0 || last_class < class {
-                if let Some(composite) = compose(decomposed[starter_index], scalar, claim)? {
+                if let Some(composite) = compose(decomposed[starter_index], scalar) {
                     decomposed[starter_index] = composite;
                     continue;
                 }
@@ -128,44 +132,30 @@ fn recompose(
     Ok(())
 }
 
-fn canonical_combining_class(
-    scalar: char,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<u8, FontError> {
+fn canonical_combining_class(scalar: char) -> u8 {
     let codepoint = scalar as u32;
-    Ok(search(
-        CANONICAL_COMBINING_CLASS,
-        |&(start, end, _)| {
-            if end < codepoint {
-                Ordering::Less
-            } else if start > codepoint {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        },
-        claim,
-    )?
-    .map_or(0, |index| CANONICAL_COMBINING_CLASS[index].2))
+    search(CANONICAL_COMBINING_CLASS, |&(start, end, _)| {
+        if end < codepoint {
+            Ordering::Less
+        } else if start > codepoint {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    })
+    .map_or(0, |index| CANONICAL_COMBINING_CLASS[index].2)
 }
 
-fn compose(
-    first: char,
-    second: char,
-    claim: &mut impl FnMut(u64, u64) -> Result<(), FontError>,
-) -> Result<Option<char>, FontError> {
-    claim(0, 1)?;
+fn compose(first: char, second: char) -> Option<char> {
     if let Some(composed) = compose_hangul(first, second) {
-        Ok(Some(composed))
+        Some(composed)
     } else {
         let pair = (first as u32, second as u32);
-        Ok(search(
-            CANONICAL_COMPOSITION,
-            |&(first, second, _)| (first, second).cmp(&pair),
-            claim,
-        )?
+        search(CANONICAL_COMPOSITION, |&(first, second, _)| {
+            (first, second).cmp(&pair)
+        })
         .ok()
-        .and_then(|index| char::from_u32(CANONICAL_COMPOSITION[index].2)))
+        .and_then(|index| char::from_u32(CANONICAL_COMPOSITION[index].2))
     }
 }
 
@@ -187,11 +177,37 @@ fn compose_hangul(first: char, second: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ordering_charges_actual_preceding_comparisons_without_swap_prices() {
+        for limit in [4, 5] {
+            let mut scalars = ['\u{0315}', '\u{0300}', '\u{0300}'];
+            let mut visits = 0;
+            let result = super::canonical_order(&mut scalars, &mut |bytes, count| {
+                assert_eq!(bytes, 0);
+                if visits + count > limit {
+                    return Err(super::FontError::Limit {
+                        resource: "ordering visits",
+                        limit,
+                    });
+                }
+                visits += count;
+                Ok(())
+            });
+            if limit == 5 {
+                result.unwrap();
+                assert_eq!(scalars, ['\u{0300}', '\u{0300}', '\u{0315}']);
+            } else {
+                assert!(result.is_err());
+            }
+            assert_eq!(visits, limit);
+        }
+    }
+
     fn normalize(value: &str) -> String {
         let resources = crate::font::canonical::OperationFontResources::new();
         super::normalize(value, &mut |bytes, work| {
             resources.claim_bytes(bytes)?;
-            resources.claim_work(work)
+            resources.claim_visits(work)
         })
         .unwrap()
     }

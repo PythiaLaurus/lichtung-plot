@@ -67,7 +67,7 @@ impl PreparedTextRequirement {
         if let Some(stage) = prepared_stage.as_deref_mut() {
             let mut present = false;
             for entry in requirements.iter() {
-                stage.font_resources().claim_work(1)?;
+                stage.font_resources().claim_visits(1)?;
                 if entry.component_address == address {
                     present = true;
                     break;
@@ -134,12 +134,13 @@ impl PreparedTextRequirement {
         if let Some(stage) = prepared_stage.as_deref_mut() {
             let work = appearance
                 .stack
-                .len()
+                .chars()
+                .count()
                 .checked_add(generated_alphabet.len())
                 .ok_or(PreparedTextCensusError::Arithmetic(
                     "borrowed text census work",
                 ))?;
-            stage.font_resources().claim_work(
+            stage.font_resources().claim_visits(
                 u64::try_from(work).map_err(|_| {
                     PreparedTextCensusError::Arithmetic("borrowed text census work")
                 })?,
@@ -158,7 +159,7 @@ impl PreparedTextRequirement {
                         ))?;
                     stage
                         .font_resources()
-                        .claim_work(u64::try_from(work).map_err(|_| {
+                        .claim_visits(u64::try_from(work).map_err(|_| {
                             PreparedTextCensusError::Arithmetic("borrowed text census work")
                         })?)?;
                 }
@@ -459,14 +460,13 @@ impl PreparedTextCensus {
             if !requirement.source_work_admitted {
                 prepared_stage
                     .font_resources()
-                    .claim_work(requirement.scalar_occurrence_count()?)?;
+                    .claim_visits(requirement.scalar_occurrence_count()?)?;
             }
         }
         self.materialize_required_scalars(&mut presence, Some(prepared_stage))?;
         let environment = PreparedFontEnvironment::discover_system_with_prepared_resources(
             presence,
             prepared_stage.font_resources(),
-            prepared_stage.generation_resources(),
             discovery,
             prepared_stage,
         )?;
@@ -572,7 +572,7 @@ impl PreparedTextCensus {
         environment: &PreparedFontEnvironment,
         presence: &mut [u64],
     ) -> Result<(), PreparedTextCensusError> {
-        environment.claim_preflight_work(self.scalar_occurrence_count()?)?;
+        environment.claim_preflight_visits(self.scalar_occurrence_count()?)?;
         self.materialize_required_scalars(presence, None)?;
         self.prepare_pairs_in(environment, None)
     }
@@ -1859,7 +1859,7 @@ mod tests {
                             let work = 16 + u64::try_from(alphabet.len()).unwrap();
                             stage
                                 .font_resources()
-                                .claim_work(1_000_000 - work + u64::from(refuse))
+                                .claim_visits(1_000_000 - work + u64::from(refuse))
                                 .unwrap();
                             let appearance = appearance("Test Sans", TextWeight::Bold);
                             let result = if formatted {
@@ -1899,7 +1899,7 @@ mod tests {
                                     4 + u64::try_from(alphabet.len()).unwrap()
                                 );
                                 assert_eq!(
-                                    stage.font_resources().usage().unwrap().logical_work,
+                                    stage.font_resources().usage().unwrap().processing_visits,
                                     1_000_000
                                 );
                             }
@@ -1950,7 +1950,10 @@ mod tests {
                     }
                     .map_err(|error| Error::Render(error.to_string()))?;
                     assert_eq!(source.source, "1\u{0301}");
-                    assert_eq!(stage.font_resources().usage().unwrap().logical_work, 12);
+                    assert_eq!(
+                        stage.font_resources().usage().unwrap().processing_visits,
+                        12
+                    );
                     let expected_bytes =
                         3 + 2 * "Test Sans".len() + std::mem::size_of::<FamilyPreference>();
                     assert_eq!(
@@ -2026,7 +2029,7 @@ mod tests {
             |stage| {
                 stage
                     .font_resources()
-                    .claim_work(1_000_000)
+                    .claim_visits(1_000_000)
                     .map_err(|error| Error::Render(error.to_string()))?;
                 let appearance = appearance("Test Sans", TextWeight::Normal);
                 let error = PreparedTextRequirement::new_with_stage(
@@ -2039,7 +2042,7 @@ mod tests {
                     Some(stage),
                 )
                 .unwrap_err();
-                assert!(error.to_string().contains("logical work"));
+                assert!(error.to_string().contains("root processing visits"));
                 assert_eq!(stage.font_resources().usage().unwrap().font_bytes, 0);
                 Ok(())
             },
@@ -2072,7 +2075,7 @@ mod tests {
                 .map_err(|error| Error::Render(error.to_string()))?;
                 let storage_pointer = requirements.as_ptr();
                 assert_eq!(requirements[0].source.as_ptr(), source_pointer);
-                let work = stage.font_resources().usage().unwrap().logical_work;
+                let work = stage.font_resources().usage().unwrap().processing_visits;
                 assert_eq!(work, 2 + 1 + "Test Sans".len() as u128);
                 let mut presence = stage.reserve_scalar_presence_map()?;
                 let census =

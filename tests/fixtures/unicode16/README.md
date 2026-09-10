@@ -190,6 +190,11 @@ Neither correction changes official fixture inputs or expected outputs.
 
 ## Runtime Admission
 
+PF4's accepted coarse contract below replaces the prior synthetic prices. Code
+is IN PROGRESS, not yet primary-verified; final comparison review and integrated
+verification remain pending. Prior test observations are retained as historical
+evidence, not proof that the current PF4 work has closed its gates.
+
 Normalization and line breaking expose one fallible implementation each, using
 borrowed root-budget callbacks and existing project-owned errors:
 
@@ -205,20 +210,25 @@ fn linebreaks(
 ) -> Result<Vec<(usize, BreakOpportunity)>, TextPlanError>;
 ```
 
-Callback arguments are newly requested storage bytes and work units. Canonical
-family-name validation, UTF-16 decoding, and normalization use the operation's
-existing `FontBudget` byte/work ledgers. Text line breaking and grapheme filtering
-use the shared root text-generation work ledger and the same operation's font
-byte ledger for scratch allocations. No production callback resets counters,
-creates a local budget, swallows a refusal, or retries without limits.
+Callback arguments are newly requested storage bytes and actual processing visits.
+Canonical family-name validation, UTF-16 decoding, normalization, text line breaking,
+and grapheme filtering share ONE cumulative operation/root font+text ledger with
+an inclusive 1,000,000 processing-visit limit. Font resources, text resources, and
+clones retain the same consumption; no callback resets counters, creates a local
+quota, swallows a refusal, or retries without limits.
 
-The existing limits remain 1,000,000 font work units, 1,000,000 text-generation
-work units, and 536,870,912 font/storage bytes. Unicode scratch buffers are
-charged as bytes, not mislabeled as retained candidate-generation slots; the
-independent 1,000,000-slot limit and its exact-boundary tests remain unchanged.
-The canonical pair-resolution work test includes one shared normalization for
-both weights: 20 resolution units, 570 normalization units for `Test Sans`, and
-40 units for cache keys, retention, and copying.
+Independent admissions remain 1,000,000 each for retained planning records,
+measurement/intrinsic calls, cache entries, prepared topology slots, and discovery
+entries, plus 536,870,912 (512 MiB) cumulative font/source/scratch bytes before
+read or retention. Unicode scratch buffers consume bytes, not candidate slots.
+Processing, records, calls, and cache remain the four planning-counter classes;
+sharing font/text processing does not add a fifth class. Counters do not bound
+CPU instructions, wall time, RSS, allocator overhead, or third-party allocations.
+
+Prior pair-resolution evidence charged 20 resolution units, 570 normalization
+units for `Test Sans`, and 40 cache-key/retention/copy units with one normalization
+shared across weights. Those figures belong to the superseded two-work-ledger
+policy, not current charges or measured CPU operations.
 
 Input lengths are checked against the u32 representation before scanning.
 Each actual decoding/segmentation pass is admitted before it starts. Text's
@@ -229,40 +239,42 @@ charged as a new allocation and is never normalized for rendering.
 All first-party Unicode buffers use checked size/capacity arithmetic and
 `try_reserve_exact` before writes. Incremental geometric growth charges the
 complete new allocation (conservatively accounting for coexistence with the
-old buffer) and potential copying before reserve. String-copy work is admitted
-before appending. Allocator failure returns `Allocation`; arithmetic overflow
+old buffer) before reserve. Copying and hashing have no extra processing price;
+actual storage still requires admission. Allocator failure returns `Allocation`; arithmetic overflow
 returns `Arithmetic`; callback errors retain their original typed classification.
 A refusal is terminal, so successful earlier claims are not rolled back.
 
 ### Normalization Work
 
-Every casefold/decomposition/combining-class/composition table comparison is
-admitted before comparing. Recursive canonical decomposition charges each
-expanded node and its output storage, including algorithmic Hangul expansion.
-NFC ordering charges each ordering comparison and swap before execution, so a
-long descending combining-class run cannot finish quadratic work beyond the
-root limit. Recomposition is in-place in the admitted character buffer, avoiding
-another vector allocation. The final UTF-8 string is incrementally admitted.
-Canonical UTF-16 validation passes and the bounded dependency decode are also
-admitted before entering the decoder.
+Fixed Unicode-table binary searches carry no per-comparison processing price.
+Normalization admits actual scalar-pass inputs and decomposition nodes, including
+algorithmic Hangul expansion; output storage is admitted separately. Variable
+lookups count actual examined elements, not unused list tails. NFC ordering guards
+each actual preceding comparison in its variable/quadratic scan, not a fixed
+allowance or extra swap price. Recomposition stays in-place in admitted storage;
+the final UTF-8 string grows with checked byte admission and fallible reservation.
+Canonical UTF-16 validation and bounded dependency decoding admit their actual
+input before processing. These guards are not a third-party CPU/OOM guarantee.
 
 ### Line-Break Work
 
 UAX #14 builds only the collapsed scalar buffer, not an additional raw-scalar
 vector. It caches the previous non-space index, numeric-prefix state, and RI
 parity in one linear pass. All later backward-context queries are O(1), replacing
-the earlier repeated prefix scans. Work is conservatively charged before each
-bounded stage: 64 units per input scalar for properties and LB1/LB9/LB10, 8 per
-collapsed scalar for context construction, and 256 per boundary for the complete
-fixed rule cascade and lookahead. A test checks the property allowance against
-the pinned table search depths. There are no hidden variable-length scans in
-the cascade. Break offsets, mandatory opportunities, and the LB25/LB8a fixes are
-unchanged. Grapheme filtering uses an admitted linear intersection of sorted
-boundaries instead of collecting, sorting, and deduplicating an unchecked vector.
+the earlier repeated prefix scans. Actual scalar inputs to variable passes and
+actual boundary visits consume the shared ledger; fixed table searches and rule
+cascades have no separate price. The prior `64` units per input scalar, `8` per
+collapsed scalar, and `256` per boundary were synthetic allowances, not current
+policy. Prior property-depth tests supported those old allowances only. Break
+offsets, mandatory opportunities, and LB25/LB8a semantics remain unchanged.
+Grapheme filtering uses an admitted linear intersection of sorted boundaries;
+storage remains independently admitted before retention.
 
 ### Refusal Evidence
 
-The admission tests exercise the same fallible implementations as conformance:
+Prior admission tests exercised the same fallible implementations as conformance.
+The following records remain historical evidence; PF4 must revalidate refusal
+boundaries in actual visits/bytes rather than preserve synthetic scores:
 
 - Input refusal returns on the first callback, before decoding or allocation.
 - Injected storage refusal leaves destination strings/vectors empty with zero
@@ -295,12 +307,14 @@ retains its existing complete pair results and rejects late resolution.
 `PreparedFontEnvironment::parse_family_stack` supplies a raw-source parser cache
 for text callers. It returns admitted copies of the retained parsed stack; the
 free parser remains the uncached primitive used during initial census parsing.
-All cache lookup work, retained keys/payloads, and returned copies consume the
-existing operation work/byte ledgers. Environment clones share the core and its
-caches; nothing is global, and warm hits do not reset or bypass resource limits.
+Variable cache lookups charge actual examined entries in the shared processing
+ledger. Retained keys/payloads and returned copies consume record/byte admission,
+without extra hash/copy/materialization prices. Environment clones share the core
+and its caches; nothing is global, and warm hits do not reset or bypass limits.
 
-Regression coverage includes 1,000 repeated requests after pre-consuming 900,000
-root work units, with independent parser/normalization/candidate/probe counters.
+Prior regression coverage included 1,000 repeated requests after pre-consuming
+900,000 synthetic root work units, with independent parser/normalization/candidate/
+probe counters. That score is historical, not a current processing-visit claim.
 Adding a space probes just that new painting scalar; adding a mandatory newline
 does not probe a glyph. Changing weight builds its candidate metadata once but
 reuses normalized names. A separate sealed-census regression verifies two pair

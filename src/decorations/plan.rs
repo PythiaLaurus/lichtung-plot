@@ -493,7 +493,7 @@ pub(crate) fn check_assigned_body(
     let pairs = (annotations.len() as u128) * (annotations.len().saturating_sub(1) as u128) / 2;
     theme
         .prepared_font_environment()?
-        .claim_text_generation_work(pairs)
+        .claim_processing_visits(pairs)
         .map_err(|error| Error::Render(format!("assigned annotation collision work: {error:?}")))?;
     let panel = PanelBox::new(
         assigned.x0 + old.x0 - cell.x0,
@@ -540,7 +540,7 @@ fn plan_panel_attempt(
     initial: Option<(PlotRenderResult, GeometryBackend)>,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
     use crate::layout::fit::FitOutcome;
-    let scope = FitScope::new(address, round.attempt_ordinal(address));
+    let scope = FitScope::new(address, round.attempt_ordinal(address)?);
     let context = context.with_fit_scope(&scope);
     let cell = context.panel;
     round.begin_owner(address)?;
@@ -885,7 +885,7 @@ fn plan_panel_attempt(
     let next_frame = match requirements.assign_fit(
         cell,
         next_gutters,
-        &FitScope::new(address, round.attempt_ordinal(address)),
+        &FitScope::new(address, round.attempt_ordinal(address)?),
     )? {
         crate::layout::fit::FitOutcome::Measured(panel) => panel,
         crate::layout::fit::FitOutcome::Miss(reason) => {

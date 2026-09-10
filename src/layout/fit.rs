@@ -190,9 +190,17 @@ pub(crate) fn reserve<T>(
     environment
         .claim_text_generation_slots(count as u128)
         .map_err(|error| Error::Render(format!("{owner}: {error:?}")))?;
-    environment
-        .claim_text_generation_work(count as u128)
-        .map_err(|error| Error::Render(format!("{owner}: {error:?}")))?;
+    if count > values.capacity() - values.len() {
+        let bytes = values
+            .len()
+            .checked_add(count)
+            .and_then(|length| length.checked_mul(std::mem::size_of::<T>()))
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render(format!("{owner}: storage overflow")))?;
+        environment
+            .claim_unicode_bytes(bytes)
+            .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
+    }
     values
         .try_reserve_exact(count)
         .map_err(|error| Error::Render(format!("{owner} allocation: {error}")))

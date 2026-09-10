@@ -22,7 +22,7 @@ thread_local! {
 struct Inputs {
     owners: [ComponentAddress; 2],
     geometry: [u64; 4],
-    plot: Plot,
+    plot: crate::builder::ComposedInputs,
     theme: crate::theme::ResolvedTheme,
     scales: Option<FacetScales>,
     feedback: ChildFeedbackInputs,
@@ -35,6 +35,17 @@ impl Inputs {
         owner: &ComponentAddress,
         round: &FeedbackRound,
     ) -> Result<Self, Error> {
+        let environment = context.theme.prepared_font_environment()?;
+        // under_grid requires one cell segment: its intermediate/final addresses
+        // use one/two segments, and the copied cell address uses one more.
+        environment
+            .claim_text_generation_slots(4)
+            .map_err(|error| Error::Render(format!("child address records: {error:?}")))?;
+        environment
+            .claim_unicode_bytes(
+                4 * std::mem::size_of::<crate::layout::kernel::AddressSegment>() as u64,
+            )
+            .map_err(|error| Error::Render(error.to_string()))?;
         let grid_role = if owner.leaf_role() == AddressRole::CanvasCell {
             AddressRole::CanvasGrid
         } else {
@@ -44,7 +55,7 @@ impl Inputs {
         let owners = [owner.clone(), grid_owner];
         Ok(Self {
             geometry: geometry(context.panel),
-            plot: plot.clone(),
+            plot: plot.retain_composed_inputs(environment)?,
             theme: context.theme.clone(),
             scales: context.facet_scales(),
             feedback: round.child_inputs(&owners)?,
@@ -61,7 +72,7 @@ impl Inputs {
     ) -> bool {
         self.owners[0] == *owner
             && self.geometry == geometry(context.panel)
-            && self.plot.same_composed_inputs(plot)
+            && plot.same_composed_inputs(&self.plot)
             && self.theme == *context.theme
             && self.scales == context.facet_scales()
             && round.child_inputs_equal(&self.feedback, &self.owners)
@@ -200,6 +211,11 @@ impl<'a> ChildPlans<'a> {
         self.validate_owner(owner)?;
         if reuse_enabled() {
             for entry in &self.measurements {
+                context
+                    .theme
+                    .prepared_font_environment()?
+                    .claim_processing_visits(1)
+                    .map_err(|error| Error::Render(format!("child lookup visits: {error:?}")))?;
                 if entry.phase == phase && entry.inputs.matches(plot, context, owner, round) {
                     return Ok(FitOutcome::Measured(Arc::clone(&entry.result)));
                 }
@@ -216,14 +232,11 @@ impl<'a> ChildPlans<'a> {
         }
         self.measurements
             .retain(|entry| entry.inputs.owners[0] != *owner || entry.phase != phase);
-        context
-            .theme
-            .prepared_font_environment()?
-            .claim_text_generation_slots(1)
-            .map_err(|error| Error::Render(format!("child measurement admission: {error:?}")))?;
-        self.measurements
-            .try_reserve(1)
-            .map_err(|error| Error::Render(format!("child measurement allocation: {error}")))?;
+        crate::render::backend::reserve_text_records(
+            &mut self.measurements,
+            1,
+            context.theme.prepared_font_environment()?,
+        )?;
         self.measurements.push(Measurement {
             inputs: Inputs::new(plot, context, owner, round)?,
             phase,
@@ -244,6 +257,11 @@ impl<'a> ChildPlans<'a> {
         self.validate_owner(owner)?;
         if reuse_enabled() {
             for entry in &self.panels {
+                context
+                    .theme
+                    .prepared_font_environment()?
+                    .claim_processing_visits(1)
+                    .map_err(|error| Error::Render(format!("child lookup visits: {error:?}")))?;
                 if entry.role == role
                     && match (
                         entry.legend_entries.as_deref(),
@@ -285,14 +303,11 @@ impl<'a> ChildPlans<'a> {
         if let Some(feedback) = round.retain_child_feedback(checkpoint)? {
             let inputs = Inputs::new(plot, context, owner, round)?;
             if round.child_stable(&inputs.owners) {
-                context
-                    .theme
-                    .prepared_font_environment()?
-                    .claim_text_generation_slots(1)
-                    .map_err(|error| Error::Render(format!("child plan admission: {error:?}")))?;
-                self.panels
-                    .try_reserve(1)
-                    .map_err(|error| Error::Render(format!("child plan allocation: {error}")))?;
+                crate::render::backend::reserve_text_records(
+                    &mut self.panels,
+                    1,
+                    context.theme.prepared_font_environment()?,
+                )?;
                 self.panels.push(Panel {
                     inputs,
                     role,

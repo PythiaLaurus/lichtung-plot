@@ -83,31 +83,31 @@ fn expansion_and_every_intermediate_share_exact_admission() {
 #[test]
 fn normalization_uses_the_existing_root_without_resetting_it() {
     let resources = OperationFontResources::new();
-    resources.claim_work(999_999).unwrap();
+    resources.claim_visits(999_999).unwrap();
     let shared = resources.clone();
     assert!(matches!(
         nfkc_casefold("A", &mut |bytes, work| {
             shared.claim_bytes(bytes)?;
-            shared.claim_work(work)
+            shared.claim_visits(work)
         }),
         Err(FontError::Limit { .. })
     ));
-    assert!(resources.claim_work(1).is_err());
+    assert!(resources.claim_visits(1).is_err());
 }
 
 #[test]
 fn adversarial_mark_ordering_refuses_before_quadratic_work_finishes() {
     // Both marks survive casefold: all class-232 marks must cross class-230
     // marks. Input/decomposition fits; the ordering comparisons exhaust work.
-    let input = format!("{}{}", "\u{0315}".repeat(600), "\u{0300}".repeat(600));
+    let input = format!("{}{}", "\u{0315}".repeat(1000), "\u{0300}".repeat(1000));
     let resources = OperationFontResources::new();
     assert!(matches!(
         nfkc_casefold(&input, &mut |bytes, work| {
             resources.claim_bytes(bytes)?;
-            resources.claim_work(work)
+            resources.claim_visits(work)
         }),
         Err(FontError::Limit {
-            resource: "font-preflight logical work units",
+            resource: "root processing visits",
             ..
         })
     ));
