@@ -229,6 +229,7 @@ The approved theme and layout targets follow these rules:
 | T5a3p5 | Evaluate repeated font setup | COMPLETE |
 | T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
 | T5a3p7 | Review speculative line extension | COMPLETE |
+| T5a3q | Local-search benchmark coverage and placement comparisons | IN PROGRESS |
 | T5a4 | Root title-block plans | PENDING |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
@@ -3982,14 +3983,94 @@ T5a4 and later phases remain PENDING, not started by this closure. Historical
 T5a3 evidence and old mapped IDs remain historical; the final evidence above
 certifies this follow-up. No push is requested or performed.
 
+### T5a3q: Local-Search Benchmark Coverage And Placement Comparisons
+
+**Status**: IN PROGRESS
+
+Dependencies: completed T5a3p; user approval of `tests/benchmarks/` and measurement
+of the remaining local choices. This stage measures existing behavior; it does
+not change placement priority, wrapping, tick selection, font policy, or limits.
+
+The original nine end-to-end publication workloads contain no nonempty legends.
+Their root/shape counts and timings therefore do not measure Auto placement cost.
+The earlier low-single-digit-millisecond estimate is a hypothesis, not acceptance
+evidence. Record actual trials and decisions rather than substituting worst-case
+caps, synthetic visit totals, or aggregate font-shape calls for those counts.
+
+#### Organization And Execution
+
+- Move the existing ignored release harness to `tests/benchmarks/suite.rs`, loaded
+  as a crate-private test module from `src/orchestrator/tests.rs`. Add focused
+  sibling modules for legends, annotations, text/specialized layout, and fonts.
+  Reuse the Rust test harness and existing helpers; no public instrumentation API,
+  benchmark framework/dependency, Python, `tools/`, or separate executable target.
+- Keep expensive measurements explicitly ignored in ordinary runs. Use
+  `cargo test --release --locked --offline --lib benchmarks -- --ignored --nocapture --test-threads=1`.
+  Small counter/fixture-contract tests remain normal tests. No wall-time threshold
+  makes ordinary CI fail. Compiler validation remains strict all-target Clippy.
+- Generate small deterministic input data in Rust. Do not commit rendered images,
+  full upstream corpora, or large raw result collections. Record concise results,
+  reproduction conditions, and interpretation in documentation.
+- Preserve the original nine workloads as a no-guide control and regression
+  baseline. Separate font setup, planning, capture, validation, serialization,
+  rasterization, and publication. Counters/timers are opt-in and `cfg(test)` only;
+  report instrumentation overhead and uncontrolled OS/scheduling conditions.
+
+#### Required Coverage
+
+| Group | Cases and comparisons | Actual observations required |
+| --- | --- | --- |
+| Outside legends | Same data under Auto, explicit outside right, and explicit bottom: a small right-fitting legend, a narrow/body-starving right arrangement, and many entries needing reflow | Nonempty legend assertion; each attempted edge/flow, owning round, body check, rejection/provisional/acceptance, final successful placement, calls and timings |
+| Shared guides | Nonempty Canvas/facet guide with adequate and pressured space | Shared-owner attempts versus root rounds; cached/repeated work and final placement |
+| Inside legends | Sparse and crowded geometry with a populated inside legend | Corner/clearance choices and actual geometry/annotation overlap scans, not just four possible corners |
+| Significance | Valid increasing bracket counts that exercise automatic headroom | Level checks, actual range-growth and bisection trials, repeated calculations, elapsed cost and final fit |
+| Heatmap text | Wrap and existing elision policies with short/long labels and multiple categories | Prefix-fit trials, text/shape work, selected text and preserved uniqueness; distinguish policy choice from searching between modes |
+| Matrix text | Short and long variable names at adequate/tight cell sizes | Actual local label/cell iterations separately from root feedback and tick work |
+| Font coverage | Controlled narrow/wider candidate and character coverage sets, plus representative system-font preparation | Candidate counts, scalar/unit coverage probes, cache reuse and elapsed setup; keep font candidates distinct from layout trials |
+| Text wrapping | Short and multi-line paragraphs with the existing extension rule | Proposal visits, exact line trials, shape calls, retained lines/glyphs and cache reuse; no alternative paragraph count inferred from shape calls |
+
+Current Beeswarm bin offsets and fixed panel-annotation corners are not tangent
+packing or automatic annotation-corner searches. If included as controls, label
+their deterministic work accurately rather than invent candidate counts.
+
+#### Comparison Rules And Acceptance
+
+- Auto accepts the first complete fitting arrangement in the existing
+  right/preferred, right/compact, top, bottom, left order. Do not describe it as
+  selecting the aesthetically best position. Explicit right fixes the edge, not
+  the absence of text reflow or compact flow.
+- Pair successful Auto with the explicit placement that it actually selects;
+  compare decoded PNG output and retained geometry, and report SVG/PNG hashes.
+  If explicit right fails while Auto succeeds, report failure separately rather
+  than calling the failed operation a faster successful render.
+- Use repeated release samples with deterministic inputs and interleaved policy
+  order for paired cases. Report sample count, minima/medians and outliers, build
+  profile, hardware, font environment, dimensions and output modes. Do not turn
+  noisy measurements into a universal speedup or maximum-latency claim.
+- Counters must distinguish attempted work, cached replay, and successful final
+  choices. A provisional selection is not final fit; record the root round and
+  terminal outcome. Add normal tests proving counter activation/reset and that
+  fixtures genuinely reach the named paths. Failed fixtures must not disappear
+  from the report or silently substitute a simpler workload.
+- Preserve rendering algorithms and existing snapshots. Any discovered functional
+  bug or proposed optimization needs a separately scoped correction, not an
+  unreported change to make a benchmark look better.
+- Run all explicit benchmark groups, scoped counter/behavior tests, strict Clippy,
+  and `just verify`; inspect and document results before completion. The outcome
+  is a cost/coverage assessment and prioritized recommendations, not automatic
+  permission for another optimizer or a changed public API.
+
+Commit: `test(perf): cover local search and legend placement costs`.
+
 ### T5a4: Root Title-Block Plans
 
 **Status**: PENDING
 
 Dependencies: completed revised T5a1/T5a1r and T5a3 through T5a3f. Their repair
 gate is satisfied by the integrated verification, not merely historical commits.
-The post-T5a3 T5a3p disposition/implementation gate above must also close before
-starting. T5a4 remains PENDING; prior closure does not implement its scope.
+The post-T5a3 T5a3p gate is complete. T5a3q's requested benchmark coverage must
+also close before starting. T5a4 remains PENDING; prior closure does not implement
+its scope.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.
