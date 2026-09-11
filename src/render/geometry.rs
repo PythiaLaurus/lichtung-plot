@@ -318,7 +318,8 @@ impl GeometryBackend {
                 )?,
             );
             let placement = PlannedTextPlacement {
-                position,
+                // This predictor is limited to deferred data-anchored annotations.
+                position: Point2D::new(position.x.round_ties_even(), position.y.round_ties_even()),
                 ..text.placement
             };
             let canonical = backend::validate_planned_text(placement, &text.plan)?;

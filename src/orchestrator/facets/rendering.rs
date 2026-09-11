@@ -116,7 +116,7 @@ pub(super) fn plan_facet_strip(
     )?;
     let first_y =
         facet.panel.y1 + 14.0 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
-    Ok(PlacedText::from_first_line(
+    Ok(PlacedText::from_deferred_first_line(
         plan,
         Point2D::new(
             f64::midpoint(facet.panel.x0, facet.panel.x1).round(),
@@ -166,7 +166,7 @@ pub(super) fn plan_shared_facet_axis_labels(
             false,
         )?;
         let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
-        plans.push(PlacedText::from_first_line(
+        plans.push(PlacedText::from_deferred_first_line(
             plan,
             Point2D::new(f64::midpoint(grid.x0, grid.x1).round(), first_y.round()),
             TextAnchor::Middle,
@@ -185,7 +185,7 @@ pub(super) fn plan_shared_facet_axis_labels(
         let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
         let first_x = first_x - plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
         plans.push(
-            PlacedText::from_first_line(
+            PlacedText::from_deferred_first_line(
                 plan,
                 Point2D::new(first_x.round(), f64::midpoint(grid.y0, grid.y1).round()),
                 TextAnchor::Middle,
@@ -223,4 +223,109 @@ pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> String {
         })
         .collect::<Vec<_>>()
         .join(" | ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "fixture has two retained lines per role"
+    )]
+    fn deferred_multiline_facet_chrome_keeps_old_final_pixel_placement() {
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .labels(crate::Labels::raw())
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.facet_header_font_size = 17;
+        theme.typography.axis_title.line_height_multiplier = 1.25;
+        let grid = PanelBox::new(71.25, 372.75, 83.25, 304.75);
+        let facet = FacetPanel {
+            panel_index: 0,
+            row: 0,
+            column: 0,
+            cell: vec![super::super::data::FacetSelector {
+                column: "facet",
+                variable: "Group".into(),
+                level: "First\nSecond".into(),
+            }],
+            rows: vec![0, 1],
+            source_rows: vec![0, 1],
+            panel: grid,
+        };
+        let strip = plan_facet_strip(&plot, &facet, &theme).unwrap();
+        let origin = (57.25, 67.75);
+        let axes = plan_shared_facet_axis_labels(
+            Some("Horizontal\nSecond"),
+            Some("Vertical\nSecond"),
+            grid,
+            origin,
+            &theme,
+        )
+        .unwrap();
+        let size = f64::from(theme.typography.axis_title.font_size);
+        let first = [
+            Point2D::new(
+                f64::midpoint(grid.x0, grid.x1).round(),
+                (grid.y1 + 14.0 + strip.plan.line_height()).round(),
+            ),
+            Point2D::new(
+                f64::midpoint(grid.x0, grid.x1).round(),
+                (origin.1 - size).round(),
+            ),
+            Point2D::new(
+                (origin.0 - size - 8.0 - axes[1].plan.line_height()).round(),
+                f64::midpoint(grid.y0, grid.y1).round(),
+            ),
+        ];
+        let roles = [&strip, &axes[0], &axes[1]];
+        let mut old_placements = Vec::new();
+        for (role, first) in roles.iter().zip(first) {
+            assert_eq!(role.plan.lines.len(), 2);
+            let offset = (role.plan.lines.len() - 1) as f64 * role.plan.line_height() / 2.0;
+            let angle = role.placement.rotation.to_radians();
+            let unrounded = Point2D::new(
+                first.x - offset * angle.sin(),
+                first.y - offset * angle.cos(),
+            );
+            let old = crate::render::coordinates::canonical_text(
+                unrounded,
+                role.placement.rotation,
+                crate::render::coordinates::CoordinatePrecision::Integer,
+            )
+            .unwrap();
+            assert_ne!(
+                unrounded,
+                old.position.value(),
+                "fixture must expose the removed backend snap"
+            );
+            assert_eq!(role.placement.position, old.position.value());
+            old_placements.push(crate::render::backend::PlannedTextPlacement {
+                position: old.position.value(),
+                ..role.placement
+            });
+        }
+        assert!(axes[1].placement.reverse_lines);
+        let mut outputs = Vec::new();
+        for old in [false, true] {
+            let mut svg = crate::render::svg_backend::SvgBackend::in_memory_with_fonts(
+                480,
+                400,
+                theme.prepared_font_environment().unwrap().clone(),
+            );
+            svg.begin(480, 400).unwrap();
+            for (role, expected) in roles.iter().zip(&old_placements) {
+                svg.draw_planned_text(if old { *expected } else { role.placement }, &role.plan)
+                    .unwrap();
+            }
+            svg.end().unwrap();
+            outputs.push(svg.into_bytes().unwrap());
+        }
+        assert_eq!(outputs[0], outputs[1]);
+    }
 }

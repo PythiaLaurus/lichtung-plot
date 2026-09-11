@@ -1,15 +1,8 @@
 //! Title, subtitle, and caption rendering.
 //!
-//! A `TitleBlock` sits outside the data plot area:
-//! - Title is drawn centered at the top.
-//! - Subtitle is drawn centered below the title.
-//! - Caption is drawn centered at the bottom.
-//!
-//! Coordinates use canvas pixel space (top-left origin). The
-//! actual placement is the caller's responsibility — the
-//! `Layout` knows the plot panel's `(x0, x1, y0, y1)` and can
-//! hand the right `(x_center, y_top, y_bottom)` values to
-//! `TitleBlock::draw`.
+//! Standalone Plot roots consume the immutable assigned-width producer in
+//! `plan`. Composed roots retain their deferred centered placement until their
+//! T5a6a adapters connect that same producer. Coordinates are math-style pixels.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -20,6 +13,8 @@
 use crate::layout::{CanvasLayout, ResolvedTextPlan};
 use crate::render::backend::{Backend, PlannedTextPlacement, Point2D, TextAnchor};
 use crate::Error;
+
+pub(crate) mod plan;
 
 /// A canvas-level title / subtitle / caption block.
 #[derive(Debug, Clone, Default)]
@@ -81,38 +76,53 @@ impl TitleBlock {
     /// - `bottom_y` is the pixel y-coordinate of the caption's
     ///   baseline (bottom of the canvas).
     ///
-    /// All three roles remain centered until root title-block planning activates
-    /// the resolved alignment. Missing roles are skipped.
+    /// Standalone roots consume frozen role placements. Only deferred composition
+    /// still uses the centered anchors below. Missing roles are skipped.
     pub(crate) fn draw(
         &self,
         backend: &mut dyn Backend,
         canvas_width: u32,
         canvas: &CanvasLayout,
     ) -> Result<(), Error> {
+        let (plans, baselines) = match &canvas.root_text {
+            crate::layout::canvas::CanvasRootText::Planned(plan) => {
+                return plan.draw(
+                    [
+                        self.title.as_deref(),
+                        self.subtitle.as_deref(),
+                        self.caption.as_deref(),
+                    ],
+                    backend,
+                )
+            }
+            crate::layout::canvas::CanvasRootText::Deferred { plans, baselines } => {
+                (plans, baselines)
+            }
+        };
         let x = f64::from(canvas_width) / 2.0;
 
         draw_planned_role(
             backend,
             x,
             self.title.as_deref().filter(|value| !value.is_empty()),
-            canvas.title_plan.as_ref(),
-            &canvas.title_lines_y,
+            plans[0].as_ref(),
+            &baselines[0],
             "title",
         )?;
         draw_planned_role(
             backend,
             x,
             self.subtitle.as_deref().filter(|value| !value.is_empty()),
-            canvas.subtitle_plan.as_ref(),
-            &canvas.subtitle_lines_y,
+            plans[1].as_ref(),
+            &baselines[1],
             "subtitle",
         )?;
         draw_planned_role(
             backend,
             x,
             self.caption.as_deref().filter(|value| !value.is_empty()),
-            canvas.caption_plan.as_ref(),
-            &canvas.caption_lines_y,
+            plans[2].as_ref(),
+            &baselines[2],
             "caption",
         )?;
 

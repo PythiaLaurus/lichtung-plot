@@ -779,13 +779,13 @@ pub(crate) struct CanonicalText {
     pub(crate) rotation: CanonicalCoordinate,
 }
 
-pub(crate) fn canonical_text(position: Point2D, rotation: f64) -> Result<CanonicalText, Error> {
+pub(crate) fn canonical_text(
+    position: Point2D,
+    rotation: f64,
+    precision: CoordinatePrecision,
+) -> Result<CanonicalText, Error> {
     Ok(CanonicalText {
-        position: CanonicalPoint::from_raw(
-            position,
-            CoordinatePrecision::Integer,
-            "text position",
-        )?,
+        position: CanonicalPoint::from_raw(position, precision, "text position")?,
         rotation: CanonicalCoordinate::from_f64(
             rotation,
             CoordinatePrecision::Tenths,

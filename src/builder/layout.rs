@@ -56,10 +56,25 @@ impl Plot {
         theme: &ResolvedTheme,
     ) -> Result<CanvasLayout, Error> {
         let labels_present = self.axis_label_presence();
-        let canvas = CanvasLayout::measured_single_panel(
-            self.width,
-            self.height,
-            theme,
+        let measure = |spec, text| {
+            if self.kind == PlotKind::Matrix || self.has_facets() {
+                CanvasLayout::measured_single_panel(self.width, self.height, theme, spec, text)
+            } else {
+                CanvasLayout::measured_plot_root(
+                    self.width,
+                    self.height,
+                    theme,
+                    spec,
+                    text,
+                    crate::decorations::title_block::plan::RootAlignments::resolve(
+                        theme,
+                        [self.title_alignment, self.subtitle_alignment],
+                        [None, None],
+                    ),
+                )
+            }
+        };
+        let canvas = measure(
             CanvasLayoutSpec {
                 has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
                 has_subtitle: self

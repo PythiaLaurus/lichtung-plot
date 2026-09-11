@@ -1004,9 +1004,9 @@ pub(crate) struct AxisAppearance {
     pub(crate) spacing: AxisSpacing,
 }
 
-/// Horizontal alignment of every role in one root title block.
+/// Physical horizontal alignment of a root text role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RootTitleBlockAlignment {
+pub(crate) enum TitleAlignment {
     /// Align to the physical left edge of the local span.
     #[allow(
         dead_code,
@@ -1023,12 +1023,8 @@ pub(crate) enum RootTitleBlockAlignment {
     End,
 }
 
-impl RootTitleBlockAlignment {
+impl TitleAlignment {
     /// Resolve this alignment into one physical x coordinate and backend anchor.
-    #[allow(
-        dead_code,
-        reason = "private root alignment is resolved now and applied by T5a4 title plans"
-    )]
     pub(crate) fn resolve_physical(self, span_start: f64, span_end: f64) -> (f64, TextAnchor) {
         match self {
             Self::Start => (span_start, TextAnchor::Start),
@@ -1044,8 +1040,6 @@ impl RootTitleBlockAlignment {
 /// Root title-block appearance and local spacing.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct RootTitleBlockAppearance {
-    /// Shared title, subtitle, and caption alignment.
-    pub(crate) alignment: RootTitleBlockAlignment,
     /// Gap between adjacent title and subtitle line boxes.
     pub(crate) title_subtitle_gap: f64,
     /// Clearance between the top title block and root content.
@@ -1056,7 +1050,14 @@ pub(crate) struct RootTitleBlockAppearance {
 
 /// Root composition appearance.
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "root policies are distinct from future panel composition policies"
+)]
 pub(crate) struct CompositionAppearance {
+    pub(crate) root_title_alignment: TitleAlignment,
+    pub(crate) root_subtitle_alignment: Option<TitleAlignment>,
+    pub(crate) root_caption_alignment: TitleAlignment,
     /// Plot or Canvas root title block.
     pub(crate) root_title_block: RootTitleBlockAppearance,
 }
@@ -1149,8 +1150,10 @@ fn resolved_theme(
             },
         },
         composition: CompositionAppearance {
+            root_title_alignment: TitleAlignment::Center,
+            root_subtitle_alignment: None,
+            root_caption_alignment: TitleAlignment::Start,
             root_title_block: RootTitleBlockAppearance {
-                alignment: RootTitleBlockAlignment::Center,
                 title_subtitle_gap: 0.0,
                 title_block_to_content_clearance: 14.0,
                 caption_to_content_clearance: 12.0,
@@ -1476,8 +1479,10 @@ mod tests {
                 },
             },
             composition: CompositionAppearance {
+                root_title_alignment: TitleAlignment::Center,
+                root_subtitle_alignment: None,
+                root_caption_alignment: TitleAlignment::Start,
                 root_title_block: RootTitleBlockAppearance {
-                    alignment: RootTitleBlockAlignment::Center,
                     title_subtitle_gap: 0.0,
                     title_block_to_content_clearance: 14.0,
                     caption_to_content_clearance: 12.0,
@@ -1577,8 +1582,8 @@ mod tests {
     fn all_built_ins_center_the_root_title_block() {
         for theme in BUILT_IN_THEMES {
             assert_eq!(
-                theme.resolve().composition.root_title_block.alignment,
-                RootTitleBlockAlignment::Center,
+                theme.resolve().composition.root_title_alignment,
+                TitleAlignment::Center,
                 "{theme:?}"
             );
         }
@@ -1588,15 +1593,15 @@ mod tests {
     fn root_alignment_resolves_physical_x_and_anchor() {
         let span = (12.0, 92.0);
         assert_eq!(
-            RootTitleBlockAlignment::Start.resolve_physical(span.0, span.1),
+            TitleAlignment::Start.resolve_physical(span.0, span.1),
             (12.0, TextAnchor::Start)
         );
         assert_eq!(
-            RootTitleBlockAlignment::Center.resolve_physical(span.0, span.1),
+            TitleAlignment::Center.resolve_physical(span.0, span.1),
             (52.0, TextAnchor::Middle)
         );
         assert_eq!(
-            RootTitleBlockAlignment::End.resolve_physical(span.0, span.1),
+            TitleAlignment::End.resolve_physical(span.0, span.1),
             (92.0, TextAnchor::End)
         );
     }

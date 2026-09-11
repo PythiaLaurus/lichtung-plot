@@ -454,3 +454,64 @@ impl Plot {
         Ok(self.source_row_map())
     }
 }
+
+#[cfg(test)]
+mod root_title_tests {
+    use super::*;
+    use crate::theme::TitleAlignment::{Center, End, Start};
+
+    #[test]
+    fn standalone_root_freezes_independent_alignment_before_null_and_svg() {
+        for preset in [
+            crate::Theme::Publication,
+            crate::Theme::Nature,
+            crate::Theme::Science,
+            crate::Theme::CHI,
+        ] {
+            let mut plot = Plot::scatter(
+                crate::NumericValues::new("x", [0.0, 1.0]),
+                crate::NumericValues::new("y", [0.0, 1.0]),
+            )
+            .title("Title\nx")
+            .subtitle("Subtitle\ny")
+            .caption("Caption\nz")
+            .size(333, 481)
+            .theme(preset)
+            .erase();
+            plot.title_alignment = Some(End);
+            plot.subtitle_alignment = Some(Start);
+            let mut theme = preset.resolve();
+            theme.composition.root_caption_alignment = Center;
+            let plan = PlotPlan::new_with_resolved_theme(&plot, PlotKind::Scatter, theme).unwrap();
+            let retained = plan.root.plan().retained_text();
+            for (source, alignment) in [
+                ("Title\nx", crate::layout::PhysicalTextAlignment::End),
+                ("Subtitle\ny", crate::layout::PhysicalTextAlignment::Start),
+                ("Caption\nz", crate::layout::PhysicalTextAlignment::Center),
+            ] {
+                let roles = retained
+                    .iter()
+                    .filter(|(_, text)| text.source == source)
+                    .collect::<Vec<_>>();
+                assert_eq!(roles.len(), 1);
+                let (placement, text) = roles[0];
+                assert_eq!(text.style.alignment, alignment);
+                assert_eq!(text.lines.len(), 2);
+                let canonical =
+                    crate::render::backend::validate_planned_text(*placement, text).unwrap();
+                assert!((canonical.position.x.value() - placement.position.x).abs() < 0.000_001);
+                assert!((canonical.position.y.value() - placement.position.y).abs() < 0.000_001);
+            }
+            let mut backend = plan.take_svg_backend().unwrap();
+            plan.render(&mut backend).unwrap();
+            let svg = backend.into_bytes().unwrap();
+            let xml = std::str::from_utf8(&svg).unwrap();
+            let document = roxmltree::Document::parse(xml).unwrap();
+            for source in ["Title", "x", "Subtitle", "y", "Caption", "z"] {
+                assert!(document
+                    .descendants()
+                    .any(|node| node.has_tag_name("text") && node.text() == Some(source)));
+            }
+        }
+    }
+}

@@ -632,11 +632,17 @@ impl FeedbackRound {
                 self.observe_number(baseline)?;
             }
         }
-        for (plan, baselines) in [
-            (&canvas.title_plan, &canvas.title_lines_y),
-            (&canvas.subtitle_plan, &canvas.subtitle_lines_y),
-            (&canvas.caption_plan, &canvas.caption_lines_y),
-        ] {
+        let (plans, baselines) = match &canvas.root_text {
+            crate::layout::canvas::CanvasRootText::Planned(plan) => {
+                self.observe_count(0)?;
+                return plan.observe(self);
+            }
+            crate::layout::canvas::CanvasRootText::Deferred { plans, baselines } => {
+                (plans, baselines)
+            }
+        };
+        self.observe_count(1)?;
+        for (plan, baselines) in plans.iter().zip(baselines) {
             self.observe_count(usize::from(plan.is_some()))?;
             if let Some(plan) = plan {
                 self.observe_text(plan)?;

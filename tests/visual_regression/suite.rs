@@ -5,6 +5,21 @@ mod support;
 use support::*;
 
 #[test]
+fn root_title_block_explicit_odd_size_snapshot() {
+    let (x, y) = fixture_values();
+    let out = tempdir().join("root-title-block.svg");
+    Plot::scatter(x, y)
+        .title("Root title\nShort")
+        .subtitle("Independent subtitle\n\nFinal line")
+        .caption("Start caption\nSecond line")
+        .size(333, 401)
+        .svg_preserve_text(&out)
+        .unwrap();
+    let svg = std::fs::read_to_string(out).unwrap();
+    insta::assert_snapshot!(normalize_embedded_font(&svg));
+}
+
+#[test]
 fn scatter_smoke_snapshot() {
     let (x, y) = fixture_values();
     let dir = tempdir();
@@ -74,8 +89,10 @@ fn horizontal_bar_clip_structure_snapshot() {
         &svg,
         &[
             "Horizontal structural title",
-            "A deliberately ",
-            "long category"
+            "A ",
+            "deliberately ",
+            "long ",
+            "category"
         ]
     ));
 }

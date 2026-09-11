@@ -589,6 +589,11 @@ pub struct Canvas {
     height: u32,
     title: Option<String>,
     subtitle: Option<String>,
+    // Stored independently of root headings; composition consumes these at T5b.
+    #[allow(dead_code)]
+    pub(crate) panel_title_alignment: Option<crate::theme::TitleAlignment>,
+    #[allow(dead_code)]
+    pub(crate) panel_subtitle_alignment: Option<crate::theme::TitleAlignment>,
     caption: Option<String>,
     labels: Option<Labels>,
     category_labels: CanvasCategoryLabels,
@@ -643,6 +648,8 @@ impl Canvas {
             height: 640,
             title: None,
             subtitle: None,
+            panel_title_alignment: None,
+            panel_subtitle_alignment: None,
             caption: None,
             labels: None,
             category_labels: CanvasCategoryLabels::EveryPlot,
@@ -1049,7 +1056,7 @@ impl Canvas {
                 + 14.0
                 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
             plans.push(CanvasHeaderPlan {
-                text: crate::render::backend::PlacedText::from_first_line(
+                text: crate::render::backend::PlacedText::from_deferred_first_line(
                     plan,
                     Point2D::new(x.round(), y.round()),
                     crate::render::backend::TextAnchor::Middle,
@@ -2057,7 +2064,7 @@ impl Canvas {
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
             headers.push(CanvasHeaderPlan {
-                text: crate::render::backend::PlacedText::from_first_line(
+                text: crate::render::backend::PlacedText::from_deferred_first_line(
                     plan,
                     Point2D::new(
                         f64::midpoint(left, right).round(),
@@ -2168,7 +2175,7 @@ impl Canvas {
             text_panels.push(TextPanelPlan {
                 index,
                 cell,
-                title_placement: crate::render::backend::PlacedText::from_first_line(
+                title_placement: crate::render::backend::PlacedText::from_deferred_first_line(
                     title.plan().clone(),
                     Point2D::new(
                         cell.x0.midpoint(cell.x1).round(),
@@ -2180,7 +2187,7 @@ impl Canvas {
                     0.0,
                 )
                 .placement,
-                body_placement: crate::render::backend::PlacedText::from_first_line(
+                body_placement: crate::render::backend::PlacedText::from_deferred_first_line(
                     body.plan().clone(),
                     Point2D::new(
                         cell.x0.midpoint(cell.x1).round(),
@@ -2694,12 +2701,14 @@ fn plan_panel_header(
     ] {
         if let Some(plan) = plan {
             let first = base + plan.lines.len().saturating_sub(1) as f64 * pitch;
-            plans.push(crate::render::backend::PlacedText::from_first_line(
-                plan,
-                Point2D::new((cell.x0 + 8.0).round(), first.round()),
-                style.anchor,
-                style.rotation,
-            ));
+            plans.push(
+                crate::render::backend::PlacedText::from_deferred_first_line(
+                    plan,
+                    Point2D::new((cell.x0 + 8.0).round(), first.round()),
+                    style.anchor,
+                    style.rotation,
+                ),
+            );
         }
     }
     Ok(plans)

@@ -476,7 +476,9 @@ impl PlacedText {
         clippy::cast_precision_loss,
         reason = "line counts are bounded by text admission"
     )]
-    pub(crate) fn from_first_line(
+    /// Deferred producers retain their whole-pixel block placement until migration.
+    /// Snap after the multiline offset, using the former canonical nearest-even rule.
+    pub(crate) fn from_deferred_first_line(
         plan: ResolvedTextPlan,
         first: Point2D,
         anchor: TextAnchor,
@@ -488,8 +490,8 @@ impl PlacedText {
             plan,
             placement: PlannedTextPlacement::middle(
                 Point2D::new(
-                    first.x - offset * angle.sin(),
-                    first.y - offset * angle.cos(),
+                    (first.x - offset * angle.sin()).round_ties_even(),
+                    (first.y - offset * angle.cos()).round_ties_even(),
                 ),
                 anchor,
                 rotation,
@@ -785,7 +787,11 @@ pub(crate) fn validate_text_style(style: &TextStyle) -> Result<(), Error> {
 
 pub(crate) fn validate_text(position: Point2D, style: &TextStyle) -> Result<CanonicalText, Error> {
     validate_text_style(style)?;
-    coordinates::canonical_text(position, style.rotation)
+    coordinates::canonical_text(
+        position,
+        style.rotation,
+        coordinates::CoordinatePrecision::Integer,
+    )
 }
 
 pub(crate) fn planned_text_style(
@@ -822,7 +828,11 @@ pub(crate) fn validate_planned_text(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
 ) -> Result<CanonicalText, Error> {
-    let canonical = coordinates::canonical_text(placement.position, placement.rotation)?;
+    let canonical = coordinates::canonical_text(
+        placement.position,
+        placement.rotation,
+        coordinates::CoordinatePrecision::Millionths,
+    )?;
     let expected_alignment = match placement.anchor {
         TextAnchor::Start => PhysicalTextAlignment::Start,
         TextAnchor::Middle => PhysicalTextAlignment::Center,
@@ -976,14 +986,15 @@ pub(crate) fn validate_bracket(
 }
 
 pub(crate) fn planned_bracket_placement(canonical: CanonicalBracket) -> PlannedTextPlacement {
+    // Bracket labels remain a deferred producer, separate from subpixel root text.
+    let position = canonical.label_position.value();
+    let position = Point2D::new(position.x.round_ties_even(), position.y.round_ties_even());
     match canonical.orientation {
-        BracketOrientation::Vertical => PlannedTextPlacement::baseline(
-            canonical.label_position.value(),
-            TextAnchor::Middle,
-            0.0,
-        ),
+        BracketOrientation::Vertical => {
+            PlannedTextPlacement::baseline(position, TextAnchor::Middle, 0.0)
+        }
         BracketOrientation::Horizontal => {
-            PlannedTextPlacement::middle(canonical.label_position.value(), TextAnchor::Start, 0.0)
+            PlannedTextPlacement::middle(position, TextAnchor::Start, 0.0)
         }
     }
 }
@@ -1174,6 +1185,80 @@ mod tests {
         assert_eq!(nearest_even_text_half(3), Some(2));
         assert_eq!(nearest_even_text_half(5), Some(2));
         assert_eq!(nearest_even_text_half(7), Some(4));
+    }
+
+    #[test]
+    fn deferred_first_line_snaps_final_half_pixel_offsets_like_old_canonical_text() {
+        let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
+        let plan = environment
+            .plan_text(crate::layout::TextPlanInput {
+                source: "A\nAA",
+                stack: "Test Sans",
+                weight: crate::TextWeight::Normal,
+                font_size: 10,
+                line_height: crate::layout::TextLineHeight::ResolvedQuanta(17 * 1024),
+                maximum_width_quanta: i64::MAX,
+                alignment: PhysicalTextAlignment::Center,
+                paint: Rgba::rgb(0, 0, 0),
+                provenance: crate::layout::TextPlanProvenance {
+                    pair_ordinal: 0,
+                    owner: "deferred placement".into(),
+                },
+                exact_override: false,
+            })
+            .unwrap();
+        for first in [
+            Point2D::new(34.0, 50.0),
+            Point2D::new(35.0, 49.0),
+            Point2D::new(-34.0, -50.0),
+        ] {
+            for rotation in [0.0_f64, -90.0] {
+                let angle = rotation.to_radians();
+                let old = coordinates::canonical_text(
+                    Point2D::new(first.x - 8.5 * angle.sin(), first.y - 8.5 * angle.cos()),
+                    rotation,
+                    coordinates::CoordinatePrecision::Integer,
+                )
+                .unwrap();
+                let placed = PlacedText::from_deferred_first_line(
+                    plan.clone(),
+                    first,
+                    TextAnchor::Middle,
+                    rotation,
+                );
+                assert_eq!(placed.placement.position, old.position.value());
+                assert_eq!(
+                    validate_planned_text(placed.placement, &plan)
+                        .unwrap()
+                        .position
+                        .value(),
+                    old.position.value()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn deferred_bracket_labels_keep_old_final_pixel_placement() {
+        let (mut bracket, style) = valid_bracket();
+        bracket.x_left = 10.25;
+        bracket.x_right = 20.75;
+        bracket.y = 30.5;
+        for orientation in [BracketOrientation::Vertical, BracketOrientation::Horizontal] {
+            bracket.orientation = orientation;
+            let canonical = validate_bracket(&bracket, &style).unwrap();
+            let old = coordinates::canonical_text(
+                canonical.label_position.value(),
+                0.0,
+                coordinates::CoordinatePrecision::Integer,
+            )
+            .unwrap();
+            assert_ne!(canonical.label_position.value(), old.position.value());
+            assert_eq!(
+                planned_bracket_placement(canonical).position,
+                old.position.value()
+            );
+        }
     }
 
     #[test]

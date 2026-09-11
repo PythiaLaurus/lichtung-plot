@@ -3330,7 +3330,7 @@ mod tests {
             environment.plan_text(input("A")).unwrap(),
             environment.plan_text(input("AA")).unwrap(),
         ];
-        let block = crate::render::backend::PlacedText::from_first_line(
+        let block = crate::render::backend::PlacedText::from_deferred_first_line(
             plan.clone(),
             Point2D::new(34.0, 50.0),
             TextAnchor::Middle,

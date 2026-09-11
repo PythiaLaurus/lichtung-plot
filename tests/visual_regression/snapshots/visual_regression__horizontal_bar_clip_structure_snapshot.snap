@@ -1,13 +1,15 @@
 ---
 source: tests/visual_regression/suite.rs
-expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A deliberately \", \"long category\"])"
+expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A \", \"deliberately \", \"long \", \"category\"])"
 ---
-<clipPath id="clip-0"><rect x="172.422" y="52.000" width="157.578" height="159.400"/></clipPath>
+<clipPath id="clip-0"><rect x="156.391" y="46.000" width="173.609" height="165.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
 <g id="axes">
-<text x="50.140625" y="166.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">A deliberately </text>
-<text x="51.1484375" y="185.7568359375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">long category</text>
-<text x="54.228515625" y="25.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Horizontal structural title</text>
+<text x="134.1875" y="145.35546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">A </text>
+<text x="50.171875" y="164.5556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">deliberately </text>
+<text x="111.921875" y="183.755859375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">long </text>
+<text x="74.765625" y="202.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">category</text>
+<text x="54.228515625" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Horizontal structural title</text>

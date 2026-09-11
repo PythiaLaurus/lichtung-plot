@@ -305,7 +305,8 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 
     let error = plot.render_with_backend(&mut backend).unwrap_err();
 
-    assert!(error.to_string().contains("measured canvas text"));
+    assert!(error.to_string().contains("root title block"));
+    assert!(error.to_string().contains("TrackOrResidual"));
     assert_eq!(backend.begins, 0);
 }
 

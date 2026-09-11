@@ -865,8 +865,9 @@ impl Backend for TextPlanningBackend<'_, '_> {
 
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.claim_call()?;
-        backend::validate_text(position, style)?;
-        let placement = PlannedTextPlacement::middle(position, style.anchor, style.rotation);
+        let canonical = backend::validate_text(position, style)?;
+        let placement =
+            PlannedTextPlacement::middle(canonical.position.value(), style.anchor, style.rotation);
         let plan = self.plan_text(
             text,
             style,
@@ -1055,9 +1056,10 @@ impl Backend for TextReplayBackend<'_> {
             return Err(self.mismatch(expected, "raw text"));
         };
         let _ = text;
+        let canonical = backend::validate_text(position, style)?;
         if !same_placement(
             expected.placement,
-            PlannedTextPlacement::middle(position, style.anchor, style.rotation),
+            PlannedTextPlacement::middle(canonical.position.value(), style.anchor, style.rotation),
         ) {
             return Err(Error::Render(format!(
                 "text replay raw text call {} does not match its captured source, style, or placement",
@@ -1912,7 +1914,7 @@ mod tests {
     fn raw_text_capture_is_immutable_and_svg_replay_uses_only_planned_calls() {
         let theme = crate::Theme::Publication.resolve();
         let style = replay_text_style(&theme);
-        let position = Point2D::new(40.0, 60.0);
+        let position = Point2D::new(40.5, 61.5);
         NULL_BEGIN_CALLS.with(|calls| calls.set(0));
         crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
         let source = String::from("captured text");
@@ -1932,6 +1934,16 @@ mod tests {
 
         assert_eq!(plan.call_count(), 1);
         assert_eq!(plan.calls.capacity(), 1);
+        let PlannedCall::RawText(call) = &plan.calls[0] else {
+            panic!("captured raw text");
+        };
+        assert_eq!(
+            call.placement.position,
+            backend::validate_text(position, &style)
+                .unwrap()
+                .position
+                .value()
+        );
         for replay_plan in [plan, plan] {
             SVG_RAW_TEXT_CALLS.with(|calls| calls.set(0));
             SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(0));

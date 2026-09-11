@@ -391,7 +391,7 @@ pub(crate) fn render(
                             })
                             .map_err(crate::layout::fit::PlanError::into_error)?;
                         text.draw(
-                            PlacedText::from_first_line(
+                            PlacedText::from_deferred_first_line(
                                 plan,
                                 Point2D::new(px.round(), (y0 - tick_len - 8.0).round()),
                                 TextAnchor::Middle,
@@ -406,7 +406,7 @@ pub(crate) fn render(
                     let cx = f64::midpoint(x0, x1);
                     let first_y = y0 - tick_len - 28.0;
                     text.draw(
-                        PlacedText::from_first_line(
+                        PlacedText::from_deferred_first_line(
                             column_blocks[col].plan().clone(),
                             Point2D::new(cx.round(), first_y.round()),
                             TextAnchor::Middle,
@@ -474,7 +474,7 @@ pub(crate) fn render(
                             })
                             .map_err(crate::layout::fit::PlanError::into_error)?;
                         text.draw(
-                            PlacedText::from_first_line(
+                            PlacedText::from_deferred_first_line(
                                 plan,
                                 Point2D::new((x0 - tick_len - 4.0).max(0.0).round(), py.round()),
                                 TextAnchor::End,
@@ -493,7 +493,7 @@ pub(crate) fn render(
                             * row_blocks[row].line_height())
                     .max(4.0);
                     text.draw(
-                        PlacedText::from_first_line(
+                        PlacedText::from_deferred_first_line(
                             row_blocks[row].plan().clone(),
                             Point2D::new(first_x.round(), cy.round()),
                             TextAnchor::Middle,

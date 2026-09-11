@@ -942,7 +942,7 @@ fn draw_colorbar(
         &stops,
     )?;
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             values[1].clone(),
             Point2D::new(
                 (left + 18.0).round(),
@@ -954,7 +954,7 @@ fn draw_colorbar(
         backend,
     )?;
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             values[0].clone(),
             Point2D::new((left + 18.0).round(), (bottom - 12.0).max(0.0).round()),
             TextAnchor::Start,
@@ -965,7 +965,7 @@ fn draw_colorbar(
     if let Some(center) = prepared.domain.center {
         if center > prepared.domain.minimum && center < prepared.domain.maximum {
             text.draw(
-                PlacedText::from_first_line(
+                PlacedText::from_deferred_first_line(
                     values[2].clone(),
                     Point2D::new(
                         (left + 18.0).round(),
@@ -987,7 +987,7 @@ fn draw_colorbar(
         }
     }
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             color_label.plan().clone(),
             Point2D::new((left + 55.0).round(), (bottom + height / 2.0).round()),
             TextAnchor::Middle,
@@ -1013,7 +1013,7 @@ fn draw_colorbar(
             },
         )?;
         text.draw(
-            PlacedText::from_first_line(
+            PlacedText::from_deferred_first_line(
                 values
                     .last()
                     .ok_or_else(|| Error::Render("missing colorbar text plan".into()))?

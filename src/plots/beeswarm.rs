@@ -249,7 +249,7 @@ fn draw_colorbar(
         &stops,
     )?;
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             values[0].clone(),
             Point2D::new(
                 (left + 16.0).trunc(),
@@ -261,7 +261,7 @@ fn draw_colorbar(
         backend,
     )?;
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             values[1].clone(),
             Point2D::new((left + 16.0).trunc(), (bottom - 13.0).max(0.0).trunc()),
             TextAnchor::Start,
@@ -270,7 +270,7 @@ fn draw_colorbar(
         backend,
     )?;
     text.draw(
-        PlacedText::from_first_line(
+        PlacedText::from_deferred_first_line(
             label.plan().clone(),
             Point2D::new((left + 47.0).trunc(), (bottom + height / 2.0).trunc()),
             TextAnchor::Middle,

@@ -2,13 +2,13 @@
 source: tests/visual_regression/suite.rs
 expression: "specialized_svg_structure(&svg,\n&[\"Beeswarm structural title\", \"Color\", \"0.100\", \"1.000\"])"
 ---
-<clipPath id="clip-0"><rect x="114.884" y="52.000" width="138.889" height="159.400"/></clipPath>
+<clipPath id="clip-0"><rect x="114.884" y="46.000" width="138.889" height="165.400"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
-<text x="285.4619140625" y="64.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr">1.000</text>
-<text x="286.0771484375" y="223.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr">0.100</text>
-<text x="299.3310546875" y="135.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,318,132)">Color</text>
+<text x="285.4619140625" y="61.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr">1.000</text>
+<text x="286.0771484375" y="220.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr">0.100</text>
+<text x="299.3310546875" y="132.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,318,129)">Color</text>
 <g id="axes">
-<text x="52.9296875" y="25.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Beeswarm structural title</text>
+<text x="52.9296875" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Beeswarm structural title</text>

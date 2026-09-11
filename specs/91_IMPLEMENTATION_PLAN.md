@@ -233,7 +233,7 @@ The approved theme and layout targets follow these rules:
 | T5a3p6 | Avoid duplicate automatic-tick work | COMPLETE |
 | T5a3p7 | Review speculative line extension | COMPLETE |
 | T5a3q | Local-search benchmark coverage and placement comparisons | COMPLETE |
-| T5a4 | Root title-block plans | PENDING |
+| T5a4 | Root title-block plans | COMPLETE |
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
@@ -4115,12 +4115,12 @@ algorithm, font policy, public API, snapshot, or deferred-feature decision.
 
 ### T5a4: Root Title-Block Plans
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: completed revised T5a1/T5a1r and T5a3 through T5a3f. Their repair
 gate is satisfied by the integrated verification, not merely historical commits.
-The post-T5a3 T5a3p and T5a3q gates are complete. T5a4 remains PENDING; prior
-closure does not implement its scope.
+The post-T5a3 T5a3p and T5a3q gates are complete. T5a4 passed the primary's
+integrated verification after the deferred-placement scope repair below.
 
 Objective: establish the reusable root title-block producer and migrate the
 standalone Plot root without requiring composition adapters early.
@@ -4182,6 +4182,69 @@ Evidence:
 - `just verify` passes.
 
 Commit: `feat(layout): plan root title blocks`.
+
+Implementation evidence (2026-09-11):
+
+- `decorations/title_block/plan.rs` supplies independent intrinsic widths and one
+  assigned-width immutable result, with retained text, role boxes, physical
+  alignments, baseline placements, active spacing reserves, and typed fit misses.
+- Standalone Plot uses this producer. `CanvasRootText` separates the planned
+  result from the deferred composed-root carrier, so a standalone root cannot
+  carry parallel text plans and baseline vectors. Matrix, facet, and Canvas
+  adapters remain deferred to T5a6a; panel integration remains deferred to T5b.
+- Private Plot inputs survive marker erasure; private Canvas panel inputs remain
+  separate from root ownership. Built-ins resolve Center/None/Start, with the
+  specified optional subtitle chain. Public `Theme` remains the closed enum and
+  no public alignment builders were added.
+- Retained-text canonicalization preserves subpixel anchors instead of snapping
+  them to whole pixels. The P2 audit found that rounding the first-line anchor
+  alone did not preserve deferred multiline placement: the subsequent half-block
+  offset could still be fractional. `PlacedText::from_deferred_first_line` now
+  explicitly snaps the final block anchor with the former canonical nearest-even
+  rule. It replaces the old helper, with no alias or backend compatibility mode.
+  Facet strips/shared axes, Canvas row titles/column headers/panel headers/
+  TextPanels, Matrix ticks/labels, and beeswarm/heatmap colorbars use that policy.
+  Bracket-label placement and the deferred annotation projection predictor also
+  retain their final pixel snap. Raw-text capture freezes the raw API's canonical
+  position before converting to a retained call; replay validates the same raw
+  position policy. Null, geometry, and SVG still share subpixel validation.
+- The remaining deferred-placement audit found final producer-side rounding in
+  standard axes, deferred outer-root titles, translated legends, panel text,
+  bar/horizontal-bar/interval-estimate labels, waterfall annotations, line-point
+  labels, Canvas row headers, and heatmap cells. These needed no new placement
+  route. No composed owner is migrated to the T5a4 root producer by this repair.
+- P2 regression evidence compares actual multiline facet strip and horizontal/
+  reversed vertical shared-axis plans and SVG bytes against the old integer
+  canonical placement. Additional checks cover positive/negative half-pixel
+  nearest-even offsets, both bracket orientations, and fractional raw capture.
+  The standalone-root test continues to require fractional retained placement.
+- Focused evidence covers all role-presence combinations, all presets, all 27
+  independent alignment combinations, RTL/mixed text, mandatory blank lines,
+  whitespace, source/cardinality rejection, exact-height refusal, private
+  precedence/order/replacement, and production Null/SVG replay. The existing
+  production soft-hyphen test exercises the migrated standalone producer.
+- Inspected snapshot changes: the new 333x401 all-role root retains fractional
+  centers/baselines and Start captions. Beeswarm, horizontal bar, and marginal
+  snapshots reflect measured text height instead of line-count reserves. The
+  horizontal bar's existing height-sensitive axis allocation consequently wraps
+  its long category into four lines rather than two. Matrix and untitled scatter
+  snapshots are unchanged.
+- Passing implementation-owner checks: strict offline all-target Clippy;
+  `cargo test --locked --offline --lib decorations::title_block` (6 tests),
+  `--lib title` (14 tests),
+  `--lib lifecycle` (43), `--lib render::` (95), `--lib layout::canvas` (5),
+  `--test layout` (20), and read-only `--test visual-regression` (6). The final
+  admission test also covers typed intrinsic-width refusal and storage exhaustion.
+  These focused checks preceded primary integrated verification.
+- P2 follow-up checks pass: strict offline all-target Clippy; `--lib deferred_`
+  (12), `--lib render::` (97), the fractional raw-capture regression (1), the
+  standalone fractional-root regression (1), and integration targets composition
+  (57), heatmap (35), marginal-matrix (18), and visual-regression (6). The snapshot
+  run was read-only and required no further updates. No `just verify` or commit
+  was performed by the implementation owner.
+- Primary `just verify` passed: formatting, strict all-target Clippy, 705 library
+  tests (17 ignored), 442 integration tests including six snapshots, API docs,
+  and package verification (210 files). Log: `/tmp/opencode/t5a4-verify.log`.
 
 ### T5a5: Axis, Range, Tick, Frame, And Grid Plans
 
