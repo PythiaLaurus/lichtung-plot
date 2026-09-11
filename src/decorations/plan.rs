@@ -12,7 +12,7 @@ use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
 use crate::layout::PanelBox;
 use crate::render::backend::{self, Backend};
-use crate::render::geometry::GeometryBackend;
+use crate::render::geometry::{GeometryBackend, GeometrySnapshot};
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
     PlotRenderResult,
@@ -513,7 +513,7 @@ fn plan_panel_attempt(
     round: &mut FeedbackRound,
     address: &ComponentAddress,
     assigned_guide: Option<Legend>,
-    initial: Option<(PlotRenderResult, GeometryBackend)>,
+    initial: Option<(PlotRenderResult, GeometrySnapshot)>,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address)?);
@@ -631,11 +631,15 @@ fn plan_panel_attempt(
     let position = planning_plot.legend_position_spec();
     let panel_axes = &result.axes;
     let chrome = if let Some(axes) = &panel_axes {
-        let mut chrome = GeometryBackend::new(context.theme)?;
-        chrome.begin(plot.width(), plot.height())?;
-        let drawn = axes.draw(&mut chrome);
-        backend::finish_scope(drawn, chrome.end(), "assigned axis ink measurement")?;
-        Some(chrome)
+        if result.marks.is_some() {
+            Some(axes.geometry_snapshot(context.theme)?)
+        } else {
+            let mut chrome = GeometryBackend::new(context.theme)?;
+            chrome.begin(plot.width(), plot.height())?;
+            let drawn = axes.draw(&mut chrome);
+            backend::finish_scope(drawn, chrome.end(), "assigned axis ink measurement")?;
+            Some(chrome.into_snapshot())
+        }
     } else {
         None
     };
@@ -1190,8 +1194,34 @@ fn measure_geometry(
     plot: &Plot,
     kind: PlotKind,
     context: PlotRenderContext<'_>,
-) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometryBackend)>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometrySnapshot)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
+    if matches!(
+        kind,
+        PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+    ) {
+        return match fit::outcome(plot.measure_selected_interior(context))? {
+            FitOutcome::Measured(result) => {
+                let mut geometry = GeometrySnapshot::new(context.theme)?;
+                geometry.append(
+                    &result
+                        .marks
+                        .as_ref()
+                        .ok_or_else(|| Error::Render("selected mark plan missing".into()))?
+                        .geometry,
+                )?;
+                geometry.append(
+                    &result
+                        .annotations
+                        .as_ref()
+                        .ok_or_else(|| Error::Render("selected annotation plan missing".into()))?
+                        .geometry,
+                )?;
+                Ok(FitOutcome::Measured((result, geometry)))
+            }
+            FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
+        };
+    }
     let mut geometry = GeometryBackend::new(context.theme)?;
     geometry.begin(plot.width(), plot.height())?;
     let result = plot
@@ -1202,7 +1232,9 @@ fn measure_geometry(
         });
     let result = backend::finish_scope(fit::outcome(result), geometry.end(), "geometry discovery")?;
     match result {
-        FitOutcome::Measured(result) => Ok(FitOutcome::Measured((result, geometry))),
+        FitOutcome::Measured(result) => {
+            Ok(FitOutcome::Measured((result, geometry.into_snapshot())))
+        }
         FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
     }
 }
@@ -1212,7 +1244,7 @@ fn discover_geometry(
     plot: &Plot,
     kind: PlotKind,
     context: PlotRenderContext<'_>,
-) -> Result<(PlotRenderResult, GeometryBackend), Error> {
+) -> Result<(PlotRenderResult, GeometrySnapshot), Error> {
     crate::layout::fit::measured(measure_geometry(plot, kind, context))
         .map_err(crate::layout::fit::PlanError::into_error)
 }
@@ -1870,15 +1902,17 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
     theme: &crate::theme::ResolvedTheme,
 ) -> Result<PanelPlan, Error> {
     let mut output = None;
+    let source = crate::kind::into_erased(plot.clone());
     crate::layout::plan_exact_root(
         plot.width(),
         plot.height(),
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+        |inputs, assigned, round| {
+            let plot = inputs.attach(source.clone())?;
             Ok(crate::layout::MeasuredLayout::new(
                 assigned,
                 crate::layout::fit::measured(plan_panel(
-                    plot,
+                    &plot,
                     kind,
                     cell,
                     role,
@@ -1889,7 +1923,7 @@ pub(crate) fn plan_panel_for_test<K: crate::kind::Marker>(
                 .map_err(crate::layout::fit::PlanError::into_error)?,
             ))
         },
-        |(), _, plan, _| {
+        |_, _, plan, _| {
             output = Some(plan);
             Ok(())
         },

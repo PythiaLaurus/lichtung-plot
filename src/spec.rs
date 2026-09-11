@@ -686,6 +686,7 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) axis_label_width: f64,
     pub(crate) retained_axes: Option<&'a crate::layout::PanelAxisPlan>,
     retained_layout: Option<&'a Layout>,
+    pub(crate) selected_interior: Option<&'a PlotRenderResult>,
     prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
     prepared_limits: [Option<(f64, f64)>; 2],
     prepared_kind: Option<PlotKind>,
@@ -713,6 +714,7 @@ impl<'a> PlotRenderContext<'a> {
             axis_label_width: (panel.width() - 80.0).max(0.0),
             retained_axes: None,
             retained_layout: None,
+            selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
@@ -739,6 +741,7 @@ impl<'a> PlotRenderContext<'a> {
             axis_label_width: (panel.width() - 80.0).max(0.0),
             retained_axes: None,
             retained_layout: None,
+            selected_interior: None,
             prepared_axes: None,
             prepared_limits: [None; 2],
             prepared_kind: None,
@@ -822,7 +825,13 @@ impl<'a> PlotRenderContext<'a> {
         mut self,
         payload: crate::layout::interior::RetainedInteriorPayload<'a>,
     ) -> Self {
-        let crate::layout::interior::RetainedInteriorPayload::LegacyCombined(result) = payload;
+        let result = match payload {
+            crate::layout::interior::RetainedInteriorPayload::LegacyCombined(result) => result,
+            crate::layout::interior::RetainedInteriorPayload::Selected(result) => {
+                self.selected_interior = Some(result);
+                result
+            }
+        };
         self.deferred_annotation_text = Some(&result.deferred_annotation_text);
         self.retained_axes = result.axes.as_ref();
         self.retained_layout = Some(&result.layout);
@@ -1270,7 +1279,8 @@ impl ProducerText<'_> {
 
 /// Current constrained interior result. FitOutcome/PlanError distinguish measured,
 /// terminal fit and fatal outcomes; provisional misses belong to FeedbackRound.
-/// Axes and text are retained here, but marks remain combined until extraction.
+/// Point/path families retain selected marks and annotations; other marks remain combined.
+#[derive(Debug)]
 pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
     pub(crate) axes: Option<crate::layout::PanelAxisPlan>,
@@ -1286,6 +1296,8 @@ pub(crate) struct PlotRenderResult {
     pub(crate) panel_text: Vec<crate::decorations::panel_text::PanelTextPlan>,
     pub(crate) self_managed_legend: Option<std::sync::Arc<crate::decorations::legend::Legend>>,
     pub(crate) matrix_axes: Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>,
+    pub(crate) marks: Option<std::sync::Arc<crate::layout::interior::DeferredMarkPlan>>,
+    pub(crate) annotations: Option<std::sync::Arc<crate::layout::interior::DeferredAnnotationPlan>>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -1303,7 +1315,11 @@ pub(crate) enum DecorationMode {
 
 impl PlotRenderResult {
     pub(crate) fn retained_payload(&self) -> crate::layout::interior::RetainedInteriorPayload<'_> {
-        crate::layout::interior::RetainedInteriorPayload::LegacyCombined(self)
+        if self.marks.is_some() {
+            crate::layout::interior::RetainedInteriorPayload::Selected(self)
+        } else {
+            crate::layout::interior::RetainedInteriorPayload::LegacyCombined(self)
+        }
     }
 
     pub(crate) fn new(layout: Layout, legend_entries: Vec<LegendEntry>) -> Self {
@@ -1322,6 +1338,8 @@ impl PlotRenderResult {
             panel_text: Vec::new(),
             self_managed_legend: None,
             matrix_axes: None,
+            marks: None,
+            annotations: None,
         }
     }
 

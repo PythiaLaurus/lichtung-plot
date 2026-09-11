@@ -239,7 +239,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
 | T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
 | T5a6a2 | Retained canonical primitive geometry | COMPLETE |
-| T5a6a3a | Point/path semantic and payload extraction | PENDING |
+| T5a6a3a | Point/path semantic and payload extraction | COMPLETE |
 | T5a6a3b | Distribution/reference semantic and payload extraction | PENDING |
 | T5a6a3c | Estimate-display semantic and payload extraction | PENDING |
 | T5a6a3d | Bar semantic and payload extraction | PENDING |
@@ -4606,8 +4606,8 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1 and T5a6a2 are complete with focused and primary integrated evidence below.
-Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
+T5a6a1, T5a6a2, and T5a6a3a are complete with focused and primary integrated
+evidence below. Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
 the later native axis/frame migrations; they must not duplicate those migrations.
@@ -4776,6 +4776,51 @@ recheck found no remaining blocker in the conservative stroke-envelope fix.
   verification (222 files). All ten ignored release benchmark groups also pass.
   Logs: `/tmp/opencode/t5a6a2-verify.log` and
   `/tmp/opencode/t5a6a2-benchmarks.log`.
+
+T5a6a3a completion evidence:
+
+- `PreparedInteriorInputs` retains Scatter and Line/Trajectory/LinePath scientific
+  semantics alongside the existing axes. Standalone, facet, and shared-Canvas
+  components prepare once before font discovery; Canvas shared ranges consume
+  those same inputs, and attachment shares their storage. Categorical Trajectory
+  keeps complete normalized condition order and panel-local source diagnostics.
+- Line series, conditional ribbons, supplemental points and labels, neutral
+  trajectories, and source-ordered neutral/hue paths produce selected payloads
+  during backend-free measurement. Series sorting, repeated-x path order, marker
+  policy, palette slots, sparse collective omission, clipping, and legend glyph
+  policy remain intact. No line-family combined renderer route remains.
+- The existing `DeferredMarkPlan`, `DeferredAnnotationPlan`, guide snapshots,
+  geometry snapshots, and selected-interior boundary serve all four families.
+  Obstacles, clearance, reserves, and range consequences consume selected payload
+  geometry. Axis/frame classification remains legacy until T5a6b1; parent chrome
+  observations and the later parent/outer-title migrations are not claimed here.
+- Semantic/projected vectors, strings, shared storage, and collective legend
+  identities use the caller's admission gate before materialization. Tests cover
+  exact-limit acceptance/refusal, payload/legacy ink parity, invalid-source
+  precedence without fonts, one preparation per component, and selected capture
+  against unusable sources. Actual source-column reads, coordinate projections,
+  semantic preparation, and shaping are zero during capture; Null/SVG replay
+  leaves the family-stage counts unchanged.
+- Strict `just lint` and focused tests pass: 6 line extraction, 8 Scatter, 11
+  shared-axis, 23 decoration-plan, 174 orchestrator (10 ignored benchmarks), 12
+  Canvas, 32 geometry, 3 interior-contract, 41 line integration, 57 composition,
+  and all 6 unchanged visual snapshots. These preceded the primary full gate.
+- Review corrections validate every facet's guides against its final reconciled
+  ranges before font discovery, including coordinates valid only under a fixed
+  union. Scatter and Line now share admitted point-legend identity construction,
+  accounting for both dimension and value strings on every projection candidate.
+  Regression tests cover unavailable-font precedence, all four facet scale
+  policies, non-finite/out-of-range guides, long caller-owned dimension names,
+  exact-limit refusal, and cumulative candidate charges. Strict `just lint` and
+  focused checks pass: 9 Scatter, 12 shared-axis, 6 line extraction, 41 line
+  integration, and 57 composition tests.
+- Primary `just verify` passed after the review corrections: 835 library tests
+  (17 ignored), 442 integration tests, strict Clippy, formatting, API docs, and
+  package verification (223 files). All six snapshots remain unchanged.
+  Log: `/tmp/opencode/t5a6a3a-verify.log`.
+
+The following unit is T5a6a3b, extracting Histogram,
+Density, Qq, and Regression through this same interior boundary.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

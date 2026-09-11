@@ -1,915 +1,417 @@
-//! Ordered numeric series with optional caller-provided ribbons.
+//! Root-prepared ordered series, trajectories, and source-ordered paths.
 
-use std::collections::HashSet;
-
-use crate::Error;
-
+use crate::data::{CollectivePair, PlotData};
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{AxisTick, Layout};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle, TextAnchor,
+    with_clip, Backend, FillStyle, LineStyle, PlacedText, Point2D, PointStyle, TextAnchor,
 };
 use crate::spec::{AxisDomain, LinePathStyle, PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
-use crate::Plot;
+use crate::{Error, Plot, PlotKind};
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
+}
+
+#[cfg(test)]
+fn stage(kind: PlotKind, index: usize) {
+    STAGES.with(|stages| {
+        let mut counts = stages.get();
+        let family = match kind {
+            PlotKind::Line => 0,
+            PlotKind::Trajectory => 1,
+            PlotKind::LinePath => 2,
+            _ => unreachable!(),
+        };
+        counts[family][index] += 1;
+        stages.set(counts);
+    });
+}
 
 #[derive(Debug)]
-struct SeriesData {
-    identity: crate::data::CollectivePair,
+pub(crate) struct PreparedLineInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedLine)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedLine {
+    pub(crate) ranges: [(f64, f64); 2],
+    pub(crate) conditions: Option<Vec<String>>,
+    groups: Vec<LineGroup>,
+    hues: Vec<String>,
+    layers: Vec<PointLayer>,
+    primary_color_slots: usize,
+}
+
+#[derive(Debug)]
+struct LineGroup {
+    identity: Option<CollectivePair>,
     hue_index: Option<usize>,
-    points: Vec<SeriesPoint>,
+    points: Vec<LinePoint>,
 }
 
 #[derive(Debug)]
-struct PreparedPointLayer {
-    points: Vec<(f64, f64)>,
-    labels: Option<Vec<String>>,
-    legend_label: Option<String>,
-    style: PointStyle,
-}
-
-type SeriesPoint = (f64, f64, Option<(f64, f64)>);
-
-#[derive(Debug)]
-struct TrajectoryData {
-    groups: Vec<TrajectoryGroup>,
-    hue_levels: Vec<String>,
-    condition_levels: Option<Vec<String>>,
-}
-
-#[derive(Debug)]
-struct TrajectoryGroup {
-    identity: Option<crate::data::CollectivePair>,
-    points: Vec<TrajectoryPoint>,
-    hue_index: Option<usize>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct TrajectoryPoint {
+struct LinePoint {
     x: f64,
     y: f64,
+    interval: Option<(f64, f64)>,
     hue_index: Option<usize>,
 }
 
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    render_series(chart, context, theme, backend)
+#[derive(Debug)]
+struct PointLayer {
+    points: Vec<(f64, f64)>,
+    labels: Option<Vec<String>>,
+    legend: Option<String>,
 }
 
-pub(crate) fn render_trajectory(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    render_grouped(chart, context, theme, backend, false)
+#[derive(Debug)]
+pub(crate) struct LinePayload {
+    #[cfg(test)]
+    kind: PlotKind,
+    clip: crate::layout::PanelBox,
+    marks: Vec<LineMark>,
+    layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
 }
 
-pub(crate) fn render_path(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    render_grouped(chart, context, theme, backend, true)
+#[derive(Debug)]
+enum LineMark {
+    Ribbon(Vec<Point2D>, FillStyle),
+    Line(Vec<Point2D>, LineStyle),
+    Points(Vec<Point2D>, PointStyle),
 }
 
-fn render_series(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let (series, primary_color_slots) = prepare(chart, context.data)?;
-    let mut text = context.producer_text()?;
-    let point_layers = prepare_point_layers(chart, primary_color_slots, theme)?;
-    let layout = context.axis_layout(|| {
-        let x_range = crate::layout::continuous_auto_range(
-            crate::data::min_max(
-                series
-                    .iter()
-                    .flat_map(|series| series.points.iter().map(|point| point.0))
-                    .chain(
-                        point_layers
-                            .iter()
-                            .flat_map(|layer| layer.points.iter().map(|point| point.0)),
-                    ),
-                "line",
-            )?,
-            chart.x_axis_spec(),
-        );
-        let y_data_range = crate::data::min_max(
-            series
-                .iter()
-                .flat_map(|series| {
-                    series.points.iter().flat_map(|point| {
-                        point
-                            .2
-                            .map_or([point.1, point.1], |(lower, upper)| [lower, upper])
-                    })
-                })
-                .chain(
-                    point_layers
-                        .iter()
-                        .flat_map(|layer| layer.points.iter().map(|point| point.1)),
-                ),
-            "line",
-        )?;
-        let y_range = crate::layout::continuous_auto_range(y_data_range, chart.y_axis_spec());
-        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        let panel = context.panel;
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            panel,
-            chart.x_label_text().unwrap_or("").to_owned(),
-            chart.y_label_text().unwrap_or("").to_owned(),
-            &x_axis,
-            &y_axis,
-            theme,
-        )
-    })?;
-    draw_series(chart, &layout, &series, theme, backend)?;
-    draw_point_layers(&layout, &point_layers, theme, &mut text, backend)?;
-
-    let mut legends = series
-        .iter()
-        .filter(|series| series.identity.hue.is_some())
-        .map(|series| {
-            let color = theme.colors[series.hue_index.unwrap_or(0) % theme.colors.len()];
-            let identity = chart.collective_legend_identity(&series.identity)?;
-            let point = chart.point_style(color, 3);
-            let line = LineStyle::solid(color, 1.8);
-            let fill = FillStyle {
-                color,
-                stroke: color,
-                stroke_width: 0.0,
-                opacity: 0.18,
-            };
-            let has_fill = series.points.iter().all(|point| point.2.is_some());
-            Ok(match (chart.markers_visible(), has_fill) {
-                (true, true) => LegendEntry::point_line_fill(identity, point, line, fill),
-                (true, false) => LegendEntry::point_line(identity, point, line),
-                (false, true) => LegendEntry::line_fill(identity, line, fill),
-                (false, false) => LegendEntry::line(identity, line),
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    legends.extend(point_layers.iter().filter_map(|layer| {
-        layer.legend_label.as_ref().map(|label| {
-            LegendEntry::point(chart.legend_identity(label.clone()), layer.style.clone())
-                .without_hue_level()
-        })
-    }));
-    let mut result = PlotRenderResult::new(layout, legends);
-    result.producer_text = text.finish()?;
-    Ok(result)
-}
-
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<(f64, f64), Error> {
-    let (ranges, categories) = axis_inputs(chart, data, None)?;
-    if categories.is_some() {
-        return Err(Error::Data(
-            "canvas x-range group has a categorical x axis".into(),
-        ));
-    }
-    Ok(ranges[0])
-}
-
-#[expect(
-    clippy::type_complexity,
-    reason = "two scientific ranges and optional ordered condition levels"
-)]
-pub(crate) fn axis_inputs(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-    facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<([(f64, f64); 2], Option<Vec<String>>), Error> {
-    // Every retained observation contributes to these domains. Series sorting,
-    // duplicate checks, and path/colour payloads belong to mark preparation.
-    let x_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("line: x column not set".into()))?;
-    let y_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("line: y column not set".into()))?;
-    let y_values = crate::data::strict_finite_f64(data, y_col, "line axis")?;
-    data.claim_source_visits(y_values.len())?;
-    let mut y = crate::data::min_max(y_values, "line axis")?;
-    let mut levels = None;
-    let mut x = if data.column(x_col)?.is_numeric() {
-        let values = crate::data::strict_finite_f64(data, x_col, "line axis")?;
-        data.claim_source_visits(values.len())?;
-        crate::data::min_max(values, "line axis")?
-    } else if chart.kind() == crate::PlotKind::Trajectory {
-        let labels =
-            crate::data::strict_normalized_strings(data, x_col, "trajectory", "condition")?;
-        let categories = if let Some(global) = facet.map_or_else(
-            || chart.global_line_condition_levels(),
-            |sources| sources.conditions,
-        ) {
-            data.collect_source(global.iter().map(|label| data.copy_source_string(label)))?
-        } else {
-            data.source_levels(&labels)?
-        };
-        let range = (0.0, categorical_index(categories.len())?);
-        levels = Some(categories);
-        range
-    } else {
-        return Err(Error::Data("line axis: x must be numeric".into()));
-    };
-    if chart.kind() == crate::PlotKind::Line {
-        if let Some((lower, upper)) = chart.interval_bound_cols() {
-            let lower = crate::data::strict_finite_f64(data, lower, "line axis")?;
-            let upper = crate::data::strict_finite_f64(data, upper, "line axis")?;
-            data.claim_source_visits(lower.len())?;
-            data.claim_source_visits(upper.len())?;
-            y = crate::data::min_max(lower.into_iter().chain(upper), "line axis")?;
-        }
-        for (index, layer) in chart.point_layers().iter().enumerate() {
-            data.claim_source_visits(1)?;
-            let mut buffer = [0_u8; 64];
-            let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
-            std::io::Write::write_fmt(&mut cursor, format_args!("line point layer {index}"))
-                .expect("bounded layer index");
-            let length = usize::try_from(cursor.position()).expect("bounded layer index");
-            let context = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
-            let xr = data.source_numeric_range(layer.x_values(), context)?;
-            let yr = data.source_numeric_range(layer.y_values(), context)?;
-            x = (x.0.min(xr.0), x.1.max(xr.1));
-            y = (y.0.min(yr.0), y.1.max(yr.1));
-        }
-    }
-    if levels.is_none() {
-        x = crate::layout::continuous_auto_range(x, chart.x_axis_spec());
-    }
-    Ok((
-        [
-            x,
-            crate::layout::continuous_auto_range(y, chart.y_axis_spec()),
-        ],
-        levels,
-    ))
-}
-
-fn prepare_point_layers(
-    chart: &Plot,
-    primary_color_slots: usize,
-    theme: &ResolvedTheme,
-) -> Result<Vec<PreparedPointLayer>, Error> {
-    chart
-        .point_layers()
-        .iter()
-        .enumerate()
-        .map(|(index, layer)| {
-            let context = format!("line point layer {index}");
-            let x = crate::data::strict_numeric_values(layer.x_values(), &context)?;
-            let y = crate::data::strict_numeric_values(layer.y_values(), &context)?;
-            if x.is_empty() || x.len() != y.len() {
-                return Err(Error::Data(format!(
-                    "{context}: x and y columns must have equal non-zero lengths"
-                )));
-            }
-            let labels = layer
-                .label_values()
-                .map(|values| crate::data::strict_category_values(values, &context))
-                .transpose()?;
-            if labels
-                .as_ref()
-                .is_some_and(|labels| labels.len() != x.len())
-            {
-                return Err(Error::Data(format!(
-                    "{context}: labels must align one-to-one with x and y"
-                )));
-            }
-            Ok(PreparedPointLayer {
-                points: x.into_iter().zip(y).collect(),
-                labels,
-                legend_label: layer.legend_label_text().map(str::to_owned),
-                style: layer
-                    .point_style(theme.colors[(primary_color_slots + index) % theme.colors.len()]),
-            })
-        })
-        .collect()
-}
-
-fn draw_point_layers(
-    layout: &Layout,
-    layers: &[PreparedPointLayer],
-    theme: &ResolvedTheme,
-    text: &mut crate::spec::ProducerText<'_>,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    if layers.is_empty() {
-        return Ok(());
-    }
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (layer_index, layer) in layers.iter().enumerate() {
-            let projected = layer
-                .points
-                .iter()
-                .map(|point| {
-                    let projected = layout.projection.project(point.0, point.1);
-                    Point2D::new(projected.0, projected.1)
-                })
-                .collect::<Vec<_>>();
-            backend.draw_scatter(&projected, &layer.style)?;
-            if let Some(labels) = &layer.labels {
-                let x_range = layout.projection.x_range();
-                let y_range = layout.projection.y_range();
-                let label_offset = f64::from(layer.style.radius) + 2.0;
-                for ((source, point), label) in layer.points.iter().zip(&projected).zip(labels) {
-                    if source.0 < x_range.0
-                        || source.0 > x_range.1
-                        || source.1 < y_range.0
-                        || source.1 > y_range.1
-                    {
-                        continue;
-                    }
-                    let owner = format!("line point layer {layer_index} label");
-                    let mut appearance =
-                        theme.legacy_text_appearance(10, crate::TextWeight::Normal);
-                    appearance.line_height_multiplier = 1.2;
-                    appearance.paint = layer.style.color.into();
-                    let plan = text
-                        .plan(label, &owner, || {
-                            Ok(theme.measure_legacy_appearance_text(
-                                label,
-                                &appearance,
-                                crate::layout::PhysicalTextAlignment::Start,
-                                &owner,
-                                false,
-                            )?)
-                        })
-                        .map_err(crate::layout::fit::PlanError::into_error)?;
-                    text.draw(
-                        crate::render::backend::PlacedText::middle(
-                            plan,
-                            Point2D::new(
-                                (point.x + label_offset).max(0.0).round(),
-                                (point.y + label_offset).max(0.0).round(),
-                            ),
-                            TextAnchor::Start,
-                            0.0,
-                        ),
-                        backend,
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    })
-}
-
-fn render_grouped(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-    ordered_path: bool,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let trajectory = prepare_trajectory(chart, context.data, ordered_path)?;
-    let family = if ordered_path {
-        "line path"
-    } else {
-        "trajectory"
-    };
-    let x_domain = if trajectory.condition_levels.is_some() {
-        AxisDomain::Categorical
-    } else {
-        AxisDomain::Continuous
-    };
-    let layout = context.axis_layout(|| {
-        let x_values = trajectory
-            .groups
-            .iter()
-            .flat_map(|group| group.points.iter().map(|point| point.x));
-        let (x_range, x_ticks) = trajectory.condition_levels.as_ref().map_or_else(
-            || {
-                let range = crate::data::min_max(x_values, family)?;
-                Ok::<_, Error>((
-                    crate::layout::continuous_auto_range(range, chart.x_axis_spec()),
-                    Vec::new(),
+impl PreparedLine {
+    #[expect(
+        clippy::too_many_lines,
+        clippy::float_cmp,
+        reason = "one normalization preserves family order; duplicate scientific coordinates compare exactly including signed zero"
+    )]
+    pub(crate) fn new(
+        chart: &Plot,
+        data: PlotData<'_>,
+        conditions: Option<&[String]>,
+    ) -> Result<Self, Error> {
+        #[cfg(test)]
+        stage(chart.kind(), 0);
+        let kind = chart.kind();
+        let family = match kind {
+            PlotKind::Line => "line",
+            PlotKind::Trajectory => "trajectory",
+            PlotKind::LinePath => "line path",
+            _ => {
+                return Err(Error::Data(
+                    "line preparation requires a line family".into(),
                 ))
-            },
-            |levels| {
-                let ticks = levels
-                    .iter()
-                    .enumerate()
-                    .map(|(index, label)| {
-                        categorical_index(index)
-                            .map(|index| AxisTick::new(index + 0.5, label.clone()))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(((0.0, categorical_index(levels.len())?), ticks))
-            },
-        )?;
-        let y_range = crate::layout::continuous_auto_range(
-            crate::data::min_max(
-                trajectory
-                    .groups
-                    .iter()
-                    .flat_map(|group| group.points.iter().map(|point| point.y)),
-                family,
-            )?,
-            chart.y_axis_spec(),
-        );
-        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        let panel = context.panel;
-        context.layout_with_ticks(
-            x_range,
-            y_range,
-            panel,
-            chart.x_label_text().unwrap_or("").to_owned(),
-            chart.y_label_text().unwrap_or("").to_owned(),
-            x_ticks,
-            Vec::new(),
-            &x_axis,
-            &y_axis,
-            theme,
-        )
-    })?;
-    let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for group in &trajectory.groups {
-            let projected = group
-                .points
-                .iter()
-                .map(|point| {
-                    let (x, y) = layout.projection.project(point.x, point.y);
-                    Point2D::new(x, y)
-                })
-                .collect::<Vec<_>>();
-            let color = if hue_paths {
-                hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?
-            } else {
-                theme.foreground
-            };
-            backend.draw_line(&projected, &LineStyle::solid(color, 1.4))?;
-        }
-        if !ordered_path || chart.markers_visible() {
-            for group in &trajectory.groups {
-                for point in &group.points {
-                    let (x, y) = layout.projection.project(point.x, point.y);
-                    let color = if hue_paths {
-                        hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?
-                    } else {
-                        point.hue_index.map_or(theme.colors[0], |index| {
-                            theme.colors[index % theme.colors.len()]
-                        })
-                    };
-                    backend.draw_scatter(&[Point2D::new(x, y)], &chart.point_style(color, 4))?;
-                }
             }
-        }
-        Ok(())
-    })?;
-    let legends = trajectory_legends(chart, &trajectory, theme, hue_paths)?;
-    Ok(PlotRenderResult::new(layout, legends).with_axis_domains(x_domain, AxisDomain::Continuous))
-}
-
-fn trajectory_legends(
-    chart: &Plot,
-    trajectory: &TrajectoryData,
-    theme: &ResolvedTheme,
-    hue_paths: bool,
-) -> Result<Vec<LegendEntry>, Error> {
-    if hue_paths {
-        return trajectory
-            .groups
-            .iter()
-            .filter_map(|group| group.identity.as_ref().map(|identity| (group, identity)))
-            .map(|(group, identity)| {
-                let color = hue_path_color(chart, &trajectory.hue_levels, group.hue_index, theme)?;
-                let identity = chart.collective_legend_identity(identity)?;
-                let line = LineStyle::solid(color, 1.4);
-                if chart.markers_visible() {
-                    Ok(LegendEntry::point_line(
-                        identity,
-                        chart.point_style(color, 4),
-                        line,
-                    ))
-                } else {
-                    Ok(LegendEntry::line(identity, line))
-                }
-            })
-            .collect();
-    }
-    if chart.kind() == crate::PlotKind::LinePath && !chart.markers_visible() {
-        return Ok(Vec::new());
-    }
-    trajectory
-        .hue_levels
-        .iter()
-        .enumerate()
-        .map(|(index, label)| {
-            let color = theme.colors[index % theme.colors.len()];
-            Ok(LegendEntry::point(
-                chart.legend_identity(label.clone()),
-                chart.point_style(color, 4),
-            ))
-        })
-        .collect()
-}
-
-fn hue_path_color(
-    chart: &Plot,
-    hue_levels: &[String],
-    hue_index: Option<usize>,
-    theme: &ResolvedTheme,
-) -> Result<(u8, u8, u8), Error> {
-    let index = hue_index.ok_or_else(|| {
-        Error::Render("line path: hue-styled path has no resolved hue index".into())
-    })?;
-    let label = hue_levels.get(index).ok_or_else(|| {
-        Error::Render("line path: hue-styled path index exceeds resolved hues".into())
-    })?;
-    chart.categorical_color("line path", label, index, theme)
-}
-
-fn draw_series(
-    chart: &Plot,
-    layout: &Layout,
-    series: &[SeriesData],
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for series in series {
-            let color_index = series.hue_index.unwrap_or(0);
-            let color = theme.colors[color_index % theme.colors.len()];
-            if series.points.iter().all(|point| point.2.is_some()) {
-                let mut polygon = series
-                    .points
-                    .iter()
-                    .map(|point| {
-                        let (x, y) = layout.projection.project(point.0, point.2.unwrap().1);
-                        Point2D::new(x, y)
-                    })
-                    .collect::<Vec<_>>();
-                polygon.extend(series.points.iter().rev().map(|point| {
-                    let (x, y) = layout.projection.project(point.0, point.2.unwrap().0);
-                    Point2D::new(x, y)
-                }));
-                backend.draw_polygon(
-                    &polygon,
-                    &FillStyle {
-                        color,
-                        stroke: color,
-                        stroke_width: 0.0,
-                        opacity: 0.18,
-                    },
-                )?;
-            }
-            let projected = series
-                .points
-                .iter()
-                .map(|point| {
-                    let (x, y) = layout.projection.project(point.0, point.1);
-                    Point2D::new(x, y)
-                })
-                .collect::<Vec<_>>();
-            backend.draw_line(&projected, &LineStyle::solid(color, 1.8))?;
-            if chart.markers_visible() {
-                backend.draw_scatter(&projected, &chart.point_style(color, 3))?;
-            }
-        }
-        Ok(())
-    })
-}
-
-fn prepare<'a>(
-    chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
-) -> Result<(Vec<SeriesData>, usize), Error> {
-    let data = data.into();
-    let x_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("line: x column not set".into()))?;
-    let y_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("line: y column not set".into()))?;
-    let x = crate::data::strict_finite_f64(data, x_col, "line")?;
-    let y = crate::data::strict_finite_f64(data, y_col, "line")?;
-    let bounds = match chart.interval_bound_cols() {
-        Some((lower, upper)) => Some((
-            crate::data::strict_finite_f64(data, lower, "line")?,
-            crate::data::strict_finite_f64(data, upper, "line")?,
-        )),
-        None => None,
-    };
-    let channels = crate::data::observed_collectives(
-        data,
-        chart.group_col(),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
-        None,
-        "line",
-    )?;
-    if x.is_empty() || x.len() != y.len() || channels.rows.len() != x.len() {
-        return Err(Error::Data(
-            "line: aligned x, y, group, and hue columns must have equal non-zero lengths".into(),
-        ));
-    }
-    if bounds
-        .as_ref()
-        .is_some_and(|(lower, upper)| lower.len() != x.len() || upper.len() != x.len())
-    {
-        return Err(Error::Data(
-            "line: interval columns must align with x and y".into(),
-        ));
-    }
-
-    let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let identities = chart.resolved_collective_pairs(channels.identities.clone());
-    let mut output = Vec::with_capacity(identities.len());
-    for identity in identities {
-        let mut points = Vec::new();
-        for index in 0..x.len() {
-            if channels.rows[index] != identity {
-                continue;
-            }
-            let interval = bounds
-                .as_ref()
-                .map(|(lower, upper)| (lower[index], upper[index]));
-            if interval.is_some_and(|(lower, upper)| lower > y[index] || y[index] > upper) {
-                let source_row = data.source_row(index);
-                return Err(Error::Data(format!(
-                    "line: source row {source_row} must satisfy lower <= y <= upper"
-                )));
-            }
-            points.push((x[index], y[index], interval));
-        }
-        if points.is_empty() {
-            continue;
-        }
-        points.sort_by(|left, right| left.0.total_cmp(&right.0));
-        let mut seen = HashSet::with_capacity(points.len());
-        if points.iter().any(|point| {
-            let canonical = if point.0 == 0.0 { 0 } else { point.0.to_bits() };
-            !seen.insert(canonical)
-        }) {
+        };
+        let x_col = chart
+            .x_col()
+            .ok_or_else(|| Error::Data(format!("{family}: x column not set")))?;
+        let y_col = chart
+            .y_col()
+            .ok_or_else(|| Error::Data(format!("{family}: y column not set")))?;
+        if kind != PlotKind::Line && chart.group_col().is_none() {
             return Err(Error::Data(format!(
-                "line: duplicate x value within series {}",
-                identity.description(channels.collapsed)
+                "{family}: explicit graphical group column not set"
             )));
         }
-        let hue_index = identity
-            .hue
-            .as_ref()
-            .and_then(|hue| hue_levels.iter().position(|level| level == hue));
-        output.push(SeriesData {
-            identity,
-            hue_index,
-            points,
-        });
-    }
-    let primary_color_slots = if chart.hue_col().is_some() {
-        hue_levels.len()
-    } else {
-        1
-    };
-    Ok((output, primary_color_slots))
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "trajectory normalization, duplicate validation, and stable grouping form one ordered preflight"
-)]
-fn prepare_trajectory<'a>(
-    chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
-    ordered_path: bool,
-) -> Result<TrajectoryData, Error> {
-    let data = data.into();
-    let context = if ordered_path {
-        "line path"
-    } else {
-        "trajectory"
-    };
-    let x_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data(format!("{context}: x column not set")))?;
-    let y_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data(format!("{context}: y column not set")))?;
-    let group_col = chart.group_col().ok_or_else(|| {
-        Error::Data(format!(
-            "{context}: explicit graphical group column not set"
-        ))
-    })?;
-    let channels = crate::data::observed_collectives(
-        data,
-        Some(group_col),
-        chart.group_name(),
-        chart.hue_col(),
-        chart.hue_name(),
-        None,
-        context,
-    )?;
-    let groups = channels
-        .rows
-        .iter()
-        .map(|identity| {
-            identity.group.clone().ok_or_else(|| {
-                Error::Data(format!(
-                    "{context}: graphical group channel did not resolve"
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let hues = chart.hue_col().map(|_| {
-        channels
-            .rows
-            .iter()
-            .map(|identity| {
-                identity
-                    .hue
-                    .clone()
-                    .ok_or_else(|| Error::Data(format!("{context}: hue channel did not resolve")))
-            })
-            .collect::<Result<Vec<_>, Error>>()
-    });
-    let hues = hues.transpose()?;
-    let y = crate::data::strict_finite_f64(data, y_col, context)?;
-    let x_source = data
-        .column(x_col)
-        .map_err(|error| Error::Data(format!("{context}: column {x_col:?}: {error}")))?;
-    let (x, condition_labels, condition_levels) = if x_source.is_numeric() {
-        (
-            crate::data::strict_finite_f64(data, x_col, context)?,
+        let channels = crate::data::observed_collectives(
+            data,
+            chart.group_col(),
+            chart.group_name(),
+            chart.hue_col(),
+            chart.hue_name(),
             None,
-            None,
-        )
-    } else if ordered_path {
-        return Err(Error::Data(
-            "line path: x must be numeric so source-ordered path geometry remains explicit".into(),
-        ));
-    } else {
-        let labels =
-            crate::data::strict_normalized_strings(data, x_col, "trajectory", "condition")?;
-        let levels = chart.resolved_line_condition_levels(crate::data::stable_levels(&labels));
-        let positions = labels
-            .iter()
-            .map(|label| {
-                levels
+            family,
+        )?;
+        let hues = data.collect_source(
+            chart
+                .global_hue_levels()
+                .unwrap_or(&channels.hue_levels)
+                .iter()
+                .map(|label| data.copy_source_string(label)),
+        )?;
+        let y = crate::data::strict_finite_f64(data, y_col, family)?;
+        let (x, conditions) = if data.column(x_col)?.is_numeric() {
+            (crate::data::strict_finite_f64(data, x_col, family)?, None)
+        } else if kind == PlotKind::Trajectory {
+            let labels = crate::data::strict_normalized_strings(data, x_col, family, "condition")?;
+            let levels =
+                if let Some(levels) = conditions.or_else(|| chart.global_line_condition_levels()) {
+                    data.collect_source(levels.iter().map(|label| data.copy_source_string(label)))?
+                } else {
+                    data.source_levels(&labels)?
+                };
+            let positions = data.collect_source(labels.iter().map(|label| {
+                data.claim_source_visits(levels.len())?;
+                let index = levels
                     .iter()
                     .position(|level| level == label)
                     .ok_or_else(|| {
                         Error::Data(format!(
                             "trajectory: condition {label:?} is absent from global order"
                         ))
-                    })
-                    .and_then(categorical_index)
-                    .map(|index| index + 0.5)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        (positions, Some(labels), Some(levels))
-    };
-    let row_count = groups.len();
-    if row_count == 0
-        || x.len() != row_count
-        || y.len() != row_count
-        || hues
-            .as_ref()
-            .is_some_and(|values| values.len() != row_count)
-    {
-        return Err(Error::Data(format!(
-            "{context}: aligned group, condition, y, and hue columns must have equal non-zero lengths"
-        )));
-    }
-
-    if !ordered_path {
-        let mut seen_numeric = HashSet::with_capacity(row_count);
-        let mut seen_categorical = HashSet::with_capacity(row_count);
-        for row in 0..row_count {
-            let duplicate = condition_labels.as_ref().map_or_else(
-                || {
-                    let normalized = if x[row] == 0.0 { 0 } else { x[row].to_bits() };
-                    !seen_numeric.insert((groups[row].clone(), normalized))
-                },
-                |labels| !seen_categorical.insert((groups[row].clone(), labels[row].clone())),
-            );
-            if duplicate {
-                return Err(Error::Data(format!(
-                    "trajectory: duplicate normalized (group, condition) ({:?}, {:?}) at source row {}",
-                    groups[row],
-                    condition_labels
-                        .as_ref()
-                        .map_or_else(|| x[row].to_string(), |labels| labels[row].clone()),
-                    data.source_row(row)
-                )));
-            }
+                    })?;
+                Ok(categorical_index(index)? + 0.5)
+            }))?;
+            (positions, Some(levels))
+        } else {
+            return Err(Error::Data(format!("{family}: x must be numeric")));
+        };
+        if x.is_empty() || x.len() != y.len() || channels.rows.len() != x.len() {
+            return Err(Error::Data(format!(
+                "{family}: aligned columns must have equal non-zero lengths"
+            )));
         }
-    }
-
-    let observed_group_levels = crate::data::stable_levels(&groups);
-    let group_levels = chart.resolved_group_levels(observed_group_levels);
-    let observed_hue_levels = hues
-        .as_ref()
-        .map_or_else(Vec::new, |values| crate::data::stable_levels(values));
-    let hue_levels = chart.resolved_hue_levels(observed_hue_levels);
-    if ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue {
-        if hues.is_none() {
+        let bounds = if kind == PlotKind::Line {
+            chart
+                .interval_bound_cols()
+                .map(|(lower, upper)| {
+                    Ok::<_, Error>((
+                        crate::data::strict_finite_f64(data, lower, family)?,
+                        crate::data::strict_finite_f64(data, upper, family)?,
+                    ))
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let hue_paths =
+            kind == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
+        if hue_paths && chart.hue_col().is_none() {
             return Err(Error::Data(
                 "line path: LinePathStyle::Hue requires a categorical hue column".into(),
             ));
         }
-        let identities = chart.resolved_collective_pairs(channels.identities.clone());
-        let mut output = Vec::new();
-        for identity in identities {
-            let rows = (0..row_count)
-                .filter(|row| channels.rows[*row] == identity)
-                .collect::<Vec<_>>();
+        let identities = chart
+            .global_collective_pairs()
+            .unwrap_or(&channels.identities);
+        let group_levels = chart
+            .global_group_levels()
+            .unwrap_or(&channels.group_levels);
+        let collective = kind == PlotKind::Line || hue_paths;
+        if kind == PlotKind::Trajectory {
+            let mut rows = data.collect_source((0..x.len()).map(Ok))?;
+            crate::data::source::sort_source_by(&mut rows, Some(data), |a, b| {
+                let normalized = |row: usize| if x[row] == 0.0 { 0.0 } else { x[row] };
+                channels.rows[*a]
+                    .group
+                    .cmp(&channels.rows[*b].group)
+                    .then_with(|| normalized(*a).total_cmp(&normalized(*b)))
+                    .then_with(|| a.cmp(b))
+            })?;
+            data.claim_source_visits(rows.len())?;
+            if let Some(row) = rows
+                .windows(2)
+                .filter(|pair| {
+                    channels.rows[pair[0]].group == channels.rows[pair[1]].group
+                        && x[pair[0]] == x[pair[1]]
+                })
+                .map(|pair| pair[1])
+                .min()
+            {
+                return Err(Error::Data(format!(
+                    "trajectory: duplicate normalized (group, condition) at source row {}",
+                    data.source_row(row)
+                )));
+            }
+        }
+        let count = if collective {
+            identities.len()
+        } else {
+            group_levels.len()
+        };
+        let mut groups = Vec::new();
+        data.reserve_source(&mut groups, count)?;
+        for index in 0..count {
+            let mut rows = Vec::new();
+            let belongs = |row: usize| {
+                if collective {
+                    channels.rows[row] == identities[index]
+                } else {
+                    channels.rows[row].group.as_ref() == Some(&group_levels[index])
+                }
+            };
+            data.claim_source_visits(x.len())?;
+            let count = (0..x.len()).filter(|row| belongs(*row)).count();
+            data.reserve_source(&mut rows, count)?;
+            for row in 0..x.len() {
+                data.claim_source_visits(1)?;
+                if belongs(row) {
+                    rows.push(row);
+                }
+            }
             if rows.is_empty() {
                 continue;
             }
-            if rows.len() < 2 {
-                return Err(Error::Data(format!(
-                    "line path: {} requires at least two retained points",
-                    identity.description(channels.collapsed)
-                )));
+            if kind != PlotKind::Line && rows.len() < 2 {
+                return Err(Error::Data(if hue_paths {
+                    format!(
+                        "line path: {} requires at least two retained points",
+                        identities[index].description(channels.collapsed)
+                    )
+                } else {
+                    format!("trajectory: graphical group {:?} requires at least two retained conditions", group_levels[index])
+                }));
             }
-            let hue = identity.hue.as_ref().ok_or_else(|| {
-                Error::Data(
-                    "line path: LinePathStyle::Hue requires a categorical hue column".into(),
-                )
-            })?;
-            let hue_index = hue_levels
-                .iter()
-                .position(|level| level == hue)
-                .ok_or_else(|| {
-                    Error::Data(format!(
-                        "line path: hue {hue:?} is absent from the resolved hue order"
-                    ))
-                })?;
-            let points = rows
-                .into_iter()
-                .map(|row| TrajectoryPoint {
+            let identity = Some(if collective {
+                data.copy_source_pair(&identities[index])?
+            } else {
+                CollectivePair {
+                    group: Some(data.copy_source_string(&group_levels[index])?),
+                    hue: None,
+                }
+            });
+            data.claim_source_visits(hues.len())?;
+            let hue_index = identity
+                .as_ref()
+                .and_then(|identity| identity.hue.as_ref())
+                .and_then(|hue| hues.iter().position(|level| level == hue));
+            if hue_paths && hue_index.is_none() {
+                return Err(Error::Data(
+                    "line path: hue is absent from the resolved hue order".into(),
+                ));
+            }
+            let mut points = data.collect_source(rows.iter().map(|row| {
+                let row = *row;
+                let interval = if let Some((lower, upper)) = &bounds {
+                    let (lower, upper) = (lower[row], upper[row]);
+                    if lower > y[row] || y[row] > upper {
+                        return Err(Error::Data(format!(
+                            "line: source row {} must satisfy lower <= y <= upper",
+                            data.source_row(row)
+                        )));
+                    }
+                    Some((lower, upper))
+                } else {
+                    None
+                };
+                data.claim_source_visits(hues.len())?;
+                Ok(LinePoint {
                     x: x[row],
                     y: y[row],
-                    hue_index: Some(hue_index),
+                    interval,
+                    hue_index: channels.rows[row]
+                        .hue
+                        .as_ref()
+                        .and_then(|hue| hues.iter().position(|level| level == hue)),
                 })
-                .collect();
-            output.push(TrajectoryGroup {
-                identity: Some(identity.clone()),
+            }))?;
+            if kind != PlotKind::LinePath {
+                crate::data::source::sort_source_by(&mut points, Some(data), |a, b| {
+                    a.x.total_cmp(&b.x)
+                })?;
+                data.claim_source_visits(points.len())?;
+                if kind == PlotKind::Line && points.windows(2).any(|pair| pair[0].x == pair[1].x) {
+                    return Err(Error::Data(format!(
+                        "line: duplicate x value within series {}",
+                        identities[index].description(channels.collapsed)
+                    )));
+                }
+            }
+            groups.push(LineGroup {
+                identity,
+                hue_index,
                 points,
-                hue_index: Some(hue_index),
             });
         }
-        return Ok(TrajectoryData {
-            groups: output,
-            hue_levels,
-            condition_levels,
-        });
+        let mut layers = Vec::new();
+        data.reserve_source(&mut layers, chart.point_layers().len())?;
+        for (index, layer) in chart.point_layers().iter().enumerate() {
+            let mut buffer = [0_u8; 64];
+            let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
+            std::io::Write::write_fmt(&mut cursor, format_args!("line point layer {index}"))
+                .expect("bounded layer index");
+            let length = usize::try_from(cursor.position()).expect("bounded layer index");
+            let context = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
+            let x = layer.x_values();
+            let y = layer.y_values();
+            if x.is_empty() || x.len() != y.len() {
+                return Err(Error::Data(
+                    "line point layer: x and y columns must have equal non-zero lengths".into(),
+                ));
+            }
+            let points = data.collect_source((0..x.len()).map(|row| {
+                Ok((
+                    crate::data::strict_numeric_value(x, row, context)?,
+                    crate::data::strict_numeric_value(y, row, context)?,
+                ))
+            }))?;
+            let labels = layer
+                .label_values()
+                .map(|values| {
+                    data.collect_source((0..values.len()).map(|row| match values.get(row) {
+                        Some(Some(label)) => data.copy_source_string(label),
+                        _ => Err(Error::Data(format!(
+                            "{context}: label contains null at source row {row}"
+                        ))),
+                    }))
+                })
+                .transpose()?;
+            if labels
+                .as_ref()
+                .is_some_and(|labels| labels.len() != points.len())
+            {
+                return Err(Error::Data(
+                    "line point layer: labels must align one-to-one with x and y".into(),
+                ));
+            }
+            layers.push(PointLayer {
+                points,
+                labels,
+                legend: layer
+                    .legend_label_text()
+                    .map(|label| data.copy_source_string(label))
+                    .transpose()?,
+            });
+        }
+        let mut ranges = [(f64::INFINITY, f64::NEG_INFINITY); 2];
+        for group in &groups {
+            data.claim_source_visits(group.points.len())?;
+            for point in &group.points {
+                ranges[0] = (ranges[0].0.min(point.x), ranges[0].1.max(point.x));
+                let (lower, upper) = point.interval.unwrap_or((point.y, point.y));
+                ranges[1] = (ranges[1].0.min(lower), ranges[1].1.max(upper));
+            }
+        }
+        for layer in &layers {
+            data.claim_source_visits(layer.points.len())?;
+            for &(x, y) in &layer.points {
+                ranges[0] = (ranges[0].0.min(x), ranges[0].1.max(x));
+                ranges[1] = (ranges[1].0.min(y), ranges[1].1.max(y));
+            }
+        }
+        ranges[0] = if let Some(levels) = &conditions {
+            (0.0, categorical_index(levels.len())?)
+        } else {
+            crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec())
+        };
+        ranges[1] = crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec());
+        let primary_color_slots = if chart.hue_col().is_some() {
+            hues.len()
+        } else {
+            1
+        };
+        Ok(Self {
+            ranges,
+            conditions,
+            groups,
+            hues,
+            layers,
+            primary_color_slots,
+        })
     }
-    let mut output = Vec::new();
-    for label in group_levels {
-        let group_rows = (0..row_count)
-            .filter(|row| groups[*row] == label)
-            .collect::<Vec<_>>();
-        if group_rows.is_empty() {
-            continue;
-        }
-        let mut points = (0..row_count)
-            .filter(|row| groups[*row] == label)
-            .map(|row| TrajectoryPoint {
-                x: x[row],
-                y: y[row],
-                hue_index: hues
-                    .as_ref()
-                    .and_then(|values| hue_levels.iter().position(|level| level == &values[row])),
-            })
-            .collect::<Vec<_>>();
-        if points.len() < 2 {
-            return Err(Error::Data(format!(
-                "trajectory: graphical group {label:?} requires at least two retained conditions"
-            )));
-        }
-        if !ordered_path {
-            points.sort_by(|left, right| left.x.total_cmp(&right.x));
-        }
-        output.push(TrajectoryGroup {
-            identity: None,
-            points,
-            hue_index: None,
-        });
+}
+
+pub(crate) fn shared_x_domain(chart: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
+    let prepared = PreparedLine::new(chart, data, None)?;
+    if prepared.conditions.is_some() {
+        return Err(Error::Data(
+            "canvas x-range group has a categorical x axis".into(),
+        ));
     }
-    Ok(TrajectoryData {
-        groups: output,
-        hue_levels,
-        condition_levels,
-    })
+    Ok(prepared.ranges[0])
 }
 
 fn categorical_index(index: usize) -> Result<f64, Error> {
@@ -920,84 +422,343 @@ fn categorical_index(index: usize) -> Result<f64, Error> {
     })
 }
 
-#[cfg(test)]
-mod axis_tests {
-    use super::*;
-    use crate::{CategoryValues, NumericValues};
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    stage(chart.kind(), 1);
+    let prepared = chart
+        .prepared_line
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, inputs)| inputs)
+        .ok_or_else(|| {
+            Error::Render(
+                "line measurement requires root-prepared semantics for its component".into(),
+            )
+        })?;
+    let layout = context
+        .axis_layout(|| Err(Error::Render("line requires root-prepared axes".into()).into()))?;
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(chart, prepared, layout, theme, data)
+}
 
-    #[test]
-    fn domain_only_sources_match_grouped_mark_preparation_and_refuse_before_work() {
-        let x = NumericValues::new("x", [2.0, 1.0, 2.0, 1.0]);
-        let y = NumericValues::new("y", [20.0, 10.0, -40.0, -30.0]);
-        let groups = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
-        let line = Plot::line(x.clone(), y.clone())
-            .group(groups.clone())
-            .erase();
-        let numeric = Plot::trajectory(x, y.clone(), groups.clone()).erase();
-        let categorical = Plot::trajectory(
-            CategoryValues::new("condition", [" after ", "before", "after", "before"]).unwrap(),
-            y,
-            groups,
-        )
-        .erase();
-        let resources = crate::font::canonical::OperationGenerationResources::new();
-        for plot in [&line, &numeric, &categorical] {
-            let (ranges, categories) =
-                axis_inputs(plot, plot.data().with_axis_resources(&resources), None).unwrap();
-            if plot.kind() == crate::PlotKind::Line {
-                let (series, _) = prepare(plot, plot.data()).unwrap();
-                assert_eq!(
-                    ranges,
-                    [
-                        crate::layout::continuous_auto_range(
-                            crate::data::min_max(
-                                series
-                                    .iter()
-                                    .flat_map(|series| series.points.iter().map(|point| point.0)),
-                                "test"
-                            )
-                            .unwrap(),
-                            plot.x_axis_spec()
-                        ),
-                        crate::layout::continuous_auto_range(
-                            crate::data::min_max(
-                                series
-                                    .iter()
-                                    .flat_map(|series| series.points.iter().map(|point| point.1)),
-                                "test"
-                            )
-                            .unwrap(),
-                            plot.y_axis_spec()
-                        ),
-                    ]
-                );
-            } else {
-                let prepared = prepare_trajectory(plot, plot.data(), false).unwrap();
-                assert_eq!(categories, prepared.condition_levels);
-                assert_eq!(
-                    ranges[1],
-                    crate::layout::continuous_auto_range(
-                        crate::data::min_max(
-                            prepared
-                                .groups
+#[expect(
+    clippy::too_many_lines,
+    reason = "selected projection retains series, ribbon, marker and label order without a backend"
+)]
+fn project(
+    chart: &Plot,
+    prepared: &PreparedLine,
+    layout: crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+    data: PlotData<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    stage(chart.kind(), 2);
+    let mut payload = LinePayload {
+        #[cfg(test)]
+        kind: chart.kind(),
+        clip: layout.projection.panel_box(),
+        marks: Vec::new(),
+        layers: Vec::new(),
+    };
+    let mut legends = Vec::new();
+    let project = |x, y| {
+        let (x, y) = layout.projection.project(x, y);
+        Point2D::new(x, y)
+    };
+    let hue_paths =
+        chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
+    let mut order = data.collect_source((0..prepared.groups.len()).map(Ok))?;
+    crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+        let key = |index: usize| {
+            let group = &prepared.groups[index];
+            group
+                .identity
+                .as_ref()
+                .and_then(|identity| {
+                    if chart.kind() == PlotKind::Line || hue_paths {
+                        chart
+                            .global_collective_pairs()
+                            .and_then(|pairs| pairs.iter().position(|pair| pair == identity))
+                    } else {
+                        chart.global_group_levels().and_then(|levels| {
+                            levels
                                 .iter()
-                                .flat_map(|group| group.points.iter().map(|point| point.y)),
-                            "test"
-                        )
-                        .unwrap(),
-                        plot.y_axis_spec()
-                    )
-                );
-            }
-            for (visits, bytes) in [(0, 1000), (1000, 0)] {
-                let resources =
-                    crate::font::canonical::OperationGenerationResources::with_test_limits(
-                        visits, bytes,
-                    );
-                let error = axis_inputs(plot, plot.data().with_axis_resources(&resources), None)
-                    .unwrap_err();
-                assert!(matches!(error, Error::Render(_)), "{error}");
+                                .position(|level| Some(level) == identity.group.as_ref())
+                        })
+                    }
+                })
+                .unwrap_or(index)
+        };
+        (key(*a), *a).cmp(&(key(*b), *b))
+    })?;
+    for &index in &order {
+        let group = &prepared.groups[index];
+        let color = if chart.kind() == PlotKind::Line {
+            let slot = group
+                .identity
+                .as_ref()
+                .and_then(|identity| identity.hue.as_ref())
+                .map_or(0, |hue| {
+                    chart.hue_color_index(hue, group.hue_index.unwrap_or(0))
+                });
+            theme.colors[slot % theme.colors.len()]
+        } else if hue_paths {
+            let index = group.hue_index.ok_or_else(|| {
+                Error::Render("line path: hue-styled path has no resolved hue index".into())
+            })?;
+            chart.categorical_color(
+                "line path",
+                &prepared.hues[index],
+                chart.hue_color_index(&prepared.hues[index], index),
+                theme,
+            )?
+        } else {
+            theme.foreground
+        };
+        let fill = FillStyle {
+            color,
+            stroke: color,
+            stroke_width: 0.0,
+            opacity: 0.18,
+        };
+        data.claim_source_visits(group.points.len())?;
+        let has_fill = chart.kind() == PlotKind::Line
+            && group.points.iter().all(|point| point.interval.is_some());
+        if has_fill {
+            let mut polygon = Vec::new();
+            let count = group
+                .points
+                .len()
+                .checked_mul(2)
+                .ok_or_else(|| Error::Render("line ribbon point count overflow".into()))?;
+            data.reserve_source(&mut polygon, count)?;
+            polygon.extend(
+                group
+                    .points
+                    .iter()
+                    .map(|point| project(point.x, point.interval.expect("complete ribbon").1)),
+            );
+            polygon.extend(
+                group
+                    .points
+                    .iter()
+                    .rev()
+                    .map(|point| project(point.x, point.interval.expect("complete ribbon").0)),
+            );
+            data.reserve_source(&mut payload.marks, 1)?;
+            payload.marks.push(LineMark::Ribbon(polygon, fill.clone()));
+        }
+        let points = data.collect_source(
+            group
+                .points
+                .iter()
+                .map(|point| Ok(project(point.x, point.y))),
+        )?;
+        let line = LineStyle::solid(
+            color,
+            if chart.kind() == PlotKind::Line {
+                1.8
+            } else {
+                1.4
+            },
+        );
+        let point_style =
+            chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
+        if chart.kind() == PlotKind::Line && chart.markers_visible() {
+            data.reserve_source(&mut payload.marks, 2)?;
+            let markers = data.collect_source(points.iter().copied().map(Ok))?;
+            payload.marks.push(LineMark::Line(points, line.clone()));
+            payload
+                .marks
+                .push(LineMark::Points(markers, point_style.clone()));
+        } else {
+            data.reserve_source(&mut payload.marks, 1)?;
+            payload.marks.push(LineMark::Line(points, line.clone()));
+        }
+        if let Some(identity) = &group.identity {
+            if identity.hue.is_some() {
+                data.reserve_source(&mut legends, 1)?;
+                let identity = chart.collective_legend_identity(identity, data)?;
+                legends.push(match (chart.markers_visible(), has_fill) {
+                    (true, true) => LegendEntry::point_line_fill(identity, point_style, line, fill),
+                    (true, false) => LegendEntry::point_line(identity, point_style, line),
+                    (false, true) => LegendEntry::line_fill(identity, line, fill),
+                    (false, false) => LegendEntry::line(identity, line),
+                });
             }
         }
     }
+    // Trajectories and paths paint every connector before any point.
+    if chart.kind() != PlotKind::Line
+        && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
+    {
+        for &index in &order {
+            let group = &prepared.groups[index];
+            for point in &group.points {
+                let color = if hue_paths {
+                    let index = group
+                        .hue_index
+                        .ok_or_else(|| Error::Render("line path: missing hue index".into()))?;
+                    chart.categorical_color(
+                        "line path",
+                        &prepared.hues[index],
+                        chart.hue_color_index(&prepared.hues[index], index),
+                        theme,
+                    )?
+                } else {
+                    let slot = point.hue_index.map_or(0, |index| {
+                        chart.hue_color_index(&prepared.hues[index], index)
+                    });
+                    theme.colors[slot % theme.colors.len()]
+                };
+                data.reserve_source(&mut payload.marks, 1)?;
+                payload.marks.push(LineMark::Points(
+                    data.collect_source(std::iter::once(Ok(project(point.x, point.y))))?,
+                    chart.point_style(color, 4),
+                ));
+            }
+        }
+        if !hue_paths {
+            let levels = chart.global_hue_levels().unwrap_or(&prepared.hues);
+            data.reserve_source(&mut legends, levels.len())?;
+            for (index, label) in levels.iter().enumerate() {
+                legends.push(LegendEntry::point(
+                    chart.point_legend_identity(label, data)?,
+                    chart.point_style(theme.colors[index % theme.colors.len()], 4),
+                ));
+            }
+        }
+    }
+    data.reserve_source(&mut payload.layers, prepared.layers.len())?;
+    for (index, layer) in prepared.layers.iter().enumerate() {
+        let slots = if chart.hue_col().is_some() {
+            chart
+                .global_hue_levels()
+                .map_or(prepared.primary_color_slots, <[String]>::len)
+        } else {
+            prepared.primary_color_slots
+        };
+        let style = chart.point_layers()[index]
+            .point_style(theme.colors[(slots + index) % theme.colors.len()]);
+        let points = data.collect_source(layer.points.iter().map(|&(x, y)| Ok(project(x, y))))?;
+        let mut text = Vec::new();
+        if let Some(labels) = &layer.labels {
+            data.reserve_source(&mut text, labels.len())?;
+            let x_range = layout.projection.x_range();
+            let y_range = layout.projection.y_range();
+            let offset = f64::from(style.radius) + 2.0;
+            for ((&(x, y), point), label) in layer.points.iter().zip(&points).zip(labels) {
+                if x < x_range.0 || x > x_range.1 || y < y_range.0 || y > y_range.1 {
+                    continue;
+                }
+                let mut buffer = [0_u8; 80];
+                let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
+                std::io::Write::write_fmt(
+                    &mut cursor,
+                    format_args!("line point layer {index} label"),
+                )
+                .expect("bounded layer index");
+                let length = usize::try_from(cursor.position()).expect("bounded layer index");
+                let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
+                let mut appearance = theme.legacy_text_appearance(10, crate::TextWeight::Normal);
+                appearance.line_height_multiplier = 1.2;
+                appearance.paint = style.color.into();
+                let plan = theme.measure_legacy_appearance_text(
+                    label,
+                    &appearance,
+                    crate::layout::PhysicalTextAlignment::Start,
+                    owner,
+                    false,
+                )?;
+                text.push(PlacedText::middle(
+                    plan,
+                    Point2D::new(
+                        (point.x + offset).max(0.0).round(),
+                        (point.y + offset).max(0.0).round(),
+                    ),
+                    TextAnchor::Start,
+                    0.0,
+                ));
+            }
+        }
+        if let Some(label) = &layer.legend {
+            data.reserve_source(&mut legends, 1)?;
+            legends.push(
+                LegendEntry::point(chart.point_legend_identity(label, data)?, style.clone())
+                    .without_hue_level(),
+            );
+        }
+        payload.layers.push((points, style, text));
+    }
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    for mark in &payload.marks {
+        match mark {
+            LineMark::Ribbon(points, style) => geometry.polygon(points, style, Some(clip))?,
+            LineMark::Line(points, style) => geometry.line(points, style, Some(clip))?,
+            LineMark::Points(points, style) => geometry.scatter(points, style, clip)?,
+        }
+    }
+    for (points, style, labels) in &payload.layers {
+        geometry.scatter(points, style, clip)?;
+        for text in labels {
+            geometry.text(text.placement, &text.plan, Some(clip))?;
+        }
+    }
+    let mut result = PlotRenderResult::new(layout, legends).with_axis_domains(
+        if prepared.conditions.is_some() {
+            AxisDomain::Categorical
+        } else {
+            AxisDomain::Continuous
+        },
+        AxisDomain::Continuous,
+    );
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Line(payload),
+        geometry,
+    })?);
+    Ok(result)
 }
+
+impl LinePayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        stage(self.kind, 3);
+        with_clip(backend, self.clip, |backend| {
+            for mark in &self.marks {
+                match mark {
+                    LineMark::Ribbon(points, style) => backend.draw_polygon(points, style)?,
+                    LineMark::Line(points, style) => backend.draw_line(points, style)?,
+                    LineMark::Points(points, style) => backend.draw_scatter(points, style)?,
+                }
+            }
+            Ok(())
+        })?;
+        if !self.layers.is_empty() {
+            with_clip(backend, self.clip, |backend| {
+                for (points, style, labels) in &self.layers {
+                    backend.draw_scatter(points, style)?;
+                    for text in labels {
+                        text.draw(backend)?;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests;

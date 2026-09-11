@@ -289,6 +289,14 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
             plot.width(),
             plot.height(),
             |stage| {
+                let inputs = if kind == PlotKind::Line {
+                    Some(crate::plots::shared_x::prepare_plot(
+                        &plot,
+                        &stage.generation_resources(),
+                    )?)
+                } else {
+                    None
+                };
                 let requirements = crate::layout::foundational_plot_requirements(
                     &plot,
                     kind,
@@ -306,9 +314,13 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(inputs)
             },
-            |(), assigned, _| {
+            |inputs, assigned, _| {
+                let plot = inputs
+                    .as_ref()
+                    .map_or_else(|| Ok(plot.clone()), |inputs| inputs.attach(plot.clone()))?;
                 let panel = PanelBox::new(100.0, 800.0, 100.0, 850.0);
                 let mut geometry = GeometryBackend::new(&theme)?;
                 geometry.begin(plot.width(), plot.height())?;
@@ -325,8 +337,11 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     (panel, result),
                 ))
             },
-            |(), assigned, (panel, result), stage| {
-                assert!(!result.producer_text.is_empty(), "{kind:?}");
+            |_, assigned, (panel, result), stage| {
+                assert!(
+                    result.marks.is_some() || !result.producer_text.is_empty(),
+                    "{kind:?}"
+                );
                 if kind != PlotKind::Line {
                     assert!(
                         result
@@ -443,6 +458,8 @@ fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
             plot.width(),
             plot.height(),
             |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     &plot,
                     PlotKind::Scatter,
@@ -461,9 +478,10 @@ fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
                 )
                 .map_err(|error| Error::Render(format!("D1 text census: {error}")))?;
                 theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(())
+                Ok(inputs)
             },
-            |(), assigned, round| {
+            |inputs, assigned, round| {
+                let plot = inputs.attach(plot.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     crate::layout::fit::measured(super::plan_panel(
@@ -478,7 +496,7 @@ fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
             },
-            |(), _, plan, _| Ok(plan),
+            |_, _, plan, _| Ok(plan),
         );
         if automatic {
             let root = root.unwrap();
@@ -546,6 +564,11 @@ fn explicit_left_and_bottom_guides_reserve_complete_axis_ink() {
 fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
     let plot =
         crate::kind::into_erased(line_plot(&line_data(["upper", "upper", "lower", "lower"])));
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        .unwrap()
+        .attach(plot)
+        .unwrap();
     let theme = theme();
     let cell = PanelBox::new(60.0, 500.0, 50.0, 350.0);
     let (mut result, _) = discover_geometry(
@@ -677,6 +700,10 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "prepared Scatter fixture exercises both resolving and nonresolving annotation assignments"
+)]
 fn annotation_conflict_links_only_to_a_resolving_assignment() {
     let theme = theme();
     let note = "Caller annotation";
@@ -686,9 +713,18 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
     )
     .hue(crate::CategoryValues::new("hue", ["a", "b"]).unwrap())
     .legend(LegendPolicy::Visible(LegendPosition::InsideRightTop));
-    let initial = source
-        .clone()
-        .erase()
+    let initial_source = source.clone().erase();
+    let initial_source = crate::plots::shared_x::prepare_plot(
+        &initial_source,
+        &theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources(),
+    )
+    .unwrap()
+    .attach(initial_source)
+    .unwrap();
+    let initial = initial_source
         .preflight_panel(
             PlotKind::Scatter,
             PanelBox::new(100.0, 500.0, 80.0, 400.0),
@@ -731,8 +767,14 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
     crate::layout::plan_exact_root(
         source.width(),
         source.height(),
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| {
+            crate::plots::shared_x::prepare_plot(
+                &source.clone().erase(),
+                &stage.generation_resources(),
+            )
+        },
+        |inputs, assigned, round| {
+            let source = inputs.attach(source.clone().erase())?;
             calls += 1;
             if calls == 1 {
                 round.seed_insets_for_test(&address, [40.0, 0.0, 0.0, 0.0])?;
@@ -749,7 +791,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
             .map_err(crate::layout::fit::PlanError::into_error)?;
             Ok(crate::layout::MeasuredLayout::new(assigned, plan))
         },
-        |(), _, _, _| Ok(()),
+        |_, _, _, _| Ok(()),
     )
     .unwrap();
     assert!(calls >= 2);
@@ -799,6 +841,9 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
             source.width(),
             source.height(),
             |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let source = inputs.attach(source.clone())?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     &source,
                     PlotKind::Scatter,
@@ -865,9 +910,10 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                         .iter()
                         .any(|plan| !plan.avoids_legend_in(narrow, bounds)));
                 }
-                Ok((if resolves { cell } else { narrow }, annotations))
+                Ok((if resolves { cell } else { narrow }, annotations, inputs))
             },
-            |(cell, _), assigned, round| {
+            |(cell, _, inputs), assigned, round| {
+                let source = inputs.attach(source.clone())?;
                 calls += 1;
                 if calls == 1 {
                     round.seed_insets_for_test(&address, seed)?;
@@ -1000,6 +1046,12 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
     let plan = plan_panel(&plot, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
     let plot_with_planned_limits = plan.plot_with_planned_limits(&plot);
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot_with_planned_limits =
+        crate::plots::shared_x::prepare_plot(&plot_with_planned_limits, &resources)
+            .unwrap()
+            .attach(plot_with_planned_limits)
+            .unwrap();
     let (result, geometry) = discover_geometry(
         &plot_with_planned_limits,
         PlotKind::Line,
@@ -1023,31 +1075,34 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
 }
 
 #[test]
-fn production_geometry_discovery_returns_a_closed_session() {
+fn production_geometry_discovery_returns_a_backend_independent_snapshot() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        .unwrap()
+        .attach(plot)
+        .unwrap();
     let cell = PanelBox::new(60.0, 440.0, 50.0, 310.0);
-    let (_, mut geometry) = discover_geometry(
+    let (_, geometry) = discover_geometry(
         &plot,
         PlotKind::Line,
         PlotRenderContext::new(crate::data::PlotData::new(&plot), cell, &theme()),
     )
     .unwrap();
 
-    let error = geometry
-        .draw_line(
-            &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)],
-            &LineStyle::solid((0, 0, 0), 1.0),
-        )
-        .unwrap_err();
-
-    assert!(error.to_string().contains("outside begin/end"));
+    assert!(!geometry.bounds().is_empty());
 }
 
 #[test]
 fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
     let data = line_data(["upper", "upper", "lower", "lower"]);
     let plot = crate::kind::into_erased(line_plot(&data));
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        .unwrap()
+        .attach(plot)
+        .unwrap();
     let cell = PanelBox::new(60.0, 440.0, 50.0, 310.0);
     let (result, _) = discover_geometry(
         &plot,

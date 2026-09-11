@@ -838,7 +838,7 @@ fn matrix_legend(
         .filter(|group| group.identity.hue.is_some())
         .map(|group| {
             Ok(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity)?,
+                chart.collective_legend_identity(&group.identity, chart.data())?,
                 chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2),
                 FillStyle {
                     color: theme.colors[group.color_index % theme.colors.len()],

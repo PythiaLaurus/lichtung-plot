@@ -114,6 +114,8 @@ impl<'a> PlotData<'a> {
     }
 
     pub(crate) fn column(self, key: &str) -> Result<DataColumn<'a>, Error> {
+        #[cfg(test)]
+        SOURCE_COLUMN_READS.with(|calls| calls.set(calls.get() + 1));
         self.plot
             .data_column(key)
             .ok_or_else(|| Error::Data(format!("unknown semantic value {key:?}")))
@@ -195,13 +197,22 @@ pub(crate) fn strict_finite_f64<'a>(
     )
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static SOURCE_COLUMN_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(crate) fn strict_numeric_values(values: &NumericValues, plot: &str) -> Result<Vec<f64>, Error> {
     (0..values.len())
         .map(|row| strict_numeric_value(values, row, plot))
         .collect()
 }
 
-fn strict_numeric_value(values: &NumericValues, row: usize, plot: &str) -> Result<f64, Error> {
+pub(crate) fn strict_numeric_value(
+    values: &NumericValues,
+    row: usize,
+    plot: &str,
+) -> Result<f64, Error> {
     match values.get(row) {
         Some(Some(value)) if value.is_finite() => Ok(value),
         Some(Some(value)) => Err(Error::Data(format!(

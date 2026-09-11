@@ -13,102 +13,688 @@
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::render::backend::{with_clip, Backend, Point2D};
+use crate::render::backend::{with_clip, Backend, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
-/// Render a scatter plot of the chart's `x_col` vs `y_col`.
-///
-/// Returns the `Layout` that was used to project the points so
-/// the caller can apply decorations (frame, grid, axes) and the
-/// collected `LegendEntry`s for the hue groups (empty when no
-/// hue was set).
-///
-/// # Errors
-/// `Error::Data` if either column is missing or
-/// non-castable to f64.
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let x_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;
-    let y_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("scatter: y column not set".into()))?;
-    let df = context.data;
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[usize; 4]> = const { std::cell::Cell::new([0; 4]) };
+}
 
-    // Compute global x/y ranges from the *whole* dataset so the
-    // Layout covers every hue group on a common axis scale.
-    let points_all = crate::data::aligned_finite_f64(df, x_col, y_col, "scatter")?;
-    if points_all.is_empty() {
-        return Err(Error::Data("scatter: no rows".into()).into());
-    }
-    let (xmin, xmax) = crate::data::min_max(points_all.iter().map(|(x, _)| *x), "scatter")?;
-    let (ymin, ymax) = crate::data::min_max(points_all.iter().map(|(_, y)| *y), "scatter")?;
-    let mut hue_keys = if let Some(hue_col) = chart.hue_col() {
-        crate::data::observed_levels_for_finite_pairs(df, x_col, y_col, hue_col, "scatter")?
-    } else {
-        Vec::new()
-    };
-    hue_keys.sort_by_key(|key| chart.hue_color_index(key, usize::MAX));
-    let layout = context.axis_layout(|| {
-        let x_range = crate::layout::continuous_auto_range((xmin, xmax), chart.x_axis_spec());
-        let y_range = crate::layout::continuous_auto_range((ymin, ymax), chart.y_axis_spec());
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+#[derive(Debug)]
+pub(crate) struct PreparedScatterInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedScatter)>,
+}
 
-        // Single shared layout for the whole plot panel.
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            context.panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            &x_axis_spec,
-            &y_axis_spec,
-            theme,
-        )
-    })?;
-    let proj = &layout.projection;
+#[derive(Debug)]
+pub(crate) struct PreparedScatter {
+    pub(crate) ranges: [(f64, f64); 2],
+    groups: Vec<ScatterGroup>,
+}
 
-    let mut legend_entries = Vec::new();
-    with_clip(backend, layout.projection.panel_box(), |backend| {
+#[derive(Debug)]
+struct ScatterGroup {
+    label: Option<String>,
+    points: Vec<(f64, f64)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ScatterPayload {
+    clip: crate::layout::PanelBox,
+    groups: Vec<(Vec<Point2D>, PointStyle)>,
+    legends: Vec<LegendEntry>,
+}
+
+impl PreparedScatter {
+    pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
+        #[cfg(test)]
+        STAGES.with(|stages| {
+            let mut counts = stages.get();
+            counts[0] += 1;
+            stages.set(counts);
+        });
+        let x_col = chart
+            .x_col()
+            .ok_or_else(|| Error::Data("scatter: x column not set".into()))?;
+        let y_col = chart
+            .y_col()
+            .ok_or_else(|| Error::Data("scatter: y column not set".into()))?;
+        let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "scatter")?;
+        if rows.is_empty() {
+            return Err(Error::Data("scatter: no rows".into()));
+        }
+        data.claim_source_visits(rows.len())?;
+        data.claim_source_visits(rows.len())?;
+        let ranges = [
+            crate::data::min_max(rows.iter().map(|(_, x, _)| *x), "scatter")?,
+            crate::data::min_max(rows.iter().map(|(_, _, y)| *y), "scatter")?,
+        ];
+        let mut groups = Vec::new();
         if let Some(hue_col) = chart.hue_col() {
-            let hues = crate::data::strict_strings(df, hue_col, "scatter")?;
-            let aligned = crate::data::aligned_finite_rows(df, x_col, y_col, "scatter")?;
-            for (i, label) in hue_keys.into_iter().enumerate() {
-                let color = theme.colors[chart.hue_color_index(&label, i) % theme.colors.len()];
-                let style = chart.point_style(color, 3);
-                let pts: Vec<Point2D> = aligned
+            let hues = crate::data::strict_strings(data, hue_col, "scatter")?;
+            let retained_hues = data.collect_source(
+                rows.iter()
+                    .map(|(row, _, _)| data.copy_source_string(&hues[*row])),
+            )?;
+            let keys = data.source_levels(&retained_hues)?;
+            data.reserve_source(&mut groups, keys.len())?;
+            for label in keys {
+                data.claim_source_visits(rows.len())?;
+                let count = rows
                     .iter()
                     .filter(|(row, _, _)| hues[*row] == label)
-                    .map(|(_, x, y)| {
-                        let (px, py) = proj.project(*x, *y);
-                        Point2D::new(px, py)
-                    })
-                    .collect();
-                backend.draw_scatter(&pts, &style)?;
-
-                legend_entries.push(LegendEntry::point(chart.legend_identity(label), style));
+                    .count();
+                let mut points = Vec::new();
+                data.reserve_source(&mut points, count)?;
+                data.claim_source_visits(rows.len())?;
+                points.extend(
+                    rows.iter()
+                        .filter(|(row, _, _)| hues[*row] == label)
+                        .map(|(_, x, y)| (*x, *y)),
+                );
+                groups.push(ScatterGroup {
+                    label: Some(label),
+                    points,
+                });
             }
         } else {
-            let color = theme.colors.first().copied().unwrap_or((0, 0, 0));
-            let style = chart.point_style(color, 3);
-            let pts: Vec<Point2D> = points_all
-                .iter()
-                .map(|(x, y)| {
-                    let (px, py) = proj.project(*x, *y);
-                    Point2D::new(px, py)
-                })
-                .collect();
-            backend.draw_scatter(&pts, &style)?;
+            data.reserve_source(&mut groups, 1)?;
+            groups.push(ScatterGroup {
+                label: None,
+                points: data.collect_source(rows.iter().map(|(_, x, y)| Ok((*x, *y))))?,
+            });
         }
-        Ok(())
-    })?;
+        Ok(Self { ranges, groups })
+    }
 
-    Ok(PlotRenderResult::new(layout, legend_entries))
+    fn project(
+        &self,
+        chart: &Plot,
+        projection: &crate::layout::Projection,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<ScatterPayload, Error> {
+        #[cfg(test)]
+        STAGES.with(|stages| {
+            let mut counts = stages.get();
+            counts[2] += 1;
+            stages.set(counts);
+        });
+        let mut groups = Vec::new();
+        let mut legends = Vec::new();
+        data.reserve_source(&mut groups, self.groups.len())?;
+        data.reserve_source(
+            &mut legends,
+            self.groups.iter().filter(|g| g.label.is_some()).count(),
+        )?;
+        let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
+        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+            let key = |index: usize| {
+                self.groups[index]
+                    .label
+                    .as_ref()
+                    .map_or(0, |label| chart.hue_color_index(label, usize::MAX))
+            };
+            (key(*a), *a).cmp(&(key(*b), *b))
+        })?;
+        for (index, group_index) in order.into_iter().enumerate() {
+            let group = &self.groups[group_index];
+            let color = group.label.as_ref().map_or_else(
+                || theme.colors.first().copied().unwrap_or((0, 0, 0)),
+                |label| theme.colors[chart.hue_color_index(label, index) % theme.colors.len()],
+            );
+            let style = chart.point_style(color, 3);
+            let points = data.collect_source(group.points.iter().map(|(x, y)| {
+                let (x, y) = projection.project(*x, *y);
+                Ok(Point2D::new(x, y))
+            }))?;
+            if let Some(label) = &group.label {
+                legends.push(LegendEntry::point(
+                    chart.point_legend_identity(label, data)?,
+                    style.clone(),
+                ));
+            }
+            groups.push((points, style));
+        }
+        Ok(ScatterPayload {
+            clip: projection.panel_box(),
+            groups,
+            legends,
+        })
+    }
+}
+
+impl ScatterPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        STAGES.with(|stages| {
+            let mut counts = stages.get();
+            counts[3] += 1;
+            stages.set(counts);
+        });
+        with_clip(backend, self.clip, |backend| {
+            for (points, style) in &self.groups {
+                backend.draw_scatter(points, style)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Measure the assigned Scatter payload from root-prepared scientific inputs.
+/// Projection may change with the assignment; capture only draws this payload.
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    STAGES.with(|stages| {
+        let mut counts = stages.get();
+        counts[1] += 1;
+        stages.set(counts);
+    });
+    let theme = context.theme;
+    let prepared = chart
+        .prepared_scatter
+        .as_ref()
+        .and_then(|panels| {
+            panels
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| {
+            Error::Render(
+                "Scatter measurement requires root-prepared semantics for its component".into(),
+            )
+        })?;
+    let layout = context
+        .axis_layout(|| Err(Error::Render("Scatter requires root-prepared axes".into()).into()))?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for (points, style) in &payload.groups {
+        geometry.scatter(points, style, clip)?;
+    }
+    let mut result = PlotRenderResult::new(layout, std::mem::take(&mut payload.legends));
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Scatter(payload),
+        geometry,
+    })?);
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::{CategoryValues, NumericValues};
+
+    fn source() -> Plot {
+        Plot::scatter(
+            NumericValues::new("x", [2.0, f64::NAN, 1.0, 3.0]),
+            NumericValues::new("y", [4.0, 999.0, 2.0, 6.0]),
+        )
+        .hue(CategoryValues::new("hue", ["b", "omitted", "a", "b"]).unwrap())
+        .erase()
+    }
+
+    #[test]
+    fn root_prepares_scatter_once_without_geometry_backend_layout() {
+        STAGES.with(|stages| stages.set([0; 4]));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+        let plot = source().size(640, 480);
+        plot.preflight().unwrap();
+        let counts = STAGES.with(std::cell::Cell::get);
+        assert_eq!(counts[0], 1);
+        assert!(counts[1] > 0);
+        assert_eq!(counts[1], counts[2]);
+        assert_eq!(counts[3], 1);
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn missing_preparation_and_invalid_guides_reject_before_fonts_or_backend_work() {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+        let plot = source();
+        let theme = crate::Theme::Publication.resolve();
+        let context = PlotRenderContext::new(
+            plot.data(),
+            crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
+            &theme,
+        );
+        let error = plot.measure_selected_interior(context).unwrap_err();
+        assert!(error.into_error().to_string().contains("root-prepared"));
+        for coordinate in [f64::INFINITY, 100.0] {
+            let plot = Plot::scatter(
+                NumericValues::new("x", [0.0, 1.0]),
+                NumericValues::new("y", [0.0, 1.0]),
+            )
+            .guide(crate::GuideSpec::horizontal(
+                coordinate,
+                crate::GuideStyle::new((0, 0, 0), 1.0, crate::LinePattern::Solid).unwrap(),
+            ))
+            .size(1, 1);
+            assert!(matches!(plot.preflight(), Err(Error::Data(_))));
+        }
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn facet_root_prepares_each_scatter_component_once_and_captures_only_selected_payloads() {
+        let plot = Plot::scatter(
+            NumericValues::new("x", [0.0, 1.0, 10.0, 20.0]),
+            NumericValues::new("y", [0.0, 1.0, 1.0, 0.0]),
+        )
+        .facet(crate::FacetSpec::column(
+            CategoryValues::new("panel", ["a", "a", "b", "b"]).unwrap(),
+        ))
+        .size(960, 640);
+        STAGES.with(|stages| stages.set([0; 4]));
+        plot.preflight().unwrap();
+        let counts = STAGES.with(std::cell::Cell::get);
+        assert_eq!(counts[0], 2);
+        assert_eq!(counts[1], counts[2]);
+        assert_eq!(counts[3], 2);
+    }
+
+    #[test]
+    fn selected_scatter_capture_does_not_read_sources_project_generate_ticks_or_shape() {
+        use crate::orchestrator::measurements::{self, Counter};
+        let plot = Plot::scatter(
+            NumericValues::new("x", [2.0, f64::NAN, 1.0, 3.0]),
+            NumericValues::new("y", [4.0, 999.0, 2.0, 6.0]),
+        )
+        .hue(CategoryValues::new("hue", ["b", "omitted", "a", "b"]).unwrap())
+        .guide(crate::GuideSpec::horizontal(
+            3.0,
+            crate::GuideStyle::new((10, 20, 30), 1.0, crate::LinePattern::Dashed).unwrap(),
+        ))
+        .panel_text_annotation(
+            crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "retained annotation")
+                .unwrap(),
+        )
+        .legend(crate::LegendPolicy::Hidden)
+        .size(640, 480)
+        .erase();
+        let theme = crate::Theme::Publication.resolve();
+        STAGES.with(|stages| stages.set([0; 4]));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+        let root = crate::layout::plan_exact_root(
+            640,
+            480,
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &plot,
+                    crate::PlotKind::Scatter,
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(inputs)
+            },
+            |inputs, assigned, _| {
+                let attached = inputs.attach(plot.clone())?;
+                assert!(std::sync::Arc::ptr_eq(
+                    attached.prepared_scatter.as_ref().unwrap(),
+                    inputs.scatter.as_ref().unwrap()
+                ));
+                let context = PlotRenderContext::new(
+                    attached.data(),
+                    crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
+                    &theme,
+                );
+                let result = attached
+                    .measure_selected_interior(context)
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert!(!result.marks.as_ref().unwrap().geometry.bounds().is_empty());
+                assert!(!result
+                    .annotations
+                    .as_ref()
+                    .unwrap()
+                    .geometry
+                    .bounds()
+                    .is_empty());
+                Ok(crate::layout::MeasuredLayout::new(assigned, result))
+            },
+            |_, _, selected, stage| {
+                let counts = STAGES.with(std::cell::Cell::get);
+                let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let projections = crate::layout::Projection::test_projection_calls();
+                measurements::start();
+                let poison = Plot::scatter(
+                    crate::NumericValues::new("x", [f64::INFINITY]),
+                    crate::NumericValues::new("y", [f64::NAN]),
+                )
+                .erase();
+                let captured = crate::orchestrator::capture_text_replay_plan(
+                    640,
+                    480,
+                    "selected Scatter test",
+                    &theme,
+                    stage,
+                    |backend| {
+                        let context = PlotRenderContext::new(
+                            poison.data(),
+                            selected.layout.projection.panel_box(),
+                            &theme,
+                        )
+                        .with_retained_body(selected.retained_payload());
+                        poison.render_panel(crate::PlotKind::Scatter, context, backend)?;
+                        selected.axes.as_ref().unwrap().draw(backend)
+                    },
+                )?;
+                let work = measurements::finish();
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                assert_eq!(
+                    crate::layout::Projection::test_projection_calls(),
+                    projections
+                );
+                let after = STAGES.with(std::cell::Cell::get);
+                assert_eq!(&after[..3], &counts[..3]);
+                assert_eq!(after[3], counts[3] + 1);
+                assert_eq!(
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                    shapes
+                );
+                for counter in [
+                    Counter::AxisRangePreparation,
+                    Counter::AxisSpecPreparation,
+                    Counter::AxisSourcePreparation,
+                    Counter::TickSource,
+                    Counter::TickMetricLookup,
+                    Counter::TextProposalVisit,
+                    Counter::TextExactTrial,
+                ] {
+                    assert_eq!(work.counters[counter as usize], 0, "{counter:?}");
+                }
+                assert!(captured
+                    .retained_text()
+                    .iter()
+                    .any(|(_, plan)| plan.source == "retained annotation"));
+                Ok(captured)
+            },
+        )
+        .unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get)[0], 1);
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        let counts = STAGES.with(std::cell::Cell::get);
+        crate::orchestrator::validate_text_replay_plan(
+            640,
+            480,
+            root.plan(),
+            "selected Scatter Null replay",
+        )
+        .unwrap();
+        let mut backend = root.plan().take_svg_backend().unwrap();
+        root.plan()
+            .replay(640, 480, &mut backend, "selected Scatter SVG replay")
+            .unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get), counts);
+    }
+
+    #[test]
+    fn selected_extents_match_clipped_legacy_ink_for_every_point_shape() {
+        use crate::render::geometry::{GeometryBackend, GeometrySnapshot};
+        let theme = crate::Theme::Publication.resolve();
+        let clip = crate::layout::PanelBox::new(10.25, 100.75, 20.5, 90.25);
+        let points = [
+            Point2D::new(10.25, 20.5),
+            Point2D::new(60.0, 60.0),
+            Point2D::new(200.0, 200.0),
+        ];
+        for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
+            for outline in [true, false] {
+                let mut style = source().point_style((10, 20, 30), 3);
+                style.shape = shape;
+                if !outline {
+                    style.outline = None;
+                }
+                for opacity in [0.0, 0.5, 1.0] {
+                    style.opacity = opacity;
+                    let mut selected = GeometrySnapshot::new(&theme).unwrap();
+                    selected.scatter(&points, &style, clip).unwrap();
+                    let mut legacy = GeometryBackend::new(&theme).unwrap();
+                    legacy.begin(640, 480).unwrap();
+                    with_clip(&mut legacy, clip, |backend| {
+                        backend.draw_scatter(&points, &style)
+                    })
+                    .unwrap();
+                    legacy.end().unwrap();
+                    assert_eq!(selected.bounds(), legacy.bounds());
+                    assert!(selected.bounds().iter().all(|ink| ink.left >= clip.x0
+                        && ink.right <= clip.x1
+                        && ink.bottom >= clip.y0
+                        && ink.top <= clip.y1));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn semantic_preparation_preserves_aligned_rows_and_observed_hue_order_without_fonts() {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let plot = source();
+        let resources = OperationGenerationResources::new();
+        let prepared =
+            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)).unwrap();
+        assert_eq!(prepared.ranges, [(1.0, 3.0), (2.0, 6.0)]);
+        assert_eq!(prepared.groups.len(), 2);
+        assert_eq!(prepared.groups[0].label.as_deref(), Some("b"));
+        assert_eq!(prepared.groups[0].points, [(2.0, 4.0), (3.0, 6.0)]);
+        assert_eq!(prepared.groups[1].label.as_deref(), Some("a"));
+        assert_eq!(prepared.groups[1].points, [(1.0, 2.0)]);
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn semantic_and_projected_buffers_use_the_callers_exact_admission() {
+        let plot = source();
+        let theme = crate::Theme::Publication.resolve();
+        let projection =
+            crate::layout::Projection::new((1.0, 3.0), (2.0, 6.0), (10.25, 210.75, 20.5, 120.25));
+        let resources = OperationGenerationResources::new();
+        let prepared =
+            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)).unwrap();
+        let semantic = (
+            resources.usage().unwrap().1,
+            resources.byte_usage().unwrap(),
+        );
+        for (visits, bytes) in [(semantic.0 - 1, semantic.1), (semantic.0, semantic.1 - 1)] {
+            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+            assert!(
+                PreparedScatter::new(&plot, plot.data().with_axis_resources(&limited)).is_err()
+            );
+        }
+        let exact = OperationGenerationResources::with_test_limits(semantic.0, semantic.1);
+        PreparedScatter::new(&plot, plot.data().with_axis_resources(&exact)).unwrap();
+        let resources = OperationGenerationResources::new();
+        let payload = prepared
+            .project(
+                &plot,
+                &projection,
+                &theme,
+                plot.data().with_axis_resources(&resources),
+            )
+            .unwrap();
+        assert_eq!(payload.clip, projection.panel_box());
+        assert!((payload.groups[0].0[0].x - 110.5).abs() < 1e-12);
+        assert!((payload.groups[0].0[0].y - 70.375).abs() < 1e-12);
+        assert_eq!(payload.groups[0].0[1], Point2D::new(210.75, 120.25));
+        assert_eq!(payload.groups[1].0, [Point2D::new(10.25, 20.5)]);
+        assert_eq!(payload.legends.len(), 2);
+        let projected = (
+            resources.usage().unwrap().1,
+            resources.byte_usage().unwrap(),
+        );
+        for (visits, bytes) in [
+            (projected.0 - 1, projected.1),
+            (projected.0, projected.1 - 1),
+        ] {
+            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+            assert!(prepared
+                .project(
+                    &plot,
+                    &projection,
+                    &theme,
+                    plot.data().with_axis_resources(&limited)
+                )
+                .is_err());
+        }
+        let exact = OperationGenerationResources::with_test_limits(projected.0, projected.1);
+        prepared
+            .project(
+                &plot,
+                &projection,
+                &theme,
+                plot.data().with_axis_resources(&exact),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn invalid_scatter_semantics_reject_without_font_discovery() {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let plot = Plot::scatter(
+            NumericValues::new("x", [f64::NAN]),
+            NumericValues::new("y", [1.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        assert!(matches!(
+            PreparedScatter::new(&plot, plot.data().with_axis_resources(&resources)),
+            Err(Error::Data(_))
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn projected_legend_fields_and_values_are_admitted_for_every_candidate() {
+        let field = "caller_owned_hue_dimension_".repeat(128);
+        let plot = |name: &str| {
+            Plot::scatter(
+                NumericValues::new("x", [0.0, 1.0]),
+                NumericValues::new("y", [1.0, 0.0]),
+            )
+            .hue(CategoryValues::new(name, ["a", "b"]).unwrap())
+            .erase()
+        };
+        let short = plot("hue");
+        let long = plot(&field);
+        let resources = OperationGenerationResources::new();
+        let prepared =
+            PreparedScatter::new(&short, short.data().with_axis_resources(&resources)).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let projection =
+            crate::layout::Projection::new((0.0, 1.0), (0.0, 1.0), (10.25, 210.75, 20.5, 120.25));
+        let mut usage = Vec::new();
+        for plot in [&short, &long] {
+            let resources = OperationGenerationResources::new();
+            let payload = prepared
+                .project(
+                    plot,
+                    &projection,
+                    &theme,
+                    plot.data().with_axis_resources(&resources),
+                )
+                .unwrap();
+            for (entry, value) in payload.legends.iter().zip(["a", "b"]) {
+                assert_eq!(
+                    entry.identity(),
+                    &crate::decorations::legend::LegendIdentity::single(
+                        plot.hue_name().unwrap(),
+                        value
+                    )
+                );
+            }
+            let visits = resources.usage().unwrap().1;
+            let bytes = resources.byte_usage().unwrap();
+            usage.push((visits, bytes));
+            for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+                let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+                assert!(prepared
+                    .project(
+                        plot,
+                        &projection,
+                        &theme,
+                        plot.data().with_axis_resources(&limited)
+                    )
+                    .is_err());
+            }
+            let exact = OperationGenerationResources::with_test_limits(2 * visits, 2 * bytes);
+            for _ in 0..2 {
+                prepared
+                    .project(
+                        plot,
+                        &projection,
+                        &theme,
+                        plot.data().with_axis_resources(&exact),
+                    )
+                    .unwrap();
+            }
+            assert_eq!(exact.usage().unwrap().1, 2 * visits);
+            assert_eq!(exact.byte_usage().unwrap(), 2 * bytes);
+            assert!(prepared
+                .project(
+                    plot,
+                    &projection,
+                    &theme,
+                    plot.data().with_axis_resources(&exact)
+                )
+                .is_err());
+        }
+        let extra = 2 * (field.len() - "hue".len());
+        assert_eq!(usage[1].0 - usage[0].0, extra as u128);
+        assert_eq!(usage[1].1 - usage[0].1, u64::try_from(extra).unwrap());
+        let short_budget = OperationGenerationResources::with_test_limits(usage[0].0, usage[0].1);
+        assert!(prepared
+            .project(
+                &long,
+                &projection,
+                &theme,
+                long.data().with_axis_resources(&short_budget)
+            )
+            .is_err());
+    }
 }

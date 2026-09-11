@@ -487,8 +487,9 @@ fn shared_legend_child_cache_replay_contract() {
         crate::layout::plan_exact_root(
             1200,
             720,
-            |_| Ok(()),
-            |(), assigned, round| {
+            |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources()),
+            |inputs, assigned, round| {
+                let plot = inputs.attach(plot.clone())?;
                 let panel = PanelBox::new(100.0, 1100.0, 100.0, 620.0);
                 let context = crate::spec::PlotRenderContext::new(plot.data(), panel, &theme);
                 let first = children.measure(
@@ -506,6 +507,7 @@ fn shared_legend_child_cache_replay_contract() {
                         )
                     },
                 )?;
+                let scatter_stages = crate::plots::scatter::STAGES.with(std::cell::Cell::get);
                 let second = children.measure(
                     &plot,
                     context,
@@ -522,6 +524,18 @@ fn shared_legend_child_cache_replay_contract() {
                     panic!("populated legend probe must fit")
                 };
                 assert!(Arc::ptr_eq(&first, &second));
+                assert_eq!(
+                    crate::plots::scatter::STAGES.with(std::cell::Cell::get),
+                    scatter_stages
+                );
+                assert!(Arc::ptr_eq(
+                    first.marks.as_ref().unwrap(),
+                    second.marks.as_ref().unwrap()
+                ));
+                assert!(Arc::ptr_eq(
+                    first.annotations.as_ref().unwrap(),
+                    second.annotations.as_ref().unwrap()
+                ));
                 let first = children.plan(
                     &plot,
                     crate::decorations::plan::LegendRole::Suppressed,
@@ -551,7 +565,7 @@ fn shared_legend_child_cache_replay_contract() {
                 children.finish_round(round);
                 Ok(MeasuredLayout::new(assigned, ()))
             },
-            |(), _, (), _| Ok(()),
+            |_, _, (), _| Ok(()),
         )
         .unwrap();
         let observed = measurements::finish();
@@ -875,8 +889,9 @@ fn historical_reflow_measured_gutter_control() {
     crate::layout::plan_exact_root(
         640,
         400,
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources()),
+        |inputs, assigned, round| {
+            let plot = inputs.attach(plot.clone())?;
             if round.insets(&address, FeedbackKind::AxisGutter)[0] == 0.0 {
                 let request = round.request_insets(
                     &address,
@@ -913,7 +928,7 @@ fn historical_reflow_measured_gutter_control() {
             }
             Ok(MeasuredLayout::new(assigned, ()))
         },
-        |(), _, (), _| Ok(()),
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
     let observed = measurements::finish();

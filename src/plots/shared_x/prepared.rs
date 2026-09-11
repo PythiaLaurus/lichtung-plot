@@ -15,16 +15,40 @@ pub(crate) struct PreparedAxes {
     pub(crate) logarithmic: bool,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "root preparation retains per-component scientific axes and admitted point/path semantics before fonts"
+)]
 pub(crate) fn prepare_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();
+    let mut scatter = Vec::new();
+    let mut line = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
+    if source.kind() == PlotKind::Scatter && !source.has_facets() {
+        return prepare_scatter_plot(
+            source,
+            resources,
+            crate::plots::scatter::PreparedScatter::new(source, source_data)?,
+        );
+    }
+    if matches!(
+        source.kind(),
+        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+    ) && !source.has_facets()
+    {
+        return prepare_line_plot(
+            source,
+            resources,
+            crate::plots::line::PreparedLine::new(source, source_data, None)?,
+        );
+    }
     if source.has_facets() {
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
         let groups = source
@@ -80,8 +104,41 @@ pub(crate) fn prepare_plot(
                 groups: groups.as_deref(),
                 conditions: conditions.as_deref(),
             };
-            let axes = prepare(source, data, fixed_data, Some(facet))?;
-            retained.push((Some(panel.scope(source_data)?), axes));
+            let marks = if source.kind() == PlotKind::Scatter {
+                Some(crate::plots::scatter::PreparedScatter::new(source, data)?)
+            } else {
+                None
+            };
+            let paths = if matches!(
+                source.kind(),
+                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+            ) {
+                Some(crate::plots::line::PreparedLine::new(
+                    source,
+                    data,
+                    facet.conditions,
+                )?)
+            } else {
+                None
+            };
+            let axes = prepare(
+                source,
+                data,
+                fixed_data,
+                Some(facet),
+                marks.as_ref(),
+                paths.as_ref(),
+            )?;
+            let scope = panel.scope(source_data)?;
+            if let Some(paths) = paths {
+                source_data.reserve_source(&mut line, 1)?;
+                line.push((Some(source_data.copy_source_string(&scope)?), paths));
+            }
+            if let Some(marks) = marks {
+                source_data.reserve_source(&mut scatter, 1)?;
+                scatter.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
+            retained.push((Some(scope), axes));
         }
         for (side, fixed) in [
             matches!(
@@ -101,6 +158,13 @@ pub(crate) fn prepare_plot(
             }
             reconcile_facet_axis(&mut retained, side, source_data)?;
         }
+        for (_, axes) in &retained {
+            crate::orchestrator::layers::GuideSnapshot::validate_sources(
+                source,
+                axes.ranges,
+                source_data,
+            )?;
+        }
     } else if source.kind() == PlotKind::Matrix {
         matrix =
             Some(source_data.source_arc(crate::plots::matrix::prepare_axes(source, source_data)?)?);
@@ -111,13 +175,96 @@ pub(crate) fn prepare_plot(
                 .axis_scope()
                 .map(|scope| source_data.copy_source_string(scope))
                 .transpose()?,
-            prepare(source, source_data, None, None)?,
+            prepare(source, source_data, None, None, None, None)?,
         ));
     }
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         axes: source_data.source_arc(retained)?,
         matrix,
+        line: if matches!(
+            source.kind(),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+        ) {
+            Some(source_data.source_arc(crate::plots::line::PreparedLineInputs { panels: line })?)
+        } else {
+            None
+        },
+        scatter: if source.kind() == PlotKind::Scatter {
+            Some(
+                source_data
+                    .source_arc(crate::plots::scatter::PreparedScatterInputs { panels: scatter })?,
+            )
+        } else {
+            None
+        },
+    })
+}
+
+/// Complete one already prepared Scatter component after root range coordination.
+pub(crate) fn prepare_scatter_plot(
+    source: &Plot,
+    resources: &crate::font::canonical::OperationGenerationResources,
+    marks: crate::plots::scatter::PreparedScatter,
+) -> Result<PreparedInteriorInputs, Error> {
+    InteriorRoute::Scatter.validate(source)?;
+    let data = source
+        .configured_source_rows()?
+        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
+        .with_axis_resources(resources);
+    let axes = prepare(source, data, None, None, Some(&marks), None)?;
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    let scope = || {
+        source
+            .axis_scope()
+            .map(|scope| data.copy_source_string(scope))
+            .transpose()
+    };
+    let mut retained_axes = Vec::new();
+    data.reserve_source(&mut retained_axes, 1)?;
+    retained_axes.push((scope()?, axes));
+    let mut panels = Vec::new();
+    data.reserve_source(&mut panels, 1)?;
+    panels.push((scope()?, marks));
+    Ok(PreparedInteriorInputs {
+        route: InteriorRoute::Scatter,
+        axes: data.source_arc(retained_axes)?,
+        matrix: None,
+        line: None,
+        scatter: Some(data.source_arc(crate::plots::scatter::PreparedScatterInputs { panels })?),
+    })
+}
+
+/// Complete one retained line component after the parent's range coordination.
+pub(crate) fn prepare_line_plot(
+    source: &Plot,
+    resources: &crate::font::canonical::OperationGenerationResources,
+    marks: crate::plots::line::PreparedLine,
+) -> Result<PreparedInteriorInputs, Error> {
+    let data = source
+        .configured_source_rows()?
+        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
+        .with_axis_resources(resources);
+    let axes = prepare(source, data, None, None, None, Some(&marks))?;
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    let scope = || {
+        source
+            .axis_scope()
+            .map(|scope| data.copy_source_string(scope))
+            .transpose()
+    };
+    let mut retained_axes = Vec::new();
+    data.reserve_source(&mut retained_axes, 1)?;
+    retained_axes.push((scope()?, axes));
+    let mut panels = Vec::new();
+    data.reserve_source(&mut panels, 1)?;
+    panels.push((scope()?, marks));
+    Ok(PreparedInteriorInputs {
+        route: InteriorRoute::classify(source.kind()),
+        axes: data.source_arc(retained_axes)?,
+        matrix: None,
+        scatter: None,
+        line: Some(data.source_arc(crate::plots::line::PreparedLineInputs { panels })?),
     })
 }
 
@@ -177,6 +324,8 @@ fn prepare(
     data: PlotData<'_>,
     fixed_data: Option<PlotData<'_>>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
+    scatter: Option<&crate::plots::scatter::PreparedScatter>,
+    line: Option<&crate::plots::line::PreparedLine>,
 ) -> Result<PreparedAxes, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
     data.claim_source_visits(12)?;
@@ -200,27 +349,14 @@ fn prepare(
     let mut ranges = match chart.kind() {
         PlotKind::Regression => crate::plots::regression::axis_ranges(chart, data)?,
         PlotKind::Scatter => {
-            let points = crate::data::aligned_finite_f64(
-                data,
-                chart
-                    .x_col()
-                    .ok_or_else(|| Error::Data("x column not set".into()))?,
-                chart
-                    .y_col()
-                    .ok_or_else(|| Error::Data("y column not set".into()))?,
-                "axis",
-            )?;
-            data.claim_source_visits(points.len())?;
-            data.claim_source_visits(points.len())?;
+            let ranges = scatter
+                .ok_or_else(|| {
+                    Error::Render("Scatter axis inputs require prepared semantics".into())
+                })?
+                .ranges;
             [
-                crate::layout::continuous_auto_range(
-                    crate::data::min_max(points.iter().map(|p| p.0), "axis")?,
-                    chart.x_axis_spec(),
-                ),
-                crate::layout::continuous_auto_range(
-                    crate::data::min_max(points.iter().map(|p| p.1), "axis")?,
-                    chart.y_axis_spec(),
-                ),
+                crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec()),
+                crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec()),
             ]
         }
         PlotKind::Histogram => crate::plots::histogram::axis_ranges(chart, data)?,
@@ -239,9 +375,20 @@ fn prepare(
             ]
         }
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-            let (ranges, levels) = crate::plots::line::axis_inputs(chart, data, facet)?;
-            categories[0] = levels;
-            ranges
+            let line = line.ok_or_else(|| {
+                Error::Render("line axis inputs require prepared semantics".into())
+            })?;
+            categories[0] = line
+                .conditions
+                .as_ref()
+                .map(|levels| {
+                    data.collect_source(levels.iter().map(|label| data.copy_source_string(label)))
+                })
+                .transpose()?;
+            [
+                chart.x_axis_spec().limits.unwrap_or(line.ranges[0]),
+                chart.y_axis_spec().limits.unwrap_or(line.ranges[1]),
+            ]
         }
         PlotKind::Marginal => crate::plots::marginal::axis_ranges(chart, data)?,
         PlotKind::Bar
@@ -547,6 +694,131 @@ fn prepare(
 mod tests {
     use super::*;
     use crate::{BarInput, CategoryValues, FacetSpec, NumericValues};
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "all extracted facet families validate final shared ranges before an unavailable font census"
+    )]
+    fn facet_guides_validate_reconciled_ranges_before_unavailable_fonts() {
+        fn plots(scales: FacetScales, guide: crate::GuideSpec) -> [Plot; 4] {
+            let x = NumericValues::new("x", [0.0, 1.0, 10.0, 11.0]);
+            let y = NumericValues::new("y", [0.0, 1.0, 10.0, 11.0]);
+            let group = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
+            let facet = FacetSpec::column(
+                CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+            )
+            .scales(scales);
+            [
+                Plot::scatter(x.clone(), y.clone())
+                    .guide(guide.clone())
+                    .facet(facet.clone())
+                    .erase(),
+                Plot::line(x.clone(), y.clone())
+                    .guide(guide.clone())
+                    .facet(facet.clone())
+                    .erase(),
+                Plot::trajectory(x.clone(), y.clone(), group.clone())
+                    .guide(guide.clone())
+                    .facet(facet.clone())
+                    .erase(),
+                Plot::line_path(x, y, group)
+                    .guide(guide)
+                    .facet(facet)
+                    .erase(),
+            ]
+        }
+        fn prepare_with_unavailable_fonts(plot: &Plot) -> Result<(), Error> {
+            let mut theme = crate::Theme::Publication.resolve();
+            theme.typography.tick_label.stack = "Lichtung T5a6a3a Unavailable Font 8c42e1".into();
+            crate::layout::plan_exact_root(
+                640,
+                480,
+                |stage| {
+                    // Exercise the root boundary, independently of the current public
+                    // restriction on combining supplemental guides with faceting.
+                    prepare_plot(plot, &stage.generation_resources())?;
+                    let requirements = crate::layout::foundational_plot_requirements(
+                        plot,
+                        plot.kind(),
+                        &theme,
+                        &crate::layout::ComponentAddress::root(),
+                        true,
+                        true,
+                        true,
+                        Some(stage),
+                    )?;
+                    let mut presence = stage.reserve_scalar_presence_map()?;
+                    let mut census = crate::layout::PreparedTextCensus::materialize(
+                        requirements,
+                        Some(stage),
+                        Some(&mut presence),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                    theme.prepare_font_environment_from_census(&mut census, presence, stage)
+                },
+                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), _, (), _| Ok(()),
+            )
+            .map(|_| ())
+        }
+        let style = crate::GuideStyle::new((0, 0, 0), 1.0, crate::LinePattern::Solid).unwrap();
+        for vertical in [false, true] {
+            let guide = |value| {
+                if vertical {
+                    crate::GuideSpec::vertical(value, style.clone())
+                } else {
+                    crate::GuideSpec::horizontal(value, style.clone())
+                }
+            };
+            for scales in [
+                FacetScales::Fixed,
+                FacetScales::FreeX,
+                FacetScales::FreeY,
+                FacetScales::Free,
+            ] {
+                for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 100.0] {
+                    for plot in plots(scales, guide(value)) {
+                        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+                        let error = prepare_with_unavailable_fonts(&plot).unwrap_err();
+                        assert!(matches!(error, Error::Data(_)), "{error}");
+                        assert!(error.to_string().contains("guide"), "{error}");
+                        assert_eq!(
+                            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                            0
+                        );
+                    }
+                }
+                for plot in plots(scales, guide(5.0)) {
+                    let resources = crate::font::canonical::OperationGenerationResources::new();
+                    let shared = scales == FacetScales::Fixed
+                        || if vertical {
+                            scales == FacetScales::FreeY
+                        } else {
+                            scales == FacetScales::FreeX
+                        };
+                    let prepared = prepare_plot(&plot, &resources);
+                    if shared {
+                        let prepared = prepared.unwrap();
+                        for (_, axes) in prepared.axes.iter() {
+                            let range = axes.ranges[usize::from(!vertical)];
+                            assert!(range.0 <= 0.0 && range.1 >= 11.0);
+                        }
+                    } else {
+                        assert!(matches!(prepared, Err(Error::Data(_))));
+                    }
+                }
+            }
+            // A valid shared guide reaches the unavailable-font error, proving
+            // the earlier assertions are not simply bypassing font preparation.
+            let [plot, ..] = plots(FacetScales::Fixed, guide(5.0));
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            let error = prepare_with_unavailable_fonts(&plot).unwrap_err();
+            assert!(matches!(error, Error::Render(_)), "{error}");
+            assert!(error.to_string().contains("font"), "{error}");
+            assert!(crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get) > 0);
+        }
+    }
 
     #[test]
     fn density_explicit_endpoint_ticks_use_display_limits_not_kde_support() {

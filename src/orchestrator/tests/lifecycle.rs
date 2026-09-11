@@ -1599,7 +1599,7 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        (3, 14, 5, 5, 5)
+        (0, 8, 2, 2, 2)
     );
 }
 
@@ -1799,7 +1799,16 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             let theme = crate::Theme::Publication.resolve();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = plot.base_canvas_layout(&theme).panel_box;
-            let expected = plot
+            // Extracted point/path families have no unprepared combined route.
+            let expected_source = if matches!(
+                kind,
+                PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+            ) {
+                &prepared
+            } else {
+                &plot
+            };
+            let expected = expected_source
                 .preflight_panel(kind, panel, &theme)
                 .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
             let actual = prepared

@@ -205,7 +205,7 @@ pub(crate) fn render(
             let style = trace_styles
                 .as_ref()
                 .map_or(TraceStyle::default(), |styles| styles[trace_index]);
-            let legend_identity = chart.collective_legend_identity(identity)?;
+            let legend_identity = chart.collective_legend_identity(identity, chart.data())?;
             let point = chart.point_style(color, 4).with_shape(style.point_shape);
             let line = style.line_pattern.line_style(color, 1.8);
             match (

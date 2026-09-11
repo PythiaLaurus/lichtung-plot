@@ -85,9 +85,7 @@ fn preflight_panels(
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
         let result = children.measure(&panel_plot, context, &owner, phase, round, || {
-            panel_plot
-                .render_panel(kind, context, backend)
-                .map(crate::layout::fit::FitOutcome::Measured)
+            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context, backend))
         })?;
         preflight.push(
             crate::layout::fit::measured(Ok(result))
@@ -149,7 +147,7 @@ pub(super) fn shared_legend_entries(
             pairs
                 .iter()
                 .filter(|pair| pair.group.is_some() || pair.hue.is_some())
-                .map(|pair| shared_plot.collective_legend_identity(pair))
+                .map(|pair| shared_plot.collective_legend_identity(pair, shared_plot.data()))
                 .collect::<Result<Vec<_>, Error>>()?
         } else {
             shared_plot

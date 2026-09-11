@@ -30,20 +30,24 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         Beeswarm,
         Waterfall,
     ];
-    let mut counts = [0; 3];
+    let mut counts = [0; 4];
     for kind in kinds {
         let route = InteriorRoute::classify(kind);
         assert_eq!(route.kind(), kind);
         // Both classification and actual dispatch are exhaustive in the macro;
         // a new PlotKind cannot compile without choosing a concrete renderer.
         let index = match route {
+            InteriorRoute::Scatter
+            | InteriorRoute::Line
+            | InteriorRoute::Trajectory
+            | InteriorRoute::LinePath => 3,
             InteriorRoute::StandardLegacy(_) => 0,
             InteriorRoute::CategoricalLegacy(_) => 1,
             InteriorRoute::SpecializedLegacy(_) => 2,
         };
         counts[index] += 1;
     }
-    assert_eq!(counts, [8, 12, 5]);
+    assert_eq!(counts, [4, 12, 5, 4]);
     let parents = [
         ParentCompositionAdapter::Facet,
         ParentCompositionAdapter::Canvas,

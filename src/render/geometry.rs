@@ -23,6 +23,7 @@ const ANNOTATION_COLLISION_WEIGHT: f64 = 100.0;
 #[cfg(test)]
 thread_local! {
     static GEOMETRY_RAW_TEXT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static GEOMETRY_BACKEND_BEGINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -165,20 +166,40 @@ impl GeometryBox {
 }
 
 pub(crate) struct GeometryBackend {
-    bounds: Vec<GeometryBox>,
-    text: Vec<PositionedText>,
+    snapshot: GeometrySnapshot,
     clips: Vec<PanelBox>,
     scopes: Vec<GeometryScope>,
     state: GeometryCanvasState,
-    font_environment: PreparedFontEnvironment,
     operation_default_stack: String,
 }
 
+/// Retained consequences of selected geometry, independent of backend sessions.
+#[derive(Debug)]
+pub(crate) struct GeometrySnapshot {
+    bounds: Vec<GeometryBox>,
+    text: Vec<PositionedText>,
+    font_environment: PreparedFontEnvironment,
+}
+
+#[derive(Debug)]
 struct PositionedText {
     placement: PlannedTextPlacement,
     plan: ResolvedTextPlan,
     clip: Option<PanelBox>,
     bounds_index: Option<usize>,
+}
+
+impl std::ops::Deref for GeometryBackend {
+    type Target = GeometrySnapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
+}
+
+impl std::ops::DerefMut for GeometryBackend {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.snapshot
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,14 +229,160 @@ impl GeometryBackend {
         operation_default_stack: String,
     ) -> Self {
         Self {
-            bounds: Vec::new(),
-            text: Vec::new(),
+            snapshot: GeometrySnapshot {
+                bounds: Vec::new(),
+                text: Vec::new(),
+                font_environment,
+            },
             clips: Vec::new(),
             scopes: Vec::new(),
             state: GeometryCanvasState::Fresh,
-            font_environment,
             operation_default_stack,
         }
+    }
+
+    pub(crate) fn into_snapshot(self) -> GeometrySnapshot {
+        self.snapshot
+    }
+}
+
+impl GeometrySnapshot {
+    fn admit_scratch<T>(&self, count: usize) -> Result<(), Error> {
+        let bytes = count
+            .checked_mul(std::mem::size_of::<T>())
+            .and_then(|bytes| u64::try_from(bytes).ok())
+            .ok_or_else(|| Error::Render("geometry scratch storage overflow".into()))?;
+        self.font_environment
+            .claim_processing_visits(count as u128)
+            .map_err(|error| Error::Render(format!("geometry scratch work: {error:?}")))?;
+        self.font_environment
+            .claim_unicode_bytes(bytes)
+            .map_err(|error| Error::Render(format!("geometry scratch storage: {error}")))
+    }
+    pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
+        Ok(Self {
+            bounds: Vec::new(),
+            text: Vec::new(),
+            font_environment: theme.prepared_font_environment()?.clone(),
+        })
+    }
+
+    pub(crate) fn record(
+        &mut self,
+        bounds: Option<GeometryBox>,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        if let Some(bounds) = bounds.and_then(|bounds| bounds.clipped(clip)) {
+            backend::reserve_text_records(&mut self.bounds, 1, &self.font_environment)?;
+            self.bounds.push(bounds);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn scatter(
+        &mut self,
+        points: &[Point2D],
+        style: &PointStyle,
+        clip: PanelBox,
+    ) -> Result<(), Error> {
+        self.admit_scratch::<CanonicalPoint>(points.len())?;
+        if style.shape == PointShape::TriangleUp {
+            self.admit_scratch::<[CanonicalPoint; 3]>(points.len())?;
+            self.admit_scratch::<[Option<[StrokeInterval; 2]>; 3]>(points.len())?;
+        }
+        scatter_bounds(points, style, |bounds| self.record(bounds, Some(clip)))
+    }
+
+    pub(crate) fn line(
+        &mut self,
+        points: &[Point2D],
+        style: &LineStyle,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        self.admit_scratch::<CanonicalPoint>(points.len())?;
+        line_bounds(points, style, |bounds| self.record(bounds, clip))
+    }
+
+    pub(crate) fn text(
+        &mut self,
+        placement: PlannedTextPlacement,
+        plan: &ResolvedTextPlan,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        let canonical = backend::validate_planned_text(placement, plan)?;
+        let placement = PlannedTextPlacement {
+            position: canonical.position.value(),
+            rotation: canonical.rotation.value(),
+            ..placement
+        };
+        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
+        let before = self.bounds.len();
+        self.record(
+            planned_text_ink_bounds(
+                plan,
+                placement.position,
+                placement.anchor,
+                placement.rotation,
+                placement.origin,
+                placement.reverse_lines,
+            ),
+            clip,
+        )?;
+        self.text.push(PositionedText {
+            placement,
+            plan: plan.clone(),
+            clip,
+            bounds_index: (before != self.bounds.len()).then_some(before),
+        });
+        Ok(())
+    }
+
+    pub(crate) fn polygon(
+        &mut self,
+        points: &[Point2D],
+        style: &FillStyle,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        if points.len() < 3 {
+            return Ok(());
+        }
+        self.admit_scratch::<CanonicalPoint>(points.len())?;
+        self.admit_scratch::<CanonicalPoint>(points.len())?;
+        self.admit_scratch::<Option<[StrokeInterval; 2]>>(points.len())?;
+        let points = backend::validate_polygon_points(points)?;
+        let style = super::primitives::CanonicalFillStyle::new(style)?;
+        let ring = polygon_ring(&points);
+        let fill = (style.opacity > 0.0 && polygon_has_positive_area(&ring)?)
+            .then(|| GeometryBox::from_canonical_points(&ring, 0))
+            .transpose()?
+            .flatten();
+        let stroke = polygon_stroke_bounds(&ring, style.stroke_width.units())?;
+        self.record(
+            match (fill, stroke) {
+                (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
+                (fill, stroke) => fill.or(stroke),
+            },
+            clip,
+        )
+    }
+
+    pub(crate) fn append(&mut self, other: &Self) -> Result<(), Error> {
+        backend::reserve_text_records(
+            &mut self.bounds,
+            other.bounds.len(),
+            &self.font_environment,
+        )?;
+        backend::reserve_text_records(&mut self.text, other.text.len(), &self.font_environment)?;
+        let offset = self.bounds.len();
+        self.bounds.extend_from_slice(&other.bounds);
+        self.text
+            .extend(other.text.iter().map(|text| PositionedText {
+                placement: text.placement,
+                plan: text.plan.clone(),
+                clip: text.clip,
+                bounds_index: text.bounds_index.map(|index| offset + index),
+            }));
+        Ok(())
     }
 
     pub(crate) fn bounds(&self) -> &[GeometryBox] {
@@ -420,13 +587,15 @@ impl GeometryBackend {
         }
         Ok(false)
     }
+}
 
+impl GeometryBackend {
     fn record_text(
         &mut self,
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
-        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
+        backend::reserve_text_records(&mut self.snapshot.text, 1, &self.snapshot.font_environment)?;
         self.font_environment
             .claim_processing_visits(self.clips.len() as u128)
             .map_err(|error| Error::Render(format!("geometry text admission: {error:?}")))?;
@@ -590,6 +759,80 @@ fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
         TextAnchor::Middle => PhysicalTextAlignment::Center,
         TextAnchor::End => PhysicalTextAlignment::End,
     }
+}
+
+fn scatter_bounds(
+    points: &[Point2D],
+    style: &PointStyle,
+    mut record: impl FnMut(Option<GeometryBox>) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let canonical_points = backend::validate_points(points, "scatter")?;
+    backend::validate_point_style(style)?;
+    let outline_width = style
+        .outline
+        .map(|outline| {
+            super::coordinates::CanonicalCoordinate::nonnegative_length(
+                outline.width_for_radius(style.radius),
+                "scatter outline width",
+            )
+            .map(super::coordinates::CanonicalCoordinate::units)
+        })
+        .transpose()?
+        .unwrap_or(0);
+    match style.shape {
+        PointShape::Circle => {
+            let radius = super::coordinates::CanonicalCoordinate::nonnegative_length(
+                f64::from(style.radius),
+                "scatter radius",
+            )?
+            .units();
+            for point in canonical_points {
+                if style.opacity == 0.0 && outline_width == 0 {
+                    continue;
+                }
+                record(GeometryBox::from_canonical_points(
+                    std::slice::from_ref(&point),
+                    2 * i128::from(radius) + i128::from(outline_width),
+                )?)?;
+            }
+        }
+        PointShape::TriangleUp => {
+            for triangle in backend::validate_triangle_points(points, style.radius)? {
+                let fill = (style.opacity > 0.0)
+                    .then(|| GeometryBox::from_canonical_points(&triangle, 0))
+                    .transpose()?
+                    .flatten();
+                let stroke = polygon_stroke_bounds(&triangle, outline_width)?;
+                record(match (fill, stroke) {
+                    (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
+                    (fill, stroke) => fill.or(stroke),
+                })?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn line_bounds(
+    points: &[Point2D],
+    style: &LineStyle,
+    mut record: impl FnMut(Option<GeometryBox>) -> Result<(), Error>,
+) -> Result<(), Error> {
+    if points.len() < 2 {
+        return Ok(());
+    }
+    let points = backend::validate_line_points(points)?;
+    let style = super::primitives::CanonicalLineStyle::new(style)?;
+    if style.width.units() == 0 {
+        return Ok(());
+    }
+    for segment in points.windows(2) {
+        record(GeometryBox::from_canonical_points(
+            segment,
+            i128::from(style.width.units()),
+        )?)?;
+    }
+    Ok(())
 }
 
 #[expect(
@@ -993,6 +1236,8 @@ fn polygon_stroke_bounds(
 
 impl Backend for GeometryBackend {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
+        #[cfg(test)]
+        GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(calls.get() + 1));
         if self.state == GeometryCanvasState::Open {
             return Err(Error::Render(
                 "geometry backend begin called while a canvas is already open".into(),
@@ -1071,70 +1316,18 @@ impl Backend for GeometryBackend {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
-        let canonical_points = backend::validate_points(points, "scatter")?;
-        backend::validate_point_style(style)?;
-        let outline_width = style
-            .outline
-            .map(|outline| {
-                super::coordinates::CanonicalCoordinate::nonnegative_length(
-                    outline.width_for_radius(style.radius),
-                    "scatter outline width",
-                )
-                .map(super::coordinates::CanonicalCoordinate::units)
-            })
-            .transpose()?
-            .unwrap_or(0);
-        match style.shape {
-            PointShape::Circle => {
-                let radius = super::coordinates::CanonicalCoordinate::nonnegative_length(
-                    f64::from(style.radius),
-                    "scatter radius",
-                )?
-                .units();
-                for point in canonical_points {
-                    if style.opacity == 0.0 && outline_width == 0 {
-                        continue;
-                    }
-                    self.record(GeometryBox::from_canonical_points(
-                        std::slice::from_ref(&point),
-                        2 * i128::from(radius) + i128::from(outline_width),
-                    )?);
-                }
-            }
-            PointShape::TriangleUp => {
-                for triangle in backend::validate_triangle_points(points, style.radius)? {
-                    let fill = (style.opacity > 0.0)
-                        .then(|| GeometryBox::from_canonical_points(&triangle, 0))
-                        .transpose()?
-                        .flatten();
-                    let stroke = polygon_stroke_bounds(&triangle, outline_width)?;
-                    self.record(match (fill, stroke) {
-                        (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
-                        (fill, stroke) => fill.or(stroke),
-                    });
-                }
-            }
-        }
-        Ok(())
+        scatter_bounds(points, style, |bounds| {
+            self.record(bounds);
+            Ok(())
+        })
     }
 
     fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
         self.ensure_open("draw_line")?;
-        if points.len() < 2 {
-            return Ok(());
-        }
-        let points = backend::validate_line_points(points)?;
-        let style = super::primitives::CanonicalLineStyle::new(style)?;
-        if style.width.units() == 0 {
-            return Ok(());
-        }
-        for segment in points.windows(2) {
-            self.record(GeometryBox::from_canonical_points(
-                segment,
-                i128::from(style.width.units()),
-            )?);
-        }
-        Ok(())
+        line_bounds(points, style, |bounds| {
+            self.record(bounds);
+            Ok(())
+        })
     }
 
     fn draw_polygon(&mut self, points: &[Point2D], style: &FillStyle) -> Result<(), Error> {
@@ -1637,6 +1830,34 @@ mod tests {
             (10.0_f64 - 410.0 / 1024.0).to_bits()
         );
         assert_eq!(geometry.bounds()[0].right.to_bits(), 10.0_f64.to_bits());
+    }
+
+    #[test]
+    fn selected_geometry_admits_scratch_and_bounds_before_allocating() {
+        for remaining in [0, std::mem::size_of::<CanonicalPoint>() as u64] {
+            let theme = crate::Theme::Publication.resolve();
+            let mut geometry = GeometrySnapshot::new(&theme).unwrap();
+            let used = geometry
+                .font_environment
+                .resource_usage()
+                .unwrap()
+                .font_bytes;
+            geometry
+                .font_environment
+                .claim_unicode_bytes(u64::try_from(536_870_912 - used).unwrap() - remaining)
+                .unwrap();
+            let style = PointStyle::new((0, 0, 0), 3);
+            let error = geometry
+                .scatter(
+                    &[Point2D::new(50.0, 50.0)],
+                    &style,
+                    PanelBox::new(0.0, 100.0, 0.0, 100.0),
+                )
+                .unwrap_err();
+            assert!(error.to_string().contains("bytes"), "{error}");
+            assert_eq!(geometry.bounds.capacity(), 0);
+            assert!(geometry.bounds.is_empty());
+        }
     }
 
     #[test]

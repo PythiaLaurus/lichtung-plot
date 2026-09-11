@@ -118,6 +118,76 @@ pub(crate) fn apply(
     .map_err(Into::into)
 }
 
+#[derive(Debug)]
+pub(crate) struct GuideSnapshot {
+    clip: crate::layout::PanelBox,
+    lines: Vec<([Point2D; 2], crate::render::backend::LineStyle)>,
+}
+
+impl GuideSnapshot {
+    pub(crate) fn validate_sources(
+        chart: &Plot,
+        ranges: [(f64, f64); 2],
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), Error> {
+        data.claim_source_visits(chart.guides().len())?;
+        for (index, guide) in chart.guides().iter().enumerate() {
+            guide_endpoints(guide, index, ranges[0], ranges[1])?;
+        }
+        Ok(())
+    }
+    pub(crate) fn measure(
+        chart: &Plot,
+        result: &PlotRenderResult,
+        data: crate::data::PlotData<'_>,
+        geometry: &mut crate::render::geometry::GeometrySnapshot,
+    ) -> Result<Self, Error> {
+        let projection = &result.layout.projection;
+        if chart.explicit_x_ticks().is_some() {
+            crate::layout::Axis::validate_ticks(
+                &result.layout.x_axis.ticks,
+                projection.x_range(),
+                "x-axis",
+            )?;
+        }
+        if chart.explicit_y_ticks().is_some() {
+            crate::layout::Axis::validate_ticks(
+                &result.layout.y_axis.ticks,
+                projection.y_range(),
+                "y-axis",
+            )?;
+        }
+        let clip = projection.panel_box();
+        let canonical_clip = crate::render::backend::validate_clip_region(clip)?.panel();
+        let lines =
+            data.collect_source(chart.guides().iter().enumerate().map(|(index, guide)| {
+                project_guide(
+                    guide,
+                    index,
+                    projection,
+                    projection.x_range(),
+                    projection.y_range(),
+                )
+            }))?;
+        for (points, style) in &lines {
+            geometry.line(points, style, Some(canonical_clip))?;
+        }
+        Ok(Self { clip, lines })
+    }
+
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        if self.lines.is_empty() {
+            return Ok(());
+        }
+        with_clip(backend, self.clip, |backend| {
+            for (points, style) in &self.lines {
+                backend.draw_line(points, style)?;
+            }
+            Ok(())
+        })
+    }
+}
+
 fn projected_x_ticks(
     chart: &Plot,
     ticks: &[AxisTick],
@@ -182,6 +252,25 @@ fn project_guide(
     x_range: (f64, f64),
     y_range: (f64, f64),
 ) -> Result<([Point2D; 2], crate::render::backend::LineStyle), Error> {
+    let (start, end, style) = guide_endpoints(guide, index, x_range, y_range)?;
+    let start = projection.project(start.0, start.1);
+    let end = projection.project(end.0, end.1);
+    Ok((
+        [Point2D::new(start.0, start.1), Point2D::new(end.0, end.1)],
+        style,
+    ))
+}
+
+#[expect(
+    clippy::type_complexity,
+    reason = "validated scientific endpoints and their current line style"
+)]
+fn guide_endpoints(
+    guide: &GuideSpec,
+    index: usize,
+    x_range: (f64, f64),
+    y_range: (f64, f64),
+) -> Result<((f64, f64), (f64, f64), crate::render::backend::LineStyle), Error> {
     let (start, end, style) = match guide {
         GuideSpec::Horizontal { y, style } => ((x_range.0, *y), (x_range.1, *y), style),
         GuideSpec::Vertical { x, style } => ((*x, y_range.0), (*x, y_range.1), style),
@@ -194,12 +283,7 @@ fn project_guide(
             "guide {index} endpoints must be distinct"
         )));
     }
-    let start = projection.project(start.0, start.1);
-    let end = projection.project(end.0, end.1);
-    Ok((
-        [Point2D::new(start.0, start.1), Point2D::new(end.0, end.1)],
-        style.line_style(),
-    ))
+    Ok((start, end, style.line_style()))
 }
 
 fn validate_guide_point(

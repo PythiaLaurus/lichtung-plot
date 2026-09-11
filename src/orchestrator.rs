@@ -10,7 +10,7 @@ mod artifacts;
 mod backend;
 mod facets;
 pub(crate) use facets::text_census_panels;
-mod layers;
+pub(crate) mod layers;
 mod lifecycle;
 #[cfg(test)]
 pub(crate) mod measurements;
@@ -119,8 +119,29 @@ impl Plot {
         kind: PlotKind,
         context: PlotRenderContext<'_>,
         backend: &mut dyn Backend,
-    ) -> Result<PlotRenderResult, Error> {
+    ) -> Result<crate::spec::DecorationMode, Error> {
+        if matches!(
+            kind,
+            PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+        ) {
+            crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+            let result = context.selected_interior.ok_or_else(|| {
+                Error::Render("point/path capture requires its selected interior payload".into())
+            })?;
+            result
+                .marks
+                .as_ref()
+                .ok_or_else(|| Error::Render("selected mark payload is missing".into()))?
+                .draw(backend)?;
+            result
+                .annotations
+                .as_ref()
+                .ok_or_else(|| Error::Render("selected annotation payload is missing".into()))?
+                .draw(backend)?;
+            return Ok(result.decoration_mode);
+        }
         self.measure_panel(kind, context, backend)
+            .map(|result| result.decoration_mode)
             .map_err(crate::layout::fit::PlanError::into_error)
     }
 
@@ -140,6 +161,12 @@ impl Plot {
             });
         }
         let context = context.with_prepared_axes(self);
+        if matches!(
+            kind,
+            PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+        ) {
+            return self.measure_selected_interior(context);
+        }
         let mut result = crate::layout::interior::InteriorRoute::classify(kind)
             .combined(self, context, backend)?;
         let domains = match kind {
@@ -183,6 +210,78 @@ impl Plot {
             )?,
         };
         crate::decorations::panel_text::draw(self, &result.layout, &result.panel_text, backend)?;
+        Ok(result)
+    }
+
+    pub(crate) fn measure_selected_interior(
+        &self,
+        context: PlotRenderContext<'_>,
+    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        #[cfg(test)]
+        RENDER_THEME_ADDRESSES.with(|addresses| {
+            addresses
+                .borrow_mut()
+                .push(std::ptr::from_ref(context.theme).addr());
+        });
+        let context = context.with_prepared_axes(self);
+        let mut result = match self.kind() {
+            PlotKind::Scatter => crate::plots::scatter::measure(self, context)?,
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                crate::plots::line::measure(self, context)?
+            }
+            _ => {
+                return Err(Error::Render(
+                    "selected measurement requires an extracted point/path family".into(),
+                )
+                .into())
+            }
+        };
+        let resources = context
+            .theme
+            .prepared_font_environment()?
+            .generation_resources();
+        let data = context.data.with_axis_resources(&resources);
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        let guides = layers::GuideSnapshot::measure(self, &result, data, &mut geometry)?;
+        resolve_rendered_labels(self, self.kind(), &mut result, context)?;
+        result.panel_text = crate::decorations::panel_text::measure_plans(
+            self,
+            &result.layout,
+            context.theme,
+            context.fit_scope(),
+        )?;
+        let panel_clip = result.layout.projection.panel_box();
+        let canonical_clip = crate::render::backend::validate_clip_region(panel_clip)?.panel();
+        let text = data.collect_source(result.panel_text.iter().map(|plan| {
+            let placed = plan.retained_placement();
+            geometry.text(placed.placement, &placed.plan, Some(canonical_clip))?;
+            Ok(placed)
+        }))?;
+        let panel_layer = if self.panel_text_annotations().is_empty() {
+            None
+        } else {
+            let mut name = String::new();
+            let length = self
+                .axis_scope()
+                .map_or(Some(10), |scope| scope.len().checked_add(11))
+                .ok_or_else(|| Error::Render("panel text layer name overflow".into()))?;
+            data.reserve_source_string(&mut name, length)?;
+            if let Some(scope) = self.axis_scope() {
+                name.push_str(scope);
+                name.push('-');
+            }
+            name.push_str("panel-text");
+            Some(name)
+        };
+        result.annotations = Some(data.source_arc(
+            crate::layout::interior::DeferredAnnotationPlan {
+                guides,
+                panel_layer,
+                panel_clip,
+                text,
+                geometry,
+            },
+        )?);
         Ok(result)
     }
 }

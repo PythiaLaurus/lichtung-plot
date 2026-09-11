@@ -501,6 +501,9 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) prepared_matrix_axes:
         Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
+    pub(crate) prepared_scatter:
+        Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
+    pub(crate) prepared_line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     waterfall_labels: Option<WaterfallLabels>,
@@ -610,6 +613,8 @@ impl Plot<crate::kind::Any> {
             categorical_colors: None,
             render_scope: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
+            prepared_scatter: None,
+            prepared_line: None,
             prepared_matrix_axes: None,
             axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
@@ -1021,8 +1026,12 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             subtitle_alignment,
             prepared_axes,
             prepared_matrix_axes,
+            prepared_scatter,
+            prepared_line,
         } = self;
         Plot {
+            prepared_scatter,
+            prepared_line,
             prepared_axes,
             prepared_matrix_axes,
             title_alignment,

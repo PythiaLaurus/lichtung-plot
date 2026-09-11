@@ -1,7 +1,16 @@
 use super::Projection;
 use crate::layout::PanelBox;
 
+#[cfg(test)]
+thread_local! {
+    static PROJECT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Projection {
+    #[cfg(test)]
+    pub(crate) fn test_projection_calls() -> usize {
+        PROJECT_CALLS.with(std::cell::Cell::get)
+    }
     /// Construct a new `Projection` for arbitrary data ranges
     /// and a custom pixel box. Used by plot renderers (e.g.
     /// `marginal`) that need to control the panel's exact pixel
@@ -22,6 +31,8 @@ impl Projection {
     /// to `pixel_box.y0` (bottom). Backends perform any native coordinate
     /// conversion at the final drawing boundary.
     pub fn project(&self, x: f64, y: f64) -> (f64, f64) {
+        #[cfg(test)]
+        PROJECT_CALLS.with(|calls| calls.set(calls.get() + 1));
         let (x_min, x_max) = self.x_range;
         let (y_min, y_max) = self.y_range;
         let (x0, x1, y0, y1) = self.pixel_box;

@@ -317,7 +317,7 @@ pub(crate) fn render(
 
         if group.identity.hue.is_some() {
             legend_entries.push(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity)?,
+                chart.collective_legend_identity(&group.identity, chart.data())?,
                 point_style,
                 fill_top,
             ));

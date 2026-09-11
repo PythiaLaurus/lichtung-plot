@@ -129,7 +129,7 @@ pub(crate) fn render(
             let color_index = curve.hue_index.unwrap_or(0);
             let color = theme.colors[color_index % theme.colors.len()];
             Ok(LegendEntry::line_fill(
-                chart.collective_legend_identity(&curve.identity)?,
+                chart.collective_legend_identity(&curve.identity, chart.data())?,
                 LineStyle::solid(color, 1.6),
                 FillStyle {
                     color,

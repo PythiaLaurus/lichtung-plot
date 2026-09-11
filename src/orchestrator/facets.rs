@@ -675,6 +675,10 @@ mod feedback_tests {
                     source.width(),
                     source.height(),
                     |stage| {
+                        let inputs = crate::plots::shared_x::prepare_plot(
+                            &source,
+                            &stage.generation_resources(),
+                        )?;
                         let requirements = crate::layout::foundational_plot_requirements(
                             &source,
                             PlotKind::Scatter,
@@ -692,9 +696,11 @@ mod feedback_tests {
                             Some(&mut presence),
                         )
                         .map_err(|error| Error::Render(error.to_string()))?;
-                        theme.prepare_font_environment_from_census(&mut census, presence, stage)
+                        theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                        Ok(inputs)
                     },
-                    |(), assigned, round| {
+                    |inputs, assigned, round| {
+                        let source = inputs.attach(source.clone())?;
                         calls += 1;
                         let plan = FacetPlan::new(
                             &source,
@@ -723,7 +729,7 @@ mod feedback_tests {
                         children.finish_round(round);
                         Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                     },
-                    |(), assigned, plan, stage| {
+                    |_, assigned, plan, stage| {
                         let (width, height) = assigned.dimensions();
                         let panels = plan
                             .panel_plans
@@ -838,6 +844,8 @@ mod feedback_tests {
             source.width(),
             source.height(),
             |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     &source,
                     PlotKind::Scatter,
@@ -855,9 +863,11 @@ mod feedback_tests {
                     Some(&mut presence),
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
-                theme.prepare_font_environment_from_census(&mut census, presence, stage)
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(inputs)
             },
-            |(), assigned, round| {
+            |inputs, assigned, round| {
+                let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     FacetPlan::new(
@@ -869,7 +879,7 @@ mod feedback_tests {
                     )?,
                 ))
             },
-            |(), assigned, plan, stage| {
+            |_, assigned, plan, stage| {
                 let expected = plan
                     .strip_text
                     .iter()
@@ -939,6 +949,8 @@ mod feedback_tests {
             source.width(),
             source.height(),
             |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     &source,
                     PlotKind::Scatter,
@@ -957,9 +969,10 @@ mod feedback_tests {
                 )
                 .map_err(|error| Error::Render(format!("facet D1 census: {error}")))?;
                 theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(())
+                Ok(inputs)
             },
-            |(), assigned, round| {
+            |inputs, assigned, round| {
+                let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     FacetPlan::new(
@@ -971,7 +984,7 @@ mod feedback_tests {
                     )?,
                 ))
             },
-            |(), _, plan, _| Ok(plan),
+            |_, _, plan, _| Ok(plan),
         )
         .unwrap();
         let plan = root.plan();
@@ -984,7 +997,7 @@ mod feedback_tests {
     }
 
     #[test]
-    fn later_fatal_facet_wins_over_an_earlier_panel_fit_miss() {
+    fn fatal_scatter_facet_source_rejects_before_fonts_or_layout() {
         let source = Plot::scatter(
             crate::NumericValues::new("x", [1.0, 2.0, f64::INFINITY, 3.0]),
             crate::NumericValues::new("y", [1.0, 2.0, 2.0, 3.0]),
@@ -995,53 +1008,24 @@ mod feedback_tests {
         .legend(crate::LegendPolicy::Hidden)
         .size(960, 640)
         .erase();
-        let theme = crate::Theme::Publication.resolve();
-        theme.prepare_font_environment().unwrap();
-        let selectors = data::facet_selectors(&source, source.data()).unwrap();
-        let cells = [
-            crate::layout::PanelBox::new(100.0, 170.0, 100.0, 200.0),
-            crate::layout::PanelBox::new(300.0, 700.0, 100.0, 500.0),
-        ];
-        let panels =
-            data::extract_panels(&source, &selectors, Some(&cells), source.data()).unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let result = crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            |_| Ok(()),
-            |(), assigned, round| {
-                assert!(matches!(
-                    planning::plan_panels(
-                        source.clone(),
-                        PlotKind::Scatter,
-                        &panels[..1],
-                        false,
-                        &std::sync::Arc::from([]),
-                        FacetScales::Free,
-                        &theme,
-                        round,
-                        &mut crate::decorations::plan::children::ChildPlans::facets(&source),
-                    )?,
-                    FitOutcome::Miss(_)
-                ));
-                planning::plan_panels(
-                    source.clone(),
-                    PlotKind::Scatter,
-                    &panels,
-                    false,
-                    &std::sync::Arc::from([]),
-                    FacetScales::Free,
-                    &theme,
-                    round,
-                    &mut crate::decorations::plan::children::ChildPlans::facets(&source),
-                )?;
-                Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |_, _, _| -> Result<crate::layout::MeasuredLayout<()>, Error> {
+                panic!("invalid semantics must reject before layout")
             },
-            |(), _, (), _| -> Result<(), Error> {
+            |_, _, (), _| -> Result<(), Error> {
                 panic!("a failed sibling set must never finalize")
             },
         );
         let error = result.err().expect("fatal second facet");
         assert!(matches!(error, Error::Data(_)), "{error}");
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
     }
 
     #[test]
@@ -1063,8 +1047,9 @@ mod feedback_tests {
         crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            |_| Ok(()),
-            |(), assigned, round| {
+            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |inputs, assigned, round| {
+                let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     FacetPlan::new(
@@ -1076,7 +1061,7 @@ mod feedback_tests {
                     )?,
                 ))
             },
-            |(), _, plan, _| {
+            |_, _, plan, _| {
                 arranged = Some(plan);
                 Ok(())
             },

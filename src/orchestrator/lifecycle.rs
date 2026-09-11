@@ -388,10 +388,7 @@ impl UnfacetedPlotPlan {
             DecorationMode::SelfManaged => {}
         }
         crate::decorations::apply::apply_canvas_text(source, &self.canvas_layout, backend)?;
-        debug_assert_eq!(
-            rendered.decoration_mode,
-            self.panel_plan.result.decoration_mode
-        );
+        debug_assert_eq!(rendered, self.panel_plan.result.decoration_mode);
         Ok(())
     }
 }

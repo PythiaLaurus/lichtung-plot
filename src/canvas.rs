@@ -69,6 +69,7 @@ struct PreparedCanvasInputs {
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
     shared_x: Vec<Option<(f64, f64)>>,
+    interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
 }
 
 struct PreparedCanvasRound<'a> {
@@ -144,12 +145,17 @@ mod d1_tests {
             .unwrap()
             .size(1200, 800);
         crate::plots::shared_x::DOMAIN_PREPARATIONS.with(|count| count.set(0));
+        crate::plots::scatter::STAGES.with(|stages| stages.set([0; 4]));
         let root = canvas.preflight_plan().unwrap();
         let shared = root.prepared().shared_x[0].unwrap();
         assert_eq!(root.prepared().shared_x[1], Some(shared));
         assert!(shared.0 <= 0.0 && shared.1 >= 20.0);
         assert_eq!(
             crate::plots::shared_x::DOMAIN_PREPARATIONS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::plots::scatter::STAGES.with(std::cell::Cell::get)[0],
             2
         );
 
@@ -307,10 +313,12 @@ mod d1_tests {
                 canvas.width,
                 canvas.height,
                 |stage| {
+                    let (interiors, _) = canvas.prepare_interiors(stage)?;
                     let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
-                    themes.prepare_font_environment(&mut census, presence, stage)
+                    themes.prepare_font_environment(&mut census, presence, stage)?;
+                    Ok(interiors)
                 },
-                |(), assigned, round| {
+                |interiors, assigned, round| {
                     calls += 1;
                     let plan = canvas.build_canvas_plan(
                         Arc::clone(&themes),
@@ -318,6 +326,7 @@ mod d1_tests {
                         round,
                         &mut children,
                         &[],
+                        interiors,
                     )?;
                     if calls == 2 {
                         retained_neighbor = Some(Arc::clone(&plan.panels[1].panel_plan));
@@ -339,7 +348,7 @@ mod d1_tests {
                     children.finish_round(round);
                     Ok(crate::layout::MeasuredLayout::new(assigned, plan))
                 },
-                |(), assigned, plan, stage| {
+                |_, assigned, plan, stage| {
                     let (width, height) = assigned.dimensions();
                     let panels = plan
                         .panels
@@ -428,6 +437,10 @@ mod d1_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "root-prepared mixed Canvas fixture checks every producer at first capture"
+    )]
     fn canvas_producer_plans_survive_first_capture_without_shaping() {
         let source = format!(
             "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
@@ -463,10 +476,12 @@ mod d1_tests {
                 canvas.width,
                 canvas.height,
                 |stage| {
+                    let (interiors, _) = canvas.prepare_interiors(stage)?;
                     let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
-                    themes.prepare_font_environment(&mut census, presence, stage)
+                    themes.prepare_font_environment(&mut census, presence, stage)?;
+                    Ok(interiors)
                 },
-                |(), assigned, round| {
+                |interiors, assigned, round| {
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned,
                         canvas.build_canvas_plan(
@@ -475,10 +490,11 @@ mod d1_tests {
                             round,
                             &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
                             &[],
+                            interiors,
                         )?,
                     ))
                 },
-                |(), assigned, plan, stage| {
+                |_, assigned, plan, stage| {
                     let mut expected = Vec::new();
                     for panel in &plan.text_panels {
                         expected.push((panel.title_placement, panel.title.plan()));
@@ -559,11 +575,12 @@ mod d1_tests {
             canvas.width,
             canvas.height,
             |stage| {
+                let (interiors, _) = canvas.prepare_interiors(stage)?;
                 let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
-                Ok(())
+                Ok(interiors)
             },
-            |(), assigned, round| {
+            |interiors, assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     canvas.build_canvas_plan(
@@ -572,10 +589,11 @@ mod d1_tests {
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
                         &[],
+                        interiors,
                     )?,
                 ))
             },
-            |(), _, plan, _| Ok(plan),
+            |_, _, plan, _| Ok(plan),
         )
         .unwrap();
         let plan = root.plan();
@@ -1182,6 +1200,8 @@ impl Canvas {
     fn prepare_shared_x(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
+        scatter: &[Option<crate::plots::scatter::PreparedScatter>],
+        line: &[Option<crate::plots::line::PreparedLine>],
     ) -> Result<Vec<Option<(f64, f64)>>, Error> {
         let mut ranges = Vec::new();
         if self.x_range_groups.is_empty() {
@@ -1196,7 +1216,34 @@ impl Canvas {
                 let plot = self.panels[index]
                     .as_ref()
                     .expect("validated shared x member");
-                let range = crate::plots::shared_x::domain(plot, &stage.generation_resources())?;
+                let range = if plot.kind() == PlotKind::Scatter {
+                    crate::layout::continuous_auto_range(
+                        scatter[index]
+                            .as_ref()
+                            .ok_or_else(|| {
+                                Error::Render(
+                                    "shared Scatter range requires root-prepared inputs".into(),
+                                )
+                            })?
+                            .ranges[0],
+                        plot.x_axis_spec(),
+                    )
+                } else if matches!(
+                    plot.kind(),
+                    PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                ) {
+                    let marks = line[index].as_ref().ok_or_else(|| {
+                        Error::Render("shared line range requires root-prepared inputs".into())
+                    })?;
+                    if marks.conditions.is_some() {
+                        return Err(Error::Data(
+                            "canvas x-range group has a categorical x axis".into(),
+                        ));
+                    }
+                    marks.ranges[0]
+                } else {
+                    crate::plots::shared_x::domain(plot, &stage.generation_resources())?
+                };
                 shared = Some(
                     shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
                 );
@@ -1300,6 +1347,103 @@ impl Canvas {
         Ok(plans)
     }
 
+    #[expect(
+        clippy::type_complexity,
+        reason = "root component inputs and their coordinated x domains are prepared together before fonts"
+    )]
+    fn prepare_interiors(
+        &self,
+        stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<
+        (
+            Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
+            Vec<Option<(f64, f64)>>,
+        ),
+        Error,
+    > {
+        let mut interiors = Vec::new();
+        stage.reserve_prepared(&mut interiors, self.panels.len(), "Canvas interior inputs")?;
+        let resources = stage.generation_resources();
+        let mut scatter = Vec::new();
+        stage.reserve_prepared(&mut scatter, self.panels.len(), "Canvas Scatter semantics")?;
+        let mut line = Vec::new();
+        stage.reserve_prepared(&mut line, self.panels.len(), "Canvas line semantics")?;
+        for plot in &self.panels {
+            line.push(
+                match plot.as_ref().filter(|plot| {
+                    matches!(
+                        plot.kind(),
+                        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                    )
+                }) {
+                    Some(plot) => {
+                        let data = plot
+                            .configured_source_rows()?
+                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
+                            .with_axis_resources(&resources);
+                        Some(crate::plots::line::PreparedLine::new(plot, data, None)?)
+                    }
+                    None => None,
+                },
+            );
+            scatter.push(
+                match plot
+                    .as_ref()
+                    .filter(|plot| plot.kind() == PlotKind::Scatter)
+                {
+                    Some(plot) => {
+                        let data = plot
+                            .configured_source_rows()?
+                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
+                            .with_axis_resources(&resources);
+                        Some(crate::plots::scatter::PreparedScatter::new(plot, data)?)
+                    }
+                    None => None,
+                },
+            );
+        }
+        let shared_x = self.prepare_shared_x(stage, &scatter, &line)?;
+        for (index, plot) in self.panels.iter().enumerate() {
+            interiors.push(
+                match plot.as_ref().filter(|plot| {
+                    matches!(
+                        plot.kind(),
+                        PlotKind::Scatter
+                            | PlotKind::Line
+                            | PlotKind::Trajectory
+                            | PlotKind::LinePath
+                    )
+                }) {
+                    Some(plot) => {
+                        let plot = self.labels.as_ref().map_or_else(
+                            || plot.clone(),
+                            |labels| plot.clone().labels(labels.clone()),
+                        );
+                        let mut plot = plot.with_render_scope(format!("panel-{index}"));
+                        if let Some(Some(range)) = shared_x.get(index) {
+                            plot = plot.with_planned_x_limits(*range);
+                        }
+                        Some(if plot.kind() == PlotKind::Scatter {
+                            crate::plots::shared_x::prepare_scatter_plot(
+                                &plot,
+                                &resources,
+                                scatter[index].take().expect("prepared Scatter component"),
+                            )?
+                        } else {
+                            crate::plots::shared_x::prepare_line_plot(
+                                &plot,
+                                &resources,
+                                line[index].take().expect("prepared line component"),
+                            )?
+                        })
+                    }
+                    None => None,
+                },
+            );
+        }
+        Ok((interiors, shared_x))
+    }
+
     fn preflight_plan(
         &self,
     ) -> Result<
@@ -1322,7 +1466,7 @@ impl Canvas {
                     }
                 }
                 self.validate_structure()?;
-                let shared_x = self.prepare_shared_x(prepared_stage)?;
+                let (interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
                 let (mut census, scalar_presence) =
                     self.foundational_text_census(&themes, prepared_stage)?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
@@ -1330,6 +1474,7 @@ impl Canvas {
                     themes,
                     text_census: census,
                     shared_x,
+                    interiors,
                 })
             },
             |prepared, assigned, round| {
@@ -1339,6 +1484,7 @@ impl Canvas {
                     round,
                     &mut children,
                     &prepared.shared_x,
+                    &prepared.interiors,
                 )?;
                 children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, Box::new(plan)))
@@ -1568,10 +1714,12 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
-        let prepared = self.prepare_canvas_round(themes, assigned, round, children, shared_x)?;
+        let prepared =
+            self.prepare_canvas_round(themes, assigned, round, children, shared_x, interiors)?;
         let mut compact_changes = true;
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return match self.build_canvas_attempt(
@@ -1675,6 +1823,7 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
         #[cfg(test)]
@@ -1701,21 +1850,36 @@ impl Canvas {
         )?;
         let full_outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            self.canvas_hue_groups(full_outer, &themes, children, round)?
-        } else {
-            Vec::new()
-        };
-        let plots = self
+        let mut plots = self
             .panels
             .iter()
             .enumerate()
             .map(|(index, plot)| {
-                plot.as_ref().map(|plot| {
-                    let plot = self.labels.as_ref().map_or_else(
-                        || plot.clone(),
-                        |labels| plot.clone().labels(labels.clone()),
-                    );
+                plot.as_ref()
+                    .map(|plot| {
+                        let plot = self.labels.as_ref().map_or_else(
+                            || plot.clone(),
+                            |labels| plot.clone().labels(labels.clone()),
+                        );
+                        let plot = plot.with_render_scope(format!("panel-{index}"));
+                        match interiors.get(index).and_then(Option::as_ref) {
+                            Some(inputs) => inputs.attach(plot),
+                            None => Ok(plot),
+                        }
+                    })
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
+            self.canvas_hue_groups(&plots, full_outer, &themes, children, round)?
+        } else {
+            Vec::new()
+        };
+        plots = plots
+            .into_iter()
+            .enumerate()
+            .map(|(index, plot)| {
+                plot.map(|plot| {
                     let plot = hue_groups
                         .iter()
                         .find(|(dimension, _)| Some(dimension.as_str()) == plot.hue_dimension_key())
@@ -2659,13 +2823,14 @@ impl Canvas {
 
     fn canvas_hue_groups(
         &self,
+        plots: &[Option<Plot>],
         panel: PanelBox,
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
     ) -> Result<Vec<(String, Vec<String>)>, Error> {
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-        for (index, plot) in self.panels.iter().enumerate() {
+        for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
             let plot = self.labels.as_ref().map_or_else(
                 || plot.clone(),

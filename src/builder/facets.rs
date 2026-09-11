@@ -262,12 +262,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn resolved_line_condition_levels(&self, observed: Vec<String>) -> Vec<String> {
-        self.global_line_condition_levels
-            .clone()
-            .unwrap_or(observed)
-    }
-
     pub(crate) fn global_line_condition_levels(&self) -> Option<&[String]> {
         self.global_line_condition_levels.as_deref()
     }

@@ -1,6 +1,6 @@
-//! Closed interior boundary. All current bodies are combined legacy adapters,
-//! not native producers or extracted mark payloads. Extraction replaces variants
-//! here rather than installing a fallback alongside the current route.
+//! Closed interior boundary. Point/path families consume prepared semantics and
+//! selected payloads; remaining families retain their classified combined routes.
+//! Axis/frame policies remain legacy until their native migration.
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
@@ -13,16 +13,15 @@ macro_rules! interior_routes {
         pub(crate) enum $class { $($kind),+ })+
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[expect(clippy::enum_variant_names, reason = "every currently admitted route is explicitly legacy; native variants arrive only with extraction")]
-        pub(crate) enum InteriorRoute { $($class($class)),+ }
+        pub(crate) enum InteriorRoute { Scatter, Line, Trajectory, LinePath, $($class($class)),+ }
 
         impl InteriorRoute {
             pub(crate) const fn classify(kind: PlotKind) -> Self {
-                match kind { $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
+                match kind { PlotKind::Scatter => Self::Scatter, PlotKind::Line => Self::Line, PlotKind::Trajectory => Self::Trajectory, PlotKind::LinePath => Self::LinePath, $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
             }
 
             pub(crate) const fn kind(self) -> PlotKind {
-                match self { $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
+                match self { Self::Scatter => PlotKind::Scatter, Self::Line => PlotKind::Line, Self::Trajectory => PlotKind::Trajectory, Self::LinePath => PlotKind::LinePath, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
             }
 
             /// Transitional combined execution, deliberately requiring a backend.
@@ -34,7 +33,7 @@ macro_rules! interior_routes {
                 backend: &mut dyn crate::render::backend::Backend,
             ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
                 self.validate(plot)?;
-                match self { $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
+                match self { Self::Scatter | Self::Line | Self::Trajectory | Self::LinePath => Err(Error::Render("point/path families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
             }
         }
     };
@@ -42,14 +41,10 @@ macro_rules! interior_routes {
 
 interior_routes! {
     StandardLegacy {
-        Scatter => crate::plots::scatter::render,
         Histogram => crate::plots::histogram::render,
         Density => crate::plots::density::render,
         Qq => crate::plots::qq::render,
         Regression => crate::plots::regression::render,
-        Line => crate::plots::line::render,
-        Trajectory => crate::plots::line::render_trajectory,
-        LinePath => crate::plots::line::render_path,
     },
     CategoricalLegacy {
         Interaction => crate::plots::interaction::render,
@@ -111,14 +106,15 @@ impl ParentCompositionAdapter {
     }
 }
 
-/// Font-independent scientific axis inputs retained by T5a5. Family statistics
-/// and marks are still combined; these inputs must not be called fully prepared
-/// family payloads. Categories (including categorical Trajectory) live in axes,
-/// not in an inferred numeric-only classification.
+/// Root-owned scientific axes plus extracted point/path semantics. Attachment shares
+/// storage; no prepared Plot clone or alternate preparation route is retained.
+/// Other families' statistics remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
     pub(crate) route: InteriorRoute,
     pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
+    pub(crate) scatter: Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
+    pub(crate) line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
 }
 
 impl PreparedInteriorInputs {
@@ -126,6 +122,8 @@ impl PreparedInteriorInputs {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
         plot.prepared_matrix_axes.clone_from(&self.matrix);
+        plot.prepared_scatter.clone_from(&self.scatter);
+        plot.prepared_line.clone_from(&self.line);
         Ok(plot)
     }
 }
@@ -188,14 +186,67 @@ impl InteriorReserveRequest {
     }
 }
 
-/// Closed retained-result contract consumed by capture. This variant retains
-/// T5a5 axes and T5a3 text, NOT scientific mark geometry. Extraction must replace
-/// it with selected DeferredMarkPlan/DeferredAnnotationPlan payloads whose
-/// intrinsics, domains, reserves and obstacle/outward ink come from those same
-/// payloads. They may not measure via a backend or reconstruct during capture.
+/// Capture consumes selected point/path mark and annotation plans without
+/// reconstruction. LegacyCombined retains only axes/text for unextracted families.
 #[derive(Clone, Copy)]
 pub(crate) enum RetainedInteriorPayload<'a> {
     LegacyCombined(&'a PlotRenderResult),
+    Selected(&'a PlotRenderResult),
+}
+
+/// Selected marks retain the classified legacy axis/frame policy.
+#[derive(Debug)]
+pub(crate) struct DeferredMarkPlan {
+    pub(crate) payload: MarkPayload,
+    pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
+}
+
+#[derive(Debug)]
+pub(crate) enum MarkPayload {
+    Scatter(crate::plots::scatter::ScatterPayload),
+    Line(crate::plots::line::LinePayload),
+}
+
+impl DeferredMarkPlan {
+    pub(crate) fn draw(
+        &self,
+        backend: &mut dyn crate::render::backend::Backend,
+    ) -> Result<(), Error> {
+        match &self.payload {
+            MarkPayload::Scatter(payload) => payload.draw(backend),
+            MarkPayload::Line(payload) => payload.draw(backend),
+        }
+    }
+}
+
+/// Current ordinary guide and panel-text placements, not future T5c semantics.
+#[derive(Debug)]
+pub(crate) struct DeferredAnnotationPlan {
+    pub(crate) guides: crate::orchestrator::layers::GuideSnapshot,
+    pub(crate) panel_layer: Option<String>,
+    pub(crate) panel_clip: crate::layout::PanelBox,
+    pub(crate) text: Vec<crate::render::backend::PlacedText>,
+    pub(crate) geometry: crate::render::geometry::GeometrySnapshot,
+}
+
+impl DeferredAnnotationPlan {
+    pub(crate) fn draw(
+        &self,
+        backend: &mut dyn crate::render::backend::Backend,
+    ) -> Result<(), Error> {
+        self.guides.draw(backend)?;
+        if let Some(layer) = &self.panel_layer {
+            crate::render::backend::with_layer(backend, layer, |backend| {
+                crate::render::backend::with_clip(backend, self.panel_clip, |backend| {
+                    for text in &self.text {
+                        text.draw(backend)?;
+                    }
+                    Ok(())
+                })
+            })?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

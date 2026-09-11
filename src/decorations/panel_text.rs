@@ -22,6 +22,12 @@ pub(crate) struct PanelTextPlan {
 }
 
 impl PanelTextPlan {
+    pub(crate) fn retained_placement(&self) -> crate::render::backend::PlacedText {
+        crate::render::backend::PlacedText {
+            placement: PlannedTextPlacement::middle(self.position, self.anchor, 0.0),
+            plan: self.text_plan.clone(),
+        }
+    }
     pub(crate) fn bounds_in(&self, panel: PanelBox) -> PanelBox {
         placement(panel, self.corner, &self.text_plan).2
     }

@@ -902,6 +902,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn collective_legend_identity(
         &self,
         pair: &crate::data::CollectivePair,
+        data: crate::data::PlotData<'_>,
     ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
         match (
             self.group_name(),
@@ -918,28 +919,56 @@ impl<K: crate::kind::Marker> Plot<K> {
                     ));
                 }
                 Ok(crate::decorations::legend::LegendIdentity::single(
-                    group_field,
-                    group_value,
+                    data.copy_source_string(group_field)?,
+                    data.copy_source_string(group_value)?,
                 ))
             }
             (Some(group_field), Some(group_value), Some(hue_field), Some(hue_value)) => {
                 Ok(crate::decorations::legend::LegendIdentity::pair(
-                    group_field,
-                    group_value,
-                    hue_field,
-                    hue_value,
+                    data.copy_source_string(group_field)?,
+                    data.copy_source_string(group_value)?,
+                    data.copy_source_string(hue_field)?,
+                    data.copy_source_string(hue_value)?,
                 ))
             }
-            (Some(group_field), Some(group_value), _, None) => Ok(
-                crate::decorations::legend::LegendIdentity::single(group_field, group_value),
-            ),
-            (_, None, Some(hue_field), Some(hue_value)) => Ok(
-                crate::decorations::legend::LegendIdentity::single(hue_field, hue_value),
-            ),
+            (Some(group_field), Some(group_value), _, None) => {
+                Ok(crate::decorations::legend::LegendIdentity::single(
+                    data.copy_source_string(group_field)?,
+                    data.copy_source_string(group_value)?,
+                ))
+            }
+            (_, None, Some(hue_field), Some(hue_value)) => {
+                Ok(crate::decorations::legend::LegendIdentity::single(
+                    data.copy_source_string(hue_field)?,
+                    data.copy_source_string(hue_value)?,
+                ))
+            }
             _ => Err(Error::Render(
                 "collective legend identity has no resolved group or hue value".into(),
             )),
         }
+    }
+
+    /// Point/path payload identities own both strings under the projection's gate.
+    pub(crate) fn point_legend_identity(
+        &self,
+        label: &str,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<crate::decorations::legend::LegendIdentity, Error> {
+        let value = data.copy_source_string(label)?;
+        Ok(
+            if self.interaction_styles.is_some() || self.hue_dimension_key().is_some() {
+                crate::decorations::legend::LegendIdentity::single(
+                    data.copy_source_string(self.legend_title_key())?,
+                    value,
+                )
+            } else {
+                crate::decorations::legend::LegendIdentity::literal(
+                    data.copy_source_string("series")?,
+                    value,
+                )
+            },
+        )
     }
 
     pub(crate) fn hue_dimension_key(&self) -> Option<&str> {

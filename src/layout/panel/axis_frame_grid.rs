@@ -101,6 +101,31 @@ struct FrozenAxisPlan {
 }
 
 impl PanelAxisPlan {
+    pub(crate) fn geometry_snapshot(
+        &self,
+        theme: &ResolvedTheme,
+    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        if let Some(frame) = &self.frame {
+            for side in &frame.sides {
+                geometry.line(side, &frame.style, None)?;
+            }
+        }
+        for axis in [&self.x_axis, &self.y_axis] {
+            for tick in &axis.ticks {
+                if let Some(style) = &axis.tick_style {
+                    geometry.line(&tick.segment, style, None)?;
+                }
+                if let Some((plan, placement)) = &tick.label {
+                    geometry.text(*placement, plan, None)?;
+                }
+            }
+            if let Some((plan, placement)) = &axis.title {
+                geometry.text(*placement, plan, None)?;
+            }
+        }
+        Ok(geometry)
+    }
     pub(crate) fn range(&self, side: AxisSide) -> (f64, f64) {
         match side {
             AxisSide::Bottom => self.projection.x_range(),
