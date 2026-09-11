@@ -19,7 +19,9 @@ T5a0s in `91_IMPLEMENTATION_PLAN.md` records accepted layout-related behavior:
 strict Unicode-legal wrapping, the three-mode sizing surface, format-local PNG
 limits, compatible base-and-mark font fallback, and independent caption alignment.
 These are implementation targets, not claims that the current renderer already
-satisfies them. Further text controls remain deferred with explicit review gates.
+satisfies them. Independent title/subtitle alignment and the narrow Plot/Canvas
+overrides below are also user-approved T6 targets. Remaining broader text controls
+remain deferred with explicit review gates.
 
 After that migration, this model governs standalone plots, facets, composed
 canvases, shared legends, text panels, SVG, and PNG. It does not authorize
@@ -46,8 +48,8 @@ properties, or a second theme representation.
   the caller. A theme does not replace a policy.
 - A **renderer invariant** is fixed behavior such as clipping, draw order,
   geometry validity, semantic orientation, or backend protocol. Text anchoring
-  is invariant except for the two root alignment values owned by
-  `CompositionTheme` below.
+  is invariant except for the root title, subtitle, and caption alignment
+  defaults and narrow Plot/Canvas overrides defined below.
 - A **resolved theme** is the private complete value consumed by preflight,
   measurement, collision planning, legend construction, and rendering. It is
   not a public inspection or extension surface.
@@ -69,8 +71,8 @@ The public foundations consist of these roles:
 | `AxisTheme` | Frame sides, axis and tick strokes, grid, lengths, and role-local spacing relationships |
 | `LegendTheme` | Discrete legend and continuous color-guide chrome, keys, padding, and role-local spacing relationships |
 | `CanvasLegendPolicy` | Per-plot, hidden, or one shared Canvas legend behavior |
-| `TitleBlockAlignment` | Closed `Start`, `Center`, or `End` horizontal alignment for one Plot or Canvas root title block |
-| `CompositionTheme` | Plot and Canvas root title-block alignment and spacing relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
+| `TitleAlignment` | Closed `Start`, `Center`, or `End` horizontal alignment for Plot or Canvas root titles, subtitles, and captions |
+| `CompositionTheme` | Plot and Canvas root title, optional subtitle, and independent caption alignment defaults and spacing relationships, facet strips, Canvas headers, row titles, text-panel chrome, and role-local composition spacing relationships |
 | `MarkTheme` | Common point, line, fill, interval, ribbon, reference, outline, missing-mark, and supplemental-accent defaults |
 | `AnnotationTheme` | Panel-text, significance, value-label, and highlight geometry plus contrast-backdrop policy |
 | `ColorScales` | Default qualitative, sequential, and diverging data-color scales |
@@ -98,14 +100,16 @@ source theme. The builder may replace components or use typed convenience
 setters, but `build()` returns one complete validated `Theme`. A builder is never
 stored by `Plot`, `Canvas`, or the renderer and is not a sparse runtime override.
 
-`TitleBlockAlignment` is the closed `Start`, `Center`, and `End` discriminant.
-`CompositionTheme` owns `root_title_block_alignment` for title and subtitle
-jointly, and independent `root_caption_alignment` for the caption. Both use
-`TitleBlockAlignment`. `Start` and `End` mean the physical left and right edges
-of the root's post-inset local content span; they are not bidi-logical directions
-or backend anchor spellings. Both block placement and per-line alignment consume
-the owning value. All four built-in themes use `Center` for title/subtitle and
-`Start` for captions. Independent title-versus-subtitle alignment remains deferred.
+`TitleAlignment` is the closed `Start`, `Center`, and `End` discriminant.
+`CompositionTheme` owns concrete `root_title_alignment: TitleAlignment`, optional
+`root_subtitle_alignment: Option<TitleAlignment>`, and independent concrete
+`root_caption_alignment: TitleAlignment`. No separate caption alignment type is
+introduced. `Start` and `End` mean the physical left and right edges of the root's
+post-inset local content span; they are not bidi-logical directions or backend
+anchor spellings. Both block placement and per-line alignment consume each role's
+effective value. All four built-in themes use `Center` for root title, `None` for
+root subtitle, and `Start` for caption. A subtitle with no applicable instruction
+uses the final effective title alignment, as resolved below.
 
 Phase T6 replaces the current closed `Theme` enum, `CategoricalColors`,
 `HeatmapScale`, RGB tuple inputs, and multiplicative opacity naming atomically
@@ -129,7 +133,7 @@ The component taxonomy is role-based rather than plot-family-based:
 - `LegendTheme` owns appearance and measured geometry of discrete legends and
   continuous color guides. Existing legend policies continue to own visibility
   and placement.
-- `CompositionTheme` owns title/subtitle and independent caption alignment,
+- `CompositionTheme` owns independent title, optional subtitle, and caption alignment defaults,
   spatial relationships for Plot and Canvas root title blocks, and Canvas/facet chrome.
   `TypographyTheme` still owns each title, subtitle, and caption text role.
   `CompositionTheme` does not own title content, panel data, grid occupancy,
@@ -159,7 +163,7 @@ deterministic component measurement, parent allocation/arrangement, bounded
 feedback, and output dimensions. A component returns one immutable measured
 plan or typed fit miss; it does not export complete alternatives for root search.
 
-Except for the two admitted `CompositionTheme` root horizontal alignment values,
+Except for the admitted root horizontal alignment defaults and narrow overrides,
 anchor, rotation, orientation, clipping, z-order, statistical
 geometry, collision rules, local layout decision order, feedback budgets, and
 minimum representable geometry remain renderer invariants. Root title,
@@ -198,15 +202,20 @@ theme and introduce no additional theme scope.
 
 In the complete target, Canvas-owned title blocks, shared headers, row titles,
 text panels, surfaces, and shared-legend chrome use the Canvas root theme. Plot
-titles, plot subtitles, axes, marks, annotations, and panel chrome use the
-resolved Plot theme. A composed Plot's panel surface comes from its Plot theme;
+titles, plot subtitles, plot captions, axes, marks, annotations, and panel chrome
+use the resolved Plot theme, subject only to the narrow title/subtitle alignment
+overrides below. A composed Plot's panel surface comes from its Plot theme;
 it never repaints the Canvas root surface. The current T4 subset is limited to
 the existing theme-aware consumers stated above.
 
-A Canvas root consumes the Canvas root theme's two alignment values. A standalone
-Plot, faceted Plot outer root, or Matrix Plot root consumes its resolved Plot
-theme's values. Title and subtitle share one value; the caption independently
-uses the other. Independence changes neither theme inheritance nor content ownership.
+A Canvas's own title uses its theme's `root_title_alignment`; its own subtitle
+uses that theme's `root_subtitle_alignment` when present, otherwise its own final
+title alignment. Its caption uses that theme's `root_caption_alignment`.
+Canvas panel alignment settings are separate and do not affect Canvas-owned text.
+A standalone, embedded, faceted outer-root, or Matrix-root Plot retains Plot text
+semantics and the alignment resolution below. Its caption independently uses its
+resolved Plot theme's `root_caption_alignment`. Independence changes neither
+complete theme replacement nor content ownership.
 
 Theme state is immutable and owner-local. There is no process-global,
 thread-local, environment-selected, backend-selected, or asynchronously scoped
@@ -230,6 +239,30 @@ Absence at one scope selects the next applicable owner; it does not copy or
 mutate that owner. A Plot scale replaces only the relevant scale and leaves all
 other theme components unchanged. A complete explicit Plot theme does not merge
 with its Canvas theme.
+
+Title/subtitle alignment has a narrow, separately resolved override surface,
+public only at T6: `Plot::title_alignment`, `Plot::subtitle_alignment`,
+`Canvas::panel_title_alignment`, and `Canvas::panel_subtitle_alignment`. Each
+sets its own optional `TitleAlignment` override input; absence is `None`.
+The public word `panel` identifies the composed Plot semantic scope, not a data
+panel anchor or a public layout-tree abstraction; private trees may use `child`.
+
+After resolving the one complete Plot theme, choose the first present instruction
+in each chain, from highest to lowest:
+
+1. Title: explicit Plot title override > Canvas panel title default (when composed)
+   > resolved Plot theme's concrete `root_title_alignment`.
+2. Subtitle: explicit Plot subtitle override > Canvas panel subtitle default
+   (when composed) > resolved Plot theme's optional `root_subtitle_alignment`
+   > final effective Plot title alignment.
+
+`None` means no instruction at that scope, not an instruction to force following
+the title or to bypass lower-precedence subtitle settings. These optional inputs
+do not make themes sparse or introduce general component merging. Theme setters
+and alignment setters are call-order independent; repeated setters replace only
+their own stored input. Resolve concrete title, subtitle, and caption alignments
+before measurement and retain them in immutable plans; drawing does not resolve
+optional inputs again.
 
 The renderer resolves theme and scale inputs before canonical plot validation,
 layout measurement, or backend begin. One private resolved theme and the

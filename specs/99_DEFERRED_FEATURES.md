@@ -84,10 +84,13 @@ limits without a second planning route; obtain the user-approved disposition.
 
 ## DF5: Broader Text Layout Controls
 
-Independent title versus subtitle alignment, general per-role alignment/anchoring,
-arbitrary rotation, emergency identifier breaking, ellipsis, and font-shrink
-controls remain excluded. Independent root captions and strict Unicode-legal
-wrapping are admitted; see `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`.
+General per-role alignment/anchoring, arbitrary rotation, emergency identifier
+breaking, ellipsis, and font-shrink controls remain excluded. Independent title
+versus subtitle alignment is now user-approved for T6, including optional Plot
+overrides and Canvas panel defaults with the defined precedence; it is no longer
+deferred. Independent root captions and strict Unicode-legal wrapping also remain
+admitted; see `03_THEME_SYSTEM.md` and `05_LAYOUT_SYSTEM.md`. This narrow admission
+does not admit the remaining broader controls or change their review checkpoint.
 
 **Review checkpoint**: T6 ENTRY, after T5e closure.
 

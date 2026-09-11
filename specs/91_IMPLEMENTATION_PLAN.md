@@ -77,10 +77,13 @@ discussion:
   (EGC) as a unit; only if none covers the unit use per-scalar first coverage when
   possible. Missing visible coverage is fatal; no provisioning or whole-word,
   emoji, or generic cluster-mapping extension is admitted.
-- `CompositionTheme` owns `root_title_block_alignment` for title/subtitle and
-  independent `root_caption_alignment`, both `TitleBlockAlignment`. Built-ins
-  use `Center` and `Start` respectively; both inherit from the same owner. T6
-  exposes Start/Center/End customization, not independent title/subtitle controls.
+- `CompositionTheme` owns `root_title_alignment`, optional
+  `root_subtitle_alignment`, and independent `root_caption_alignment`, using
+  `TitleAlignment`. Built-ins use Center, None, and Start. Subtitle fallback is
+  the final effective title alignment. T6 exposes independent Plot title/subtitle
+  instructions and Canvas panel title/subtitle defaults; explicit Plot instruction
+  wins over Canvas panel instruction, then the resolved theme default. These
+  narrow policies do not merge themes or affect the Canvas's own heading.
 - Automatic numeric ticks have no fixed five-tick ceiling or public count target.
   T6 exposes one optional additive or Log10-decade preferred data interval per
   axis; the renderer tries it first, then deterministic coarsenings for fit, and
@@ -234,6 +237,21 @@ The approved theme and layout targets follow these rules:
 | T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
+| T5a6a1 | Prepared interior contracts and exhaustive classification | PENDING |
+| T5a6a2 | Retained canonical primitive geometry | PENDING |
+| T5a6a3a | Point/path semantic and payload extraction | PENDING |
+| T5a6a3b | Distribution/reference semantic and payload extraction | PENDING |
+| T5a6a3c | Estimate-display semantic and payload extraction | PENDING |
+| T5a6a3d | Bar semantic and payload extraction | PENDING |
+| T5a6a3e | Categorical-distribution semantic and payload extraction | PENDING |
+| T5a6a3f | Interaction semantic and payload extraction | PENDING |
+| T5a6a4a | Heatmap deferred interior | PENDING |
+| T5a6a4b | Marginal deferred interior | PENDING |
+| T5a6a4c | Matrix deferred interior and outer title integration | PENDING |
+| T5a6a4d | Beeswarm deferred interior | PENDING |
+| T5a6a4e | Waterfall deferred interior | PENDING |
+| T5a6a5a | Facet parent adapter and outer title integration | PENDING |
+| T5a6a5b | Canvas parent adapter and outer title integration | PENDING |
 | T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
 | T5a6b1 | Standard point and path families | PENDING |
 | T5a6b2 | Standard distribution and reference families | PENDING |
@@ -2474,7 +2492,7 @@ Remaining native migrations and the public T6 API are still future work.
 | D3 Sizing workflows | User-approved delegated best choice: exactly automatic, exact-width/automatic-height, and exact-pair modes | Remove `max_width` target; consuming Plot/Canvas `width(u32) -> Self` at T6 replaces the width getter. Setters completely replace requests; width after size clears height. Positive preflight matches current timing; Canvas owns child allocation; no public Flutter bounds. T5e/T6 | ACCEPTED |
 | D4 SVG versus PNG limits | Every PNG limit is terminal-local in all sizing modes; remove hypothetical PNG viability and automatic-only 64 MiB canonical SVG gate | Shared logical-work/font caps, representability, and fallible SVG allocation remain. No relayout on PNG failure. T5a3d/T5e/T6 | ACCEPTED |
 | D5 Font availability | Preserve catalog/order/provenance; prefer first face covering base plus combining marks within an EGC as a unit, otherwise allow per-scalar first-coverage fallback when possible | Missing visible coverage is fatal, including required generated alphabets; no provisioning, whole-word, emoji, or generic cluster mapping. Preparation-unit census/selection in T5a3a3; shaping in T5a3c | ACCEPTED |
-| D6 Caption alignment | Independent `CompositionTheme::root_caption_alignment` uses the same `TitleBlockAlignment`; built-ins use Start captions and Center title/subtitle | Same-owner inheritance; no independent title versus subtitle controls. T5a4 privately connects defaults; T6 exposes customization | ACCEPTED |
+| D6 Caption alignment | Independent `CompositionTheme::root_caption_alignment` uses `TitleAlignment`; built-ins use Start captions and Center titles, with subtitle following final title alignment by default | Same-owner theme inheritance; the subsequent approved independent title/subtitle policy is specified in T5a4 and T6. Panel alignment instructions never affect captions | ACCEPTED, AMENDED |
 
 Behavioral acceptance examples, carried into the owning stages:
 
@@ -4109,16 +4127,26 @@ standalone Plot root without requiring composition adapters early.
 
 Scope:
 
-- Build one immutable title-block result at the parent-assigned width from resolved
-  text roles, `CompositionTheme` spacing, `root_title_block_alignment` for title/
-  subtitle, and independent `root_caption_alignment`, both `TitleBlockAlignment`.
-  Extend the retained private carrier here: built-ins use Center title/subtitle
-  and Start captions; both properties resolve and inherit from the same owner.
+- Build one immutable title-block result at the parent-assigned width from the
+  existing retained text plans, resolved text roles, and `CompositionTheme` spacing.
+  Use `TitleAlignment` with theme defaults `root_title_alignment = Center`,
+  `root_subtitle_alignment = None`, and `root_caption_alignment = Start`.
+- Establish private optional Plot title/subtitle instructions and Canvas panel
+  title/subtitle defaults. Resolve title as Plot instruction, Canvas panel
+  instruction when embedded, then resolved Plot theme. Resolve subtitle as Plot
+  instruction, Canvas panel instruction, optional resolved-theme subtitle, then
+  final effective title. None means no instruction, not forced inheritance over
+  a lower-priority subtitle instruction. Freeze concrete effective alignments.
+  Canvas root headings use only their own theme; panel instructions do not affect
+  captions, TextPanels, strips, row titles, or other shared headers. This narrow
+  policy does not merge themes or infer intent from preset/default equality.
 - Supply intrinsic requirements separately, measure height after deterministic
   wrapping, and return a typed fit miss when exact allocated geometry cannot fit.
   Admit text and plan storage before materialization; do not search title widths.
-- Apply each role's alignment consistently to per-line translation and horizontal
-  child placement. Retain zero rotation and no independent title/subtitle control.
+- Apply each role's independent alignment consistently to per-line translation and
+  horizontal block placement over its local post-inset content span, not the data
+  panel. Retain zero rotation. Unspecified subtitles follow the effective title
+  even when title text is absent. Include both effective values in plan identity.
 - Migrate the standalone Plot root. T5a6a connects the same producer to faceted
   Plot, Matrix, and Canvas outer-root adapters after those boundaries exist.
 - Store exact lines, widths, baselines, paints, spacing, boxes, and serialization
@@ -4132,18 +4160,25 @@ Exclusions:
 
 Deletion targets:
 
-- Standalone-root `TitleBlock::draw` wrapping, line/baseline `zip`, hidden font
-  fallback, hardcoded muted paints, duplicate root gaps/reserves, and draw-time
-  title style reconstruction. T5a6d removes the corresponding deferred outer-root
-  route after every adapter consumes this producer.
+- Standalone-root all-role centering and whole-pixel placement rounding, parallel
+  title-plan/baseline carriers, and duplicate root gaps/reserves. Earlier repairs
+  already removed draw-time wrapping and added source/cardinality checks; reuse
+  those guarantees rather than rebuilding text preparation. T5a6d removes the
+  deferred outer-root placement route after every adapter consumes this producer.
 
 Evidence:
 
-- Title-only, subtitle-only, caption-only, all-role, unequal multiline,
-  independent Start/Center/End, built-in Center titles/Start captions, owner selection, presence,
-  baseline cardinality, Null/SVG identity, and explicit-size snapshot tests.
-- Example: changing a multiline caption to End does not move the centered title
-  or subtitle; inherited and explicit Plot themes retain the same owner boundary.
+- Title-only, subtitle-only, caption-only, all-role, unequal multiline, independent
+  Start/Center/End, all four presets, owner selection, baseline cardinality,
+  physical Start/End under RTL/mixed text, odd widths/asymmetric gutters, mandatory
+  blank lines, whitespace presence, source-preserving soft hyphens, exact-height
+  refusal, Null/SVG identity, and explicit-size snapshot tests.
+- Private precedence tests: Canvas panel Start affects Nature/CHI panels; Plot
+  title End overrides it and an unspecified subtitle follows End. Canvas panel
+  subtitle Center instead stays Center until Plot subtitle overrides it. Explicit
+  custom-theme subtitle is used only below both instruction scopes. Theme/setter
+  order is independent; repeated setters replace their own input. Caption End
+  changes neither title nor subtitle. No public builders land before T6.
 - `just verify` passes.
 
 Commit: `feat(layout): plan root title blocks`.
@@ -4195,6 +4230,16 @@ Scope:
 - Replace ordinary axis/title local stabilization with T5a1r's at-most-eight
   root feedback rounds; bounded local source trials are not independent
   stabilization loops. Use actual measured gutters, not a fixed 40% cutoff.
+- Migrate composed-axis copying, source provenance, immutable cache inputs, and
+  equality together with interval fields. Include every generated-label scalar in
+  its role's font census before sealing; no late resolution during capture/replay.
+  Preserve the range-only seed independently from intentional tick changes.
+- Retain font-independent axis/exact-tick/interval and shared-x semantic inputs
+  rather than validating by a second renderer pass. Invalid policies and domains
+  owned by those components reject before font discovery. Whole-family data
+  preparation and its error precedence belong to T5a6a's extraction steps, not
+  this axis stage. Geometry/text-dependent fit remains in measurement.
+  Admit raw source and cache payloads before allocation, not only at capture.
 
 Exclusions:
 
@@ -4225,6 +4270,12 @@ Evidence:
   tick/grid reserve-draw parity, horizontal categorical fit, shared-x validation,
   accounting refusal, feedback stabilization, deterministic order, and measured
   gutter cases below/at/above the old 40% cutoff, including real fit misses.
+- Cache-enabled/disabled equivalence for intervals, exact precedence, shared
+  domains, Forest Log10, and changed title allocations; source provenance survives
+  composition. Invalid nontext inputs win over unavailable-font errors with zero
+  discovery calls for the axis/shared-x inputs owned here. Generated glyph census,
+  retained axis preparation reuse, refusal
+  before materialization, and no post-freeze tick/shape work are explicit gates.
 - `just verify` passes.
 
 Commit: `feat(axes): freeze axis and grid plans`.
@@ -4256,7 +4307,9 @@ the root-coordinated feedback protocol specified in `05_LAYOUT_SYSTEM.md`.
 Dependencies: T5a5.
 
 Objective: establish closed native/deferred interior boundaries before migrating
-any family route.
+any family route. This is an umbrella over the ordered extraction stages below,
+not one adapter-scaffolding commit. Wrapping the combined family `render()` entry
+point does not satisfy semantic preparation or retained-payload requirements.
 
 Scope:
 
@@ -4283,6 +4336,12 @@ Scope:
   Canvas until T5b, regardless of child PlotKind. Connect faceted Plot, Matrix,
   and Canvas outer roots to the T5a4 title-block producer through these adapters.
   No generic fallback adapter or runtime downcast is admitted.
+- Preserve the supported/rejected composition matrix independently from adapter
+  representation: no new faceted-in-Canvas, Canvas-in-Canvas, or specialized
+  nesting is admitted by this migration. Retain semantic rejection timing for
+  unsupported shapes. Embedded Plot titles retain their local Plot semantics;
+  T5b owns complete track integration for their local captions, not omission or
+  promotion to the Canvas caption.
 - Make every carrier and adapter use the T5a1r measured-result, accounting,
   admission, bounded feedback, frozen-plan, Null, and concrete lifecycle route.
   Intrinsics precede parent allocation; local alternatives require an owner,
@@ -4303,7 +4362,57 @@ Evidence:
   no-layout-backend-call; and pre-backend failure tests.
 - `just verify` passes.
 
-Commit: `feat(layout): add ordinary interior carriers`.
+#### T5a6a Execution Partition
+
+All steps below are PENDING. Each is one logical commit with focused evidence and
+`just verify`; complete each before its successor. The umbrella has no commit.
+The numbered extraction clusters retain the existing family behavior and feed
+the later native axis/frame migrations; they must not duplicate those migrations.
+
+| Step | Dependency | Deliverable and deletion boundary | Commit |
+| --- | --- | --- | --- |
+| T5a6a1 | T5a5 | Closed prepared-input, intrinsic/domain/reserve, constrained-result, and retained-payload contracts; exhaustive route classification; shared resource/feedback ownership. Existing routes remain explicitly classified, not falsely native | `feat(layout): define prepared interior contracts` |
+| T5a6a2 | T5a6a1 | Sole canonical primitive carrier and shared count/emission from retained quantized operands; remove repeated raw conversion after freeze across native and deferred capture | `refactor(render): retain canonical primitive geometry` |
+| T5a6a3a | T5a6a2 | Scatter, Line, Trajectory, LinePath semantic/payload extraction | `refactor(layout): prepare point and path payloads` |
+| T5a6a3b | T5a6a3a | Histogram, Density, Qq, Regression semantic/payload extraction | `refactor(layout): prepare distribution reference payloads` |
+| T5a6a3c | T5a6a3b | PointInterval, Coefficient, Forest, Dumbbell semantic/payload extraction | `refactor(layout): prepare estimate display payloads` |
+| T5a6a3d | T5a6a3c | Bar, HorizontalBar, StackedBar, StackedHorizontalBar semantic/payload extraction | `refactor(layout): prepare bar payloads` |
+| T5a6a3e | T5a6a3d | Boxplot, Violin, Raincloud semantic/payload extraction | `refactor(layout): prepare categorical distribution payloads` |
+| T5a6a3f | T5a6a3e | Interaction semantic/payload extraction; all 20 ordinary adapters satisfy the same contract | `refactor(layout): prepare interaction payloads` |
+| T5a6a4a | T5a6a3f | Heatmap typed deferred interior | `refactor(layout): prepare heatmap adapter` |
+| T5a6a4b | T5a6a4a | Marginal typed deferred interior | `refactor(layout): prepare marginal adapter` |
+| T5a6a4c | T5a6a4b | Matrix typed deferred interior and T5a4 outer title producer | `refactor(layout): prepare matrix adapter` |
+| T5a6a4d | T5a6a4c | Beeswarm typed deferred interior | `refactor(layout): prepare beeswarm adapter` |
+| T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
+| T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
+| T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a1 declares the interfaces; each extraction step replaces its family's
+combined preparation/drawing use with those interfaces and deletes superseded
+helpers in that same step. Its selected draw payload is the source of reported
+domain/reserve/obstacle consequences, never a discarded geometry-backend pass.
+Constraint-dependent projection/payload construction may repeat when constraints
+change; data/statistical preparation is retained. Final capture consumes the
+selected payload without repeating preparation, projection, ticks, or shaping.
+The later T5a6b/c clusters replace the classified legacy axis/frame policy with
+the common native producer; they reuse, rather than rebuild, extracted payloads.
+
+T5a6a2 applies the `05` quantum spelling and checked bottom-up conversion once.
+Cover points, paths, clips, surfaces, gradients, rounded rectangles, bracket and
+text-placement transforms, stroke operands, and post-conversion degeneracy. Test
+negative zero, negative coordinates, quantum half-ties, outward bounds,
+nonintegral translations, collapsed lines/polygons, exact token counts, and
+Null/SVG operand identity. Deterministic later glyph-outline extraction remains
+format conversion under the existing font contract. Snapshot changes require
+individual review; do not retain alternate raw and canonical frozen routes.
+
+Every extraction step proves font-independent error precedence with zero font
+discovery, admission before payload/cache allocation, actual consequence parity,
+and separate preparation/measurement/payload/capture/replay counts. Resources
+spent on rejected alternatives remain spent. Every feedback producer declares
+consumed/emitted inputs, provisional versus terminal failure, monotonic quantities,
+and replacement of stale requests. Cache keys consume the same immutable inputs
+as measurement; feedback-producing hits replay their retained effects.
 
 #### T5a6b: Standard-Coordinate Ordinary Plot Migration
 
@@ -4326,6 +4435,11 @@ Requirements shared by both clusters:
 - Preserve current exact default dimensions and `.size`; validate one selected
   `PlotPlan` through one Null lifecycle and replay the same plan through one
   concrete lifecycle.
+- Reuse T5a6a's prepared input and selected payload. Instrument semantic preparation,
+  constrained measurement, payload construction, capture, Null, and concrete
+  replay separately; capture/replay must not invoke the combined family renderer.
+  Test cache-enabled/disabled identity, changed shared domains/constraints,
+  rejected ancestor trials, and resource refusal before materialization.
 
 ##### T5a6b1: Standard Point And Path Families
 
@@ -4399,6 +4513,9 @@ Requirements shared by all four clusters:
   mark/annotation range, reserve, collision, and draw consequences until T5c.
 - Freeze selected projections, categorical positions, clips, and deferred mark
   and annotation plans before Null validation.
+- Apply the same preparation/payload/capture counters, no-recomputation gates,
+  cache/feedback differential tests, and pre-materialization admission gates as
+  T5a6b. Reuse T5a6a extraction rather than a second family preparation route.
 
 ##### T5a6c1: Estimate-Display Families
 
@@ -4511,9 +4628,28 @@ Scope:
 - Audit every materialized T5a ledger key from source through measurement,
   intrinsic/allocation/measurement, bounded admission, arrangement, frozen plan, and
   draw; remove every superseded T5a path.
+- Split-phase ledger keys close only their T5a portion here. In particular,
+  caption alignment and standalone/outer-root replay close in T5a; embedded Plot
+  caption track allocation and exactly-once rendering remain a named T5b
+  obligation carried by the composition adapter. Do not claim that portion done.
 - Prove the five specialized interior adapters, two composition adapters, and
   mark/annotation deferred adapters plus their named legacy-panel-minimum
   consequence are the only remaining nonnative boundaries.
+- Publish one closure matrix over all 20 native kinds and each remaining adapter:
+  semantic validation/prepared input; intrinsic/domain/reserve supplier; consumed
+  constraints and emitted feedback; cache identity/replay; retained text/canonical
+  primitives; admission boundary; selected-payload capture count; no post-freeze
+  preparation/layout; Null/concrete identity; exact-size fit/failure and snapshots.
+  Count all measurement-backend paths, not only final Null replay. No adapter may
+  hide an extra layout-backend pass behind the final lifecycle counter.
+- Exercise shrinking axis gutters, monotonic annotation-domain growth, rollback
+  after rejected containing frames, later-round cached feedback replay, cycles,
+  and eighth-round success/exhaustion with actual native ordinary axis/title/root
+  producers and the named retained deferred annotation/composition consequences.
+  T5b replaces guide/containing-frame and composition adapters with native
+  evidence; T5c replaces deferred annotation consequences. Merely
+  observing changed geometry does not request a new round; owners emit the
+  required feedback explicitly before stable-root early termination.
 - Preserve explicit `640x480` Plot and `960x640` Canvas behavior while leaving
   public automatic and exact-width sizing unexposed until their atomic T6 switch.
 
@@ -4564,6 +4700,17 @@ Scope:
   spacing styles while keeping visibility and placement in legend policy.
 - Apply role-based typography and surfaces to facet strips, panel headers, shared
   headers, row titles, text panels, and shared legends.
+- Integrate embedded Plot titles/subtitles through the T5a4 producer, preserving
+  Plot content and the resolved title/subtitle policies across their local
+  post-inset allocation, not the data-panel span. Canvas-owned heading alignment
+  remains independent. Render each panel Plot caption exactly once beneath that
+  Plot, with its resolved theme and caption alignment; the Canvas caption remains
+  separate. Measure caption space in tracks and reject unfit exact allocations
+  rather than omit, merge, or promote captions. Preserve existing row-title
+  conflict rules unless separately revised.
+- TextPanel title/body use the approved top-left placement after chrome insets;
+  extra exact space expands chrome, not text centering. Distinct shared headers,
+  row titles, and facet strips do not inherit panel Plot alignment instructions.
 - Preserve exact legend glyph reproduction from resolved mark styles.
 - Keep collision planning, outside reservation, and shared-legend compatibility
   synchronized with the resolved theme.
@@ -4587,6 +4734,10 @@ Scope:
   before materialization; do not add grid/legend searches or local retry loops.
 - Preserve declared sparse coordinates, spans, groups, and facet topology. Do
   not compact empty rows or columns implicitly.
+- Delete the two T5a6a parent-composition adapters as their native routes land;
+  census the remaining specialized interior adapters separately. Remove native
+  legend/facet/Canvas stabilization loops here, not at T5e. T5e closes remaining
+  specialized and cross-producer behavior on this same feedback driver.
 
 Acceptance:
 
@@ -4594,10 +4745,23 @@ Acceptance:
 - Shared and per-plot legends use one component contract while retaining exact
   mark glyphs.
 - Mixed explicit Plot themes have deterministic documented behavior.
+- Mixed Nature/CHI panels obey Canvas panel title/subtitle instructions unless
+  individually overridden. Test subtitle fallback to final title, explicit
+  subtitle separation, independent Canvas headings, simultaneous Canvas/panel
+  captions, narrow wrapping, asymmetric gutters, exact-height refusal, and
+  cache-enabled/disabled equivalence. A roomy TextPanel fixture proves top-left
+  placement. Unsupported nesting is rejected independently from native/adapted
+  representation; no new composition shapes are implicitly admitted.
 - D1 examples: automatic right-guide fit that starves the body recovers through a
   supported top/bottom edge or compact reflow with all entries intact; explicit
   right remains right or fails. Nested guides share bounded trial/work budgets,
   and resource refusal is distinct from exhausted supported fit trials.
+- Multi-owner traces on supported composition shapes establish initialization and
+  reset of current guide choices, ancestor constraint changes, provisional child
+  misses, next-round recovery, fixed sibling decisions without backtracking, and
+  planning-limit versus fit-error precedence. Cache hits replay feedback; measured
+  cache misses are not described as reuse. No unsupported nesting is needed to
+  manufacture the trace.
 - Facet and Canvas plans have one measured root size and perform no layout
   reconstruction during final drawing.
 - T5b establishes one comparison and failure path and proves it against the
@@ -4816,11 +4980,24 @@ Scope:
   `Theme` API and built-in constructors or presets.
 - Expose only validated component theme, color, typography, and scale types
   required by the full-foundations milestone.
-- Expose `TitleBlockAlignment::{Start,Center,End}` for
-  `CompositionTheme::root_title_block_alignment` (title/subtitle) and independent
-  `root_caption_alignment`. Built-ins return Center and Start respectively; both
-  use the same owner/inheritance. No independent title versus subtitle controls,
-  general `TextTheme` alignment, backend anchors, or Plot/Canvas alignment setters.
+- Expose `TitleAlignment::{Start,Center,End}` for concrete theme defaults
+  `CompositionTheme::root_title_alignment` and `root_caption_alignment`, and
+  optional `root_subtitle_alignment`. Built-ins return Center, Start, and None
+  respectively. Subtitle fallback follows the final effective title, not a copied
+  preset value. Start/End are physical directions over the local content span.
+- Expose consuming `Plot::title_alignment(TitleAlignment)` and
+  `Plot::subtitle_alignment(TitleAlignment)`, and
+  `Canvas::panel_title_alignment(TitleAlignment)` and
+  `Canvas::panel_subtitle_alignment(TitleAlignment)`. Each sets its own optional
+  instruction; repeated calls replace it independently of theme-setter order.
+  Title resolves Plot instruction > Canvas panel instruction > resolved Plot
+  theme. Subtitle resolves Plot instruction > Canvas panel instruction > optional
+  resolved-theme subtitle > final effective title. None is absence, not a force-
+  follow mode. Complete themes otherwise retain their existing replacement rule.
+  Canvas's own heading uses its theme independently; panel settings affect no
+  captions, TextPanels, strips, row titles, or other shared headers. Use `panel`
+  in the public Canvas API; `child` remains generic internal tree terminology.
+  No general per-role alignment, backend anchors, or sparse theme merging is added.
 - Retain `Canvas::theme(Theme)` and `Plot::theme(Theme)` as the sole owner
   attachments established by T4 while replacing the closed selector arguments
   with the approved complete immutable `Theme` values. Migrate repository
@@ -4869,10 +5046,15 @@ Acceptance:
 
 - Callers can construct one complete custom theme covering the admitted full
   foundations without editing private renderer state.
-- A caller can independently choose Start, Center, or End caption alignment and
-  joint title/subtitle alignment. Canvas/Plot ownership and inheritance select
-  both values; every built-in centers title/subtitle and Start-aligns captions.
-  Example: End caption customization leaves the centered title/subtitle unchanged.
+- A caller can independently choose title, subtitle, and caption alignment.
+  Every built-in centers title, leaves subtitle unspecified to follow the final
+  title, and Start-aligns captions. Mixed explicit presets obey Canvas panel
+  policies; Plot instructions win individually. Test all precedence combinations,
+  subtitle-only content, theme/setter-order independence, and replacement.
+  Explicit Canvas panel subtitle Center remains Center when a Plot title is End;
+  Plot subtitle End overrides it. Custom-theme subtitle applies only below both
+  instruction scopes. End caption changes neither heading role. Canvas root
+  headings and captions remain independent from panel defaults and captions.
 - A caller can request an additive linear or Log10-decade preferred tick interval
   independently on x and y; focused evidence proves exact-source preference,
   deterministic coarsening, terminal midpoint order, scale mismatch, exact-tick
@@ -4923,8 +5105,9 @@ Scope:
   behavior, SVG, and PNG.
 - Cover automatic, exact-width/automatic-height, and exact-pair dimensions across
   ordinary, specialized, facet, sparse Canvas, shared-guide, SVG, and PNG routes.
-- Cover independent caption and joint title/subtitle defaults/customization and
-  inheritance, plus automatic/additive/Log10-decade/exact tick-policy precedence
+- Cover independent caption/title/subtitle defaults, final-title subtitle fallback,
+  Plot/Canvas panel instruction precedence across mixed presets, and independent
+  Canvas headings, plus automatic/additive/Log10-decade/exact tick-policy precedence
   across standalone, facet, Canvas-child, SVG, and PNG routes.
 - Retain reviewed deterministic snapshots for every built-in preset and selected
   custom themes.
@@ -5004,11 +5187,16 @@ T3j/T5a0/T5a0r decision records above remain historical evidence.
   replace it completely; facets add no scope.
 - Components are surfaces, typography, axes, legend, composition, marks,
   annotations, and color scales. Plot-family theme blocks are not admitted.
-- `CompositionTheme` owns joint title/subtitle `root_title_block_alignment` and
-  independent `root_caption_alignment`, both `TitleBlockAlignment`, inherited
-  from the same owner. Built-ins use Center titles/subtitles and Start captions;
-  T6 customization permits Start/Center/End without independent title/subtitle
-  controls. Other anchors remain renderer invariants.
+- `CompositionTheme` owns `root_title_alignment`, optional
+  `root_subtitle_alignment`, and independent `root_caption_alignment`, using
+  `TitleAlignment`. Built-ins use Center, None, and Start. Subtitle follows final
+  effective title unless separately instructed. Plot title/subtitle instructions
+  override Canvas panel instructions, which override resolved theme defaults;
+  an absent subtitle at all scopes follows the final title. This narrow policy
+  applies across explicit presets without general theme merging. Canvas headings,
+  panel captions, and other text roles retain independent ownership. Public names
+  are `title_alignment`, `subtitle_alignment`, `panel_title_alignment`, and
+  `panel_subtitle_alignment`; public exposure remains T6.
 - `OpaqueColor` owns RGB data-scale color. `Color` owns final RGBA paint with
   `u8` alpha. Alpha replacement is exact and never multiplicative.
 - Built-in qualitative palettes preserve curated colors and extend them through

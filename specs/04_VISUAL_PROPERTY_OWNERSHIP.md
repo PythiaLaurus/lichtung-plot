@@ -7938,8 +7938,8 @@ prices are no longer policy; variable lookups charge actual examined elements.
 | `layout.kernel.constraint-dependent-measured-plan` | Renderer invariant; measurement deterministically returns one complete finite typed immutable local plan under parent-assigned constraints or a typed recoverable unsatisfied outcome; only the root converts final unsatisfied to a fit error | Every component measurement and frozen root | `add`, T5a-T5e; assigned-constraint, deterministic-result, recoverable-fit, and plan-completeness tests |
 | `layout.kernel.parent-owned-arrangement` | Renderer invariant; each parent assigns child constraints and positions using measured requirements; children decide only within their assigned spans, and changed constraints require new immutable plans | Canvas, facet, legend, marginal, and Matrix composition | `add`, T5a-T5e; parent/child box, constraint propagation, and sparse-coordinate tests |
 | `layout.plan.frozen-root-draw-identity` | Renderer invariant; only one unchanged complete state becomes the `PlotPlan` or `CanvasPlan` consumed by Null and concrete rendering; it retains every used `(stack,weight)` font-provenance list and the final kind-specific shared-guide descriptor, domain, labels, and glyphs | Complete convergence state, font preflight, shared-guide preparation, and canonical Scene | `add`, T5a-T5e; Null/concrete identity, font-provenance identity, shared-guide identity, and no draw-time layout tests |
-| `composition.root-title-block.horizontal-alignment` | Theme component; `CompositionTheme::root_title_block_alignment` in closed `TitleBlockAlignment::{Start,Center,End}` applies jointly to Plot/Canvas root title and subtitle over the physical post-inset root content span; Publication, Nature, Science, and CHI use `Center` | Replaces only title/subtitle anchor arms; independent of caption alignment; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a; public connection T6; all-variant, title/subtitle consistency, inheritance, physical-span, and plan/draw identity evidence |
-| `composition.root-caption.horizontal-alignment` | Theme component; independent `CompositionTheme::root_caption_alignment` uses the same closed `TitleBlockAlignment::{Start,Center,End}` over the physical post-inset root content span for Plot/Canvas root captions; Publication, Nature, Science, and CHI use `Start` | Replaces only the caption anchor arm; changing title/subtitle alignment does not change caption alignment or vice versa; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a; public connection T6; independent all-variant, four-preset Start default, inheritance, physical-span, and plan/draw identity evidence |
+| `composition.root-title-block.horizontal-alignment` | Theme component; `CompositionTheme::root_title_alignment: TitleAlignment` and independent `root_subtitle_alignment: Option<TitleAlignment>`; closed `TitleAlignment::{Start,Center,End}`; Publication, Nature, Science, and CHI use `Center` title and `None` subtitle | This ledger key groups two independently resolved fields, not a joint value; explicit Plot and Canvas panel policies resolve as specified below; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`, T5a private foundation; independent fields and explicit policies public in T6; all-variant, None-follow-final-title, precedence, physical-span, and plan/draw identity evidence |
+| `composition.root-caption.horizontal-alignment` | Theme component; independent `CompositionTheme::root_caption_alignment` uses closed `TitleAlignment::{Start,Center,End}` over the physical post-inset owner-local content span; Publication, Nature, Science, and CHI use `Start` | Plot-local caption remains independent of Canvas caption and all title/subtitle controls; zero rotation remains invariant; immutable text/root plan and feedback identity input | `add`; T5a private alignment and standalone/outer-root replay; T5b embedded Plot caption allocation, exactly-once rendering alongside Canvas caption, and fit refusal; T6 public customization. Independent all-variant, four-preset Start default, inheritance, physical-span, and plan/draw identity evidence |
 | `axes.ticks.preferred-data-interval` | Explicit policy; optional per-axis opaque immutable `TickInterval::additive` for linear axes or `TickInterval::log10_decades` for Log10 axes; exact ticks take precedence regardless of setter order, repeated interval setters replace, absence selects automatic generation, and categorical axes reject | Ordered local complete interval vectors under assigned span, requested-first coarsening then conditional midpoint fallback, automatic generation, exact-tick controls, Forest Log10 route, immutable axis plan, and public policy | `add`, T5a; public connection T6; constructor validation, exact requested source, deterministic bounded coarsening, nonempty/no-subsequence vectors, midpoint order, mismatch, precedence, replacement, and no-count-control evidence |
 | `layout.root.automatic-constraint-policy` | Explicit policy; absent a sizing request, zero minima and no maxima; deterministically derive finite dimensions from preferred requirements and measured content without optimization | Parent track allocation, measured plans, common root representability, and complete sizing-request replacement | `add`, T5e; public connection T6; ordinary/facet/Canvas/specialized evidence |
 | `layout.root.exact-width-auto-height-constraint-policy` | Explicit policy; a positive exact-width request fixes width and derives automatic height from complete measured content; replaces the former target-only bounded-width owner one-for-one; no public `max_width` target | Common root representability, canonical conversion, and complete sizing-request replacement; internal interval bounds stay private | `add`, T5e; public connection T6; exact-width preservation, legal wrapping, auto-height, and replacement-order evidence |
@@ -7963,11 +7963,65 @@ including when switching between exact width/automatic height and exact size.
 No independent sticky width/height bounds or new public wrapping controls are
 introduced. Internal bounded constraints remain private implementation inputs.
 
+### Approved Alignment Override
+
+This approved target overrides earlier joint-title/subtitle, fixed panel-header
+Start, and deferred-independent-alignment assignments in this ledger. It does
+not rewrite historical source values or completed implementation evidence, and
+does not expose a public API before T6. The retained title-block ledger identity
+groups the two theme fields and their explicit policy inputs; it is not the old
+joint API or an alias. No new ledger identity is added by this refinement.
+
+T6 exposes independent `Plot::title_alignment` and `Plot::subtitle_alignment`,
+and `Canvas::panel_title_alignment` and `Canvas::panel_subtitle_alignment`, using
+`TitleAlignment`. These are explicit policies; unset policies contribute no
+override. Resolve one complete Plot theme first: explicit Plot theme, otherwise
+inherited Canvas theme, otherwise Publication. There is no general theme or
+component merging.
+
+For an embedded Plot, resolve each role independently, highest precedence first:
+
+1. Title: explicit Plot title alignment, explicit Canvas panel-title alignment,
+   resolved Plot theme's `root_title_alignment`.
+2. Subtitle: explicit Plot subtitle alignment, explicit Canvas panel-subtitle
+   alignment, resolved Plot theme's `root_subtitle_alignment` when `Some`, then
+    the final resolved title alignment. `None` contributes no instruction at its
+    scope; only after all subtitle scopes are absent does it follow the final
+    title, including its explicit override, not the theme's title default.
+
+A standalone Plot uses the same rules without Canvas panel policies. Explicit
+Canvas panel policies therefore override even an explicitly selected Nature,
+CHI, Science, or Publication Plot theme; an explicit Plot role policy still
+wins. This is narrow policy precedence, not theme merging. All four built-ins
+have Center title, None subtitle, and Start caption defaults.
+
+An embedded Plot preserves its local title/subtitle semantics rather than
+becoming a fixed-Start generic panel header. Each role controls both per-line
+translation and nonfill block placement over that Plot's physical post-inset
+local content span, not the full Canvas or data-panel span. Start/End mean
+physical left/right regardless of bidi direction. Its caption likewise remains
+Plot-local, using its resolved Plot caption alignment independently of the
+Canvas caption. Canvas's own heading resolves title, optional subtitle (None
+follows its final title), and caption from its own theme, independently of panel
+controls. Panel controls do not apply to TextPanel content, facet strips, row
+titles, shared or other headers, or captions. Those roles retain their own rules.
+
+Resolve these values before measurement and reuse them in frozen geometry,
+feedback identity, collision checks, and draw. Evidence must cover independent
+title/subtitle choices, None following an explicitly overridden title, explicit
+Canvas panel policy over Nature/CHI Plot themes, Plot policy over Canvas policy,
+and unchanged Canvas heading, Plot/Canvas captions, and excluded header roles.
+
+Canonical primitive geometry is an explicit responsibility of T5a6a2 under the
+T5a6a extraction umbrella. Trace normalized primitive geometry into immutable
+plans and identical Null/concrete replay there; T5a6d performs the exhaustive
+closure audit. These are pending phase assignments, not completion evidence.
+
 ### Existing-Key Groups
 
-The following declarations expand to exactly 1552 existing keys. The 1490 keys
+The following declarations expand to exactly 1552 existing keys. The 1487 keys
 without an explicit override retain their historical target disposition and gain
-the listed relationship; the 62 explicit overrides in the next subsection
+the listed relationship; the 65 explicit overrides in the next subsection
 replace their old target resolution or disposition.
 
 | Group | Count | Canonical key set | Added relationship and evidence |
@@ -8468,7 +8522,7 @@ and were never in an `A-*` group.
 
 ### Existing-Key Overrides
 
-These 62 keys replace their historical target resolution or disposition. Every
+These 65 keys replace their historical target resolution or disposition. Every
 other affected key retains its prior target owner and gains only its group
 relationship above.
 
@@ -8486,12 +8540,27 @@ relationship above.
   `typography.title-block.subtitle.current-fixed-orientation`, and
   `typography.title-block.caption.current-fixed-orientation`:
   `split-and-replace`, T5a with public connection T6; deduplicate their hardcoded
-  `Middle` anchor arms into two owners: title/subtitle map to
-  `composition.root-title-block.horizontal-alignment` (`Center` in all four
-  presets), and caption maps independently to
+  `Middle` anchor arms into separately resolved title/subtitle fields grouped by
+  `composition.root-title-block.horizontal-alignment` (`Center` title and `None`
+  subtitle in all four presets), and caption maps independently to
   `composition.root-caption.horizontal-alignment` (`Start` in all four presets).
   Both use the physical post-inset root content span; their zero-rotation and
   horizontal-orientation arms remain private renderer invariants.
+- `canvas.panel-header.title-start-anchor` and
+  `canvas.panel-header.subtitle-start-anchor`: `split-and-replace`, T5b local
+  plan integration with independent policies public in T6; replace the historical
+  `retain` disposition and fixed-Start target with the approved alignment
+  resolution above. Alignment comes from theme components and explicit policies;
+  zero rotation remains a renderer invariant. Validate each role's physical-span
+  placement and frozen plan/draw identity, including explicit Canvas panel policy
+  over an explicit Plot preset and explicit Plot policy over Canvas policy.
+- `canvas.text-panel.centered-block-placement`: `replace`, T5b; supersede the
+  historical target's Middle anchors and vertical centering with the approved
+  `05_LAYOUT_SYSTEM.md` top-left content placement after chrome inset. The cell
+  surface fills both axes; required title then body are nonfill, Start-aligned,
+  zero-rotation content. Preserve exact line/baseline cardinality and complete
+  cell fit. Evidence must reject accidental horizontal or vertical centering and
+  prove that Canvas panel-title/subtitle policies do not affect TextPanel.
 - `font-resolution.load-system-fonts`: `move-and-replace`, T5a; discover host
   faces before measurement through the bounded project-owned discovery and
   checked fallible reservation/growth path, load admitted files explicitly rather than calling
@@ -8627,7 +8696,7 @@ annotations.waterfall.first-fit-row-packing
 
 The three completed T2 tables remain exactly 1860 unique keys in identical
 order. The overlay expands to exactly 1575 identities: 1552 existing historical
-keys partitioned into 62 explicit overrides and 1490 retained dispositions, plus
+keys partitioned into 65 explicit overrides and 1487 retained dispositions, plus
 23 target-only keys. No existing overlay key occurs outside the
 historical set, no target-only key occurs inside it, and no overlay identity is
 duplicated. Materialization applies existing-key overrides in historical order
@@ -8651,8 +8720,11 @@ D3 replaces the bounded-width key one-for-one with
 nonexact-default-PNG and exact-format-local keys one-for-one with
 `layout.resources.common-root-representability-and-checked-svg-reservation` and
 `layout.resources.all-root-format-local-viability`. Field/key renames add no
-extra owners. Existing groups and the override partition remain unchanged:
-`691 + 861 = 1552`, `1490 + 62 = 1552`, `1552 + 23 = 1575`, and
+extra owners. The approved alignment refinement groups independent title/subtitle
+fields under the existing title-block identity; panel-title, panel-subtitle, and
+TextPanel placement add three existing-key overrides, not new identities.
+Existing groups remain unchanged; the override partition is now:
+`691 + 861 = 1552`, `1487 + 65 = 1552`, `1552 + 23 = 1575`, and
 `1860 + 23 = 1883`.
 
 T7 reconciles only that 1883-key materialized target. The historical 1836-record

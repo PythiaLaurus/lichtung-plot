@@ -15,9 +15,11 @@ The D1-D6 user-visible behavior decisions are approved: bounded containing-frame
 recovery, strict Unicode wrapping, three sizing modes, PNG-local output gates,
 base-plus-mark font preference, and separate root title and caption alignment.
 Approval is not implementation evidence. T5a0s in `91_IMPLEMENTATION_PLAN.md`
-records the decisions and documentation review. Broad public constraints remain
-deferred to DF6 review at T7 closure; new text controls remain deferred to DF5
-review at T6 entry. Neither checkpoint is a promise to implement those extensions.
+records the decisions and documentation review. Independent title/subtitle
+alignment and narrow Plot/Canvas overrides are also user-approved T6 targets.
+Broad public constraints remain deferred to DF6 review at T7 closure; remaining
+broader text controls remain deferred to DF5 review at T6 entry. Neither checkpoint
+is a promise to implement those extensions.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
 (PF1-PF7). The amendments below approve external conformance data, effective-
@@ -301,14 +303,16 @@ Cross-axis start/end use the corresponding edge; center uses nearest-even half
 residual; baseline uses `t+BA-child_baseline`. A legend key exposes nearest-even
 half its height and aligns to the label's first baseline. Other horizontal
 sequences baseline-align children exposing a baseline and start-align the rest.
-Root title/subtitle use their owner-local
-`CompositionTheme::root_title_block_alignment`; root caption instead uses
-`CompositionTheme::root_caption_alignment`. Both fields have type
-`TitleBlockAlignment`. All four built-in presets default the title block to
-`Center` and the caption to `Start`. Each field controls both line translation
-within its text block and nonfill block placement across the post-inset root
-content span, not the panel span. Start/End are physical left/right, independent
-of bidi direction. Headers, row titles, and strips center in their spanned cells.
+Root title and subtitle use independently resolved concrete `TitleAlignment`
+values under the precedence in `03_THEME_SYSTEM.md`; root caption independently
+uses the owning theme's `CompositionTheme::root_caption_alignment`, also
+`TitleAlignment`. All four built-in presets use concrete `root_title_alignment`
+`Center`, optional `root_subtitle_alignment` `None`, and caption `Start`.
+Each effective value controls both line translation within its text block and
+nonfill block placement across the owner's post-inset local root content span,
+not the data-panel span. Embedded Plot titles/subtitles retain these same Plot
+semantics within their allocated cell. Start/End are physical left/right,
+independent of bidi direction. Headers, row titles, and strips center in their spanned cells.
 Other nonfill Grid/sequence children start-align unless explicitly specified.
 
 Fill policy is closed: frames, bodies, panels, interiors, mark layers, Canvas Plot
@@ -480,7 +484,7 @@ width. For edges `left,right`, `span=right-left`, block width `W`, line x is
 for end. TextPanel, legend title/label, guide title, and standalone text start;
 composition headers, axes, ticks, and guide numbers center. Panel/annotation
 edge anchors start at left, end at right, otherwise center. These are fixed role
-decisions except for the two owned root alignment fields noted above.
+decisions except for the root title, subtitle, and caption alignment rules above.
 
 Editable preserve-text SVG emits original content with explicit selected line
 boundaries/anchors and validated ordered font stack/weight, preserving paragraph
@@ -956,6 +960,14 @@ anchored top-left after chrome inset; content is required title then body text.
 Extra exact space expands chrome, not text. Headers/row titles/strips are
 `composition_text`; range groups are nonvisual records without measured boxes.
 
+An embedded Plot retains its own title, subtitle, and caption exactly once in its
+local root flow. Its allocated cell includes measured space for every present
+text role; Canvas does not replace its titles with differently anchored headers
+or omit its caption. The Plot caption remains local, with its resolved Plot theme's
+independent caption alignment. A Canvas caption is separate Canvas-owned content,
+not a replacement or a duplicate of panel captions. Insufficient allocated space
+returns the applicable fit failure rather than omitting any of this content.
+
 Canvas/facet coordinates are row-major, including declared empty/trailing slots.
 Canvas shared-x groups contain configured Plot members with continuous automatic
 x domains only; categorical axes, explicit x limits, and unconfigured members
@@ -1283,9 +1295,26 @@ setter panic. Until then the current exact API remains the sole public contract.
 There is no public maximum-width builder. Broad public constraints are deferred
 for T7 closure; internal intervals remain private.
 
-`CompositionTheme` exposes separate `root_title_block_alignment` (title/subtitle
-only) and `root_caption_alignment`, both `TitleBlockAlignment`, with `Center`
-and `Start` defaults respectively in all four presets as specified above.
+At T6 only, `TitleAlignment::{Start,Center,End}` and `CompositionTheme` expose
+concrete `root_title_alignment`, optional `root_subtitle_alignment`, and concrete
+independent `root_caption_alignment`, with built-in defaults `Center`, `None`,
+and `Start`. Caption uses the same `TitleAlignment`, not a new caption type.
+The narrow public setters are `Plot::title_alignment`, `Plot::subtitle_alignment`,
+`Canvas::panel_title_alignment`, and `Canvas::panel_subtitle_alignment`; each
+owns an optional override input. Public `panel` naming denotes composed Plot
+semantics; internal layout trees may still call their nodes children.
+
+Title precedence is explicit Plot override > Canvas panel default > resolved Plot
+theme title. Subtitle precedence is explicit Plot subtitle override > Canvas
+panel subtitle default > resolved Plot theme optional subtitle > final effective
+Plot title. Standalone Plots skip Canvas panel defaults. `None` means no
+instruction, not forced title-following that bypasses another subtitle setting.
+Theme/alignment call order is independent, and repeated setters replace only
+their own input. Complete theme replacement is otherwise unchanged; there is no
+general merging. Resolve optional inputs to concrete alignments before measuring
+and retain them in plans for unchanged consumption by arrangement and drawing.
+Canvas's own title/subtitle use its theme's root fields, with absent subtitle
+falling back to its own title alignment, separately from Canvas panel settings.
 
 `TickInterval` is an opaque immutable crate-root `Clone + Copy + Debug + PartialEq`
 value. `additive(step:f64)->Result<Self>` requires finite positive step;
@@ -1363,9 +1392,14 @@ eight, nonadjacent repetition, terminal misses, and feedback-resolvable misses.
 Sizing evidence covers all three modes on Plot and Canvas, exact width with
 derived height, both sizing-call orders and repeated calls, and zero dimensions
 rejecting at preflight without setter panic. Alignment evidence covers all four
-presets and overrides, title/subtitle versus caption independence, wrapped line
-and block placement across the physical post-inset root content span, and bidi
-without swapping Start/End.
+presets and independent title/subtitle overrides, each precedence level, absent
+subtitle instructions falling through to the final effective title, theme/alignment
+call-order independence, and repeated-setter replacement. Also cover caption
+independence, separate Canvas root versus panel settings, wrapped line and block
+placement across each physical post-inset local root content span (not data-panel
+span), and bidi without swapping Start/End. Embedded Plot evidence must preserve
+titles, subtitles, and local captions exactly once with allocated space, keep the
+Canvas caption separate, and fail rather than omit content when space is insufficient.
 
 Output evidence covers `10_485` versus `10_486` source-axis default-target boundary,
 `3_200x3_200` versus `3_200x3_201` target-area boundary, and actual outlined PNG
