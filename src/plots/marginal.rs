@@ -20,13 +20,12 @@
 )]
 
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{self, AxisSpec, Layout, PanelBox};
+use crate::layout::{self, AxisSpec, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{
-    gaussian_kde_with_bandwidth, kde, kde_support_range, strict_scott_bandwidth,
+    gaussian_kde_with_bandwidth, kde_support_range, strict_scott_bandwidth,
 };
-use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::Plot;
 
@@ -38,12 +37,12 @@ const MARGINAL_DATA_MARGIN_FRACTION: f64 = 0.06;
 /// One graphical group's data and optional color identity.
 struct HueGroup {
     identity: crate::data::CollectivePair,
-    description: String,
+    collapsed: bool,
     x: Vec<f64>,
     y: Vec<f64>,
     x_bandwidth: f64,
     y_bandwidth: f64,
-    color: (u8, u8, u8),
+    color_index: usize,
 }
 
 /// Render a marginal plot: central scatter with
@@ -60,18 +59,18 @@ pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, Error> {
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
     // --- Extract data (grouped or ungrouped) ---
-    let (groups, _hue_levels) = build_groups(chart, context.data, theme)?;
+    let (groups, _hue_levels) = build_groups(chart, context.data)?;
 
     // Collect all x/y for range computation.
     let all_x: Vec<f64> = groups.iter().flat_map(|g| g.x.iter().copied()).collect();
     let all_y: Vec<f64> = groups.iter().flat_map(|g| g.y.iter().copied()).collect();
 
     if all_x.is_empty() {
-        return Err(Error::Data("marginal: no rows".into()));
+        return Err(Error::Data("marginal: no rows".into()).into());
     }
 
     // --- Layout geometry ---
@@ -99,63 +98,39 @@ pub(crate) fn render(
         .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| {
             (lo.min(v), hi.max(v))
         });
-    let (x_low, x_high) = marginal_display_range(
-        groups.iter().map(|group| group.x.as_slice()),
-        (x_min, x_max),
-        chart.x_axis_spec(),
-    );
-    let y_display_range = marginal_display_range(
-        groups.iter().map(|group| group.y.as_slice()),
-        (y_min, y_max),
-        chart.y_axis_spec(),
-    );
-    validate_marginal_range(&groups, (x_low, x_high), |group| &group.x, "x")?;
-    validate_marginal_range(&groups, y_display_range, |group| &group.y, "y")?;
+    let (x_low, x_high) = context.axis_range(layout::AxisSide::Bottom, || {
+        marginal_display_range(
+            groups.iter().map(|group| group.x.as_slice()),
+            (x_min, x_max),
+            chart.x_axis_spec(),
+            None,
+        )
+    })?;
+    let y_display_range = context.axis_range(layout::AxisSide::Left, || {
+        marginal_display_range(
+            groups.iter().map(|group| group.y.as_slice()),
+            (y_min, y_max),
+            chart.y_axis_spec(),
+            None,
+        )
+    })?;
+    validate_marginal_range(&groups, (x_low, x_high), |group| &group.x, "x", None)?;
+    validate_marginal_range(&groups, y_display_range, |group| &group.y, "y", None)?;
     let (y_low, y_high) = y_display_range;
 
     // --- Build Layout for the central scatter ---
-    let projection = crate::layout::Projection::new(
-        (x_low, x_high),
-        (y_low, y_high),
-        (central_x0, central_x1, central_y0, central_y1),
-    );
-    let x_ticks = chart.explicit_x_ticks().map_or_else(
-        || {
-            layout::automatic_numeric_ticks(
-                (x_low, x_high),
-                &projection,
-                crate::layout::AxisSide::Bottom,
-                theme,
-            )
-        },
-        |ticks| Ok(ticks.to_vec()),
-    )?;
-    let y_ticks = chart.explicit_y_ticks().map_or_else(
-        || {
-            layout::automatic_numeric_ticks(
-                (y_low, y_high),
-                &projection,
-                crate::layout::AxisSide::Left,
-                theme,
-            )
-        },
-        |ticks| Ok(ticks.to_vec()),
-    )?;
-    let layout = Layout {
-        projection,
-        x_axis: crate::layout::Axis {
-            label: chart.x_label_text().unwrap_or("").to_string(),
-            ticks: x_ticks,
-            explicit_ticks: chart.explicit_x_ticks().is_some(),
-            assigned_tick_width: None,
-        },
-        y_axis: crate::layout::Axis {
-            label: chart.y_label_text().unwrap_or("").to_string(),
-            ticks: y_ticks,
-            explicit_ticks: chart.explicit_y_ticks().is_some(),
-            assigned_tick_width: None,
-        },
-    };
+    let layout = context.axis_layout(|| {
+        context.layout_with_axis_specs(
+            (x_low, x_high),
+            (y_low, y_high),
+            crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            &layout::display_axis_spec(chart.x_axis_spec(), (x_low, x_high)),
+            &layout::display_axis_spec(chart.y_axis_spec(), (y_low, y_high)),
+            theme,
+        )
+    })?;
 
     let proj = &layout.projection;
 
@@ -219,7 +194,7 @@ pub(crate) fn render(
             gaussian_kde_with_bandwidth(&group.x, &x_grid, group.x_bandwidth).map_err(|error| {
                 Error::Data(format!(
                     "marginal: x distribution for {}: {error}",
-                    group.description
+                    group.identity.description(group.collapsed)
                 ))
             })
         })
@@ -230,7 +205,7 @@ pub(crate) fn render(
             gaussian_kde_with_bandwidth(&group.y, &y_grid, group.y_bandwidth).map_err(|error| {
                 Error::Data(format!(
                     "marginal: y distribution for {}: {error}",
-                    group.description
+                    group.identity.description(group.collapsed)
                 ))
             })
         })
@@ -266,7 +241,7 @@ pub(crate) fn render(
     let mut legend_entries = Vec::new();
 
     for (gi, group) in groups.iter().enumerate() {
-        let color = group.color;
+        let color = theme.colors[group.color_index % theme.colors.len()];
 
         // Scatter points in central panel.
         let point_style = chart.point_style(color, 3);
@@ -357,29 +332,101 @@ fn validate_marginal_range<'a>(
     range: (f64, f64),
     values: impl Fn(&'a HueGroup) -> &'a [f64],
     channel: &str,
+    data: Option<crate::data::PlotData<'_>>,
 ) -> Result<(), Error> {
+    use crate::data::source::SourceAdmission;
     if range.0.is_finite() && range.1.is_finite() && range.0 < range.1 {
         return Ok(());
     }
-    let group = groups
-        .iter()
-        .find(|group| {
-            let samples = values(group);
-            crate::data::min_max(samples.iter().copied(), "marginal")
-                .is_ok_and(|(minimum, maximum)| !(maximum - minimum).is_finite())
-                || kde_support_range(std::iter::once(samples), MARGINAL_KDE_CUT).is_none()
-        })
-        .map_or("ungrouped series", |group| group.description.as_str());
+    let mut invalid = None;
+    for group in groups {
+        let samples = values(group);
+        data.source_visits(samples.len())?;
+        let wide = crate::data::min_max(samples.iter().copied(), "marginal")
+            .is_ok_and(|(minimum, maximum)| !(maximum - minimum).is_finite());
+        if !wide {
+            data.source_visits(samples.len())?;
+            if samples.len() >= 2 {
+                data.source_visits(samples.len())?;
+                data.source_visits(samples.len())?;
+            }
+        }
+        if wide || kde_support_range(std::iter::once(samples), MARGINAL_KDE_CUT).is_none() {
+            invalid = Some(group);
+            break;
+        }
+    }
+    let group = invalid.map_or_else(
+        || "ungrouped series".to_owned(),
+        |group| group.identity.description(group.collapsed),
+    );
     Err(Error::Data(format!(
         "marginal: {channel} distribution for {group}: support/grid is not representable at this numeric scale"
     )))
 }
 
 /// Build graphical groups while keeping hue as color-only metadata.
+pub(crate) fn axis_ranges(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<[(f64, f64); 2], Error> {
+    let (groups, _) = build_groups(chart, data)?;
+    let mut ranges = [(0.0, 1.0); 2];
+    for (index, spec) in [chart.x_axis_spec(), chart.y_axis_spec()]
+        .into_iter()
+        .enumerate()
+    {
+        let values: fn(&HueGroup) -> &[f64] = if index == 0 {
+            |group| &group.x
+        } else {
+            |group| &group.y
+        };
+        for group in &groups {
+            data.claim_source_visits(values(group).len())?;
+        }
+        let range = crate::data::min_max(
+            groups
+                .iter()
+                .flat_map(|group| values(group).iter().copied()),
+            "marginal",
+        )?;
+        ranges[index] = marginal_display_range(groups.iter().map(values), range, spec, Some(data))?;
+        validate_marginal_range(
+            &groups,
+            ranges[index],
+            values,
+            if index == 0 { "x" } else { "y" },
+            Some(data),
+        )?;
+    }
+    Ok(ranges)
+}
+
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let (groups, _) = build_groups(chart, data)?;
+    for group in &groups {
+        data.claim_source_visits(group.x.len())?;
+    }
+    let range = crate::data::min_max(
+        groups.iter().flat_map(|group| group.x.iter().copied()),
+        "marginal",
+    )?;
+    let range = marginal_display_range(
+        groups.iter().map(|group| group.x.as_slice()),
+        range,
+        chart.x_axis_spec(),
+        Some(data),
+    )?;
+    validate_marginal_range(&groups, range, |group| &group.x, "x", Some(data))?;
+    Ok(range)
+}
+
 fn build_groups<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
-    theme: &ResolvedTheme,
 ) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
     let data = data.into();
 
@@ -390,7 +437,7 @@ fn build_groups<'a>(
         .y_col()
         .ok_or_else(|| Error::Data("marginal: y column not set".into()))?;
     let rows = crate::data::aligned_finite_rows(data, x_col, y_col, "marginal")?;
-    let retained_rows = rows.iter().map(|(row, _, _)| *row).collect::<Vec<_>>();
+    let retained_rows = data.collect_source(rows.iter().map(|(row, _, _)| Ok(*row)))?;
     let channels = crate::data::observed_collectives(
         data,
         chart.group_col(),
@@ -400,15 +447,27 @@ fn build_groups<'a>(
         Some(&retained_rows),
         "marginal",
     )?;
-    let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
+    let hue_levels = data.collect_source(
+        chart
+            .global_hue_levels()
+            .unwrap_or(&channels.hue_levels)
+            .iter()
+            .map(|level| data.copy_source_string(level)),
+    )?;
     let mut groups = Vec::new();
+    data.reserve_source(&mut groups, channels.identities.len())?;
     for identity in &channels.identities {
+        data.claim_source_visits(rows.len())?;
+        let count = channels.rows.iter().filter(|row| *row == identity).count();
         let selected = rows
             .iter()
             .zip(&channels.rows)
             .filter(|(_, row_identity)| *row_identity == identity);
         let mut x = Vec::new();
         let mut y = Vec::new();
+        data.reserve_source(&mut x, count)?;
+        data.reserve_source(&mut y, count)?;
+        data.claim_source_visits(rows.len())?;
         for ((_, x_value, y_value), _) in selected {
             x.push(*x_value);
             y.push(*y_value);
@@ -416,58 +475,73 @@ fn build_groups<'a>(
         if x.is_empty() {
             continue;
         }
-        let description = identity.description(channels.collapsed);
+        for _ in 0..5 {
+            data.claim_source_visits(x.len())?;
+            data.claim_source_visits(y.len())?;
+        }
         let x_bandwidth = strict_scott_bandwidth(&x).map_err(|reason| {
             Error::Data(format!(
-                "marginal: x distribution for {description} {reason}"
+                "marginal: x distribution for {} {reason}",
+                identity.description(channels.collapsed)
             ))
         })?;
         let y_bandwidth = strict_scott_bandwidth(&y).map_err(|reason| {
             Error::Data(format!(
-                "marginal: y distribution for {description} {reason}"
+                "marginal: y distribution for {} {reason}",
+                identity.description(channels.collapsed)
             ))
         })?;
+        data.claim_source_visits(hue_levels.len())?;
         let color_index = identity
             .hue
             .as_deref()
             .and_then(|label| hue_levels.iter().position(|level| level == label))
             .unwrap_or(0);
         groups.push(HueGroup {
-            identity: identity.clone(),
-            description,
+            identity: data.copy_source_pair(identity)?,
+            collapsed: channels.collapsed,
             x,
             y,
             x_bandwidth,
             y_bandwidth,
-            color: theme.colors[color_index % theme.colors.len()],
+            color_index,
         });
     }
     Ok((groups, hue_levels))
 }
 
 fn marginal_display_range<'a>(
-    groups: impl IntoIterator<Item = &'a [f64]>,
+    groups: impl Iterator<Item = &'a [f64]> + Clone,
     data_range: (f64, f64),
     spec: &AxisSpec,
-) -> (f64, f64) {
+    data: Option<crate::data::PlotData<'_>>,
+) -> Result<(f64, f64), Error> {
     let data_display_range = marginal_data_display_range(data_range, spec);
     if spec.limits.is_some() {
-        return data_display_range;
+        return Ok(data_display_range);
     }
 
-    let Some(visible_kde_range) =
-        kde_visible_support_range(groups, MARGINAL_KDE_CUT, MARGINAL_KDE_VISIBLE_FRACTION)
+    let Some(visible_kde_range) = kde_visible_support_range(
+        groups,
+        MARGINAL_KDE_CUT,
+        MARGINAL_KDE_VISIBLE_FRACTION,
+        data,
+    )?
     else {
-        return data_display_range;
+        return Ok(data_display_range);
     };
 
-    (
+    Ok((
         data_display_range.0.min(visible_kde_range.0),
         data_display_range.1.max(visible_kde_range.1),
-    )
+    ))
 }
 
 fn marginal_data_display_range(data_range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisRangePreparation,
+    );
     if spec.limits.is_some() {
         return layout::continuous_auto_range(data_range, spec);
     }
@@ -484,30 +558,43 @@ fn marginal_data_display_range(data_range: (f64, f64), spec: &AxisSpec) -> (f64,
 }
 
 fn kde_visible_support_range<'a>(
-    groups: impl IntoIterator<Item = &'a [f64]>,
+    groups: impl Iterator<Item = &'a [f64]> + Clone,
     cut: f64,
     visible_fraction: f64,
-) -> Option<(f64, f64)> {
-    let groups: Vec<&[f64]> = groups.into_iter().collect();
-    let (support_low, support_high) = kde_support_range(groups.iter().copied(), cut)?;
-    let grid: Vec<f64> = (0..MARGINAL_KDE_GRID_POINTS)
-        .map(|i| {
-            support_low
-                + (support_high - support_low) * (i as f64 / (MARGINAL_KDE_GRID_POINTS - 1) as f64)
-        })
-        .collect();
+    data: Option<crate::data::PlotData<'_>>,
+) -> Result<Option<(f64, f64)>, Error> {
+    use crate::data::source::SourceAdmission;
+    for samples in groups.clone() {
+        data.source_visits(samples.len())?;
+        if samples.len() >= 2 {
+            data.source_visits(samples.len())?;
+            data.source_visits(samples.len())?;
+        }
+    }
+    let Some((support_low, support_high)) = kde_support_range(groups.clone(), cut) else {
+        return Ok(None);
+    };
+    data.source_visits(MARGINAL_KDE_GRID_POINTS)?;
+    let grid: [f64; MARGINAL_KDE_GRID_POINTS] = std::array::from_fn(|i| {
+        support_low
+            + (support_high - support_low) * (i as f64 / (MARGINAL_KDE_GRID_POINTS - 1) as f64)
+    });
 
     let mut low = f64::INFINITY;
     let mut high = f64::NEG_INFINITY;
     for samples in groups {
-        let Ok(densities) = kde(samples, &grid) else {
-            continue;
+        let densities = match crate::stats::distribution::kde_with_source(samples, &grid, data) {
+            Ok(densities) => densities,
+            Err(Error::Data(_)) => continue,
+            Err(error) => return Err(error),
         };
+        data.source_visits(densities.len())?;
         let max_density = densities.iter().fold(0.0_f64, |acc, value| acc.max(*value));
         if max_density <= 0.0 {
             continue;
         }
         let threshold = max_density * visible_fraction;
+        data.source_visits(grid.len())?;
         for (&x, &density) in grid.iter().zip(densities.iter()) {
             if density >= threshold {
                 low = low.min(x);
@@ -516,5 +603,46 @@ fn kde_visible_support_range<'a>(
         }
     }
 
-    (low.is_finite() && high.is_finite() && low < high).then_some((low, high))
+    Ok((low.is_finite() && high.is_finite() && low < high).then_some((low, high)))
+}
+
+#[cfg(test)]
+#[test]
+fn visible_support_propagates_resource_refusal_instead_of_skipping_the_group() {
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [1.0]),
+        crate::NumericValues::new("y", [1.0]),
+    )
+    .erase();
+    for (visits, bytes, expected) in [
+        (0, 1000, "work admission"),
+        (100_000, 0, "storage admission"),
+    ] {
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(visits, bytes);
+        let error = kde_visible_support_range(
+            std::iter::once(&[1.0, 2.0, 3.0][..]),
+            MARGINAL_KDE_CUT,
+            MARGINAL_KDE_VISIBLE_FRACTION,
+            Some(plot.data().with_axis_resources(&resources)),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::Render(_)), "{error}");
+        assert!(error.to_string().contains(expected), "{error}");
+    }
+    let samples = [1.0, 2.0, 3.0];
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let calculate = |data| {
+        kde_visible_support_range(
+            std::iter::once(samples.as_slice()),
+            MARGINAL_KDE_CUT,
+            MARGINAL_KDE_VISIBLE_FRACTION,
+            data,
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        calculate(None),
+        calculate(Some(plot.data().with_axis_resources(&resources)))
+    );
 }

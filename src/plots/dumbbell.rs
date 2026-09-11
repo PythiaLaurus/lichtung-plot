@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{AxisSpec, AxisTick, Layout};
+use crate::layout::{AxisSpec, AxisTick};
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
@@ -38,40 +38,31 @@ pub(crate) fn render(
     let endpoints = chart
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
-    let display_categories = chart.resolve_label_domain(
-        "y-axis categories",
-        prepared.categories.iter().map(String::as_str),
-    )?;
-    let x_range = crate::layout::continuous_auto_range(prepared.range, chart.x_axis_spec());
-    let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
     let category_count = prepared.categories.len();
-    let y_ticks = prepared
-        .categories
-        .iter()
-        .enumerate()
-        .map(|(index, category)| AxisTick::new(row_y(index, category_count), category.clone()))
-        .collect();
-    let y_axis = AxisSpec::default().limits(0.0, category_count as f64);
-    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
-        chart,
-        context.panel,
-        &display_categories,
-        context.theme,
-        context.fit_scope(),
-    )?;
-    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        (0.0, category_count as f64),
-        panel,
-        chart.x_label_text().unwrap_or("").to_owned(),
-        chart.y_label_text().unwrap_or("").to_owned(),
-        Vec::new(),
-        y_ticks,
-        &x_axis,
-        &y_axis,
-        context.theme,
-    )?;
-    layout.y_axis.assigned_tick_width = Some(tick_width);
+    let layout = context.axis_layout(|| {
+        let x_range = crate::layout::continuous_auto_range(prepared.range, chart.x_axis_spec());
+        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_ticks = prepared
+            .categories
+            .iter()
+            .enumerate()
+            .map(|(index, category)| AxisTick::new(row_y(index, category_count), category.clone()))
+            .collect();
+        let y_axis = AxisSpec::default().limits(0.0, category_count as f64);
+        let panel = context.panel;
+        context.layout_with_ticks(
+            x_range,
+            (0.0, category_count as f64),
+            panel,
+            chart.x_label_text().unwrap_or("").to_owned(),
+            chart.y_label_text().unwrap_or("").to_owned(),
+            Vec::new(),
+            y_ticks,
+            &x_axis,
+            &y_axis,
+            context.theme,
+        )
+    })?;
     let connector = LineStyle::solid(context.theme.foreground, 1.2);
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for row in &prepared.rows {
@@ -110,6 +101,47 @@ pub(crate) fn render(
         ),
     ];
     Ok(PlotRenderResult::new(layout, legend))
+}
+
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let left = crate::data::strict_finite_f64(
+        data,
+        chart
+            .y_col()
+            .ok_or_else(|| Error::Data("dumbbell: left value column not set".into()))?,
+        "dumbbell",
+    )?;
+    let right = crate::data::strict_finite_f64(
+        data,
+        chart
+            .dumbbell_right_col()
+            .ok_or_else(|| Error::Data("dumbbell: right value column not set".into()))?,
+        "dumbbell",
+    )?;
+    data.claim_source_visits(left.len())?;
+    data.claim_source_visits(right.len())?;
+    Ok(crate::layout::continuous_auto_range(
+        crate::data::min_max(left.into_iter().chain(right), "dumbbell")?,
+        chart.x_axis_spec(),
+    ))
+}
+
+pub(crate) fn axis_categories(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<String>, Error> {
+    let categories = crate::data::strict_normalized_strings(
+        data,
+        chart
+            .x_col()
+            .ok_or_else(|| Error::Data("dumbbell: category column not set".into()))?,
+        "dumbbell",
+        "category",
+    )?;
+    data.source_levels(&categories)
 }
 
 fn prepare<'a>(

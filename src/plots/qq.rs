@@ -4,7 +4,6 @@
 
 use crate::Error;
 
-use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult, QqLine};
 use crate::stats::distribution::{quantile, standard_normal_quantile};
@@ -39,25 +38,28 @@ pub(crate) fn render(
         .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
     let values = crate::data::strict_finite_f64(context.data, value_col, "Q-Q plot")?;
     let prepared = prepare_qq(&values, chart.qq_line_spec())?;
-    let theoretical_range = crate::data::min_max(prepared.theoretical.iter().copied(), "Q-Q plot")?;
-    let observed_range = crate::data::min_max(prepared.observed.iter().copied(), "Q-Q plot")?;
-    let x_range = qq_display_range(theoretical_range, chart.x_axis_spec(), "x-axis")?;
-    let y_range = qq_display_range(observed_range, chart.y_axis_spec(), "y-axis")?;
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        context.panel,
-        chart
-            .x_label_text()
-            .unwrap_or("Theoretical normal quantiles")
-            .to_string(),
-        chart.y_label_text().unwrap_or(value_col).to_string(),
-        &x_axis_spec,
-        &y_axis_spec,
-        context.theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let theoretical_range =
+            crate::data::min_max(prepared.theoretical.iter().copied(), "Q-Q plot")?;
+        let observed_range = crate::data::min_max(prepared.observed.iter().copied(), "Q-Q plot")?;
+        let x_range = qq_display_range(theoretical_range, chart.x_axis_spec(), "x-axis")?;
+        let y_range = qq_display_range(observed_range, chart.y_axis_spec(), "y-axis")?;
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            context.panel,
+            chart
+                .x_label_text()
+                .unwrap_or("Theoretical normal quantiles")
+                .to_string(),
+            chart.y_label_text().unwrap_or(value_col).to_string(),
+            &x_axis_spec,
+            &y_axis_spec,
+            context.theme,
+        )
+    })?;
     let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
@@ -107,11 +109,38 @@ pub(crate) fn render(
     Ok(PlotRenderResult::new(layout, Vec::new()))
 }
 
-fn qq_display_range(
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let column = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
+    let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
+    if values.len() < 2 {
+        return Err(Error::Data(
+            "Q-Q plot: at least 2 finite observations are required".into(),
+        ));
+    }
+    qq_display_range(
+        (
+            theoretical_quantile(0, values.len())?,
+            theoretical_quantile(values.len() - 1, values.len())?,
+        ),
+        chart.x_axis_spec(),
+        "x-axis",
+    )
+}
+
+pub(super) fn qq_display_range(
     data_range: (f64, f64),
     spec: &crate::layout::AxisSpec,
     axis: &str,
 ) -> Result<(f64, f64), Error> {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisRangePreparation,
+    );
     if let Some(limits) = spec.limits {
         return Ok(limits);
     }
@@ -254,9 +283,8 @@ fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
     }
     let mut observed = values.to_vec();
     observed.sort_by(f64::total_cmp);
-    let sample_count = observed.len() as f64;
     let theoretical = (0..observed.len())
-        .map(|index| standard_normal_quantile((index as f64 + 0.5) / sample_count))
+        .map(|index| theoretical_quantile(index, observed.len()))
         .collect::<Result<Vec<_>, _>>()?;
     let line = match line_mode {
         QqLine::Quartiles => {
@@ -285,6 +313,10 @@ fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
         observed,
         line,
     })
+}
+
+fn theoretical_quantile(index: usize, count: usize) -> Result<f64, Error> {
+    standard_normal_quantile((index as f64 + 0.5) / count as f64)
 }
 
 fn finite_difference(high: f64, low: f64) -> Option<f64> {
@@ -409,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn qq_opposite_extreme_auto_range_falls_back_to_exact_finite_endpoints() {
+    fn qq_opposite_extreme_auto_range_retains_endpoints_with_scaled_ticks() {
         let spec = crate::layout::AxisSpec::default();
 
         let range = qq_display_range((-f64::MAX, f64::MAX), &spec, "y-axis").unwrap();
@@ -417,7 +449,7 @@ mod tests {
         assert_eq!(range, (-f64::MAX, f64::MAX));
         assert_eq!(
             crate::layout::nice_ticks(range.0, range.1, 5),
-            [range.0, range.1]
+            [-1e308, 0.0, 1e308]
         );
     }
 

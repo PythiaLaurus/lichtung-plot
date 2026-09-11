@@ -508,7 +508,7 @@ fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
     clippy::cast_precision_loss,
     reason = "planned text retains exact integer quanta until collision conversion"
 )]
-fn planned_text_ink_bounds(
+pub(crate) fn planned_text_ink_bounds(
     plan: &ResolvedTextPlan,
     position: Point2D,
     anchor: TextAnchor,
@@ -529,9 +529,12 @@ fn planned_text_ink_bounds(
         }
         PlannedTextOrigin::Baseline => plan.first_baseline_quanta.unwrap_or(0) as f64 / quanta,
     };
-    let radians = rotation.to_radians();
-    let cosine = radians.cos();
-    let sine = radians.sin();
+    let (sine, cosine) = match rotation {
+        0.0 => (0.0, 1.0),
+        -90.0 => (-1.0, 0.0),
+        90.0 => (1.0, 0.0),
+        _ => rotation.to_radians().sin_cos(),
+    };
     let mut bounds: Option<GeometryBox> = None;
 
     for line in &plan.lines {

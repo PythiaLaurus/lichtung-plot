@@ -28,6 +28,10 @@ pub(crate) struct DistributionSample {
     pub(crate) groups: Vec<DistributionGroup>,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "ordered grouping admits each nested source buffer before populating it"
+)]
 pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_>,
@@ -52,25 +56,52 @@ pub(crate) fn prepare(
         family,
     )?;
     let mut x_levels = Vec::new();
-    let group_levels = chart.resolved_group_levels(channels.group_levels.clone());
-    let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
+    let group_levels = data.collect_source(
+        chart
+            .global_group_levels()
+            .unwrap_or(&channels.group_levels)
+            .iter()
+            .map(|level| data.copy_source_string(level)),
+    )?;
+    let hue_levels = data.collect_source(
+        chart
+            .global_hue_levels()
+            .unwrap_or(&channels.hue_levels)
+            .iter()
+            .map(|level| data.copy_source_string(level)),
+    )?;
     let mut groups: Vec<DistributionGroup> = Vec::new();
     for (row, (label, value)) in x_values.into_iter().zip(y_values).enumerate() {
+        data.claim_source_visits(x_levels.len())?;
         if !x_levels.contains(&label) {
-            x_levels.push(label.clone());
+            data.reserve_source(&mut x_levels, 1)?;
+            x_levels.push(data.copy_source_string(&label)?);
         }
-        let group_label = channels.groups.as_ref().map(|values| values[row].clone());
-        let hue_label = channels.hues.as_ref().map(|values| values[row].clone());
+        let group_label = channels
+            .groups
+            .as_ref()
+            .map(|values| data.copy_source_string(&values[row]))
+            .transpose()?;
+        let hue_label = channels
+            .hues
+            .as_ref()
+            .map(|values| data.copy_source_string(&values[row]))
+            .transpose()?;
+        data.claim_source_visits(groups.len())?;
         if let Some(group) = groups
             .iter_mut()
             .find(|group| group.label == label && group.group_label == group_label)
         {
+            data.reserve_source(&mut group.observations, 1)?;
             group.observations.push(DistributionObservation {
                 source_row: data.source_row(row),
                 value,
             });
             continue;
         }
+        data.claim_source_visits(x_levels.len())?;
+        data.claim_source_visits(group_levels.len())?;
+        data.claim_source_visits(hue_levels.len())?;
         let x_index = x_levels
             .iter()
             .position(|level| level == &label)
@@ -82,6 +113,13 @@ pub(crate) fn prepare(
         let hue_index = hue_label
             .as_ref()
             .and_then(|hue| hue_levels.iter().position(|level| level == hue));
+        let mut observations = Vec::new();
+        data.reserve_source(&mut observations, 1)?;
+        observations.push(DistributionObservation {
+            source_row: data.source_row(row),
+            value,
+        });
+        data.reserve_source(&mut groups, 1)?;
         groups.push(DistributionGroup {
             label,
             group_label,
@@ -89,10 +127,7 @@ pub(crate) fn prepare(
             x_index,
             group_index,
             hue_index,
-            observations: vec![DistributionObservation {
-                source_row: data.source_row(row),
-                value,
-            }],
+            observations,
         });
     }
     if groups.is_empty() {

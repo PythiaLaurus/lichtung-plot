@@ -6,20 +6,81 @@
     clippy::cast_sign_loss
 )]
 
+use crate::data::{source::SourceAdmission, PlotData};
 use crate::{Error, HistogramKdePoint};
 
-use crate::layout::{Layout, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{
     HistogramBins, HistogramComposite, HistogramKde, HistogramStat, PlotRenderContext,
     PlotRenderResult,
 };
-use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_AUTO_BINS: usize = 512;
 const MAX_EXPLICIT_BINS: usize = 1_000_000;
 const KDE_GRID_POINTS: usize = 128;
+
+pub(crate) fn axis_ranges(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<[(f64, f64); 2], Error> {
+    let (range, maximum) = if let Some(input) = chart.histogram_composite_geometry_input() {
+        let range = input.validate(Some(data))?;
+        data.claim_source_visits(input.bins.len())?;
+        data.claim_source_visits(input.kde.len())?;
+        data.claim_source_visits(input.rugs.len())?;
+        (
+            range,
+            input
+                .bins
+                .iter()
+                .map(|bin| bin.density)
+                .chain(input.kde.iter().map(|point| point.y))
+                .chain(input.rugs.iter().map(|rug| rug.top))
+                .fold(0.0_f64, f64::max),
+        )
+    } else {
+        let column = chart
+            .x_col()
+            .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
+        let values = crate::data::strict_finite_f64(data, column, "histogram")?;
+        let prepared = prepare_histogram(
+            &values,
+            chart.histogram_bins_spec(),
+            chart.histogram_stat_spec(),
+            Some(data),
+        )?;
+        let range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
+        let curve_maximum =
+            density_maximum(chart.histogram_composite_spec(), &values, range, data)?;
+        data.claim_source_visits(prepared.heights.len())?;
+        let maximum = prepared
+            .heights
+            .iter()
+            .copied()
+            .fold(curve_maximum, f64::max);
+        (range, maximum)
+    };
+    Ok([
+        chart.x_axis_spec().limits.unwrap_or(range),
+        crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+    ])
+}
+
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    if let Some(input) = chart.histogram_composite_geometry_input() {
+        return input.validate(Some(data));
+    }
+    let column = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
+    let values = crate::data::strict_finite_f64(data, column, "histogram")?;
+    let edges = prepare_edges(&values, chart.histogram_bins_spec(), Some(data))?;
+    Ok((edges[0], edges[edges.len() - 1]))
+}
 
 #[derive(Debug)]
 struct PreparedHistogram {
@@ -33,7 +94,7 @@ pub(crate) fn render(
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     if let Some(input) = chart.histogram_composite_geometry_input() {
-        return render_precomputed_composite(chart, input, context.panel, context.theme, backend);
+        return render_precomputed_composite(chart, input, context, backend);
     }
     if let Some(hue) = chart.hue_col() {
         return Err(Error::Data(format!(
@@ -48,6 +109,7 @@ pub(crate) fn render(
         &values,
         chart.histogram_bins_spec(),
         chart.histogram_stat_spec(),
+        None,
     )?;
     let x_range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
     let density_curve = prepare_density_curve(chart.histogram_composite_spec(), &values, x_range)?;
@@ -55,22 +117,24 @@ pub(crate) fn render(
     if let Some(curve) = &density_curve {
         y_max = curve.iter().map(|point| point.y).fold(y_max, f64::max);
     }
-    let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        context.panel,
-        chart.x_label_text().unwrap_or(value_col).to_string(),
-        chart
-            .y_label_text()
-            .unwrap_or(histogram_axis_label(chart.histogram_stat_spec()))
-            .to_string(),
-        &x_axis_spec,
-        &y_axis_spec,
-        context.theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            context.panel,
+            chart.x_label_text().unwrap_or(value_col).to_string(),
+            chart
+                .y_label_text()
+                .unwrap_or(histogram_axis_label(chart.histogram_stat_spec()))
+                .to_string(),
+            &x_axis_spec,
+            &y_axis_spec,
+            context.theme,
+        )
+    })?;
     let theme = context.theme;
     let fill = FillStyle {
         color: theme.colors[0],
@@ -122,11 +186,12 @@ pub(crate) fn render(
 fn render_precomputed_composite(
     chart: &Plot,
     input: &crate::HistogramGeometry,
-    panel: PanelBox,
-    theme: &ResolvedTheme,
+    context: PlotRenderContext<'_>,
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let x_range = input.validate()?;
+    let panel = context.panel;
+    let theme = context.theme;
+    let x_range = input.validate(None)?;
     let y_max = input
         .bins
         .iter()
@@ -134,19 +199,21 @@ fn render_precomputed_composite(
         .chain(input.kde.iter().map(|point| point.y))
         .chain(input.rugs.iter().map(|rug| rug.top))
         .fold(0.0_f64, f64::max);
-    let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("Density").to_string(),
-        &x_axis_spec,
-        &y_axis_spec,
-        theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("Density").to_string(),
+            &x_axis_spec,
+            &y_axis_spec,
+            theme,
+        )
+    })?;
     let fill = FillStyle {
         color: theme.colors[0],
         stroke: theme.foreground,
@@ -206,10 +273,7 @@ fn prepare_density_curve(
             let bandwidth = crate::stats::distribution::strict_scott_bandwidth(values)
                 .map_err(|reason| Error::Data(format!("histogram KDE: {reason}")))?;
             let grid = (0..KDE_GRID_POINTS)
-                .map(|index| {
-                    x_range.0
-                        + (x_range.1 - x_range.0) * index as f64 / (KDE_GRID_POINTS - 1) as f64
-                })
+                .map(|index| histogram_grid_coordinate(x_range, index))
                 .collect::<Vec<_>>();
             let densities =
                 crate::stats::distribution::gaussian_kde_with_bandwidth(values, &grid, bandwidth)
@@ -225,6 +289,48 @@ fn prepare_density_curve(
         }
     };
     Ok(Some(curve))
+}
+
+fn density_maximum(
+    composite: &HistogramComposite,
+    values: &[f64],
+    range: (f64, f64),
+    data: PlotData<'_>,
+) -> Result<f64, Error> {
+    let HistogramComposite::KdeAndRug(kde) = composite else {
+        return Ok(0.0);
+    };
+    match kde {
+        HistogramKde::Precomputed(points) => {
+            data.claim_source_visits(points.len())?;
+            data.claim_source_visits(points.len())?;
+            validate_precomputed_kde(points, range)?;
+            data.claim_source_visits(points.len())?;
+            Ok(points.iter().map(|point| point.y).fold(0.0, f64::max))
+        }
+        HistogramKde::Internal => {
+            for _ in 0..5 {
+                data.claim_source_visits(values.len())?;
+            }
+            let bandwidth = crate::stats::distribution::strict_scott_bandwidth(values)
+                .map_err(|reason| Error::Data(format!("histogram KDE: {reason}")))?;
+            data.claim_source_visits(KDE_GRID_POINTS)?;
+            let grid: [f64; KDE_GRID_POINTS] =
+                std::array::from_fn(|index| histogram_grid_coordinate(range, index));
+            let densities = crate::stats::distribution::gaussian_kde_with_source(
+                values,
+                &grid,
+                bandwidth,
+                Some(data),
+            )?;
+            data.claim_source_visits(densities.len())?;
+            Ok(densities.into_iter().fold(0.0, f64::max))
+        }
+    }
+}
+
+fn histogram_grid_coordinate(range: (f64, f64), index: usize) -> f64 {
+    range.0 + (range.1 - range.0) * index as f64 / (KDE_GRID_POINTS - 1) as f64
 }
 
 fn validate_precomputed_kde(
@@ -268,12 +374,22 @@ fn prepare_histogram(
     values: &[f64],
     bins: HistogramBins,
     stat: HistogramStat,
+    data: Option<PlotData<'_>>,
 ) -> Result<PreparedHistogram, Error> {
+    finish_histogram(values, prepare_edges(values, bins, data)?, stat, data)
+}
+
+fn prepare_edges(
+    values: &[f64],
+    bins: HistogramBins,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
     if values.is_empty() {
         return Err(Error::Data(
             "histogram: value column contains no observations".into(),
         ));
     }
+    data.source_visits(values.len())?;
     for (index, value) in values.iter().enumerate() {
         if !value.is_finite() {
             return Err(Error::Data(format!(
@@ -282,10 +398,10 @@ fn prepare_histogram(
         }
     }
     validate_bins(bins)?;
+    data.source_visits(values.len())?;
     let (minimum, maximum) = crate::data::min_max(values.iter().copied(), "histogram")?;
     if minimum.total_cmp(&maximum).is_eq() {
-        let edges = constant_edges(minimum, bins)?;
-        return finish_histogram(values, edges, stat);
+        return constant_edges(minimum, bins, data);
     }
     let range = maximum - minimum;
     if !range.is_finite() || range <= 0.0 {
@@ -296,18 +412,11 @@ fn prepare_histogram(
 
     match bins {
         HistogramBins::Auto => {
-            let count = automatic_bin_count(values, range)?;
-            let edges = equal_edges(minimum, maximum, count)?;
-            finish_histogram(values, edges, stat)
+            let count = automatic_bin_count(values, range, data)?;
+            equal_edges(minimum, maximum, count, data)
         }
-        HistogramBins::Count(count) => {
-            let edges = equal_edges(minimum, maximum, count)?;
-            finish_histogram(values, edges, stat)
-        }
-        HistogramBins::Width(width) => {
-            let edges = requested_width_edges(minimum, maximum, width)?;
-            finish_histogram(values, edges, stat)
-        }
+        HistogramBins::Count(count) => equal_edges(minimum, maximum, count, data),
+        HistogramBins::Width(width) => requested_width_edges(minimum, maximum, width, data),
     }
 }
 
@@ -326,9 +435,17 @@ fn validate_bins(bins: HistogramBins) -> Result<(), Error> {
     }
 }
 
-fn automatic_bin_count(values: &[f64], range: f64) -> Result<usize, Error> {
-    let q1 = crate::stats::distribution::quantile(values, 0.25)?;
-    let q3 = crate::stats::distribution::quantile(values, 0.75)?;
+fn automatic_bin_count(
+    values: &[f64],
+    range: f64,
+    data: Option<PlotData<'_>>,
+) -> Result<usize, Error> {
+    let mut sorted = Vec::new();
+    data.source_reserve(&mut sorted, values.len())?;
+    sorted.extend_from_slice(values);
+    crate::data::source::sort_numeric_source(&mut sorted, data)?;
+    let q1 = crate::stats::distribution::sorted_quantile(&sorted, 0.25);
+    let q3 = crate::stats::distribution::sorted_quantile(&sorted, 0.75);
     let iqr = q3 - q1;
     let width = 2.0 * iqr * (values.len() as f64).powf(-1.0 / 3.0);
     if width.is_finite() && width > 0.0 {
@@ -347,37 +464,50 @@ fn sturges_bin_count(sample_count: usize) -> usize {
     ((sample_count as f64).log2() + 1.0).ceil().max(1.0) as usize
 }
 
-fn constant_edges(value: f64, bins: HistogramBins) -> Result<Vec<f64>, Error> {
+fn constant_edges(
+    value: f64,
+    bins: HistogramBins,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
     match bins {
-        HistogramBins::Auto => constant_auto_edges(value),
-        HistogramBins::Count(count) => constant_count_edges(value, count),
-        HistogramBins::Width(width) => constant_width_edges(value, width),
+        HistogramBins::Auto => constant_auto_edges(value, data),
+        HistogramBins::Count(count) => constant_count_edges(value, count, data),
+        HistogramBins::Width(width) => constant_width_edges(value, width, data),
     }
 }
 
-fn constant_auto_edges(value: f64) -> Result<Vec<f64>, Error> {
+fn constant_auto_edges(value: f64, data: Option<PlotData<'_>>) -> Result<Vec<f64>, Error> {
+    let mut edges = Vec::new();
+    data.source_reserve(&mut edges, 2)?;
     let preferred = [value - 0.5, value + 0.5];
     if valid_edges(&preferred) {
-        return Ok(preferred.to_vec());
+        edges.extend_from_slice(&preferred);
+        return Ok(edges);
     }
     let adjacent = [value.next_down(), value.next_up()];
     if valid_edges(&adjacent) {
-        return Ok(adjacent.to_vec());
+        edges.extend_from_slice(&adjacent);
+        return Ok(edges);
     }
     Err(Error::Data(format!(
         "histogram: constant value {value} is too large to construct a finite centered automatic bin"
     )))
 }
 
-fn constant_count_edges(value: f64, count: usize) -> Result<Vec<f64>, Error> {
+fn constant_count_edges(
+    value: f64,
+    count: usize,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
     let lower_ulp = value - value.next_down();
     let upper_ulp = value.next_up() - value;
     let required_padding = lower_ulp.max(upper_ulp) * count as f64 / 2.0;
     let mut padding = 0.5_f64.max(required_padding);
     for _ in 0..8 {
+        data.source_visits(1)?;
         let lower = value - padding;
         let upper = value + padding;
-        if let Some(edges) = try_equal_edges(lower, upper, count) {
+        if let Some(edges) = try_equal_edges(lower, upper, count, data)? {
             return Ok(edges);
         }
         padding *= 2.0;
@@ -387,19 +517,31 @@ fn constant_count_edges(value: f64, count: usize) -> Result<Vec<f64>, Error> {
     )))
 }
 
-fn constant_width_edges(value: f64, width: f64) -> Result<Vec<f64>, Error> {
+fn constant_width_edges(
+    value: f64,
+    width: f64,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
     let half_width = width / 2.0;
     let edges = [value - half_width, value + half_width];
     if half_width > 0.0 && edges[0] < value && edges[1] > value && valid_edges(&edges) {
-        return Ok(edges.to_vec());
+        let mut retained = Vec::new();
+        data.source_reserve(&mut retained, edges.len())?;
+        retained.extend_from_slice(&edges);
+        return Ok(retained);
     }
     Err(Error::Data(format!(
         "histogram: Width({width}) cannot produce distinct finite centered edges around constant value {value}; use a wider bin"
     )))
 }
 
-fn equal_edges(lower: f64, upper: f64, count: usize) -> Result<Vec<f64>, Error> {
-    try_equal_edges(lower, upper, count).ok_or_else(|| {
+fn equal_edges(
+    lower: f64,
+    upper: f64,
+    count: usize,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
+    try_equal_edges(lower, upper, count, data)?.ok_or_else(|| {
         Error::Data(
             "histogram: equal-width bin edges are not distinct and finite at this numeric scale; use fewer bins or a wider range"
                 .into(),
@@ -407,24 +549,37 @@ fn equal_edges(lower: f64, upper: f64, count: usize) -> Result<Vec<f64>, Error> 
     })
 }
 
-fn try_equal_edges(lower: f64, upper: f64, count: usize) -> Option<Vec<f64>> {
+fn try_equal_edges(
+    lower: f64,
+    upper: f64,
+    count: usize,
+    data: Option<PlotData<'_>>,
+) -> Result<Option<Vec<f64>>, Error> {
     if count == 0 || count > MAX_EXPLICIT_BINS || !lower.is_finite() || !upper.is_finite() {
-        return None;
+        return Ok(None);
     }
     let range = upper - lower;
     let width = range / count as f64;
     if !range.is_finite() || !width.is_finite() || width <= 0.0 {
-        return None;
+        return Ok(None);
     }
-    let mut edges = Vec::with_capacity(count + 1);
+    let mut edges = Vec::new();
+    data.source_reserve(&mut edges, count + 1)?;
     for index in 0..=count {
         edges.push(lower + width * index as f64);
     }
     edges[count] = upper;
-    valid_edges(&edges).then_some(edges)
+    data.source_visits(edges.len())?;
+    data.source_visits(edges.len() - 1)?;
+    Ok(valid_edges(&edges).then_some(edges))
 }
 
-fn requested_width_edges(minimum: f64, maximum: f64, width: f64) -> Result<Vec<f64>, Error> {
+fn requested_width_edges(
+    minimum: f64,
+    maximum: f64,
+    width: f64,
+    data: Option<PlotData<'_>>,
+) -> Result<Vec<f64>, Error> {
     let range = maximum - minimum;
     let first_upper = minimum + width;
     if !first_upper.is_finite() || first_upper <= minimum {
@@ -443,6 +598,7 @@ fn requested_width_edges(minimum: f64, maximum: f64, width: f64) -> Result<Vec<f
     let mut count = raw_count.ceil().max(1.0) as usize;
 
     while count > 1 {
+        data.source_visits(1)?;
         let prior = minimum + width * (count - 1) as f64;
         if prior.is_finite() && prior >= maximum {
             count -= 1;
@@ -451,6 +607,7 @@ fn requested_width_edges(minimum: f64, maximum: f64, width: f64) -> Result<Vec<f
         }
     }
     loop {
+        data.source_visits(1)?;
         let upper = minimum + width * count as f64;
         if !upper.is_finite() {
             return Err(Error::Data(format!(
@@ -475,10 +632,13 @@ fn requested_width_edges(minimum: f64, maximum: f64, width: f64) -> Result<Vec<f
         )));
     }
 
-    let mut edges = Vec::with_capacity(count + 1);
+    let mut edges = Vec::new();
+    data.source_reserve(&mut edges, count + 1)?;
     for index in 0..=count {
         edges.push(minimum + width * index as f64);
     }
+    data.source_visits(edges.len())?;
+    data.source_visits(edges.len() - 1)?;
     if !valid_edges(&edges) {
         return Err(Error::Data(format!(
             "histogram: width {width} cannot produce distinct finite edges at this numeric scale; use a wider bin or Count"
@@ -497,7 +657,10 @@ fn finish_histogram(
     values: &[f64],
     edges: Vec<f64>,
     stat: HistogramStat,
+    data: Option<PlotData<'_>>,
 ) -> Result<PreparedHistogram, Error> {
+    data.source_visits(edges.len())?;
+    data.source_visits(edges.len().saturating_sub(1))?;
     if !valid_edges(&edges) {
         return Err(Error::Data(
             "histogram: computed bin edges are not distinct and finite".into(),
@@ -507,20 +670,35 @@ fn finish_histogram(
     let lower = edges[0];
     let upper = edges[count];
 
-    let mut counts = vec![0_usize; count];
+    let mut counts = Vec::new();
+    data.source_reserve(&mut counts, count)?;
+    counts.resize(count, 0_usize);
+    data.source_visits(values.len())?;
     for value in values {
         if *value < lower || *value > upper {
             return Err(Error::Data(format!(
                 "histogram: value {value} falls outside computed edges {lower}..{upper}"
             )));
         }
-        let insertion = edges.partition_point(|edge| edge <= value);
+        let mut left = 0;
+        let mut right = edges.len();
+        while left < right {
+            data.source_visits(1)?;
+            let middle = left + (right - left) / 2;
+            if edges[middle] <= *value {
+                left = middle + 1;
+            } else {
+                right = middle;
+            }
+        }
+        let insertion = left;
         let index = insertion.saturating_sub(1).min(count - 1);
         counts[index] += 1;
     }
 
     let sample_count = values.len() as f64;
-    let mut heights = Vec::with_capacity(count);
+    let mut heights = Vec::new();
+    data.source_reserve(&mut heights, count)?;
     for (index, count) in counts.into_iter().enumerate() {
         let actual_width = edges[index + 1] - edges[index];
         let height = match stat {
@@ -555,6 +733,112 @@ const fn histogram_axis_label(stat: HistogramStat) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn axis_helpers_refuse_before_edges_quantiles_counts_and_kde_work() {
+        use crate::font::canonical::OperationGenerationResources;
+        let plot = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+            "x",
+            [1.0, 2.0, 3.0],
+        )))
+        .erase();
+        let resources = OperationGenerationResources::with_test_limits(1000, 0);
+        let data = Some(plot.data().with_axis_resources(&resources));
+        for bins in [
+            HistogramBins::Auto,
+            HistogramBins::Count(2),
+            HistogramBins::Width(1.0),
+        ] {
+            let error = prepare_edges(&[1.0, 2.0, 3.0], bins, data).unwrap_err();
+            assert!(error.to_string().contains("storage admission"), "{error}");
+        }
+        let error = super::finish_histogram(&[1.0], vec![0.0, 2.0], HistogramStat::Count, data)
+            .unwrap_err();
+        assert!(error.to_string().contains("storage admission"), "{error}");
+        let resources = OperationGenerationResources::with_test_limits(0, 1000);
+        let data = plot.data().with_axis_resources(&resources);
+        let error = prepare_edges(&[f64::INFINITY], HistogramBins::Auto, Some(data)).unwrap_err();
+        assert!(error.to_string().contains("work admission"), "{error}");
+        let error = density_maximum(
+            &HistogramComposite::KdeAndRug(HistogramKde::Internal),
+            &[f64::INFINITY],
+            (0.0, 1.0),
+            data,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("work admission"), "{error}");
+    }
+
+    #[test]
+    fn admitted_histogram_domains_and_kde_maxima_match_mark_preparation() {
+        let plot = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+            "x",
+            [1.0, 2.0, 3.0],
+        )))
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let data = plot.data().with_axis_resources(&resources);
+        for values in [&[1.0, 2.0, 3.0][..], &[5.0, 5.0], &[-10.0, 0.0, 1.0, 10.0]] {
+            for bins in [
+                HistogramBins::Auto,
+                HistogramBins::Count(3),
+                HistogramBins::Width(2.0),
+            ] {
+                for stat in [
+                    HistogramStat::Count,
+                    HistogramStat::Probability,
+                    HistogramStat::Density,
+                ] {
+                    let expected = super::prepare_histogram(values, bins, stat, None).unwrap();
+                    let actual = super::prepare_histogram(values, bins, stat, Some(data)).unwrap();
+                    assert_eq!(actual.edges, expected.edges);
+                    assert_eq!(actual.heights, expected.heights);
+                }
+            }
+        }
+        let values = [1.0, 2.0, 3.0];
+        let composite = HistogramComposite::KdeAndRug(HistogramKde::Internal);
+        let curve = prepare_density_curve(&composite, &values, (1.0, 3.0))
+            .unwrap()
+            .unwrap();
+        let expected = curve.iter().map(|point| point.y).fold(0.0, f64::max);
+        assert_eq!(
+            density_maximum(&composite, &values, (1.0, 3.0), data)
+                .unwrap()
+                .to_bits(),
+            expected.to_bits()
+        );
+        let supplied = HistogramComposite::KdeAndRug(HistogramKde::Precomputed(curve));
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(1000, 0);
+        assert_eq!(
+            density_maximum(
+                &supplied,
+                &values,
+                (1.0, 3.0),
+                plot.data().with_axis_resources(&resources)
+            )
+            .unwrap()
+            .to_bits(),
+            expected.to_bits()
+        );
+    }
+
+    fn prepare_histogram(
+        values: &[f64],
+        bins: HistogramBins,
+        stat: HistogramStat,
+    ) -> Result<PreparedHistogram, Error> {
+        super::prepare_histogram(values, bins, stat, None)
+    }
+
+    fn finish_histogram(
+        values: &[f64],
+        edges: Vec<f64>,
+        stat: HistogramStat,
+    ) -> Result<PreparedHistogram, Error> {
+        super::finish_histogram(values, edges, stat, None)
+    }
 
     #[test]
     fn auto_uses_freedman_diaconis_for_nonzero_iqr() {

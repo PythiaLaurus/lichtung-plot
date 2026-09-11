@@ -15,10 +15,8 @@ expression: normalize_embedded_font(&svg)
 <polyline points="225.009,284.400 225.009,129.001" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="292.827,284.400 292.827,129.001" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 <polyline points="79.200,277.337 303.000,277.337" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="79.200,242.019 303.000,242.019" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="79.200,206.701 303.000,206.701" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="79.200,171.383 303.000,171.383" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
-<polyline points="79.200,136.065 303.000,136.065" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="79.200,206.700 303.000,206.700" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="79.200,136.064 303.000,136.064" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 </g>
 <g clip-path="url(#clip-0)">
 <circle cx="89.373" cy="206.701" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.3"/>
@@ -57,26 +55,22 @@ expression: normalize_embedded_font(&svg)
 <polyline points="303.000,284.400 303.000,129.001" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="303.000,129.001 79.200,129.001" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="79.200,129.001 79.200,284.400" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<polyline points="89.373,284.400 89.373,289.400" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="83.9140625" y="311.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
-<polyline points="157.191,284.400 157.191,289.400" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="151.9921875" y="311.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<polyline points="225.009,284.400 225.009,289.400" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="214.47265625" y="311.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
-<polyline points="292.827,284.400 292.827,289.400" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="282.640625" y="311.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
-<text x="185.189453125" y="336.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
-<polyline points="79.200,277.337 74.200,277.337" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="59.21875" y="281.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
-<polyline points="79.200,242.019 74.200,242.019" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="43.953125" y="246.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">7.5</text>
-<polyline points="79.200,206.701 74.200,206.701" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="48.703125" y="211.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
-<polyline points="79.200,171.383 74.200,171.383" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="33.7734375" y="175.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">12.5</text>
-<polyline points="79.200,136.065 74.200,136.065" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="49.0390625" y="140.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
-<text x="15.8076171875" y="211.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,21,207)">Y</text>
+<polyline points="89.373,284.800 89.373,289.800" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="84.287109375" y="310.3564453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<polyline points="157.191,284.800 157.191,289.800" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="152.18359375" y="310.3564453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<polyline points="225.009,284.800 225.009,289.800" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="214.4814453125" y="310.3564453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
+<polyline points="292.827,284.800 292.827,289.800" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="280.4599609375" y="310.3564453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
+<text x="185.2900390625" y="335.1162109375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
+<polyline points="78.800,277.337 73.800,277.337" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="58.619140625" y="278.556640625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<polyline points="78.800,206.700 73.800,206.700" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="48.103515625" y="210.8564453125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
+<polyline points="78.800,136.064 73.800,136.064" fill="none" stroke="#000000" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="48.439453125" y="143.1572265625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">15</text>
+<text x="20.1689453125" y="211.1171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,25.361328125,206.701171875)">Y</text>
 </g>
 <text x="120.6650390625" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Root title</text>
 <text x="139.244140625" y="53.1962890625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#000000" text-anchor="start" direction="ltr">Short</text>

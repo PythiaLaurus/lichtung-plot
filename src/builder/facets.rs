@@ -2,6 +2,9 @@ use super::{ComposedInputs, Plot};
 use crate::data::{FACET_COLUMN, FACET_ROW, FACET_WRAP};
 use crate::spec::{AxisScale, FacetScales, FacetSpec, PlotKind};
 
+#[cfg(test)]
+mod interval_tests;
+
 impl<K: crate::kind::Marker> Plot<K> {
     /// Apply one complete generic-facet layout.
     #[must_use]
@@ -74,6 +77,9 @@ impl<K: crate::kind::Marker> Plot<K> {
         y_range: Option<(f64, f64)>,
     ) -> Self {
         if let Some(range) = x_range {
+            if self.x_axis_spec.provenance != crate::layout::RangeProvenance::Configured {
+                self.x_axis_spec.provenance = crate::layout::RangeProvenance::Shared;
+            }
             if kind == PlotKind::Forest && self.axis_scale == AxisScale::Log10 {
                 self.resolved_facet_x_range = Some(range);
             } else {
@@ -81,6 +87,9 @@ impl<K: crate::kind::Marker> Plot<K> {
             }
         }
         if let Some(range) = y_range {
+            if self.y_axis_spec.provenance != crate::layout::RangeProvenance::Configured {
+                self.y_axis_spec.provenance = crate::layout::RangeProvenance::Shared;
+            }
             self.y_axis_spec.limits = Some(range);
         }
         self
@@ -103,8 +112,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             && self.global_group_levels == other.global_group_levels
             && self.global_collective_pairs == other.global_collective_pairs
             && self.global_line_condition_levels == other.global_line_condition_levels
-            && self.axis_text_measured == other.axis_text_measured
-            && self.composed_axis_text_measured == other.composed_axis_text_measured
+            && self.axis_gutter_owner == other.axis_gutter_owner
             && self.y_tick_labels_visible == other.y_tick_labels_visible
             && self.render_scope == other.render_scope
             && self.legend_policy == other.legend_policy
@@ -135,6 +143,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         ];
         for (target, source) in axes.iter_mut().zip([&self.x_axis_spec, &self.y_axis_spec]) {
             target.limits = source.limits;
+            target.provenance = source.provenance;
+            target.interval = source.interval;
             if let Some(ticks) = &source.exact_ticks {
                 let mut retained = Vec::new();
                 crate::render::backend::reserve_text_records(
@@ -193,8 +203,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             global_line_condition_levels,
             global_collective_pairs: pairs,
             resolved_facet_x_range: self.resolved_facet_x_range,
-            axis_text_measured: self.axis_text_measured,
-            composed_axis_text_measured: self.composed_axis_text_measured,
+            axis_gutter_owner: self.axis_gutter_owner,
             y_tick_labels_visible: self.y_tick_labels_visible,
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.legend_policy,
@@ -223,6 +232,10 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     pub(crate) fn resolved_group_levels(&self, observed: Vec<String>) -> Vec<String> {
         self.global_group_levels.clone().unwrap_or(observed)
+    }
+
+    pub(crate) fn global_group_levels(&self) -> Option<&[String]> {
+        self.global_group_levels.as_deref()
     }
 
     pub(crate) fn with_global_collective_pairs(
@@ -255,6 +268,10 @@ impl<K: crate::kind::Marker> Plot<K> {
             .unwrap_or(observed)
     }
 
+    pub(crate) fn global_line_condition_levels(&self) -> Option<&[String]> {
+        self.global_line_condition_levels.as_deref()
+    }
+
     pub(crate) fn hue_color_index(&self, label: &str, default: usize) -> usize {
         self.global_hue_levels
             .as_ref()
@@ -267,14 +284,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn with_measured_axis_text(mut self) -> Self {
-        self.axis_text_measured = true;
-        self
-    }
-
-    pub(crate) fn with_measured_composed_axis_text(mut self) -> Self {
-        self.axis_text_measured = true;
-        self.composed_axis_text_measured = true;
+    pub(crate) fn with_parent_axis_gutters(mut self) -> Self {
+        self.axis_gutter_owner = super::AxisGutterOwner::Composition;
         self
     }
 

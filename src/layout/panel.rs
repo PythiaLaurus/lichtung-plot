@@ -25,21 +25,23 @@
 )]
 
 mod axis_frame_grid;
+mod cells;
 mod geometry;
 mod projection;
 mod range_ticks;
-
-pub(crate) use axis_frame_grid::PanelAxisTextPlan;
-pub(crate) use geometry::y_axis_left_inset_for_tick_labels;
-pub(crate) use range_ticks::{
-    anchored_auto_range, automatic_numeric_ticks, automatic_numeric_ticks_legacy,
-    continuous_auto_range, display_axis_spec, fit_automatic_tick_candidates, format_tick,
-    retain_automatic_ticks_inside_panel_legacy,
-};
+mod semantics;
+mod sources;
 #[cfg(test)]
-pub(crate) use range_ticks::{
-    nice_ticks, retain_automatic_ticks_inside_panel, AUTOMATIC_TICK_TARGET,
-};
+use semantics::RangePolicy;
+pub(crate) use semantics::{AxisSemanticInputs, RangeProvenance, StandardPanelInputs};
+pub(crate) use sources::NUMERIC_ALPHABET;
+pub(crate) use sources::{numeric_tick_plan, NumericTickPlan, TickInterval, TickSource};
+
+pub(crate) use axis_frame_grid::PanelAxisPlan;
+pub(crate) use geometry::y_axis_left_inset_for_tick_labels;
+pub(crate) use range_ticks::{anchored_auto_range, continuous_auto_range, display_axis_spec};
+#[cfg(test)]
+pub(crate) use range_ticks::{automatic_numeric_ticks, nice_ticks};
 
 #[cfg(test)]
 use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
@@ -47,10 +49,12 @@ use range_ticks::{distinct_tick_labels, labels_are_unique, nice_range};
 /// User-configurable axis behavior.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AxisSpec {
+    pub(crate) provenance: RangeProvenance,
     /// Explicit visible data range. When `None`, the renderer computes one.
     pub limits: Option<(f64, f64)>,
     /// Exact numeric tick source, selected before any automatic text is measured.
     pub(crate) exact_ticks: Option<Vec<AxisTick>>,
+    pub(crate) interval: Option<TickInterval>,
 }
 
 /// A single tick on an axis: a data-space position and the
@@ -91,15 +95,8 @@ pub struct Axis {
     pub ticks: Vec<AxisTick>,
     pub(crate) explicit_ticks: bool,
     pub(crate) assigned_tick_width: Option<f64>,
+    pub(crate) source: TickSource,
 }
-
-/// A four-sided frame for a plot area.
-#[derive(Debug, Clone, Copy)]
-pub struct Frame;
-
-/// Grid lines for a plot area.
-#[derive(Debug, Clone, Copy)]
-pub struct Grid;
 
 /// A 2D data-to-pixel projection.
 #[derive(Debug, Clone)]

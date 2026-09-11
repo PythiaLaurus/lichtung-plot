@@ -681,6 +681,14 @@ use crate::Error;
 pub(crate) struct PlotRenderContext<'a> {
     pub(crate) data: crate::data::PlotData<'a>,
     pub(crate) panel: PanelBox,
+    // Parent-owned perpendicular capacity; axis feedback must not shrink it a
+    // second time merely because the assigned mark panel became narrower.
+    pub(crate) axis_label_width: f64,
+    pub(crate) retained_axes: Option<&'a crate::layout::PanelAxisPlan>,
+    retained_layout: Option<&'a Layout>,
+    prepared_axes: Option<&'a crate::plots::shared_x::PreparedAxes>,
+    prepared_limits: [Option<(f64, f64)>; 2],
+    prepared_kind: Option<PlotKind>,
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
     deferred_annotation_text: Option<&'a [crate::layout::DeferredAnnotationTextPlan]>,
@@ -688,6 +696,8 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
     pub(crate) self_managed_legend:
         Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
+    pub(crate) matrix_axes:
+        Option<&'a Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
 
@@ -700,12 +710,19 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data,
             panel,
+            axis_label_width: (panel.width() - 80.0).max(0.0),
+            retained_axes: None,
+            retained_layout: None,
+            prepared_axes: None,
+            prepared_limits: [None; 2],
+            prepared_kind: None,
             theme,
             facet_scales: None,
             deferred_annotation_text: None,
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
+            matrix_axes: None,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -719,12 +736,19 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
+            axis_label_width: (panel.width() - 80.0).max(0.0),
+            retained_axes: None,
+            retained_layout: None,
+            prepared_axes: None,
+            prepared_limits: [None; 2],
+            prepared_kind: None,
             theme,
             facet_scales: None,
             deferred_annotation_text: None,
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
+            matrix_axes: None,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -736,6 +760,11 @@ impl<'a> PlotRenderContext<'a> {
 
     pub(crate) const fn with_panel(mut self, panel: PanelBox) -> Self {
         self.panel = panel;
+        self
+    }
+
+    pub(crate) const fn with_axis_label_width(mut self, width: f64) -> Self {
+        self.axis_label_width = width;
         self
     }
 
@@ -798,10 +827,381 @@ impl<'a> PlotRenderContext<'a> {
     }
 
     pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
+        self.retained_axes = result.axes.as_ref();
+        self.retained_layout = Some(&result.layout);
         self.producer_text = Some(&result.producer_text);
         self.panel_text = Some(&result.panel_text);
         self.self_managed_legend = Some(&result.self_managed_legend);
+        self.matrix_axes = Some(&result.matrix_axes);
         self
+    }
+
+    /// Annotation geometry may read the selected range but must not resolve it again.
+    pub(crate) fn axis_range(
+        self,
+        side: crate::layout::AxisSide,
+        prepare: impl FnOnce() -> Result<(f64, f64), Error>,
+    ) -> Result<(f64, f64), Error> {
+        if let Some(axes) = self.retained_axes {
+            return Ok(axes.range(side));
+        }
+        let index = usize::from(side == crate::layout::AxisSide::Left);
+        self.prepared_axes.map_or_else(prepare, |axes| {
+            Ok(self.prepared_limits[index].unwrap_or(axes.ranges[index]))
+        })
+    }
+
+    pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Self {
+        if self.retained_layout.is_some() {
+            return self;
+        }
+        self.prepared_axes = plot.prepared_axis_inputs();
+        self.prepared_kind = Some(plot.kind());
+        self.prepared_limits = [plot.x_axis_spec().limits, plot.y_axis_spec().limits];
+        if plot.kind() == PlotKind::Forest && plot.axis_scale_spec() == AxisScale::Log10 {
+            self.prepared_limits[0] =
+                self.prepared_limits[0].map(|(lo, hi)| (lo.log10(), hi.log10()));
+        }
+        if let Some(shared) = plot.resolved_facet_x_range() {
+            self.prepared_limits[0] = Some(shared);
+        }
+        self
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "same closed axis construction inputs as Layout"
+    )]
+    pub(crate) fn layout_with_axis_specs(
+        self,
+        x: (f64, f64),
+        y: (f64, f64),
+        panel: PanelBox,
+        x_label: String,
+        y_label: String,
+        x_spec: &crate::layout::AxisSpec,
+        y_spec: &crate::layout::AxisSpec,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Layout, crate::layout::fit::PlanError> {
+        self.layout_with_ticks(
+            x,
+            y,
+            panel,
+            x_label,
+            y_label,
+            Vec::new(),
+            Vec::new(),
+            x_spec,
+            y_spec,
+            theme,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "same closed axis construction inputs as Layout"
+    )]
+    pub(crate) fn layout_with_ticks(
+        self,
+        mut x: (f64, f64),
+        mut y: (f64, f64),
+        panel: PanelBox,
+        x_label: String,
+        y_label: String,
+        mut x_ticks: Vec<crate::layout::AxisTick>,
+        mut y_ticks: Vec<crate::layout::AxisTick>,
+        x_spec: &crate::layout::AxisSpec,
+        y_spec: &crate::layout::AxisSpec,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Layout, crate::layout::fit::PlanError> {
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let data = self.data.with_axis_resources(&resources);
+        let mut specs = [
+            crate::layout::AxisSpec::default(),
+            crate::layout::AxisSpec::default(),
+        ];
+        for (target, source) in specs.iter_mut().zip([x_spec, y_spec]) {
+            *target = crate::layout::AxisSpec {
+                provenance: source.provenance,
+                limits: source.limits,
+                interval: source.interval,
+                exact_ticks: source
+                    .exact_ticks
+                    .as_ref()
+                    .map(|ticks| {
+                        data.collect_source(ticks.iter().map(|tick| {
+                            Ok(crate::layout::AxisTick::new(
+                                tick.position,
+                                data.copy_source_string(&tick.label)?,
+                            ))
+                        }))
+                    })
+                    .transpose()?,
+            };
+        }
+        if let Some(axes) = self.prepared_axes {
+            // Heatmap keeps its text-dependent rotated category adapter. Its raw
+            // labels are borrowed separately from this same preparation.
+            if self.prepared_kind != Some(PlotKind::Heatmap) {
+                for (side, (range, ticks)) in [(&mut x, &mut x_ticks), (&mut y, &mut y_ticks)]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let geometry_expansion = matches!(
+                        self.prepared_kind,
+                        Some(
+                            PlotKind::Bar
+                                | PlotKind::StackedBar
+                                | PlotKind::HorizontalBar
+                                | PlotKind::StackedHorizontalBar
+                                | PlotKind::Boxplot
+                                | PlotKind::Violin
+                                | PlotKind::Raincloud
+                        )
+                    );
+                    if let Some(categories) = &axes.categories[side] {
+                        *ticks = data.collect_source(categories.iter().map(|tick| {
+                            Ok(crate::layout::AxisTick::new(
+                                tick.position,
+                                data.copy_source_string(&tick.label)?,
+                            ))
+                        }))?;
+                        *range = axes.ranges[side];
+                    } else if !geometry_expansion {
+                        *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
+                    }
+                    specs[side].limits = Some(*range);
+                }
+            }
+        }
+        Layout::new_with_ticks_and_axis_specs_in_panel_box(
+            x,
+            y,
+            panel,
+            x_label,
+            y_label,
+            x_ticks,
+            y_ticks,
+            &specs[0],
+            &specs[1],
+            theme,
+            self.fit_scope,
+        )
+    }
+
+    pub(crate) fn prepared_category_labels(self, side: usize) -> Option<&'a [String]> {
+        self.prepared_axes?.display_categories[side].as_deref()
+    }
+
+    /// Capture consumes the selected layout; only measurement may select sources.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "closed native preparation consumption and admitted retained-layout replay"
+    )]
+    pub(crate) fn axis_layout(
+        self,
+        measure: impl FnOnce() -> Result<Layout, crate::layout::fit::PlanError>,
+    ) -> Result<Layout, crate::layout::fit::PlanError> {
+        if self.retained_layout.is_none() {
+            if let (Some(axes), Some(kind)) = (self.prepared_axes, self.prepared_kind) {
+                let standard = match kind {
+                    PlotKind::Scatter
+                    | PlotKind::Regression
+                    | PlotKind::Histogram
+                    | PlotKind::Density
+                    | PlotKind::Qq
+                    | PlotKind::Line
+                    | PlotKind::Trajectory
+                    | PlotKind::LinePath
+                    | PlotKind::Interaction
+                    | PlotKind::PointInterval
+                    | PlotKind::Coefficient
+                    | PlotKind::Forest
+                    | PlotKind::Dumbbell => true,
+                    PlotKind::Bar
+                    | PlotKind::StackedBar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedHorizontalBar
+                    | PlotKind::Boxplot
+                    | PlotKind::Violin
+                    | PlotKind::Raincloud
+                    | PlotKind::Heatmap
+                    | PlotKind::Marginal
+                    | PlotKind::Matrix
+                    | PlotKind::Beeswarm
+                    | PlotKind::Waterfall => false,
+                };
+                if standard {
+                    let resources = self
+                        .theme
+                        .prepared_font_environment()?
+                        .generation_resources();
+                    let data = self.data.with_axis_resources(&resources);
+                    let x_spec = &axes.specs[0];
+                    let log = if axes.logarithmic && x_spec.exact_ticks.is_none() {
+                        Some(crate::plots::interval_estimate::log_tick_plan(
+                            self.prepared_limits[0].unwrap_or(axes.ranges[0]),
+                            x_spec.interval,
+                            self.panel,
+                            self.theme,
+                            self.fit_scope,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let source = log.as_ref().map(|plan| plan.source);
+                    let mut layout = self.layout_with_ticks(
+                        axes.ranges[0],
+                        axes.ranges[1],
+                        self.panel,
+                        data.copy_source_string(&axes.labels[0])?,
+                        data.copy_source_string(&axes.labels[1])?,
+                        log.map_or_else(Vec::new, |plan| plan.ticks),
+                        Vec::new(),
+                        x_spec,
+                        &axes.specs[1],
+                        self.theme,
+                    )?;
+                    if let Some(source) = source {
+                        layout.x_axis.source = source;
+                    }
+                    return Ok(layout);
+                }
+            }
+        }
+        match self.retained_layout {
+            Some(layout) => {
+                let environment = self.theme.prepared_font_environment()?;
+                let retain_string = |source: &str| -> Result<String, Error> {
+                    environment
+                        .claim_unicode_bytes(source.len() as u64)
+                        .map_err(|error| Error::Render(error.to_string()))?;
+                    let mut retained = String::new();
+                    retained
+                        .try_reserve_exact(source.len())
+                        .map_err(|error| Error::Render(error.to_string()))?;
+                    retained.push_str(source);
+                    Ok(retained)
+                };
+                let retain_axis =
+                    |axis: &crate::layout::Axis| -> Result<crate::layout::Axis, Error> {
+                        let mut ticks = Vec::new();
+                        crate::render::backend::reserve_text_records(
+                            &mut ticks,
+                            axis.ticks.len(),
+                            environment,
+                        )?;
+                        for tick in &axis.ticks {
+                            ticks.push(crate::layout::AxisTick {
+                                position: tick.position,
+                                label: retain_string(&tick.label)?,
+                            });
+                        }
+                        Ok(crate::layout::Axis {
+                            label: retain_string(&axis.label)?,
+                            ticks,
+                            explicit_ticks: axis.explicit_ticks,
+                            assigned_tick_width: axis.assigned_tick_width,
+                            source: axis.source,
+                        })
+                    };
+                Ok(Layout {
+                    projection: layout.projection.clone(),
+                    x_axis: retain_axis(&layout.x_axis)?,
+                    y_axis: retain_axis(&layout.y_axis)?,
+                })
+            }
+            None => measure(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn native_axis_consumption_admits_every_owned_source_copy() {
+    use crate::layout::{AxisSpec, AxisTick};
+    let plot = crate::Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .erase();
+    let axes = crate::plots::shared_x::PreparedAxes {
+        ranges: [(0.0, 2.0), (0.0, 1.0)],
+        categories: [
+            Some(vec![
+                AxisTick::new(0.5, "first"),
+                AxisTick::new(1.5, "second"),
+            ]),
+            None,
+        ],
+        display_categories: [None, None],
+        labels: ["x title".into(), "y title".into()],
+        specs: [
+            AxisSpec::default(),
+            AxisSpec {
+                exact_ticks: Some(vec![AxisTick::new(0.5, "exact")]),
+                ..AxisSpec::default()
+            },
+        ],
+        logarithmic: false,
+    };
+    let consume = |theme: &crate::theme::ResolvedTheme| {
+        let mut context =
+            PlotRenderContext::new(plot.data(), PanelBox::new(0.0, 400.0, 0.0, 300.0), theme);
+        context.prepared_axes = Some(&axes);
+        context.prepared_kind = Some(PlotKind::Line);
+        context.axis_layout(|| panic!("native preparation must be consumed"))
+    };
+    let theme = crate::Theme::Publication.resolve();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let before = (
+        resources.usage().unwrap().1,
+        resources.byte_usage().unwrap(),
+    );
+    let layout = consume(&theme).unwrap();
+    assert_eq!(layout.x_axis.ticks, *axes.categories[0].as_ref().unwrap());
+    assert_eq!(
+        layout.y_axis.ticks,
+        *axes.specs[1].exact_ticks.as_ref().unwrap()
+    );
+    let visits = resources.usage().unwrap().1 - before.0;
+    let bytes = resources.byte_usage().unwrap() - before.1;
+    // Two titles, two category records/strings, and two copies of the exact source
+    // (temporary spec and final axis, whose reserve has a four-record minimum).
+    // No font or final text-plan storage is involved.
+    assert_eq!(
+        bytes,
+        (7 * std::mem::size_of::<AxisTick>() + 14 + 11 + 10) as u64
+    );
+    assert!(visits >= 14 + 2 + 11 + 1 + 5);
+    for (remaining_visits, remaining_bytes, succeeds) in [
+        (visits, bytes, true),
+        (visits - 1, bytes, false),
+        (visits, bytes - 1, false),
+    ] {
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        resources
+            .claim_visits(1_000_000 - resources.usage().unwrap().1 - remaining_visits)
+            .unwrap();
+        resources
+            .claim_bytes(536_870_912 - resources.byte_usage().unwrap() - remaining_bytes)
+            .unwrap();
+        let result = consume(&theme);
+        if succeeds {
+            result.unwrap();
+        } else {
+            assert!(matches!(
+                result,
+                Err(crate::layout::fit::PlanError::Fatal(Error::Render(_)))
+            ));
+        }
     }
 }
 
@@ -873,6 +1273,7 @@ impl ProducerText<'_> {
 
 pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
+    pub(crate) axes: Option<crate::layout::PanelAxisPlan>,
     pub(crate) x_domain: AxisDomain,
     pub(crate) y_domain: AxisDomain,
     pub(crate) significance: Option<SignificancePlan>,
@@ -884,6 +1285,7 @@ pub(crate) struct PlotRenderResult {
     pub(crate) producer_text: Vec<crate::render::backend::PlacedText>,
     pub(crate) panel_text: Vec<crate::decorations::panel_text::PanelTextPlan>,
     pub(crate) self_managed_legend: Option<std::sync::Arc<crate::decorations::legend::Legend>>,
+    pub(crate) matrix_axes: Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>,
 }
 
 /// Semantic kind of one renderer-resolved axis domain.
@@ -903,6 +1305,7 @@ impl PlotRenderResult {
     pub(crate) fn new(layout: Layout, legend_entries: Vec<LegendEntry>) -> Self {
         Self {
             layout,
+            axes: None,
             x_domain: AxisDomain::Continuous,
             y_domain: AxisDomain::Continuous,
             significance: None,
@@ -914,6 +1317,7 @@ impl PlotRenderResult {
             producer_text: Vec::new(),
             panel_text: Vec::new(),
             self_managed_legend: None,
+            matrix_axes: None,
         }
     }
 

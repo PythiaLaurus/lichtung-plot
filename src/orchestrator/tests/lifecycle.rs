@@ -311,6 +311,55 @@ fn impossible_wrapped_caption_fails_before_backend_begin() {
 }
 
 #[test]
+fn malformed_exact_tick_sources_fail_before_font_discovery_and_backend_begin() {
+    let cases = [
+        (Vec::new(), "must not be empty"),
+        (vec![crate::AxisTick::new(f64::NAN, "")], "must be finite"),
+        (
+            vec![crate::AxisTick::new(2.0, ""), crate::AxisTick::new(1.0, "")],
+            "strictly ascending",
+        ),
+        (
+            (0..10_001)
+                .map(|index| crate::AxisTick::new(f64::from(index), ""))
+                .collect(),
+            "exceeds 10000",
+        ),
+        (
+            vec![crate::AxisTick::new(4.0, "")],
+            "outside resolved range",
+        ),
+    ];
+    for (ticks, expected) in cases {
+        for x_axis in [true, false] {
+            let plot = Plot::scatter(
+                NumericValues::new("x", [1.0, 2.0, 3.0]),
+                NumericValues::new("y", [3.0, 1.0, 2.0]),
+            )
+            .x_limits(0.0, 3.0)
+            .y_limits(0.0, 3.0);
+            let plot = if x_axis {
+                plot.x_ticks(ticks.clone())
+            } else {
+                plot.y_ticks(ticks.clone())
+            };
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            let mut backend = RecordingBackend::default();
+            let error = plot.render_with_backend(&mut backend).unwrap_err();
+            assert!(
+                matches!(&error, crate::Error::Data(message) if message.contains(expected)),
+                "{error}"
+            );
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+            assert_eq!((backend.begins, backend.ends), (0, 0));
+        }
+    }
+}
+
+#[test]
 fn exact_root_reservation_failures_precede_concrete_backend_begin() {
     let plot = Plot::scatter(
         NumericValues::new("x", [1.0, 2.0, 3.0]),
@@ -994,13 +1043,15 @@ fn canvas_row_titles_use_canvas_root_for_plan_and_render() {
         .render_with_backend(&mut reversed)
         .unwrap();
     let selected = |backend: &RecordingBackend| {
-        let (x, y, _, style) = backend
+        let (_, y, _, style) = backend
             .text_draws
             .iter()
             .find(|(_, _, text, _)| text == "Shared outcome")
             .expect("Canvas row title is rendered");
-        (*x, *y, style.color, style.font_size)
+        (*y, style.color, style.font_size)
     };
+    // Adaptive ticks can change child gutters and hence the shared title's x
+    // allocation. Its vertical position and root-owned appearance stay fixed.
     assert_eq!(selected(&backend), selected(&reversed));
 }
 
@@ -1168,7 +1219,6 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
         &[
             "resolved",
             "shared-category-label-validation",
-            "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
             "grid-render",
@@ -1180,7 +1230,6 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
         &[
             "resolved",
             "shared-category-label-validation",
-            "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
             "grid-render",
@@ -1217,7 +1266,6 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
         &[
             "resolved",
             "shared-category-label-validation",
-            "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
             "grid-render",
@@ -1229,7 +1277,6 @@ fn mixed_theme_canvas_coordination_reuses_each_stored_child_theme() {
         &[
             "resolved",
             "shared-category-label-validation",
-            "grouped-x-range-plan",
             "panel-measure",
             "panel-plan",
             "grid-render",
@@ -1679,13 +1726,136 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             Plot::waterfall(group, delta, 10.0).erase(),
         ),
     ];
+    let mut preparation_work = [0_u64; 3];
     for (kind, plot) in plots {
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let domain = crate::plots::shared_x::domain(
+            &plot,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        );
+        let prepared = crate::plots::shared_x::prepare_plot(
+            &plot,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
+        .attach(plot.clone());
+        if matches!(
+            kind,
+            PlotKind::Interaction
+                | PlotKind::Heatmap
+                | PlotKind::Bar
+                | PlotKind::StackedBar
+                | PlotKind::Boxplot
+                | PlotKind::Violin
+                | PlotKind::Raincloud
+                | PlotKind::Matrix
+        ) {
+            assert!(domain.is_err(), "{kind:?}");
+        } else {
+            let range = domain.unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+            assert_eq!(
+                range,
+                prepared.prepared_axis_inputs().unwrap().ranges[0],
+                "{kind:?}: shared/standalone parity"
+            );
+            assert!(
+                range.0.is_finite() && range.1.is_finite() && range.0 < range.1,
+                "{kind:?}"
+            );
+        }
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0,
+            "{kind:?}"
+        );
+        if kind != PlotKind::Matrix {
+            let axes = prepared.prepared_axis_inputs().unwrap();
+            for side in 0..2 {
+                if axes.categories[side].is_some() {
+                    continue;
+                }
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+                let invalid = plot.clone().with_test_axis_ticks(
+                    side,
+                    vec![crate::AxisTick::new(
+                        axes.ranges[side].1.next_up(),
+                        "outside",
+                    )],
+                );
+                let error = invalid
+                    .render_kind_erased(kind, &mut RecordingBackend::default())
+                    .unwrap_err();
+                assert!(
+                    error.to_string().contains("outside"),
+                    "{kind:?} {side}: {error}"
+                );
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    0,
+                    "{kind:?} {side}: {error}"
+                );
+            }
+            let theme = crate::Theme::Publication.resolve();
+            let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
+            let panel = plot.base_canvas_layout(&theme).panel_box;
+            let expected = plot
+                .preflight_panel(kind, panel, &theme)
+                .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+            let actual = prepared
+                .preflight_panel(kind, panel, &theme)
+                .unwrap_or_else(|error| panic!("{kind:?}: {error}"));
+            assert_eq!(
+                actual.layout.projection.x_range(),
+                expected.layout.projection.x_range(),
+                "{kind:?} x"
+            );
+            assert_eq!(
+                actual.layout.projection.y_range(),
+                expected.layout.projection.y_range(),
+                "{kind:?} y"
+            );
+            assert_eq!(
+                actual.layout.x_axis.ticks, expected.layout.x_axis.ticks,
+                "{kind:?} x source"
+            );
+            assert_eq!(
+                actual.layout.y_axis.ticks, expected.layout.y_axis.ticks,
+                "{kind:?} y source"
+            );
+            assert_eq!(
+                crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
+                preparations,
+                "{kind:?}: measurement must consume retained preparation"
+            );
+        }
         let mut backend = RecordingBackend::default();
-
+        crate::orchestrator::measurements::start();
         plot.render_kind(kind, &mut backend)
             .unwrap_or_else(|error| panic!("{kind:?} failed: {error}"));
+        let work = crate::orchestrator::measurements::finish();
+        for (total, counter) in preparation_work.iter_mut().zip([
+            crate::orchestrator::measurements::Counter::AxisRangePreparation,
+            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
+            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
+        ]) {
+            *total += work.counters[counter as usize];
+        }
+        for counter in [
+            crate::orchestrator::measurements::Counter::TickSource,
+            crate::orchestrator::measurements::Counter::TickDistinctList,
+            crate::orchestrator::measurements::Counter::TickMetricLookup,
+            crate::orchestrator::measurements::Counter::AxisRangePreparation,
+            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
+            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
+        ] {
+            assert_eq!(
+                work.capture_counters[counter as usize], 0,
+                "{kind:?}: {counter:?}"
+            );
+        }
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
     }
+    assert!(preparation_work.into_iter().all(|count| count > 0));
 }
 
 #[test]
@@ -1802,7 +1972,7 @@ fn attached_significance_plan_is_not_reshaped_during_final_render() {
     let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, PlotKind::Bar).unwrap();
     let planned_calls = crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS
         .with(std::cell::Cell::get);
-    assert_eq!(planned_calls, 2);
+    assert_eq!(planned_calls, 4);
 
     plan.render(&mut RecordingBackend::default()).unwrap();
 

@@ -13,7 +13,6 @@
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Plot;
@@ -56,22 +55,24 @@ pub(crate) fn render(
         Vec::new()
     };
     hue_keys.sort_by_key(|key| chart.hue_color_index(key, usize::MAX));
-    let x_range = crate::layout::continuous_auto_range((xmin, xmax), chart.x_axis_spec());
-    let y_range = crate::layout::continuous_auto_range((ymin, ymax), chart.y_axis_spec());
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+    let layout = context.axis_layout(|| {
+        let x_range = crate::layout::continuous_auto_range((xmin, xmax), chart.x_axis_spec());
+        let y_range = crate::layout::continuous_auto_range((ymin, ymax), chart.y_axis_spec());
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
 
-    // Single shared layout for the whole plot panel.
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        context.panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        &x_axis_spec,
-        &y_axis_spec,
-        theme,
-    )?;
+        // Single shared layout for the whole plot panel.
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            context.panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            &x_axis_spec,
+            &y_axis_spec,
+            theme,
+        )
+    })?;
     let proj = &layout.projection;
 
     let mut legend_entries = Vec::new();

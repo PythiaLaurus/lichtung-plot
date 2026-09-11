@@ -10,12 +10,17 @@ fn specialized_renderers_clip_resolved_marks_without_clipping_decorations() {
     let color = NumericValues::new("color", [0.1, 1.0]);
 
     let horizontal = Plot::horizontal_bar(group.clone(), crate::BarInput::samples(y.clone()));
-    let outer_panel = horizontal.canvas_layout().panel_box;
+    let short_label_panel = Plot::horizontal_bar(
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+        crate::BarInput::samples(y.clone()),
+    )
+    .canvas_layout()
+    .panel_box;
     let mut horizontal_backend = RecordingBackend::default();
     horizontal
         .render_kind(PlotKind::HorizontalBar, &mut horizontal_backend)
         .unwrap();
-    assert!(horizontal_backend.clips[0].x0 > outer_panel.x0);
+    assert!(horizontal_backend.clips[0].x0 > short_label_panel.x0);
 
     let beeswarm = Plot::beeswarm(group, x.clone(), color).size(800, 600);
     let mut beeswarm_backend = RecordingBackend::default();

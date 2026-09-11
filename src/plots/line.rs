@@ -87,51 +87,53 @@ fn render_series(
     let (series, primary_color_slots) = prepare(chart, context.data)?;
     let mut text = context.producer_text()?;
     let point_layers = prepare_point_layers(chart, primary_color_slots, theme)?;
-    let x_range = crate::layout::continuous_auto_range(
-        crate::data::min_max(
+    let layout = context.axis_layout(|| {
+        let x_range = crate::layout::continuous_auto_range(
+            crate::data::min_max(
+                series
+                    .iter()
+                    .flat_map(|series| series.points.iter().map(|point| point.0))
+                    .chain(
+                        point_layers
+                            .iter()
+                            .flat_map(|layer| layer.points.iter().map(|point| point.0)),
+                    ),
+                "line",
+            )?,
+            chart.x_axis_spec(),
+        );
+        let y_data_range = crate::data::min_max(
             series
                 .iter()
-                .flat_map(|series| series.points.iter().map(|point| point.0))
+                .flat_map(|series| {
+                    series.points.iter().flat_map(|point| {
+                        point
+                            .2
+                            .map_or([point.1, point.1], |(lower, upper)| [lower, upper])
+                    })
+                })
                 .chain(
                     point_layers
                         .iter()
-                        .flat_map(|layer| layer.points.iter().map(|point| point.0)),
+                        .flat_map(|layer| layer.points.iter().map(|point| point.1)),
                 ),
             "line",
-        )?,
-        chart.x_axis_spec(),
-    );
-    let y_data_range = crate::data::min_max(
-        series
-            .iter()
-            .flat_map(|series| {
-                series.points.iter().flat_map(|point| {
-                    point
-                        .2
-                        .map_or([point.1, point.1], |(lower, upper)| [lower, upper])
-                })
-            })
-            .chain(
-                point_layers
-                    .iter()
-                    .flat_map(|layer| layer.points.iter().map(|point| point.1)),
-            ),
-        "line",
-    )?;
-    let y_range = crate::layout::continuous_auto_range(y_data_range, chart.y_axis_spec());
-    let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let panel = context.panel;
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_owned(),
-        chart.y_label_text().unwrap_or("").to_owned(),
-        &x_axis,
-        &y_axis,
-        theme,
-    )?;
+        )?;
+        let y_range = crate::layout::continuous_auto_range(y_data_range, chart.y_axis_spec());
+        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        let panel = context.panel;
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_owned(),
+            chart.y_label_text().unwrap_or("").to_owned(),
+            &x_axis,
+            &y_axis,
+            theme,
+        )
+    })?;
     draw_series(chart, &layout, &series, theme, backend)?;
     draw_point_layers(&layout, &point_layers, theme, &mut text, backend)?;
 
@@ -167,6 +169,95 @@ fn render_series(
     let mut result = PlotRenderResult::new(layout, legends);
     result.producer_text = text.finish()?;
     Ok(result)
+}
+
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let (ranges, categories) = axis_inputs(chart, data, None)?;
+    if categories.is_some() {
+        return Err(Error::Data(
+            "canvas x-range group has a categorical x axis".into(),
+        ));
+    }
+    Ok(ranges[0])
+}
+
+#[expect(
+    clippy::type_complexity,
+    reason = "two scientific ranges and optional ordered condition levels"
+)]
+pub(crate) fn axis_inputs(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
+) -> Result<([(f64, f64); 2], Option<Vec<String>>), Error> {
+    // Every retained observation contributes to these domains. Series sorting,
+    // duplicate checks, and path/colour payloads belong to mark preparation.
+    let x_col = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("line: x column not set".into()))?;
+    let y_col = chart
+        .y_col()
+        .ok_or_else(|| Error::Data("line: y column not set".into()))?;
+    let y_values = crate::data::strict_finite_f64(data, y_col, "line axis")?;
+    data.claim_source_visits(y_values.len())?;
+    let mut y = crate::data::min_max(y_values, "line axis")?;
+    let mut levels = None;
+    let mut x = if data.column(x_col)?.is_numeric() {
+        let values = crate::data::strict_finite_f64(data, x_col, "line axis")?;
+        data.claim_source_visits(values.len())?;
+        crate::data::min_max(values, "line axis")?
+    } else if chart.kind() == crate::PlotKind::Trajectory {
+        let labels =
+            crate::data::strict_normalized_strings(data, x_col, "trajectory", "condition")?;
+        let categories = if let Some(global) = facet.map_or_else(
+            || chart.global_line_condition_levels(),
+            |sources| sources.conditions,
+        ) {
+            data.collect_source(global.iter().map(|label| data.copy_source_string(label)))?
+        } else {
+            data.source_levels(&labels)?
+        };
+        let range = (0.0, categorical_index(categories.len())?);
+        levels = Some(categories);
+        range
+    } else {
+        return Err(Error::Data("line axis: x must be numeric".into()));
+    };
+    if chart.kind() == crate::PlotKind::Line {
+        if let Some((lower, upper)) = chart.interval_bound_cols() {
+            let lower = crate::data::strict_finite_f64(data, lower, "line axis")?;
+            let upper = crate::data::strict_finite_f64(data, upper, "line axis")?;
+            data.claim_source_visits(lower.len())?;
+            data.claim_source_visits(upper.len())?;
+            y = crate::data::min_max(lower.into_iter().chain(upper), "line axis")?;
+        }
+        for (index, layer) in chart.point_layers().iter().enumerate() {
+            data.claim_source_visits(1)?;
+            let mut buffer = [0_u8; 64];
+            let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
+            std::io::Write::write_fmt(&mut cursor, format_args!("line point layer {index}"))
+                .expect("bounded layer index");
+            let length = usize::try_from(cursor.position()).expect("bounded layer index");
+            let context = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
+            let xr = data.source_numeric_range(layer.x_values(), context)?;
+            let yr = data.source_numeric_range(layer.y_values(), context)?;
+            x = (x.0.min(xr.0), x.1.max(xr.1));
+            y = (y.0.min(yr.0), y.1.max(yr.1));
+        }
+    }
+    if levels.is_none() {
+        x = crate::layout::continuous_auto_range(x, chart.x_axis_spec());
+    }
+    Ok((
+        [
+            x,
+            crate::layout::continuous_auto_range(y, chart.y_axis_spec()),
+        ],
+        levels,
+    ))
 }
 
 fn prepare_point_layers(
@@ -278,10 +369,6 @@ fn draw_point_layers(
     })
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "shared grouped-path layout and drawing remain one renderer lifecycle"
-)]
 fn render_grouped(
     chart: &Plot,
     context: PlotRenderContext<'_>,
@@ -295,70 +382,62 @@ fn render_grouped(
     } else {
         "trajectory"
     };
-    let x_values = trajectory
-        .groups
-        .iter()
-        .flat_map(|group| group.points.iter().map(|point| point.x));
-    let (x_range, x_ticks, x_domain) = trajectory.condition_levels.as_ref().map_or_else(
-        || {
-            let range = crate::data::min_max(x_values, family)?;
-            Ok::<_, Error>((
-                crate::layout::continuous_auto_range(range, chart.x_axis_spec()),
-                Vec::new(),
-                AxisDomain::Continuous,
-            ))
-        },
-        |levels| {
-            let ticks = levels
-                .iter()
-                .enumerate()
-                .map(|(index, label)| {
-                    categorical_index(index).map(|index| AxisTick::new(index + 0.5, label.clone()))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok((
-                (0.0, categorical_index(levels.len())?),
-                ticks,
-                AxisDomain::Categorical,
-            ))
-        },
-    )?;
-    let y_range = crate::layout::continuous_auto_range(
-        crate::data::min_max(
-            trajectory
-                .groups
-                .iter()
-                .flat_map(|group| group.points.iter().map(|point| point.y)),
-            family,
-        )?,
-        chart.y_axis_spec(),
-    );
-    let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let panel = trajectory
-        .condition_levels
-        .as_ref()
-        .map_or(Ok(context.panel), |levels| {
-            crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
-                chart,
-                context.panel,
-                levels,
-                theme,
-                context.fit_scope(),
-            )
-        })?;
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_owned(),
-        chart.y_label_text().unwrap_or("").to_owned(),
-        x_ticks,
-        Vec::new(),
-        &x_axis,
-        &y_axis,
-        theme,
-    )?;
+    let x_domain = if trajectory.condition_levels.is_some() {
+        AxisDomain::Categorical
+    } else {
+        AxisDomain::Continuous
+    };
+    let layout = context.axis_layout(|| {
+        let x_values = trajectory
+            .groups
+            .iter()
+            .flat_map(|group| group.points.iter().map(|point| point.x));
+        let (x_range, x_ticks) = trajectory.condition_levels.as_ref().map_or_else(
+            || {
+                let range = crate::data::min_max(x_values, family)?;
+                Ok::<_, Error>((
+                    crate::layout::continuous_auto_range(range, chart.x_axis_spec()),
+                    Vec::new(),
+                ))
+            },
+            |levels| {
+                let ticks = levels
+                    .iter()
+                    .enumerate()
+                    .map(|(index, label)| {
+                        categorical_index(index)
+                            .map(|index| AxisTick::new(index + 0.5, label.clone()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(((0.0, categorical_index(levels.len())?), ticks))
+            },
+        )?;
+        let y_range = crate::layout::continuous_auto_range(
+            crate::data::min_max(
+                trajectory
+                    .groups
+                    .iter()
+                    .flat_map(|group| group.points.iter().map(|point| point.y)),
+                family,
+            )?,
+            chart.y_axis_spec(),
+        );
+        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        let panel = context.panel;
+        context.layout_with_ticks(
+            x_range,
+            y_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_owned(),
+            chart.y_label_text().unwrap_or("").to_owned(),
+            x_ticks,
+            Vec::new(),
+            &x_axis,
+            &y_axis,
+            theme,
+        )
+    })?;
     let hue_paths = ordered_path && chart.line_path_style_spec() == LinePathStyle::Hue;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for group in &trajectory.groups {
@@ -839,4 +918,86 @@ fn categorical_index(index: usize) -> Result<f64, Error> {
             "trajectory: categorical condition count exceeds the supported coordinate range".into(),
         )
     })
+}
+
+#[cfg(test)]
+mod axis_tests {
+    use super::*;
+    use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn domain_only_sources_match_grouped_mark_preparation_and_refuse_before_work() {
+        let x = NumericValues::new("x", [2.0, 1.0, 2.0, 1.0]);
+        let y = NumericValues::new("y", [20.0, 10.0, -40.0, -30.0]);
+        let groups = CategoryValues::new("group", ["a", "a", "b", "b"]).unwrap();
+        let line = Plot::line(x.clone(), y.clone())
+            .group(groups.clone())
+            .erase();
+        let numeric = Plot::trajectory(x, y.clone(), groups.clone()).erase();
+        let categorical = Plot::trajectory(
+            CategoryValues::new("condition", [" after ", "before", "after", "before"]).unwrap(),
+            y,
+            groups,
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        for plot in [&line, &numeric, &categorical] {
+            let (ranges, categories) =
+                axis_inputs(plot, plot.data().with_axis_resources(&resources), None).unwrap();
+            if plot.kind() == crate::PlotKind::Line {
+                let (series, _) = prepare(plot, plot.data()).unwrap();
+                assert_eq!(
+                    ranges,
+                    [
+                        crate::layout::continuous_auto_range(
+                            crate::data::min_max(
+                                series
+                                    .iter()
+                                    .flat_map(|series| series.points.iter().map(|point| point.0)),
+                                "test"
+                            )
+                            .unwrap(),
+                            plot.x_axis_spec()
+                        ),
+                        crate::layout::continuous_auto_range(
+                            crate::data::min_max(
+                                series
+                                    .iter()
+                                    .flat_map(|series| series.points.iter().map(|point| point.1)),
+                                "test"
+                            )
+                            .unwrap(),
+                            plot.y_axis_spec()
+                        ),
+                    ]
+                );
+            } else {
+                let prepared = prepare_trajectory(plot, plot.data(), false).unwrap();
+                assert_eq!(categories, prepared.condition_levels);
+                assert_eq!(
+                    ranges[1],
+                    crate::layout::continuous_auto_range(
+                        crate::data::min_max(
+                            prepared
+                                .groups
+                                .iter()
+                                .flat_map(|group| group.points.iter().map(|point| point.y)),
+                            "test"
+                        )
+                        .unwrap(),
+                        plot.y_axis_spec()
+                    )
+                );
+            }
+            for (visits, bytes) in [(0, 1000), (1000, 0)] {
+                let resources =
+                    crate::font::canonical::OperationGenerationResources::with_test_limits(
+                        visits, bytes,
+                    );
+                let error = axis_inputs(plot, plot.data().with_axis_resources(&resources), None)
+                    .unwrap_err();
+                assert!(matches!(error, Error::Render(_)), "{error}");
+            }
+        }
+    }
 }

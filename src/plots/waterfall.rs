@@ -7,13 +7,49 @@
     clippy::too_many_lines
 )]
 
-use crate::layout::{AxisTick, Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{AxisTick, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
 use crate::Plot;
+
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let column = chart
+        .y_col()
+        .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
+    let deltas = crate::data::strict_finite_f64(data, column, "waterfall")?;
+    if deltas.is_empty() {
+        return Err(Error::Data(
+            "waterfall: delta column contains no observations".into(),
+        ));
+    }
+    let mut running = chart
+        .waterfall_base()
+        .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
+    if !running.is_finite() {
+        return Err(Error::Data("waterfall: base value must be finite".into()));
+    }
+    let mut range = (running, running);
+    for (index, delta) in deltas.into_iter().enumerate() {
+        running += delta;
+        if !running.is_finite() {
+            return Err(Error::Data(format!(
+                "waterfall: cumulative endpoint is non-finite at source row {}",
+                data.source_row(index)
+            )));
+        }
+        range = (range.0.min(running), range.1.max(running));
+    }
+    Ok(crate::layout::continuous_auto_range(
+        range,
+        chart.x_axis_spec(),
+    ))
+}
 
 pub(crate) fn render(
     chart: &Plot,
@@ -31,8 +67,6 @@ pub(crate) fn render(
         .waterfall_base()
         .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
     let labels = crate::data::strict_strings(context.data, label_col, "waterfall")?;
-    let display_labels =
-        chart.resolve_label_domain("y-axis categories", labels.iter().map(String::as_str))?;
     let deltas = crate::data::strict_finite_f64(context.data, delta_col, "waterfall")?;
     if labels.is_empty() || labels.len() != deltas.len() {
         return Err(Error::Data(
@@ -61,39 +95,34 @@ pub(crate) fn render(
         running = next;
     }
     let terminal = running;
-    let x_range = crate::layout::continuous_auto_range(range, chart.x_axis_spec());
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_ticks = labels
-        .iter()
-        .enumerate()
-        .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-        .collect::<Vec<_>>();
-    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
-        chart,
-        context.panel,
-        &display_labels,
-        theme,
-        context.fit_scope(),
-    )?;
-    let initial_layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        (0.0, labels.len() as f64),
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        Vec::new(),
-        y_ticks.clone(),
-        &x_axis_spec,
-        chart.y_axis_spec(),
-        theme,
-    )?;
+    let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
+        Ok(crate::layout::continuous_auto_range(
+            range,
+            chart.x_axis_spec(),
+        ))
+    })?;
+    let y_ticks = || {
+        labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
+            .collect::<Vec<_>>()
+    };
+    let panel = context.panel;
+    let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
+        Ok(chart
+            .y_axis_spec()
+            .limits
+            .unwrap_or((0.0, labels.len() as f64)))
+    })?;
+    let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple());
     let (base_label, terminal_label) = chart
         .waterfall_labels_spec()
         .map_or(("base", "total"), |labels| {
             (labels.base(), labels.terminal())
         });
     let annotations = plan_annotations(
-        &initial_layout,
+        &annotation_projection,
         panel,
         labels.len() as f64,
         [
@@ -111,28 +140,21 @@ pub(crate) fn render(
     }
     let mut mark_panel = panel;
     mark_panel.y1 -= annotations.height;
-    crate::plots::horizontal_bar::validate_y_tick_label_rows(
-        mark_panel,
-        &display_labels,
-        theme,
-        tick_width,
-        &context
-            .fit_scope()
-            .child(crate::layout::AddressRole::AxisLeft, 0)?,
-    )?;
-    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        (0.0, labels.len() as f64),
-        mark_panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        Vec::new(),
-        y_ticks,
-        &x_axis_spec,
-        chart.y_axis_spec(),
-        theme,
-    )?;
-    layout.y_axis.assigned_tick_width = Some(tick_width);
+    let layout = context.axis_layout(|| {
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        context.layout_with_ticks(
+            x_range,
+            (0.0, labels.len() as f64),
+            mark_panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            Vec::new(),
+            y_ticks(),
+            &x_axis_spec,
+            chart.y_axis_spec(),
+            theme,
+        )
+    })?;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for (index, ((start, end), delta)) in spans.iter().zip(&deltas).enumerate() {
             let y0 = index as f64 + 0.2;
@@ -263,7 +285,7 @@ struct AnnotationPlan {
 }
 
 fn plan_annotations(
-    layout: &Layout,
+    projection: &crate::layout::Projection,
     panel: PanelBox,
     source_y: f64,
     candidates: [(f64, String); 2],
@@ -274,7 +296,7 @@ fn plan_annotations(
     let mut items = Vec::new();
     let mut miss = None;
     for (index, (value, text)) in candidates.into_iter().enumerate() {
-        if !layout.projection.contains_data(value, source_y) {
+        if !projection.contains_data(value, source_y) {
             continue;
         }
         let text_plan = theme.measure_legacy_text(
@@ -292,7 +314,7 @@ fn plan_annotations(
             )));
             continue;
         }
-        let (projected_x, _) = layout.projection.project(value, source_y);
+        let (projected_x, _) = projection.project(value, source_y);
         let half_width = width / 2.0;
         let x = projected_x
             .clamp(

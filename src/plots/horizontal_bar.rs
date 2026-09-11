@@ -11,14 +11,13 @@
 use crate::Error;
 
 use crate::layout::{
-    AxisTick, Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan, TextBlock,
+    AxisTick, Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan,
 };
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
 use crate::render::backend::{
     with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
 };
 use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
-use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 pub(crate) fn render(
@@ -34,41 +33,26 @@ pub(crate) fn render(
         _ => BarMode::Single,
     };
     let prepared = bar_data::prepare(chart, context.data, mode)?;
-    let display_categories = chart.resolve_label_domain(
-        "y-axis categories",
-        prepared.categories.iter().map(String::as_str),
-    )?;
     let legend_entries = bar_data::legend_entries(&prepared, chart, theme);
-    let mut base_x_range =
-        crate::layout::anchored_auto_range(prepared.value_range, chart.x_axis_spec(), 0.0);
     let y_count = prepared.categories.len() as f64;
-    let y_ticks = prepared
-        .categories
-        .iter()
-        .enumerate()
-        .map(|(i, label)| {
-            AxisTick::new(
-                i as f64 + 0.5,
-                if chart.y_tick_labels_visible() {
-                    label.clone()
-                } else {
-                    String::new()
-                },
-            )
-        })
-        .collect();
-    let semantic_panel = context.panel;
-    let (panel_box, tick_width) = if chart.y_tick_labels_visible() {
-        panel_box_for_y_tick_labels(
-            chart,
-            semantic_panel,
-            &display_categories,
-            theme,
-            context.fit_scope(),
-        )?
-    } else {
-        (semantic_panel, 1.0 / 1024.0)
+    let y_ticks = || {
+        prepared
+            .categories
+            .iter()
+            .enumerate()
+            .map(|(i, label)| {
+                AxisTick::new(
+                    i as f64 + 0.5,
+                    if chart.y_tick_labels_visible() {
+                        label.clone()
+                    } else {
+                        String::new()
+                    },
+                )
+            })
+            .collect()
     };
+    let panel_box = context.panel;
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
         .typography
@@ -87,13 +71,24 @@ pub(crate) fn render(
         "horizontal bar attached significance label",
         chart.significance_mark_style_override().is_some(),
     )?;
-    base_x_range = range_for_bar_marks(
-        chart,
-        &prepared,
-        panel_box,
-        base_x_range,
-        &attached_label_plans,
-    );
+    let base_x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
+        Ok(crate::layout::anchored_auto_range(
+            prepared.value_range,
+            chart.x_axis_spec(),
+            0.0,
+        ))
+    })?;
+    let base_x_range = if context.retained_axes.is_none() {
+        range_for_bar_marks(
+            chart,
+            &prepared,
+            panel_box,
+            base_x_range,
+            &attached_label_plans,
+        )
+    } else {
+        base_x_range
+    };
     let anchor_count = prepared.series.len().max(1);
     let mut rendered_maxima =
         vec![vec![f64::NEG_INFINITY; anchor_count]; prepared.categories.len()];
@@ -153,20 +148,21 @@ pub(crate) fn render(
         context.fit_scope(),
     )?;
     let x_range = significance.y_range;
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        (0.0, y_count),
-        panel_box,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        Vec::new(),
-        y_ticks,
-        &x_axis_spec,
-        chart.y_axis_spec(),
-        theme,
-    )?;
-    layout.y_axis.assigned_tick_width = Some(tick_width);
+    let layout = context.axis_layout(|| {
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        context.layout_with_ticks(
+            x_range,
+            (0.0, y_count),
+            panel_box,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            Vec::new(),
+            y_ticks(),
+            &x_axis_spec,
+            chart.y_axis_spec(),
+            theme,
+        )
+    })?;
     validate_bar_significance_collisions(
         chart,
         &prepared,
@@ -459,248 +455,4 @@ fn draw_error_bar(
         ],
         style,
     )
-}
-
-pub(crate) fn panel_box_for_y_tick_labels(
-    chart: &Plot,
-    panel: PanelBox,
-    labels: &[String],
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<(PanelBox, f64), crate::layout::fit::PlanError> {
-    panel_box_for_y_tick_labels_impl(chart, panel, labels, true, theme, scope)
-}
-
-pub(crate) fn panel_box_for_elided_y_tick_labels(
-    chart: &Plot,
-    panel: PanelBox,
-    labels: &[String],
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<(PanelBox, f64), crate::layout::fit::PlanError> {
-    panel_box_for_y_tick_labels_impl(chart, panel, labels, false, theme, scope)
-}
-
-fn panel_box_for_y_tick_labels_impl(
-    chart: &Plot,
-    mut panel: PanelBox,
-    labels: &[String],
-    validate_row_height: bool,
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<(PanelBox, f64), crate::layout::fit::PlanError> {
-    use crate::layout::fit::FitKind;
-    if labels.is_empty() {
-        return Ok((panel, 1.0 / 1024.0));
-    }
-    let axis_scope = scope.child(crate::layout::AddressRole::AxisLeft, 0)?;
-    if chart.composed_axis_text_is_measured() && validate_row_height {
-        // The composed grid owns this gutter. Preserve its intrinsic preference
-        // rather than treating the residual mark width as a new label allocation.
-        let width =
-            theme.intrinsic_tick_label_width(labels.iter().map(String::as_str), panel.height())?;
-        validate_y_tick_label_rows(panel, labels, theme, width, &axis_scope)?;
-        return Ok((panel, width));
-    }
-    let chrome = crate::layout::y_axis_left_inset_for_tick_labels(
-        0.0,
-        theme
-            .axes
-            .ticks
-            .as_ref()
-            .map_or(0, |appearance| appearance.length),
-        theme.typography.axis_title.font_size,
-        &theme.axes.spacing,
-    );
-    let base_left = chart.base_canvas_layout(theme).panel_box.x0;
-    let minimum_body = match chart.kind() {
-        PlotKind::Beeswarm => 100.0,
-        PlotKind::Heatmap => 40.0,
-        _ => 80.0,
-    };
-    let available = panel.width() - minimum_body + base_left.min(panel.x0) - chrome;
-    let mut natural = 1.0 / 1024.0;
-    for label in labels {
-        let plan = theme.measure_text(
-            label,
-            &theme.typography.tick_label,
-            PhysicalTextAlignment::End,
-            "y-axis category label",
-            false,
-        )?;
-        natural = f64::max(natural, plan.width().max(plan.fit_width()));
-    }
-    if available <= 0.0 && (!chart.axis_text_is_measured() || !validate_row_height) {
-        return Err(axis_scope.failure(FitKind::TrackOrResidual, format!("y-axis labels leave no width while preserving the minimum {minimum_body}px plot panel")).into());
-    }
-    let width = if chart.axis_text_is_measured() && validate_row_height {
-        theme.intrinsic_tick_label_width(labels.iter().map(String::as_str), panel.height())?
-    } else if natural <= available || !validate_row_height {
-        natural.min(available)
-    } else {
-        theme
-            .intrinsic_tick_label_width(labels.iter().map(String::as_str), panel.height())?
-            .min(available)
-    };
-    if validate_row_height {
-        let blocks = y_tick_label_blocks(labels, theme, width, &axis_scope)?;
-        validate_y_tick_label_row_height(panel, labels.len(), &blocks, &axis_scope)?;
-    }
-    if chart.composed_axis_text_is_measured() {
-        return Ok((panel, width));
-    }
-    let required_left = width + chrome;
-    let additional_inset = (required_left - base_left.min(panel.x0)).max(0.0);
-    if additional_inset > 0.0 {
-        panel.x0 = (panel.x0 + additional_inset).min(panel.x1 - minimum_body);
-    }
-    Ok((panel, width))
-}
-
-pub(crate) fn validate_y_tick_label_rows(
-    panel: PanelBox,
-    labels: &[String],
-    theme: &ResolvedTheme,
-    width: f64,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<(), crate::layout::fit::PlanError> {
-    if labels.is_empty() {
-        return Ok(());
-    }
-    let blocks = y_tick_label_blocks(labels, theme, width, scope)?;
-    validate_y_tick_label_row_height(panel, labels.len(), &blocks, scope)
-}
-
-fn y_tick_label_blocks(
-    labels: &[String],
-    theme: &ResolvedTheme,
-    maximum_width: f64,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<Vec<crate::layout::TextBlock>, crate::layout::fit::PlanError> {
-    crate::layout::fit::collect(
-        theme,
-        "y-axis category labels",
-        labels.iter().map(|label| {
-            crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                label,
-                &theme.typography.tick_label,
-                maximum_width,
-                PhysicalTextAlignment::End,
-                "y-axis category label",
-                scope,
-            ))
-            .map(TextBlock::from_resolved)
-        }),
-    )
-}
-
-fn validate_y_tick_label_row_height(
-    panel: PanelBox,
-    label_count: usize,
-    blocks: &[crate::layout::TextBlock],
-    scope: &crate::layout::fit::FitScope,
-) -> Result<(), crate::layout::fit::PlanError> {
-    let row_height = panel.height() / label_count.max(1) as f64;
-    if blocks.iter().any(|block| block.height() > row_height) {
-        return Err(scope.failure(crate::layout::fit::FitKind::Tick,
-            "multiline y-axis category labels do not fit their rows; increase chart height or shorten labels"
-        ).into());
-    }
-    Ok(())
-}
-
-pub(crate) fn panel_box_for_x_tick_labels(
-    chart: &Plot,
-    mut panel: PanelBox,
-    labels: &[String],
-    theme: &ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<PanelBox, crate::layout::fit::PlanError> {
-    if labels.is_empty() || chart.axis_text_is_measured() {
-        return Ok(panel);
-    }
-    let display =
-        chart.resolve_label_domain("x-axis categories", labels.iter().map(String::as_str))?;
-    let maximum_width = panel.width() / labels.len() as f64;
-    let axis_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
-    let maximum_height = crate::layout::fit::collect(
-        theme,
-        "x-axis category labels",
-        display.iter().map(|label| {
-            crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                label,
-                &theme.typography.tick_label,
-                maximum_width.max(1.0),
-                PhysicalTextAlignment::Center,
-                "x-axis category label",
-                &axis_scope,
-            ))
-            .map(TextBlock::from_resolved)
-            .map(|block| block.height())
-        }),
-    )?
-    .into_iter()
-    .fold(0.0_f64, f64::max);
-    let extra = (maximum_height - theme.typography.tick_label.line_height()).max(0.0);
-    if panel.height() - extra < 60.0 {
-        return Err(axis_scope.failure(crate::layout::fit::FitKind::TrackOrResidual,
-            "multiline x-axis category labels do not fit while preserving the minimum 60px plot panel; increase chart height"
-        ).into());
-    }
-    panel.y0 += extra;
-    Ok(panel)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn preferred_y_width_uses_available_room_and_retains_compact_wrapping() {
-        let plot = Plot::horizontal_bar(
-            crate::CategoryValues::new("category", ["Control group"]).unwrap(),
-            crate::BarInput::estimates(crate::NumericValues::new("value", [1.0])),
-        )
-        .erase();
-        let theme = crate::Theme::Publication.resolve();
-        theme.prepare_font_environment().unwrap();
-        let labels = ["Control group".to_owned()];
-        let natural = theme
-            .measure_text(
-                &labels[0],
-                &theme.typography.tick_label,
-                PhysicalTextAlignment::End,
-                "y-axis category label",
-                false,
-            )
-            .unwrap();
-        let scope = crate::layout::fit::FitScope::root();
-        let (_, wide) = panel_box_for_y_tick_labels(
-            &plot,
-            PanelBox::new(80.0, 600.0, 80.0, 400.0),
-            &labels,
-            &theme,
-            &scope,
-        )
-        .unwrap();
-        assert_eq!(
-            wide.to_bits(),
-            natural.width().max(natural.fit_width()).to_bits()
-        );
-        let (panel, compact) = panel_box_for_y_tick_labels(
-            &plot,
-            PanelBox::new(80.0, 230.0, 80.0, 400.0),
-            &labels,
-            &theme,
-            &scope,
-        )
-        .unwrap();
-        assert!(compact < wide);
-        assert!(panel.width() >= 80.0);
-        let blocks = y_tick_label_blocks(&labels, &theme, compact, &scope).unwrap();
-        assert!(blocks[0].lines().len() > 1);
-        assert_eq!(blocks[0].plan().source, labels[0]);
-    }
 }

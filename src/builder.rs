@@ -497,8 +497,11 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     interaction_styles: Option<Vec<crate::InteractionStyle>>,
     categorical_colors: Option<CategoricalColors>,
     render_scope: Option<String>,
-    axis_text_measured: bool,
-    composed_axis_text_measured: bool,
+    pub(crate) prepared_axes:
+        std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
+    pub(crate) prepared_matrix_axes:
+        Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
+    axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     waterfall_labels: Option<WaterfallLabels>,
     guides: Vec<GuideSpec>,
@@ -518,6 +521,12 @@ struct CategoryOrders {
     y: CategoryOrder,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AxisGutterOwner {
+    Root,
+    Composition,
+}
+
 /// Only the values that parent coordination may replace for a fixed child owner.
 pub(crate) struct ComposedInputs {
     x_axis_spec: AxisSpec,
@@ -527,8 +536,7 @@ pub(crate) struct ComposedInputs {
     global_group_levels: Option<Vec<String>>,
     global_collective_pairs: Option<Vec<crate::data::CollectivePair>>,
     global_line_condition_levels: Option<Vec<String>>,
-    axis_text_measured: bool,
-    composed_axis_text_measured: bool,
+    axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     render_scope: Option<String>,
     legend_policy: LegendPolicy,
@@ -601,8 +609,9 @@ impl Plot<crate::kind::Any> {
             interaction_styles: None,
             categorical_colors: None,
             render_scope: None,
-            axis_text_measured: false,
-            composed_axis_text_measured: false,
+            prepared_axes: std::sync::Arc::new(Vec::new()),
+            prepared_matrix_axes: None,
+            axis_gutter_owner: AxisGutterOwner::Root,
             y_tick_labels_visible: true,
             waterfall_labels: None,
             guides: Vec::new(),
@@ -999,8 +1008,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             interaction_styles,
             categorical_colors,
             render_scope,
-            axis_text_measured,
-            composed_axis_text_measured,
+            axis_gutter_owner,
             y_tick_labels_visible,
             waterfall_labels,
             guides,
@@ -1011,8 +1019,12 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             marker: _,
             title_alignment,
             subtitle_alignment,
+            prepared_axes,
+            prepared_matrix_axes,
         } = self;
         Plot {
+            prepared_axes,
+            prepared_matrix_axes,
             title_alignment,
             subtitle_alignment,
             input,
@@ -1075,8 +1087,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             interaction_styles,
             categorical_colors,
             render_scope,
-            axis_text_measured,
-            composed_axis_text_measured,
+            axis_gutter_owner,
             y_tick_labels_visible,
             waterfall_labels,
             guides,

@@ -234,7 +234,7 @@ The approved theme and layout targets follow these rules:
 | T5a3p7 | Review speculative line extension | COMPLETE |
 | T5a3q | Local-search benchmark coverage and placement comparisons | COMPLETE |
 | T5a4 | Root title-block plans | COMPLETE |
-| T5a5 | Axis, range, tick, frame, and grid plans | PENDING |
+| T5a5 | Axis, range, tick, frame, and grid plans | COMPLETE |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
 | T5a6a1 | Prepared interior contracts and exhaustive classification | PENDING |
@@ -4248,7 +4248,186 @@ Implementation evidence (2026-09-11):
 
 ### T5a5: Axis, Range, Tick, Frame, And Grid Plans
 
-**Status**: PENDING
+**Status**: COMPLETE
+
+Final implementation and acceptance audit (2026-09-11): the axis-owned source,
+retention, measurement, and replay gates are closed. The existing final
+`just verify` log, `/tmp/opencode/t5a5-final-verify.log`, records formatting,
+strict locked/offline all-target Clippy, **797 library tests passed (17 ignored)**,
+**442 integration tests including six snapshots**, warning-denied API docs, and
+package verification (**219 files**). All ten normal benchmark contracts pass in
+that run. `/tmp/opencode/t5a5-final-benchmarks.log` separately records **all ten
+ignored release groups passed**, zero failed, 804 filtered out (8.41 seconds).
+These are completed implementation runs, not commands rerun for this documentation
+closure; no commit is claimed. Normative scope below is unchanged.
+
+Final acceptance matrix (paths relative to `src/` unless prefixed `tests/`):
+
+| Gate | Implemented Result And Passing Evidence |
+| --- | --- |
+| Numeric source policy | `layout/panel/sources.rs` and `sources/tests.rs`: assigned-span `6ch` descending seeds, complete interval sources with `1,2,3,5` coarsening, exact precedence, conditional terminal midpoint; wide/small spans, representable-index boundaries, `10_000/10_001`, no subsequences, deterministic local order and exhaustion |
+| Declared caps and arithmetic | Linear adaptive `upper+1`, integral-log `min(upper,n)+1`, additive at most `4*633+1`, integer-log at most `4*20+1`; checked index products and scaled finite extremes; empty/dense/unrepresentable trials miss locally, resource refusal remains fatal |
+| Exact ticks, formatting, census | Configuration and prepared-domain validation enforce indivisible `1..=10_000` lists, finite increasing positions and containment before fonts; empty/duplicate label bytes remain permitted. Source tests cover nearest-even formatting, whole-list scientific uniqueness, integral/nonintegral Log10 labels and exact projection keys; the closed source alphabet supplies the pre-font census |
+| Pre-font domains and sharing | `plots/shared_x{,/prepared}.rs`, Canvas D1 and lifecycle tests: retained standalone/faceted x/y domains, raw/display categories, titles and exact specs; Fixed/FreeX/FreeY/Free reconciliation; Matrix variable domains/labels; all 25 branches, 17 shared-x eligible and eight rejected, zero discovery on owned invalid inputs, including one-step-outside automatic ticks |
+| Immutable semantics and composition | `layout/panel/semantics.rs`, axis-plan, builder-facet and child-plan tests: automatic/configured/shared provenance, linear/Log10 interpretation, range/interval policy, projection endpoints and source kind/ordinal/cap; `StandardPanelInputs` retains typography and preferred `4:3`; cache identity covers provenance, intervals, title/parent-width allocations and standard typography; cached/uncached Forest/shared-domain parity |
+| Assigned cells and categorical fit | `layout/panel/cells.rs`, panel/axis tests: adjacent nonempty-label midpoint cells, inward endpoints, shared 4px clearance, exact integer-ratio category bands with nearest-even quantization and reverse order. Empty labels retain tick/grid positions without text; legal wrapping and intact overwide/row-height failures preserve D2 |
+| Native axis/frame/grid replay | `PanelAxisPlan` retained by `PlotRenderResult`/`PanelPlan` freezes text, cells, ticks, grid, frame sides and strokes during measurement. Drop-input/clone tests replay without layout/theme or additional shaping; empty positions and reserve/draw parity survive. Science draws four sides once |
+| Measured gutters and feedback | Panel and decoration-plan tests cover complete title blocks, quarter-turn ink, stroke/tick reserve, outward quantization, fractional-origin invariance, 39%/40%/41% gutters and real residual failure. Root/composition ownership replaces booleans and local retries; pending growth and inside-domain proposals use the existing bounded root feedback protocol |
+| Post-freeze SOURCE boundary | `PlotRenderContext::axis_layout`/`axis_range`, lifecycle and specialized producer tests: all 25 canonical families have zero capture range/spec/source preparation, numeric source selection, formatter-list attempts and tick-fit lookups; positive preparation observations keep instrumentation live. Matrix capture requires retained sources and matching spans; native replay adds no shaping |
+| Resource admission | Family manifest and final audit below; cumulative operation visits/bytes precede source temporaries, retention and measurement copies, checked fallible Vec/String growth, refusal-before-work/mutation and numeric parity tests. `spec::native_axis_consumption_admits_every_owned_source_copy` covers categorical, exact and title copies |
+| Typed local fit failure | `decorations/plan/tests.rs` and `plots/matrix.rs`: terminal numeric exhaustion remains scoped `FitKind::Tick`, not a fatal generic error or small-cell error; Marginal Auto can reject Right and accept Top, fixed Right preserves its axis address, Matrix preserves Canvas/Matrix-cell/axis ancestry; later fatal source errors still win |
+| Deletion and regression closure | No shared `AUTOMATIC_TICK_TARGET`, five-only downsampling, shared-x renderer range probe, draw-time axis text planning, duplicate horizontal helpers or local axis/title stabilization remains. Range broadening retains its independent private five-sample seed; no public count/density/interval API or old-policy route was added. Full verification and ignored release groups pass |
+
+Important fixes and intentional output changes:
+
+- Density pre-font x domains use configured display limits when present, not KDE
+  support, so exact endpoint ticks agree with measurement. The regression
+  `density_explicit_endpoint_ticks_use_display_limits_not_kde_support` passes;
+  full-sample KDE preparation and clipping semantics remain unchanged.
+- Owned measurement-time category/exact/title copies now receive the same source
+  admission as preparation. Marginal/Matrix dispatch preserves scoped Tick misses
+  through local selection. Forest shared exponent-space domains are not transformed
+  twice, and Waterfall pre-font errors preserve their original source row.
+- Compact-guide gutter feedback remeasures changed assignments rather than rejecting
+  a stale guide. The original 640x400 reflow selects compact Right in two rounds;
+  pressured facets select Right in three rounds without a provisional Top detour.
+  Auto/explicit output equality and cache-disabled complete-frame checks pass.
+- Heatmap long Elide records 400 actual prefix candidates: 200 in unsuccessful
+  root 0 and 200 in successful root 1, asserted in normal and release contracts.
+  The former 500 expectation has no established historical cause and is not an
+  optimization baseline. Labels, fixture dimensions, uniqueness/failure gates and
+  the historical T5a3q data remain intact; see `docs/local-search-benchmarks.md`.
+- Four reviewed snapshots intentionally change: `scatter_smoke`,
+  `root_title_block_explicit_odd_size`, `horizontal_bar_clip_structure`, and
+  `beeswarm_clip_structure` under `tests/visual_regression/snapshots/`. Adaptive
+  short-axis tick/grid removal (including `7.5`/`12.5`), inward axis placement and
+  measured categorical/title gutters explain the differences; root-title block
+  geometry is unchanged. All six snapshots pass in the final gate. Line collision
+  fixtures now constrain an interior cell; horizontal clip checks compare measured
+  long/short labels rather than the deleted second inset.
+
+Final activation-source resource audit: no known remaining admission finding in
+the activated axis-source graph. This includes helper-internal work/storage and
+retained/measurement copies, not merely the dispatcher resource argument.
+
+- `shared_x/prepared.rs::prepare_plot` returns only `PreparedPlotAxes`, not an
+  owned Plot. It borrows source configuration during preparation and attaches
+  retained axis handles to the existing measurement-time Plot only after font
+  preparation. It no longer deep-copies supplied geometry, exact ticks, label
+  policy, titles, annotations, orders or other unrelated Plot configuration.
+  `PreparedAxes` itself is not Clone.
+- `text_census_panels` now owns admitted row/selector buffers while borrowing its
+  source Plot. There is no provisional panel-box vector, base-Plot construction,
+  per-panel Plot clone or significance-vector clone on this route. Shared facet
+  selector construction, categorical checks, Cartesian cell storage, column
+  temporaries, row selection, source-row mapping and selector retention all use
+  the operation-bearing data view. Pre-font significance ownership validation
+  uses these same panels instead of constructing a second provisional set.
+- `FacetAxisSources` borrows only global Bar group slots and Trajectory condition
+  order. Unused collective/color metadata is not prepared. Empty child axis
+  titles and the existing generic-facet Bar bootstrap identity behavior are
+  preserved without cloning or rewriting the source Plot. Scope strings are
+  built on demand with checked, admitted String capacity. Fixed categorical
+  comparisons charge before comparison; numeric unions charge read and write
+  passes before applying a union. Free axes bypass those passes.
+- Labels use one resolution/humanization implementation. Axis titles select
+  borrowed inferred/verbatim sources before their admitted retained copy. Alias
+  policy is borrowed, not cloned. Collision checking retains raw references and
+  one display vector rather than a second map of owned raw/display strings.
+  Alias lookups and collision comparisons have admitted work bounds, including
+  empty identities. Humanization uses bounded fallible split/output Strings,
+  with no character vector, word vector, per-word lowercase String, joined
+  result vector or infallible output growth. Matrix variable labels and ordinary
+  raw/display categories use this same admitted owner.
+- Ordinary retention uses `Arc<Vec<_>>`, moving the already admitted vector
+  rather than copying it into an Arc slice. Matrix and ordinary Arc allocations
+  claim the checked reference-count-header plus value layout before `Arc::new`.
+  Arc handle cloning does not copy axis payloads. Stable std Arc construction
+  remains abort-on-allocator-exhaustion: these are pre-construction budget
+  refusals, not a claim of recoverable std Arc OOM. Vec/String growth remains
+  checked and fallible; error diagnostic formatting is not a general allocator
+  interception or OOM-recovery facility.
+- The final graph audit additionally found Regression's axis-only `unzip`.
+  Its two channel buffers now reserve before filling; the allocation-free OLS
+  finite/scale/mean/product/residual scans and bounded band evaluations are
+  admitted before work. No regression algorithm changed. The audit also added
+  the missing repeated scalar range/status scans in the closed dispatcher, the
+  PointInterval value-order status scan, and a bounded stack context formatter
+  for Line supplemental-axis ranges.
+
+Activated family-source manifest (all 25 PlotKind branches; the shared-x entry
+uses the same operation state for its 17 eligible families and rejects the
+other eight before fonts):
+
+| Family | Actual Source Owner And Resource Disposition |
+| --- | --- |
+| Scatter | `shared_x/prepared.rs`, `data.rs`: aligned finite pairs, two admitted scalar reductions, configured/automatic range seeds; no grouping or marks |
+| Regression | `regression::axis_ranges`: admitted aligned/channel buffers, allocation-free authoritative OLS with preclaimed scans, bounded endpoint/band evaluations |
+| Histogram | `histogram::{axis_ranges,shared_x_domain,prepare_edges,prepare_histogram}`: admitted samples, sorted quantile scratch, edges/counts/heights/bin comparisons; supplied validators receive the gate; composite KDE maximum uses admitted work and a stack grid or borrowed curve |
+| Density | `density::{axis_ranges,shared_x_domain}` and their common preparation: admitted channels, reusable group samples, support/bandwidth scans, grids/densities and maximum reduction |
+| Q-Q | `qq::shared_x_domain`, `shared_x/prepared.rs`: admitted observations, theoretical endpoint quantiles, observed-y scalar reduction; no sort or reference-line payload |
+| Line, Trajectory, LinePath | `line::axis_inputs`: admitted numeric/condition sources and range reductions; borrowed global facet conditions; supplemental scalar extents and stack-only diagnostic context; no path grouping/sorting payload |
+| Marginal | `marginal::{axis_ranges,shared_x_domain,build_groups}`: admitted nested groups/channels and support reductions; visible-support KDE uses admitted work/storage and a stack grid; resource refusal propagates rather than skipping a group |
+| Bar, StackedBar, HorizontalBar, StackedHorizontalBar | `bar_data::{axis_inputs,prepare_core}`: admitted aggregation, bounds/order/permutations, signed stacks, generated intervals/quantiles/bootstrap buffers and every RNG rejection-loop draw; borrowed facet group slots/unit keys, reused scratch and scalar supplemental extents; exact limits omit unused interval work; refusal/non-mutation and bit-exact ordinary/unequal-unit bootstrap parity tests |
+| Boxplot, Violin, Raincloud | `distribution_sample::prepare`, `shared_x/prepared.rs`: admitted categorical/numeric channels, nested groups/observations, raw extrema or KDE support scans and scratch; supplied Raincloud validation/labels receive the same gate |
+| PointInterval | `point_interval::{axis_categories,shared_x_domain,prepare}`: admitted tuple/row/normalization/order/permutation buffers and status/range scans; fixed-x unavailable panels use admitted sibling tuples |
+| Coefficient, Forest | `interval_estimate::{axis_categories,shared_x_domain,prepare_estimate_tuples}`: admitted tuples, raw labels and uniqueness work; scalar references/bounds/Log10 transformation; fixed-x sibling input stays in the same operation |
+| Dumbbell | `dumbbell::{axis_categories,shared_x_domain}`: admitted normalized observed levels and endpoint channels/reductions; no connector/offset payload |
+| Interaction | `shared_x/prepared.rs`: admitted observed categories and lower/upper channels/reductions; no trace/style payload |
+| Beeswarm | `shared_x.rs`, `shared_x/prepared.rs`: admitted categorical levels and numeric reduction; no swarm/colorbar payload |
+| Waterfall | `waterfall::shared_x_domain`, `shared_x/prepared.rs`: admitted labels/deltas and cumulative endpoint work, preserving source-row diagnostics; no annotation or primitive payload |
+| Heatmap | `heatmap::{axis_categories,category_levels}`: shared admitted normalization, Cartesian/triangular ordering and explicit-order copies; no cell/color/highlight grid |
+| Matrix | `matrix::{prepare_axes,build_groups,validate_group_kdes,matrix_support_range}`: admitted variable reference/label buffers, nested channels/groups/bandwidths and support scans, then pre-admitted Arc retention; no cell packing/primitive payload |
+
+Common source gates are `PlotData::{reserve_source,collect_source,
+copy_source_string,normalize_source_string,reserve_source_string,source_arc}`,
+`data::explicit_category_order`, `SourceAdmission`, the fallible in-place source
+sorter, and the admitted KDE/geometry validators. All calls reached from the
+activation dispatcher carry its operation resources. Existing configuration
+validation, ordinary mark/statistical preparation, facet strip/legend work and
+post-font Plot copies remain under their existing owners; this audit does not
+claim a T5a6a/T5b/T5c payload migration or generic process-wide allocation control.
+They are not new blockers assigned to this axis-source unit.
+
+Final retention refusal and parity evidence:
+
+- `retention_boundaries_share_the_operation_without_retaining_a_plot_clone`:
+  standalone/faceted/Matrix exact work-and-byte admission boundaries, one-less
+  refusal, zero font discovery, no retained source Plot handle, and unchanged
+  axis storage budget when large unused title/caption/alias values are present.
+- `borrowed_facet_panels_and_scope_sources_refuse_before_materialization`:
+  work/storage refusal, source pointer identity, selected/source row identity and
+  exact scope text. `fixed_facet_comparisons_and_union_refuse_before_their_work_or_mutation`
+  checks category-comparison refusal and union read/write boundaries with zero
+  storage, preserving ranges until write admission.
+- `borrowed_facet_axis_views_preserve_bootstrap_and_global_conditions` compares
+  sampled grouped Bar facet domains with the authoritative existing child
+  preparer and checks complete global Trajectory condition order on sparse panels.
+- `source_labels_admit_aliases_humanization_and_collision_storage` covers raw,
+  humanized and aliased refusal, refused output before source-iterator work,
+  repeated raw identities, collision diagnostics, Unicode whitespace/combining
+  text/case expansion and acronym parity.
+- `arc_retention_admits_header_and_value_without_recopying_vector_storage`
+  checks work/byte refusal, header/value budget boundaries and unchanged vector
+  buffer identity. `regression_axis_channel_and_fit_work_is_admitted_before_preparation`
+  checks channel-storage/fit-work refusal and numeric parity.
+
+Limits and next-stage boundary: SOURCE here means **axis-owned** range resolution,
+broadening, scale/policy projection, source/spec/category preparation, generated
+tick/label materialization and axis fit work. Zero capture SOURCE counters do not
+claim zero ordinary mark/statistical recomputation. Full-family KDE/fit/bar and
+other interior payload extraction, canonical primitives and deferred-family/parent
+adapters remain T5a6a; ordinary exact-root migration/closure remains T5a6b-T5a6d.
+Matrix/Marginal packing, Canvas/facet tracks, full domain feedback and T5c
+mark/density/annotation sizing retain their declared owners. No T5a6 substage or
+parent T5a completion is implied.
+
+Remaining `canvas_probe` uses are hue/category/legend probes, not shared-x range
+replay. `PanelAxisPlan::draw_grid` replays retained lines; Matrix's `draw_frame`
+is deferred cell geometry, not an automatic source selector. The resource audit
+does not claim generic allocator interception, recoverable std Arc OOM, or
+whole-family pre-font validation precedence. There is no known unresolved T5a5
+acceptance item; these are unchanged scope limits, not deferred T5a5 blockers.
 
 Dependencies: T5a4.
 

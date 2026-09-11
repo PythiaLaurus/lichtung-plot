@@ -1,7 +1,6 @@
 //! Caller-computed geometry accepted by distribution renderers.
 
-use std::collections::HashSet;
-
+use crate::data::{source::SourceAdmission, PlotData};
 use crate::Error;
 
 const MAX_RAINCLOUD_GROUPS: usize = 512;
@@ -123,10 +122,13 @@ pub struct HistogramRug {
 }
 
 impl RaincloudGeometry {
-    pub(crate) fn validate(&self) -> Result<(f64, f64), Error> {
+    pub(crate) fn validate(&self, data: Option<PlotData<'_>>) -> Result<(f64, f64), Error> {
+        data.source_visits(self.dimensions.category.len())?;
+        data.source_visits(self.dimensions.value.len())?;
         validate_dimension(&self.dimensions.category, "raincloud category dimension")?;
         validate_dimension(&self.dimensions.value, "raincloud value dimension")?;
         if let Some(hue) = &self.dimensions.hue {
+            data.source_visits(hue.len())?;
             validate_dimension(hue, "raincloud hue dimension")?;
         }
         if self.groups.is_empty() {
@@ -144,11 +146,12 @@ impl RaincloudGeometry {
                 "raincloud hue dimension and group hue identities must either both be present or both be absent",
             ));
         }
-        let mut group_identities = HashSet::new();
         let mut density_point_count = 0_usize;
         let mut raw_point_count = 0_usize;
         let mut y_range = (f64::INFINITY, f64::NEG_INFINITY);
         for (group_index, group) in self.groups.iter().enumerate() {
+            data.source_visits(1)?;
+            data.source_visits(group.category.len())?;
             if group.category.trim().is_empty() {
                 return Err(data_error(format!(
                     "raincloud geometry group {group_index} has an empty category"
@@ -159,16 +162,22 @@ impl RaincloudGeometry {
                     "raincloud geometry hue identities must be present for every group or absent for every group",
                 ));
             }
+            if let Some(hue) = &group.hue {
+                data.source_visits(hue.len())?;
+            }
             if group.hue.as_ref().is_some_and(|hue| hue.trim().is_empty()) {
                 return Err(data_error(format!(
                     "raincloud geometry group {group_index} has an empty hue"
                 )));
             }
-            if !group_identities.insert((group.category.as_str(), group.hue.as_deref())) {
-                return Err(data_error(format!(
-                    "raincloud geometry contains duplicate category-hue identity ({:?}, {:?})",
-                    group.category, group.hue
-                )));
+            for previous in &self.groups[..group_index] {
+                data.source_visits(1)?;
+                if previous.category == group.category && previous.hue == group.hue {
+                    return Err(data_error(format!(
+                        "raincloud geometry contains duplicate category-hue identity ({:?}, {:?})",
+                        group.category, group.hue
+                    )));
+                }
             }
             density_point_count = density_point_count
                 .checked_add(group.density.len())
@@ -186,7 +195,7 @@ impl RaincloudGeometry {
                     "raincloud geometry has more than {MAX_RAINCLOUD_RAW_POINTS} raw points, exceeding the safety limit"
                 )));
             }
-            let group_range = validate_raincloud_group(group, group_index)?;
+            let group_range = validate_raincloud_group(group, group_index, data)?;
             y_range.0 = y_range.0.min(group_range.0);
             y_range.1 = y_range.1.max(group_range.1);
         }
@@ -197,6 +206,7 @@ impl RaincloudGeometry {
 fn validate_raincloud_group(
     group: &RaincloudGroup,
     group_index: usize,
+    data: Option<PlotData<'_>>,
 ) -> Result<(f64, f64), Error> {
     if group.density.len() < 2 {
         return Err(data_error(format!(
@@ -209,7 +219,9 @@ fn validate_raincloud_group(
             group.density.len()
         )));
     }
+    let mut positive_width = false;
     for (point_index, point) in group.density.iter().enumerate() {
+        data.source_visits(1)?;
         if !point.y.is_finite()
             || !point.normalized_width.is_finite()
             || !(0.0..=1.0).contains(&point.normalized_width)
@@ -223,12 +235,9 @@ fn validate_raincloud_group(
                 "raincloud geometry group {group_index} density y coordinates must be strictly increasing"
             )));
         }
+        positive_width |= point.normalized_width > 0.0;
     }
-    if !group
-        .density
-        .iter()
-        .any(|point| point.normalized_width > 0.0)
-    {
+    if !positive_width {
         return Err(data_error(format!(
             "raincloud geometry group {group_index} requires a positive density width"
         )));
@@ -256,6 +265,7 @@ fn validate_raincloud_group(
         )));
     }
     for (point_index, point) in group.points.iter().enumerate() {
+        data.source_visits(1)?;
         if !point.y.is_finite()
             || !point.normalized_strip.is_finite()
             || !(0.0..=1.0).contains(&point.normalized_strip)
@@ -274,7 +284,9 @@ fn validate_raincloud_group(
 }
 
 impl HistogramGeometry {
-    pub(crate) fn validate(&self) -> Result<(f64, f64), Error> {
+    pub(crate) fn validate(&self, data: Option<PlotData<'_>>) -> Result<(f64, f64), Error> {
+        data.source_visits(self.dimensions.value.len())?;
+        data.source_visits(self.dimensions.density.len())?;
         validate_dimension(&self.dimensions.value, "histogram value dimension")?;
         validate_dimension(&self.dimensions.density, "histogram density dimension")?;
         if self.bins.is_empty() {
@@ -300,7 +312,9 @@ impl HistogramGeometry {
                 self.rugs.len()
             )));
         }
+        let mut positive_density = false;
         for (index, bin) in self.bins.iter().enumerate() {
+            data.source_visits(1)?;
             if !bin.lower.is_finite()
                 || !bin.upper.is_finite()
                 || !bin.density.is_finite()
@@ -321,26 +335,33 @@ impl HistogramGeometry {
                     self.bins[index - 1].upper
                 )));
             }
+            positive_density |= bin.density > 0.0;
         }
-        if !self.bins.iter().any(|bin| bin.density > 0.0) {
+        if !positive_density {
             return Err(data_error(
                 "histogram composite geometry requires a positive bin density",
             ));
         }
         let range = (self.bins[0].lower, self.bins[self.bins.len() - 1].upper);
-        validate_histogram_kde(&self.kde, range)?;
-        validate_histogram_rugs(&self.rugs, range)?;
+        validate_histogram_kde(&self.kde, range, data)?;
+        validate_histogram_rugs(&self.rugs, range, data)?;
         Ok(range)
     }
 }
 
-fn validate_histogram_kde(points: &[HistogramKdePoint], range: (f64, f64)) -> Result<(), Error> {
+fn validate_histogram_kde(
+    points: &[HistogramKdePoint],
+    range: (f64, f64),
+    data: Option<PlotData<'_>>,
+) -> Result<(), Error> {
     if points.len() < 2 {
         return Err(data_error(
             "histogram composite geometry requires at least two KDE points",
         ));
     }
+    let mut positive_density = false;
     for (index, point) in points.iter().enumerate() {
+        data.source_visits(1)?;
         if !point.x.is_finite() || !point.y.is_finite() || point.y < 0.0 {
             return Err(data_error(format!(
                 "histogram composite KDE point {index} requires finite x and nonnegative finite y"
@@ -357,8 +378,9 @@ fn validate_histogram_kde(points: &[HistogramKdePoint], range: (f64, f64)) -> Re
                 "histogram composite KDE x coordinates must be strictly increasing",
             ));
         }
+        positive_density |= point.y > 0.0;
     }
-    if !points.iter().any(|point| point.y > 0.0) {
+    if !positive_density {
         return Err(data_error(
             "histogram composite geometry requires a positive KDE y coordinate",
         ));
@@ -366,13 +388,18 @@ fn validate_histogram_kde(points: &[HistogramKdePoint], range: (f64, f64)) -> Re
     Ok(())
 }
 
-fn validate_histogram_rugs(rugs: &[HistogramRug], range: (f64, f64)) -> Result<(), Error> {
+fn validate_histogram_rugs(
+    rugs: &[HistogramRug],
+    range: (f64, f64),
+    data: Option<PlotData<'_>>,
+) -> Result<(), Error> {
     if rugs.is_empty() {
         return Err(data_error(
             "histogram composite geometry requires at least one rug segment",
         ));
     }
     for (index, rug) in rugs.iter().enumerate() {
+        data.source_visits(1)?;
         if !rug.x.is_finite()
             || !rug.baseline.is_finite()
             || !rug.top.is_finite()
@@ -402,5 +429,98 @@ fn validate_dimension(value: &str, name: &str) -> Result<(), Error> {
         Err(data_error(format!("{name} must be nonempty")))
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn supplied_geometry_validation_needs_no_storage_and_refuses_before_record_work() {
+        let chart = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0]),
+            crate::NumericValues::new("y", [1.0]),
+        )
+        .erase();
+        let histogram = HistogramGeometry {
+            dimensions: HistogramDimensions {
+                value: "x".into(),
+                density: "y".into(),
+            },
+            bins: vec![HistogramBin {
+                lower: -2.0,
+                upper: 2.0,
+                density: 1.0,
+            }],
+            kde: vec![
+                HistogramKdePoint { x: -2.0, y: 0.5 },
+                HistogramKdePoint { x: 2.0, y: 0.5 },
+            ],
+            rugs: vec![HistogramRug {
+                x: 0.0,
+                baseline: 0.0,
+                top: 0.1,
+            }],
+        };
+        let raincloud = RaincloudGeometry {
+            dimensions: RaincloudDimensions {
+                category: "x".into(),
+                value: "y".into(),
+                hue: None,
+            },
+            groups: ["a", "b"]
+                .into_iter()
+                .map(|category| RaincloudGroup {
+                    category: category.into(),
+                    hue: None,
+                    density: vec![
+                        RaincloudDensityPoint {
+                            y: -2.0,
+                            normalized_width: 0.5,
+                        },
+                        RaincloudDensityPoint {
+                            y: 2.0,
+                            normalized_width: 0.5,
+                        },
+                    ],
+                    q1: -1.0,
+                    median: 0.0,
+                    q3: 1.0,
+                    points: vec![RaincloudPoint {
+                        y: 0.0,
+                        normalized_strip: 0.5,
+                    }],
+                })
+                .collect(),
+        };
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(100, 0);
+        let data = Some(chart.data().with_axis_resources(&resources));
+        assert_eq!(
+            histogram.validate(data).unwrap(),
+            histogram.validate(None).unwrap()
+        );
+        assert_eq!(
+            raincloud.validate(data).unwrap(),
+            raincloud.validate(None).unwrap()
+        );
+        let mut invalid_histogram = histogram;
+        invalid_histogram.bins[0].lower = f64::INFINITY;
+        let mut invalid_raincloud = raincloud;
+        invalid_raincloud.groups[0].density[0].y = f64::INFINITY;
+        for (limit, histogram) in [(2, true), (4, false)] {
+            let resources =
+                crate::font::canonical::OperationGenerationResources::with_test_limits(limit, 0);
+            let data = Some(chart.data().with_axis_resources(&resources));
+            let error = if histogram {
+                invalid_histogram.validate(data)
+            } else {
+                invalid_raincloud.validate(data)
+            }
+            .unwrap_err();
+            assert!(matches!(error, Error::Render(_)), "{error}");
+            assert!(error.to_string().contains("work admission"), "{error}");
+        }
     }
 }

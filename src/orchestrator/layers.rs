@@ -2,16 +2,18 @@
 
 use crate::Error;
 
-use crate::layout::{AxisSide, AxisTick};
+use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, Point2D};
 use crate::spec::{AxisScale, PlotKind, PlotRenderResult};
-use crate::theme::ResolvedTheme;
 use crate::{GuideSpec, Plot};
 
 impl Plot {
-    pub(crate) fn projected_explicit_x_ticks(&self) -> Result<Option<Vec<AxisTick>>, Error> {
+    pub(crate) fn projected_explicit_x_ticks(
+        &self,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Option<Vec<AxisTick>>, Error> {
         self.explicit_x_ticks()
-            .map(|ticks| projected_x_ticks(self, ticks))
+            .map(|ticks| projected_x_ticks(self, ticks, data))
             .transpose()
     }
     pub(crate) fn validate_supplemental_configuration(&self, kind: PlotKind) -> Result<(), Error> {
@@ -78,9 +80,7 @@ impl Plot {
 pub(crate) fn apply(
     chart: &Plot,
     result: &mut PlotRenderResult,
-    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
-    scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let projection = &result.layout.projection;
     if chart.explicit_x_ticks().is_some() {
@@ -89,26 +89,12 @@ pub(crate) fn apply(
             projection.x_range(),
             "x-axis",
         )?;
-        result.layout.x_axis.validate_explicit_tick_collisions(
-            projection,
-            AxisSide::Bottom,
-            theme,
-            "x-axis",
-            &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
-        )?;
     }
     if chart.explicit_y_ticks().is_some() {
         crate::layout::Axis::validate_ticks(
             &result.layout.y_axis.ticks,
             projection.y_range(),
             "y-axis",
-        )?;
-        result.layout.y_axis.validate_explicit_tick_collisions(
-            projection,
-            AxisSide::Left,
-            theme,
-            "y-axis",
-            &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
         )?;
     }
     if chart.guides().is_empty() {
@@ -132,23 +118,61 @@ pub(crate) fn apply(
     .map_err(Into::into)
 }
 
-fn projected_x_ticks(chart: &Plot, ticks: &[AxisTick]) -> Result<Vec<AxisTick>, Error> {
-    if chart.axis_scale_spec() == AxisScale::Linear {
-        return Ok(ticks.to_vec());
-    }
-    ticks
+fn projected_x_ticks(
+    chart: &Plot,
+    ticks: &[AxisTick],
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<AxisTick>, Error> {
+    data.collect_source(ticks
         .iter()
         .enumerate()
         .map(|(index, tick)| {
-            if tick.position <= 0.0 {
+            let position = if chart.axis_scale_spec() == AxisScale::Linear {
+                tick.position
+            } else {
+                if tick.position <= 0.0 {
                 return Err(Error::Data(format!(
                     "x-axis explicit tick {index} position must be strictly positive on a logarithmic scale; got {}",
                     tick.position
                 )));
-            }
-            Ok(AxisTick::new(tick.position.log10(), tick.label.clone()))
-        })
-        .collect()
+                }
+                tick.position.log10()
+            };
+            Ok(AxisTick::new(position, data.copy_source_string(&tick.label)?))
+        }))
+}
+
+#[cfg(test)]
+#[test]
+fn projected_exact_ticks_admit_records_and_labels_before_transformation() {
+    let chart = Plot::forest(
+        crate::CategoryValues::new("term", ["a"]).unwrap(),
+        crate::NumericValues::new("value", [1.0]),
+        crate::Bounds::new(
+            crate::NumericValues::new("lower", [0.1]),
+            crate::NumericValues::new("upper", [10.0]),
+        ),
+        1.0,
+    )
+    .scale(AxisScale::Log10)
+    .erase();
+    for (visits, bytes) in [(0, 100), (100, 0)] {
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(visits, bytes);
+        let error = projected_x_ticks(
+            &chart,
+            &[AxisTick::new(0.0, "invalid")],
+            chart.data().with_axis_resources(&resources),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::Render(_)), "{error}");
+    }
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let ticks = [AxisTick::new(0.1, "lower"), AxisTick::new(10.0, "upper")];
+    assert_eq!(
+        projected_x_ticks(&chart, &ticks, chart.data().with_axis_resources(&resources)).unwrap(),
+        [AxisTick::new(-1.0, "lower"), AxisTick::new(1.0, "upper")]
+    );
 }
 
 fn project_guide(

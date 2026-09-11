@@ -25,6 +25,8 @@ thread_local! {
 struct Inputs {
     owners: [ComponentAddress; 2],
     geometry: [u64; 4],
+    axis_label_width: u64,
+    standard: crate::layout::StandardPanelInputs,
     plot: crate::builder::ComposedInputs,
     theme: crate::theme::ResolvedTheme,
     scales: Option<FacetScales>,
@@ -58,6 +60,8 @@ impl Inputs {
         let owners = [owner.clone(), grid_owner];
         Ok(Self {
             geometry: geometry(context.panel),
+            axis_label_width: context.axis_label_width.to_bits(),
+            standard: crate::layout::StandardPanelInputs::new(context.theme)?,
             plot: plot.retain_composed_inputs(environment)?,
             theme: context.theme.clone(),
             scales: context.facet_scales(),
@@ -75,6 +79,8 @@ impl Inputs {
     ) -> bool {
         self.owners[0] == *owner
             && self.geometry == geometry(context.panel)
+            && self.axis_label_width == context.axis_label_width.to_bits()
+            && self.standard.matches(context.theme)
             && plot.same_composed_inputs(&self.plot)
             && self.theme == *context.theme
             && self.scales == context.facet_scales()
@@ -99,7 +105,6 @@ pub(crate) enum MeasurementPhase {
     Probe,
     Hue,
     Legend,
-    Range,
     Category,
 }
 
@@ -111,7 +116,6 @@ impl MeasurementPhase {
             Self::Probe => "probe",
             Self::Hue => "hue-probe",
             Self::Legend => "legend-probe",
-            Self::Range => "range-probe",
             Self::Category => "category-probe",
         }
     }
@@ -380,6 +384,12 @@ mod tests {
                 .is_err());
                 let key = Inputs::new(&source, context, &owner, round)?;
                 assert!(key.matches(&source, context, &owner, round));
+                assert!(!key.matches(
+                    &source,
+                    context.with_axis_label_width(context.axis_label_width + 1.0),
+                    &owner,
+                    round
+                ));
                 for moved in [
                     PanelBox::new(11.0, 201.0, 30.0, 400.0),
                     PanelBox::new(10.0, 200.0, 31.0, 401.0),
@@ -406,7 +416,7 @@ mod tests {
                         .with_global_line_condition_levels(vec!["new condition".into()]),
                     source.clone().with_global_collective_pairs(Vec::new()),
                     source.clone().with_y_tick_labels_visible(false),
-                    source.clone().with_measured_composed_axis_text(),
+                    source.clone().with_parent_axis_gutters(),
                     source.clone().with_suppressed_legend(),
                 ] {
                     assert!(!key.matches(&plot, context, &owner, round));

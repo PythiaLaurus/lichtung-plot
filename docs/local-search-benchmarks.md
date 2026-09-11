@@ -8,6 +8,216 @@ The final aggregate release run in
 tests including five unchanged snapshots, API documentation, and package
 verification (207 files). The verification log is `/tmp/opencode/t5a3q-verify.log`.
 
+## T5a5 Audit (2026-09-11)
+
+### Final Benchmark Closure (2026-09-11)
+
+The completed implementation's final release run,
+`/tmp/opencode/t5a5-final-benchmarks.log`, passes **all 10 ignored measurement
+groups**, zero failed, zero ignored, 804 filtered out (8.41 seconds of test
+execution). It uses the ignored release command recorded below. The final
+`just verify` log, `/tmp/opencode/t5a5-final-verify.log`, passes formatting,
+strict locked/offline all-target Clippy, **797 library tests (17 ignored)**,
+**442 integration tests including six snapshots**, warning-denied API docs and
+package verification (**219 files**). All ten normal benchmark contracts pass in
+that full run. These are existing final-run results, not tests rerun for this
+documentation-only closure.
+
+The final source includes the Density configured-display-domain correction,
+admission of owned measurement-time axis copies, and scoped terminal Tick misses
+through Marginal/Matrix dispatch. Their regression tests pass in the final gate.
+The reflow/facet fixes and output-equality gates described below remain closed.
+All three final long-Heatmap Elide samples assert the same 400-prefix attribution:
+`[(0, 200, false), (1, 200, true)]`. This does not explain the former 500 golden
+or establish a speedup from it.
+
+T5a5 is COMPLETE in `specs/91_IMPLEMENTATION_PLAN.md`; there is no known unresolved
+T5a5 benchmark acceptance item. The preparation-run and superseded audit notes
+below describe earlier runs, not the final checkout's status. All historical
+**T5a3q tables, timings and hashes remain unchanged**: current adaptive ticks,
+assigned cells, gutters and root paths are not an output-equivalent performance
+baseline for T5a3q. The 8.41-second duration is a local observation, not a speedup
+claim. Whole-family interior extraction and deferred adapters remain T5a6a work;
+this closure does not expand scope or claim a commit.
+
+### Superseding Preparation Results (2026-09-11)
+
+This note supersedes the earlier T5a5 audit observations below, including its
+unresolved reflow/facet defects, Heatmap mismatch, and failing run results.
+Those observations and all T5a3q tables/hashes are retained as history, not
+current-policy profiles. This benchmark-only completion changes no production
+code, fixture dimensions, label sources, counter definitions, or output gates.
+
+The unchanged long Heatmap Elide fixture now asserts **400 actual prefix
+candidates**, attributed to root ordinal 0: **200, unsuccessful**, and ordinal
+1: **200, successful**. Their sum is asserted against the aggregate counter.
+The normal contract and all three release samples report this same attribution
+(`heatmap_prefix_roots` and `paired_root,heatmap_long_elide` in the logs below).
+`src/plots/heatmap.rs::fitted_label` increments `HeatmapPrefixTrial` for each
+grapheme-prefix-plus-ellipsis candidate before its width check, including the
+first rejected extension. Full-label and ellipsis-only width checks are not
+prefix trials; cached text measurements still count candidate visits.
+`src/orchestrator/measurements.rs::count` attributes each increment to the active
+root round. Neither definition was changed to obtain 400.
+
+**Golden-count change explanation:** 500 was a previous expectation, not a
+current measured profile. No recorded root attribution here establishes why
+that expectation was 500, so this update does not invent a historical cause or
+claim an optimization from 500 to 400. The historical T5a3q table's 300 is also
+left untouched. The new golden records current defined work under the current
+axis/feedback policy. All six elided labels must remain distinct; Wrap retains
+complete labels; shared-prefix Elide still rejects ambiguity at 96 candidates
+and publishes no artifacts.
+
+The production reflow and selected-edge defects reported in the earlier audit
+are now fixed in the tested checkout. The original `historical_reflow_640x400`
+public path selects compact right in two rounds, not top in one round:
+preferred right is rejected guide-only in each round; compact right is first
+provisional, then accepted. It records 4 guide trials, 2 body checks, and 180
+text proposals. Auto and explicit right now have identical outlined SVG,
+preserved SVG, encoded PNG, and decoded pixels. The separate 630x480
+`compact_right` control still has 1 round, 2 trials, 2 checks, and 11 proposals;
+it is not substituted for or compared for equality with the historical fixture.
+
+Pressured facets now select right without a provisional top detour, and explicit
+right succeeds with identical output. Both policies record 3 rounds, 4 trials,
+6 checks, and 0 child hits / 24 misses / 0 replays. The normal
+`measured_gutter_reflow_preserves_complete_frames_without_cache` contract also
+checks both reflow and pressured facets with child reuse disabled, preserving
+output equality, complete frames, minimum body size, and all marks. The seeded
+15 px gutter control remains separate from the natural public lifecycle.
+
+| Current fixture | Root rounds | Guide trials / body checks | Child hits / misses / replays |
+| --- | ---: | ---: | ---: |
+| Adequate Canvas/facets | 2 | 2 / 4 | 0 / 16 / 0 |
+| Pressured Canvas, selected top | 3 | 7 / 6 | 0 / 24 / 0 |
+| Pressured facets, Auto/explicit right | 3 | 4 / 6 | 0 / 24 / 0 |
+
+| Current text fixture | Root rounds | Prefix trials | Exact trials / shapes |
+| --- | ---: | ---: | ---: |
+| Short Heatmap Wrap/Elide | 2 | 0 | 14 / 14 |
+| Long Heatmap Wrap | 2 | 0 | 67 / 67 |
+| Long Heatmap Elide | 2 | 400 | 115 / 115 |
+| Shared-prefix Heatmap Wrap | 2 | 0 | 89 / 89 |
+| Shared-prefix Heatmap Elide, failure | 1 | 96 | 29 / 29 |
+
+Matrix retains 1 root round, 3 local passes (6 for tight long labels), and
+12 tick sources / 12 lists. At 1200x1200 both label variants have 72 metric
+lookups and 9 shapes; at 600x600 both have 36 lookups, with 6 shapes for short
+labels and 90 for long labels. Sparse/dense inside placement retains 2 rounds,
+28/2005 geometry scans, 2 annotation comparisons, and no automatic corner
+candidates. Controlled child reuse remains 2 hits / 2 misses / 1 replay.
+
+Completion runs use the three audit commands below, with full output in:
+
+- `/tmp/opencode/t5a5-preparation-benchmarks-normal.log`
+- `/tmp/opencode/t5a5-preparation-benchmarks-release.log`
+- `/tmp/opencode/t5a5-preparation-benchmarks-clippy.log`
+
+The normal run passed **10 contracts, 0 failed, 10 ignored, 767 filtered out**
+(46.17 seconds). The release run passed **all 10 ignored groups, 0 failed,
+0 ignored, 777 filtered out** (7.97 seconds): significance search; font observer
+overhead, synthetic coverage, and system preparation; inside, outside, and
+shared legends; publication efficiency; paragraph search; specialized text
+search. These durations are local execution observations, not comparable
+performance claims. Strict all-target Clippy passed with warnings denied
+(5.24 seconds), after adding a scoped function-length expectation to keep the
+Heatmap fixture and its correctness assertions together. The changed Rust file
+passes `rustfmt --check`, and the owned paths pass `git diff --check`.
+No `just verify` or commit was requested or performed.
+
+### Earlier Audit Observations (Superseded)
+
+The tables and hash comparisons below remain the historical **T5a3q** report.
+They are not current-policy baselines. T5a5 intentionally changes adaptive tick
+sources, assigned label cells, and measured gutter feedback. Running the command
+below on T5a5 measures that checkout; reproducing the historical tables requires
+the T5a3q source state and its font/host conditions. No new timings or hashes have
+been substituted into those tables.
+
+The benchmark-only audit preserves the original 640x400, 18-entry/36-mark reflow
+input as `historical_reflow_640x400`. Its current public path is one root round:
+preferred right fails guide-only, compact right fails during body planning, and
+preferred top succeeds (3 guide trials, 2 body checks, 90 text proposals).
+Auto and explicit top have byte-identical outlined SVG, preserved SVG, PNG, and
+decoded pixels. Explicit right fails and publishes nothing. This is an observed
+behavior, **not a claim that compact right cannot legitimately fit**.
+
+The audit found a production gutter-feedback defect in
+`src/decorations/plan.rs`, at the `next_gutters` / `requirements.assign_fit`
+check in `plan_panel_attempt`: the previously measured compact guide leaves an
+80 px body. Its native axes require a 89.26953125 px left gutter, which requests
+15 px beyond the intrinsic reservation after the owned 4 px gap. The old guide
+is checked against the new gutter and rejected before being remeasured with the
+changed assignment. `historical_reflow_measured_gutter_control` seeds that 15 px
+feedback in a controlled first round, then calls the production planner on the
+unchanged fixture. Preferred right is rejected guide-only and compact right is
+accepted with an 80 px body and the same measured gutter requirement. This
+demonstrates a self-consistent fitting plan, not public output equality or a
+measurement of the natural public lifecycle. Production was not changed here.
+
+A separate public `compact_right` control uses **630x480, two long entries/four
+marks, and a 20-character `M` x-axis title**. Preferred right fails the body check;
+compact right succeeds in one root round (2 trials, 2 checks, 11 text proposals).
+The height accommodates wrapped entries and the width puts the complete title
+between the preferred and compact body allocations. Probes at 625x480 selected
+top, at 635x480 selected compact right, and at 640x480 selected preferred right.
+This is a different workload and rejection phase, not an equivalent replacement
+for T5a3q's 18-entry guide-only reflow case. Its Auto/explicit-right equality is
+checked independently; historical/new fixtures are never compared for equality.
+
+Other current-policy observations are asserted rather than relaxed to bounds:
+
+| Fixture | Root rounds | Guide trials / body checks | Child hits / misses / replays |
+| --- | ---: | ---: | ---: |
+| Adequate Canvas/facets | 2 | 2 / 4 | 0 / 16 / 0 |
+| Pressured Canvas, selected top | 3 | 7 / 6 | 0 / 24 / 0 |
+| Pressured facets, Auto selected right | 4 | 6 / 8 | 0 / 32 / 0 |
+
+Sparse inside placement now has two rounds for gutter feedback, 28 geometry
+scans and 2 annotation comparisons; its panel left edge moves from 79.2 to
+115.2 px. Dense inside placement retains two rounds, 2005 scans and 2 comparisons.
+Both still have zero automatic corner candidates and retain containment, mark
+clearance, and the caller annotation. Controlled child reuse still asserts
+2 hits, 2 misses, 1 replay, separately from end-to-end cache utilization.
+Matrix local passes remain 3 (6 for tight long labels), but native tick counts
+are 12 sources / 12 lists, with 36 metric lookups at 600x600 and 72 at 1200x1200.
+The long Heatmap Elide contract still expects 500 prefixes, but the current
+unchanged 1200x500 fixture measures 400: 200 in each of two root rounds, with only
+the second round successful. Per-round counters expose this unresolved mismatch;
+no historical/current root-path comparison yet justifies replacing 500. The
+ambiguous Elide contract expects 96 and failure without artifacts. Normal text
+contracts cover the Heatmap and Matrix variants but the combined contract
+currently stops at the long Elide mismatch. Font, paragraph-cache, significance, lifecycle, and artifact
+contracts retain their existing semantic checks.
+
+**Unresolved selected-edge defect:** pressured facets at 560x360 finish on right
+under Auto after a provisional top round, but explicit right fails with
+`available panel size is 70.7x222.8`. Auto's trace is provisional right; rejected
+preferred/compact right followed by provisional top; provisional right; accepted
+right. The ordinary `shared_legend_selected_edge_contract` and ignored
+`shared_legend_measurements` retain their success/equality gates and expose this
+failure. No output-equivalent pressured-facet pair or speedup is claimed for
+T5a5. The historical T5a3q top pair below is unchanged.
+
+Audit commands (no `just verify` or commit):
+
+```sh
+cargo test --locked --offline --lib benchmarks -- --nocapture --test-threads=1
+cargo test --release --locked --offline --lib benchmarks -- --ignored --nocapture --test-threads=1
+cargo clippy --locked --offline --all-targets -- -D warnings
+```
+
+Final audit results: **8 normal contracts passed, 1 failed, 10 ignored**;
+**9 ignored release groups passed, 1 failed**; strict all-target Clippy passed.
+Both failures are the pressured-facet explicit-right defect above, not relaxed
+counter checks. Logs are `/tmp/opencode/t5a5-benchmarks-normal.log`,
+`/tmp/opencode/t5a5-benchmarks-release.log`, and
+`/tmp/opencode/t5a5-benchmarks-clippy.log`. Concurrent production edits caused
+transient compilation failures during probing; the final runs compiled and
+reproduced the same selected-edge failure in debug and release. These runs do
+not establish performance comparability with the historical measurements.
+
 ## Conditions And Sources
 
 Reproduction command from `specs/91_IMPLEMENTATION_PLAN.md`, T5a3q:
@@ -16,7 +226,7 @@ Reproduction command from `specs/91_IMPLEMENTATION_PLAN.md`, T5a3q:
 cargo test --release --locked --offline --lib benchmarks -- --ignored --nocapture --test-threads=1
 ```
 
-- Build: optimized release test binary, `lichtung-plot` 0.1.0; current toolchain
+- Build: optimized release test binary, `lichtung-plot` 0.1.0; T5a3q toolchain
   `rustc 1.96.0 (ac68faa20 2026-05-25)`, LLVM 22.1.2,
   `x86_64-unknown-linux-gnu`. No custom release profile is declared.
 - Host inspected alongside the report: AMD Ryzen 9 7950X3D, 16 cores/32 logical

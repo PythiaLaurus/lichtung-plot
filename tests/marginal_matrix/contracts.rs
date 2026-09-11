@@ -268,17 +268,15 @@ fn marginal_auto_range_includes_kde_support_beyond_raw_data() {
     let plot = marginal(&data)
         .group(data.group.clone().unwrap())
         .hue(data.hue.clone().unwrap())
+        .legend(LegendPolicy::Hidden)
         .size(420, 300);
     let svg = render(plot, "marginal-kde-support");
     let central = parse_first_clip_rect(&svg);
-    let text = parse_text_elements(&svg);
-    let x_ticks = numeric_text_values(
-        text.iter()
-            .filter(|entry| entry.y > central.y + central.height),
-    );
-    let y_ticks = numeric_text_values(text.iter().filter(|entry| entry.x < central.x));
-    assert!(x_ticks.iter().any(|tick| *tick < 0.0) && x_ticks.iter().any(|tick| *tick > 2.0));
-    assert!(y_ticks.iter().any(|tick| *tick < 5.0) && y_ticks.iter().any(|tick| *tick > 80.0));
+    // Domain support is independent of the adaptive source's selected positions.
+    // The observed extrema (0..2 and 5..80) must project strictly inside it.
+    let (min_x, max_x, min_y, max_y) = circle_bounds(&parse_circles(&svg));
+    assert!(min_x > central.x && max_x < central.x + central.width);
+    assert!(min_y > central.y && max_y < central.y + central.height);
 }
 
 #[test]

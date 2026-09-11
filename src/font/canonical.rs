@@ -997,6 +997,19 @@ pub(crate) struct OperationGenerationResources {
 }
 
 impl OperationGenerationResources {
+    #[cfg(test)]
+    pub(crate) fn with_test_limits(visits: u128, bytes: u64) -> Self {
+        Self {
+            counters: Arc::new(Mutex::new(GenerationResourceCounters {
+                slots: 0,
+                visits: 0,
+                visit_limit: visits,
+                bytes: 0,
+                byte_limit: bytes,
+            })),
+        }
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             counters: Arc::new(Mutex::new(GenerationResourceCounters {
@@ -1055,6 +1068,14 @@ impl OperationGenerationResources {
             .lock()
             .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
         Ok((counters.slots, counters.visits))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn byte_usage(&self) -> Result<u64, FontError> {
+        self.counters
+            .lock()
+            .map(|counters| counters.bytes)
+            .map_err(|_| FontError::Synchronization)
     }
 }
 
@@ -1217,7 +1238,6 @@ impl PreparedFontEnvironment {
         Ok(())
     }
 
-    #[cfg(test)]
     pub(crate) fn generation_resources(&self) -> OperationGenerationResources {
         self.core.read().unwrap().generation_resources.clone()
     }

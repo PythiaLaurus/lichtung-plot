@@ -81,14 +81,6 @@ pub(crate) fn render(
     let theme = context.theme;
     let mut text = context.producer_text()?;
     let prepared = prepare(chart, context.data)?;
-    let x_labels = chart.resolve_label_domain(
-        "heatmap x-axis categories",
-        prepared.x_levels.iter().map(String::as_str),
-    )?;
-    let y_labels = chart.resolve_label_domain(
-        "heatmap y-axis categories",
-        prepared.y_levels.iter().map(String::as_str),
-    )?;
     let color_label = chart.resolved_color_label();
     let detail_font_size = theme.detail_font_size;
     let guide_scope = context
@@ -152,24 +144,55 @@ pub(crate) fn render(
     }
     let mut body = context.panel;
     body.x1 -= colorbar_reserve;
-    let wrap_labels = chart.heatmap_label_fit_spec() == HeatmapLabelFit::Wrap;
-    let (panel, tick_width) = if wrap_labels {
-        crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
-            chart,
-            body,
-            &y_labels,
-            theme,
-            context.fit_scope(),
-        )?
-    } else {
-        crate::plots::horizontal_bar::panel_box_for_elided_y_tick_labels(
-            chart,
-            body,
-            &y_labels,
-            theme,
-            context.fit_scope(),
-        )?
+    let mut annotations = None;
+    let layout = context.axis_layout(|| -> Result<_, crate::layout::fit::PlanError> {
+    let x_labels = match context.prepared_category_labels(0) {
+        Some(labels) => labels.to_vec(),
+        None => chart.resolve_label_domain("heatmap x-axis categories", prepared.x_levels.iter().map(String::as_str))?,
     };
+    let y_labels = match context.prepared_category_labels(1) {
+        Some(labels) => labels.to_vec(),
+        None => chart.resolve_label_domain("heatmap y-axis categories", prepared.y_levels.iter().map(String::as_str))?,
+    };
+    let wrap_labels = chart.heatmap_label_fit_spec() == HeatmapLabelFit::Wrap;
+    // Heatmap owns its rotated/elided text adapter until family extraction.
+    let chrome = crate::layout::y_axis_left_inset_for_tick_labels(
+        0.0,
+        theme.axes.ticks.as_ref().map_or(0, |ticks| ticks.length),
+        theme.typography.axis_title.font_size,
+        &theme.axes.spacing,
+    );
+    let base_left = chart.base_canvas_layout(theme).panel_box.x0.min(body.x0);
+    let available = body.width() - 40.0 + base_left - chrome;
+    if available <= 0.0 {
+        return Err(context
+            .fit_scope()
+            .failure(
+                crate::layout::fit::FitKind::TrackOrResidual,
+                "heatmap: y-axis labels leave no width for the minimum 40px plot panel",
+            )
+            .into());
+    }
+    let mut natural = 1.0 / 1024.0;
+    for label in &y_labels {
+        let plan = theme.measure_text(
+            label,
+            &theme.typography.tick_label,
+            PhysicalTextAlignment::End,
+            "y-axis category label",
+            false,
+        )?;
+        natural = f64::max(natural, plan.width().max(plan.fit_width()));
+    }
+    let tick_width = if natural <= available || !wrap_labels {
+        natural.min(available)
+    } else {
+        theme
+            .intrinsic_tick_label_width(y_labels.iter().map(String::as_str), body.height())?
+            .min(available)
+    };
+    let mut panel = body;
+    panel.x0 += (tick_width + chrome - base_left).max(0.0);
     let minimum_panel_height = if prepared.has_missing { 90.0 } else { 60.0 };
     if panel.width() < 40.0
         || panel.height() < minimum_panel_height
@@ -208,23 +231,26 @@ pub(crate) fn render(
         .collect();
     let x_spec = AxisSpec::default().limits(0.0, x_count as f64);
     let y_spec = AxisSpec::default().limits(0.0, y_count as f64);
-    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        (0.0, x_count as f64),
-        (0.0, y_count as f64),
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        x_ticks,
-        y_ticks,
-        &x_spec,
-        &y_spec,
-        theme,
-    )?;
+        let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+            (0.0, x_count as f64),
+            (0.0, y_count as f64),
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            x_ticks,
+            y_ticks,
+            &x_spec,
+            &y_spec,
+            theme,
+            context.fit_scope(),
+        )?;
     // Elision already selected the complete displayed labels; do not wrap them again.
-    layout.y_axis.explicit_ticks = !wrap_labels;
-    layout.y_axis.assigned_tick_width = Some(tick_width);
-    let annotations =
-        plan_annotations(chart, &prepared, &layout, theme, context.fit_scope(), &text)?;
+        layout.y_axis.explicit_ticks = !wrap_labels;
+        layout.y_axis.assigned_tick_width = Some(tick_width);
+        // Preserve annotation-error precedence before the final x-label fit.
+        annotations = Some(plan_annotations(
+            chart, &prepared, &layout, theme, context.fit_scope(), &text,
+        )?);
     let x_labels = if wrap_labels {
         x_labels
     } else {
@@ -241,6 +267,13 @@ pub(crate) fn render(
     for (tick, label) in layout.x_axis.ticks.iter_mut().zip(x_labels) {
         tick.label = label;
     }
+    Ok(layout)
+    })?;
+    let panel = layout.projection.panel_box();
+    let annotations = annotations.map_or_else(
+        || plan_annotations(chart, &prepared, &layout, theme, context.fit_scope(), &text),
+        Ok,
+    )?;
 
     with_clip(backend, panel, |backend| {
         draw_cells(
@@ -266,6 +299,60 @@ pub(crate) fn render(
         .with_resolved_axis_keys(prepared.x_levels.clone(), prepared.y_levels.clone());
     result.producer_text = text.finish()?;
     Ok(result)
+}
+
+pub(crate) fn axis_categories(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<[Vec<String>; 2], Error> {
+    let x = normalized_categories(
+        data,
+        chart
+            .x_col()
+            .ok_or_else(|| Error::Data("heatmap: x category column not set".into()))?,
+        "x",
+    )?;
+    let y = normalized_categories(
+        data,
+        chart
+            .y_col()
+            .ok_or_else(|| Error::Data("heatmap: y category column not set".into()))?,
+        "y",
+    )?;
+    category_levels(chart, data, &x, &y)
+}
+
+fn category_levels(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+    x: &[String],
+    y: &[String],
+) -> Result<[Vec<String>; 2], Error> {
+    match chart.heatmap_layout_spec() {
+        HeatmapLayout::Cartesian => Ok([
+            resolve_axis_order(
+                &data.source_levels(x)?,
+                chart.x_category_order_spec(),
+                "x",
+                !data.is_full_plot(),
+                data,
+            )?,
+            resolve_axis_order(
+                &data.source_levels(y)?,
+                chart.y_category_order_spec(),
+                "y",
+                !data.is_full_plot(),
+                data,
+            )?,
+        ]),
+        layout => {
+            let observed = triangular_family_order(x, y, layout, data)?;
+            let family = resolve_triangular_order(chart, &observed, !data.is_full_plot(), data)?;
+            let copy =
+                data.collect_source(family.iter().map(|level| data.copy_source_string(level)))?;
+            Ok([copy, family])
+        }
+    }
 }
 
 fn prepare<'a>(
@@ -306,27 +393,7 @@ fn prepare<'a>(
     }
 
     let heatmap_layout = chart.heatmap_layout_spec();
-    let (x_levels, y_levels) = match heatmap_layout {
-        HeatmapLayout::Cartesian => (
-            resolve_axis_order(
-                &crate::data::stable_levels(&x_values),
-                chart.x_category_order_spec(),
-                "x",
-                !data.is_full_plot(),
-            )?,
-            resolve_axis_order(
-                &crate::data::stable_levels(&y_values),
-                chart.y_category_order_spec(),
-                "y",
-                !data.is_full_plot(),
-            )?,
-        ),
-        HeatmapLayout::LowerTriangle { .. } | HeatmapLayout::UpperTriangle { .. } => {
-            let observed = triangular_family_order(&x_values, &y_values, heatmap_layout);
-            let family = resolve_triangular_order(chart, &observed, !data.is_full_plot())?;
-            (family.clone(), family)
-        }
-    };
+    let [x_levels, y_levels] = category_levels(chart, data, &x_values, &y_values)?;
     let cell_count = x_levels
         .len()
         .checked_mul(y_levels.len())
@@ -515,21 +582,22 @@ fn normalized_categories(
     column: &str,
     axis: &str,
 ) -> Result<Vec<String>, Error> {
-    crate::data::strict_strings(data, column, "heatmap")?
-        .into_iter()
-        .enumerate()
-        .map(|(row, value)| {
-            let normalized = crate::data::collapse_whitespace(&value);
-            if normalized.is_empty() {
-                let source_row = data.source_row(row);
-                Err(Error::Data(format!(
-                    "heatmap: {axis} category label is empty at source row {source_row}"
-                )))
-            } else {
-                Ok(normalized)
-            }
-        })
-        .collect()
+    data.collect_source(
+        crate::data::strict_strings(data, column, "heatmap")?
+            .into_iter()
+            .enumerate()
+            .map(|(row, value)| {
+                let normalized = data.normalize_source_string(&value)?;
+                if normalized.is_empty() {
+                    let source_row = data.source_row(row);
+                    Err(Error::Data(format!(
+                        "heatmap: {axis} category label is empty at source row {source_row}"
+                    )))
+                } else {
+                    Ok(normalized)
+                }
+            }),
+    )
 }
 
 fn resolve_axis_order(
@@ -537,14 +605,13 @@ fn resolve_axis_order(
     order: &CategoryOrder,
     axis: &str,
     is_subset: bool,
+    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     match order {
-        CategoryOrder::Observed => Ok(observed.to_vec()),
+        CategoryOrder::Observed => data.collect_source(observed.iter().map(|level| data.copy_source_string(level))),
         CategoryOrder::Explicit(requested) => {
-            let requested = requested
-                .iter()
-                .map(|level| crate::data::collapse_whitespace(level))
-                .collect::<Vec<_>>();
+            let requested = data.collect_source(requested.iter().map(|level| data.normalize_source_string(level)))?;
+            data.claim_source_visits(requested.len())?;
             if requested.iter().any(String::is_empty) {
                 return Err(Error::Data(format!(
                     "heatmap: explicit {axis} category order contains an empty normalized level"
@@ -555,6 +622,7 @@ fn resolve_axis_order(
                 &requested,
                 &format!("heatmap {axis} category order"),
                 is_subset,
+                Some(data),
             )
         }
         CategoryOrder::Value(sort) => Err(Error::Data(format!(
@@ -567,14 +635,18 @@ fn resolve_triangular_order(
     chart: &Plot,
     observed: &[String],
     is_subset: bool,
+    data: crate::data::PlotData<'_>,
 ) -> Result<Vec<String>, Error> {
     match (chart.x_category_order_spec(), chart.y_category_order_spec()) {
-        (CategoryOrder::Observed, CategoryOrder::Observed) => Ok(observed.to_vec()),
-        (CategoryOrder::Observed, y) => resolve_axis_order(observed, y, "y", is_subset),
-        (x, CategoryOrder::Observed) => resolve_axis_order(observed, x, "x", is_subset),
+        (CategoryOrder::Observed, CategoryOrder::Observed) => {
+            data.collect_source(observed.iter().map(|level| data.copy_source_string(level)))
+        }
+        (CategoryOrder::Observed, y) => resolve_axis_order(observed, y, "y", is_subset, data),
+        (x, CategoryOrder::Observed) => resolve_axis_order(observed, x, "x", is_subset, data),
         (x, y) => {
-            let x = resolve_axis_order(observed, x, "x", is_subset)?;
-            let y = resolve_axis_order(observed, y, "y", is_subset)?;
+            let x = resolve_axis_order(observed, x, "x", is_subset, data)?;
+            let y = resolve_axis_order(observed, y, "y", is_subset, data)?;
+            data.claim_source_visits(x.len())?;
             if x != y {
                 return Err(Error::Data(
                     "heatmap: triangular x and y category orders must resolve to the same family order"
@@ -590,7 +662,8 @@ fn triangular_family_order(
     x_values: &[String],
     y_values: &[String],
     layout: HeatmapLayout,
-) -> Vec<String> {
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<String>, Error> {
     let mut levels = Vec::new();
     for (x, y) in x_values.iter().zip(y_values) {
         let pair = match layout {
@@ -598,12 +671,14 @@ fn triangular_family_order(
             HeatmapLayout::LowerTriangle { .. } | HeatmapLayout::Cartesian => [x, y],
         };
         for value in pair {
+            data.claim_source_visits(levels.len())?;
             if !levels.contains(value) {
-                levels.push(value.clone());
+                data.reserve_source(&mut levels, 1)?;
+                levels.push(data.copy_source_string(value)?);
             }
         }
     }
-    levels
+    Ok(levels)
 }
 
 const fn active_cell(layout: HeatmapLayout, x_index: usize, y_index: usize) -> bool {

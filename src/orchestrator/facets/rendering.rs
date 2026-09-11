@@ -55,9 +55,9 @@ pub(super) fn render_scene(
     for (facet, panel_plan) in panels.iter().zip(panel_plans) {
         let panel_plot = shared_plot
             .clone()
-            .with_render_scope(facet.render_scope())
+            .with_render_scope(facet.render_scope(shared_plot.data())?)
             .with_significance_subset(facet.significance_selectors());
-        crate::decorations::apply::apply_grid(&panel_plot, &panel_plan.result, theme, backend)?;
+        crate::decorations::apply::apply_grid(&panel_plot, panel_plan, backend)?;
     }
 
     for (index, ((facet, panel_plan), strip)) in
@@ -65,7 +65,7 @@ pub(super) fn render_scene(
     {
         let panel_plot = shared_plot
             .clone()
-            .with_render_scope(facet.render_scope())
+            .with_render_scope(facet.render_scope(shared_plot.data())?)
             .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
@@ -81,7 +81,7 @@ pub(super) fn render_scene(
         if let Some(significance) = &panel_plan.result.significance {
             crate::significance::render(&panel_plot, significance, theme, backend)?;
         }
-        crate::decorations::apply::apply_axes(&panel_plot, panel_plan, theme, backend)?;
+        crate::decorations::apply::apply_axes(&panel_plot, panel_plan, backend)?;
         crate::decorations::apply::apply_planned_legend(
             &panel_plot,
             if index == 0 {

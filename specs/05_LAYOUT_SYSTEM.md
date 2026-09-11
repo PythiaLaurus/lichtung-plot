@@ -593,11 +593,12 @@ upstream parsing; matching the unrestricted parser is not claimed outside them.
 
 ## Axes And Ticks
 
-PF6 admits output-preserving deduplication of identical complete candidate lists
-and repeated label measurements in identical contexts, preserving the exact
-selected positions and label bytes. PF6 is implemented in `23db99f`. It does not admit
-first-fit replacement of the current greatest-count selection or alter the native
-source policy below, whose implementation remains assigned to T5a5.
+PF6 implemented output-preserving deduplication of identical complete candidate
+lists and repeated label measurements in `23db99f`; that optimization did not
+authorize changing its greatest-count selection. The T5a5 numeric-source unit
+intentionally supersedes that selector with the ordered first-fitting source
+policy below. T5a5 also closes native axis geometry/text plans; its verification
+and reviewed output changes are recorded in `91_IMPLEMENTATION_PLAN.md`.
 
 Each axis measures at its one assigned panel-parallel span and returns one tick
 plan plus required perpendicular gutter. The parent owns panel size. Initial

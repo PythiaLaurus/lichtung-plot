@@ -29,7 +29,10 @@ fn outside(fixture: &str, edge: LegendPosition) -> Plot<crate::kind::Scatter> {
         "starvation" => scatter(2, true)
             .x_label("MMMMMMMMMMMMMMMMMMMMMMMMMMMM")
             .size(640, 480),
-        "reflow" => scatter(18, true).size(640, 400),
+        "historical_reflow_640x400" => scatter(18, true).size(640, 400),
+        "compact_right" => scatter(2, true)
+            .x_label("MMMMMMMMMMMMMMMMMMMM")
+            .size(630, 480),
         _ => panic!("unknown fixture"),
     };
     plot.legend(LegendPolicy::Visible(edge))
@@ -125,38 +128,13 @@ fn outside_case(fixture: &str, edge: LegendPosition, success: bool) -> CaseMeasu
         &sample,
         match fixture {
             "small" => 3,
-            "starvation" => 2,
-            "reflow" => 18,
+            "starvation" | "compact_right" => 2,
+            "historical_reflow_640x400" => 18,
             _ => unreachable!(),
         },
     );
     if edge == LegendPosition::Auto {
-        let trials = &sample.observations.guides;
-        match fixture {
-            "small" => {
-                assert_eq!(selected(&sample), LegendPosition::OutsideRight);
-                assert_eq!(trials.len(), 1);
-            }
-            "starvation" => {
-                assert_eq!(selected(&sample), LegendPosition::OutsideTop);
-                assert!(trials
-                    .iter()
-                    .any(|trial| trial.edge == LegendPosition::OutsideRight
-                        && trial.phase == GuidePhase::Body
-                        && trial.outcome == GuideOutcome::Rejected));
-            }
-            "reflow" => {
-                assert_eq!(selected(&sample), LegendPosition::OutsideRight);
-                assert!(trials.iter().any(|trial| !trial.compact
-                    && trial.phase == GuidePhase::GuideOnly
-                    && trial.outcome == GuideOutcome::Rejected));
-                assert!(trials
-                    .iter()
-                    .any(|trial| trial.compact && trial.outcome == GuideOutcome::Accepted));
-                assert!(sample.observations.counters[Counter::TextProposalVisit as usize] > 0);
-            }
-            _ => unreachable!(),
-        }
+        assert_outside_auto(&sample, fixture);
     }
     if !success {
         assert!(sample
@@ -169,6 +147,60 @@ fn outside_case(fixture: &str, edge: LegendPosition, success: bool) -> CaseMeasu
     sample
 }
 
+fn assert_outside_auto(sample: &CaseMeasurement, fixture: &str) {
+    use GuideOutcome::{Accepted, Provisional, Rejected};
+    use GuidePhase::{Body, GuideOnly};
+    use LegendPosition::{OutsideRight, OutsideTop};
+
+    let expected: &[_] = match fixture {
+        "small" => &[(OutsideRight, false, Body, Accepted)],
+        "starvation" => &[
+            (OutsideRight, false, Body, Rejected),
+            (OutsideRight, true, Body, Rejected),
+            (OutsideTop, false, Body, Accepted),
+        ],
+        "compact_right" => &[
+            (OutsideRight, false, Body, Rejected),
+            (OutsideRight, true, Body, Accepted),
+        ],
+        "historical_reflow_640x400" => &[
+            (OutsideRight, false, GuideOnly, Rejected),
+            (OutsideRight, true, Body, Provisional),
+            (OutsideRight, false, GuideOnly, Rejected),
+            (OutsideRight, true, Body, Accepted),
+        ],
+        _ => unreachable!(),
+    };
+    let observed = &sample.observations;
+    assert_eq!(
+        observed.roots.len(),
+        if fixture == "historical_reflow_640x400" {
+            2
+        } else {
+            1
+        }
+    );
+    assert_eq!(
+        observed
+            .guides
+            .iter()
+            .map(|trial| (trial.edge, trial.compact, trial.phase, trial.outcome))
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(selected(sample), expected.last().unwrap().0);
+    assert_eq!(
+        observed.counters[Counter::GuideBodyCheck as usize],
+        u64::try_from(expected.iter().filter(|trial| trial.2 == Body).count()).unwrap()
+    );
+    if matches!(fixture, "compact_right" | "historical_reflow_640x400") {
+        assert_eq!(
+            observed.counters[Counter::TextProposalVisit as usize],
+            if fixture == "compact_right" { 11 } else { 180 }
+        );
+    }
+}
+
 #[test]
 #[ignore = "release measurements; run with --release --ignored --nocapture --test-threads=1"]
 fn outside_legend_measurements() {
@@ -177,8 +209,13 @@ fn outside_legend_measurements() {
         "requires --release"
     );
     println!("legend_conditions,release,three_interleaved_runs,selection_probe_before_pairs,OS_cache_and_scheduling_uncontrolled,SVG_outlined,PNG_source_balanced,preserved_text_checks_outside_timing");
-    println!("legend_dimensions,small=800x480,starvation=640x480,reflow=640x400");
-    for fixture in ["small", "starvation", "reflow"] {
+    println!("legend_dimensions,small=800x480,starvation=640x480,historical_reflow_640x400=640x400,compact_right=630x480");
+    for fixture in [
+        "small",
+        "starvation",
+        "historical_reflow_640x400",
+        "compact_right",
+    ] {
         let auto = || outside_case(fixture, LegendPosition::Auto, true);
         let probe = auto();
         let edge = selected(&probe);
@@ -264,6 +301,24 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     );
     assert!(sample.observations.counters[Counter::GuideBodyCheck as usize] > 0);
     assert_child_reuse(&sample, facet, pressure);
+    let (rounds, trials, checks) = if pressure {
+        if facet {
+            (3, 4, 6)
+        } else {
+            (3, 7, 6)
+        }
+    } else {
+        (2, 2, 4)
+    };
+    assert_eq!(sample.observations.roots.len(), rounds);
+    assert_eq!(
+        sample.observations.counters[Counter::GuideTrial as usize],
+        trials
+    );
+    assert_eq!(
+        sample.observations.counters[Counter::GuideBodyCheck as usize],
+        checks
+    );
     if pressure && edge == LegendPosition::Auto {
         assert!(sample
             .observations
@@ -273,7 +328,7 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     }
     assert_eq!(
         selected(&sample),
-        if pressure {
+        if pressure && !facet {
             LegendPosition::OutsideTop
         } else {
             LegendPosition::OutsideRight
@@ -324,7 +379,12 @@ fn shared_legend_measurements() {
 fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     let observed = &sample.observations;
     let events = &observed.children;
-    assert!(observed.counters[Counter::ChildCacheMiss as usize] > 0);
+    assert_eq!(observed.counters[Counter::ChildCacheHit as usize], 0);
+    assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
+    assert_eq!(
+        observed.counters[Counter::ChildCacheMiss as usize],
+        if pressure { 24 } else { 16 }
+    );
     for counter in [
         Counter::ChildCacheHit,
         Counter::ChildCacheMiss,
@@ -392,7 +452,7 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
 }
 
 // A controlled repeat isolates actual child reuse from the end-to-end fixtures,
-// whose changed assignments invalidate all children in the second root round.
+// whose changed assignments invalidate children across root rounds.
 #[test]
 #[expect(
     clippy::too_many_lines,
@@ -495,8 +555,9 @@ fn shared_legend_child_cache_replay_contract() {
         )
         .unwrap();
         let observed = measurements::finish();
-        assert!(observed.counters[Counter::ChildCacheHit as usize] > 0);
-        assert!(observed.counters[Counter::ChildFeedbackReplay as usize] > 0);
+        assert_eq!(observed.counters[Counter::ChildCacheHit as usize], 2);
+        assert_eq!(observed.counters[Counter::ChildCacheMiss as usize], 2);
+        assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 1);
         assert!(observed.children.iter().all(|event| event.owner == owner));
         println!(
             "controlled_shared_child,facet={facet},hits={},misses={},replays={},events={:?}",
@@ -564,11 +625,14 @@ fn inside_case(dense: bool) -> CaseMeasurement {
         sample.observations.counters[Counter::InsideLegendCandidate as usize],
         0
     );
-    assert!(sample.observations.counters[Counter::GeometryOverlapScan as usize] > 0);
+    assert_eq!(
+        sample.observations.counters[Counter::GeometryOverlapScan as usize],
+        if dense { 2005 } else { 28 }
+    );
     let comparisons = sample.observations.counters[Counter::AnnotationOverlapComparison as usize];
-    assert!(comparisons > 0);
+    assert_eq!(comparisons, 2);
     println!("annotation_overlap,dense={dense},comparisons={comparisons}");
-    assert_eq!(sample.observations.roots.len(), if dense { 2 } else { 1 });
+    assert_eq!(sample.observations.roots.len(), 2);
     assert_inside_geometry(&sample, dense);
     sample
 }
@@ -657,12 +721,22 @@ fn inside_legend_measurements() {
 
 #[test]
 fn populated_legend_fixture_contract() {
-    for fixture in ["small", "starvation", "reflow"] {
+    for fixture in [
+        "small",
+        "starvation",
+        "historical_reflow_640x400",
+        "compact_right",
+    ] {
         let auto = outside_case(fixture, LegendPosition::Auto, true);
         let explicit = outside_case(fixture, selected(&auto), true);
         equal_output(&auto, &explicit);
     }
     outside_case("starvation", LegendPosition::OutsideRight, false);
+    outside_case(
+        "historical_reflow_640x400",
+        LegendPosition::OutsideRight,
+        true,
+    );
     for facet in [false, true] {
         for pressure in [false, true] {
             shared_case(facet, pressure, LegendPosition::Auto);
@@ -670,5 +744,203 @@ fn populated_legend_fixture_contract() {
     }
     for dense in [false, true] {
         inside_case(dense);
+    }
+}
+
+#[test]
+fn shared_legend_selected_edge_contract() {
+    for pressure in [false, true] {
+        let auto = shared_case(true, pressure, LegendPosition::Auto);
+        let explicit = shared_case(true, pressure, selected(&auto));
+        equal_output(&auto, &explicit);
+    }
+}
+
+#[test]
+fn measured_gutter_reflow_preserves_complete_frames_without_cache() {
+    use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
+
+    for facet in [false, true] {
+        let render = |edge| {
+            if facet {
+                shared_case(true, true, edge)
+            } else {
+                outside_case("historical_reflow_640x400", edge, true)
+            }
+        };
+        let auto = render(LegendPosition::Auto);
+        assert_eq!(selected(&auto), LegendPosition::OutsideRight);
+        let explicit = render(LegendPosition::OutsideRight);
+        equal_output(&auto, &explicit);
+        DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
+        let uncached = std::panic::catch_unwind(|| render(LegendPosition::OutsideRight));
+        DISABLE_CHILD_REUSE.with(|disabled| disabled.set(false));
+        equal_output(&auto, &uncached.unwrap());
+
+        let svg = std::str::from_utf8(
+            auto.output
+                .as_ref()
+                .unwrap()
+                .preserved_svg
+                .as_ref()
+                .unwrap(),
+        )
+        .unwrap();
+        let document = roxmltree::Document::parse(svg).unwrap();
+        let rect = |node: roxmltree::Node<'_, '_>| {
+            ["x", "y", "width", "height"]
+                .map(|attribute| node.attribute(attribute).unwrap().parse::<f64>().unwrap())
+        };
+        let legend = document
+            .descendants()
+            .find(|node| {
+                node.attribute("id")
+                    .is_some_and(|id| id.ends_with("legend"))
+            })
+            .unwrap();
+        let [lx, ly, lw, lh] = rect(
+            legend
+                .descendants()
+                .find(|node| node.has_tag_name("rect"))
+                .unwrap(),
+        );
+        let (width, height) = if facet {
+            (560.0, 360.0)
+        } else {
+            (640.0, 400.0)
+        };
+        assert!(lx >= 0.0 && ly >= 0.0 && lx + lw <= width && ly + lh <= height);
+        let panels = document
+            .descendants()
+            .filter(|node| node.has_tag_name("clipPath"))
+            .map(|clip| {
+                rect(
+                    clip.descendants()
+                        .find(|node| node.has_tag_name("rect"))
+                        .unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(panels.len(), if facet { 2 } else { 1 });
+        for [x, y, w, h] in panels {
+            assert!(w >= 80.0 && h >= 60.0, "invalid data body: {w}x{h}");
+            assert!(x >= 0.0 && y >= 0.0 && x + w <= lx && y + h <= height);
+        }
+        assert_eq!(
+            document
+                .descendants()
+                .filter(|node| node.has_tag_name("circle")
+                    && !node.ancestors().any(|ancestor| ancestor == legend))
+                .count(),
+            if facet { 24 } else { 36 }
+        );
+        for root in &auto.observations.roots {
+            assert!(root.guides.len() <= 8);
+            let trials = &auto.observations.guides[root.guides.clone()];
+            assert!(trials
+                .iter()
+                .all(|trial| trial.edge == LegendPosition::OutsideRight));
+            assert_eq!(
+                trials.last().unwrap().outcome,
+                if root.successful {
+                    GuideOutcome::Accepted
+                } else {
+                    GuideOutcome::Provisional
+                }
+            );
+        }
+    }
+}
+
+#[test]
+#[expect(
+    clippy::float_cmp,
+    reason = "exact quantized geometry and integer gutter contract"
+)]
+fn historical_reflow_measured_gutter_control() {
+    use crate::layout::fit::FitOutcome;
+    use crate::layout::kernel::{FeedbackKind, FitKind};
+    use crate::layout::{AddressRole, ComponentAddress, MeasuredLayout};
+    use crate::orchestrator::measurements;
+
+    let plot = outside("historical_reflow_640x400", LegendPosition::Auto).erase();
+    let theme = crate::Theme::Publication.resolve();
+    let cell = plot.measured_canvas_layout(&theme).unwrap().panel_box;
+    let address = ComponentAddress::root()
+        .child(AddressRole::PlotBody, 0)
+        .unwrap();
+    measurements::start();
+    // Independently establish the measured-gutter input used by the public
+    // root's second round, without relying on its first provisional guide.
+    crate::layout::plan_exact_root(
+        640,
+        400,
+        |_| Ok(()),
+        |(), assigned, round| {
+            if round.insets(&address, FeedbackKind::AxisGutter)[0] == 0.0 {
+                let request = round.request_insets(
+                    &address,
+                    &address,
+                    FeedbackKind::AxisGutter,
+                    [15.0, 0.0, 0.0, 0.0],
+                )?;
+                round.miss(
+                    &address,
+                    FitKind::Tick,
+                    &[request],
+                    "controlled measured gutter",
+                )?;
+            } else {
+                let FitOutcome::Measured(plan) = crate::decorations::plan::plan_panel(
+                    &plot,
+                    plot.kind(),
+                    cell,
+                    crate::decorations::plan::LegendRole::Panel,
+                    &theme,
+                    round,
+                    &address,
+                )?
+                else {
+                    panic!("remeasured compact guide must fit with its measured gutter")
+                };
+                let required = plan.result.axes.as_ref().unwrap().requirements();
+                assert_eq!(required.left, 89.269_531_25);
+                assert_eq!(
+                    (required.left + 4.0 - plot.base_canvas_layout(&theme).insets.left).ceil(),
+                    15.0
+                );
+                assert_eq!(plan.panel_box.width(), 80.0);
+            }
+            Ok(MeasuredLayout::new(assigned, ()))
+        },
+        |(), _, (), _| Ok(()),
+    )
+    .unwrap();
+    let observed = measurements::finish();
+    assert_eq!(observed.roots.len(), 2);
+    assert!(!observed.roots[0].successful && observed.roots[1].successful);
+    assert_eq!(observed.counters[Counter::GuideTrial as usize], 2);
+    assert_eq!(observed.counters[Counter::GuideBodyCheck as usize], 1);
+    assert_eq!(observed.guides.len(), 2);
+    for (trial, compact, phase, outcome) in [
+        (
+            &observed.guides[0],
+            false,
+            GuidePhase::GuideOnly,
+            GuideOutcome::Rejected,
+        ),
+        (
+            &observed.guides[1],
+            true,
+            GuidePhase::Body,
+            GuideOutcome::Accepted,
+        ),
+    ] {
+        assert_eq!(trial.root_round, 1);
+        assert_eq!(trial.edge, LegendPosition::OutsideRight);
+        assert_eq!(
+            (trial.compact, trial.phase, trial.outcome),
+            (compact, phase, outcome)
+        );
     }
 }

@@ -14,6 +14,25 @@ impl Plot {
     pub(crate) fn validate_configuration(&self, kind: PlotKind) -> Result<(), Error> {
         self.x_axis_spec().validate("x-axis")?;
         self.y_axis_spec().validate("y-axis")?;
+        for (spec, logarithmic) in [
+            (
+                self.x_axis_spec(),
+                kind == PlotKind::Forest && self.axis_scale_spec() == crate::spec::AxisScale::Log10,
+            ),
+            (self.y_axis_spec(), false),
+        ] {
+            if spec.interval.is_some_and(|interval| {
+                !matches!(
+                    (logarithmic, interval),
+                    (false, crate::layout::TickInterval::Additive(_))
+                        | (true, crate::layout::TickInterval::Log10Decades(_))
+                )
+            }) {
+                return Err(Error::Data(
+                    "tick interval does not match the axis scale".into(),
+                ));
+            }
+        }
         if !self.significance_annotations().is_empty() && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
@@ -704,7 +723,7 @@ fn validate_full_explicit_order(
     } else {
         requested.clone()
     };
-    crate::data::explicit_category_order(observed, &requested, context, false)?;
+    crate::data::explicit_category_order(observed, &requested, context, false, None)?;
     Ok(())
 }
 

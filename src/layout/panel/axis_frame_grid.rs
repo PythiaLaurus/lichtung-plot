@@ -1,22 +1,33 @@
 use crate::Error;
 
-use super::geometry::y_axis_label_half_width;
-use super::{Axis, AxisSide, AxisSpec, AxisTick, Frame, Grid, Layout, Projection};
-use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
-use crate::render::backend::{Backend, PlannedTextPlacement, Point2D, TextAnchor};
+use super::sources::SourceKind;
+use super::{cells, Axis, AxisSide, AxisSpec, AxisTick, Layout, Projection, TickSource};
+use crate::layout::canvas::PanelRequirements;
+use crate::layout::fit::{self, FitKind, FitScope, PlanError};
+use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
+use crate::render::backend::{Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::ResolvedTheme;
 
+#[cfg(test)]
+mod tests;
+
 impl AxisSpec {
-    /// Return a copy of this spec with explicit limits.
-    ///
-    /// Rendering requires finite, strictly ascending endpoints.
+    /// Return a copy with finite, strictly ascending explicit limits.
     #[must_use]
     pub fn limits(mut self, min: f64, max: f64) -> Self {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::AxisSpecPreparation,
+        );
         self.limits = Some((min, max));
+        self.provenance = super::RangeProvenance::Configured;
         self
     }
 
     pub(crate) fn validate(&self, axis: &str) -> Result<(), Error> {
+        if let Some(interval) = self.interval {
+            interval.validate()?;
+        }
         if let Some((minimum, maximum)) = self.limits {
             if !minimum.is_finite() || !maximum.is_finite() || minimum >= maximum {
                 return Err(Error::Data(format!(
@@ -24,14 +35,21 @@ impl AxisSpec {
                 )));
             }
         }
+        if let Some(ticks) = &self.exact_ticks {
+            Axis::validate_tick_source(ticks, self.limits, axis)?;
+        }
         Ok(())
     }
 }
 
 impl AxisTick {
-    /// Construct an `AxisTick`.
+    /// Construct a tick with an unchanged display label.
     #[must_use]
     pub fn new(position: f64, label: impl Into<String>) -> Self {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::AxisSourcePreparation,
+        );
         Self {
             position,
             label: label.into(),
@@ -40,28 +58,138 @@ impl AxisTick {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PanelAxisTextPlan {
-    x_axis: AxisTextPlan,
-    y_axis: AxisTextPlan,
+pub(crate) struct PanelAxisPlan {
+    projection: Projection,
+    semantics: [super::AxisSemanticInputs; 2],
+    standard: super::StandardPanelInputs,
+    x_axis: FrozenAxisPlan,
+    y_axis: FrozenAxisPlan,
+    frame: Option<FramePlan>,
+    grid: Option<GridPlan>,
+    requirements: PanelRequirements,
 }
 
 #[derive(Debug, Clone)]
-struct AxisTextPlan {
-    tick_labels: Vec<Option<ResolvedTextPlan>>,
-    title: Option<ResolvedTextPlan>,
+struct FramePlan {
+    sides: [[Point2D; 2]; 4],
+    style: LineStyle,
 }
 
-impl PanelAxisTextPlan {
+#[derive(Debug, Clone)]
+struct GridPlan {
+    lines: Vec<[Point2D; 2]>,
+    style: LineStyle,
+}
+
+#[derive(Debug, Clone)]
+struct FrozenTick {
+    position: f64,
+    cell: cells::LabelCell,
+    segment: [Point2D; 2],
+    label: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
+}
+
+#[derive(Debug, Clone)]
+struct FrozenAxisPlan {
+    source: TickSource,
+    ticks: Vec<FrozenTick>,
+    title: Option<(ResolvedTextPlan, PlannedTextPlacement)>,
+    tick_style: Option<LineStyle>,
+    gutter: f64,
+    start_overhang: f64,
+    end_overhang: f64,
+}
+
+impl PanelAxisPlan {
+    pub(crate) fn range(&self, side: AxisSide) -> (f64, f64) {
+        match side {
+            AxisSide::Bottom => self.projection.x_range(),
+            AxisSide::Left => self.projection.y_range(),
+        }
+    }
+
+    pub(crate) fn requirements(&self) -> PanelRequirements {
+        self.requirements
+    }
+
+    pub(crate) fn draw_grid(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        if let Some(grid) = &self.grid {
+            for line in &grid.lines {
+                backend.draw_line(line, &grid.style)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        if let Some(frame) = &self.frame {
+            for side in &frame.sides {
+                backend.draw_line(side, &frame.style)?;
+            }
+        }
+        for axis in [&self.x_axis, &self.y_axis] {
+            for tick in &axis.ticks {
+                if let Some(style) = &axis.tick_style {
+                    backend.draw_line(&tick.segment, style)?;
+                }
+                if let Some((plan, placement)) = &tick.label {
+                    backend.draw_planned_text(*placement, plan)?;
+                }
+            }
+            if let Some((plan, placement)) = &axis.title {
+                backend.draw_planned_text(*placement, plan)?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn observe_feedback(
         &self,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
+        self.standard.observe_feedback(round)?;
+        for input in self.semantics {
+            input.observe_feedback(round)?;
+        }
+        for range in [self.projection.x_range(), self.projection.y_range()] {
+            round.observe_number(range.0)?;
+            round.observe_number(range.1)?;
+        }
         for axis in [&self.x_axis, &self.y_axis] {
-            for label in axis.tick_labels.iter().flatten() {
-                round.observe_text(label)?;
+            round.observe_count(axis.source.ordinal)?;
+            round.observe_count(axis.source.cap)?;
+            let (kind, parameter) = match axis.source.kind {
+                SourceKind::Supplied => (0, 0.0),
+                SourceKind::Exact => (1, 0.0),
+                SourceKind::Adaptive(seed) => (2, seed as f64),
+                SourceKind::Additive(step) => (3, step),
+                SourceKind::LogIntegral => (4, 0.0),
+                SourceKind::LogSubset(count) => (5, count as f64),
+                SourceKind::LogInterval(step) => {
+                    round.observe_count((step >> 32) as usize)?;
+                    round.observe_count((step & 0xffff_ffff) as usize)?;
+                    (6, 0.0)
+                }
+                SourceKind::Midpoint => (7, 0.0),
+            };
+            round.observe_count(kind)?;
+            round.observe_number(parameter)?;
+            for tick in &axis.ticks {
+                round.observe_number(tick.position)?;
+                round.observe_number(tick.cell.center)?;
+                if tick.label.is_some() {
+                    round.observe_number(tick.cell.start)?;
+                    round.observe_number(tick.cell.end)?;
+                    round.observe_count(usize::from(tick.cell.inward))?;
+                }
             }
-            if let Some(title) = &axis.title {
-                round.observe_text(title)?;
+            for (plan, _) in axis
+                .ticks
+                .iter()
+                .filter_map(|tick| tick.label.as_ref())
+                .chain(axis.title.iter())
+            {
+                round.observe_text(plan)?;
             }
         }
         Ok(())
@@ -69,45 +197,172 @@ impl PanelAxisTextPlan {
 }
 
 impl Layout {
-    pub(crate) fn plan_axis_text(&self, theme: &ResolvedTheme) -> Result<PanelAxisTextPlan, Error> {
-        Ok(PanelAxisTextPlan {
-            x_axis: self
-                .x_axis
-                .plan_text(&self.projection, AxisSide::Bottom, theme)?,
-            y_axis: self
-                .y_axis
-                .plan_text(&self.projection, AxisSide::Left, theme)?,
+    #[cfg(test)]
+    pub(crate) fn plan_axes(&self, theme: &ResolvedTheme) -> Result<PanelAxisPlan, Error> {
+        self.measure_axes(theme, &FitScope::root(), self.test_semantics())
+            .map_err(PlanError::into_error)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_semantics(&self) -> [super::AxisSemanticInputs; 2] {
+        [&self.x_axis, &self.y_axis].map(|axis| {
+            super::AxisSemanticInputs::new(
+                &AxisSpec::default(),
+                crate::spec::AxisScale::Linear,
+                if axis.source == TickSource::SUPPLIED {
+                    super::RangePolicy::CategorySlots
+                } else {
+                    super::RangePolicy::ContinuousNice
+                },
+            )
         })
     }
 
-    pub(crate) fn draw_decorations_with_text(
+    pub(crate) fn measure_axes(
         &self,
         theme: &ResolvedTheme,
-        text: &PanelAxisTextPlan,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        Frame::draw(&self.projection, theme, backend)?;
-        self.x_axis.draw_planned(
+        scope: &FitScope,
+        semantics: [super::AxisSemanticInputs; 2],
+    ) -> Result<PanelAxisPlan, PlanError> {
+        theme
+            .prepared_font_environment()?
+            .claim_unicode_bytes(
+                u64::try_from(std::mem::size_of::<PanelAxisPlan>())
+                    .map_err(|_| Error::Render("axis plan storage overflow".into()))?,
+            )
+            .map_err(|error| Error::Render(format!("axis plan admission: {error}")))?;
+        let standard = super::StandardPanelInputs::new(theme)?;
+        // Evaluate both siblings: a later fatal error takes precedence over a fit miss.
+        let x_axis = self.x_axis.measure(
             &self.projection,
             AxisSide::Bottom,
             theme,
-            &text.x_axis,
-            backend,
-        )?;
-        self.y_axis.draw_planned(
+            &standard,
+            &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
+        );
+        let y_axis = self.y_axis.measure(
             &self.projection,
             AxisSide::Left,
             theme,
-            &text.y_axis,
-            backend,
-        )
+            &standard,
+            &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
+        );
+        let (x_axis, y_axis) = match (x_axis, y_axis) {
+            (Err(PlanError::Fatal(error)), _) | (_, Err(PlanError::Fatal(error))) => {
+                return Err(error.into())
+            }
+            (Err(error), _) | (_, Err(error)) => return Err(error),
+            (Ok(x), Ok(y)) => (x, y),
+        };
+        let (x0, x1, y0, y1) = self.projection.pixel_box();
+        let frame = theme.axes.frame.as_ref().map(|frame| FramePlan {
+            sides: [
+                [Point2D::new(x0, y0), Point2D::new(x1, y0)],
+                [Point2D::new(x1, y0), Point2D::new(x1, y1)],
+                [Point2D::new(x1, y1), Point2D::new(x0, y1)],
+                [Point2D::new(x0, y1), Point2D::new(x0, y0)],
+            ],
+            style: frame.stroke.backend_style(),
+        });
+        let half_stroke = frame
+            .as_ref()
+            .map_or(0.0, |frame| f64::from(frame.style.width) / 2.0);
+        let grid = if let Some(grid) = &theme.axes.grid {
+            let mut lines = Vec::new();
+            let count = x_axis
+                .ticks
+                .len()
+                .checked_add(y_axis.ticks.len())
+                .ok_or_else(|| Error::Render("grid plan count overflow".into()))?;
+            fit::reserve(theme, &mut lines, count, "grid geometry")?;
+            for tick in &x_axis.ticks {
+                lines.push([
+                    Point2D::new(tick.segment[0].x, y0),
+                    Point2D::new(tick.segment[0].x, y1),
+                ]);
+            }
+            for tick in &y_axis.ticks {
+                lines.push([
+                    Point2D::new(x0, tick.segment[0].y),
+                    Point2D::new(x1, tick.segment[0].y),
+                ]);
+            }
+            Some(GridPlan {
+                lines,
+                style: grid.backend_style(),
+            })
+        } else {
+            None
+        };
+        let mut requirements = PanelRequirements {
+            left: y_axis.gutter.max(x_axis.start_overhang).max(half_stroke),
+            right: x_axis.end_overhang.max(half_stroke),
+            bottom: x_axis.gutter.max(y_axis.start_overhang).max(half_stroke),
+            top: y_axis.end_overhang.max(half_stroke),
+        };
+        for extent in [
+            &mut requirements.left,
+            &mut requirements.right,
+            &mut requirements.bottom,
+            &mut requirements.top,
+        ] {
+            *extent = (*extent * 1024.0).ceil() / 1024.0;
+        }
+        Ok(PanelAxisPlan {
+            projection: self.projection.clone(),
+            semantics,
+            standard,
+            x_axis,
+            y_axis,
+            frame,
+            grid,
+            requirements,
+        })
     }
 }
 
 impl Axis {
+    pub(crate) fn assign_label_width(
+        &mut self,
+        available: f64,
+        height: f64,
+        theme: &ResolvedTheme,
+    ) -> Result<(), Error> {
+        let mut natural = 1.0 / 1024.0;
+        for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
+            let plan = theme.measure_text(
+                &tick.label,
+                &theme.typography.tick_label,
+                PhysicalTextAlignment::End,
+                "y-axis tick label",
+                false,
+            )?;
+            natural = f64::max(natural, plan.width().max(plan.fit_width()));
+        }
+        self.assigned_tick_width = Some(if natural <= available {
+            natural
+        } else {
+            theme
+                .intrinsic_tick_label_width(
+                    self.ticks.iter().map(|tick| tick.label.as_str()),
+                    height,
+                )?
+                .min(available)
+        });
+        Ok(())
+    }
+
     pub(crate) fn validate_ticks(
         ticks: &[AxisTick],
         range: (f64, f64),
+        axis: &str,
+    ) -> Result<(), Error> {
+        Self::validate_tick_source(ticks, Some(range), axis)
+    }
+
+    fn validate_tick_source(
+        ticks: &[AxisTick],
+        range: Option<(f64, f64)>,
         axis: &str,
     ) -> Result<(), Error> {
         const MAX_EXPLICIT_TICKS: usize = 10_000;
@@ -129,11 +384,13 @@ impl Axis {
                     tick.position
                 )));
             }
-            if tick.position < range.0 || tick.position > range.1 {
-                return Err(Error::Data(format!(
-                    "{axis} explicit tick {index} position {} is outside resolved range {}..{}",
-                    tick.position, range.0, range.1
-                )));
+            if let Some(range) = range {
+                if tick.position < range.0 || tick.position > range.1 {
+                    return Err(Error::Data(format!(
+                        "{axis} explicit tick {index} position {} is outside resolved range {}..{}",
+                        tick.position, range.0, range.1
+                    )));
+                }
             }
             if index > 0 && ticks[index - 1].position >= tick.position {
                 return Err(Error::Data(format!(
@@ -143,389 +400,276 @@ impl Axis {
         }
         Ok(())
     }
-    pub(crate) fn validate_explicit_tick_collisions(
-        &self,
-        projection: &Projection,
-        side: AxisSide,
-        theme: &ResolvedTheme,
-        axis: &str,
-        scope: &crate::layout::fit::FitScope,
-    ) -> Result<(), crate::layout::fit::PlanError> {
-        let maximum_width = self.tick_label_width(projection.panel_box(), side, theme)?;
-        let role = format!("{axis} explicit tick label");
-        let mut previous = None;
-        for (index, tick) in self
-            .ticks
-            .iter()
-            .enumerate()
-            .filter(|(_, tick)| !tick.label.is_empty())
-        {
-            let block =
-                TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
-                    theme,
-                    &tick.label,
-                    &theme.typography.tick_label,
-                    maximum_width,
-                    match side {
-                        AxisSide::Bottom => PhysicalTextAlignment::Center,
-                        AxisSide::Left => PhysicalTextAlignment::End,
-                    },
-                    &role,
-                    scope,
-                ))?);
-            let center = match side {
-                AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
-                AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
-            };
-            let (start, end) = match side {
-                AxisSide::Bottom => {
-                    let center = center.round();
-                    (center - block.width() / 2.0, center + block.width() / 2.0)
-                }
-                AxisSide::Left => {
-                    let line_offset = (block.height() - block.line_height()) / 2.0;
-                    (
-                        (center - line_offset).round() - block.line_height() / 2.0,
-                        (center + line_offset).round() + block.line_height() / 2.0,
-                    )
-                }
-            };
-            if let Some((previous_index, previous_end)) = previous {
-                if start < previous_end {
-                    return Err(scope.failure(crate::layout::kernel::FitKind::Tick, format!(
-                        "{axis} explicit tick labels at indices {previous_index} and {index} overlap after projection; increase chart size, shorten the labels, or provide non-overlapping exact ticks"
-                    )).into());
-                }
-            }
-            previous = Some((index, end));
-        }
-        Ok(())
-    }
 
-    pub(crate) fn tick_label_width(
+    fn vertical_label_width(
         &self,
         panel: crate::layout::PanelBox,
-        side: AxisSide,
         theme: &ResolvedTheme,
     ) -> Result<f64, Error> {
         if let Some(width) = self.assigned_tick_width {
             return Ok(width);
         }
-        match side {
-            AxisSide::Bottom => Ok(panel.width() / self.ticks.len().max(1) as f64),
-            AxisSide::Left if self.explicit_ticks => {
-                let mut width = 1.0 / 1024.0;
-                for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
-                    let plan = theme.measure_text(
-                        &tick.label,
-                        &theme.typography.tick_label,
-                        PhysicalTextAlignment::End,
-                        "y-axis exact tick label",
-                        false,
-                    )?;
-                    width = f64::max(width, plan.width().max(plan.fit_width()));
-                }
-                Ok(width)
+        if self.source == TickSource::EXACT {
+            let mut width = 1.0 / 1024.0;
+            for tick in self.ticks.iter().filter(|tick| !tick.label.is_empty()) {
+                let plan = theme.measure_text(
+                    &tick.label,
+                    &theme.typography.tick_label,
+                    PhysicalTextAlignment::End,
+                    "y-axis exact tick label",
+                    false,
+                )?;
+                width = f64::max(width, plan.width().max(plan.fit_width()));
             }
-            AxisSide::Left => theme.intrinsic_tick_label_width(
+            Ok(width)
+        } else {
+            theme.intrinsic_tick_label_width(
                 self.ticks.iter().map(|tick| tick.label.as_str()),
                 panel.height(),
-            ),
+            )
         }
     }
 
-    fn plan_text(
+    #[allow(clippy::too_many_lines)]
+    fn measure(
         &self,
         projection: &Projection,
         side: AxisSide,
         theme: &ResolvedTheme,
-    ) -> Result<AxisTextPlan, Error> {
-        let maximum_width = self.tick_label_width(projection.panel_box(), side, theme)?;
-        let (alignment, tick_role, title_role, title_width) = match side {
+        standard: &super::StandardPanelInputs,
+        scope: &FitScope,
+    ) -> Result<FrozenAxisPlan, PlanError> {
+        let categorical = self.source == TickSource::SUPPLIED;
+        let cells = cells::assign(&self.ticks, categorical, projection, side, theme, scope)?;
+        let panel = projection.panel_box();
+        let vertical_width = if side == AxisSide::Left {
+            self.vertical_label_width(panel, theme)?
+        } else {
+            0.0
+        };
+        let frame_half = theme.axes.frame.as_ref().map_or(0.0, |frame| {
+            f64::from(frame.stroke.backend_style().width) / 2.0
+        });
+        let tick_appearance = theme.axes.ticks.as_ref().filter(|_| !self.ticks.is_empty());
+        let tick_style = tick_appearance.map(|ticks| ticks.stroke.backend_style());
+        let tick_length = tick_appearance.map_or(0.0, |ticks| f64::from(ticks.length));
+        let outward = frame_half
+            + tick_length
+            + tick_style
+                .as_ref()
+                .map_or(0.0, |style| f64::from(style.width) / 2.0);
+        let mut ticks = Vec::new();
+        fit::reserve(theme, &mut ticks, self.ticks.len(), "frozen axis ticks")?;
+        let mut label_extent = 0.0_f64;
+        let (gap, title_gap, title_width, tick_role, title_role) = match side {
             AxisSide::Bottom => (
-                PhysicalTextAlignment::Center,
+                theme.axes.spacing.x_tick_label_gap,
+                theme.axes.spacing.x_title_tick_label_gap,
+                panel.width(),
                 "x-axis tick label",
                 "x-axis title",
-                (projection.pixel_box().1 - projection.pixel_box().0).max(1.0),
             ),
             AxisSide::Left => (
-                PhysicalTextAlignment::End,
+                theme.axes.spacing.y_tick_label_gap,
+                theme.axes.spacing.y_title_tick_label_gap,
+                panel.height(),
                 "y-axis tick label",
                 "y-axis title",
-                (projection.pixel_box().3 - projection.pixel_box().2).max(1.0),
             ),
         };
-        let tick_labels = self
-            .ticks
-            .iter()
-            .map(|tick| {
-                (!tick.label.is_empty())
-                    .then(|| {
-                        tick_text_plan(
-                            theme,
-                            &tick.label,
-                            &theme.typography.tick_label,
-                            maximum_width,
-                            alignment,
-                            tick_role,
-                        )
-                    })
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let title = (!self.label.is_empty())
-            .then(|| {
-                theme.plan_text(
-                    &self.label,
-                    &theme.typography.axis_title,
-                    title_width,
-                    PhysicalTextAlignment::Center,
-                    title_role,
-                    false,
-                )
-            })
-            .transpose()?;
-        Ok(AxisTextPlan { tick_labels, title })
-    }
-
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-    fn draw_planned(
-        &self,
-        projection: &Projection,
-        side: AxisSide,
-        theme: &ResolvedTheme,
-        text: &AxisTextPlan,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        let (x0, x1, y0, y1) = projection.pixel_box();
-        // y0 = bottom of plot area (math), y1 = top (math).
-
-        let frame = theme.axes.frame.as_ref();
-        let ticks = theme.axes.ticks.as_ref();
-        let frame_style = frame.map(|appearance| appearance.stroke.backend_style());
-        let tick_style = ticks.map(|appearance| appearance.stroke.backend_style());
-        let tick_length = ticks.map_or(0.0, |appearance| f64::from(appearance.length));
-        if text.tick_labels.len() != self.ticks.len() {
-            return Err(Error::Render(
-                "planned axis tick-label count does not match its axis".into(),
-            ));
-        }
-
-        // Spine (only the two visible edges for open-frame
-        // styles; the Frame renderer decides whether the full
-        // box is drawn).
-        if frame.is_some_and(|appearance| appearance.source_show_top_right_spines) {
-            if let Some(frame_style) = &frame_style {
-                let spine = match side {
-                    AxisSide::Bottom => vec![Point2D::new(x0, y0), Point2D::new(x1, y0)],
-                    AxisSide::Left => vec![Point2D::new(x0, y0), Point2D::new(x0, y1)],
+        for (tick, cell) in self.ticks.iter().zip(cells) {
+            let segment = match side {
+                AxisSide::Bottom => [
+                    Point2D::new(cell.center, panel.y0 - frame_half),
+                    Point2D::new(cell.center, panel.y0 - frame_half - tick_length),
+                ],
+                AxisSide::Left => [
+                    Point2D::new(panel.x0 - frame_half, cell.center),
+                    Point2D::new(panel.x0 - frame_half - tick_length, cell.center),
+                ],
+            };
+            let label = if tick.label.is_empty() {
+                None
+            } else {
+                let (width, alignment) = match side {
+                    AxisSide::Bottom => (cell.capacity(), PhysicalTextAlignment::Center),
+                    AxisSide::Left => (vertical_width, PhysicalTextAlignment::End),
                 };
-                backend.draw_line(&spine, frame_style)?;
-            }
-        }
-
-        // Tick marks + tick labels.
-        for (tick, tick_plan) in self.ticks.iter().zip(&text.tick_labels) {
-            match side {
-                AxisSide::Bottom => {
-                    let (x_px, _) = projection.project(tick.position, projection.y_range().0);
-                    if let Some(tick_style) = &tick_style {
-                        backend.draw_line(
-                            &[Point2D::new(x_px, y0), Point2D::new(x_px, y0 - tick_length)],
-                            tick_style,
-                        )?;
-                    }
-                    if let Some(plan) = tick_plan {
-                        let first_y = y0
-                            - tick_length
-                            - theme.axes.spacing.x_tick_label_gap
-                            - plan.line_height() / 2.0;
-                        let center_y = first_y
-                            - plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
-                        backend.draw_planned_text(
-                            PlannedTextPlacement::middle(
-                                Point2D::new(x_px.round(), center_y.round()),
-                                TextAnchor::Middle,
-                                0.0,
-                            ),
-                            plan,
-                        )?;
-                    }
+                let plan = fit::measured(fit::text(
+                    theme,
+                    &tick.label,
+                    &standard.tick_label,
+                    width,
+                    alignment,
+                    tick_role,
+                    scope,
+                ))?;
+                let extent = match side {
+                    AxisSide::Bottom => plan.width().max(plan.fit_width()),
+                    AxisSide::Left => plan.height(),
+                };
+                if extent > cell.capacity() {
+                    return Err(scope.failure(FitKind::Tick, format!("{tick_role} exceeds its assigned cell; increase chart size or shorten labels")).into());
                 }
-                AxisSide::Left => {
-                    let (_, y_px) = projection.project(projection.x_range().0, tick.position);
-                    if let Some(tick_style) = &tick_style {
-                        backend.draw_line(
-                            &[Point2D::new(x0, y_px), Point2D::new(x0 - tick_length, y_px)],
-                            tick_style,
-                        )?;
-                    }
-                    if let Some(plan) = tick_plan {
-                        let first_y = y_px
-                            + plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
-                        let center_y = first_y
-                            - plan.lines.len().saturating_sub(1) as f64 * plan.line_height() / 2.0;
-                        backend.draw_planned_text(
-                            PlannedTextPlacement::middle(
-                                Point2D::new(
-                                    (x0 - tick_length - theme.axes.spacing.y_tick_label_gap)
-                                        .max(0.0)
-                                        .round(),
-                                    center_y.round(),
-                                ),
-                                TextAnchor::End,
-                                0.0,
-                            ),
-                            plan,
-                        )?;
-                    }
-                }
-            }
-        }
-
-        // Axis label.
-        if let Some(block) = &text.title {
-            match side {
-                AxisSide::Bottom => {
-                    let cx = f64::midpoint(x0, x1);
-                    let tick_label_height = self
-                        .ticks
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, _)| {
-                            text.tick_labels
-                                .get(index)
-                                .and_then(Option::as_ref)
-                                .map(ResolvedTextPlan::height)
-                        })
-                        .fold(0.0_f64, f64::max);
-                    let tick_offset = if tick_label_height > 0.0 {
-                        theme.axes.spacing.x_tick_label_gap
-                            + tick_label_height
-                            + theme.axes.spacing.x_title_tick_label_gap
-                    } else {
-                        theme.axes.spacing.x_title_without_tick_labels_gap
+                let center = cell.label_center(extent);
+                let mut placement = match side {
+                    AxisSide::Bottom => PlannedTextPlacement::middle(
+                        Point2D::new(center, panel.y0 - outward - gap - plan.height() / 2.0),
+                        TextAnchor::Middle,
+                        0.0,
+                    ),
+                    AxisSide::Left => PlannedTextPlacement::middle(
+                        Point2D::new(panel.x0 - outward - gap, center),
+                        TextAnchor::End,
+                        0.0,
+                    ),
+                };
+                let canonical = crate::render::coordinates::canonical_text(
+                    placement.position,
+                    placement.rotation,
+                    crate::render::coordinates::CoordinatePrecision::Millionths,
+                )?;
+                placement.position = canonical.position.value();
+                if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+                    &plan,
+                    placement.position,
+                    placement.anchor,
+                    placement.rotation,
+                    placement.origin,
+                    placement.reverse_lines,
+                ) {
+                    let (start, end) = match side {
+                        AxisSide::Bottom => (ink.left, ink.right),
+                        AxisSide::Left => (ink.bottom, ink.top),
                     };
-                    let first_y = y0 - tick_length - tick_offset - block.line_height() / 2.0;
-                    let center_y = first_y
-                        - block.lines.len().saturating_sub(1) as f64 * block.line_height() / 2.0;
-                    backend.draw_planned_text(
-                        PlannedTextPlacement::middle(
-                            Point2D::new(cx.round(), center_y.round()),
-                            TextAnchor::Middle,
-                            0.0,
-                        ),
-                        block,
-                    )?;
-                }
-                AxisSide::Left => {
-                    let cy = f64::midpoint(y0, y1);
-                    let tick_label_width = self
-                        .ticks
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, _)| {
-                            text.tick_labels
-                                .get(index)
-                                .and_then(Option::as_ref)
-                                .map(ResolvedTextPlan::width)
-                        })
-                        .fold(0.0_f64, f64::max);
-                    let tick_label_anchor_x =
-                        x0 - tick_length - theme.axes.spacing.y_tick_label_gap;
-                    let label_half_width =
-                        y_axis_label_half_width(theme.typography.axis_title.font_size);
-                    let min_lx = theme.axes.spacing.y_title_edge_padding
-                        + label_half_width
-                        + block.lines.len().saturating_sub(1) as f64 * block.line_height();
-                    let lx = if tick_label_width > 0.0 {
-                        tick_label_anchor_x
-                            - tick_label_width
-                            - theme.axes.spacing.y_title_tick_label_gap
-                            - label_half_width
-                    } else {
-                        x0 - tick_length - 48.0
+                    if start < cell.start || end > cell.end {
+                        return Err(scope
+                            .failure(
+                                FitKind::Tick,
+                                format!("{tick_role} ink exceeds its assigned cell clearance"),
+                            )
+                            .into());
                     }
-                    .max(min_lx);
-                    let center_x =
-                        lx - block.lines.len().saturating_sub(1) as f64 * block.line_height() / 2.0;
-                    backend.draw_planned_text(
-                        PlannedTextPlacement::middle(
-                            Point2D::new(center_x.max(0.0).round(), cy.round()),
-                            TextAnchor::Middle,
-                            -90.0,
-                        ),
-                        block,
-                    )?;
                 }
+                // Gutter extents are translation invariant. Subtracting large
+                // absolute anchors can otherwise alternate a feedback quantum.
+                if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+                    &plan,
+                    Point2D::new(0.0, 0.0),
+                    placement.anchor,
+                    placement.rotation,
+                    placement.origin,
+                    placement.reverse_lines,
+                ) {
+                    label_extent = label_extent.max(match side {
+                        AxisSide::Bottom => plan.height() / 2.0 - ink.bottom,
+                        AxisSide::Left => -ink.left,
+                    });
+                }
+                label_extent = label_extent.max(match side {
+                    AxisSide::Bottom => plan.height(),
+                    AxisSide::Left => plan.width(),
+                });
+                Some((plan, placement))
+            };
+            ticks.push(FrozenTick {
+                position: tick.position,
+                cell,
+                segment,
+                label,
+            });
+        }
+        let mut gutter = outward;
+        if label_extent > 0.0 {
+            gutter += gap + label_extent;
+        }
+        let title = if self.label.is_empty() {
+            None
+        } else {
+            let plan = fit::measured(fit::text(
+                theme,
+                &self.label,
+                &standard.axis_title,
+                title_width,
+                PhysicalTextAlignment::Center,
+                title_role,
+                scope,
+            ))?;
+            gutter += if label_extent > 0.0 {
+                title_gap
+            } else {
+                match side {
+                    AxisSide::Bottom => theme.axes.spacing.x_title_without_tick_labels_gap,
+                    AxisSide::Left => title_gap,
+                }
+            };
+            let mut placement = match side {
+                AxisSide::Bottom => PlannedTextPlacement::middle(
+                    Point2D::new(
+                        f64::midpoint(panel.x0, panel.x1),
+                        panel.y0 - gutter - plan.height() / 2.0,
+                    ),
+                    TextAnchor::Middle,
+                    0.0,
+                ),
+                AxisSide::Left => PlannedTextPlacement::middle(
+                    Point2D::new(
+                        panel.x0 - gutter - plan.height() / 2.0,
+                        f64::midpoint(panel.y0, panel.y1),
+                    ),
+                    TextAnchor::Middle,
+                    -90.0,
+                ),
+            };
+            let canonical = crate::render::coordinates::canonical_text(
+                placement.position,
+                placement.rotation,
+                crate::render::coordinates::CoordinatePrecision::Millionths,
+            )?;
+            placement.position = canonical.position.value();
+            let mut thickness = plan.height();
+            if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
+                &plan,
+                Point2D::new(0.0, 0.0),
+                placement.anchor,
+                placement.rotation,
+                placement.origin,
+                placement.reverse_lines,
+            ) {
+                thickness = thickness.max(match side {
+                    AxisSide::Bottom => plan.height() / 2.0 - ink.bottom,
+                    AxisSide::Left => plan.height() / 2.0 - ink.left,
+                });
             }
-        }
-
-        Ok(())
-    }
-}
-
-fn tick_text_plan(
-    theme: &ResolvedTheme,
-    source: &str,
-    appearance: &crate::theme::TextAppearance,
-    maximum_width: f64,
-    alignment: PhysicalTextAlignment,
-    owner: &str,
-) -> Result<ResolvedTextPlan, Error> {
-    theme.plan_text(source, appearance, maximum_width, alignment, owner, false)
-}
-
-impl Frame {
-    /// Draw the current structurally present four-spine frame.
-    pub fn draw(
-        projection: &Projection,
-        theme: &ResolvedTheme,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        let Some(frame) = &theme.axes.frame else {
-            return Ok(());
+            gutter += thickness;
+            Some((plan, placement))
         };
-        let (x0, x1, y0, y1) = projection.pixel_box();
-        let line_style = frame.stroke.backend_style();
-        backend.draw_line(&[Point2D::new(x0, y0), Point2D::new(x1, y0)], &line_style)?;
-        backend.draw_line(&[Point2D::new(x1, y0), Point2D::new(x1, y1)], &line_style)?;
-        backend.draw_line(&[Point2D::new(x1, y1), Point2D::new(x0, y1)], &line_style)?;
-        backend.draw_line(&[Point2D::new(x0, y1), Point2D::new(x0, y0)], &line_style)
-    }
-}
-
-impl Grid {
-    /// Draw the structurally present grid style.
-    pub fn draw(
-        projection: &Projection,
-        x_axis: &Axis,
-        y_axis: &Axis,
-        theme: &ResolvedTheme,
-        backend: &mut dyn Backend,
-    ) -> Result<(), Error> {
-        let Some(grid) = &theme.axes.grid else {
-            return Ok(());
+        if side == AxisSide::Left && title.is_some() {
+            gutter += theme.axes.spacing.y_title_edge_padding;
+        }
+        let (start, end) = match side {
+            AxisSide::Bottom => (panel.x0, panel.x1),
+            AxisSide::Left => (panel.y0, panel.y1),
         };
-        let line_style = grid.backend_style();
-        for tick in &x_axis.ticks {
-            let (x_px, _) = projection.project(tick.position, 0.0);
-            let (_, y_min) = projection.project(tick.position, projection.y_range().0);
-            let (_, y_max) = projection.project(tick.position, projection.y_range().1);
-            backend.draw_line(
-                &[Point2D::new(x_px, y_min), Point2D::new(x_px, y_max)],
-                &line_style,
-            )?;
-        }
-        for tick in &y_axis.ticks {
-            let (_, y_px) = projection.project(0.0, tick.position);
-            let (x_min, _) = projection.project(projection.x_range().0, tick.position);
-            let (x_max, _) = projection.project(projection.x_range().1, tick.position);
-            backend.draw_line(
-                &[Point2D::new(x_min, y_px), Point2D::new(x_max, y_px)],
-                &line_style,
-            )?;
-        }
-        Ok(())
+        let half_tick = tick_style
+            .as_ref()
+            .map_or(0.0, |style| f64::from(style.width) / 2.0);
+        let start_overhang = ticks
+            .iter()
+            .map(|tick| start - tick.cell.center + half_tick)
+            .fold(0.0_f64, f64::max);
+        let end_overhang = ticks
+            .iter()
+            .map(|tick| tick.cell.center + half_tick - end)
+            .fold(0.0_f64, f64::max);
+        Ok(FrozenAxisPlan {
+            source: self.source,
+            ticks,
+            title,
+            tick_style,
+            gutter,
+            start_overhang,
+            end_overhang,
+        })
     }
 }

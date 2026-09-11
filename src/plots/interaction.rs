@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{AxisTick, Layout};
+use crate::layout::AxisTick;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
 use crate::Plot;
@@ -91,36 +91,31 @@ pub(crate) fn render(
             x_levels.push(x[index].clone());
         }
     }
-    let y_range = crate::layout::continuous_auto_range(
-        crate::data::min_max(lower.iter().chain(&upper).copied(), "interaction")?,
-        chart.y_axis_spec(),
-    );
-    let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let x_ticks = x_levels
-        .iter()
-        .enumerate()
-        .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-        .collect();
-    let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
-        chart,
-        panel,
-        &x_levels,
-        context.theme,
-        context.fit_scope(),
-    )?;
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        (0.0, x_levels.len() as f64),
-        y_range,
-        panel,
-        chart.x_label_text().unwrap_or(x_col).to_owned(),
-        chart.y_label_text().unwrap_or(estimate_col).to_owned(),
-        x_ticks,
-        Vec::new(),
-        chart.x_axis_spec(),
-        &y_axis,
-        context.theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let y_range = crate::layout::continuous_auto_range(
+            crate::data::min_max(lower.iter().chain(&upper).copied(), "interaction")?,
+            chart.y_axis_spec(),
+        );
+        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        let x_ticks = x_levels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
+            .collect();
+        let panel = context.panel;
+        context.layout_with_ticks(
+            (0.0, x_levels.len() as f64),
+            y_range,
+            panel,
+            chart.x_label_text().unwrap_or(x_col).to_owned(),
+            chart.y_label_text().unwrap_or(estimate_col).to_owned(),
+            x_ticks,
+            Vec::new(),
+            chart.x_axis_spec(),
+            &y_axis,
+            context.theme,
+        )
+    })?;
     with_clip(backend, layout.projection.panel_box(), |backend| {
         for identity in &identities {
             if !channels.rows.contains(identity) {

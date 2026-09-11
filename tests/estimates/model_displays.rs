@@ -179,7 +179,7 @@ fn forest_log_scale_renders_raw_power_ticks_and_rejects_nonpositive_values() {
 }
 
 #[test]
-fn forest_narrow_log_range_keeps_raw_multiplicative_ticks() {
+fn forest_narrow_log_range_uses_expression_labeled_adaptive_exponents() {
     let svg = render_svg(
         Plot::forest(
             lichtung_plot::CategoryValues::new("term", ["a", "b"]).unwrap(),
@@ -196,7 +196,9 @@ fn forest_narrow_log_range_keeps_raw_multiplicative_ticks() {
     )
     .unwrap();
     assert!(
-        svg.contains(">1</text>") && svg.contains(">1.3</text>") && svg.contains(">1.6</text>")
+        svg.contains(">10^0</text>")
+            && svg.contains(">10^0.1</text>")
+            && svg.contains(">10^0.2</text>")
     );
 }
 

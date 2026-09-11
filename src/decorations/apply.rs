@@ -7,21 +7,26 @@ use crate::decorations::plan::{PanelPlan, ResolvedLegend as PlannedLegend};
 use crate::decorations::title_block::TitleBlock;
 use crate::layout::CanvasLayout;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
-use crate::spec::PlotRenderResult;
-use crate::theme::ResolvedTheme;
 
 /// Draw one panel's grid before its marks.
 pub(crate) fn apply_grid(
     plot: &Plot,
-    result: &PlotRenderResult,
-    theme: &ResolvedTheme,
+    plan: &PanelPlan,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer_role(
         backend,
         &plot.layer_name("grid"),
         LayerRole::Grid,
-        |backend| result.layout.draw_grid_below(theme, backend),
+        |backend| {
+            plan.result
+                .axes
+                .as_ref()
+                .ok_or_else(|| {
+                    Error::Render("standard panel plan is missing immutable axes".into())
+                })?
+                .draw_grid(backend)
+        },
     )
 }
 
@@ -29,16 +34,14 @@ pub(crate) fn apply_grid(
 pub(crate) fn apply_axes(
     plot: &Plot,
     plan: &PanelPlan,
-    theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     with_layer(backend, &plot.layer_name("axes"), |backend| {
-        let text = plan.axis_text.as_ref().ok_or_else(|| {
-            Error::Render("standard panel plan is missing immutable axis text".into())
-        })?;
-        plan.result
-            .layout
-            .draw_decorations_with_text(theme, text, backend)
+        let axes =
+            plan.result.axes.as_ref().ok_or_else(|| {
+                Error::Render("standard panel plan is missing immutable axes".into())
+            })?;
+        axes.draw(backend)
     })
 }
 

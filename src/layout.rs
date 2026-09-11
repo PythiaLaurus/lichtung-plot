@@ -12,15 +12,19 @@ pub(crate) use canvas::{CanvasLayout, CanvasLayoutSpec, PanelBox};
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
-pub use panel::AxisTick;
-pub(crate) use panel::{
-    anchored_auto_range, automatic_numeric_ticks, automatic_numeric_ticks_legacy,
-    continuous_auto_range, display_axis_spec, fit_automatic_tick_candidates, format_tick,
-    retain_automatic_ticks_inside_panel_legacy, y_axis_left_inset_for_tick_labels,
-};
 #[cfg(test)]
-pub(crate) use panel::{nice_ticks, AUTOMATIC_TICK_TARGET};
-pub(crate) use panel::{Axis, AxisSide, AxisSpec, Layout, PanelAxisTextPlan, Projection};
+pub(crate) use panel::nice_ticks;
+pub use panel::AxisTick;
+#[cfg(test)]
+pub(crate) use panel::TickSource;
+pub(crate) use panel::NUMERIC_ALPHABET;
+pub(crate) use panel::{
+    anchored_auto_range, continuous_auto_range, display_axis_spec, numeric_tick_plan,
+    y_axis_left_inset_for_tick_labels,
+};
+pub(crate) use panel::{Axis, AxisSide, AxisSpec, Layout, PanelAxisPlan, Projection};
+pub(crate) use panel::{NumericTickPlan, TickInterval};
+pub(crate) use panel::{RangeProvenance, StandardPanelInputs};
 #[allow(unused_imports)]
 pub(crate) use text::{
     foundational_plot_requirements, maximum_width_quanta, DeferredAnnotationTextPlan,

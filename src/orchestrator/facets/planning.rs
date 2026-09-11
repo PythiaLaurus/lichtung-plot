@@ -225,7 +225,7 @@ pub(super) fn layout_panels(
     for (index, facet) in panels.iter().enumerate() {
         let mut panel_plot = plot
             .clone()
-            .with_render_scope(facet.render_scope())
+            .with_render_scope(facet.render_scope(plot.data())?)
             .with_significance_subset(facet.significance_selectors());
         let domain_address = ComponentAddress::root().child(
             AddressRole::FacetCell,
@@ -313,7 +313,10 @@ pub(super) fn layout_panels(
         let label = facet_label(&panel_plot, &facet.cell);
         let cell = cells[facet.row * columns + facet.column];
         let requirement = match fit::outcome(PanelRequirements::measure(
-            &result.layout,
+            result
+                .axes
+                .as_ref()
+                .ok_or_else(|| Error::Render("facet panel is missing its measured axes".into()))?,
             theme,
             Some(&label),
             cell,
@@ -424,7 +427,7 @@ pub(super) fn plan_panels(
     for (index, facet) in panels.iter().enumerate() {
         let panel_plot = plot
             .clone()
-            .with_render_scope(facet.render_scope())
+            .with_render_scope(facet.render_scope(plot.data())?)
             .with_significance_subset(facet.significance_selectors());
         let role = if legend_owner {
             LegendRole::Panel

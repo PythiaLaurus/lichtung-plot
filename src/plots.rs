@@ -26,5 +26,6 @@ pub mod matrix;
 pub mod point_interval;
 pub mod qq;
 pub mod regression;
+pub(crate) mod shared_x;
 pub mod violin;
 pub mod waterfall;

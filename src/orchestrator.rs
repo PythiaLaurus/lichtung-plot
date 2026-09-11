@@ -9,6 +9,7 @@ use crate::spec::{AxisDomain, PlotKind, PlotRenderContext, PlotRenderResult};
 mod artifacts;
 mod backend;
 mod facets;
+pub(crate) use facets::text_census_panels;
 mod layers;
 mod lifecycle;
 #[cfg(test)]
@@ -108,6 +109,7 @@ impl Plot {
                     .push(std::ptr::from_ref(context.theme).addr());
             });
         }
+        let context = context.with_prepared_axes(self);
         let mut result = match kind {
             PlotKind::Scatter => crate::plots::scatter::render(self, context, backend),
             PlotKind::Histogram => crate::plots::histogram::render(self, context, backend),
@@ -132,12 +134,8 @@ impl Plot {
             PlotKind::Violin => crate::plots::violin::render(self, context, backend),
             PlotKind::Raincloud => crate::plots::violin::render_raincloud(self, context, backend),
             PlotKind::Regression => crate::plots::regression::render(self, context, backend),
-            PlotKind::Marginal => {
-                crate::plots::marginal::render(self, context, backend).map_err(Into::into)
-            }
-            PlotKind::Matrix => {
-                crate::plots::matrix::render(self, context, backend).map_err(Into::into)
-            }
+            PlotKind::Marginal => crate::plots::marginal::render(self, context, backend),
+            PlotKind::Matrix => crate::plots::matrix::render(self, context, backend),
             PlotKind::Beeswarm => crate::plots::beeswarm::render(self, context, backend),
             PlotKind::Waterfall => crate::plots::waterfall::render(self, context, backend),
         }?;
@@ -164,17 +162,8 @@ impl Plot {
         };
         result.x_domain = domains.0;
         result.y_domain = domains.1;
-        layers::apply(
-            self,
-            &mut result,
-            context.theme,
-            backend,
-            context.fit_scope(),
-        )?;
-        let (x_label, y_label) = self.resolved_axis_labels(kind);
-        result.layout.x_axis.label = x_label;
-        result.layout.y_axis.label = y_label;
-        resolve_rendered_labels(self, &mut result, context.theme, context.fit_scope())?;
+        layers::apply(self, &mut result, backend)?;
+        resolve_rendered_labels(self, kind, &mut result, context)?;
         result.panel_text = match context.panel_text {
             Some(plans) => plans.to_vec(),
             None => crate::decorations::panel_text::measure_plans(
@@ -191,38 +180,71 @@ impl Plot {
 
 fn resolve_rendered_labels(
     plot: &Plot,
+    kind: PlotKind,
     result: &mut PlotRenderResult,
-    theme: &crate::theme::ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
+    context: PlotRenderContext<'_>,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    if result.decoration_mode == crate::spec::DecorationMode::SelfManaged {
+    if result.decoration_mode == crate::spec::DecorationMode::SelfManaged
+        || context.retained_axes.is_some()
+    {
         return Ok(());
     }
+    let theme = context.theme;
+    let scope = context.fit_scope();
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let (x_label, y_label) = match plot.prepared_axis_inputs() {
+        Some(axes) => (
+            data.copy_source_string(&axes.labels[0])?,
+            data.copy_source_string(&axes.labels[1])?,
+        ),
+        None => plot.resolved_axis_labels(kind),
+    };
+    result.layout.x_axis.label = x_label;
+    result.layout.y_axis.label = y_label;
     if result.x_domain == AxisDomain::Categorical && result.x_tick_keys.is_none() {
-        let raw = result
-            .layout
-            .x_axis
-            .ticks
-            .iter()
-            .map(|tick| tick.label.clone())
-            .collect::<Vec<_>>();
-        let display =
-            plot.resolve_label_domain("x-axis categories", raw.iter().map(String::as_str))?;
+        let raw = data.collect_source(
+            result
+                .layout
+                .x_axis
+                .ticks
+                .iter()
+                .map(|tick| data.copy_source_string(&tick.label)),
+        )?;
+        let display = match context.prepared_category_labels(0) {
+            Some(labels) => {
+                data.collect_source(labels.iter().map(|label| data.copy_source_string(label)))?
+            }
+            None => plot.resolve_axis_label_domain(
+                "x-axis categories",
+                raw.iter().map(String::as_str),
+                data,
+            )?,
+        };
         for (tick, label) in result.layout.x_axis.ticks.iter_mut().zip(display) {
             tick.label = label;
         }
         result.x_tick_keys = Some(raw);
     }
     if result.y_domain == AxisDomain::Categorical && result.y_tick_keys.is_none() {
-        let raw = result
-            .layout
-            .y_axis
-            .ticks
-            .iter()
-            .map(|tick| tick.label.clone())
-            .collect::<Vec<_>>();
-        let display =
-            plot.resolve_label_domain("y-axis categories", raw.iter().map(String::as_str))?;
+        let raw = data.collect_source(
+            result
+                .layout
+                .y_axis
+                .ticks
+                .iter()
+                .map(|tick| data.copy_source_string(&tick.label)),
+        )?;
+        let display = match context.prepared_category_labels(1) {
+            Some(labels) => {
+                data.collect_source(labels.iter().map(|label| data.copy_source_string(label)))?
+            }
+            None => plot.resolve_axis_label_domain(
+                "y-axis categories",
+                raw.iter().map(String::as_str),
+                data,
+            )?,
+        };
         for (tick, label) in result.layout.y_axis.ticks.iter_mut().zip(display) {
             tick.label = label;
         }
@@ -231,91 +253,177 @@ fn resolve_rendered_labels(
     if !result.legend_entries.is_empty() {
         crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
     }
-    validate_axis_text(&result.layout, theme, scope)?;
+    if result.y_domain == AxisDomain::Categorical
+        && result.layout.y_axis.assigned_tick_width.is_none()
+    {
+        let height = result.layout.projection.panel_box().height();
+        if plot.parent_owns_axis_gutters() {
+            // The composition reserves the reported intrinsic gutter. Its residual
+            // mark width is not a second, narrower label allocation.
+            result.layout.y_axis.assigned_tick_width = Some(
+                theme.intrinsic_tick_label_width(
+                    result
+                        .layout
+                        .y_axis
+                        .ticks
+                        .iter()
+                        .map(|tick| tick.label.as_str()),
+                    height,
+                )?,
+            );
+        } else {
+            result
+                .layout
+                .y_axis
+                .assign_label_width(context.axis_label_width, height, theme)?;
+        }
+    }
+    result.axes = Some(result.layout.measure_axes(
+        theme,
+        scope,
+        plot.axis_semantic_inputs([result.x_domain, result.y_domain]),
+    )?);
     Ok(())
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "tick counts are bounded by the finite panel width and allocated tick vector"
-)]
+#[cfg(test)]
 fn validate_axis_text(
     layout: &crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(), crate::layout::fit::PlanError> {
-    use crate::layout::fit;
-    let mut miss = None;
-    let mut record = |result: Result<fit::FitOutcome<crate::layout::ResolvedTextPlan>, Error>| -> Result<(), Error> {
-        if let fit::FitOutcome::Miss(failure) = result? { fit::FitFailure::retain_least(&mut miss, failure); }
-        Ok(())
-    };
-    let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
-    let y_scope = scope.child(crate::layout::AddressRole::AxisLeft, 0)?;
-    let panel = layout.projection.panel_box();
-    let x_tick_width = panel.width() / layout.x_axis.ticks.len().max(1) as f64;
-    for tick in layout
-        .x_axis
-        .ticks
-        .iter()
-        .filter(|tick| !tick.label.is_empty())
-    {
-        record(fit::text(
-            theme,
-            &tick.label,
-            &theme.typography.tick_label,
-            x_tick_width.max(1.0),
-            crate::layout::PhysicalTextAlignment::Center,
-            "x-axis tick label",
-            &x_scope,
-        ))?;
-    }
-    if !layout.x_axis.label.is_empty() {
-        record(fit::text(
-            theme,
-            &layout.x_axis.label,
-            &theme.typography.axis_title,
-            panel.width().max(1.0),
-            crate::layout::PhysicalTextAlignment::Center,
-            "x-axis title",
-            &x_scope,
-        ))?;
-    }
+    layout
+        .measure_axes(theme, scope, layout.test_semantics())
+        .map(|_| ())
+}
 
-    if !layout.y_axis.label.is_empty() {
-        record(fit::text(
-            theme,
-            &layout.y_axis.label,
-            &theme.typography.axis_title,
-            panel.height().max(1.0),
-            crate::layout::PhysicalTextAlignment::Center,
-            "y-axis title",
-            &y_scope,
-        ))?;
+#[cfg(test)]
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one fixture checks copy-only refusal and warm measured-consumption limits"
+)]
+fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::layout::fit::PlanError;
+    use crate::layout::{Axis, PanelBox, Projection, TickSource};
+    let plot = Plot::heatmap(
+        crate::CategoryValues::new("column", ["first", "second"]).unwrap(),
+        crate::CategoryValues::new("row", ["upper", "lower"]).unwrap(),
+        crate::NumericValues::new("value", [1.0, 2.0]),
+    )
+    .x_label("Horizontal")
+    .y_label("Vertical")
+    .labels(crate::Labels::raw())
+    .erase();
+    let prepared =
+        crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new()).unwrap();
+    let plot = prepared.attach(plot);
+    let axes = plot.prepared_axis_inputs().unwrap();
+    let panel = PanelBox::new(0.0, 600.0, 0.0, 400.0);
+    let template = crate::layout::Layout {
+        projection: Projection::new(axes.ranges[0], axes.ranges[1], panel.as_tuple()),
+        x_axis: Axis {
+            label: String::new(),
+            ticks: axes.categories[0].clone().unwrap(),
+            explicit_ticks: false,
+            assigned_tick_width: None,
+            source: TickSource::SUPPLIED,
+        },
+        y_axis: Axis {
+            label: String::new(),
+            ticks: axes.categories[1].clone().unwrap(),
+            explicit_ticks: false,
+            assigned_tick_width: Some(200.0),
+            source: TickSource::SUPPLIED,
+        },
+    };
+    let consume = |theme: &crate::theme::ResolvedTheme| {
+        let mut result = PlotRenderResult::new(template.clone(), Vec::new());
+        result.x_domain = AxisDomain::Categorical;
+        result.y_domain = AxisDomain::Categorical;
+        resolve_rendered_labels(
+            &plot,
+            plot.kind(),
+            &mut result,
+            PlotRenderContext::new(plot.data(), panel, theme).with_prepared_axes(&plot),
+        )?;
+        Ok::<_, PlanError>(result)
+    };
+    // Stop at the copy boundary, before any final axis-plan admission. This
+    // distinguishes admitted source copies from charging only the final plan.
+    let copy_bytes = (18 + 2 * 21 + 8 * std::mem::size_of::<String>()) as u64;
+    for shortfall in [0, 1] {
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        resources
+            .claim_bytes(536_870_912 - resources.byte_usage().unwrap() - copy_bytes + shortfall)
+            .unwrap();
+        let mut result = PlotRenderResult::new(template.clone(), Vec::new());
+        result.x_domain = AxisDomain::Categorical;
+        result.y_domain = AxisDomain::Categorical;
+        let error = resolve_rendered_labels(
+            &plot,
+            plot.kind(),
+            &mut result,
+            PlotRenderContext::new(plot.data(), panel, &theme).with_prepared_axes(&plot),
+        )
+        .unwrap_err();
+        let PlanError::Fatal(Error::Render(message)) = error else {
+            panic!("copy resource refusal must remain fatal")
+        };
+        assert!(
+            message.contains(if shortfall == 0 {
+                "axis plan admission"
+            } else {
+                "axis source storage admission"
+            }),
+            "{message}"
+        );
+        assert!(result.x_tick_keys.is_some());
+        assert_eq!(result.y_tick_keys.is_some(), shortfall == 0);
+        assert!(result.axes.is_none());
     }
-    let y_tick_width =
-        layout
-            .y_axis
-            .tick_label_width(panel, crate::layout::AxisSide::Left, theme)?;
-    for tick in layout
-        .y_axis
-        .ticks
-        .iter()
-        .filter(|tick| !tick.label.is_empty())
-    {
-        record(fit::text(
-            theme,
-            &tick.label,
-            &theme.typography.tick_label,
-            y_tick_width,
-            crate::layout::PhysicalTextAlignment::End,
-            "y-axis tick label",
-            &y_scope,
-        ))?;
-    }
-    match miss {
-        Some(failure) => Err(failure.into()),
-        None => Ok(()),
+    for shortfall in [None, Some(false), Some(true)] {
+        let theme = crate::Theme::Publication.resolve();
+        consume(&theme).unwrap();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        let before = (
+            resources.usage().unwrap().1,
+            resources.byte_usage().unwrap(),
+        );
+        let measured = consume(&theme).unwrap();
+        assert_eq!(measured.layout.x_axis.label, "Horizontal");
+        assert_eq!(measured.layout.y_axis.label, "Vertical");
+        assert_eq!(measured.x_tick_keys.as_ref().unwrap(), &["first", "second"]);
+        assert_eq!(measured.y_tick_keys.as_ref().unwrap(), &["upper", "lower"]);
+        let visits = resources.usage().unwrap().1 - before.0;
+        let bytes = resources.byte_usage().unwrap() - before.1;
+        assert!(bytes >= copy_bytes);
+        resources
+            .claim_visits(
+                1_000_000 - resources.usage().unwrap().1 - visits
+                    + u128::from(shortfall == Some(false)),
+            )
+            .unwrap();
+        resources
+            .claim_bytes(
+                536_870_912 - resources.byte_usage().unwrap() - bytes
+                    + u64::from(shortfall == Some(true)),
+            )
+            .unwrap();
+        let result = consume(&theme);
+        if shortfall.is_none() {
+            result.unwrap();
+        } else {
+            assert!(matches!(result, Err(PlanError::Fatal(Error::Render(_)))));
+        }
     }
 }
 

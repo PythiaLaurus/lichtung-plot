@@ -4,6 +4,225 @@ use super::*;
 #[test]
 #[expect(
     clippy::too_many_lines,
+    reason = "one real frame fixture checks Auto recovery, fixed scoped refusal, and Top source work"
+)]
+fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
+    use crate::layout::fit::FitOutcome;
+    use crate::orchestrator::measurements::{self, Counter, GuideOutcome, GuidePhase};
+    let plot = Plot::marginal(
+        crate::NumericValues::new("x", [-1e-100, -2e-100, -3e-100]),
+        crate::NumericValues::new("y", [0.0, 1.0, 2.0]),
+    )
+    .hue(crate::CategoryValues::new("group", ["Group"; 3]).unwrap())
+    .x_label("")
+    .y_label("")
+    .x_limits(-4e-100, -0.5e-100)
+    .size(640, 480)
+    .legend(LegendPolicy::Visible(LegendPosition::Auto))
+    .erase();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.typography.tick_label.font_size = 48;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let plot = prepared.attach(plot);
+    let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
+    measurements::start();
+    let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
+    let observed = measurements::finish();
+    assert!(auto.is_ok(), "{:?}; {:?}", auto.err(), observed.guides);
+    assert!(
+        observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == LegendPosition::OutsideRight
+                && trial.phase == GuidePhase::Body
+                && trial.outcome == GuideOutcome::Rejected),
+        "{:?}",
+        observed.guides
+    );
+    assert!(
+        observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == LegendPosition::OutsideTop
+                && trial.outcome == GuideOutcome::Accepted),
+        "{:?}",
+        observed.guides
+    );
+    assert_eq!(
+        observed.counters[Counter::TickFitMiss as usize],
+        u64::try_from(
+            observed
+                .guides
+                .iter()
+                .filter(|trial| trial.edge == LegendPosition::OutsideRight
+                    && trial.phase == GuidePhase::Body
+                    && trial.outcome == GuideOutcome::Rejected)
+                .count()
+        )
+        .unwrap()
+    );
+    assert!(observed
+        .guides
+        .iter()
+        .all(|trial| trial.outcome != GuideOutcome::Aborted));
+
+    let fixed = plot
+        .clone()
+        .with_legend_position(LegendPosition::OutsideRight);
+    let mut failure = None;
+    measurements::start();
+    let result = crate::layout::plan_exact_root(
+        fixed.width(),
+        fixed.height(),
+        |_| Ok(()),
+        |(), _, round| match super::plan_panel(
+            &fixed,
+            fixed.kind(),
+            cell,
+            LegendRole::Panel,
+            &theme,
+            round,
+            &ComponentAddress::root(),
+        )? {
+            FitOutcome::Miss(miss) => {
+                let error = Error::Render(miss.to_string());
+                failure = Some(miss);
+                Err::<crate::layout::MeasuredLayout<()>, _>(error)
+            }
+            FitOutcome::Measured(_) => panic!("fixed Right must not recover to Top"),
+        },
+        |(), _, (), _| Ok(()),
+    );
+    assert!(result.is_err());
+    let fixed_observed = measurements::finish();
+    let failure = failure.expect("fixed Right must retain a typed miss");
+    assert_eq!(failure.reason.kind, FitKind::Tick, "{failure}");
+    assert_eq!(
+        failure.reason.address,
+        ComponentAddress::root()
+            .child(AddressRole::AxisBottom, 0)
+            .unwrap()
+    );
+    assert_eq!(fixed_observed.counters[Counter::TickFitMiss as usize], 1);
+    assert!(fixed_observed
+        .guides
+        .iter()
+        .all(|trial| trial.edge == LegendPosition::OutsideRight
+            && trial.outcome == GuideOutcome::Rejected));
+    measurements::start();
+    plan_panel(
+        &plot.with_legend_position(LegendPosition::OutsideTop),
+        PlotKind::Marginal,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    let top = measurements::finish();
+    assert_eq!(top.counters[Counter::TickFitMiss as usize], 0);
+    assert!(
+        observed.counters[Counter::TickSource as usize]
+            > top.counters[Counter::TickSource as usize]
+    );
+}
+
+#[test]
+fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
+    use crate::orchestrator::measurements::{self, Counter, GuideOutcome, GuidePhase};
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [-1e-100, -2e-100]),
+        crate::NumericValues::new("y", [0.0, 1.0]),
+    )
+    .hue(crate::CategoryValues::new("group", ["MMMMMMMMMMMMMMMMMM"; 2]).unwrap())
+    .x_label("")
+    .y_label("")
+    .size(640, 480)
+    .legend(LegendPolicy::Visible(LegendPosition::Auto))
+    .erase();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.typography.tick_label.font_size = 40;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+    let plot = prepared.attach(plot);
+    let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
+    measurements::start();
+    let before = resources.usage().unwrap();
+    let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
+    let observed = measurements::finish();
+    assert!(auto.is_ok(), "{:?}; {:?}", auto.err(), observed.guides);
+    assert!(
+        observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == LegendPosition::OutsideRight
+                && trial.phase == GuidePhase::Body
+                && trial.outcome == GuideOutcome::Rejected),
+        "{:?}",
+        observed.guides
+    );
+    assert!(
+        observed
+            .guides
+            .iter()
+            .any(|trial| trial.edge == LegendPosition::OutsideTop
+                && trial.outcome == GuideOutcome::Accepted),
+        "{:?}",
+        observed.guides
+    );
+    assert!(observed.counters[Counter::TickSource as usize] > 0);
+    assert_eq!(observed.counters[Counter::TickFitMiss as usize], 1);
+    assert!(resources.usage().unwrap().1 > before.1);
+    assert!(observed
+        .guides
+        .iter()
+        .all(|trial| trial.outcome != GuideOutcome::Aborted));
+    measurements::start();
+    let error = plan_panel(
+        &plot
+            .clone()
+            .with_legend_position(LegendPosition::OutsideRight),
+        PlotKind::Scatter,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .err()
+    .expect("fixed right must fail");
+    let fixed = measurements::finish();
+    assert!(error.to_string().contains("layout fit"), "{error}");
+    assert_eq!(fixed.counters[Counter::TickFitMiss as usize], 1);
+    assert!(fixed
+        .guides
+        .iter()
+        .all(|trial| trial.edge == LegendPosition::OutsideRight
+            && trial.outcome == GuideOutcome::Rejected));
+    measurements::start();
+    plan_panel(
+        &plot.with_legend_position(LegendPosition::OutsideTop),
+        PlotKind::Scatter,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    let top = measurements::finish();
+    assert_eq!(top.counters[Counter::TickFitMiss as usize], 0);
+    assert!(
+        observed.counters[Counter::TickSource as usize]
+            > top.counters[Counter::TickSource as usize]
+    );
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
     reason = "one freeze-to-capture harness covers all specialized producer families"
 )]
 fn specialized_producer_plans_survive_first_capture_without_shaping() {
@@ -126,6 +345,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     );
                 }
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+                crate::orchestrator::measurements::start();
                 let (width, height) = assigned.dimensions();
                 let replay = crate::orchestrator::capture_text_replay_plan(
                     width,
@@ -143,6 +363,17 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                         .map(|_| ())
                     },
                 )?;
+                let capture_work = crate::orchestrator::measurements::finish();
+                for counter in [
+                    crate::orchestrator::measurements::Counter::TickSource,
+                    crate::orchestrator::measurements::Counter::TickDistinctList,
+                    crate::orchestrator::measurements::Counter::TickMetricLookup,
+                ] {
+                    assert_eq!(
+                        capture_work.counters[counter as usize], 0,
+                        "{kind:?}: {counter:?}"
+                    );
+                }
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| {
                     assert_eq!(calls.get(), 0, "{kind:?} shaped during first capture");
                 });
@@ -290,8 +521,10 @@ fn explicit_left_and_bottom_guides_reserve_complete_axis_ink() {
         let mut chrome = GeometryBackend::new(&theme).unwrap();
         chrome.begin(plot.width(), plot.height()).unwrap();
         plan.result
-            .layout
-            .draw_decorations_with_text(&theme, plan.axis_text.as_ref().unwrap(), &mut chrome)
+            .axes
+            .as_ref()
+            .unwrap()
+            .draw(&mut chrome)
             .unwrap();
         chrome.end().unwrap();
         for bounds in chrome.bounds() {
@@ -479,7 +712,16 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
         )
         .unwrap()
         .width();
-    let width = note_width + legend.compute_box_width() + 36.0;
+    let axis_extra = (initial.axes.as_ref().unwrap().requirements().left + 4.0
+        - source
+            .clone()
+            .erase()
+            .base_canvas_layout(&theme)
+            .insets
+            .left)
+        .max(0.0)
+        .ceil();
+    let width = note_width + legend.compute_box_width() + 36.0 + axis_extra;
     let cell = PanelBox::new(100.0, 100.0 + width, 80.0, 400.0);
     let source = source.panel_text_annotation(
         crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, note).unwrap(),
@@ -958,11 +1200,43 @@ fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
         crate::layout::AxisTick::new(1.0, "red blue"),
         crate::layout::AxisTick::new(2.0, "six ten"),
     ]);
-    let cell = PanelBox::new(60.0, 220.0, 30.0, 180.0);
+    let cell = PanelBox::new(60.0, 240.0, 30.0, 180.0);
 
     let plan = plan_panel(&plot, PlotKind::Scatter, cell, LegendRole::Panel, &theme()).unwrap();
 
     assert!(plan.panel_box.y0 > cell.y0);
+}
+
+#[test]
+fn categorical_gutter_uses_root_feedback_and_real_residual_fit_not_a_percentage_cap() {
+    let source = Plot::horizontal_bar(
+        crate::CategoryValues::new("category", ["W".repeat(20)]).unwrap(),
+        crate::BarInput::estimates(NumericValues::new("value", [1.0])),
+    )
+    .size(800, 480)
+    .erase();
+    let theme = theme();
+    let cell = PanelBox::new(80.0, 680.0, 80.0, 380.0);
+    let plan = plan_panel(
+        &source,
+        PlotKind::HorizontalBar,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    assert!(plan.panel_box.x0 > cell.x0);
+    assert!(plan.result.axes.as_ref().unwrap().requirements().left > cell.width() * 0.4);
+    assert_eq!(plan.result.layout.y_axis.ticks[0].label, "W".repeat(20));
+    let narrow = PanelBox::new(80.0, 250.0, 80.0, 380.0);
+    assert!(plan_panel(
+        &source,
+        PlotKind::HorizontalBar,
+        narrow,
+        LegendRole::Panel,
+        &theme
+    )
+    .is_err());
 }
 
 #[test]

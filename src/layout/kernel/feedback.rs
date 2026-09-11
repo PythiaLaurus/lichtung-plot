@@ -1055,6 +1055,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn axis_semantics_and_standard_typography_are_feedback_identity() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [0.0, 1.0]),
+        )
+        .erase();
+        let domains = [crate::spec::AxisDomain::Continuous; 2];
+        let theme = crate::Theme::Publication.resolve();
+        let standard = crate::layout::StandardPanelInputs::new(&theme).unwrap();
+        let state = |plot: &crate::Plot, standard: &crate::layout::StandardPanelInputs| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let mut round = FeedbackRound::new(None, resources, 0).unwrap();
+            for input in plot.axis_semantic_inputs(domains) {
+                input.observe_feedback(&mut round).unwrap();
+            }
+            standard.observe_feedback(&mut round).unwrap();
+            round.finish().unwrap()
+        };
+        let automatic = state(&plot, &standard);
+        let shared = plot.clone().with_resolved_facet_ranges(
+            crate::spec::PlotKind::Scatter,
+            Some((0.0, 1.0)),
+            None,
+        );
+        assert_ne!(automatic, state(&shared, &standard));
+        assert_eq!(
+            automatic,
+            state(&plot.with_planned_x_limits((0.0, 1.0)), &standard)
+        );
+        let mut changed_theme = theme.clone();
+        changed_theme.typography.tick_label.line_height_multiplier += 0.25;
+        let changed = crate::layout::StandardPanelInputs::new(&changed_theme).unwrap();
+        assert_ne!(state(&shared, &standard), state(&shared, &changed));
+    }
+
+    #[test]
     fn guide_lookups_charge_examined_entries_and_refuse_before_mutation() {
         let owners = [0, 1, 2, 3].map(|slot| {
             ComponentAddress::root()

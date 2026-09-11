@@ -32,6 +32,15 @@
 /// assert!(densities[2] > densities[4]);
 /// ```
 pub fn kde(samples: &[f64], grid_points: &[f64]) -> Result<Vec<f64>, crate::Error> {
+    kde_with_source(samples, grid_points, None)
+}
+
+pub(crate) fn kde_with_source(
+    samples: &[f64],
+    grid_points: &[f64],
+    data: Option<crate::data::PlotData<'_>>,
+) -> Result<Vec<f64>, crate::Error> {
+    use crate::data::source::SourceAdmission;
     use crate::Error;
     if samples.is_empty() {
         return Err(Error::Data(
@@ -46,12 +55,14 @@ pub fn kde(samples: &[f64], grid_points: &[f64]) -> Result<Vec<f64>, crate::Erro
     let n_f = n as f64;
 
     // Bandwidth via Scott's rule.
+    data.source_visits(samples.len())?;
     let mean = samples.iter().sum::<f64>() / n_f;
     // Sample variance (n - 1 in the denominator for the
     // unbiased estimator; for the KDE bandwidth the n
     // denominator is also valid, but (n - 1) is the
     // scipy convention).
     let var = if n > 1 {
+        data.source_visits(samples.len())?;
         samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (n_f - 1.0)
     } else {
         0.0
@@ -63,7 +74,7 @@ pub fn kde(samples: &[f64], grid_points: &[f64]) -> Result<Vec<f64>, crate::Erro
     // doesn't blow up to a Dirac delta.
     let h = (n_f.powf(-0.2) * std).max(1e-6);
 
-    gaussian_kde_with_bandwidth(samples, grid_points, h)
+    gaussian_kde_with_source(samples, grid_points, h, data)
 }
 
 /// Evaluate a Gaussian KDE with an already validated bandwidth.
@@ -72,12 +83,24 @@ pub(crate) fn gaussian_kde_with_bandwidth(
     grid_points: &[f64],
     bandwidth: f64,
 ) -> Result<Vec<f64>, crate::Error> {
+    gaussian_kde_with_source(samples, grid_points, bandwidth, None)
+}
+
+pub(crate) fn gaussian_kde_with_source(
+    samples: &[f64],
+    grid_points: &[f64],
+    bandwidth: f64,
+    data: Option<crate::data::PlotData<'_>>,
+) -> Result<Vec<f64>, crate::Error> {
+    use crate::data::source::SourceAdmission;
     use crate::Error;
     if samples.is_empty() || !bandwidth.is_finite() || bandwidth <= 0.0 {
         return Err(Error::Data(
             "kde: samples and a positive finite bandwidth are required".into(),
         ));
     }
+    data.source_visits(samples.len())?;
+    data.source_visits(grid_points.len())?;
     if samples
         .iter()
         .chain(grid_points)
@@ -95,8 +118,10 @@ pub(crate) fn gaussian_kde_with_bandwidth(
             "kde: bandwidth is too small for finite density values".into(),
         ));
     }
-    let mut densities = Vec::with_capacity(grid_points.len());
+    let mut densities = Vec::new();
+    data.source_reserve(&mut densities, grid_points.len())?;
     for &x in grid_points {
+        data.source_visits(samples.len())?;
         let mut sum = 0.0;
         for &s in samples {
             let z = (x - s) / bandwidth;
@@ -243,14 +268,19 @@ pub fn quantile(samples: &[f64], q: f64) -> Result<f64, crate::Error> {
             "quantile: sample at index {index} must be finite, got {value}"
         )));
     }
-    let mut sorted: Vec<f64> = samples.to_vec();
+    let mut sorted = samples.to_vec();
     sorted.sort_by(f64::total_cmp);
+    Ok(sorted_quantile(&sorted, q))
+}
+
+/// Type-7 interpolation for a nonempty sorted finite sample and a validated q.
+pub(crate) fn sorted_quantile(sorted: &[f64], q: f64) -> f64 {
     let n = sorted.len();
     if n == 1 || q == 0.0 {
-        return Ok(sorted[0]);
+        return sorted[0];
     }
     if q.to_bits() == 1.0_f64.to_bits() {
-        return Ok(sorted[n - 1]);
+        return sorted[n - 1];
     }
     // Type 7 quantile: h = (n - 1) * q; index = floor(h);
     // fraction = h - index; result = sorted[index] +
@@ -270,15 +300,15 @@ pub fn quantile(samples: &[f64], q: f64) -> Result<f64, crate::Error> {
     #[allow(clippy::cast_precision_loss)]
     let fraction = h - index as f64;
     if index >= n - 1 {
-        return Ok(sorted[n - 1]);
+        return sorted[n - 1];
     }
     if fraction == 0.0 {
-        return Ok(sorted[index]);
+        return sorted[index];
     }
     let lower = sorted[index];
     let upper = sorted[index + 1];
     let difference = upper - lower;
-    let value = if difference.is_finite() {
+    if difference.is_finite() {
         lower + fraction * difference
     } else {
         // Center/half-span form is algebraically equivalent when the direct
@@ -286,8 +316,7 @@ pub fn quantile(samples: &[f64], q: f64) -> Result<f64, crate::Error> {
         let midpoint = f64::midpoint(lower, upper);
         let half_span = upper / 2.0 - lower / 2.0;
         midpoint + (2.0 * fraction - 1.0) * half_span
-    };
-    Ok(value)
+    }
 }
 
 /// Inverse CDF of the standard normal distribution.

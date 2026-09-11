@@ -33,8 +33,6 @@ pub(crate) fn render(
     };
     let prepared = bar_data::prepare(chart, context.data, mode)?;
     let legend_entries = bar_data::legend_entries(&prepared, chart, theme);
-    let mut base_y_range =
-        crate::layout::anchored_auto_range(prepared.value_range, chart.y_axis_spec(), 0.0);
     let mut rendered_maxima = vec![0.0_f64; prepared.categories.len()];
     let anchor_count = prepared.series.len().max(1);
     let mut grouped_maxima = vec![vec![f64::NEG_INFINITY; anchor_count]; prepared.categories.len()];
@@ -59,13 +57,6 @@ pub(crate) fn render(
         }
     }
     let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
-        chart,
-        panel,
-        &prepared.categories,
-        theme,
-        context.fit_scope(),
-    )?;
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
         .typography
@@ -78,8 +69,18 @@ pub(crate) fn render(
         "bar attached significance label",
         chart.significance_mark_style_override().is_some(),
     )?;
-    base_y_range =
-        range_for_bar_marks(chart, &prepared, panel, base_y_range, &attached_label_plans);
+    let base_y_range = context.axis_range(crate::layout::AxisSide::Left, || {
+        Ok(crate::layout::anchored_auto_range(
+            prepared.value_range,
+            chart.y_axis_spec(),
+            0.0,
+        ))
+    })?;
+    let base_y_range = if context.retained_axes.is_none() {
+        range_for_bar_marks(chart, &prepared, panel, base_y_range, &attached_label_plans)
+    } else {
+        base_y_range
+    };
     let value_per_pixel = (base_y_range.1 - base_y_range.0) / panel.height();
     for point in &prepared.points {
         let clearance = point.value + f64::from(point.style.radius) * value_per_pixel;
@@ -133,26 +134,28 @@ pub(crate) fn render(
         )?
     };
     let y_range = significance.y_range;
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
     let x_count = prepared.categories.len() as f64;
-    let x_ticks = prepared
-        .categories
-        .iter()
-        .enumerate()
-        .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
-        .collect();
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        (0.0, x_count),
-        y_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        x_ticks,
-        Vec::new(),
-        chart.x_axis_spec(),
-        &y_axis_spec,
-        theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        let x_ticks = prepared
+            .categories
+            .iter()
+            .enumerate()
+            .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
+            .collect();
+        context.layout_with_ticks(
+            (0.0, x_count),
+            y_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            x_ticks,
+            Vec::new(),
+            chart.x_axis_spec(),
+            &y_axis_spec,
+            theme,
+        )
+    })?;
     validate_bar_significance_collisions(
         chart,
         &prepared,

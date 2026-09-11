@@ -2,6 +2,8 @@
 
 use crate::{BooleanValues, CategoryValues, Error, NumericValues};
 
+pub(crate) mod source;
+
 pub(crate) const X: &str = "__x";
 pub(crate) const Y: &str = "__y";
 pub(crate) const HUE: &str = "__hue";
@@ -48,12 +50,20 @@ impl<'a> DataColumn<'a> {
     }
 }
 
+/// Global axis inputs normally installed on a generic facet child Plot.
+#[derive(Clone, Copy)]
+pub(crate) struct FacetAxisSources<'a> {
+    pub(crate) groups: Option<&'a [String]>,
+    pub(crate) conditions: Option<&'a [String]>,
+}
+
 /// A borrowed semantic plot view, optionally restricted to selected source rows.
 #[derive(Clone, Copy)]
 pub(crate) struct PlotData<'a> {
     plot: &'a crate::builder::Plot,
     rows: Option<&'a [usize]>,
     source_rows: Option<&'a [usize]>,
+    axis_resources: Option<&'a crate::font::canonical::OperationGenerationResources>,
 }
 
 impl std::fmt::Debug for PlotData<'_> {
@@ -72,6 +82,7 @@ impl<'a> PlotData<'a> {
             plot,
             rows: None,
             source_rows: None,
+            axis_resources: None,
         }
     }
 
@@ -89,7 +100,17 @@ impl<'a> PlotData<'a> {
             plot,
             rows: Some(rows),
             source_rows: Some(source_rows),
+            axis_resources: None,
         }
+    }
+
+    /// Axis source work uses the root counters; ordinary mark preparation remains separate.
+    pub(crate) fn with_axis_resources(
+        mut self,
+        resources: &'a crate::font::canonical::OperationGenerationResources,
+    ) -> Self {
+        self.axis_resources = Some(resources);
+        self
     }
 
     pub(crate) fn column(self, key: &str) -> Result<DataColumn<'a>, Error> {
@@ -118,7 +139,7 @@ impl<'a> PlotData<'a> {
         let Some(statuses) = self.plot.estimate_status_values() else {
             return Ok(None);
         };
-        (0..self.height())
+        self.collect_source((0..self.height())
             .map(|row| {
                 statuses.get(self.row_index(row)).copied().ok_or_else(|| {
                     Error::Data(format!(
@@ -126,8 +147,7 @@ impl<'a> PlotData<'a> {
                         self.source_row(row)
                     ))
                 })
-            })
-            .collect::<Result<Vec<_>, _>>()
+            }))
             .map(Some)
     }
 
@@ -157,8 +177,8 @@ pub(crate) fn strict_finite_f64<'a>(
             data.column(column)?.name()
         )));
     };
-    (0..data.height())
-        .map(|row| match values.get(data.row_index(row)) {
+    data.collect_source(
+        (0..data.height()).map(|row| match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_finite() => Ok(value),
             Some(Some(value)) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains non-finite value {value} at source row {}",
@@ -171,27 +191,31 @@ pub(crate) fn strict_finite_f64<'a>(
                 data.source_row(row)
             ))),
             None => Err(length_error(plot, values.name(), row)),
-        })
-        .collect()
+        }),
+    )
 }
 
 pub(crate) fn strict_numeric_values(values: &NumericValues, plot: &str) -> Result<Vec<f64>, Error> {
     (0..values.len())
-        .map(|row| match values.get(row) {
-            Some(Some(value)) if value.is_finite() => Ok(value),
-            Some(Some(value)) => Err(Error::Data(format!(
-                "{plot}: value {:?} contains non-finite value {value} at source row {}",
-                values.name(),
-                row
-            ))),
-            Some(None) => Err(Error::Data(format!(
-                "{plot}: value {:?} contains null at source row {}",
-                values.name(),
-                row
-            ))),
-            None => unreachable!("row is bounded by NumericValues::len"),
-        })
+        .map(|row| strict_numeric_value(values, row, plot))
         .collect()
+}
+
+fn strict_numeric_value(values: &NumericValues, row: usize, plot: &str) -> Result<f64, Error> {
+    match values.get(row) {
+        Some(Some(value)) if value.is_finite() => Ok(value),
+        Some(Some(value)) => Err(Error::Data(format!(
+            "{plot}: value {:?} contains non-finite value {value} at source row {}",
+            values.name(),
+            row
+        ))),
+        Some(None) => Err(Error::Data(format!(
+            "{plot}: value {:?} contains null at source row {}",
+            values.name(),
+            row
+        ))),
+        None => unreachable!("row is bounded by NumericValues::len"),
+    }
 }
 
 pub(crate) fn strict_category_values(
@@ -223,8 +247,8 @@ pub(crate) fn nullable_finite_f64<'a>(
             data.column(column)?.name()
         )));
     };
-    (0..data.height())
-        .map(|row| match values.get(data.row_index(row)) {
+    data.collect_source(
+        (0..data.height()).map(|row| match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_finite() => Ok(Some(value)),
             Some(Some(value)) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains non-finite value {value} at source row {}",
@@ -233,8 +257,8 @@ pub(crate) fn nullable_finite_f64<'a>(
             ))),
             Some(None) => Ok(None),
             None => Err(length_error(plot, values.name(), row)),
-        })
-        .collect()
+        }),
+    )
 }
 
 pub(crate) fn strict_bool<'a>(
@@ -278,7 +302,10 @@ pub(crate) fn aligned_finite_f64<'a>(
             y.len()
         )));
     }
-    Ok(x.into_iter().zip(y).filter_map(|(x, y)| x.zip(y)).collect())
+    let mut pairs = Vec::new();
+    data.reserve_source(&mut pairs, x.len())?;
+    pairs.extend(x.into_iter().zip(y).filter_map(|(x, y)| x.zip(y)));
+    Ok(pairs)
 }
 
 pub(crate) fn aligned_finite_rows<'a>(
@@ -297,11 +324,15 @@ pub(crate) fn aligned_finite_rows<'a>(
             y.len()
         )));
     }
-    Ok(x.into_iter()
-        .zip(y)
-        .enumerate()
-        .filter_map(|(row, (x, y))| Some((row, x?, y?)))
-        .collect())
+    let mut rows = Vec::new();
+    data.reserve_source(&mut rows, x.len())?;
+    rows.extend(
+        x.into_iter()
+            .zip(y)
+            .enumerate()
+            .filter_map(|(row, (x, y))| Some((row, x?, y?))),
+    );
+    Ok(rows)
 }
 
 fn optional_finite_f64(
@@ -315,8 +346,8 @@ fn optional_finite_f64(
             data.column(column)?.name()
         )));
     };
-    (0..data.height())
-        .map(|row| match values.get(data.row_index(row)) {
+    data.collect_source(
+        (0..data.height()).map(|row| match values.get(data.row_index(row)) {
             Some(Some(value)) if value.is_infinite() => Err(Error::Data(format!(
                 "{plot}: value {:?} contains infinite value {value} at source row {}",
                 values.name(),
@@ -325,8 +356,8 @@ fn optional_finite_f64(
             Some(Some(value)) if value.is_nan() => Ok(None),
             Some(value) => Ok(value),
             None => Err(length_error(plot, values.name(), row)),
-        })
-        .collect()
+        }),
+    )
 }
 
 #[derive(Debug)]
@@ -377,7 +408,16 @@ pub(crate) fn observed_collectives<'a>(
     plot: &str,
 ) -> Result<ObservedCollectives, Error> {
     let data = data.into();
-    let row_indices = retained_rows.map_or_else(|| (0..data.height()).collect(), <[usize]>::to_vec);
+    let mut row_indices = Vec::new();
+    data.reserve_source(
+        &mut row_indices,
+        retained_rows.map_or(data.height(), <[usize]>::len),
+    )?;
+    if let Some(rows) = retained_rows {
+        row_indices.extend_from_slice(rows);
+    } else {
+        row_indices.extend(0..data.height());
+    }
     let groups = group_column
         .map(|column| strict_strings_for_rows(data, column, &row_indices, plot))
         .transpose()?;
@@ -388,6 +428,7 @@ pub(crate) fn observed_collectives<'a>(
         .zip(hue_name)
         .is_some_and(|(group, hue)| group == hue);
     if collapsed {
+        data.claim_source_visits(row_indices.len())?;
         let (Some(groups), Some(hues)) = (groups.as_ref(), hues.as_ref()) else {
             return Err(Error::Data(format!(
                 "{plot}: equal graphical group and hue names require both categorical channels"
@@ -406,34 +447,44 @@ pub(crate) fn observed_collectives<'a>(
         }
     }
 
-    let rows = (0..row_indices.len())
-        .map(|index| CollectivePair {
-            group: groups.as_ref().map(|values| values[index].clone()),
-            hue: hues.as_ref().map(|values| values[index].clone()),
+    let rows = data.collect_source((0..row_indices.len()).map(|index| {
+        Ok(CollectivePair {
+            group: groups
+                .as_ref()
+                .map(|values| data.copy_source_string(&values[index]))
+                .transpose()?,
+            hue: hues
+                .as_ref()
+                .map(|values| data.copy_source_string(&values[index]))
+                .transpose()?,
         })
-        .collect::<Vec<_>>();
+    }))?;
     let group_levels = groups
         .as_ref()
-        .map_or_else(Vec::new, |values| stable_levels(values));
+        .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?;
     let hue_levels = hues
         .as_ref()
-        .map_or_else(Vec::new, |values| stable_levels(values));
+        .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?;
     let mut identities = Vec::new();
+    data.reserve_source(&mut identities, rows.len())?;
     if groups.is_some() {
         for group in &group_levels {
+            data.claim_source_visits(rows.len())?;
             for identity in rows
                 .iter()
                 .filter(|identity| identity.group.as_ref() == Some(group))
             {
+                data.claim_source_visits(identities.len())?;
                 if !identities.contains(identity) {
-                    identities.push(identity.clone());
+                    identities.push(data.copy_source_pair(identity)?);
                 }
             }
         }
     } else {
         for identity in &rows {
+            data.claim_source_visits(identities.len())?;
             if !identities.contains(identity) {
-                identities.push(identity.clone());
+                identities.push(data.copy_source_pair(identity)?);
             }
         }
     }
@@ -459,17 +510,18 @@ fn strict_strings_for_rows(
             data.column(column)?.name()
         )));
     };
-    rows.iter()
-        .map(|row| match values.get(data.row_index(*row)) {
-            Some(Some(value)) => Ok(value.to_owned()),
-            Some(None) => Err(Error::Data(format!(
-                "{plot}: value {:?} contains null at source row {}",
-                values.name(),
-                data.source_row(*row)
-            ))),
-            None => Err(length_error(plot, values.name(), *row)),
-        })
-        .collect()
+    data.collect_source(
+        rows.iter()
+            .map(|row| match values.get(data.row_index(*row)) {
+                Some(Some(value)) => data.copy_source_string(value),
+                Some(None) => Err(Error::Data(format!(
+                    "{plot}: value {:?} contains null at source row {}",
+                    values.name(),
+                    data.source_row(*row)
+                ))),
+                None => Err(length_error(plot, values.name(), *row)),
+            }),
+    )
 }
 
 pub(crate) fn collective_channels<'a>(
@@ -502,7 +554,9 @@ pub(crate) fn collective_channels<'a>(
 
     if let Some(hues_ref) = hues.as_ref() {
         let mut marks: Vec<(Option<&str>, Option<&str>, &str)> = Vec::new();
+        data.reserve_source(&mut marks, row_count)?;
         for row in 0..row_count {
+            data.claim_source_visits(marks.len())?;
             let cell = cells.map(|values| values[row].as_str());
             let group = groups.as_ref().map(|values| values[row].as_str());
             let hue = hues_ref[row].as_str();
@@ -525,10 +579,10 @@ pub(crate) fn collective_channels<'a>(
     Ok(CollectiveChannels {
         group_levels: groups
             .as_ref()
-            .map_or_else(Vec::new, |values| stable_levels(values)),
+            .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?,
         hue_levels: hues
             .as_ref()
-            .map_or_else(Vec::new, |values| stable_levels(values)),
+            .map_or_else(|| Ok(Vec::new()), |values| data.source_levels(values))?,
         groups,
         hues,
     })
@@ -549,27 +603,42 @@ pub(crate) fn explicit_category_order(
     requested: &[String],
     context: &str,
     allow_unobserved: bool,
+    data: Option<PlotData<'_>>,
 ) -> Result<Vec<String>, Error> {
-    let mut seen = Vec::with_capacity(requested.len());
+    use source::SourceAdmission;
+    let mut seen = Vec::new();
+    data.source_reserve(&mut seen, requested.len())?;
     for level in requested {
+        data.source_visits(seen.len())?;
         if seen.contains(level) {
             return Err(Error::Data(format!(
                 "{context}: explicit category order contains duplicate level {level:?}"
             )));
         }
+        data.source_visits(observed.len())?;
         if !allow_unobserved && !observed.contains(level) {
             return Err(Error::Data(format!(
                 "{context}: explicit category order contains unknown level {level:?}"
             )));
         }
-        seen.push(level.clone());
+        seen.push(if let Some(data) = data {
+            data.copy_source_string(level)?
+        } else {
+            level.clone()
+        });
     }
-    if let Some(level) = observed.iter().find(|level| !seen.contains(level)) {
-        return Err(Error::Data(format!(
-            "{context}: explicit category order omits observed level {level:?}"
-        )));
+    for level in observed {
+        data.source_visits(seen.len())?;
+        if !seen.contains(level) {
+            return Err(Error::Data(format!(
+                "{context}: explicit category order omits observed level {level:?}"
+            )));
+        }
     }
     if allow_unobserved {
+        for _ in &seen {
+            data.source_visits(observed.len())?;
+        }
         seen.retain(|level| observed.contains(level));
     }
     Ok(seen)
@@ -587,17 +656,17 @@ pub(crate) fn strict_strings<'a>(
             data.column(column)?.name()
         )));
     };
-    (0..data.height())
-        .map(|row| match values.get(data.row_index(row)) {
-            Some(Some(value)) => Ok(value.to_owned()),
+    data.collect_source(
+        (0..data.height()).map(|row| match values.get(data.row_index(row)) {
+            Some(Some(value)) => data.copy_source_string(value),
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
                 values.name(),
                 data.source_row(row)
             ))),
             None => Err(length_error(plot, values.name(), row)),
-        })
-        .collect()
+        }),
+    )
 }
 
 pub(crate) fn strict_normalized_strings<'a>(
@@ -607,21 +676,22 @@ pub(crate) fn strict_normalized_strings<'a>(
     role: &str,
 ) -> Result<Vec<String>, Error> {
     let data = data.into();
-    strict_strings(data, column, plot)?
-        .into_iter()
-        .enumerate()
-        .map(|(row, value)| {
-            let normalized = collapse_whitespace(&value);
-            if normalized.is_empty() {
-                Err(Error::Data(format!(
+    data.collect_source(
+        strict_strings(data, column, plot)?
+            .into_iter()
+            .enumerate()
+            .map(|(row, value)| {
+                let normalized = data.normalize_source_string(&value)?;
+                if normalized.is_empty() {
+                    Err(Error::Data(format!(
                     "{plot}: {role} label is empty after whitespace normalization at source row {}",
                     data.source_row(row)
                 )))
-            } else {
-                Ok(normalized)
-            }
-        })
-        .collect()
+                } else {
+                    Ok(normalized)
+                }
+            }),
+    )
 }
 
 pub(crate) fn collapse_whitespace(value: &str) -> String {

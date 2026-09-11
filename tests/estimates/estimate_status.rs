@@ -433,10 +433,11 @@ fn all_unavailable_fixed_facets_require_limits_and_sufficient_space() {
         let output = svg(plot, &format!("all-unavailable-facets-{family}"));
         assert_eq!(output.matches(">Not estimable</text>").count(), 4);
     }
+    // Inward endpoint labels no longer reserve the old outer half-label gutters.
     let narrow = point_interval(&frame, true)
         .facet(FacetSpec::column(frame.panel.clone().unwrap()))
         .x_limits(-2.0, 2.0)
-        .size(440, 300);
+        .size(360, 300);
     let error = narrow.preflight().unwrap_err().to_string();
     assert!(
         error.contains("Not estimable row text requires") && error.contains("chart panel provides"),

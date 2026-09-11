@@ -14,14 +14,7 @@ pub(super) fn render(
     backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
-    let data_y_range = input.validate()?;
-    let raw_x_levels = input
-        .groups
-        .iter()
-        .map(|group| group.category.clone())
-        .collect::<Vec<_>>();
-    let display_x_levels =
-        chart.resolve_label_domain("x-axis categories", raw_x_levels.iter().map(String::as_str))?;
+    let data_y_range = input.validate(None)?;
     let hue_levels = input
         .groups
         .iter()
@@ -32,32 +25,29 @@ pub(super) fn render(
             }
             levels
         });
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
-        chart,
-        context.panel,
-        &display_x_levels,
-        theme,
-        context.fit_scope(),
-    )?;
-    let display_range = crate::layout::continuous_auto_range(data_y_range, chart.y_axis_spec());
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
-    let x_ticks = raw_x_levels
-        .iter()
-        .enumerate()
-        .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-        .collect();
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        (0.0, input.groups.len() as f64),
-        display_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        x_ticks,
-        Vec::new(),
-        chart.x_axis_spec(),
-        &y_axis_spec,
-        theme,
-    )?;
+    let panel = context.panel;
+    let layout = context.axis_layout(|| {
+        let display_range = crate::layout::continuous_auto_range(data_y_range, chart.y_axis_spec());
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
+        let x_ticks = input
+            .groups
+            .iter()
+            .enumerate()
+            .map(|(index, group)| AxisTick::new(index as f64 + 0.5, group.category.clone()))
+            .collect();
+        context.layout_with_ticks(
+            (0.0, input.groups.len() as f64),
+            display_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            x_ticks,
+            Vec::new(),
+            chart.x_axis_spec(),
+            &y_axis_spec,
+            theme,
+        )
+    })?;
     let legend_entries = hue_levels
         .iter()
         .enumerate()

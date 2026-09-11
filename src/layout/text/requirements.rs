@@ -11,9 +11,7 @@ use crate::theme::TextAppearance;
 use crate::{Error, Plot, PlotKind, TextWeight};
 
 const SCALAR_MAP_WORDS: usize = 0x11_0000 / u64::BITS as usize;
-const AUTOMATIC_NUMERIC_ALPHABET: &[char] = &[
-    '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'M', '^', 'e', 'k',
-];
+use crate::layout::NUMERIC_ALPHABET as AUTOMATIC_NUMERIC_ALPHABET;
 const HEATMAP_ELISION_ALPHABET: &[char] = &['.'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -1272,7 +1270,14 @@ fn push_deferred_plot_requirements(
                 | PlotKind::Waterfall
         )
     {
-        for panel in crate::orchestrator::facet_text_census_panels(plot, kind)? {
+        let resources = prepared_stage
+            .as_ref()
+            .map(|stage| stage.generation_resources());
+        let data = resources.as_ref().map_or_else(
+            || plot.data(),
+            |resources| plot.data().with_axis_resources(resources),
+        );
+        for panel in crate::orchestrator::facet_text_census_panels(plot, data)? {
             specialized_text_census(
                 panel.plot(),
                 kind,

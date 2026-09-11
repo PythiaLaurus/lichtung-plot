@@ -18,6 +18,7 @@ pub(crate) enum Counter {
     FontUnitProbe,
     MatrixLayoutPass,
     TickSource,
+    TickFitMiss,
     TickDistinctList,
     TickMetricLookup,
     TextProposalVisit,
@@ -26,10 +27,13 @@ pub(crate) enum Counter {
     ChildCacheMiss,
     ChildFeedbackReplay,
     AnnotationOverlapComparison,
+    AxisRangePreparation,
+    AxisSpecPreparation,
+    AxisSourcePreparation,
 }
 
 impl Counter {
-    pub(crate) const ALL: [Self; 20] = [
+    pub(crate) const ALL: [Self; 24] = [
         Self::GuideTrial,
         Self::GuideBodyCheck,
         Self::InsideLegendCandidate,
@@ -42,6 +46,7 @@ impl Counter {
         Self::FontUnitProbe,
         Self::MatrixLayoutPass,
         Self::TickSource,
+        Self::TickFitMiss,
         Self::TickDistinctList,
         Self::TickMetricLookup,
         Self::TextProposalVisit,
@@ -50,6 +55,9 @@ impl Counter {
         Self::ChildCacheMiss,
         Self::ChildFeedbackReplay,
         Self::AnnotationOverlapComparison,
+        Self::AxisRangePreparation,
+        Self::AxisSpecPreparation,
+        Self::AxisSourcePreparation,
     ];
 
     pub(crate) const fn name(self) -> &'static str {
@@ -66,6 +74,7 @@ impl Counter {
             Self::FontUnitProbe => "FontUnitProbe",
             Self::MatrixLayoutPass => "MatrixLayoutPass",
             Self::TickSource => "TickSource",
+            Self::TickFitMiss => "TickFitMiss",
             Self::TickDistinctList => "TickDistinctList",
             Self::TickMetricLookup => "TickMetricLookup",
             Self::TextProposalVisit => "TextProposalVisit",
@@ -74,6 +83,9 @@ impl Counter {
             Self::ChildCacheMiss => "ChildCacheMiss",
             Self::ChildFeedbackReplay => "ChildFeedbackReplay",
             Self::AnnotationOverlapComparison => "AnnotationOverlapComparison",
+            Self::AxisRangePreparation => "AxisRangePreparation",
+            Self::AxisSpecPreparation => "AxisSpecPreparation",
+            Self::AxisSourcePreparation => "AxisSourcePreparation",
         }
     }
 }
@@ -110,6 +122,7 @@ pub(crate) struct GuideAttempt {
 #[derive(Clone, Debug)]
 pub(crate) struct RootRound {
     pub ordinal: usize,
+    pub heatmap_prefix_trials: u64,
     pub guides: std::ops::Range<usize>,
     /// Set only for the terminal round after the exact root freezes successfully.
     pub successful: bool,
@@ -161,6 +174,7 @@ pub(crate) struct Observations {
     pub visits: u128,
     pub bytes: u128,
     pub counters: [u64; Counter::ALL.len()],
+    pub capture_counters: [u64; Counter::ALL.len()],
     pub guides: Vec<GuideAttempt>,
     pub roots: Vec<RootRound>,
     pub children: Vec<ChildCacheEvent>,
@@ -172,6 +186,11 @@ pub(crate) fn count(counter: Counter) {
     ACTIVE.with(|active| {
         if let Some(observation) = active.borrow_mut().as_mut() {
             observation.counters[counter as usize] += 1;
+            if counter == Counter::HeatmapPrefixTrial {
+                if let Some(root) = observation.roots.last_mut() {
+                    root.heatmap_prefix_trials += 1;
+                }
+            }
         }
     });
 }
@@ -184,6 +203,7 @@ pub(crate) fn root_round(ordinal: usize) -> Timer {
             }
             observation.roots.push(RootRound {
                 ordinal,
+                heatmap_prefix_trials: 0,
                 guides: observation.guides.len()..observation.guides.len(),
                 successful: false,
             });
@@ -323,17 +343,20 @@ pub(crate) fn producer() {
     });
 }
 
-pub(crate) struct Timer(usize, Option<(Instant, Rc<()>)>);
+pub(crate) struct Timer(usize, Option<(Instant, Rc<()>, [u64; Counter::ALL.len()])>);
 
 impl Timer {
     pub(crate) fn new(stage: usize) -> Self {
         Self(
             stage,
             ACTIVE.with(|active| {
-                active
-                    .borrow()
-                    .as_ref()
-                    .map(|observation| (Instant::now(), Rc::clone(&observation.session)))
+                active.borrow().as_ref().map(|observation| {
+                    (
+                        Instant::now(),
+                        Rc::clone(&observation.session),
+                        observation.counters,
+                    )
+                })
             }),
         )
     }
@@ -341,7 +364,7 @@ impl Timer {
 
 impl Drop for Timer {
     fn drop(&mut self) {
-        if let Some((start, session)) = &self.1 {
+        if let Some((start, session, counters)) = &self.1 {
             ACTIVE.with(|active| {
                 if let Some(observation) = active
                     .borrow_mut()
@@ -350,6 +373,12 @@ impl Drop for Timer {
                 {
                     observation.times[self.0] += start.elapsed();
                     observation.calls[self.0] += 1;
+                    if self.0 == 2 {
+                        for (index, before) in counters.iter().enumerate() {
+                            observation.capture_counters[index] +=
+                                observation.counters[index] - before;
+                        }
+                    }
                 }
             });
         }
@@ -402,6 +431,7 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
     drop(GuideTrial::new(&owner, edge, false));
     start();
     root_round(0);
+    count(Counter::HeatmapPrefixTrial);
     {
         let trial = GuideTrial::new(&owner, edge, false);
         trial.reject();
@@ -412,6 +442,8 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
         trial.complete(&TrialOutcome::Provisional);
     }
     root_round(1);
+    count(Counter::HeatmapPrefixTrial);
+    count(Counter::HeatmapPrefixTrial);
     {
         let trial = GuideTrial::new(&owner, edge, false);
         trial.body();
@@ -422,6 +454,12 @@ fn guide_guards_preserve_outcomes_and_root_boundaries() {
     let observation = finish();
     assert_eq!(observation.counters[Counter::GuideTrial as usize], 4);
     assert_eq!(observation.roots[0].guides, 0..2);
+    assert_eq!(observation.roots[0].heatmap_prefix_trials, 1);
+    assert_eq!(observation.roots[1].heatmap_prefix_trials, 2);
+    assert_eq!(
+        observation.counters[Counter::HeatmapPrefixTrial as usize],
+        3
+    );
     assert!(!observation.roots[0].successful);
     assert!(observation.roots[1].successful);
     let attempts = &observation.guides;

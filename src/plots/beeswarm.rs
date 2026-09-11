@@ -48,8 +48,6 @@ pub(crate) fn render(
             levels.push(category.clone());
         }
     }
-    let display_levels =
-        chart.resolve_label_domain("y-axis categories", levels.iter().map(String::as_str))?;
     let x_data = crate::data::min_max(xs.iter().copied(), "beeswarm")?;
     let color_range = match chart.beeswarm_color_limits_spec() {
         Some((minimum, maximum)) => {
@@ -62,8 +60,6 @@ pub(crate) fn render(
         }
         None => crate::data::min_max(colors.iter().copied(), "beeswarm")?,
     };
-    let x_range = crate::layout::continuous_auto_range(x_data, chart.x_axis_spec());
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
     let detail_font_size = theme.detail_font_size;
     let high_label = format_colorbar_value(color_range.1);
     let low_label = format_colorbar_value(color_range.0);
@@ -112,31 +108,29 @@ pub(crate) fn render(
     }
     let mut body = context.panel;
     body.x1 -= colorbar_reserve;
-    let (panel, tick_width) = crate::plots::horizontal_bar::panel_box_for_y_tick_labels(
-        chart,
-        body,
-        &display_levels,
-        theme,
-        context.fit_scope(),
-    )?;
-    let y_ticks = levels
-        .iter()
-        .enumerate()
-        .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-        .collect();
-    let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        x_range,
-        (0.0, levels.len() as f64),
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        Vec::new(),
-        y_ticks,
-        &x_axis_spec,
-        chart.y_axis_spec(),
-        theme,
-    )?;
-    layout.y_axis.assigned_tick_width = Some(tick_width);
+    let panel = body;
+    let layout = context.axis_layout(|| {
+        let x_range = crate::layout::continuous_auto_range(x_data, chart.x_axis_spec());
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_ticks = levels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
+            .collect();
+        context.layout_with_ticks(
+            x_range,
+            (0.0, levels.len() as f64),
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            Vec::new(),
+            y_ticks,
+            &x_axis_spec,
+            chart.y_axis_spec(),
+            theme,
+        )
+    })?;
+    let x_range = layout.projection.x_range();
     with_clip(backend, layout.projection.panel_box(), |backend| {
         if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
             let (x, y0) = layout.projection.project(0.0, 0.0);

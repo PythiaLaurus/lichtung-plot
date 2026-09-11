@@ -6,7 +6,9 @@
 
 use crate::Error;
 
-use crate::layout::{Layout, PhysicalTextAlignment, ResolvedTextPlan, TextBlock};
+#[cfg(test)]
+use crate::layout::Layout;
+use crate::layout::{PanelAxisPlan, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextAppearance;
@@ -67,14 +69,14 @@ pub(crate) struct PanelRequirements {
 impl PanelRequirements {
     /// Measure decorations emitted by [`crate::layout::Axis`] around a panel.
     pub(crate) fn measure(
-        layout: &Layout,
+        axes: &PanelAxisPlan,
         theme: &ResolvedTheme,
         top_text: Option<&str>,
         available_panel: PanelBox,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         let mut requirements =
-            Self::measure_header(layout, theme, None, None, available_panel, scope)?;
+            Self::measure_header(axes, theme, None, None, available_panel, scope)?;
         if let Some(text) = top_text {
             let plan = crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
@@ -102,12 +104,8 @@ impl PanelRequirements {
         clippy::cast_precision_loss,
         reason = "wrapped line counts are bounded by the finite panel dimensions"
     )]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one measurement pass keeps interdependent axis decoration geometry together"
-    )]
     pub(crate) fn measure_header(
-        layout: &Layout,
+        axes: &PanelAxisPlan,
         theme: &ResolvedTheme,
         top_title: Option<&str>,
         top_subtitle: Option<&str>,
@@ -115,152 +113,7 @@ impl PanelRequirements {
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         use crate::layout::fit;
-        let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
-        let y_scope = scope.child(crate::layout::AddressRole::AxisLeft, 0)?;
-        let tick_length = theme
-            .axes
-            .ticks
-            .as_ref()
-            .map_or(0.0, |ticks| f64::from(ticks.length));
-        let tick_role = &theme.typography.tick_label;
-        let axis_title_role = &theme.typography.axis_title;
-        let spacing = &theme.axes.spacing;
-        let x_tick_width = available_panel.width() / layout.x_axis.ticks.len().max(1) as f64;
-        let x_tick_blocks = fit::collect(
-            theme,
-            "x-axis tick labels",
-            layout
-                .x_axis
-                .ticks
-                .iter()
-                .filter(|tick| !tick.label.is_empty())
-                .map(|tick| {
-                    fit::measured(fit::text(
-                        theme,
-                        &tick.label,
-                        tick_role,
-                        x_tick_width.max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "x-axis tick label",
-                        &x_scope,
-                    ))
-                    .map(TextBlock::from_resolved)
-                }),
-        )?;
-        let y_tick_maximum_width = layout.y_axis.tick_label_width(
-            available_panel,
-            crate::layout::AxisSide::Left,
-            theme,
-        )?;
-        let y_tick_blocks = fit::collect(
-            theme,
-            "y-axis tick labels",
-            layout
-                .y_axis
-                .ticks
-                .iter()
-                .filter(|tick| !tick.label.is_empty())
-                .map(|tick| {
-                    fit::measured(fit::text(
-                        theme,
-                        &tick.label,
-                        tick_role,
-                        y_tick_maximum_width,
-                        PhysicalTextAlignment::End,
-                        "y-axis tick label",
-                        &y_scope,
-                    ))
-                    .map(TextBlock::from_resolved)
-                }),
-        )?;
-        let x_tick_half_width = x_tick_blocks
-            .iter()
-            .map(|block| block.width() / 2.0)
-            .fold(0.0_f64, f64::max);
-        let y_tick_width = y_tick_blocks
-            .iter()
-            .map(crate::layout::TextBlock::width)
-            .fold(0.0_f64, f64::max);
-        let x_label_block = (!layout.x_axis.label.is_empty())
-            .then(|| {
-                fit::measured(fit::text(
-                    theme,
-                    &layout.x_axis.label,
-                    axis_title_role,
-                    available_panel.width().max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "x-axis title",
-                    &x_scope,
-                ))
-                .map(TextBlock::from_resolved)
-            })
-            .transpose()?;
-        let y_label_block = (!layout.y_axis.label.is_empty())
-            .then(|| {
-                fit::measured(fit::text(
-                    theme,
-                    &layout.y_axis.label,
-                    axis_title_role,
-                    available_panel.height().max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "y-axis title",
-                    &y_scope,
-                ))
-                .map(TextBlock::from_resolved)
-            })
-            .transpose()?;
-        let x_label_overhang = ((x_label_block
-            .as_ref()
-            .map_or(0.0, crate::layout::TextBlock::width)
-            - available_panel.width())
-            / 2.0)
-            .max(0.0);
-        let y_label_overhang = ((y_label_block
-            .as_ref()
-            .map_or(0.0, crate::layout::TextBlock::width)
-            - available_panel.height())
-            / 2.0)
-            .max(0.0);
-        let y_tick_vertical_overhang = y_tick_blocks
-            .iter()
-            .map(|block| block.height() / 2.0)
-            .fold(0.0_f64, f64::max);
-
-        let mut left = tick_length + spacing.y_tick_label_gap + y_tick_width;
-        if !layout.y_axis.label.is_empty() {
-            left += spacing.y_title_tick_label_gap
-                + y_label_block.as_ref().map_or(
-                    f64::from(axis_title_role.font_size),
-                    crate::layout::TextBlock::height,
-                );
-        }
-        left = left.max(x_tick_half_width).max(x_label_overhang) + 4.0;
-
-        let x_tick_height = x_tick_blocks
-            .iter()
-            .map(crate::layout::TextBlock::height)
-            .fold(0.0_f64, f64::max);
-        let mut bottom = if x_tick_height > 0.0 {
-            tick_length + spacing.x_tick_label_gap + x_tick_height
-        } else {
-            tick_length + 4.0
-        };
-        if !layout.x_axis.label.is_empty() {
-            let title_gap = if x_tick_height > 0.0 {
-                spacing.x_tick_label_gap + x_tick_height + spacing.x_title_tick_label_gap
-            } else {
-                spacing.x_title_without_tick_labels_gap
-            };
-            bottom = bottom.max(
-                tick_length
-                    + title_gap
-                    + x_label_block.as_ref().map_or(
-                        axis_title_role.line_height(),
-                        crate::layout::TextBlock::height,
-                    ),
-            );
-        }
-        bottom = bottom.max(y_label_overhang).max(y_tick_vertical_overhang) + 4.0;
+        let required = axes.requirements();
 
         let maximum_width = (available_panel.width() - 16.0).max(1.0);
         let title_lines = top_title.map_or(Ok(0), |text| {
@@ -308,12 +161,10 @@ impl PanelRequirements {
         };
 
         Ok(Self {
-            left,
-            right: x_tick_half_width.max(x_label_overhang) + 4.0,
-            bottom,
-            top: top
-                .max(y_label_overhang + 4.0)
-                .max(y_tick_vertical_overhang + 4.0),
+            left: required.left + 4.0,
+            right: required.right + 4.0,
+            bottom: required.bottom + 4.0,
+            top: top.max(required.top + 4.0),
         })
     }
 }
@@ -958,17 +809,19 @@ mod tests {
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                source: crate::layout::TickSource::SUPPLIED,
             },
             y_axis: crate::layout::Axis {
                 label: String::new(),
                 ticks: Vec::new(),
                 explicit_ticks: false,
                 assigned_tick_width: None,
+                source: crate::layout::TickSource::SUPPLIED,
             },
         };
 
         let requirements = PanelRequirements::measure(
-            &layout,
+            &layout.plan_axes(&theme).unwrap(),
             &theme,
             Some("facet"),
             panel,

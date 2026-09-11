@@ -1,9 +1,7 @@
 use crate::Error;
 
 use super::Plot;
-use crate::layout::{
-    CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, PhysicalTextAlignment, TextBlock,
-};
+use crate::layout::{CanvasLayout, CanvasLayoutSpec};
 use crate::spec::PlotKind;
 use crate::theme::ResolvedTheme;
 
@@ -116,104 +114,5 @@ impl Plot {
                 has_y_label: labels_present.1,
             },
         )
-    }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "tick counts are bounded by finite canvas dimensions"
-    )]
-    pub(crate) fn measured_axis_title_gutters(
-        &self,
-        kind: PlotKind,
-        candidate_panel: PanelBox,
-        discovered_layout: &Layout,
-        theme: &ResolvedTheme,
-        scope: &crate::layout::fit::FitScope,
-    ) -> Result<[f64; 4], crate::layout::fit::PlanError> {
-        let x_scope = scope.child(crate::layout::AddressRole::AxisBottom, 0)?;
-        let mut extra_bottom = 0.0;
-        if !self.axis_text_measured
-            && discovered_layout.projection.panel_box().y0 <= candidate_panel.y0 + f64::EPSILON
-        {
-            let tick_width =
-                candidate_panel.width() / discovered_layout.x_axis.ticks.len().max(1) as f64;
-            let maximum_height = discovered_layout
-                .x_axis
-                .ticks
-                .iter()
-                .filter(|tick| !tick.label.is_empty())
-                .map(|tick| {
-                    crate::layout::fit::measured(crate::layout::fit::text(
-                        theme,
-                        &tick.label,
-                        &theme.typography.tick_label,
-                        tick_width.max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "x-axis tick label",
-                        &x_scope,
-                    ))
-                    .map(TextBlock::from_resolved)
-                    .map(|block| block.height())
-                })
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .fold(0.0_f64, f64::max);
-            let extra = (maximum_height - theme.typography.tick_label.line_height()).max(0.0);
-            if candidate_panel.height() - extra < 60.0 {
-                return Err(x_scope.failure(crate::layout::fit::FitKind::TrackOrResidual,
-                    "multiline x-axis tick labels do not fit while preserving the minimum 60px plot panel; increase chart height or shorten the tick labels"
-                ).into());
-            }
-            extra_bottom = extra;
-        }
-        let lines = self.axis_title_line_counts(kind, candidate_panel, theme, scope)?;
-        let line_height = theme.typography.axis_title.line_height();
-        Ok([
-            lines.1.saturating_sub(1) as f64 * line_height,
-            0.0,
-            extra_bottom + lines.0.saturating_sub(1) as f64 * line_height,
-            0.0,
-        ])
-    }
-
-    fn axis_title_line_counts(
-        &self,
-        kind: PlotKind,
-        panel: PanelBox,
-        theme: &ResolvedTheme,
-        scope: &crate::layout::fit::FitScope,
-    ) -> Result<(usize, usize), crate::layout::fit::PlanError> {
-        let (x_label, y_label) = self.resolved_axis_labels(kind);
-        let x_lines = if x_label.is_empty() {
-            0
-        } else {
-            TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                &x_label,
-                &theme.typography.axis_title,
-                panel.width().max(1.0),
-                PhysicalTextAlignment::Center,
-                "x-axis title",
-                &scope.child(crate::layout::AddressRole::AxisBottom, 0)?,
-            ))?)
-            .lines()
-            .len()
-        };
-        let y_lines = if y_label.is_empty() {
-            0
-        } else {
-            TextBlock::from_resolved(crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                &y_label,
-                &theme.typography.axis_title,
-                panel.height().max(1.0),
-                PhysicalTextAlignment::Center,
-                "y-axis title",
-                &scope.child(crate::layout::AddressRole::AxisLeft, 0)?,
-            ))?)
-            .lines()
-            .len()
-        };
-        Ok((x_lines, y_lines))
     }
 }

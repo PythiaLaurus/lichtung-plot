@@ -4,6 +4,10 @@ use crate::orchestrator::measurements::{self, Counter};
 use crate::{CategoryValues, HeatmapLabelFit, NumericValues, Plot};
 use std::time::{Duration, Instant};
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep fixture, root-attributed work, and retained-label correctness checks together"
+)]
 fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
     let labels = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"].map(|prefix| {
         if ambiguous {
@@ -41,12 +45,26 @@ fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
     if wrap {
         assert_eq!(trials, 0, "Wrap is a policy, not a trial following elision");
     } else if long || ambiguous {
-        assert!(
-            trials > 0,
-            "long labels must exercise actual prefix candidates"
+        assert_eq!(
+            trials,
+            if ambiguous { 96 } else { 400 },
+            "long labels must exercise actual prefix candidates: {:?}",
+            sample.observations.roots
         );
     } else {
         assert_eq!(trials, 0, "full-label width checks are not prefix trials");
+    }
+    if long && !wrap && !ambiguous {
+        // 2026-09-11: current-policy work, not an optimization of the old 500 expectation.
+        let roots = sample
+            .observations
+            .roots
+            .iter()
+            .map(|root| (root.ordinal, root.heatmap_prefix_trials, root.successful))
+            .collect::<Vec<_>>();
+        assert_eq!(roots, [(0, 200, false), (1, 200, true)]);
+        assert_eq!(trials, roots.iter().map(|root| root.1).sum::<u64>());
+        println!("heatmap_prefix_roots,{roots:?}");
     }
     if let Some(output) = &sample.output {
         let svg = std::str::from_utf8(output.preserved_svg.as_ref().unwrap()).unwrap();
@@ -138,7 +156,18 @@ fn matrix_case(long: bool, size: u32) -> CaseMeasurement {
     assert_eq!(passes, if long && size == 600 { 6 } else { 3 });
     assert_eq!(sample.observations.roots.len(), 1);
     assert!(sample.observations.roots.last().unwrap().successful);
-    assert!(sample.observations.counters[Counter::TickSource as usize] > 0);
+    assert_eq!(
+        sample.observations.counters[Counter::TickSource as usize],
+        12
+    );
+    assert_eq!(
+        sample.observations.counters[Counter::TickDistinctList as usize],
+        12
+    );
+    assert_eq!(
+        sample.observations.counters[Counter::TickMetricLookup as usize],
+        if size == 600 { 36 } else { 72 }
+    );
     let svg = std::str::from_utf8(
         sample
             .output
@@ -278,10 +307,14 @@ fn paragraph_search_contract() {
 
 #[test]
 fn specialized_text_search_contract() {
+    heatmap_case(false, true, false);
     heatmap_case(false, false, false);
     heatmap_case(true, false, false);
     heatmap_case(true, true, false);
     heatmap_case(true, false, true);
+    heatmap_case(true, true, true);
+    matrix_case(false, 1200);
+    matrix_case(true, 1200);
     let short = matrix_case(false, 600);
     let long = matrix_case(true, 600);
     assert!(

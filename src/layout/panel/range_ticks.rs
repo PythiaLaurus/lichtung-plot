@@ -1,31 +1,36 @@
-use super::{AxisSide, AxisSpec, AxisTick, Projection};
-use crate::layout::PhysicalTextAlignment;
+use super::AxisSpec;
+#[cfg(test)]
+use super::{AxisSide, AxisTick, Projection};
+#[cfg(test)]
 use crate::theme::ResolvedTheme;
+#[cfg(test)]
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
+const NICE_RANGE_SEED_COUNT: usize = 5;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
-pub(crate) const AUTOMATIC_TICK_TARGET: usize = 5;
 
 pub(super) fn resolve_range(range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
-    if let Some(limits) = spec.limits {
-        limits
-    } else {
-        continuous_auto_range(range, spec)
-    }
+    continuous_auto_range(range, spec)
 }
 
-/// Compute an auto display range for continuous marks.
 pub(crate) fn continuous_auto_range(range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisRangePreparation,
+    );
     if let Some(limits) = spec.limits {
         limits
     } else {
-        broaden_nice_range(range, AUTOMATIC_TICK_TARGET, DEFAULT_RANGE_MARGIN_FRACTION)
+        broaden_nice_range(range, NICE_RANGE_SEED_COUNT, DEFAULT_RANGE_MARGIN_FRACTION)
     }
 }
 
-/// Compute an auto display range anchored at a meaningful baseline.
 pub(crate) fn anchored_auto_range(range: (f64, f64), spec: &AxisSpec, anchor: f64) -> (f64, f64) {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisRangePreparation,
+    );
     if let Some(limits) = spec.limits {
         return limits;
     }
@@ -50,8 +55,7 @@ pub(crate) fn anchored_auto_range(range: (f64, f64), spec: &AxisSpec, anchor: f6
             (pad_down(lo, relative_padding(lo, anchor)), anchor)
         };
     }
-
-    let (nice_min, nice_max) = nice_range(lo, hi, AUTOMATIC_TICK_TARGET);
+    let (nice_min, nice_max) = nice_range(lo, hi, NICE_RANGE_SEED_COUNT);
     let pad = relative_padding(nice_min, nice_max);
     if lo >= anchor {
         (anchor, pad_up(nice_max.max(hi), pad))
@@ -102,12 +106,17 @@ fn pad_down(value: f64, padding: f64) -> f64 {
     }
 }
 
-/// Return a spec that preserves an already-computed display range.
 pub(crate) fn display_axis_spec(spec: &AxisSpec, range: (f64, f64)) -> AxisSpec {
+    #[cfg(test)]
+    crate::orchestrator::measurements::count(
+        crate::orchestrator::measurements::Counter::AxisSpecPreparation,
+    );
     if spec.limits.is_some() {
         spec.clone()
     } else {
-        spec.clone().limits(range.0, range.1)
+        let mut display = spec.clone();
+        display.limits = Some(range);
+        display
     }
 }
 
@@ -133,313 +142,28 @@ fn broaden_nice_range(range: (f64, f64), target_ticks: usize, margin_fraction: f
     }
 }
 
+#[cfg(test)]
 pub(crate) fn automatic_numeric_ticks(
     range: (f64, f64),
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
 ) -> Result<Vec<AxisTick>, Error> {
-    automatic_numeric_ticks_with_policy(range, projection, side, theme, false)
-}
-
-pub(crate) fn automatic_numeric_ticks_legacy(
-    range: (f64, f64),
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-) -> Result<Vec<AxisTick>, Error> {
-    automatic_numeric_ticks_with_policy(range, projection, side, theme, true)
-}
-
-fn automatic_numeric_ticks_with_policy(
-    range: (f64, f64),
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-    legacy: bool,
-) -> Result<Vec<AxisTick>, Error> {
-    let mut candidates: [Vec<AxisTick>; AUTOMATIC_TICK_TARGET] =
-        std::array::from_fn(|_| Vec::new());
-    let mut candidate_count = 0;
-    let mut best: Option<usize> = None;
-    // At most five retained lists of five ticks; entries borrow labels by index.
-    let mut metrics =
-        [(0_usize, 0_usize, (0.0, 0.0, 0.0)); AUTOMATIC_TICK_TARGET * AUTOMATIC_TICK_TARGET];
-    let mut metric_count = 0;
-
-    for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::TickSource,
-        );
-        let positions = nice_ticks(range.0, range.1, target);
-        if positions.len() < 2 {
-            continue;
-        }
-        let labels = distinct_tick_labels(&positions);
-        let ticks = positions
-            .into_iter()
-            .zip(labels)
-            .map(|(position, label)| AxisTick::new(position, label))
-            .collect::<Vec<_>>();
-        if ticks.len() > AUTOMATIC_TICK_TARGET {
-            continue;
-        }
-        if candidates[..candidate_count].iter().any(|previous| {
-            previous.len() == ticks.len()
-                && previous.iter().zip(&ticks).all(|(a, b)| {
-                    a.position.to_bits() == b.position.to_bits() && a.label == b.label
-                })
-        }) {
-            continue;
-        }
-        let index = candidate_count;
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::TickDistinctList,
-        );
-        candidates[index] = ticks;
-        candidate_count += 1;
-        let ticks = &candidates[index];
-        if !automatic_tick_labels_fit_with_measure(ticks, projection, side, |tick_index, label| {
-            if let Some((_, _, dimensions)) = metrics[..metric_count]
-                .iter()
-                .find(|(candidate, tick, _)| candidates[*candidate][*tick].label == label)
-            {
-                return Ok(*dimensions);
-            }
-            #[cfg(test)]
-            crate::orchestrator::measurements::count(
-                crate::orchestrator::measurements::Counter::TickMetricLookup,
-            );
-            let dimensions = tick_text_size(theme, label, legacy)?;
-            metrics[metric_count] = (index, tick_index, dimensions);
-            metric_count += 1;
-            Ok(dimensions)
-        })? {
-            continue;
-        }
-        if best.is_none_or(|current| ticks.len() > candidates[current].len()) {
-            best = Some(index);
-        }
-    }
-
-    Ok(best.map_or_else(
-        || {
-            let midpoint = finite_midpoint(range);
-            vec![AxisTick::new(midpoint, format_tick(midpoint))]
-        },
-        |index| std::mem::take(&mut candidates[index]),
-    ))
-}
-
-pub(crate) fn fit_automatic_tick_candidates(
-    ticks: Vec<AxisTick>,
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-    fallback: AxisTick,
-) -> Result<Vec<AxisTick>, Error> {
-    if !ticks.is_empty()
-        && ticks.len() <= AUTOMATIC_TICK_TARGET
-        && automatic_tick_labels_fit(&ticks, projection, side, theme, false)?
-    {
-        return Ok(ticks);
-    }
-
-    for desired in (2..=ticks.len().min(AUTOMATIC_TICK_TARGET)).rev() {
-        let last = ticks.len() - 1;
-        let denominator = desired - 1;
-        let candidate = (0..desired)
-            .map(|index| {
-                let numerator = index * last;
-                let source = (numerator + denominator / 2) / denominator;
-                ticks[source].clone()
-            })
-            .collect::<Vec<_>>();
-        if automatic_tick_labels_fit(&candidate, projection, side, theme, false)? {
-            return Ok(candidate);
-        }
-    }
-
-    Ok(vec![fallback])
+    Ok(super::sources::numeric_tick_plan(
+        range,
+        None,
+        false,
+        projection,
+        side,
+        theme,
+        false,
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .map_err(crate::layout::fit::PlanError::into_error)?
+    .ticks)
 }
 
 #[cfg(test)]
-pub(crate) fn retain_automatic_ticks_inside_panel(
-    ticks: Vec<AxisTick>,
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-) -> Result<Vec<AxisTick>, Error> {
-    retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, false)
-}
-
-pub(crate) fn retain_automatic_ticks_inside_panel_legacy(
-    ticks: Vec<AxisTick>,
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-) -> Result<Vec<AxisTick>, Error> {
-    retain_automatic_ticks_inside_panel_with_policy(ticks, projection, side, theme, true)
-}
-
-fn retain_automatic_ticks_inside_panel_with_policy(
-    ticks: Vec<AxisTick>,
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-    legacy: bool,
-) -> Result<Vec<AxisTick>, Error> {
-    let (x0, x1, y0, y1) = projection.pixel_box();
-    let bounds = match side {
-        AxisSide::Bottom => (x0, x1),
-        AxisSide::Left => (y0, y1),
-    };
-    let mut retained = Vec::new();
-    for tick in ticks {
-        let (start, end) = projected_tick_extent(&tick, projection, side, theme, legacy)?;
-        if start >= bounds.0 && end <= bounds.1 {
-            retained.push(tick);
-        }
-    }
-    if !retained.is_empty() {
-        return Ok(retained);
-    }
-
-    let range = match side {
-        AxisSide::Bottom => projection.x_range(),
-        AxisSide::Left => projection.y_range(),
-    };
-    let midpoint = finite_midpoint(range);
-    let fallback = AxisTick::new(midpoint, format_tick(midpoint));
-    let (start, end) = projected_tick_extent(&fallback, projection, side, theme, legacy)?;
-    Ok((start >= bounds.0 && end <= bounds.1)
-        .then_some(fallback)
-        .into_iter()
-        .collect())
-}
-
-fn automatic_tick_labels_fit(
-    ticks: &[AxisTick],
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-    legacy: bool,
-) -> Result<bool, Error> {
-    automatic_tick_labels_fit_with_measure(ticks, projection, side, |_, label| {
-        tick_text_size(theme, label, legacy)
-    })
-}
-
-fn automatic_tick_labels_fit_with_measure(
-    ticks: &[AxisTick],
-    projection: &Projection,
-    side: AxisSide,
-    mut measure: impl FnMut(usize, &str) -> Result<(f64, f64, f64), Error>,
-) -> Result<bool, Error> {
-    let mut previous_end = None;
-    let (x0, x1, _, _) = projection.pixel_box();
-    let maximum_width = match side {
-        AxisSide::Bottom => Some((x1 - x0) / ticks.len().max(1) as f64 * 0.9),
-        AxisSide::Left => None,
-    };
-
-    for (index, tick) in ticks.iter().enumerate() {
-        #[cfg(test)]
-        tests::VISITED_LABELS.with(|labels| labels.borrow_mut().insert(tick.label.clone()));
-        let (width, height, fit_width) = measure(index, &tick.label)?;
-        if maximum_width.is_some_and(|width| fit_width > width) {
-            return Ok(false);
-        }
-        let (start, end) = projected_tick_extent_from_size(tick, projection, side, width, height)?;
-        let fits = previous_end.is_none_or(|previous| start >= previous);
-        previous_end = Some(end);
-        if !fits {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
-fn projected_tick_extent(
-    tick: &AxisTick,
-    projection: &Projection,
-    side: AxisSide,
-    theme: &ResolvedTheme,
-    legacy: bool,
-) -> Result<(f64, f64), Error> {
-    let (width, height, _) = tick_text_size(theme, &tick.label, legacy)?;
-    projected_tick_extent_from_size(tick, projection, side, width, height)
-}
-
-fn projected_tick_extent_from_size(
-    tick: &AxisTick,
-    projection: &Projection,
-    side: AxisSide,
-    width: f64,
-    height: f64,
-) -> Result<(f64, f64), Error> {
-    let center = match side {
-        AxisSide::Bottom => projection.project(tick.position, projection.y_range().0).0,
-        AxisSide::Left => projection.project(projection.x_range().0, tick.position).1,
-    }
-    .round();
-    let half_extent = match side {
-        AxisSide::Bottom => width / 2.0,
-        AxisSide::Left => height / 2.0,
-    };
-    let start = center - half_extent;
-    let end = center + half_extent;
-    if start.is_finite() && end.is_finite() {
-        Ok((start, end))
-    } else {
-        Err(Error::Render(
-            "tick extent projection arithmetic overflowed".into(),
-        ))
-    }
-}
-
-fn tick_text_size(
-    theme: &ResolvedTheme,
-    label: &str,
-    legacy: bool,
-) -> Result<(f64, f64, f64), Error> {
-    #[cfg(test)]
-    tests::SIZE_LOOKUPS.with(|count| count.set(count.get() + 1));
-    let plan = if legacy {
-        theme.measure_legacy_appearance_text(
-            label,
-            &theme.typography.tick_label,
-            PhysicalTextAlignment::Center,
-            "legacy automatic tick label",
-            false,
-        )
-    } else {
-        theme.measure_text(
-            label,
-            &theme.typography.tick_label,
-            PhysicalTextAlignment::Center,
-            "automatic tick label",
-            false,
-        )
-    }?;
-    Ok((plan.width(), plan.height(), plan.fit_width()))
-}
-
-fn finite_midpoint(range: (f64, f64)) -> f64 {
-    let midpoint = f64::midpoint(range.0, range.1);
-    if midpoint.is_finite() {
-        midpoint
-    } else if range.0.is_finite() {
-        range.0
-    } else if range.1.is_finite() {
-        range.1
-    } else {
-        0.0
-    }
-}
-
 pub(super) fn distinct_tick_labels(positions: &[f64]) -> Vec<String> {
     let mut labels = positions
         .iter()
@@ -461,6 +185,7 @@ pub(super) fn distinct_tick_labels(positions: &[f64]) -> Vec<String> {
     labels
 }
 
+#[cfg(test)]
 pub(super) fn labels_are_unique(labels: &[String]) -> bool {
     labels
         .iter()
@@ -468,12 +193,7 @@ pub(super) fn labels_are_unique(labels: &[String]) -> bool {
         .all(|(index, label)| !labels[..index].contains(label))
 }
 
-/// Compute a "nice" axis range enclosing `[lo, hi]` by snapping
-/// outward to multiples of the best tick step.
-///
-/// The step is chosen from the canonical set {1, 2, 2.5, 5, 10} × 10^k
-/// to produce a tick count closest to `target_ticks` intervals.
-#[allow(clippy::cast_precision_loss)]
+/// The range owner's snapping grammar is deliberately independent of tick sources.
 pub(crate) fn nice_range(lo: f64, hi: f64, target_ticks: usize) -> (f64, f64) {
     if !(lo.is_finite() && hi.is_finite()) || lo > hi || target_ticks == 0 {
         return (lo, hi);
@@ -519,15 +239,7 @@ fn finite_adjacent_range(value: f64) -> (f64, f64) {
     }
 }
 
-/// Find the best tick step from the canonical nice-number set
-/// {1, 2, 2.5, 5, 10} × 10^mag that produces tick count closest to
-/// `target_ticks` intervals (i.e. ≈ target_ticks+1 tick marks).
-///
-/// Mirrors matplotlib `MaxNLocator` logic: among all candidate steps,
-/// choose the one whose resulting tick count is closest to the target,
-/// with ties broken in favor of larger steps (fewer, cleaner ticks).
-#[allow(clippy::cast_precision_loss)]
-pub(crate) fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
+fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
     let range = finite_span(lo, hi);
     if !range.is_finite() || range <= 0.0 || target_ticks == 0 {
         return f64::NAN;
@@ -540,18 +252,15 @@ pub(crate) fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
     if !mag.is_finite() || mag <= 0.0 {
         return raw_step;
     }
-    let target_n = target_ticks.saturating_add(1); // desired number of tick marks
-
-    let mut best_step = raw_step; // fallback
+    let target_n = target_ticks.saturating_add(1);
+    let mut best_step = raw_step;
     let mut best_dist = usize::MAX;
-
     for &n in &NICE_STEPS {
         let step = n * mag;
         let Some(nticks) = snapped_tick_count(lo, hi, step) else {
             continue;
         };
         let dist = nticks.abs_diff(target_n);
-        // Prefer smaller distance; on tie prefer larger step (scanned first)
         if dist < best_dist {
             best_dist = dist;
             best_step = step;
@@ -560,75 +269,14 @@ pub(crate) fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
     best_step
 }
 
-/// Generate ticks within `[lo, hi]`.
-///
-/// Selects the nice step that places the closest number of ticks
-/// to `k` **inside** the given range (no boundary snap — just
-/// ceil(lo/step) to floor(hi/step)).
-#[allow(clippy::cast_precision_loss)]
-pub(crate) fn nice_ticks(lo: f64, hi: f64, k: usize) -> Vec<f64> {
-    if !(lo.is_finite() && hi.is_finite()) || lo >= hi || k == 0 {
+#[cfg(test)]
+pub(crate) fn nice_ticks(lo: f64, hi: f64, seed: usize) -> Vec<f64> {
+    if !(lo.is_finite() && hi.is_finite()) || lo >= hi || seed == 0 {
         return Vec::new();
     }
-    if lo.next_up() >= hi {
-        return vec![lo, hi];
-    }
-    let range = finite_span(lo, hi);
-    if !range.is_finite() || range <= 0.0 {
-        return vec![lo, hi];
-    }
-    let raw_step = range / k as f64;
-    if !raw_step.is_finite() || raw_step <= 0.0 {
-        return vec![lo, hi];
-    }
-    let mag = 10f64.powf(raw_step.log10().floor());
-    if !mag.is_finite() || mag <= 0.0 {
-        return vec![lo, hi];
-    }
-    let target_n = k; // desired number of tick marks inside range
-
-    let mut best_step = raw_step;
-    let mut best_dist = usize::MAX;
-
-    for &n in &NICE_STEPS {
-        let step = n * mag;
-        let Some(nticks) = tick_count(lo, hi, step) else {
-            continue;
-        };
-        let dist = nticks.abs_diff(target_n);
-        if dist < best_dist {
-            best_dist = dist;
-            best_step = step;
-        }
-    }
-
-    let start = (lo / best_step).ceil() * best_step;
-    let Some(count) = tick_count(lo, hi, best_step) else {
-        return vec![lo, hi];
-    };
-    let mut out = Vec::with_capacity(count);
-    let mut tick = start;
-    let mut stalled = false;
-    for _ in 0..count {
-        if tick.is_finite()
-            && tick >= lo
-            && tick <= hi + best_step * 1e-9
-            && out.last().is_none_or(|previous| *previous < tick)
-        {
-            out.push(tick);
-        }
-        let next = tick + best_step;
-        if next <= tick {
-            stalled = true;
-            break;
-        }
-        tick = next;
-    }
-    if stalled || out.len() < 2 {
-        vec![lo, hi]
-    } else {
-        out
-    }
+    super::sources::adaptive_positions((lo, hi), seed, None)
+        .unwrap()
+        .unwrap_or_default()
 }
 
 fn finite_span(lo: f64, hi: f64) -> f64 {
@@ -638,24 +286,6 @@ fn finite_span(lo: f64, hi: f64) -> f64 {
     }
     let scale = lo.abs().max(hi.abs());
     (hi / scale - lo / scale) * scale
-}
-
-fn tick_count(lo: f64, hi: f64, step: f64) -> Option<usize> {
-    const MAX_TICKS: usize = 10_000;
-    if !step.is_finite() || step <= 0.0 {
-        return None;
-    }
-    let first = (lo / step).ceil();
-    let last = (hi / step).floor();
-    if !first.is_finite() || !last.is_finite() || last < first {
-        return Some(0);
-    }
-    let count = last - first + 1.0;
-    if !count.is_finite() || count > MAX_TICKS as f64 {
-        None
-    } else {
-        Some(count.max(0.0) as usize)
-    }
 }
 
 fn snapped_tick_count(lo: f64, hi: f64, step: f64) -> Option<usize> {
@@ -674,238 +304,7 @@ fn snapped_tick_count(lo: f64, hi: f64, step: f64) -> Option<usize> {
     }
 }
 
-/// Format a tick value smartly: no trailing zeros, no -0.0, SI prefixes for large numbers.
-pub(crate) fn format_tick(value: f64) -> String {
-    // Eliminate -0.0
-    let v = if value == 0.0 { 0.0 } else { value };
-
-    let abs = v.abs();
-    if abs >= 1.0e12 {
-        format!("{v:.2e}")
-    } else if abs >= 1_000_000.0 {
-        let m = v / 1_000_000.0;
-        format_clean(m, "M")
-    } else if abs >= 10_000.0 {
-        let k = v / 1_000.0;
-        format_clean(k, "k")
-    } else if abs < 0.01 && abs > 0.0 {
-        // Scientific-ish for very small values
-        format!("{v:.2e}")
-    } else {
-        // Auto-select decimal places based on magnitude
-        let s = if abs >= 100.0 {
-            format!("{v:.0}")
-        } else if abs >= 1.0 {
-            format!("{v:.1}")
-        } else {
-            format!("{v:.2}")
-        };
-        // Strip trailing zeros after decimal point
-        if s.contains('.') {
-            let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-            trimmed.to_string()
-        } else {
-            s
-        }
-    }
-}
-
-fn format_clean(v: f64, suffix: &str) -> String {
-    let s = format!("{v:.1}");
-    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-    format!("{trimmed}{suffix}")
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    std::thread_local! {
-        pub(super) static SIZE_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-        pub(super) static VISITED_LABELS: std::cell::RefCell<std::collections::BTreeSet<String>> =
-            const { std::cell::RefCell::new(std::collections::BTreeSet::new()) };
-    }
-
-    // Pre-PF6 selection and duplicate size queries, deliberately kept as the oracle.
-    fn original_reference(
-        range: (f64, f64),
-        projection: &Projection,
-        side: AxisSide,
-        theme: &ResolvedTheme,
-        legacy: bool,
-    ) -> Result<Vec<AxisTick>, Error> {
-        let mut best: Option<Vec<AxisTick>> = None;
-        for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
-            let positions = nice_ticks(range.0, range.1, target);
-            if positions.len() < 2 {
-                continue;
-            }
-            let labels = distinct_tick_labels(&positions);
-            let ticks = positions
-                .into_iter()
-                .zip(labels)
-                .map(|(position, label)| AxisTick::new(position, label))
-                .collect::<Vec<_>>();
-            if ticks.len() > AUTOMATIC_TICK_TARGET {
-                continue;
-            }
-            let mut previous_end = None;
-            let (x0, x1, _, _) = projection.pixel_box();
-            let maximum_width = match side {
-                AxisSide::Bottom => Some((x1 - x0) / ticks.len().max(1) as f64 * 0.9),
-                AxisSide::Left => None,
-            };
-            let mut fits = true;
-            for tick in &ticks {
-                let (_, _, fit_width) = tick_text_size(theme, &tick.label, legacy)?;
-                if maximum_width.is_some_and(|width| fit_width > width) {
-                    fits = false;
-                    break;
-                }
-                let (start, end) = projected_tick_extent(tick, projection, side, theme, legacy)?;
-                fits = previous_end.is_none_or(|previous| start >= previous);
-                previous_end = Some(end);
-                if !fits {
-                    break;
-                }
-            }
-            if fits
-                && best
-                    .as_ref()
-                    .is_none_or(|current| ticks.len() > current.len())
-            {
-                best = Some(ticks);
-            }
-        }
-        Ok(best.unwrap_or_else(|| {
-            let midpoint = finite_midpoint(range);
-            vec![AxisTick::new(midpoint, format_tick(midpoint))]
-        }))
-    }
-
-    fn tick_bytes(ticks: &[AxisTick]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        for tick in ticks {
-            bytes.extend(tick.position.to_bits().to_le_bytes());
-            bytes.extend(tick.label.len().to_le_bytes());
-            bytes.extend(tick.label.as_bytes());
-        }
-        bytes
-    }
-
-    #[test]
-    fn numeric_selection_matches_original_bytes_with_fewer_size_lookups() {
-        let ranges = [
-            (0.0, 10.0),
-            (5.0, 30.0),
-            (-7.25, 19.75),
-            (0.0, 1e-12),
-            (1e6, 9e6),
-            (1e12, 9e12),
-            (-f64::MAX, f64::MAX),
-            (f64::MAX.next_down(), f64::MAX),
-            (0.0, f64::from_bits(1)),
-            (1.0, 1.0_f64.next_up()),
-            (-0.0, 10.0),
-            (1.000_000_000_000_01, 1.000_000_000_000_09),
-        ];
-        let mut old_total = 0;
-        let mut new_total = 0;
-        for range in ranges {
-            let theme = crate::Theme::Publication.resolve();
-            for extent in [0.0, 30.0, 120.0, 1000.0] {
-                let projection =
-                    Projection::new(range, range, (10.0, 10.0 + extent, 20.0, 20.0 + extent));
-                for side in [AxisSide::Bottom, AxisSide::Left] {
-                    for legacy in [false, true] {
-                        SIZE_LOOKUPS.with(|count| count.set(0));
-                        let old =
-                            original_reference(range, &projection, side, &theme, legacy).unwrap();
-                        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-                        VISITED_LABELS.with(|labels| labels.borrow_mut().clear());
-                        let new = automatic_numeric_ticks_with_policy(
-                            range,
-                            &projection,
-                            side,
-                            &theme,
-                            legacy,
-                        )
-                        .unwrap();
-                        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-                        let distinct_visited = VISITED_LABELS.with(|labels| labels.borrow().len());
-                        assert_eq!(new_count, distinct_visited);
-                        assert_eq!(
-                            tick_bytes(&new),
-                            tick_bytes(&old),
-                            "{range:?}, {extent}, {side:?}, legacy={legacy}"
-                        );
-                        assert!(new_count <= old_count);
-                        old_total += old_count;
-                        new_total += new_count;
-                    }
-                }
-            }
-        }
-        assert!(new_total < old_total);
-        println!("PF6 matrix size lookups: {old_total} -> {new_total}");
-    }
-
-    #[test]
-    fn different_sources_share_label_metrics() {
-        let range = (0.0, 10.0);
-        let theme = crate::Theme::Publication.resolve();
-        let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
-        let mut lists = Vec::new();
-        for target in (1..=AUTOMATIC_TICK_TARGET).rev() {
-            let positions = nice_ticks(range.0, range.1, target);
-            if (2..=AUTOMATIC_TICK_TARGET).contains(&positions.len()) {
-                let labels = distinct_tick_labels(&positions);
-                if !lists.contains(&labels) {
-                    lists.push(labels);
-                }
-            }
-        }
-        assert!(
-            lists
-                .iter()
-                .filter(|list| list.iter().any(|label| label == "0"))
-                .count()
-                > 1
-        );
-        let distinct = lists
-            .iter()
-            .flatten()
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
-        let per_candidate_count = lists.iter().map(Vec::len).sum::<usize>();
-        SIZE_LOOKUPS.with(|count| count.set(0));
-        let old = original_reference(range, &projection, AxisSide::Bottom, &theme, false).unwrap();
-        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-        let new = automatic_numeric_ticks(range, &projection, AxisSide::Bottom, &theme).unwrap();
-        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-        assert_eq!(tick_bytes(&new), tick_bytes(&old));
-        assert_eq!(new_count, distinct);
-        assert!(new_count < per_candidate_count);
-        println!("PF6 shared labels size lookups: original={old_count}, per-candidate={per_candidate_count}, cached={new_count}");
-    }
-
-    #[test]
-    fn identical_sources_keep_first_list_and_measure_it_only_once() {
-        let range = (1.0, 1.0_f64.next_up());
-        let first = nice_ticks(range.0, range.1, AUTOMATIC_TICK_TARGET);
-        for target in 1..AUTOMATIC_TICK_TARGET {
-            assert_eq!(nice_ticks(range.0, range.1, target), first);
-        }
-        let theme = crate::Theme::Publication.resolve();
-        let projection = Projection::new(range, range, (0.0, 1000.0, 0.0, 1000.0));
-        SIZE_LOOKUPS.with(|count| count.set(0));
-        let old = original_reference(range, &projection, AxisSide::Bottom, &theme, false).unwrap();
-        let old_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-        let new = automatic_numeric_ticks(range, &projection, AxisSide::Bottom, &theme).unwrap();
-        let new_count = SIZE_LOOKUPS.with(|count| count.replace(0));
-        assert_eq!(tick_bytes(&new), tick_bytes(&old));
-        assert_eq!(new.len(), 2);
-        assert_eq!((old_count, new_count), (20, 2));
-        println!("PF6 five identical sources size lookups: {old_count} -> {new_count}");
-    }
+pub(crate) fn format_tick(value: f64) -> String {
+    super::sources::format_label(value, false, false, 0, None).unwrap()
 }

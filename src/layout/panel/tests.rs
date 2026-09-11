@@ -49,7 +49,7 @@ fn anchored_auto_range_advances_adjacent_subnormal_density_endpoint() {
 #[test]
 fn continuous_auto_range_keeps_nice_ticks_inside_limits() {
     let range = continuous_auto_range((0.0, 10.0), &AxisSpec::default());
-    let ticks = nice_ticks(range.0, range.1, AUTOMATIC_TICK_TARGET);
+    let ticks = nice_ticks(range.0, range.1, 5);
 
     assert!(
         ticks.iter().any(|tick| tick.abs() < f64::EPSILON)
@@ -59,6 +59,82 @@ fn continuous_auto_range_keeps_nice_ticks_inside_limits() {
             && range.0 < 0.0
             && range.1 > 10.0,
         "auto range should broaden limits while preserving nice endpoint ticks: range={range:?}, ticks={ticks:?}"
+    );
+}
+
+#[test]
+fn exact_tick_configuration_validates_count_before_fonts() {
+    for count in [0_u32, 1, 10_000, 10_001] {
+        let spec = AxisSpec {
+            provenance: RangeProvenance::Automatic,
+            limits: None,
+            interval: None,
+            exact_ticks: Some(
+                (0..count)
+                    .map(|index| AxisTick::new(f64::from(index), ""))
+                    .collect(),
+            ),
+        };
+        assert_eq!(
+            spec.validate("x-axis").is_ok(),
+            (1..=10_000).contains(&count),
+            "count={count}"
+        );
+    }
+}
+
+#[test]
+fn exact_tick_configuration_validates_positions_without_a_display_domain() {
+    for positions in [
+        vec![f64::NAN],
+        vec![f64::INFINITY],
+        vec![f64::NEG_INFINITY],
+        vec![1.0, 1.0],
+        vec![1.0, 0.0],
+        vec![-0.0, 0.0],
+    ] {
+        let spec = AxisSpec {
+            provenance: RangeProvenance::Automatic,
+            limits: None,
+            interval: None,
+            exact_ticks: Some(
+                positions
+                    .into_iter()
+                    .map(|position| AxisTick::new(position, "verbatim"))
+                    .collect(),
+            ),
+        };
+        assert!(matches!(
+            spec.validate("y-axis"),
+            Err(crate::Error::Data(_))
+        ));
+    }
+}
+
+#[test]
+fn exact_tick_configuration_preserves_empty_and_duplicate_labels_and_checks_known_limits() {
+    let mut spec = AxisSpec {
+        provenance: RangeProvenance::Automatic,
+        limits: None,
+        interval: None,
+        exact_ticks: Some(vec![
+            AxisTick::new(-f64::MAX, "same"),
+            AxisTick::new(0.0, ""),
+            AxisTick::new(f64::MAX, "same"),
+        ]),
+    };
+    spec.validate("x-axis").unwrap();
+    spec.limits = Some((-f64::MAX, f64::MAX));
+    spec.validate("x-axis").unwrap();
+    spec.limits = Some((0.0, f64::MAX));
+    assert!(matches!(
+        spec.validate("x-axis"),
+        Err(crate::Error::Data(message)) if message.contains("outside resolved range")
+    ));
+    // An automatic domain cannot be checked at configuration time, but still
+    // must reject an out-of-domain exact position before text measurement.
+    assert!(
+        Axis::validate_ticks(spec.exact_ticks.as_ref().unwrap(), (0.0, 1.0), "x-axis").is_err()
     );
 }
 
@@ -98,6 +174,7 @@ fn exact_axis_sources_bypass_automatic_measurement_in_both_constructors() {
         &x,
         &y,
         &theme,
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
     for layout in [numeric, supplied] {
@@ -127,23 +204,37 @@ fn automatic_tick_fit_never_swallows_fatal_text_errors() {
     let error =
         automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).unwrap_err();
     assert!(error.to_string().contains("font size must be positive"));
-    let error = retain_automatic_ticks_inside_panel(
-        vec![AxisTick::new(5.0, "5")],
-        &projection,
-        AxisSide::Bottom,
+}
+
+#[test]
+fn later_invalid_axis_source_wins_over_terminal_tick_fit_miss() {
+    use crate::layout::fit::{FitScope, PlanError};
+    let theme = crate::Theme::Publication.resolve();
+    let scope = FitScope::root()
+        .child(crate::layout::AddressRole::FacetCell, 2)
+        .unwrap();
+    let x = AxisSpec::default().limits(1.1, 1.2);
+    let y = AxisSpec {
+        exact_ticks: Some(Vec::new()),
+        ..AxisSpec::default().limits(0.0, 1.0)
+    };
+    let result = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+        (1.1, 1.2),
+        (0.0, 1.0),
+        crate::layout::PanelBox::new(0.0, 1.0, 0.0, 100.0),
+        String::new(),
+        String::new(),
+        Vec::new(),
+        Vec::new(),
+        &x,
+        &y,
         &theme,
-    )
-    .unwrap_err();
-    assert!(error.to_string().contains("font size must be positive"));
-    let error = fit_automatic_tick_candidates(
-        vec![AxisTick::new(0.0, "0"), AxisTick::new(10.0, "10")],
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        AxisTick::new(5.0, "5"),
-    )
-    .unwrap_err();
-    assert!(error.to_string().contains("font size must be positive"));
+        &scope,
+    );
+    assert!(matches!(
+        result,
+        Err(PlanError::Fatal(crate::Error::Data(_)))
+    ));
 }
 
 #[test]
@@ -209,8 +300,8 @@ fn shorter_y_panel_uses_fewer_automatic_ticks_without_changing_resolved_range() 
 #[test]
 fn wider_numeric_labels_reduce_automatic_x_tick_density() {
     let theme = crate::Theme::Publication.resolve();
-    let panel_box = crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0);
-    let wider_label_spec = AxisSpec::default().limits(0.0, 100.0);
+    let panel_box = crate::layout::PanelBox::new(0.0, 400.0, 0.0, 100.0);
+    let wider_label_spec = AxisSpec::default().limits(0.0, 1e12);
     let shorter_label_spec = AxisSpec::default().limits(0.0, 1.0);
     let wider_labels = Layout::new_with_axis_specs_in_panel_box(
         (0.0, 100.0),
@@ -254,7 +345,7 @@ fn wider_numeric_labels_reduce_automatic_x_tick_density() {
 }
 
 #[test]
-fn automatic_ticks_keep_target_five_candidate_when_labels_fit() {
+fn automatic_ticks_keep_the_first_span_adaptive_source_when_labels_fit() {
     let theme = crate::Theme::Publication.resolve();
     let spec = AxisSpec::default().limits(0.0, 100.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
@@ -276,7 +367,7 @@ fn automatic_ticks_keep_target_five_candidate_when_labels_fit() {
             .iter()
             .map(|tick| tick.position)
             .collect::<Vec<_>>(),
-        [0.0, 25.0, 50.0, 75.0, 100.0]
+        [0.0, 20.0, 40.0, 60.0, 80.0, 100.0]
     );
 }
 
@@ -320,6 +411,7 @@ fn resolved_tick_label_size_controls_automatic_tick_measurement_and_drawing() {
         &spec,
         &spec,
         &large_tick_theme,
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
 
@@ -365,8 +457,76 @@ fn frame_and_ticks_draw_with_their_independent_resolved_strokes() {
     backend.end().unwrap();
 
     let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-    assert_eq!(svg.matches("stroke=\"#010203\"").count(), 6);
+    assert_eq!(svg.matches("stroke=\"#010203\"").count(), 4);
     assert_eq!(svg.matches("stroke=\"#A1B2C3\"").count(), expected_ticks);
+}
+
+#[test]
+fn frozen_axes_and_grid_replay_without_layout_theme_or_shaping() {
+    let theme = crate::Theme::Publication.resolve();
+    let spec = AxisSpec {
+        provenance: RangeProvenance::Configured,
+        limits: Some((0.0, 10.0)),
+        exact_ticks: Some(vec![
+            AxisTick::new(0.0, ""),
+            AxisTick::new(5.0, "middle"),
+            AxisTick::new(10.0, ""),
+        ]),
+        interval: None,
+    };
+    let layout = Layout::new_with_axis_specs_in_panel_box(
+        (0.0, 10.0),
+        (0.0, 10.0),
+        crate::layout::PanelBox::new(80.0, 360.0, 80.0, 360.0),
+        "horizontal".into(),
+        "vertical".into(),
+        &spec,
+        &spec,
+        &theme,
+    )
+    .unwrap();
+    let plan = layout.plan_axes(&theme).unwrap();
+    drop(layout);
+    drop(theme);
+    let shape_calls = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    let render = |plan: &PanelAxisPlan| {
+        let mut backend = crate::render::svg_backend::SvgBackend::in_memory(400, 400);
+        backend.begin(400, 400).unwrap();
+        plan.draw_grid(&mut backend).unwrap();
+        plan.draw(&mut backend).unwrap();
+        backend.end().unwrap();
+        String::from_utf8(backend.into_bytes().unwrap()).unwrap()
+    };
+    let svg = render(&plan);
+    assert_eq!(svg, render(&plan.clone()));
+    crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shape_calls));
+    assert_eq!(svg.matches(">middle</text>").count(), 2);
+    assert!(svg.contains(">horizontal</text>") && svg.contains(">vertical</text>"));
+    // Empty endpoint labels retain all six ticks and all six grid lines.
+    assert_eq!(svg.matches("<polyline ").count(), 4 + 6 + 6);
+}
+
+#[test]
+fn axis_plan_storage_refusal_precedes_text_and_geometry_materialization() {
+    let theme = crate::Theme::Publication.resolve();
+    let mut layout = Layout::self_managed(400, 400);
+    layout.x_axis.label = "unmeasured title".into();
+    let environment = theme.prepared_font_environment().unwrap();
+    let before = environment.resource_usage().unwrap();
+    environment
+        .claim_unicode_bytes(u64::try_from(536_870_912 - before.font_bytes).unwrap())
+        .unwrap();
+    let shape_calls = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    assert!(layout
+        .plan_axes(&theme)
+        .unwrap_err()
+        .to_string()
+        .contains("axis plan admission"));
+    crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), shape_calls));
+    assert_eq!(
+        environment.resource_usage().unwrap().processing_visits,
+        before.processing_visits
+    );
 }
 
 #[test]
@@ -398,44 +558,24 @@ fn absent_frame_and_ticks_leave_axis_text_without_panicking() {
 }
 
 #[test]
-fn automatic_ticks_fall_back_to_one_finite_midpoint_when_no_labels_fit() {
+fn automatic_ticks_reject_when_even_the_terminal_midpoint_cannot_fit() {
     let theme = crate::Theme::Publication.resolve();
     let projection = Projection::new((0.0, 10.0), (0.0, 10.0), (0.0, 0.0, 0.0, 0.0));
 
-    let ticks =
-        automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).unwrap();
-
-    assert_eq!(
-        ticks
-            .iter()
-            .map(|tick| (tick.position, tick.label.as_str()))
-            .collect::<Vec<_>>(),
-        [(5.0, "5")]
-    );
+    assert!(automatic_numeric_ticks((0.0, 10.0), &projection, AxisSide::Bottom, &theme).is_err());
 }
 
 #[test]
-fn fitted_automatic_candidates_never_exceed_the_internal_maximum() {
+fn wide_numeric_sources_retain_more_than_five_ticks() {
     let theme = crate::Theme::Publication.resolve();
     let projection = Projection::new((0.0, 9.0), (0.0, 1.0), (0.0, 1_000.0, 0.0, 100.0));
-    let ticks = (0..10)
-        .map(|position| AxisTick::new(f64::from(position), position.to_string()))
-        .collect();
-
-    let fitted = fit_automatic_tick_candidates(
-        ticks,
-        &projection,
-        AxisSide::Bottom,
-        &theme,
-        AxisTick::new(4.5, "4.5"),
-    )
-    .unwrap();
-
-    assert_eq!(fitted.len(), AUTOMATIC_TICK_TARGET);
+    let fitted =
+        automatic_numeric_ticks((0.0, 9.0), &projection, AxisSide::Bottom, &theme).unwrap();
+    assert!(fitted.len() > 5);
 }
 
 #[test]
-fn automatic_ticks_never_exceed_the_internal_maximum() {
+fn automatic_ticks_use_the_assigned_span_instead_of_a_five_tick_ceiling() {
     let theme = crate::Theme::Publication.resolve();
     let spec = AxisSpec::default().limits(5.0, 30.0);
     let layout = Layout::new_with_axis_specs_in_panel_box(
@@ -450,28 +590,27 @@ fn automatic_ticks_never_exceed_the_internal_maximum() {
     )
     .unwrap();
 
-    assert!(layout.x_axis.ticks.len() <= AUTOMATIC_TICK_TARGET);
+    assert!(layout.x_axis.ticks.len() > 5);
 }
 
 #[test]
-fn panel_lane_filter_removes_automatic_labels_that_cross_its_edges() {
+fn complete_sources_fit_endpoint_labels_inward_instead_of_filtering_positions() {
     let theme = crate::Theme::Publication.resolve();
-    let projection = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
+    let projection = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 160.0, 0.0, 100.0));
     let ticks = vec![
         AxisTick::new(0.0, "0"),
         AxisTick::new(50.0, "50"),
         AxisTick::new(100.0, "100"),
     ];
 
-    let retained =
-        retain_automatic_ticks_inside_panel(ticks, &projection, AxisSide::Bottom, &theme).unwrap();
-
+    let narrow = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
+    assert!(!super::sources::labels_fit(&ticks, &narrow, AxisSide::Bottom, &theme, false).unwrap());
+    assert!(
+        super::sources::labels_fit(&ticks, &projection, AxisSide::Bottom, &theme, false).unwrap()
+    );
     assert_eq!(
-        retained
-            .iter()
-            .map(|tick| tick.position)
-            .collect::<Vec<_>>(),
-        [50.0]
+        ticks.iter().map(|tick| tick.position).collect::<Vec<_>>(),
+        [0.0, 50.0, 100.0]
     );
 }
 
@@ -518,6 +657,7 @@ fn categorical_y_ticks_preserve_the_supplied_vector_and_row_range() {
         &AxisSpec::default(),
         &AxisSpec::default(),
         &theme,
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
 
@@ -576,11 +716,11 @@ fn adjacent_ordinary_and_large_ticks_keep_both_distinguishable_endpoints() {
 }
 
 #[test]
-fn opposite_extreme_ticks_use_finite_endpoints_and_distinct_labels() {
+fn opposite_extreme_ticks_use_scaled_steps_and_distinct_labels() {
     let ticks = nice_ticks(-f64::MAX, f64::MAX, 5);
     let labels = distinct_tick_labels(&ticks);
 
-    assert_eq!(ticks, [-f64::MAX, f64::MAX]);
+    assert_eq!(ticks, [-1e308, 0.0, 1e308]);
     assert_ne!(labels[0], labels[1]);
 }
 

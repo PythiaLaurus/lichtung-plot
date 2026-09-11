@@ -31,7 +31,7 @@ use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
 use crate::layout::fit::with_clip;
-use crate::layout::{AxisTick, Layout};
+use crate::layout::AxisTick;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde, kde_support_range, quantile};
@@ -149,18 +149,15 @@ fn render_samples(
         2.0,
     )
     .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
-    let base_display_range =
-        crate::layout::continuous_auto_range(support_range, chart.y_axis_spec());
+    let base_display_range = context.axis_range(crate::layout::AxisSide::Left, || {
+        Ok(crate::layout::continuous_auto_range(
+            support_range,
+            chart.y_axis_spec(),
+        ))
+    })?;
     let rendered_maxima = vec![support_range.1; x_levels.len()];
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let panel = crate::plots::horizontal_bar::panel_box_for_x_tick_labels(
-        chart,
-        panel,
-        x_levels,
-        theme,
-        context.fit_scope(),
-    )?;
     let legend_entries = hue_levels
         .iter()
         .enumerate()
@@ -213,27 +210,29 @@ fn render_samples(
         )?
     };
     let display_range = significance.y_range;
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
 
     let group_active = !group_levels.is_empty();
     let n_groups = x_levels.len();
-    let x_ticks: Vec<AxisTick> = x_levels
-        .iter()
-        .enumerate()
-        .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
-        .collect();
-    let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
-        (0.0, n_groups as f64),
-        display_range,
-        panel,
-        chart.x_label_text().unwrap_or("").to_string(),
-        chart.y_label_text().unwrap_or("").to_string(),
-        x_ticks,
-        Vec::new(),
-        chart.x_axis_spec(),
-        &y_axis_spec,
-        theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
+        let x_ticks: Vec<AxisTick> = x_levels
+            .iter()
+            .enumerate()
+            .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
+            .collect();
+        context.layout_with_ticks(
+            (0.0, n_groups as f64),
+            display_range,
+            panel,
+            chart.x_label_text().unwrap_or("").to_string(),
+            chart.y_label_text().unwrap_or("").to_string(),
+            x_ticks,
+            Vec::new(),
+            chart.x_axis_spec(),
+            &y_axis_spec,
+            theme,
+        )
+    })?;
     let proj = &layout.projection;
 
     let n_grid: usize = 64;

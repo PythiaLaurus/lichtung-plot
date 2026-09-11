@@ -68,19 +68,198 @@ struct CanvasPlan {
 struct PreparedCanvasInputs {
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
+    shared_x: Vec<Option<(f64, f64)>>,
 }
 
-struct PreparedCanvasRound {
+struct PreparedCanvasRound<'a> {
     themes: Arc<ResolvedCanvasThemes>,
     canvas_layout: CanvasLayout,
     plots: Vec<Option<Plot>>,
     shared_legend: Option<(String, Arc<[LegendEntry]>)>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
+    shared_x: &'a [Option<(f64, f64)>],
 }
 
 #[cfg(test)]
 mod d1_tests {
     use super::*;
+
+    #[test]
+    fn shared_x_member_rejections_precede_font_discovery() {
+        let numeric = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        );
+        let categorical = Plot::boxplot(
+            crate::CategoryValues::new("x", ["a", "b"]).unwrap(),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .erase();
+        for (member, expected) in [
+            (Some(categorical), "categorical x axis"),
+            (
+                Some(numeric.clone().x_limits(0.0, 1.0).erase()),
+                "explicit x limits",
+            ),
+            (None, "unconfigured panel"),
+        ] {
+            let mut canvas = Canvas::grid(1, 2)
+                .unwrap()
+                .panel(0, 0, numeric.clone())
+                .unwrap()
+                .x_range_group([(0, 0), (0, 1)])
+                .unwrap();
+            if let Some(member) = member {
+                canvas.panels[1] = Some(member);
+            }
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            let error = canvas.render_scene().unwrap_err();
+            assert!(
+                matches!(&error, Error::Data(message) if message.contains(expected)),
+                "{error}"
+            );
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn shared_x_domains_are_prepared_once_and_exact_containment_is_prefont() {
+        let member = |values| {
+            Plot::scatter(
+                crate::NumericValues::new("x", values),
+                crate::NumericValues::new("y", [1.0, 2.0]),
+            )
+            .legend(crate::LegendPolicy::Hidden)
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, member([0.0, 1.0]))
+            .unwrap()
+            .panel(0, 1, member([10.0, 20.0]))
+            .unwrap()
+            .x_range_group([(0, 0), (0, 1)])
+            .unwrap()
+            .size(1200, 800);
+        crate::plots::shared_x::DOMAIN_PREPARATIONS.with(|count| count.set(0));
+        let root = canvas.preflight_plan().unwrap();
+        let shared = root.prepared().shared_x[0].unwrap();
+        assert_eq!(root.prepared().shared_x[1], Some(shared));
+        assert!(shared.0 <= 0.0 && shared.1 >= 20.0);
+        assert_eq!(
+            crate::plots::shared_x::DOMAIN_PREPARATIONS.with(std::cell::Cell::get),
+            2
+        );
+
+        let cached = canvas.render_scene().unwrap();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
+        let uncached = canvas.render_scene();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE
+            .with(|disabled| disabled.set(false));
+        assert_eq!(cached.svg_bytes(), uncached.unwrap().svg_bytes());
+
+        let mut invalid = canvas;
+        invalid.panels[0] = Some(
+            member([0.0, 1.0])
+                .x_ticks(vec![crate::AxisTick::new(1000.0, "outside")])
+                .erase(),
+        );
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = invalid.render_scene().unwrap_err();
+        assert!(
+            error.to_string().contains("outside resolved shared range"),
+            "{error}"
+        );
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn invalid_shared_x_family_domains_precede_font_discovery() {
+        let invalid = [
+            Plot::scatter(
+                crate::NumericValues::new("x", [f64::NAN]),
+                crate::NumericValues::new("y", [1.0]),
+            )
+            .erase(),
+            Plot::density(crate::NumericValues::new("x", [1.0])).erase(),
+            Plot::qq(crate::NumericValues::new("x", [1.0])).erase(),
+            Plot::forest(
+                crate::CategoryValues::new("term", ["a"]).unwrap(),
+                crate::NumericValues::new("estimate", [0.0]),
+                crate::Bounds::new(
+                    crate::NumericValues::new("lower", [0.0]),
+                    crate::NumericValues::new("upper", [1.0]),
+                ),
+                1.0,
+            )
+            .scale(crate::AxisScale::Log10)
+            .erase(),
+        ];
+        for plot in invalid {
+            let mut canvas = Canvas::grid(1, 2)
+                .unwrap()
+                .panel(
+                    0,
+                    1,
+                    Plot::scatter(
+                        crate::NumericValues::new("x", [1.0, 2.0]),
+                        crate::NumericValues::new("y", [1.0, 2.0]),
+                    ),
+                )
+                .unwrap()
+                .x_range_group([(0, 0), (0, 1)])
+                .unwrap();
+            canvas.panels[0] = Some(plot);
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            assert!(matches!(canvas.render_scene(), Err(Error::Data(_))));
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn shared_x_forest_union_is_not_log_transformed_twice() {
+        let forest = || {
+            Plot::forest(
+                crate::CategoryValues::new("term", ["a"]).unwrap(),
+                crate::NumericValues::new("estimate", [1.0]),
+                crate::Bounds::new(
+                    crate::NumericValues::new("lower", [0.1]),
+                    crate::NumericValues::new("upper", [10.0]),
+                ),
+                1.0,
+            )
+            .scale(crate::AxisScale::Log10)
+            .x_ticks(vec![
+                crate::AxisTick::new(0.1, "low"),
+                crate::AxisTick::new(10.0, "high"),
+            ])
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, forest())
+            .unwrap()
+            .panel(0, 1, forest())
+            .unwrap()
+            .x_range_group([(0, 0), (0, 1)])
+            .unwrap()
+            .size(1200, 800);
+        let root = canvas.preflight_plan().unwrap();
+        assert_eq!(
+            root.prepared().shared_x[0],
+            Some(crate::layout::continuous_auto_range(
+                (-1.0, 1.0),
+                &crate::layout::AxisSpec::default()
+            ))
+        );
+    }
 
     #[test]
     #[expect(
@@ -138,6 +317,7 @@ mod d1_tests {
                         assigned,
                         round,
                         &mut children,
+                        &[],
                     )?;
                     if calls == 2 {
                         retained_neighbor = Some(Arc::clone(&plan.panels[1].panel_plan));
@@ -294,6 +474,7 @@ mod d1_tests {
                             assigned,
                             round,
                             &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
+                            &[],
                         )?,
                     ))
                 },
@@ -390,6 +571,7 @@ mod d1_tests {
                         assigned,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
+                        &[],
                     )?,
                 ))
             },
@@ -975,6 +1157,14 @@ impl Canvas {
                         "canvas x-range group panel {index} has explicit x limits"
                     )));
                 }
+                if plot
+                    .automatic_axis_category_values(plot.kind(), true)
+                    .is_some()
+                {
+                    return Err(Error::Data(format!(
+                        "canvas x-range group panel {index} has a categorical x axis"
+                    )));
+                }
             }
         }
         for title in &self.row_titles {
@@ -991,6 +1181,53 @@ impl Canvas {
             }
         }
         Ok(())
+    }
+
+    fn prepare_shared_x(
+        &self,
+        stage: &mut crate::layout::kernel::PreparedStage<'_>,
+    ) -> Result<Vec<Option<(f64, f64)>>, Error> {
+        let mut ranges = Vec::new();
+        if self.x_range_groups.is_empty() {
+            return Ok(ranges);
+        }
+        stage.claim_topology_slots(self.panels.len() as u128)?;
+        stage.reserve_prepared(&mut ranges, self.panels.len(), "shared x domains")?;
+        ranges.resize(self.panels.len(), None);
+        for group in &self.x_range_groups {
+            let mut shared: Option<(f64, f64)> = None;
+            for &index in group {
+                let plot = self.panels[index]
+                    .as_ref()
+                    .expect("validated shared x member");
+                let range = crate::plots::shared_x::domain(plot, &stage.generation_resources())?;
+                shared = Some(
+                    shared.map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
+                );
+            }
+            let shared = shared.expect("validated nonempty shared x group");
+            for &index in group {
+                let plot = self.panels[index]
+                    .as_ref()
+                    .expect("validated shared x member");
+                if let Some(ticks) = plot.explicit_x_ticks() {
+                    for tick in ticks {
+                        let position = if plot.kind() == PlotKind::Forest
+                            && plot.axis_scale_spec() == crate::AxisScale::Log10
+                        {
+                            tick.position.log10()
+                        } else {
+                            tick.position
+                        };
+                        if !position.is_finite() || position < shared.0 || position > shared.1 {
+                            return Err(Error::Data(format!("x-axis explicit tick position {} is outside resolved shared range {}..{}", tick.position, shared.0, shared.1)));
+                        }
+                    }
+                }
+                ranges[index] = Some(shared);
+            }
+        }
+        Ok(ranges)
     }
 
     fn row_title_plan(
@@ -1089,12 +1326,14 @@ impl Canvas {
                     }
                 }
                 self.validate_structure()?;
+                let shared_x = self.prepare_shared_x(prepared_stage)?;
                 let (mut census, scalar_presence) =
                     self.foundational_text_census(&themes, prepared_stage)?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
                 Ok(PreparedCanvasInputs {
                     themes,
                     text_census: census,
+                    shared_x,
                 })
             },
             |prepared, assigned, round| {
@@ -1103,6 +1342,7 @@ impl Canvas {
                     assigned,
                     round,
                     &mut children,
+                    &prepared.shared_x,
                 )?;
                 children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, Box::new(plan)))
@@ -1331,10 +1571,11 @@ impl Canvas {
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
+        shared_x: &[Option<(f64, f64)>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
-        let prepared = self.prepare_canvas_round(themes, assigned, round, children)?;
+        let prepared = self.prepare_canvas_round(themes, assigned, round, children, shared_x)?;
         let mut compact_changes = true;
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return match self.build_canvas_attempt(
@@ -1431,13 +1672,14 @@ impl Canvas {
             .into_error())
     }
 
-    fn prepare_canvas_round(
+    fn prepare_canvas_round<'a>(
         &self,
         themes: Arc<ResolvedCanvasThemes>,
         assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
-    ) -> Result<PreparedCanvasRound, Error> {
+        shared_x: &'a [Option<(f64, f64)>],
+    ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "layout", themes.root());
@@ -1486,7 +1728,7 @@ impl Canvas {
                             |(_, levels)| plot.clone().with_global_hue_levels(levels.clone()),
                         );
                     plot.with_canvas_size(width, height)
-                        .with_measured_composed_axis_text()
+                        .with_parent_axis_gutters()
                         .with_render_scope(format!("panel-{index}"))
                 })
             })
@@ -1502,6 +1744,7 @@ impl Canvas {
             plots,
             shared_legend: shared_legend.map(|(title, entries)| (title, entries.into())),
             body_probes,
+            shared_x,
         })
     }
 
@@ -1710,49 +1953,18 @@ impl Canvas {
             }
         }
         if !self.x_range_groups.is_empty() {
-            let mut ranges = vec![None; plots.len()];
-            let mut domains = vec![None; plots.len()];
-            for (index, plot) in plots.iter().enumerate() {
-                let Some(plot) = plot else { continue };
-                let theme = themes
-                    .plot(index)
-                    .expect("configured canvas panel has a resolved theme");
-                #[cfg(test)]
-                record_canvas_theme(index, "grouped-x-range-plan", theme);
-                let result = children.canvas_probe(
-                    plot,
-                    provisional[index],
-                    theme,
-                    index,
-                    MeasurementPhase::Range,
-                    round,
-                )?;
-                let address = crate::layout::ComponentAddress::root().child(
-                    crate::layout::AddressRole::CanvasCell,
-                    u32::try_from(index)
-                        .map_err(|_| Error::Render("canvas address overflowed".into()))?,
-                )?;
-                let base = result.layout.projection.x_range();
-                ranges[index] = Some(
-                    round
-                        .domain(&address, FeedbackKind::AutomaticDomainX)
-                        .map_or(base, |range| (base.0.min(range.0), base.1.max(range.1))),
-                );
-                domains[index] = Some(result.x_domain);
-            }
             for group in &self.x_range_groups {
                 let mut shared: Option<(f64, f64)> = None;
                 for &index in group {
-                    if domains[index] != Some(AxisDomain::Continuous) {
-                        return Err(Error::Data(format!(
-                            "canvas x-range group panel {index} has a categorical x axis"
-                        )));
-                    }
-                    let range = ranges[index].ok_or_else(|| {
-                        Error::Data(format!(
-                            "canvas x-range group references unconfigured panel {index}"
-                        ))
-                    })?;
+                    let base = prepared.shared_x[index].expect("prepared shared x member");
+                    let address = crate::layout::ComponentAddress::root().child(
+                        crate::layout::AddressRole::CanvasCell,
+                        u32::try_from(index)
+                            .map_err(|_| Error::Render("canvas address overflowed".into()))?,
+                    )?;
+                    let range = round
+                        .domain(&address, FeedbackKind::AutomaticDomainX)
+                        .map_or(base, |range| (base.0.min(range.0), base.1.max(range.1)));
                     shared = Some(shared.map_or(range, |current| {
                         (current.0.min(range.0), current.1.max(range.1))
                     }));
@@ -1765,7 +1977,11 @@ impl Canvas {
                 }
                 for &index in group {
                     let plot = plots[index].as_ref().expect("validated grouped panel");
-                    plots[index] = Some(plot.clone().with_planned_x_limits(shared));
+                    plots[index] = Some(plot.clone().with_resolved_facet_ranges(
+                        plot.kind(),
+                        Some(shared),
+                        None,
+                    ));
                 }
             }
         }
@@ -1901,7 +2117,9 @@ impl Canvas {
             let title = plot.title_text().filter(|title| !title.is_empty());
             let subtitle = plot.subtitle_text().filter(|subtitle| !subtitle.is_empty());
             let requirement = match fit::outcome(PanelRequirements::measure_header(
-                &result.layout,
+                result.axes.as_ref().ok_or_else(|| {
+                    Error::Render("composed panel is missing its measured axes".into())
+                })?,
                 theme,
                 title,
                 subtitle,
@@ -2357,13 +2575,14 @@ impl Canvas {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
                 Error::Render("composed canvas panel disappeared during preflight".into())
             })?;
+            #[cfg(test)]
             let theme = plan
                 .themes
                 .plot(panel.index)
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "grid-render", theme);
-            crate::decorations::apply::apply_grid(plot, &panel.panel_plan.result, theme, backend)?;
+            crate::decorations::apply::apply_grid(plot, &panel.panel_plan, backend)?;
         }
         for panel in &plan.panels {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
@@ -2401,7 +2620,7 @@ impl Canvas {
             if let Some(significance) = &panel.panel_plan.result.significance {
                 crate::significance::render(plot, significance, theme, backend)?;
             }
-            crate::decorations::apply::apply_axes(plot, &panel.panel_plan, theme, backend)?;
+            crate::decorations::apply::apply_axes(plot, &panel.panel_plan, backend)?;
             crate::decorations::apply::apply_planned_legend(
                 plot,
                 panel.panel_plan.legend.as_ref(),

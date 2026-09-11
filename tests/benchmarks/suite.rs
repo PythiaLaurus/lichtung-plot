@@ -49,7 +49,8 @@ pub(super) fn measure_case<R>(
     assert_eq!(
         result.is_ok(),
         expected_success,
-        "unexpected outcome: {name}"
+        "unexpected outcome: {name}: {:?}",
+        result.as_ref().err()
     );
     // Replay, reads, and caller assertions are outside both timing and observation.
     let (output, error) = match result {

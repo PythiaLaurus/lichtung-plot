@@ -72,7 +72,7 @@ fn preflight_panels(
     for (index, facet) in panels.iter().enumerate() {
         let panel_plot = base_plot
             .clone()
-            .with_render_scope(facet.render_scope())
+            .with_render_scope(facet.render_scope(base_plot.data())?)
             .with_significance_subset(facet.significance_selectors());
         let context = PlotRenderContext::new(
             crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),

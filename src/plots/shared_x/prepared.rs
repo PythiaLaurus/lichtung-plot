@@ -1,0 +1,986 @@
+use crate::data::PlotData;
+use crate::layout::{AxisSpec, AxisTick};
+use crate::spec::{AxisScale, FacetScales, PlotKind};
+use crate::{Error, Plot};
+
+/// Scientific coordinates and raw category sources, never pixel or font state.
+#[derive(Debug)]
+pub(crate) struct PreparedAxes {
+    pub(crate) ranges: [(f64, f64); 2],
+    pub(crate) categories: [Option<Vec<AxisTick>>; 2],
+    pub(crate) display_categories: [Option<Vec<String>>; 2],
+    pub(crate) labels: [String; 2],
+    pub(crate) specs: [AxisSpec; 2],
+    pub(crate) logarithmic: bool,
+}
+
+pub(crate) struct PreparedPlotAxes {
+    pub(crate) axes: std::sync::Arc<Vec<(Option<String>, PreparedAxes)>>,
+    pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
+}
+
+impl PreparedPlotAxes {
+    pub(crate) fn attach(&self, mut plot: Plot) -> Plot {
+        plot.prepared_axes = self.axes.clone();
+        plot.prepared_matrix_axes.clone_from(&self.matrix);
+        plot
+    }
+}
+
+pub(crate) fn prepare_plot(
+    source: &Plot,
+    resources: &crate::font::canonical::OperationGenerationResources,
+) -> Result<PreparedPlotAxes, Error> {
+    let mut matrix = None;
+    let mut retained = Vec::new();
+    let source_data = source
+        .configured_source_rows()?
+        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
+        .with_axis_resources(resources);
+    if source.has_facets() {
+        let panels = crate::orchestrator::text_census_panels(source, source_data)?;
+        let groups = source
+            .group_col()
+            .filter(|_| {
+                matches!(
+                    source.kind(),
+                    PlotKind::Bar
+                        | PlotKind::StackedBar
+                        | PlotKind::HorizontalBar
+                        | PlotKind::StackedHorizontalBar
+                )
+            })
+            .map(|column| {
+                source_data.source_levels(&crate::data::strict_strings(
+                    source_data,
+                    column,
+                    "facet graphical group",
+                )?)
+            })
+            .transpose()?;
+        let conditions = if source.kind() == PlotKind::Trajectory
+            && source
+                .x_col()
+                .map(|column| {
+                    source_data
+                        .column(column)
+                        .map(|column| !column.is_numeric())
+                })
+                .transpose()?
+                .unwrap_or(false)
+        {
+            Some(
+                source_data.source_levels(&crate::data::strict_normalized_strings(
+                    source_data,
+                    source.x_col().expect("categorical x"),
+                    "trajectory",
+                    "condition",
+                )?)?,
+            )
+        } else {
+            None
+        };
+        source_data.reserve_source(&mut retained, panels.len())?;
+        for panel in panels {
+            let fixed_data = matches!(
+                source.facet_scales_spec(),
+                FacetScales::Fixed | FacetScales::FreeY
+            )
+            .then_some(source_data);
+            let data = panel.data().with_axis_resources(resources);
+            let facet = crate::data::FacetAxisSources {
+                groups: groups.as_deref(),
+                conditions: conditions.as_deref(),
+            };
+            let axes = prepare(source, data, fixed_data, Some(facet))?;
+            retained.push((Some(panel.scope(source_data)?), axes));
+        }
+        for (side, fixed) in [
+            matches!(
+                source.facet_scales_spec(),
+                FacetScales::Fixed | FacetScales::FreeY
+            ),
+            matches!(
+                source.facet_scales_spec(),
+                FacetScales::Fixed | FacetScales::FreeX
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if !fixed {
+                continue;
+            }
+            reconcile_facet_axis(&mut retained, side, source_data)?;
+        }
+    } else if source.kind() == PlotKind::Matrix {
+        matrix =
+            Some(source_data.source_arc(crate::plots::matrix::prepare_axes(source, source_data)?)?);
+    } else {
+        source_data.reserve_source(&mut retained, 1)?;
+        retained.push((
+            source
+                .axis_scope()
+                .map(|scope| source_data.copy_source_string(scope))
+                .transpose()?,
+            prepare(source, source_data, None, None)?,
+        ));
+    }
+    Ok(PreparedPlotAxes {
+        axes: source_data.source_arc(retained)?,
+        matrix,
+    })
+}
+
+fn reconcile_facet_axis(
+    retained: &mut [(Option<String>, PreparedAxes)],
+    side: usize,
+    data: PlotData<'_>,
+) -> Result<(), Error> {
+    let Some((_, first)) = retained.first() else {
+        return Ok(());
+    };
+    for (_, axes) in retained.iter() {
+        data.claim_source_visits(1)?;
+        if let (Some(a), Some(b)) = (&axes.categories[side], &first.categories[side]) {
+            for (a, b) in a.iter().zip(b) {
+                data.claim_source_visits(1)?;
+                data.claim_source_visits(a.label.len().min(b.label.len()))?;
+            }
+        }
+        if axes.categories[side] != first.categories[side] {
+            return Err(Error::Render(format!("fixed facet {} axis requires identical categorical levels and ordering in every panel; use a free scale or provide complete panel data", if side == 0 { "x" } else { "y" })));
+        }
+    }
+    if first.categories[side].is_none() {
+        data.claim_source_visits(retained.len())?;
+        let union = retained
+            .iter()
+            .map(|(_, axes)| axes.ranges[side])
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |a, b| {
+                (a.0.min(b.0), a.1.max(b.1))
+            });
+        validate_range(union)?;
+        data.claim_source_visits(retained.len())?;
+        for (_, axes) in retained {
+            axes.ranges[side] = union;
+        }
+    }
+    Ok(())
+}
+
+fn validate_range(range: (f64, f64)) -> Result<(), Error> {
+    if !range.0.is_finite() || !range.1.is_finite() || range.0 >= range.1 {
+        return Err(Error::Data(
+            "axis domain must be finite and strictly ascending".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::too_many_lines,
+    reason = "closed scientific axis dispatch; category lengths are bounded source rows"
+)]
+fn prepare(
+    chart: &Plot,
+    data: PlotData<'_>,
+    fixed_data: Option<PlotData<'_>>,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
+) -> Result<PreparedAxes, Error> {
+    // Two scalar domain results and their fixed five-sample nice-range seeds.
+    data.claim_source_visits(12)?;
+    #[cfg(test)]
+    super::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
+    let mut categories: [Option<Vec<String>>; 2] = [None, None];
+    let numeric = |column: Option<&str>| -> Result<Vec<f64>, Error> {
+        crate::data::strict_finite_f64(
+            data,
+            column.ok_or_else(|| Error::Data("axis column not set".into()))?,
+            "axis",
+        )
+    };
+    let strings = |column: Option<&str>| -> Result<Vec<String>, Error> {
+        crate::data::strict_strings(
+            data,
+            column.ok_or_else(|| Error::Data("axis category column not set".into()))?,
+            "axis",
+        )
+    };
+    let mut ranges = match chart.kind() {
+        PlotKind::Regression => crate::plots::regression::axis_ranges(chart, data)?,
+        PlotKind::Scatter => {
+            let points = crate::data::aligned_finite_f64(
+                data,
+                chart
+                    .x_col()
+                    .ok_or_else(|| Error::Data("x column not set".into()))?,
+                chart
+                    .y_col()
+                    .ok_or_else(|| Error::Data("y column not set".into()))?,
+                "axis",
+            )?;
+            data.claim_source_visits(points.len())?;
+            data.claim_source_visits(points.len())?;
+            [
+                crate::layout::continuous_auto_range(
+                    crate::data::min_max(points.iter().map(|p| p.0), "axis")?,
+                    chart.x_axis_spec(),
+                ),
+                crate::layout::continuous_auto_range(
+                    crate::data::min_max(points.iter().map(|p| p.1), "axis")?,
+                    chart.y_axis_spec(),
+                ),
+            ]
+        }
+        PlotKind::Histogram => crate::plots::histogram::axis_ranges(chart, data)?,
+        PlotKind::Density => crate::plots::density::axis_ranges(chart, data)?,
+        PlotKind::Qq => {
+            let x = super::domain_with_data(chart, data)?;
+            let values = numeric(chart.x_col())?;
+            data.claim_source_visits(values.len())?;
+            [
+                x,
+                crate::plots::qq::qq_display_range(
+                    crate::data::min_max(values, "Q-Q")?,
+                    chart.y_axis_spec(),
+                    "y-axis",
+                )?,
+            ]
+        }
+        PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+            let (ranges, levels) = crate::plots::line::axis_inputs(chart, data, facet)?;
+            categories[0] = levels;
+            ranges
+        }
+        PlotKind::Marginal => crate::plots::marginal::axis_ranges(chart, data)?,
+        PlotKind::Bar
+        | PlotKind::StackedBar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedHorizontalBar => {
+            use crate::plots::bar_data::{self, BarMode};
+            let mode = if matches!(
+                chart.kind(),
+                PlotKind::StackedBar | PlotKind::StackedHorizontalBar
+            ) {
+                BarMode::Stacked
+            } else if chart.group_col().is_some() {
+                BarMode::Grouped
+            } else {
+                BarMode::Single
+            };
+            let (levels, range) = bar_data::axis_inputs(chart, data, mode, facet)?;
+            let horizontal = matches!(
+                chart.kind(),
+                PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+            );
+            let slots = (0.0, levels.len() as f64);
+            categories[usize::from(horizontal)] = Some(levels);
+            let values = crate::layout::anchored_auto_range(
+                range,
+                if horizontal {
+                    chart.x_axis_spec()
+                } else {
+                    chart.y_axis_spec()
+                },
+                0.0,
+            );
+            if horizontal {
+                [values, slots]
+            } else {
+                [slots, values]
+            }
+        }
+        PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+            let (levels, values) = if let Some(input) = chart.raincloud_geometry_input() {
+                let range = input.validate(Some(data))?;
+                (
+                    data.collect_source(
+                        input
+                            .groups
+                            .iter()
+                            .map(|group| data.copy_source_string(&group.category)),
+                    )?,
+                    range,
+                )
+            } else {
+                let family = match chart.kind() {
+                    PlotKind::Boxplot => "boxplot",
+                    PlotKind::Violin => "violin",
+                    _ => "raincloud",
+                };
+                let sample = crate::plots::distribution_sample::prepare(chart, data, family)?;
+                let values = if chart.kind() == PlotKind::Boxplot {
+                    for group in &sample.groups {
+                        data.claim_source_visits(group.observations.len())?;
+                    }
+                    crate::data::min_max(
+                        sample
+                            .groups
+                            .iter()
+                            .flat_map(|group| group.observations.iter().map(|value| value.value)),
+                        "boxplot",
+                    )?
+                } else {
+                    let groups = data.collect_source(sample.groups.iter().map(|group| {
+                        data.collect_source(group.observations.iter().map(|value| Ok(value.value)))
+                    }))?;
+                    for group in &groups {
+                        data.claim_source_visits(group.len())?;
+                        if group.len() >= 2 {
+                            data.claim_source_visits(group.len())?;
+                            data.claim_source_visits(group.len())?;
+                        }
+                    }
+                    crate::stats::distribution::kde_support_range(
+                        groups.iter().map(Vec::as_slice),
+                        2.0,
+                    )
+                    .ok_or_else(|| Error::Data("distribution: no finite KDE support".into()))?
+                };
+                (sample.x_levels, values)
+            };
+            let slots = (0.0, levels.len() as f64);
+            categories[0] = Some(levels);
+            [
+                slots,
+                crate::layout::continuous_auto_range(values, chart.y_axis_spec()),
+            ]
+        }
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest | PlotKind::Dumbbell => {
+            let levels = match chart.kind() {
+                PlotKind::PointInterval => {
+                    crate::plots::point_interval::axis_categories(chart, data)?
+                }
+                PlotKind::Dumbbell => crate::plots::dumbbell::axis_categories(chart, data)?,
+                _ => crate::plots::interval_estimate::axis_categories(
+                    chart,
+                    data,
+                    if chart.kind() == PlotKind::Forest {
+                        "forest"
+                    } else {
+                        "coefficient"
+                    },
+                )?,
+            };
+            let slots = (0.0, levels.len() as f64);
+            categories[1] = Some(levels);
+            let fallback = if chart.kind() != PlotKind::Dumbbell
+                && chart.x_axis_spec().limits.is_none()
+                && fixed_data.is_some()
+            {
+                let tuples = crate::plots::interval_estimate::prepare_estimate_tuples(
+                    chart,
+                    data,
+                    "estimate axis",
+                    chart.kind() != PlotKind::Coefficient,
+                )?;
+                data.claim_source_visits(tuples.len())?;
+                tuples
+                    .iter()
+                    .all(Option::is_none)
+                    .then_some(fixed_data)
+                    .flatten()
+            } else {
+                None
+            };
+            let x = if let Some(full_data) = fallback {
+                if chart.kind() == PlotKind::PointInterval {
+                    let tuples = crate::plots::interval_estimate::prepare_estimate_tuples(
+                        chart,
+                        full_data,
+                        "point_interval",
+                        true,
+                    )?;
+                    full_data.claim_source_visits(tuples.len())?;
+                    let range = crate::plots::interval_estimate::estimate_data_range(&tuples).ok_or_else(|| Error::Data("point_interval: all rows are not_estimable; set explicit x-axis limits".into()))?;
+                    crate::plots::point_interval::point_interval_display_range(
+                        range,
+                        chart.x_axis_spec(),
+                    )?
+                } else {
+                    crate::plots::interval_estimate::shared_x_domain(chart, full_data)?
+                }
+            } else {
+                super::domain_with_data(chart, data)?
+            };
+            [x, slots]
+        }
+        PlotKind::Interaction => {
+            let levels = data.source_levels(&strings(chart.x_col())?)?;
+            let (lo, hi) = chart
+                .interval_bound_cols()
+                .ok_or_else(|| Error::Data("interaction: interval columns not set".into()))?;
+            let lower = numeric(Some(lo))?;
+            let upper = numeric(Some(hi))?;
+            data.claim_source_visits(lower.len())?;
+            data.claim_source_visits(upper.len())?;
+            let slots = (0.0, levels.len() as f64);
+            categories[0] = Some(levels);
+            [
+                slots,
+                crate::layout::continuous_auto_range(
+                    crate::data::min_max(lower.into_iter().chain(upper), "axis")?,
+                    chart.y_axis_spec(),
+                ),
+            ]
+        }
+        PlotKind::Beeswarm | PlotKind::Waterfall => {
+            let levels = strings(if chart.kind() == PlotKind::Beeswarm {
+                chart.y_col()
+            } else {
+                chart.x_col()
+            })?;
+            let levels = if chart.kind() == PlotKind::Beeswarm {
+                data.source_levels(&levels)?
+            } else {
+                levels
+            };
+            let slots = chart
+                .y_axis_spec()
+                .limits
+                .unwrap_or((0.0, levels.len() as f64));
+            categories[1] = Some(levels);
+            [super::domain_with_data(chart, data)?, slots]
+        }
+        PlotKind::Heatmap => {
+            let [x, y] = crate::plots::heatmap::axis_categories(chart, data)?;
+            let ranges = [(0.0, x.len() as f64), (0.0, y.len() as f64)];
+            categories = [Some(x), Some(y)];
+            ranges
+        }
+        PlotKind::Matrix => {
+            return Err(Error::Render(
+                "Matrix has no single panel axis owner".into(),
+            ))
+        }
+    };
+    if let Some(shared) = chart.resolved_facet_x_range() {
+        ranges[0] = shared;
+    }
+    let logarithmic =
+        chart.kind() == PlotKind::Forest && chart.axis_scale_spec() == AxisScale::Log10;
+    let mut specs = [AxisSpec::default(), AxisSpec::default()];
+    for (side, source) in [chart.x_axis_spec(), chart.y_axis_spec()]
+        .into_iter()
+        .enumerate()
+    {
+        specs[side] = AxisSpec {
+            provenance: source.provenance,
+            limits: source.limits,
+            interval: source.interval,
+            exact_ticks: if logarithmic && side == 0 {
+                chart.projected_explicit_x_ticks(data)?
+            } else {
+                source
+                    .exact_ticks
+                    .as_ref()
+                    .map(|ticks| {
+                        data.collect_source(ticks.iter().map(|tick| {
+                            Ok(AxisTick::new(
+                                tick.position,
+                                data.copy_source_string(&tick.label)?,
+                            ))
+                        }))
+                    })
+                    .transpose()?
+            },
+        };
+    }
+    if logarithmic {
+        specs[0].limits = specs[0].limits.map(|(lo, hi)| (lo.log10(), hi.log10()));
+    }
+    let mut ticks = [None, None];
+    let mut display_categories = [None, None];
+    for side in 0..2 {
+        validate_range(ranges[side])?;
+        if let Some(levels) = categories[side].take() {
+            display_categories[side] = Some(chart.resolve_axis_label_domain(
+                if side == 0 {
+                    "x-axis categories"
+                } else {
+                    "y-axis categories"
+                },
+                levels.iter().map(String::as_str),
+                data,
+            )?);
+            let reverse = side == 1
+                && matches!(
+                    chart.kind(),
+                    PlotKind::PointInterval
+                        | PlotKind::Coefficient
+                        | PlotKind::Forest
+                        | PlotKind::Dumbbell
+                        | PlotKind::Heatmap
+                );
+            let count = levels.len() as f64;
+            let mut retained = Vec::new();
+            data.reserve_source(&mut retained, levels.len())?;
+            for (index, label) in levels.into_iter().enumerate() {
+                retained.push(AxisTick::new(
+                    if reverse {
+                        count - index as f64 - 0.5
+                    } else {
+                        index as f64 + 0.5
+                    },
+                    label,
+                ));
+            }
+            ticks[side] = Some(retained);
+        }
+        let spec = &specs[side];
+        if let Some(exact) = &spec.exact_ticks {
+            data.claim_source_visits(exact.len())?;
+            crate::layout::Axis::validate_ticks(
+                exact,
+                ranges[side],
+                if side == 0 { "x-axis" } else { "y-axis" },
+            )?;
+        }
+    }
+    let labels = if facet.is_some() {
+        [String::new(), String::new()]
+    } else {
+        chart.prepare_axis_labels(data)?
+    };
+    Ok(PreparedAxes {
+        ranges,
+        categories: ticks,
+        display_categories,
+        labels,
+        specs,
+        logarithmic,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BarInput, CategoryValues, FacetSpec, NumericValues};
+
+    #[test]
+    fn density_explicit_endpoint_ticks_use_display_limits_not_kde_support() {
+        let natural = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0]));
+        let plot = natural
+            .clone()
+            .x_limits(-100.0, 100.0)
+            .x_ticks(vec![
+                AxisTick::new(-100.0, "-100"),
+                AxisTick::new(100.0, "100"),
+            ])
+            .erase();
+        let natural = natural.erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let prepared = prepare_plot(&plot, &resources).unwrap();
+        assert_eq!(prepared.axes[0].1.ranges[0], (-100.0, 100.0));
+        assert_eq!(
+            crate::plots::density::axis_ranges(&natural, natural.data()).unwrap()[1],
+            prepared.axes[0].1.ranges[1]
+        );
+        assert_ne!(
+            crate::plots::density::axis_ranges(&natural, natural.data()).unwrap()[0],
+            prepared.axes[0].1.ranges[0]
+        );
+        plot.preflight().unwrap();
+    }
+
+    #[test]
+    fn retention_boundaries_share_the_operation_without_retaining_a_plot_clone() {
+        use crate::font::canonical::OperationGenerationResources;
+        let scatter = Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0, 3.0]),
+            NumericValues::new("y", [2.0, 1.0, 4.0]),
+        )
+        .erase();
+        let facets = Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0, 30.0]),
+            NumericValues::new("y", [2.0, 1.0, 40.0]),
+        )
+        .facet(FacetSpec::column(
+            CategoryValues::new("panel", ["a", "a", "b"]).unwrap(),
+        ))
+        .erase();
+        let matrix = Plot::matrix(vec![
+            NumericValues::new("first", [1.0, 2.0, 3.0]),
+            NumericValues::new("second", [2.0, 1.0, 4.0]),
+        ])
+        .erase();
+        for source in [scatter, facets, matrix] {
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            let count = std::sync::Arc::strong_count(&source.prepared_axes);
+            let resources = OperationGenerationResources::new();
+            let retained = prepare_plot(&source, &resources).unwrap();
+            assert_eq!(std::sync::Arc::strong_count(&source.prepared_axes), count);
+            let bytes = resources.byte_usage().unwrap();
+            let visits = resources.usage().unwrap().1;
+            for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+                assert!(matches!(
+                    prepare_plot(&source, &resources),
+                    Err(Error::Render(_))
+                ));
+            }
+            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+            prepare_plot(&source, &resources).unwrap();
+            // Unused text and policy values stay borrowed, not copied and charged.
+            let large = "unused".repeat(10_000);
+            let decorated = source
+                .clone()
+                .title(large.clone())
+                .caption(large.clone())
+                .labels(crate::Labels::humanized().alias("unreferenced", large));
+            let resources = OperationGenerationResources::with_test_limits(u128::MAX, bytes);
+            prepare_plot(&decorated, &resources).unwrap();
+            let attached = retained.attach(source);
+            assert!(std::sync::Arc::ptr_eq(
+                &attached.prepared_axes,
+                &retained.axes
+            ));
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_facet_comparisons_and_union_refuse_before_their_work_or_mutation() {
+        use crate::font::canonical::OperationGenerationResources;
+        let source = Plot::scatter(
+            NumericValues::new("x", [1.0]),
+            NumericValues::new("y", [1.0]),
+        )
+        .erase();
+        let axes = |range, label: Option<&str>| PreparedAxes {
+            ranges: [range, (0.0, 1.0)],
+            categories: [label.map(|label| vec![AxisTick::new(0.5, label)]), None],
+            display_categories: [None, None],
+            labels: [String::new(), String::new()],
+            specs: [AxisSpec::default(), AxisSpec::default()],
+            logarithmic: false,
+        };
+        for visits in [0, 2, 4, 5] {
+            let mut retained = [
+                (None, axes((0.0, 1.0), None)),
+                (None, axes((2.0, 3.0), None)),
+            ];
+            let resources = OperationGenerationResources::with_test_limits(visits, 0);
+            assert!(reconcile_facet_axis(
+                &mut retained,
+                0,
+                source.data().with_axis_resources(&resources)
+            )
+            .is_err());
+            assert_eq!(
+                retained.map(|(_, axes)| axes.ranges[0]),
+                [(0.0, 1.0), (2.0, 3.0)]
+            );
+        }
+        let mut retained = [
+            (None, axes((0.0, 1.0), None)),
+            (None, axes((2.0, 3.0), None)),
+        ];
+        let resources = OperationGenerationResources::with_test_limits(6, 0);
+        reconcile_facet_axis(
+            &mut retained,
+            0,
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap();
+        assert_eq!(retained.map(|(_, axes)| axes.ranges[0]), [(0.0, 3.0); 2]);
+        for (visits, expected) in [
+            (0, "work admission"),
+            (9, "work admission"),
+            (10, "identical categorical"),
+        ] {
+            let mut retained = [
+                (None, axes((0.0, 1.0), Some("one"))),
+                (None, axes((0.0, 1.0), Some("two"))),
+            ];
+            let resources = OperationGenerationResources::with_test_limits(visits, 0);
+            let error = reconcile_facet_axis(
+                &mut retained,
+                0,
+                source.data().with_axis_resources(&resources),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn borrowed_facet_panels_and_scope_sources_refuse_before_materialization() {
+        use crate::font::canonical::OperationGenerationResources;
+        let source = Plot::bar(
+            CategoryValues::new("category", ["a", "b", "a"]).unwrap(),
+            BarInput::estimates(NumericValues::new("value", [1.0, 2.0, 3.0])),
+        )
+        .facet(
+            FacetSpec::column(CategoryValues::new("panel", ["left", "right", "left"]).unwrap())
+                .scales(FacetScales::Free),
+        )
+        .erase();
+        for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
+            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+            assert!(crate::orchestrator::text_census_panels(
+                &source,
+                source.data().with_axis_resources(&resources)
+            )
+            .is_err());
+        }
+        let resources = OperationGenerationResources::new();
+        let panels = crate::orchestrator::text_census_panels(
+            &source,
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap();
+        assert_eq!(panels.len(), 2);
+        for (panel, (scope, rows)) in panels.iter().zip([
+            ("facet panel=left", vec![0, 2]),
+            ("facet panel=right", vec![1]),
+        ]) {
+            assert!(std::ptr::eq(panel.plot(), std::ptr::from_ref(&source)));
+            assert_eq!(
+                (0..panel.data().height())
+                    .map(|row| panel.data().source_row(row))
+                    .collect::<Vec<_>>(),
+                rows
+            );
+            assert_eq!(panel.scope(source.data()).unwrap(), scope);
+            for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
+                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+                assert!(panel
+                    .scope(source.data().with_axis_resources(&resources))
+                    .is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn borrowed_facet_axis_views_preserve_bootstrap_and_global_conditions() {
+        let source = Plot::bar(
+            CategoryValues::new("category", ["a", "a", "a", "a", "a", "a", "b", "b"]).unwrap(),
+            BarInput::samples(NumericValues::new(
+                "value",
+                [1.0, 4.0, 2.0, 8.0, 3.0, 7.0, 5.0, 9.0],
+            )),
+        )
+        .series(
+            CategoryValues::new("series", ["g1", "g1", "g2", "g2", "g2", "g2", "g2", "g2"])
+                .unwrap(),
+        )
+        .facet(
+            FacetSpec::column(
+                CategoryValues::new(
+                    "panel",
+                    [
+                        "left", "left", "left", "left", "right", "right", "right", "right",
+                    ],
+                )
+                .unwrap(),
+            )
+            .scales(FacetScales::Free),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let retained = prepare_plot(&source, &resources).unwrap();
+        let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
+        for (panel, (scope, axes)) in panels.iter().zip(retained.axes.iter()) {
+            let child = source
+                .clone()
+                .without_facets()
+                .with_global_group_levels(vec!["g1".to_owned(), "g2".to_owned()]);
+            let expected = crate::plots::bar_data::prepare(
+                &child,
+                panel.data(),
+                crate::plots::bar_data::BarMode::Grouped,
+            )
+            .unwrap();
+            assert_eq!(
+                scope.as_deref(),
+                Some(panel.scope(source.data()).unwrap().as_str())
+            );
+            assert_eq!(
+                axes.ranges[1],
+                crate::layout::anchored_auto_range(expected.value_range, child.y_axis_spec(), 0.0)
+            );
+            assert_eq!(
+                axes.categories[0]
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|tick| tick.label.as_str())
+                    .collect::<Vec<_>>(),
+                expected.categories
+            );
+        }
+        let trajectory = Plot::trajectory(
+            CategoryValues::new("condition", ["before", "after", "before", "later"]).unwrap(),
+            NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+            CategoryValues::new("subject", ["one", "one", "two", "two"]).unwrap(),
+        )
+        .facet(
+            FacetSpec::column(
+                CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+            )
+            .scales(FacetScales::Free),
+        )
+        .erase();
+        let retained = prepare_plot(&trajectory, &resources).unwrap();
+        for (_, axes) in retained.axes.iter() {
+            assert_eq!(axes.ranges[0], (0.0, 3.0));
+            assert_eq!(
+                axes.categories[0]
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|tick| tick.label.as_str())
+                    .collect::<Vec<_>>(),
+                ["before", "after", "later"]
+            );
+            assert_eq!(axes.labels, ["", ""]);
+        }
+    }
+
+    #[test]
+    fn invalid_category_and_log_sources_reject_before_discovery() {
+        let duplicate = CategoryValues::new("term", ["a", "a"]).unwrap();
+        let values = NumericValues::new("estimate", [1.0, 2.0]);
+        let bounds = || {
+            crate::Bounds::new(
+                NumericValues::new("lower", [0.5, 1.5]),
+                NumericValues::new("upper", [1.5, 2.5]),
+            )
+        };
+        let plots = [
+            Plot::matrix(vec![
+                NumericValues::new("constant", [1.0, 1.0]),
+                NumericValues::new("variable", [1.0, 2.0]),
+            ])
+            .erase(),
+            Plot::coefficient(
+                duplicate.clone(),
+                crate::CoefficientInput::estimates(values.clone()),
+            )
+            .erase(),
+            Plot::forest(duplicate.clone(), values.clone(), bounds(), 1.0).erase(),
+            Plot::point_interval(duplicate, values, bounds()).erase(),
+            Plot::forest(
+                CategoryValues::new("term", ["a", "b"]).unwrap(),
+                NumericValues::new("estimate", [1.0, 2.0]),
+                bounds(),
+                1.0,
+            )
+            .scale(AxisScale::Log10)
+            .x_ticks(vec![AxisTick::new(1000.0, "outside")])
+            .erase(),
+            Plot::forest(
+                CategoryValues::new("term", ["a", "b"]).unwrap(),
+                NumericValues::new("estimate", [0.0, 2.0]),
+                crate::Bounds::new(
+                    NumericValues::new("lower", [-1.0, 1.0]),
+                    NumericValues::new("upper", [1.0, 3.0]),
+                ),
+                1.0,
+            )
+            .scale(AxisScale::Log10)
+            .x_limits(0.1, 10.0)
+            .erase(),
+        ];
+        for plot in plots {
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+            assert!(plot.preflight().is_err());
+            assert_eq!(
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn mixed_facet_policies_retain_actual_numeric_unions_and_local_categories() {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let categories = CategoryValues::new("category", ["a", "b", "a", "c"]).unwrap();
+        let facets = CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap();
+        let plot = Plot::bar(
+            categories,
+            BarInput::estimates(NumericValues::new("value", [1.0, 2.0, 100.0, 200.0])),
+        );
+        let free = plot
+            .clone()
+            .facet(FacetSpec::column(facets.clone()).scales(FacetScales::Free))
+            .erase();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let free = prepare_plot(&free, &resources).unwrap().attach(free);
+        let union = (
+            free.prepared_axes[0].1.ranges[1]
+                .0
+                .min(free.prepared_axes[1].1.ranges[1].0),
+            free.prepared_axes[0].1.ranges[1]
+                .1
+                .max(free.prepared_axes[1].1.ranges[1].1),
+        );
+        let mixed = plot
+            .clone()
+            .facet(FacetSpec::column(facets.clone()).scales(FacetScales::FreeX))
+            .erase();
+        let mixed = prepare_plot(&mixed, &resources).unwrap().attach(mixed);
+        for (index, (_, axes)) in mixed.prepared_axes.iter().enumerate() {
+            assert_eq!(axes.ranges[1], union);
+            assert_eq!(
+                axes.categories[0],
+                free.prepared_axes[index].1.categories[0]
+            );
+        }
+        for scales in [FacetScales::Fixed, FacetScales::FreeY] {
+            let invalid = plot
+                .clone()
+                .facet(FacetSpec::column(facets.clone()).scales(scales));
+            let error = invalid.preflight().unwrap_err();
+            assert!(
+                error.to_string().contains("identical categorical"),
+                "{error}"
+            );
+        }
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        mixed.preflight().unwrap();
+    }
+
+    #[test]
+    fn free_y_uses_histogram_edge_union_and_keeps_actual_panel_heights() {
+        let source = Plot::histogram(crate::HistogramInput::samples(NumericValues::new(
+            "value",
+            [0.0, 1.0, 10.0, 20.0, 20.0],
+        )))
+        .facet(
+            FacetSpec::column(CategoryValues::new("panel", ["a", "a", "b", "b", "b"]).unwrap())
+                .scales(FacetScales::FreeY),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let prepared = prepare_plot(&source, &resources)
+            .unwrap()
+            .attach(source.clone());
+        let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
+        let local = panels
+            .iter()
+            .map(|panel| crate::plots::histogram::axis_ranges(panel.plot(), panel.data()).unwrap())
+            .collect::<Vec<_>>();
+        let x = (
+            local[0][0].0.min(local[1][0].0),
+            local[0][0].1.max(local[1][0].1),
+        );
+        for (index, (_, axes)) in prepared.prepared_axes.iter().enumerate() {
+            assert_eq!(axes.ranges, [x, local[index][1]]);
+        }
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}

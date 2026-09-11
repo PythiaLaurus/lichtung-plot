@@ -17,6 +17,7 @@ pub(super) struct PlotPlan {
 }
 
 struct PreparedPlotInputs {
+    axes: crate::plots::shared_x::PreparedPlotAxes,
     theme: Box<ResolvedTheme>,
     text_census: crate::layout::PreparedTextCensus,
 }
@@ -157,6 +158,10 @@ impl PlotPlan {
         Self::new_with_theme_factory(source, kind, || Box::new(theme))
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "ordered axis preparation, font preparation, measurement, and capture lifecycle"
+    )]
     fn new_with_theme_factory(
         source: &Plot,
         kind: PlotKind,
@@ -171,9 +176,10 @@ impl PlotPlan {
             |prepared_stage| {
                 let theme = resolve_theme();
                 source.validate_configuration(kind)?;
-                if source.has_facets() {
-                    super::facets::validate_before_font_preparation(source, kind)?;
-                }
+                let axes = crate::plots::shared_x::prepare_plot(
+                    source,
+                    &prepared_stage.generation_resources(),
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     source,
                     kind,
@@ -206,13 +212,17 @@ impl PlotPlan {
                     prepared_stage,
                 )?;
                 Ok(PreparedPlotInputs {
+                    axes,
                     theme,
                     text_census: census,
                 })
             },
             |prepared, assigned, round| {
                 let (width, height) = assigned.dimensions();
-                let source = source.clone().with_canvas_size(width, height);
+                let source = prepared
+                    .axes
+                    .attach(source.clone())
+                    .with_canvas_size(width, height);
                 let plan = if source.has_facets() {
                     PlotLayoutPlan::Faceted(Box::new(super::facets::FacetPlan::new(
                         &source,
@@ -344,7 +354,7 @@ impl UnfacetedPlotPlan {
             SurfaceRole::PlotPanel,
         )?;
         if self.panel_plan.result.decoration_mode == DecorationMode::Standard {
-            crate::decorations::apply::apply_grid(source, &self.panel_plan.result, theme, backend)?;
+            crate::decorations::apply::apply_grid(source, &self.panel_plan, backend)?;
         }
         let source_rows = self.plot.configured_source_rows()?;
         let context = source_rows
@@ -369,7 +379,7 @@ impl UnfacetedPlotPlan {
 
         match self.panel_plan.result.decoration_mode {
             DecorationMode::Standard => {
-                crate::decorations::apply::apply_axes(source, &self.panel_plan, theme, backend)?;
+                crate::decorations::apply::apply_axes(source, &self.panel_plan, backend)?;
                 crate::decorations::apply::apply_planned_legend(
                     source,
                     self.panel_plan.legend.as_ref(),

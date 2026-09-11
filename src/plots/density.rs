@@ -8,7 +8,7 @@ use crate::decorations::legend::LegendEntry;
 use crate::layout::Layout;
 use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
+use crate::stats::distribution::strict_scott_bandwidth;
 use crate::Plot;
 
 const MIN_GRID_POINTS: usize = 128;
@@ -30,6 +30,29 @@ struct PreparedDensity {
     curves: Vec<DensityCurve>,
 }
 
+pub(crate) fn axis_ranges(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<[(f64, f64); 2], Error> {
+    let column = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("density: value column not set".into()))?;
+    let prepared = prepare_density_for_chart(chart, data, column)?;
+    for curve in &prepared.curves {
+        data.claim_source_visits(curve.densities.len())?;
+    }
+    let maximum = prepared
+        .curves
+        .iter()
+        .flat_map(|curve| &curve.densities)
+        .copied()
+        .fold(0.0_f64, f64::max);
+    Ok([
+        chart.x_axis_spec().limits.unwrap_or(prepared.x_range),
+        crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+    ])
+}
+
 pub(crate) fn render(
     chart: &Plot,
     context: PlotRenderContext<'_>,
@@ -39,26 +62,28 @@ pub(crate) fn render(
         .x_col()
         .ok_or_else(|| Error::Data("density: value column not set".into()))?;
     let prepared = prepare_density_for_chart(chart, context.data, value_col)?;
-    let x_range = prepared.x_range;
-    let y_max = prepared
-        .curves
-        .iter()
-        .flat_map(|curve| curve.densities.iter())
-        .copied()
-        .fold(0.0_f64, f64::max);
-    let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
-    let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-    let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-    let layout = Layout::new_with_axis_specs_in_panel_box(
-        x_range,
-        y_range,
-        context.panel,
-        chart.x_label_text().unwrap_or(value_col).to_string(),
-        chart.y_label_text().unwrap_or("Density").to_string(),
-        &x_axis_spec,
-        &y_axis_spec,
-        context.theme,
-    )?;
+    let layout = context.axis_layout(|| {
+        let x_range = prepared.x_range;
+        let y_max = prepared
+            .curves
+            .iter()
+            .flat_map(|curve| curve.densities.iter())
+            .copied()
+            .fold(0.0_f64, f64::max);
+        let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
+        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
+        context.layout_with_axis_specs(
+            x_range,
+            y_range,
+            context.panel,
+            chart.x_label_text().unwrap_or(value_col).to_string(),
+            chart.y_label_text().unwrap_or("Density").to_string(),
+            &x_axis_spec,
+            &y_axis_spec,
+            context.theme,
+        )
+    })?;
     let theme = context.theme;
 
     with_clip(backend, layout.projection.panel_box(), |backend| {
@@ -132,6 +157,79 @@ fn prepare_density<'a>(
     )
 }
 
+pub(crate) fn shared_x_domain(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let column = chart
+        .x_col()
+        .ok_or_else(|| Error::Data("density: value column not set".into()))?;
+    let values = crate::data::strict_finite_f64(data, column, "density")?;
+    let channels = crate::data::observed_collectives(
+        data,
+        chart.group_col(),
+        chart.group_name(),
+        chart.hue_col(),
+        chart.hue_name(),
+        None,
+        "density",
+    )?;
+    if channels.rows.len() != values.len() {
+        return Err(Error::Data(
+            "density: value, graphical group, and hue columns must have equal lengths".into(),
+        ));
+    }
+    let mut range = (f64::INFINITY, f64::NEG_INFINITY);
+    let mut samples = Vec::new();
+    data.reserve_source(&mut samples, values.len())?;
+    for identity in &channels.identities {
+        samples.clear();
+        data.claim_source_visits(values.len())?;
+        samples.extend(
+            channels
+                .rows
+                .iter()
+                .zip(&values)
+                .filter_map(|(row, value)| (row == identity).then_some(*value)),
+        );
+        // Scott bandwidth scans five times; support adds one min/max pass.
+        let visits = samples
+            .len()
+            .checked_mul(6)
+            .ok_or_else(|| Error::Render("density axis source visits overflow".into()))?;
+        data.claim_source_visits(visits)?;
+        let (low, high, _) =
+            density_support(&samples, || identity.description(channels.collapsed))?;
+        range = (range.0.min(low), range.1.max(high));
+    }
+    Ok(range)
+}
+
+fn density_support(
+    samples: &[f64],
+    description: impl Fn() -> String,
+) -> Result<(f64, f64, f64), Error> {
+    if samples.len() < 2 {
+        return Err(Error::Data(format!(
+            "density: {} requires at least 2 observations, got {}",
+            description(),
+            samples.len()
+        )));
+    }
+    let bandwidth = strict_scott_bandwidth(samples)
+        .map_err(|reason| Error::Data(format!("density: {} {reason}", description())))?;
+    let (minimum, maximum) = crate::data::min_max(samples.iter().copied(), "density")?;
+    let low = minimum - SUPPORT_BANDWIDTHS * bandwidth;
+    let high = maximum + SUPPORT_BANDWIDTHS * bandwidth;
+    if !low.is_finite() || !high.is_finite() || low >= high {
+        return Err(Error::Data(format!(
+            "density: {} cannot produce finite KDE support",
+            description()
+        )));
+    }
+    Ok((low, high, bandwidth))
+}
+
 fn prepare_density_for_chart<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
@@ -151,6 +249,7 @@ fn prepare_density_for_chart<'a>(
 
 #[expect(
     clippy::too_many_arguments,
+    clippy::too_many_lines,
     reason = "channel columns, semantic names, and global orders form one density preparation boundary"
 )]
 fn prepare_density_ordered<'a>(
@@ -175,51 +274,37 @@ fn prepare_density_ordered<'a>(
     }
 
     let ordered_identities = identity_order.unwrap_or(&channels.identities);
-    let groups = ordered_identities
-        .iter()
-        .filter_map(|identity| {
-            let samples = channels
+    let mut support_low = f64::INFINITY;
+    let mut support_high = f64::NEG_INFINITY;
+    let mut curves = Vec::new();
+    data.reserve_source(&mut curves, ordered_identities.len())?;
+    let mut samples = Vec::new();
+    data.reserve_source(&mut samples, values.len())?;
+    for identity in ordered_identities {
+        samples.clear();
+        data.claim_source_visits(values.len())?;
+        samples.extend(
+            channels
                 .rows
                 .iter()
                 .zip(&values)
-                .filter_map(|(row_identity, value)| (row_identity == identity).then_some(*value))
-                .collect::<Vec<_>>();
-            (!samples.is_empty()).then(|| (identity.clone(), samples))
-        })
-        .collect::<Vec<_>>();
-    if groups.is_empty() {
-        return Err(Error::Data(
-            "density: value column contains no observations".into(),
-        ));
-    }
-
-    let mut support_low = f64::INFINITY;
-    let mut support_high = f64::NEG_INFINITY;
-    let mut curves = Vec::with_capacity(groups.len());
-    for (identity, samples) in &groups {
-        let description = identity.description(channels.collapsed);
-        if samples.len() < 2 {
-            return Err(Error::Data(format!(
-                "density: {description} requires at least 2 observations, got {}",
-                samples.len()
-            )));
+                .filter_map(|(row, value)| (row == identity).then_some(*value)),
+        );
+        if samples.is_empty() {
+            continue;
         }
-        let bandwidth = strict_scott_bandwidth(samples)
-            .map_err(|reason| Error::Data(format!("density: {description} {reason}")))?;
-        let (minimum, maximum) = crate::data::min_max(samples.iter().copied(), "density")?;
-        let low = minimum - SUPPORT_BANDWIDTHS * bandwidth;
-        let high = maximum + SUPPORT_BANDWIDTHS * bandwidth;
-        if !low.is_finite() || !high.is_finite() || low >= high {
-            return Err(Error::Data(format!(
-                "density: {description} cannot produce finite KDE support"
-            )));
+        for _ in 0..6 {
+            data.claim_source_visits(samples.len())?;
         }
+        let description = || identity.description(channels.collapsed);
+        let (low, high, bandwidth) = density_support(&samples, description)?;
         support_low = support_low.min(low);
         support_high = support_high.max(high);
         let span_in_bandwidths = scaled_difference_ratio(high, low, bandwidth);
         if !span_in_bandwidths.is_finite() && !span_in_bandwidths.is_infinite() {
             return Err(Error::Data(format!(
-                "density: {description} grid not representable at this numeric scale"
+                "density: {} grid not representable at this numeric scale",
+                description()
             )));
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -230,23 +315,39 @@ fn prepare_density_ordered<'a>(
         let step = scaled_difference_ratio(high, low, interval_count as f64);
         if !step.is_finite() || step <= 0.0 {
             return Err(Error::Data(format!(
-                "density: {description} grid not representable at this numeric scale"
+                "density: {} grid not representable at this numeric scale",
+                description()
             )));
         }
-        let grid = (0..=interval_count)
-            .map(|index| scaled_lerp(low, high, index as f64 / interval_count as f64))
-            .collect::<Vec<_>>();
+        let mut grid = Vec::new();
+        data.reserve_source(&mut grid, interval_count + 1)?;
+        grid.extend(
+            (0..=interval_count)
+                .map(|index| scaled_lerp(low, high, index as f64 / interval_count as f64)),
+        );
+        data.claim_source_visits(grid.len())?;
+        data.claim_source_visits(grid.len() - 1)?;
         if grid.iter().any(|coordinate| !coordinate.is_finite())
             || grid.windows(2).any(|pair| pair[0] >= pair[1])
         {
             return Err(Error::Data(format!(
-                "density: {description} grid not representable at this numeric scale"
+                "density: {} grid not representable at this numeric scale",
+                description()
             )));
         }
-        let densities = gaussian_kde_with_bandwidth(samples, &grid, bandwidth)
-            .map_err(|error| Error::Data(format!("density: {description}: {error}")))?;
+        let densities = crate::stats::distribution::gaussian_kde_with_source(
+            &samples,
+            &grid,
+            bandwidth,
+            Some(data),
+        )
+        .map_err(|error| match error {
+            Error::Data(_) => Error::Data(format!("density: {}: {error}", description())),
+            error => error,
+        })?;
+        data.claim_source_visits(hue_order.unwrap_or(&channels.hue_levels).len())?;
         curves.push(DensityCurve {
-            identity: identity.clone(),
+            identity: data.copy_source_pair(identity)?,
             hue_index: identity.hue.as_ref().and_then(|hue| {
                 hue_order
                     .unwrap_or(&channels.hue_levels)
@@ -256,6 +357,11 @@ fn prepare_density_ordered<'a>(
             grid,
             densities,
         });
+    }
+    if curves.is_empty() {
+        return Err(Error::Data(
+            "density: value column contains no observations".into(),
+        ));
     }
     Ok(PreparedDensity {
         x_range: (support_low, support_high),
@@ -406,6 +512,28 @@ mod tests {
     struct DensityValues {
         values: NumericValues,
         group: Option<CategoryValues>,
+    }
+
+    #[test]
+    fn admitted_grouped_source_support_matches_the_authoritative_preparer() {
+        let values = NumericValues::new("value", [0.0, 1.0, 2.0, 100.0, 110.0, 120.0]);
+        let groups = CategoryValues::new("group", ["a", "a", "a", "b", "b", "b"]).unwrap();
+        for collapsed in [false, true] {
+            let mut plot = Plot::density(values.clone()).group(groups.clone());
+            if collapsed {
+                plot = plot.hue(groups.clone());
+            } else {
+                plot =
+                    plot.hue(CategoryValues::new("color", ["u", "u", "u", "v", "v", "v"]).unwrap());
+            }
+            let plot = plot.erase();
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let data = plot.data().with_axis_resources(&resources);
+            let range = shared_x_domain(&plot, data).unwrap();
+            let prepared = prepare_density_for_chart(&plot, plot.data(), crate::data::X).unwrap();
+            assert_eq!(range, prepared.x_range);
+            assert!(resources.usage().unwrap().1 > 0);
+        }
     }
 
     fn density_values(values: &[f64], labels: Option<&[&str]>) -> DensityValues {

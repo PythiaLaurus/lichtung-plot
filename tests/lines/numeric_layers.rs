@@ -327,12 +327,16 @@ fn explicit_x_ticks_reject_projected_neighboring_label_collisions() {
         .x_ticks(vec![
             AxisTick::new(1.0, "First exact label"),
             AxisTick::new(1.01, "Second exact label"),
+            AxisTick::new(1.02, "Third exact label"),
         ])
         .preflight()
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("x-axis explicit tick labels at indices 0 and 1 overlap"));
+    assert!(
+        error.contains("AxisBottom") && error.contains("assigned cell"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -343,12 +347,13 @@ fn explicit_y_ticks_reject_projected_neighboring_label_collisions() {
         .y_ticks(vec![
             AxisTick::new(2.0, "Lower exact\nlabel"),
             AxisTick::new(2.25, "Upper exact\nlabel"),
+            AxisTick::new(2.5, "Third exact\nlabel"),
         ])
         .preflight()
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("y-axis explicit tick labels at indices 0 and 1 overlap"));
+    assert!(error.contains("y-axis tick label"), "{error}");
 }
 
 #[test]
