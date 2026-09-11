@@ -56,7 +56,7 @@ fn hue_path_style_colors_complete_paths_preserves_order_and_draws_line_legends()
         .line_draws
         .iter()
         .filter(|(_, style, clip_depth)| {
-            *clip_depth == 1 && (style.width - 1.4).abs() <= f32::EPSILON
+            *clip_depth == 1 && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
         })
         .collect::<Vec<_>>();
     assert_eq!(path_lines.len(), 2);
@@ -69,7 +69,7 @@ fn hue_path_style_colors_complete_paths_preserves_order_and_draws_line_legends()
         .iter()
         .filter(|(_, style, clip_depth)| {
             *clip_depth == 0
-                && (style.width - 1.4).abs() <= f32::EPSILON
+                && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
                 && path_lines
                     .iter()
                     .any(|(_, path_style, _)| path_style.color == style.color)
@@ -95,7 +95,7 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         .line_draws
         .iter()
         .filter(|(_, style, clip_depth)| {
-            *clip_depth == 1 && (style.width - 1.4).abs() <= f32::EPSILON
+            *clip_depth == 1 && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
         })
         .map(|(_, style, _)| style.color)
         .collect::<Vec<_>>();
@@ -109,7 +109,7 @@ fn hue_path_style_uses_caller_colors_for_paths_markers_and_legend_lines() {
         .line_draws
         .iter()
         .filter(|(_, style, clip_depth)| {
-            *clip_depth == 0 && (style.width - 1.4).abs() <= f32::EPSILON
+            *clip_depth == 0 && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
         })
         .map(|(_, style, _)| style.color)
         .collect::<Vec<_>>();
@@ -141,7 +141,7 @@ fn hue_path_style_splits_one_group_into_observed_hue_paths() {
         .line_draws
         .iter()
         .filter(|(_, style, clip_depth)| {
-            *clip_depth == 1 && (style.width - 1.4).abs() <= f32::EPSILON
+            *clip_depth == 1 && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
         })
         .map(|(_, style, _)| style.color)
         .collect::<Vec<_>>();
@@ -161,7 +161,7 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
         .line_draws
         .iter()
         .filter(|(_, style, clip_depth)| {
-            *clip_depth == 1 && (style.width - 1.4).abs() <= f32::EPSILON
+            *clip_depth == 1 && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
         })
         .collect::<Vec<_>>();
     assert_eq!(path_lines.len(), 2);
@@ -175,7 +175,7 @@ fn line_only_hue_paths_keep_connectors_order_repeated_x_and_line_legends() {
             .iter()
             .filter(|(_, style, clip_depth)| {
                 *clip_depth == 0
-                    && (style.width - 1.4).abs() <= f32::EPSILON
+                    && (style.width - 1434.0 / 1024.0).abs() <= f32::EPSILON
                     && path_lines
                         .iter()
                         .any(|(_, path_style, _)| path_style.color == style.color)

@@ -2,7 +2,7 @@
 source: tests/visual_regression/suite.rs
 expression: "specialized_svg_structure(&svg,\n&[\"Horizontal structural title\", \"A \", \"deliberately \", \"long \", \"category\"])"
 ---
-<clipPath id="clip-0"><rect x="155.200" y="46.000" width="174.800" height="165.400"/></clipPath>
+<clipPath id="clip-0"><rect x="155.2001953125" y="46" width="174.7998046875" height="165.400390625"/></clipPath>
 <g id="grid">
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0

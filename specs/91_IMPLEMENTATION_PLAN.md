@@ -238,7 +238,7 @@ The approved theme and layout targets follow these rules:
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
 | T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
-| T5a6a2 | Retained canonical primitive geometry | PENDING |
+| T5a6a2 | Retained canonical primitive geometry | COMPLETE |
 | T5a6a3a | Point/path semantic and payload extraction | PENDING |
 | T5a6a3b | Distribution/reference semantic and payload extraction | PENDING |
 | T5a6a3c | Estimate-display semantic and payload extraction | PENDING |
@@ -4606,8 +4606,8 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1 is complete with focused and primary integrated evidence below. All
-successor steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
+T5a6a1 and T5a6a2 are complete with focused and primary integrated evidence below.
+Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
 the later native axis/frame migrations; they must not duplicate those migrations.
@@ -4712,6 +4712,70 @@ nonintegral translations, collapsed lines/polygons, exact token counts, and
 Null/SVG operand identity. Deterministic later glyph-outline extraction remains
 format conversion under the existing font contract. Snapshot changes require
 individual review; do not retain alternate raw and canonical frozen routes.
+
+T5a6a2 completion evidence:
+
+Independent review identified raw-text quantum, painted-stroke bounds, outward
+rounding, and direct Null planned-placement validation gaps. All are corrected;
+the focused test totals below describe the successive repair checks.
+
+Review-gap correction evidence: raw text now shares CSS-quantum placement with
+final capture; marker bounds include canonical circle outlines and triangle
+miters using the serializer's miter limit; bracket bounds use canonical stroke
+width. Recorded bounds round outward before clipping and collision consumption.
+Direct planned Null text/bracket adapters use the same canonical constructors as
+SVG, including absolute-origin and bottom-up overflow checks. Frozen replay and
+capture resource admission are unchanged. Strict `just lint`, 103 render tests,
+29 orchestrator backend tests, and the full all-target test run passed (816
+library tests, 17 ignored; 442 integration tests). Existing snapshots passed
+without further updates. These checks preceded primary integrated verification.
+
+A subsequent blocking review found that rounding after floating absolute stroke
+expansion still lost half-quanta at large coordinates. Stroke envelopes now use
+wide integer half-quanta before outward rounding, signed-quantum edge checks,
+and directed conversion to collision-space floats (with a second range check).
+Polygon normals/miters use outward-rounded local intervals translated onto exact
+integer vertices; axis normals and right-angle miters retain exact integer
+half-quanta. No late record-time stroke rounding or frozen replay conversion is
+used. Tests retain one-quantum strokes and clipped ink at both signs of 2^43 CSS
+pixels and reject integer-edge and directed-float overflow near the signed
+limits. Strict `just lint`, 106 render tests, 29 orchestrator backend tests, and
+75 targeted annotation/interaction/layout/snapshot tests passed. These are the
+checks for this correction, followed by the primary gate below. Independent
+recheck found no remaining blocker in the conservative stroke-envelope fix.
+
+- `render::primitives` retains admitted top-down quantum operands for every
+  frozen primitive. Raw and planned text/bracket producers converge on one
+  canonical payload; no frozen raw text/bracket variants remain. Text retains
+  the original source and shaped plan alongside absolute line/run/glyph origins,
+  logical run order, rotation center, and canonical angle/sine/cosine. Angles
+  retain their separate tenth-degree unit, with zero signs normalized.
+- Final capture performs checked placement and bottom-up conversion. Shared SVG
+  count/emission and final Null consume those operands without conversion,
+  sorting, layout, or shaping. `PlannedLineOutline` shares frozen geometry;
+  later deterministic extraction uses retained font identities and absolute
+  glyph origins, not new placement or a changed font source/policy.
+- Capture admits each line/run/order/glyph vector and shared text allocation
+  against the existing root resources before constructing its storage. Final
+  SVG and Null storage admission and exact count/write agreement remain intact;
+  obsolete replay run-order scratch is removed.
+- Tests cover all primitive replay conversions, text anchors and origins,
+  multiline/bidi source preservation, negative zero and small angles,
+  nonintegral/half-tie placement, absolute glyph and Y-inversion overflow,
+  per-allocation refusal, unchanged final storage addresses, and deterministic
+  outlined byte counts. Strict `just lint` passed; 811 library tests passed
+  (17 ignored), and all 442 integration tests passed.
+- Individually reviewed the six existing snapshot changes: Beeswarm and
+  HorizontalBar clip operands; Marginal's three clip operands; Matrix's four
+  clip operands; and the odd-sized title/scatter snapshots' clip, surface,
+  mark, axis, and stroke quantum spellings. Text/source structure is unchanged
+  in those snapshots. Text/bracket freezing required no additional snapshot
+  updates.
+- Primary `just verify` passed: 819 library tests (17 ignored), 442 integration
+  tests including six snapshots, strict Clippy, formatting, API docs, and package
+  verification (222 files). All ten ignored release benchmark groups also pass.
+  Logs: `/tmp/opencode/t5a6a2-verify.log` and
+  `/tmp/opencode/t5a6a2-benchmarks.log`.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

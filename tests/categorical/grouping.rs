@@ -370,7 +370,9 @@ fn explicit_group_and_hue_render_only_observed_pair_paths() {
     let marks = remove_legend_layers(&svg);
     let paths = marks
         .lines()
-        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .filter(|line| {
+            line.starts_with("<polyline ") && line.contains("stroke-width=\"1.7998046875\"")
+        })
         .collect::<Vec<_>>();
     let colors = PUBLICATION_COLORS;
 
@@ -404,7 +406,8 @@ fn hue_only_line_and_density_create_one_mark_per_hue() {
     assert_eq!(
         line_marks
             .lines()
-            .filter(|tag| tag.starts_with("<polyline ") && tag.contains("stroke-width=\"1.8\""))
+            .filter(|tag| tag.starts_with("<polyline ")
+                && tag.contains("stroke-width=\"1.7998046875\""))
             .count(),
         2
     );
@@ -479,7 +482,7 @@ fn density_legend_preserves_curve_and_translucent_fill_without_point() {
         .unwrap()
         .0;
 
-    assert_eq!(legend.matches("stroke-width=\"1.6\"").count(), 2);
+    assert_eq!(legend.matches("stroke-width=\"1.599609375\"").count(), 2);
     assert_eq!(legend.matches("fill-opacity=\"0.22\"").count(), 2);
     assert!(!legend.contains("<circle "));
 }
@@ -561,7 +564,9 @@ fn faceted_group_hue_pairs_keep_global_hue_colors() {
     let marks = remove_legend_layers(&svg);
     let paths = marks
         .lines()
-        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .filter(|line| {
+            line.starts_with("<polyline ") && line.contains("stroke-width=\"1.7998046875\"")
+        })
         .collect::<Vec<_>>();
 
     assert_eq!(paths.len(), 3);

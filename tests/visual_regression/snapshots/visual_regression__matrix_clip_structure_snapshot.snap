@@ -3,10 +3,10 @@ source: tests/visual_regression/suite.rs
 assertion_line: 35
 expression: "specialized_svg_structure(&svg, &[\"Matrix structural title\", \"Group\"])"
 ---
-<clipPath id="clip-0"><rect x="79.200" y="52.000" width="93.998" height="75.700"/></clipPath>
-<clipPath id="clip-1"><rect x="181.199" y="52.000" width="93.998" height="75.700"/></clipPath>
-<clipPath id="clip-2"><rect x="79.200" y="135.700" width="93.998" height="75.700"/></clipPath>
-<clipPath id="clip-3"><rect x="181.199" y="135.700" width="93.998" height="75.700"/></clipPath>
+<clipPath id="clip-0"><rect x="79.2001953125" y="52" width="93.998046875" height="75.7001953125"/></clipPath>
+<clipPath id="clip-1"><rect x="181.1982421875" y="52" width="93.998046875" height="75.7001953125"/></clipPath>
+<clipPath id="clip-2"><rect x="79.2001953125" y="135.7001953125" width="93.998046875" height="75.7001953125"/></clipPath>
+<clipPath id="clip-3"><rect x="181.1982421875" y="135.7001953125" width="93.998046875" height="75.7001953125"/></clipPath>
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS

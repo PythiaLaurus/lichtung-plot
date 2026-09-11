@@ -2003,8 +2003,8 @@ fn unclamped_projection_leaves_out_of_range_marks_for_backend_clipping() {
     let output = dir.join("canvas.svg");
     plot.clone().svg_preserve_text(&output).unwrap();
     let svg = std::fs::read_to_string(&output).unwrap();
-    assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[0].x)));
-    assert!(svg.contains(&format!("cx=\"{:.3}\"", backend.scatter_points[2].x)));
+    assert!(svg.contains(&format!("cx=\"{}\"", backend.scatter_points[0].x)));
+    assert!(svg.contains(&format!("cx=\"{}\"", backend.scatter_points[2].x)));
     assert!(svg.contains("<g clip-path=\"url(#clip-0)\">"));
     std::fs::remove_dir_all(dir).unwrap();
 }

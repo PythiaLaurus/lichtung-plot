@@ -27,7 +27,7 @@ fn generic_line_band_uses_exact_precomputed_geometry() {
     let output = render_svg(line(&data), "line-band").unwrap();
 
     assert_eq!(output.matches("fill-opacity=\"0.18\"").count(), 1);
-    assert_eq!(output.matches("stroke-width=\"1.8\"").count(), 1);
+    assert_eq!(output.matches("stroke-width=\"1.7998046875\"").count(), 1);
 }
 
 #[test]

@@ -35,6 +35,84 @@ pub(crate) struct GeometryBox {
 }
 
 impl GeometryBox {
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "compare the rounded float with the exact wide integer before directed correction"
+    )]
+    fn from_half_quanta(edges: [i128; 4]) -> Result<Self, Error> {
+        let mut values = [0.0; 4];
+        for (index, edge) in edges.into_iter().enumerate() {
+            let upper = index % 2 == 1;
+            let quanta = edge.div_euclid(2) + i128::from(upper && edge.rem_euclid(2) != 0);
+            let quanta = i64::try_from(quanta)
+                .map_err(|_| Error::Render("painted bound exceeds signed quantum range".into()))?;
+            let mut value = quanta as f64;
+            if upper && (value as i128) < i128::from(quanta) {
+                value = value.next_up();
+            } else if !upper && (value as i128) > i128::from(quanta) {
+                value = value.next_down();
+            }
+            if value as i128 > i128::from(i64::MAX) || (value as i128) < i128::from(i64::MIN) {
+                return Err(Error::Render(
+                    "painted collision bound exceeds signed quantum range".into(),
+                ));
+            }
+            values[index] = value / 1024.0;
+        }
+        Ok(Self {
+            left: values[0],
+            right: values[1],
+            bottom: values[2],
+            top: values[3],
+            weight: 1.0,
+        })
+    }
+
+    fn from_canonical_points(
+        points: &[CanonicalPoint],
+        padding_half_quanta: i128,
+    ) -> Result<Option<Self>, Error> {
+        if !(0..=i128::from(u64::MAX)).contains(&padding_half_quanta) {
+            return Err(Error::Render(
+                "painted padding exceeds signed quantum envelope".into(),
+            ));
+        }
+        let Some(first) = points.first() else {
+            return Ok(None);
+        };
+        let mut edges = [
+            first.x.units(),
+            first.x.units(),
+            first.y.units(),
+            first.y.units(),
+        ];
+        for point in &points[1..] {
+            edges[0] = edges[0].min(point.x.units());
+            edges[1] = edges[1].max(point.x.units());
+            edges[2] = edges[2].min(point.y.units());
+            edges[3] = edges[3].max(point.y.units());
+        }
+        // All operands are signed quanta; i128 preserves odd-width half-quanta.
+        Self::from_half_quanta([
+            2 * i128::from(edges[0]) - padding_half_quanta,
+            2 * i128::from(edges[1]) + padding_half_quanta,
+            2 * i128::from(edges[2]) - padding_half_quanta,
+            2 * i128::from(edges[3]) + padding_half_quanta,
+        ])
+        .map(Some)
+    }
+
+    fn outward(self) -> Self {
+        Self {
+            left: (self.left * 1024.0).floor() / 1024.0,
+            right: (self.right * 1024.0).ceil() / 1024.0,
+            bottom: (self.bottom * 1024.0).floor() / 1024.0,
+            top: (self.top * 1024.0).ceil() / 1024.0,
+            ..self
+        }
+    }
+
     fn from_points(points: &[Point2D], padding: f64) -> Option<Self> {
         let mut left = f64::INFINITY;
         let mut right = f64::NEG_INFINITY;
@@ -435,18 +513,28 @@ impl GeometryBackend {
         style: &BracketStyle,
         label: &ResolvedTextPlan,
     ) -> Result<(), Error> {
-        let line_start = canonical.line_start.value();
-        let line_end = canonical.line_end.value();
-        let first_tick_end = canonical.first_tick_end.value();
-        let second_tick_end = canonical.second_tick_end.value();
-        let path = GeometryBox::from_points(
-            &[line_start, line_end, first_tick_end, second_tick_end],
-            f64::from(style.width) / 2.0,
-        )
-        .map(|bounds| GeometryBox {
-            weight: ANNOTATION_COLLISION_WEIGHT,
-            ..bounds
-        });
+        let width = super::coordinates::CanonicalCoordinate::nonnegative_length(
+            f64::from(style.width),
+            "bracket stroke width",
+        )?;
+        let path = (width.units() > 0)
+            .then(|| {
+                GeometryBox::from_canonical_points(
+                    &[
+                        canonical.line_start,
+                        canonical.line_end,
+                        canonical.first_tick_end,
+                        canonical.second_tick_end,
+                    ],
+                    i128::from(width.units()),
+                )
+            })
+            .transpose()?
+            .flatten()
+            .map(|bounds| GeometryBox {
+                weight: ANNOTATION_COLLISION_WEIGHT,
+                ..bounds
+            });
         let placement = backend::planned_bracket_placement(canonical);
         self.record_text(placement, label)?;
         let label = planned_text_ink_bounds(
@@ -570,7 +658,7 @@ pub(crate) fn planned_text_ink_bounds(
             (current, line) => current.or(line),
         };
     }
-    bounds
+    bounds.map(GeometryBox::outward)
 }
 
 fn polygon_ring(points: &[CanonicalPoint]) -> Vec<CanonicalPoint> {
@@ -586,9 +674,9 @@ fn polygon_ring(points: &[CanonicalPoint]) -> Vec<CanonicalPoint> {
     ring
 }
 
-fn polygon_has_positive_area(points: &[CanonicalPoint]) -> bool {
+fn polygon_has_positive_area(points: &[CanonicalPoint]) -> Result<bool, Error> {
     if points.len() < 3 {
-        return false;
+        return Ok(false);
     }
     // A nonzero-fill path is empty only when its directed edges cancel exactly.
     // Canonical integer line intervals avoid floating cancellation at retraced bands.
@@ -599,29 +687,38 @@ fn polygon_has_positive_area(points: &[CanonicalPoint]) -> bool {
         .zip(points.iter().copied().cycle().skip(1))
         .take(points.len())
     {
-        let dx = end.x.units() - start.x.units();
-        let dy = end.y.units() - start.y.units();
+        let dx = i128::from(end.x.units()) - i128::from(start.x.units());
+        let dy = i128::from(end.y.units()) - i128::from(start.y.units());
         if dx == 0 && dy == 0 {
             continue;
         }
         let divisor = i128::from(greatest_common_divisor(
-            dx.unsigned_abs(),
-            dy.unsigned_abs(),
+            u64::try_from(dx.unsigned_abs()).expect("i64 endpoint difference fits u64"),
+            u64::try_from(dy.unsigned_abs()).expect("i64 endpoint difference fits u64"),
         ));
-        let raw_x = i128::from(dx) / divisor;
-        let raw_y = i128::from(dy) / divisor;
+        let raw_x = dx / divisor;
+        let raw_y = dy / divisor;
         let forward = raw_x > 0 || (raw_x == 0 && raw_y > 0);
         let (direction_x, direction_y, direction) = if forward {
             (raw_x, raw_y, 1_i32)
         } else {
             (-raw_x, -raw_y, -1_i32)
         };
-        let line =
-            direction_y * i128::from(start.x.units()) - direction_x * i128::from(start.y.units());
-        let start_projection =
-            direction_x * i128::from(start.x.units()) + direction_y * i128::from(start.y.units());
-        let end_projection =
-            direction_x * i128::from(end.x.units()) + direction_y * i128::from(end.y.units());
+        let overflow = || Error::Render("polygon canonical area arithmetic overflowed".into());
+        let product = |direction: i128, coordinate: i64| {
+            direction
+                .checked_mul(i128::from(coordinate))
+                .ok_or_else(overflow)
+        };
+        let line = product(direction_y, start.x.units())?
+            .checked_sub(product(direction_x, start.y.units())?)
+            .ok_or_else(overflow)?;
+        let start_projection = product(direction_x, start.x.units())?
+            .checked_add(product(direction_y, start.y.units())?)
+            .ok_or_else(overflow)?;
+        let end_projection = product(direction_x, end.x.units())?
+            .checked_add(product(direction_y, end.y.units())?)
+            .ok_or_else(overflow)?;
         let (low, high) = if start_projection < end_projection {
             (start_projection, end_projection)
         } else {
@@ -634,7 +731,7 @@ fn polygon_has_positive_area(points: &[CanonicalPoint]) -> bool {
         events.push((high, -direction));
     }
 
-    line_events.into_values().any(|mut events| {
+    Ok(line_events.into_values().any(|mut events| {
         events.sort_unstable_by_key(|event| event.0);
         let mut coverage = 0_i32;
         let mut index = 0;
@@ -649,7 +746,7 @@ fn polygon_has_positive_area(points: &[CanonicalPoint]) -> bool {
             }
         }
         false
-    })
+    }))
 }
 
 fn greatest_common_divisor(mut left: u64, mut right: u64) -> u64 {
@@ -659,16 +756,167 @@ fn greatest_common_divisor(mut left: u64, mut right: u64) -> u64 {
     left
 }
 
-fn cross(first: Point2D, second: Point2D) -> f64 {
-    first.x * second.y - first.y * second.x
+// Polygon offsets are evaluated locally with directed interval arithmetic. Never
+// add a floating normal or miter to an absolute (possibly >2^53-quanta) vertex.
+#[derive(Clone, Copy)]
+struct StrokeInterval {
+    low: f64,
+    high: f64,
 }
 
-fn polygon_stroke_bounds(points: &[Point2D], stroke_width: f64) -> Option<GeometryBox> {
-    if stroke_width == 0.0 || points.len() < 2 {
-        return None;
+impl StrokeInterval {
+    const ZERO: Self = Self {
+        low: 0.0,
+        high: 0.0,
+    };
+    const ONE: Self = Self {
+        low: 1.0,
+        high: 1.0,
+    };
+
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "directed enclosure of bounded canonical integer differences and widths"
+    )]
+    fn integer(value: i128) -> Self {
+        let rounded = value as f64;
+        Self {
+            low: if rounded as i128 > value {
+                rounded.next_down()
+            } else {
+                rounded
+            },
+            high: if (rounded as i128) < value {
+                rounded.next_up()
+            } else {
+                rounded
+            },
+        }
     }
-    let half_width = stroke_width / 2.0;
-    let mut stroke_points = Vec::with_capacity(points.len() * 5);
+
+    fn neg(self) -> Self {
+        Self {
+            low: -self.high,
+            high: -self.low,
+        }
+    }
+
+    fn add(self, other: Self) -> Self {
+        if other.low == 0.0 && other.high == 0.0 {
+            return self;
+        }
+        if self.low == 0.0 && self.high == 0.0 {
+            return other;
+        }
+        Self {
+            low: (self.low + other.low).next_down(),
+            high: (self.high + other.high).next_up(),
+        }
+    }
+
+    #[expect(
+        clippy::float_cmp,
+        reason = "only exact singleton identities preserve interval endpoints"
+    )]
+    fn mul(self, other: Self) -> Self {
+        if (self.low == 0.0 && self.high == 0.0) || (other.low == 0.0 && other.high == 0.0) {
+            return Self::ZERO;
+        }
+        if self.low == 1.0 && self.high == 1.0 {
+            return other;
+        }
+        if other.low == 1.0 && other.high == 1.0 {
+            return self;
+        }
+        if self.low == -1.0 && self.high == -1.0 {
+            return other.neg();
+        }
+        if other.low == -1.0 && other.high == -1.0 {
+            return self.neg();
+        }
+        let products = [
+            self.low * other.low,
+            self.low * other.high,
+            self.high * other.low,
+            self.high * other.high,
+        ];
+        Self {
+            low: products
+                .into_iter()
+                .fold(f64::INFINITY, f64::min)
+                .next_down(),
+            high: products
+                .into_iter()
+                .fold(f64::NEG_INFINITY, f64::max)
+                .next_up(),
+        }
+    }
+
+    #[expect(
+        clippy::float_cmp,
+        reason = "only an exact singleton identity preserves interval endpoints"
+    )]
+    fn div_positive(self, other: Self) -> Self {
+        debug_assert!(other.low > 0.0);
+        if other.low == 1.0 && other.high == 1.0 {
+            return self;
+        }
+        self.mul(Self {
+            low: (1.0 / other.high).next_down(),
+            high: (1.0 / other.low).next_up(),
+        })
+    }
+
+    fn sqrt(self) -> Self {
+        Self {
+            low: self.low.sqrt().next_down(),
+            high: self.high.sqrt().next_up(),
+        }
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::float_cmp,
+        reason = "finite local offsets are range checked before wide-integer conversion"
+    )]
+    fn translated(self, anchor: i64, width: i64) -> Result<[i128; 2], Error> {
+        // Axis normals and right-angle miters use exact integer half-quanta,
+        // including odd widths. No floating width or absolute vertex is needed.
+        if self.low == self.high && [0.0, 1.0, -1.0].contains(&self.low) {
+            let edge = 2 * i128::from(anchor) + self.low as i128 * i128::from(width);
+            return Ok([edge; 2]);
+        }
+        let offset = self.mul(Self::integer(i128::from(width)));
+        // Other offsets are half-quanta; round locally, then add the exact vertex.
+        let low = (offset.low / 2.0).floor();
+        let high = (offset.high / 2.0).ceil();
+        let limit = 2.0_f64.powi(126);
+        if !low.is_finite() || !high.is_finite() || low <= -limit || high >= limit {
+            return Err(Error::Render("painted polygon offset overflowed".into()));
+        }
+        Ok([
+            2 * (i128::from(anchor) + low as i128),
+            2 * (i128::from(anchor) + high as i128),
+        ])
+    }
+}
+
+fn polygon_stroke_bounds(
+    points: &[CanonicalPoint],
+    stroke_width: i64,
+) -> Result<Option<GeometryBox>, Error> {
+    if stroke_width == 0 || points.len() < 2 {
+        return Ok(None);
+    }
+    let mut bounds: Option<GeometryBox> = None;
+    let mut include = |point: CanonicalPoint, offset: [StrokeInterval; 2]| -> Result<(), Error> {
+        let [left, right] = offset[0].translated(point.x.units(), stroke_width)?;
+        let [bottom, top] = offset[1].translated(point.y.units(), stroke_width)?;
+        let next = GeometryBox::from_half_quanta([left, right, bottom, top])?;
+        bounds = Some(bounds.map_or(next, |bounds| bounds.union(next)));
+        Ok(())
+    };
     let mut directions = Vec::with_capacity(points.len());
     for (start, end) in points
         .iter()
@@ -676,21 +924,28 @@ fn polygon_stroke_bounds(points: &[Point2D], stroke_width: f64) -> Option<Geomet
         .zip(points.iter().copied().cycle().skip(1))
         .take(points.len())
     {
-        let dx = end.x - start.x;
-        let dy = end.y - start.y;
-        let length = dx.hypot(dy);
-        if length == 0.0 {
+        let dx = i128::from(end.x.units()) - i128::from(start.x.units());
+        let dy = i128::from(end.y.units()) - i128::from(start.y.units());
+        if dx == 0 && dy == 0 {
             directions.push(None);
             continue;
         }
-        let direction = Point2D::new(dx / length, dy / length);
-        let normal = Point2D::new(-direction.y * half_width, direction.x * half_width);
-        stroke_points.extend([
-            Point2D::new(start.x + normal.x, start.y + normal.y),
-            Point2D::new(start.x - normal.x, start.y - normal.y),
-            Point2D::new(end.x + normal.x, end.y + normal.y),
-            Point2D::new(end.x - normal.x, end.y - normal.y),
-        ]);
+        let direction = if dx == 0 || dy == 0 {
+            [
+                StrokeInterval::integer(dx.signum()),
+                StrokeInterval::integer(dy.signum()),
+            ]
+        } else {
+            let x = StrokeInterval::integer(dx);
+            let y = StrokeInterval::integer(dy);
+            let length = x.mul(x).add(y.mul(y)).sqrt();
+            [x.div_positive(length), y.div_positive(length)]
+        };
+        let normal = [direction[1].neg(), direction[0]];
+        for point in [start, end] {
+            include(point, normal)?;
+            include(point, normal.map(StrokeInterval::neg))?;
+        }
         directions.push(Some(direction));
     }
 
@@ -701,28 +956,39 @@ fn polygon_stroke_bounds(points: &[Point2D], stroke_width: f64) -> Option<Geomet
         let Some(outgoing) = directions[index] else {
             continue;
         };
-        let turn = cross(incoming, outgoing);
-        let denominator = 1.0 + incoming.x * outgoing.x + incoming.y * outgoing.y;
-        if turn == 0.0 || denominator <= f64::EPSILON {
+        let turn = incoming[0]
+            .mul(outgoing[1])
+            .add(incoming[1].mul(outgoing[0]).neg());
+        let denominator = StrokeInterval::ONE.add(
+            incoming[0]
+                .mul(outgoing[0])
+                .add(incoming[1].mul(outgoing[1])),
+        );
+        // miter_ratio^2 = 2 / (1 + dot). An ambiguous limit comparison
+        // includes the miter; it must never discard potentially painted ink.
+        let minimum_denominator = 2.0 / (POLYGON_MITER_LIMIT * POLYGON_MITER_LIMIT);
+        if (turn.low == 0.0 && turn.high == 0.0) || denominator.high < minimum_denominator {
             continue;
         }
-        let incoming_normal = Point2D::new(-incoming.y, incoming.x);
-        let outgoing_normal = Point2D::new(-outgoing.y, outgoing.x);
-        let outer_sign = if turn > 0.0 { -1.0 } else { 1.0 };
-        let offset = Point2D::new(
-            outer_sign * half_width * (incoming_normal.x + outgoing_normal.x) / denominator,
-            outer_sign * half_width * (incoming_normal.y + outgoing_normal.y) / denominator,
-        );
-        let miter_ratio = offset.x.hypot(offset.y) / half_width;
-        if miter_ratio <= POLYGON_MITER_LIMIT {
-            stroke_points.push(Point2D::new(
-                points[index].x + offset.x,
-                points[index].y + offset.y,
+        if denominator.low <= 0.0 {
+            return Err(Error::Render(
+                "painted polygon miter denominator is not positive".into(),
             ));
+        }
+        let offset = [
+            incoming[1].add(outgoing[1]).neg(),
+            incoming[0].add(outgoing[0]),
+        ]
+        .map(|value| value.div_positive(denominator));
+        if turn.low <= 0.0 {
+            include(points[index], offset)?;
+        }
+        if turn.high >= 0.0 {
+            include(points[index], offset.map(StrokeInterval::neg))?;
         }
     }
 
-    GeometryBox::from_points(&stroke_points, 0.0)
+    Ok(bounds)
 }
 
 impl Backend for GeometryBackend {
@@ -807,23 +1073,45 @@ impl Backend for GeometryBackend {
         self.ensure_open("draw_scatter")?;
         let canonical_points = backend::validate_points(points, "scatter")?;
         backend::validate_point_style(style)?;
+        let outline_width = style
+            .outline
+            .map(|outline| {
+                super::coordinates::CanonicalCoordinate::nonnegative_length(
+                    outline.width_for_radius(style.radius),
+                    "scatter outline width",
+                )
+                .map(super::coordinates::CanonicalCoordinate::units)
+            })
+            .transpose()?
+            .unwrap_or(0);
         match style.shape {
             PointShape::Circle => {
+                let radius = super::coordinates::CanonicalCoordinate::nonnegative_length(
+                    f64::from(style.radius),
+                    "scatter radius",
+                )?
+                .units();
                 for point in canonical_points {
-                    let point = point.value();
-                    self.record(GeometryBox::from_points(
+                    if style.opacity == 0.0 && outline_width == 0 {
+                        continue;
+                    }
+                    self.record(GeometryBox::from_canonical_points(
                         std::slice::from_ref(&point),
-                        f64::from(style.radius),
-                    ));
+                        2 * i128::from(radius) + i128::from(outline_width),
+                    )?);
                 }
             }
             PointShape::TriangleUp => {
-                let outline_padding = style
-                    .outline
-                    .map_or(0.0, |outline| outline.width_for_radius(style.radius) / 2.0);
                 for triangle in backend::validate_triangle_points(points, style.radius)? {
-                    let triangle = triangle.map(super::coordinates::CanonicalPoint::value);
-                    self.record(GeometryBox::from_points(&triangle, outline_padding));
+                    let fill = (style.opacity > 0.0)
+                        .then(|| GeometryBox::from_canonical_points(&triangle, 0))
+                        .transpose()?
+                        .flatten();
+                    let stroke = polygon_stroke_bounds(&triangle, outline_width)?;
+                    self.record(match (fill, stroke) {
+                        (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
+                        (fill, stroke) => fill.or(stroke),
+                    });
                 }
             }
         }
@@ -836,19 +1124,15 @@ impl Backend for GeometryBackend {
             return Ok(());
         }
         let points = backend::validate_line_points(points)?;
-        backend::validate_line_style(style)?;
-        let points = points
-            .into_iter()
-            .map(super::coordinates::CanonicalPoint::value)
-            .collect::<Vec<_>>();
-        if style.width == 0.0 {
+        let style = super::primitives::CanonicalLineStyle::new(style)?;
+        if style.width.units() == 0 {
             return Ok(());
         }
         for segment in points.windows(2) {
-            self.record(GeometryBox::from_points(
+            self.record(GeometryBox::from_canonical_points(
                 segment,
-                f64::from(style.width) / 2.0,
-            ));
+                i128::from(style.width.units()),
+            )?);
         }
         Ok(())
     }
@@ -859,17 +1143,13 @@ impl Backend for GeometryBackend {
             return Ok(());
         }
         let points = backend::validate_polygon_points(points)?;
-        backend::validate_fill_style(style)?;
+        let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
-        let point_values = ring
-            .iter()
-            .copied()
-            .map(super::coordinates::CanonicalPoint::value)
-            .collect::<Vec<_>>();
-        let fill_bounds = (style.opacity > 0.0 && polygon_has_positive_area(&ring))
-            .then(|| GeometryBox::from_points(&point_values, 0.0))
+        let fill_bounds = (style.opacity > 0.0 && polygon_has_positive_area(&ring)?)
+            .then(|| GeometryBox::from_canonical_points(&ring, 0))
+            .transpose()?
             .flatten();
-        let stroke_bounds = polygon_stroke_bounds(&point_values, f64::from(style.stroke_width));
+        let stroke_bounds = polygon_stroke_bounds(&ring, style.stroke_width.units())?;
         self.record(match (fill_bounds, stroke_bounds) {
             (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
             (fill, stroke) => fill.or(stroke),
@@ -977,14 +1257,24 @@ impl Backend for GeometryBackend {
         {
             return Ok(());
         }
-        let padding = f64::from(style.stroke_width) / 2.0;
-        self.record(Some(GeometryBox {
-            left: rounded.rect.left.value() - padding,
-            right: rounded.rect.right.value() + padding,
-            bottom: rounded.rect.bottom.value() - padding,
-            top: rounded.rect.top.value() + padding,
-            weight: 1.0,
-        }));
+        let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
+            f64::from(style.stroke_width),
+            "rectangle stroke width",
+        )?
+        .units();
+        self.record(GeometryBox::from_canonical_points(
+            &[
+                CanonicalPoint {
+                    x: rounded.rect.left,
+                    y: rounded.rect.bottom,
+                },
+                CanonicalPoint {
+                    x: rounded.rect.right,
+                    y: rounded.rect.top,
+                },
+            ],
+            i128::from(padding),
+        )?);
         Ok(())
     }
 
@@ -1040,6 +1330,314 @@ impl Backend for GeometryBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn draw_quantum_stroke(
+        geometry: &mut GeometryBackend,
+        kind: &str,
+        x: f64,
+    ) -> Result<(), Error> {
+        let width = 1.0 / 1024.0;
+        match kind {
+            "line" => geometry.draw_line(
+                &[Point2D::new(x, 10.0), Point2D::new(x, 20.0)],
+                &LineStyle::solid((0, 0, 0), width),
+            ),
+            "circle" => geometry.draw_scatter(
+                &[Point2D::new(x, 15.0)],
+                &PointStyle::with_outline(
+                    (0, 0, 0),
+                    1,
+                    Some(backend::PointOutline {
+                        color: (0, 0, 0),
+                        width_ratio: f64::from(width),
+                    }),
+                )
+                .with_opacity(0.0),
+            ),
+            "bracket" => geometry.draw_bracket(
+                &SignificanceBracket {
+                    x_left: x,
+                    x_right: x + 2.0,
+                    y: 20.0,
+                    label: String::new(),
+                    orientation: BracketOrientation::Vertical,
+                },
+                &BracketStyle {
+                    color: (0, 0, 0).into(),
+                    width,
+                    label_color: (0, 0, 0).into(),
+                    font_family: "Test Sans".into(),
+                    font_size: 12,
+                    line_height: 14.4,
+                    weight: crate::TextWeight::Normal,
+                    label_gap: 4.0,
+                },
+            ),
+            "polygon" => geometry.draw_polygon(
+                &[
+                    Point2D::new(x, 10.0),
+                    Point2D::new(x + 2.0, 10.0),
+                    Point2D::new(x + 2.0, 20.0),
+                    Point2D::new(x, 20.0),
+                ],
+                &test_fill_style(0.0, width),
+            ),
+            "rectangle" => {
+                geometry.draw_rounded_rect(x, 10.0, 2.0, 10.0, 0.0, &test_fill_style(0.0, width))
+            }
+            _ => unreachable!("test primitive"),
+        }
+    }
+
+    #[test]
+    fn large_one_quantum_strokes_keep_exact_outward_envelopes_and_clipped_ink() {
+        for x in [2.0_f64.powi(43), -2.0_f64.powi(43)] {
+            for kind in ["line", "circle", "bracket", "polygon", "rectangle"] {
+                let (left, right) = match kind {
+                    "line" => (x, x),
+                    "circle" => (x - 1.0, x + 1.0),
+                    _ => (x, x + 2.0),
+                };
+                let mut geometry = begun_backend();
+                draw_quantum_stroke(&mut geometry, kind, x).unwrap();
+                assert_eq!(
+                    geometry.bounds()[0].left.to_bits(),
+                    left.next_down().to_bits(),
+                    "{kind}"
+                );
+                assert_eq!(
+                    geometry.bounds()[0].right.to_bits(),
+                    right.next_up().to_bits(),
+                    "{kind}"
+                );
+                geometry
+                    .begin_clip(PanelBox::new(right, right + 1.0, 9.0, 21.0))
+                    .unwrap();
+                draw_quantum_stroke(&mut geometry, kind, x).unwrap();
+                assert_eq!(
+                    geometry.bounds().len(),
+                    2,
+                    "clipped {kind} stroke must survive"
+                );
+                assert_eq!(geometry.bounds()[1].left.to_bits(), right.to_bits());
+                assert_eq!(
+                    geometry.bounds()[1].right.to_bits(),
+                    right.next_up().to_bits()
+                );
+                assert!(geometry.bounds()[1].overlap_area(geometry.bounds()[1], 0.0) > 0.0);
+            }
+            let mut geometry = begun_backend();
+            geometry
+                .draw_line(
+                    &[Point2D::new(10.0, x), Point2D::new(20.0, x)],
+                    &LineStyle::solid((0, 0, 0), 1.0 / 1024.0),
+                )
+                .unwrap();
+            assert_eq!(
+                geometry.bounds()[0].bottom.to_bits(),
+                x.next_down().to_bits()
+            );
+            assert_eq!(geometry.bounds()[0].top.to_bits(), x.next_up().to_bits());
+        }
+    }
+
+    #[test]
+    fn painted_edges_reject_signed_quantum_and_directed_float_overflow() {
+        let point = |x| CanonicalPoint {
+            x: super::super::coordinates::CanonicalCoordinate::from_quanta(x),
+            y: super::super::coordinates::CanonicalCoordinate::from_quanta(0),
+        };
+        for x in [i64::MIN, i64::MAX] {
+            assert!(GeometryBox::from_canonical_points(&[point(x)], 1)
+                .unwrap_err()
+                .to_string()
+                .contains("painted bound exceeds signed quantum range"));
+        }
+        for padding in [i128::MIN, i128::MAX] {
+            assert!(GeometryBox::from_canonical_points(&[point(0)], padding).is_err());
+        }
+        let last_float_quanta = i64::MAX - 1023;
+        assert!(GeometryBox::from_canonical_points(&[point(last_float_quanta)], 0).is_ok());
+        assert!(
+            GeometryBox::from_canonical_points(&[point(last_float_quanta)], 1)
+                .unwrap_err()
+                .to_string()
+                .contains("painted collision bound exceeds signed quantum range")
+        );
+        // An unrepresentable canonical vertex must not be rounded before expansion.
+        let bounds = GeometryBox::from_canonical_points(&[point((1_i64 << 53) + 1)], 1)
+            .unwrap()
+            .unwrap();
+        let x = 2.0_f64.powi(43);
+        assert_eq!(bounds.left.to_bits(), x.to_bits());
+        assert_eq!(bounds.right.to_bits(), x.next_up().to_bits());
+        for kind in ["line", "circle", "bracket", "polygon", "rectangle"] {
+            let mut geometry = begun_backend();
+            // Valid canonical geometry at i64::MIN, but its stroke crosses the edge.
+            let error = draw_quantum_stroke(&mut geometry, kind, -2.0_f64.powi(53)).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("painted bound exceeds signed quantum range"),
+                "{kind}: {error}"
+            );
+            assert!(geometry.bounds().is_empty());
+        }
+    }
+
+    #[test]
+    fn local_polygon_miters_stay_conservative_under_large_translations() {
+        for x in [0.0, 2.0_f64.powi(43), -2.0_f64.powi(43)] {
+            let bounds = recorded_polygon(
+                &[
+                    Point2D::new(x, 0.0),
+                    Point2D::new(x + 10.0, 0.0),
+                    Point2D::new(x + 6.0, 3.0),
+                ],
+                &test_fill_style(0.0, 2.0),
+            )
+            .unwrap();
+            // The 3-4-5 edge produces an exact three-pixel miter at the right tip.
+            assert!(bounds.right >= x + 13.0);
+            assert!(bounds.right <= (x + 13.0 + 1.0 / 1024.0).next_up());
+            let points = backend::validate_polygon_points(&[
+                Point2D::new(x, 0.0),
+                Point2D::new(x + 10.0, 0.0),
+                Point2D::new(x + 6.0, 3.0),
+            ])
+            .unwrap();
+            // Thin diagonal stroke offsets survive the same local-to-absolute path.
+            let thin = polygon_stroke_bounds(&points, 1).unwrap().unwrap();
+            assert!(thin.right > x + 10.0);
+            assert!(thin.bottom < 0.0);
+        }
+        let high = 2.0_f64.powi(53) - 2.0;
+        let points = backend::validate_polygon_points(&[
+            Point2D::new(high - 10.0, 0.0),
+            Point2D::new(high, 0.0),
+            Point2D::new(high - 4.0, 3.0),
+        ])
+        .unwrap();
+        assert!(polygon_stroke_bounds(&points, 2048)
+            .unwrap_err()
+            .to_string()
+            .contains("painted bound exceeds signed quantum range"));
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "canonical quanta must agree exactly")]
+    fn raw_fractional_text_matches_planned_quantum_placement() {
+        let style = test_text_style();
+        for x in [-1.2345, 0.5 / 1024.0, 1.5 / 1024.0, 20.125] {
+            let position = Point2D::new(x, 30.2345);
+            let mut raw = begun_backend();
+            raw.draw_text(position, "A", &style).unwrap();
+            let mut planned = begun_backend();
+            let plan = planned
+                .plan_raw_text("A", &style, PhysicalTextAlignment::Center, "test")
+                .unwrap();
+            let placement = PlannedTextPlacement::middle(position, style.anchor, style.rotation);
+            planned.draw_planned_text(placement, &plan).unwrap();
+            assert_eq!(raw.bounds(), planned.bounds());
+            let canonical =
+                super::super::primitives::CanonicalPlannedText::new(placement, &plan, 100, None)
+                    .unwrap();
+            assert_eq!(
+                raw.text[0].placement.position.x,
+                canonical.0.center.x.value()
+            );
+            assert_eq!(
+                raw.text[0].placement.position.y,
+                100.0 - canonical.0.center.y.value()
+            );
+        }
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "outward quantum edges must agree exactly")]
+    fn painted_marker_outlines_survive_fill_excluding_clips() {
+        for shape in [PointShape::Circle, PointShape::TriangleUp] {
+            let mut geometry = begun_backend();
+            geometry
+                .begin_clip(PanelBox::new(8.0, 12.0, 12.0, 13.0))
+                .unwrap();
+            geometry
+                .draw_scatter(
+                    &[Point2D::new(10.0, 10.0)],
+                    &PointStyle::new((0, 0, 0), 2)
+                        .with_shape(shape)
+                        .with_opacity(0.0),
+                )
+                .unwrap();
+            let bounds = geometry.bounds()[0];
+            assert_eq!(bounds.bottom, 12.0);
+            assert!(bounds.top > 12.0);
+            // Triangle tip miter extends a full stroke width, not half.
+            assert_eq!(
+                bounds.top,
+                if shape == PointShape::Circle {
+                    12.100_585_937_5
+                } else {
+                    12.200_195_312_5
+                }
+            );
+        }
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "outward quantum edges must agree exactly")]
+    fn odd_quantum_strokes_round_outward_before_clipping() {
+        let mut geometry = begun_backend();
+        geometry
+            .draw_line(
+                &[Point2D::new(1.0, 2.0), Point2D::new(3.0, 2.0)],
+                &LineStyle::solid((0, 0, 0), 1.0 / 1024.0),
+            )
+            .unwrap();
+        let bounds = geometry.bounds()[0];
+        assert_eq!(bounds.left, 1.0 - 1.0 / 1024.0);
+        assert_eq!(bounds.top, 2.0 + 1.0 / 1024.0);
+        geometry
+            .draw_rounded_rect(1.0, 1.0, 2.0, 2.0, 0.0, &test_fill_style(0.0, 1.0 / 1024.0))
+            .unwrap();
+        assert_eq!(geometry.bounds()[1].left, bounds.left);
+    }
+
+    #[test]
+    fn bracket_uses_quantized_stroke_before_outward_clipped_bounds() {
+        let mut geometry = begun_backend();
+        let style = BracketStyle {
+            color: (0, 0, 0).into(),
+            width: 0.8009,
+            label_color: (0, 0, 0).into(),
+            font_family: "Test Sans".into(),
+            font_size: 12,
+            line_height: 14.4,
+            weight: crate::TextWeight::Normal,
+            label_gap: 4.0,
+        };
+        geometry
+            .begin_clip(PanelBox::new(9.0, 10.0, 29.0, 30.0))
+            .unwrap();
+        geometry
+            .draw_bracket(
+                &SignificanceBracket {
+                    x_left: 10.0,
+                    x_right: 20.0,
+                    y: 30.0,
+                    label: String::new(),
+                    orientation: BracketOrientation::Vertical,
+                },
+                &style,
+            )
+            .unwrap();
+        // 0.8009 becomes 820 quanta: its half is exactly 410, not 411.
+        assert_eq!(
+            geometry.bounds()[0].left.to_bits(),
+            (10.0_f64 - 410.0 / 1024.0).to_bits()
+        );
+        assert_eq!(geometry.bounds()[0].right.to_bits(), 10.0_f64.to_bits());
+    }
 
     #[test]
     fn geometry_text_bytes_refuse_before_allocation_or_clip_processing() {
@@ -1296,7 +1894,7 @@ mod tests {
 
     fn has_polygon_fill(points: &[Point2D]) -> bool {
         let points = backend::validate_polygon_points(points).unwrap();
-        polygon_has_positive_area(&polygon_ring(&points))
+        polygon_has_positive_area(&polygon_ring(&points)).unwrap()
     }
 
     #[test]
@@ -1584,8 +2182,10 @@ mod tests {
         )
         .unwrap();
 
-        assert!((admitted.right - 13.0).abs() < 1.0e-12);
-        assert!((limited.right - (12.0 + 5.0 / 13.0)).abs() < 1.0e-12);
+        // Directed local arithmetic may enclose an exactly integral tip by one quantum.
+        assert!(admitted.right >= 13.0 && admitted.right <= 13.0 + 1.0 / 1024.0);
+        let expected = ((12.0_f64 + 5.0 / 13.0) * 1024.0).ceil() / 1024.0;
+        assert_eq!(limited.right.to_bits(), expected.to_bits());
     }
 
     #[test]
@@ -1689,9 +2289,9 @@ mod tests {
             backend.bounds(),
             &[GeometryBox {
                 left: -1.0,
-                right: 1.001,
+                right: 1.000_976_562_5,
                 bottom: -1.0,
-                top: 1.001,
+                top: 1.000_976_562_5,
                 weight: 1.0,
             }]
         );
@@ -1832,14 +2432,14 @@ mod tests {
         assert_eq!(
             geometry.bounds(),
             &[GeometryBox {
-                left: 9.134,
-                right: 10.866,
+                left: 9.134_765_625,
+                right: 10.866_210_937_5,
                 bottom: 19.5,
                 top: 21.0,
                 weight: 1.0,
             }]
         );
-        assert!(output.contains("points=\"10.000,79.000 9.134,80.500 10.866,80.500\""));
+        assert!(output.contains("points=\"10,79 9.134765625,80.5 10.8662109375,80.5\""));
     }
 
     #[test]

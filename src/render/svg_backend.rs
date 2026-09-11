@@ -6,16 +6,22 @@ use std::ops::Range;
 use crate::Error;
 
 use super::backend::{
-    nearest_even_text_half, validate_bracket, validate_clip_region, validate_fill_style,
-    validate_line_style, validate_point_style, validate_rounded_rect, validate_surface_bounds,
-    validate_text, Backend, BracketStyle, FillStyle, GradientStop, LayerRole, LineStyle,
-    PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement, Point2D, PointStyle, Rgba,
+    validate_bracket, validate_clip_region, validate_fill_style, validate_rounded_rect,
+    validate_surface_bounds, validate_text, Backend, BracketStyle, FillStyle, GradientStop,
+    LayerRole, LineStyle, PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, Rgba,
     SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
 };
-use super::coordinates::{self, CanonicalPoint, ValidationScratch};
+use super::coordinates::{self, CanonicalPoint};
+use super::primitives::{
+    self, CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
+    CanonicalPlannedBracket, CanonicalPlannedText, CanonicalScatter, PathKind,
+};
 use crate::font::canonical::{PreparedFontEnvironment, ShapingDirection};
-use crate::layout::{PanelBox, ResolvedTextPlan, CSS_PIXEL_QUANTA};
+#[cfg(test)]
+use crate::layout::CSS_PIXEL_QUANTA;
+use crate::layout::{PanelBox, ResolvedTextPlan};
 use crate::spec::{PngCompression, PngOptions, PngSizing, SVG_CSS_DPI};
+#[cfg(test)]
 use crate::PointShape;
 
 #[cfg(test)]
@@ -48,50 +54,6 @@ pub(crate) fn reserve_storage<T>(
         }
     });
     stage.reserve_final(values, count, payload)
-}
-
-#[derive(Clone, Copy)]
-struct CanonicalQuantum(i64);
-
-impl fmt::Display for CanonicalQuantum {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let magnitude = self.0.unsigned_abs();
-        if self.0 < 0 {
-            formatter.write_char('-')?;
-        }
-        let whole = magnitude / CSS_PIXEL_QUANTA as u64;
-        let remainder = magnitude % CSS_PIXEL_QUANTA as u64;
-        if remainder == 0 {
-            return write!(formatter, "{whole}");
-        }
-        let mut fraction = remainder * 9_765_625;
-        let mut width = 10;
-        while fraction.is_multiple_of(10) {
-            fraction /= 10;
-            width -= 1;
-        }
-        write!(formatter, "{whole}.{fraction:0width$}")
-    }
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    reason = "validated finite backend coordinates are quantized once to the canonical 1/1024 CSS-pixel lattice"
-)]
-fn pixel_coordinate_quanta(value: f64, field: &str) -> Result<i64, Error> {
-    let scaled = value * CSS_PIXEL_QUANTA as f64;
-    if !scaled.is_finite() || scaled < i64::MIN as f64 || scaled > i64::MAX as f64 {
-        return Err(Error::Render(format!(
-            "planned text {field} is not representable in CSS-pixel quanta"
-        )));
-    }
-    Ok(scaled.round_ties_even() as i64)
-}
-
-fn nearest_even_half(value: i64, field: &str) -> Result<i64, Error> {
-    nearest_even_text_half(value)
-        .ok_or_else(|| Error::Render(format!("planned text {field} cannot be negative")))
 }
 
 impl SvgBackend {
@@ -131,11 +93,9 @@ impl SvgBackend {
             font_environment: None,
             text_replacements: Vec::new(),
             replacement_count: 0,
-            validation: ValidationScratch::default(),
             fixed: false,
             document: String::new(),
             expected_document_bytes: None,
-            run_order: Vec::new(),
         }
     }
 
@@ -276,56 +236,19 @@ impl<S: SvgSink> SvgSerializer<S> {
 }
 
 impl SvgBackend {
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::too_many_lines,
-        reason = "one pass validates and serializes every immutable glyph-plan field"
-    )]
     fn outline_planned_line<S: SvgSink>(
-        height_css_px: u32,
         environment: &PreparedFontEnvironment,
         outline: &PlannedLineOutline,
         outlined: &mut S,
     ) -> Result<(), Error> {
-        let canonical = outline.canonical;
-        let placement = outline.placement;
-        let line = &outline.plan.lines[outline.line_index];
-        let quanta = CSS_PIXEL_QUANTA as f64;
-        let position_x = pixel_coordinate_quanta(canonical.position.x.value(), "x position")?;
-        let position_y = pixel_coordinate_quanta(canonical.position.y.value(), "y position")?;
-        let anchor_offset = match placement.anchor {
-            TextAnchor::Start => 0,
-            TextAnchor::Middle => nearest_even_half(outline.width_quanta, "width")?
-                .checked_neg()
-                .ok_or_else(|| Error::Render("planned text anchor offset overflowed".into()))?,
-            TextAnchor::End => outline
-                .width_quanta
-                .checked_neg()
-                .ok_or_else(|| Error::Render("planned text anchor offset overflowed".into()))?,
-        };
-        let block_left = position_x
-            .checked_add(anchor_offset)
-            .ok_or_else(|| Error::Render("planned text block x overflowed".into()))?;
-        let vertical_reference = match placement.origin {
-            PlannedTextOrigin::Middle => nearest_even_half(outline.height_quanta, "height")?,
-            PlannedTextOrigin::Baseline => outline.first_baseline_quanta.unwrap_or(0),
-        };
-        let line_x = block_left
-            .checked_add(line.translation_x_quanta)
-            .ok_or_else(|| Error::Render("planned text line x overflowed".into()))?;
-        let line_y = placement.line_y(&outline.plan, line.translation_y_quanta)?;
-        let baseline = position_y
-            .checked_add(vertical_reference)
-            .and_then(|value| value.checked_sub(line_y))
-            .ok_or_else(|| Error::Render("planned text baseline overflowed".into()))?;
-        let rotation_center = (
-            canonical.position.x.value(),
-            canonical.position.y.inverted(height_css_px)?.value(),
-        );
-        let fill = SvgPaint::from(outline.paint).attributes("fill");
+        let text = &outline.text.0;
+        let line = &text.plan.lines[outline.line_index];
+        let geometry = &text.lines[outline.line_index];
+        let rotation_center = (text.center.x.value(), text.center.y.value());
+        let fill = SvgPaint::from(text.plan.style.paint).attributes("fill");
 
-        for run in &line.runs {
-            for glyph in &run.glyphs {
+        for (run, geometry) in line.runs.iter().zip(&geometry.runs) {
+            for (glyph, origin) in run.glyphs.iter().zip(&geometry.glyphs) {
                 if glyph.face != run.face {
                     return Err(Error::Render(
                         "planned glyph face does not match its immutable shaped run".into(),
@@ -365,24 +288,13 @@ impl SvgBackend {
                     ));
                 }
                 if builder.data.len() != 0 {
-                    let glyph_origin_quanta =
-                        (glyph.glyph_origin_x_quanta, glyph.glyph_origin_y_quanta);
-                    let glyph_x = line_x.checked_add(glyph_origin_quanta.0).ok_or_else(|| {
-                        Error::Render("planned glyph x placement overflowed".into())
-                    })?;
-                    let glyph_y = baseline.checked_add(glyph_origin_quanta.1).ok_or_else(|| {
-                        Error::Render("planned glyph y placement overflowed".into())
-                    })?;
-                    let path_origin = (
-                        glyph_x as f64 / quanta,
-                        f64::from(height_css_px) - glyph_y as f64 / quanta,
-                    );
-                    let scale = f64::from(outline.font_size) / f64::from(run.units_per_em);
+                    let path_origin = (origin.x.value(), origin.y.value());
+                    let scale = f64::from(text.plan.style.font_size) / f64::from(run.units_per_em);
                     let transform = glyph_transform(
                         scale,
                         path_origin.0,
                         path_origin.1,
-                        outline.rotation_sin_cos,
+                        text.rotation_sin_cos,
                         rotation_center,
                     );
                     let _ = outlined.write_str("<path d=\"");
@@ -406,47 +318,15 @@ impl SvgBackend {
 }
 
 impl<S: SvgSink> SvgSerializer<S> {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one shared emitter preserves line framing and frozen visual-run placement"
-    )]
-    fn draw_multiline_planned_text(
-        &mut self,
-        canonical: super::coordinates::CanonicalText,
-        placement: PlannedTextPlacement,
-        plan: &ResolvedTextPlan,
-    ) -> Result<(), Error> {
-        let position_x = pixel_coordinate_quanta(canonical.position.x.value(), "x position")?;
-        let position_y = pixel_coordinate_quanta(canonical.position.y.value(), "y position")?;
-        let anchor_offset = match placement.anchor {
-            TextAnchor::Start => 0,
-            TextAnchor::Middle => nearest_even_half(plan.width_quanta, "width")?
-                .checked_neg()
-                .ok_or_else(|| Error::Render("planned text anchor offset overflowed".into()))?,
-            TextAnchor::End => plan
-                .width_quanta
-                .checked_neg()
-                .ok_or_else(|| Error::Render("planned text anchor offset overflowed".into()))?,
-        };
-        let block_left = position_x
-            .checked_add(anchor_offset)
-            .ok_or_else(|| Error::Render("planned text block x overflowed".into()))?;
-        let vertical_reference = match placement.origin {
-            PlannedTextOrigin::Middle => nearest_even_half(plan.height_quanta, "height")?,
-            PlannedTextOrigin::Baseline => plan.first_baseline_quanta.unwrap_or(0),
-        };
+    fn draw_multiline_planned_text(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
+        let plan = &text.0.plan;
         let fill = SvgPaint::from(plan.style.paint).attributes("fill");
         let family = Self::escape_text(&plan.style.stack_source);
         let weight = FontWeight(plan.style.weight);
-        let root_height = i64::from(self.height)
-            .checked_mul(CSS_PIXEL_QUANTA)
-            .ok_or_else(|| Error::Render("planned text root height overflowed".into()))?;
-        let rotation_center_y = root_height
-            .checked_sub(position_y)
-            .ok_or_else(|| Error::Render("planned text rotation center overflowed".into()))?;
-        let rotation = canonical.rotation;
-        let rotated = rotation.units() != 0;
+        let rotation = text.0.rotation;
+        let rotated = rotation.is_rotated();
         for (line_index, line) in plan.lines.iter().enumerate() {
+            let geometry = &text.0.lines[line_index];
             let start = line.source_span.start_byte as usize;
             let end = line.source_span.end_byte as usize;
             let source = &plan.source[start..end];
@@ -460,17 +340,6 @@ impl<S: SvgSink> SvgSerializer<S> {
                 ShapingDirection::LeftToRight => ("ltr", "start"),
                 ShapingDirection::RightToLeft => ("rtl", "end"),
             };
-            let x = block_left
-                .checked_add(line.translation_x_quanta)
-                .ok_or_else(|| Error::Render("planned text line x overflowed".into()))?;
-            let line_y = placement.line_y(plan, line.translation_y_quanta)?;
-            let baseline = position_y
-                .checked_add(vertical_reference)
-                .and_then(|value| value.checked_sub(line_y))
-                .ok_or_else(|| Error::Render("planned text baseline overflowed".into()))?;
-            let y = root_height
-                .checked_sub(baseline)
-                .ok_or_else(|| Error::Render("planned text SVG y overflowed".into()))?;
             let preserve = match self.active_text_buffer() {
                 TextBuffer::Body => &mut self.body,
                 TextBuffer::Grid => &mut self.grid_buf,
@@ -480,66 +349,29 @@ impl<S: SvgSink> SvgSerializer<S> {
                 let _ = write!(
                     preserve,
                     "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\" transform=\"rotate({rotation},{},{})\"",
-                    CanonicalQuantum(x),
-                    CanonicalQuantum(y),
+                    geometry.origin.x,
+                    geometry.origin.y,
                     plan.style.font_size,
-                    CanonicalQuantum(position_x),
-                    CanonicalQuantum(rotation_center_y),
+                    text.0.center.x,
+                    text.0.center.y,
                 );
             } else {
                 let _ = write!(
                     preserve,
                     "<text x=\"{}\" y=\"{}\" font-family=\"{family}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{physical_anchor}\" direction=\"{direction}\"",
-                    CanonicalQuantum(x),
-                    CanonicalQuantum(y),
+                    geometry.origin.x,
+                    geometry.origin.y,
                     plan.style.font_size,
                 );
             }
-            let isolate_runs = line.selected_soft_hyphen.is_some()
-                || line.runs.len() > 1
-                || line
-                    .runs
-                    .iter()
-                    .any(|run| run.bidi_level > 1 || run.direction != line.base_direction);
-            if isolate_runs {
-                let order = if line.runs.len() > 1 {
-                    self.run_order.clear();
-                    if line.runs.len() > self.run_order.capacity() {
-                        if self.fixed {
-                            return Err(Error::Render(
-                                "SVG exceeded reserved run-order scratch".into(),
-                            ));
-                        }
-                        self.run_order
-                            .try_reserve_exact(line.runs.len())
-                            .map_err(|error| {
-                                Error::Render(format!("SVG run-order reservation: {error}"))
-                            })?;
-                    }
-                    self.run_order.extend(0..line.runs.len());
-                    self.run_order
-                        .sort_unstable_by_key(|index| line.runs[*index].source_span.start_byte);
-                    self.run_order.as_slice()
-                } else {
-                    &[0][..line.runs.len()]
-                };
+            if geometry.isolate_runs {
                 let _ = write!(preserve, " aria-label=\"{}\">", EscapedAttribute(source));
-                for &index in order {
+                for &index in &geometry.order {
                     let run = &line.runs[index];
-                    let Some(first) = run.glyphs.first() else {
+                    let Some(origin) = geometry.runs[index].origin else {
                         continue;
                     };
                     let rtl = run.bidi_level % 2 != 0;
-                    let origin = first
-                        .glyph_origin_x_quanta
-                        .checked_sub(first.x_offset_quanta)
-                        .and_then(|origin| x.checked_add(origin))
-                        .ok_or_else(|| Error::Render("planned SVG run origin overflow".into()))?;
-                    let run_y = first
-                        .glyph_origin_y_quanta
-                        .checked_sub(first.y_offset_quanta)
-                        .and_then(|origin| y.checked_sub(origin))
-                        .ok_or_else(|| Error::Render("planned SVG run baseline overflow".into()))?;
                     let run_source = &plan.source
                         [run.source_span.start_byte as usize..run.source_span.end_byte as usize];
                     let (run_direction, anchor) = if rtl {
@@ -548,7 +380,7 @@ impl<S: SvgSink> SvgSerializer<S> {
                     } else {
                         ("ltr", "start")
                     };
-                    let _ = write!(preserve, "<tspan x=\"{}\" y=\"{}\" direction=\"{run_direction}\" unicode-bidi=\"bidi-override\" text-anchor=\"{anchor}\">", CanonicalQuantum(origin), CanonicalQuantum(run_y));
+                    let _ = write!(preserve, "<tspan x=\"{}\" y=\"{}\" direction=\"{run_direction}\" unicode-bidi=\"bidi-override\" text-anchor=\"{anchor}\">", origin.x, origin.y);
                     if let Some(soft) = line.selected_soft_hyphen.filter(|soft| {
                         soft.start_byte >= run.source_span.start_byte
                             && soft.end_byte <= run.source_span.end_byte
@@ -576,8 +408,10 @@ impl<S: SvgSink> SvgSerializer<S> {
             }
             self.append_text_replacement(
                 start,
-                (!S::COUNTING)
-                    .then(|| PlannedLineOutline::new(canonical, placement, plan, line_index)),
+                (!S::COUNTING).then(|| PlannedLineOutline {
+                    text: text.clone(),
+                    line_index,
+                }),
             )?;
         }
         Ok(())
@@ -714,7 +548,6 @@ impl SvgOutlinePlan {
             TextBuffer::Grid,
             &source.replacements,
             source.font_environment.as_ref(),
-            height,
             output,
         )?;
         apply_text_replacements(
@@ -722,7 +555,6 @@ impl SvgOutlinePlan {
             TextBuffer::Body,
             &source.replacements,
             source.font_environment.as_ref(),
-            height,
             output,
         )?;
         let _ = output.write_str("</svg>\n");
@@ -762,38 +594,8 @@ struct TextReplacement {
 }
 
 struct PlannedLineOutline {
-    canonical: super::coordinates::CanonicalText,
-    placement: PlannedTextPlacement,
-    width_quanta: i64,
-    height_quanta: i64,
-    first_baseline_quanta: Option<i64>,
-    font_size: u32,
-    paint: Rgba,
-    plan: ResolvedTextPlan,
+    text: CanonicalPlannedText,
     line_index: usize,
-    rotation_sin_cos: (f64, f64),
-}
-
-impl PlannedLineOutline {
-    fn new(
-        canonical: super::coordinates::CanonicalText,
-        placement: PlannedTextPlacement,
-        plan: &ResolvedTextPlan,
-        line_index: usize,
-    ) -> Self {
-        Self {
-            canonical,
-            placement,
-            width_quanta: plan.width_quanta,
-            height_quanta: plan.height_quanta,
-            first_baseline_quanta: plan.first_baseline_quanta,
-            font_size: plan.style.font_size,
-            paint: plan.style.paint,
-            plan: plan.clone(),
-            line_index,
-            rotation_sin_cos: canonical.rotation.value().to_radians().sin_cos(),
-        }
-    }
 }
 
 #[derive(Default)]
@@ -930,40 +732,18 @@ impl fmt::Display for EscapedAttribute<'_> {
     }
 }
 
-struct PointTokens<'a>(&'a [Point2D], u32);
+struct PointTokens<'a>(&'a [CanonicalPoint]);
 
 impl fmt::Display for PointTokens<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        emit_points(
-            formatter,
-            coordinates::canonical_points_iter(self.0, "SVG points"),
-            self.1,
-        )
-    }
-}
-
-struct TriangleTokens([CanonicalPoint; 3], u32);
-
-impl fmt::Display for TriangleTokens {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        emit_points(formatter, self.0.into_iter().map(Ok), self.1)
-    }
-}
-
-fn emit_points(
-    formatter: &mut fmt::Formatter<'_>,
-    points: impl Iterator<Item = Result<CanonicalPoint, Error>>,
-    height: u32,
-) -> fmt::Result {
-    for (index, point) in points.enumerate() {
-        let point = point.map_err(|_| fmt::Error)?;
-        let y = point.y.inverted(height).map_err(|_| fmt::Error)?;
-        if index != 0 {
-            formatter.write_str(" ")?;
+        for (index, point) in self.0.iter().enumerate() {
+            if index != 0 {
+                formatter.write_str(" ")?;
+            }
+            write!(formatter, "{},{}", point.x, point.y)?;
         }
-        write!(formatter, "{},{}", point.x, y)?;
+        Ok(())
     }
-    Ok(())
 }
 
 struct FontWeight(crate::TextWeight);
@@ -1175,6 +955,15 @@ macro_rules! svg_backend_methods {
 }
 
 svg_backend_methods! {
+    fn draw_canonical_text(text: &CanonicalPlannedText);
+    fn draw_canonical_bracket(bracket: &CanonicalPlannedBracket);
+    fn draw_canonical_scatter(scatter: &CanonicalScatter);
+    fn draw_canonical_line(points: &[CanonicalPoint], style: &CanonicalLineStyle);
+    fn draw_canonical_polygon(points: &[CanonicalPoint], style: &CanonicalFillStyle);
+    fn draw_canonical_gradient(gradient: &CanonicalGradientFill);
+    fn begin_canonical_clip(region: coordinates::CanonicalBox);
+    fn draw_canonical_surface(bounds: coordinates::CanonicalBox, paint: Rgba, role: SurfaceRole);
+    fn draw_canonical_rounded_rect(rounded: coordinates::CanonicalRoundedBox);
     fn begin(width: u32, height: u32);
     fn end();
     fn begin_layer(name: &str);
@@ -1452,11 +1241,9 @@ pub struct SvgSerializer<S: SvgSink> {
     font_environment: Option<PreparedFontEnvironment>,
     text_replacements: Vec<TextReplacement>,
     replacement_count: usize,
-    validation: ValidationScratch,
     fixed: bool,
     document: String,
     expected_document_bytes: Option<usize>,
-    run_order: Vec<usize>,
 }
 
 /// Concrete canonical SVG writer.
@@ -1469,15 +1256,9 @@ pub(crate) struct SvgStorage {
 #[derive(Clone, Copy)]
 pub(crate) struct SvgStorageRequirements {
     pub(crate) scopes: usize,
-    pub(crate) points: usize,
-    pub(crate) runs: usize,
 }
 
 impl SvgStorage {
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one preparation owns counting and transfer of every actual canonical buffer"
-    )]
     pub(crate) fn prepare(
         width: u32,
         height: u32,
@@ -1492,19 +1273,6 @@ impl SvgStorage {
             &mut groups,
             requirements.scopes,
             "canonical SVG scopes",
-        )?;
-        let mut validation = ValidationScratch::default();
-        validation.prepare(
-            requirements.points,
-            stage,
-            "canonical SVG validation points",
-        )?;
-        let mut run_order = Vec::new();
-        reserve_storage(
-            stage,
-            &mut run_order,
-            requirements.runs,
-            "canonical SVG run-order scratch",
         )?;
         let mut count = SvgSerializer {
             output: None,
@@ -1523,11 +1291,9 @@ impl SvgStorage {
             font_environment: None,
             text_replacements: Vec::new(),
             replacement_count: 0,
-            validation,
             fixed: true,
             document: String::new(),
             expected_document_bytes: None,
-            run_order,
         };
         visit(&mut count)?;
         count.check_buffers()?;
@@ -1593,11 +1359,9 @@ impl SvgStorage {
                 font_environment: Some(environment),
                 text_replacements: replacements,
                 replacement_count: 0,
-                validation: count.validation,
                 fixed: true,
                 document: document_storage.text,
                 expected_document_bytes: Some(document.len()),
-                run_order: count.run_order,
             },
         })
     }
@@ -1706,16 +1470,26 @@ impl<S: SvgSink> SvgSerializer<S> {
     pub(crate) fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
         self.ensure_begun("begin_clip")?;
         let region = validate_clip_region(region)?;
+        self.begin_canonical_clip(coordinates::CanonicalBox::from_bottom_up(
+            region,
+            self.height,
+        )?)
+    }
+
+    pub(crate) fn begin_canonical_clip(
+        &mut self,
+        region: coordinates::CanonicalBox,
+    ) -> Result<(), Error> {
+        self.ensure_begun("begin_clip")?;
         let id = self.next_clip_id;
         self.next_clip_id = self
             .next_clip_id
             .checked_add(1)
             .ok_or_else(|| Error::Render("SVG clip identifier overflow".into()))?;
-        let svg_y = region.top.inverted(self.height)?;
         let _ = writeln!(
             self.clip_defs,
             "<clipPath id=\"clip-{id}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>",
-            region.left, svg_y, region.width, region.height,
+            region.x, region.y, region.width, region.height,
         );
         let _ = writeln!(self.buf(), "<g clip-path=\"url(#clip-{id})\">");
         self.push_group(GroupState::Clip)?;
@@ -1747,20 +1521,32 @@ impl<S: SvgSink> SvgSerializer<S> {
     ) -> Result<(), Error> {
         self.ensure_begun("draw_surface")?;
         let bounds = validate_surface_bounds(bounds)?;
+        self.draw_canonical_surface(
+            coordinates::CanonicalBox::from_bottom_up(bounds, self.height)?,
+            paint,
+            role,
+        )
+    }
+
+    pub(crate) fn draw_canonical_surface(
+        &mut self,
+        bounds: coordinates::CanonicalBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_surface")?;
         let paint = SvgPaint(paint).attributes("fill");
-        let canvas_bounds = validate_surface_bounds(PanelBox::new(
-            0.0,
-            f64::from(self.width),
-            0.0,
-            f64::from(self.height),
-        ))?;
-        if role == SurfaceRole::CanvasRoot && bounds == canvas_bounds {
+        if role == SurfaceRole::CanvasRoot
+            && bounds.x.units() == 0
+            && bounds.y.units() == 0
+            && bounds.width.units() == i64::from(self.width) * 1024
+            && bounds.height.units() == i64::from(self.height) * 1024
+        {
             let _ = writeln!(
                 self.root_surfaces,
                 "<rect width=\"100%\" height=\"100%\" {paint}/>"
             );
         } else {
-            let svg_y = bounds.top.inverted(self.height)?;
             let buffer = match role {
                 SurfaceRole::CanvasRoot => &mut self.root_surfaces,
                 SurfaceRole::PlotPanel => &mut self.panel_surfaces,
@@ -1768,7 +1554,7 @@ impl<S: SvgSink> SvgSerializer<S> {
             let _ = writeln!(
                 buffer,
                 "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" {paint}/>",
-                bounds.left, svg_y, bounds.width, bounds.height,
+                bounds.x, bounds.y, bounds.width, bounds.height,
             );
         }
         Ok(())
@@ -1780,56 +1566,52 @@ impl<S: SvgSink> SvgSerializer<S> {
         style: &PointStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        for point in coordinates::canonical_points_iter(points, "scatter") {
-            point?;
-        }
-        validate_point_style(style)?;
-        let color = SvgPaint::from(style.color);
-        let outline = style.outline.map(|outline| {
-            (
-                SvgPaint::from(outline.color),
-                outline.width_for_radius(style.radius),
-            )
-        });
-        let height = self.height;
-        match style.shape {
-            PointShape::Circle => {
+        let scatter = CanonicalScatter::new(points, style, self.height, None)?;
+        self.draw_canonical_scatter(&scatter)
+    }
+
+    pub(crate) fn draw_canonical_scatter(
+        &mut self,
+        scatter: &CanonicalScatter,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_scatter")?;
+        let color = SvgPaint::from(scatter.color);
+        let outline = scatter
+            .outline
+            .map(|(color, width)| (SvgPaint::from(color), width));
+        match &scatter.markers {
+            CanonicalMarkers::Circles { points, radius } => {
                 let buf = self.buf();
-                for p in coordinates::canonical_points_iter(points, "scatter") {
-                    let p = p?;
-                    let y = p.y.inverted(height)?;
+                for p in points {
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             buf,
-                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\"/>",
-                            p.x, y, style.radius, style.opacity
+                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width}\"/>",
+                            p.x, p.y, radius, scatter.opacity
                         );
                     } else {
                         let _ = writeln!(
                             buf,
                             "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            p.x, y, style.radius, style.opacity
+                            p.x, p.y, radius, scatter.opacity
                         );
                     }
                 }
             }
-            PointShape::TriangleUp => {
-                for (index, point) in points.iter().copied().enumerate() {
-                    let vertices = TriangleTokens(
-                        coordinates::canonical_triangle(point, style.radius, index)?,
-                        height,
-                    );
+            CanonicalMarkers::Triangles(triangles) => {
+                for triangle in triangles {
+                    let vertices = PointTokens(triangle);
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             self.buf(),
-                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width:.1}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
-                            style.opacity,
+                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
+                            scatter.opacity,
                         );
                     } else {
                         let _ = writeln!(
                             self.buf(),
                             "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            style.opacity
+                            scatter.opacity
                         );
                     }
                 }
@@ -1843,10 +1625,19 @@ impl<S: SvgSink> SvgSerializer<S> {
         if points.len() < 2 {
             return Ok(());
         }
-        self.validation.line(points)?;
-        validate_line_style(style)?;
+        let points = primitives::path(points, PathKind::Line, self.height, None)?;
+        let style = CanonicalLineStyle::new(style)?;
+        self.draw_canonical_line(&points, &style)
+    }
+
+    pub(crate) fn draw_canonical_line(
+        &mut self,
+        points: &[CanonicalPoint],
+        style: &CanonicalLineStyle,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_line")?;
         let stroke = SvgPaint::from(style.color).attributes("stroke");
-        let pts_str = PointTokens(points, self.height);
+        let pts_str = PointTokens(points);
         let buf = self.buf();
         if let Some(dasharray) = style.pattern.svg_dasharray() {
             let _ = writeln!(
@@ -1873,11 +1664,20 @@ impl<S: SvgSink> SvgSerializer<S> {
         if points.len() < 3 {
             return Ok(());
         }
-        self.validation.polygon(points)?;
-        validate_fill_style(style)?;
+        let points = primitives::path(points, PathKind::Polygon, self.height, None)?;
+        let style = CanonicalFillStyle::new(style)?;
+        self.draw_canonical_polygon(&points, &style)
+    }
+
+    pub(crate) fn draw_canonical_polygon(
+        &mut self,
+        points: &[CanonicalPoint],
+        style: &CanonicalFillStyle,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_polygon")?;
         let fill = SvgPaint::from(style.color);
         let stroke = SvgPaint::from(style.stroke);
-        let pts_str = PointTokens(points, self.height);
+        let pts_str = PointTokens(points);
         let buf = self.buf();
         let _ = writeln!(
             buf,
@@ -1895,26 +1695,27 @@ impl<S: SvgSink> SvgSerializer<S> {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.ensure_begun("draw_linear_gradient")?;
-        let (bounds, start, end) =
-            coordinates::visit_canonical_gradient(bounds, start, end, stops, |_| {})?;
+        let gradient = CanonicalGradientFill::new(bounds, start, end, stops, self.height, None)?;
+        self.draw_canonical_gradient(&gradient)
+    }
+
+    pub(crate) fn draw_canonical_gradient(
+        &mut self,
+        gradient: &CanonicalGradientFill,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_linear_gradient")?;
         let id = self.next_gradient_id;
         self.next_gradient_id = self
             .next_gradient_id
             .checked_add(1)
             .ok_or_else(|| Error::Render("SVG gradient identifier overflow".into()))?;
-        let start_y = start.y.inverted(self.height)?;
-        let end_y = end.y.inverted(self.height)?;
         let _ = writeln!(
             self.gradient_defs,
             "<linearGradient id=\"linear-gradient-{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">",
-            start.x, start_y, end.x, end_y,
+            gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y,
         );
-        for stop in stops {
-            let offset = coordinates::CanonicalCoordinate::from_f64(
-                stop.offset,
-                coordinates::CoordinatePrecision::Millionths,
-                "linear gradient stop offset",
-            )?;
+        for stop in &gradient.stops {
+            let offset = stop.offset;
             let color = SvgPaint::from(stop.color);
             let _ = writeln!(
                 self.gradient_defs,
@@ -1922,14 +1723,13 @@ impl<S: SvgSink> SvgSerializer<S> {
             );
         }
         let _ = writeln!(self.gradient_defs, "</linearGradient>");
-        let svg_y = bounds.top.inverted(self.height)?;
         let _ = writeln!(
             self.buf(),
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"url(#linear-gradient-{id})\"/>",
-            bounds.left,
-            svg_y,
-            bounds.width,
-            bounds.height,
+            gradient.bounds.x,
+            gradient.bounds.y,
+            gradient.bounds.width,
+            gradient.bounds.height,
         );
         Ok(())
     }
@@ -1946,21 +1746,32 @@ impl<S: SvgSink> SvgSerializer<S> {
         self.ensure_begun("draw_rounded_rect")?;
         let rounded = validate_rounded_rect(rect_x, rect_y, rect_w, rect_h, radius)?;
         validate_fill_style(style)?;
-        let fill = SvgPaint::from(style.color);
-        let stroke = SvgPaint::from(style.stroke);
-        let svg_y = rounded.rect.top.inverted(self.height)?;
+        self.draw_canonical_rounded_rect(coordinates::CanonicalRoundedBox::from_bottom_up(
+            rounded,
+            style,
+            self.height,
+        )?)
+    }
+
+    pub(crate) fn draw_canonical_rounded_rect(
+        &mut self,
+        rounded: coordinates::CanonicalRoundedBox,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_rounded_rect")?;
+        let fill = SvgPaint::from(rounded.color);
+        let stroke = SvgPaint::from(rounded.stroke);
         let buf = self.buf();
         let _ = writeln!(
             buf,
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\"/>",
-            rounded.rect.left,
-            svg_y,
-            rounded.rect.width,
-            rounded.rect.height,
+            rounded.bounds.x,
+            rounded.bounds.y,
+            rounded.bounds.width,
+            rounded.bounds.height,
             rounded.radius,
             rounded.radius,
-            style.opacity,
-            style.stroke_width,
+            rounded.opacity,
+            rounded.stroke_width,
         );
         Ok(())
     }
@@ -1993,7 +1804,7 @@ impl<S: SvgSink> SvgSerializer<S> {
             ""
         };
         let buf = self.buf();
-        if canonical.rotation.units() != 0 {
+        if canonical.rotation.is_rotated() {
             let _ = writeln!(
                 buf,
                 "<text x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{}\"{weight}{preserve_space} {fill} text-anchor=\"{anchor}\" dominant-baseline=\"middle\" transform=\"rotate({},{},{})\">{escaped}</text>",
@@ -2023,13 +1834,18 @@ impl<S: SvgSink> SvgSerializer<S> {
         placement: PlannedTextPlacement,
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
+        self.ensure_begun("draw_planned_text")?;
+        let text = CanonicalPlannedText::new(placement, plan, self.height, None)?;
+        self.draw_canonical_text(&text)
+    }
+
+    pub(crate) fn draw_canonical_text(&mut self, text: &CanonicalPlannedText) -> Result<(), Error> {
         #[cfg(test)]
         if !S::COUNTING {
             SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
         }
         self.ensure_begun("draw_planned_text")?;
-        let canonical = super::backend::validate_planned_text(placement, plan)?;
-        self.draw_multiline_planned_text(canonical, placement, plan)
+        self.draw_multiline_planned_text(text)
     }
 
     pub(crate) fn draw_bracket(
@@ -2108,63 +1924,26 @@ impl<S: SvgSink> SvgSerializer<S> {
         &mut self,
         call: PlannedSignificanceCall<'_>,
     ) -> Result<(), Error> {
-        #[cfg(test)]
-        if !S::COUNTING {
-            SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(calls.get() + 1));
-        }
         self.ensure_begun("draw_planned_bracket")?;
-        let canonical = super::backend::validate_planned_bracket(call)?;
-        let stroke = SvgPaint::from(call.style.color).attributes("stroke");
-        let plan = &call.label.plan;
-        let height = self.height;
-        let line_start_y = canonical.line_start.y.inverted(height)?;
-        let line_end_y = canonical.line_end.y.inverted(height)?;
-        let first_tick_y = canonical.first_tick_end.y.inverted(height)?;
-        let second_tick_y = canonical.second_tick_end.y.inverted(height)?;
-        let placement = super::backend::planned_bracket_placement(canonical);
-        let canonical_text = super::backend::validate_planned_text(placement, plan)?;
-        match canonical.orientation {
-            super::backend::BracketOrientation::Vertical => {
-                let _ = writeln!(
-                    self.buf(),
-                    "<path class=\"significance-bracket\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\"/>",
-                    canonical.line_start.x,
-                    line_start_y,
-                    canonical.line_end.x,
-                    line_end_y,
-                    canonical.line_start.x,
-                    line_start_y,
-                    canonical.first_tick_end.x,
-                    first_tick_y,
-                    canonical.line_end.x,
-                    line_end_y,
-                    canonical.second_tick_end.x,
-                    second_tick_y,
-                    call.style.width,
-                );
-            }
-            super::backend::BracketOrientation::Horizontal => {
-                let _ = writeln!(
-                    self.buf(),
-                    "<path class=\"significance-bracket horizontal\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\"/>",
-                    canonical.line_start.x,
-                    line_start_y,
-                    canonical.line_end.x,
-                    line_end_y,
-                    canonical.line_start.x,
-                    line_start_y,
-                    canonical.first_tick_end.x,
-                    first_tick_y,
-                    canonical.line_end.x,
-                    line_end_y,
-                    canonical.second_tick_end.x,
-                    second_tick_y,
-                    call.style.width,
-                );
-            }
-        }
-        self.draw_multiline_planned_text(canonical_text, placement, plan)?;
-        Ok(())
+        let bracket = CanonicalPlannedBracket::new(call, self.height, None)?;
+        self.draw_canonical_bracket(&bracket)
+    }
+
+    pub(crate) fn draw_canonical_bracket(
+        &mut self,
+        bracket: &CanonicalPlannedBracket,
+    ) -> Result<(), Error> {
+        self.ensure_begun("draw_planned_bracket")?;
+        let stroke = SvgPaint::from(bracket.color).attributes("stroke");
+        let suffix = match bracket.orientation {
+            super::backend::BracketOrientation::Vertical => "",
+            super::backend::BracketOrientation::Horizontal => " horizontal",
+        };
+        let [start, end, first, second] = bracket.points;
+        let _ = writeln!(self.buf(),
+            "<path class=\"significance-bracket{suffix}\" d=\"M {} {} L {} {} M {} {} L {} {} M {} {} L {} {}\" fill=\"none\" {stroke} stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+            start.x, start.y, end.x, end.y, start.x, start.y, first.x, first.y, end.x, end.y, second.x, second.y, bracket.width);
+        self.draw_canonical_text(&bracket.text)
     }
 }
 
@@ -2234,7 +2013,6 @@ fn apply_text_replacements<S: SvgSink>(
     buffer: TextBuffer,
     replacements: &[TextReplacement],
     font_environment: Option<&PreparedFontEnvironment>,
-    height_css_px: u32,
     outlined: &mut S,
 ) -> Result<(), String> {
     let mut cursor = 0_usize;
@@ -2254,7 +2032,7 @@ fn apply_text_replacements<S: SvgSink>(
             let environment = font_environment.ok_or_else(|| {
                 "planned SVG text was serialized without its retained font environment".to_owned()
             })?;
-            SvgBackend::outline_planned_line(height_css_px, environment, outline, outlined)
+            SvgBackend::outline_planned_line(environment, outline, outlined)
                 .map_err(|error| error.to_string())?;
         }
         cursor = replacement.range.end;
@@ -2394,14 +2172,16 @@ mod tests {
             .unwrap();
         let placement =
             PlannedTextPlacement::middle(Point2D::new(8.0, 20.0), TextAnchor::Start, 0.0);
-        let canonical = super::super::backend::validate_planned_text(placement, &plan).unwrap();
-        let outline = PlannedLineOutline::new(canonical, placement, &plan, 0);
+        let outline = PlannedLineOutline {
+            text: CanonicalPlannedText::new(placement, &plan, 40, None).unwrap(),
+            line_index: 0,
+        };
         let mut buffer = WriteBuffer {
             fixed: true,
             ..WriteBuffer::default()
         };
         let error =
-            SvgBackend::outline_planned_line(40, &environment, &outline, &mut buffer).unwrap_err();
+            SvgBackend::outline_planned_line(&environment, &outline, &mut buffer).unwrap_err();
         assert!(error.to_string().contains("reserved storage"));
         assert!(buffer.failed);
         assert_eq!(buffer.text.capacity(), 0);
@@ -2549,12 +2329,22 @@ mod tests {
 
     #[test]
     fn canonical_quantum_spelling_is_exact_and_minimal() {
-        assert_eq!(CanonicalQuantum(0).to_string(), "0");
-        assert_eq!(CanonicalQuantum(1).to_string(), "0.0009765625");
-        assert_eq!(CanonicalQuantum(512).to_string(), "0.5");
-        assert_eq!(CanonicalQuantum(1023).to_string(), "0.9990234375");
-        assert_eq!(CanonicalQuantum(-1536).to_string(), "-1.5");
-        assert_eq!(CanonicalQuantum(i64::MIN).to_string(), "-9007199254740992");
+        use coordinates::CanonicalCoordinate;
+        assert_eq!(CanonicalCoordinate::from_quanta(0).to_string(), "0");
+        assert_eq!(
+            CanonicalCoordinate::from_quanta(1).to_string(),
+            "0.0009765625"
+        );
+        assert_eq!(CanonicalCoordinate::from_quanta(512).to_string(), "0.5");
+        assert_eq!(
+            CanonicalCoordinate::from_quanta(1023).to_string(),
+            "0.9990234375"
+        );
+        assert_eq!(CanonicalCoordinate::from_quanta(-1536).to_string(), "-1.5");
+        assert_eq!(
+            CanonicalCoordinate::from_quanta(i64::MIN).to_string(),
+            "-9007199254740992"
+        );
     }
 
     fn test_fill_style() -> FillStyle {
@@ -2711,7 +2501,7 @@ mod tests {
         backend.end().unwrap();
 
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-        assert!(svg.contains("points=\"0.000,100.000 0.001,99.999\""));
+        assert!(svg.contains("points=\"0,100 0.0009765625,99.9990234375\""));
     }
 
     #[test]
@@ -2727,7 +2517,7 @@ mod tests {
         backend.end().unwrap();
 
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
-        assert!(svg.contains("points=\"10.000,79.000 9.134,80.500 10.867,80.500\""));
+        assert!(svg.contains("points=\"10.0009765625,79 9.134765625,80.5 10.8662109375,80.5\""));
     }
 
     #[test]
@@ -2775,11 +2565,11 @@ mod tests {
         assert_eq!(
             primitives,
             [
-                "<circle cx=\"10.000\" cy=\"80.000\" r=\"2\" fill=\"#000000\" fill-opacity=\"0.82\"/>",
-                "<polygon points=\"20.000,78.000 18.268,81.000 21.732,81.000\" fill=\"#010203\" fill-opacity=\"0.82\"/>",
-                "<circle cx=\"15.000\" cy=\"80.000\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2\"/>",
-                "<polygon points=\"30.000,78.000 28.268,81.000 31.732,81.000\" fill=\"#040506\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
-                "<polygon points=\"10.000,90.000 20.000,90.000 10.000,80.000\" fill=\"#010203\" fill-opacity=\"1.00\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#000000\" fill-opacity=\"0.82\"/>",
+                "<polygon points=\"20,78 18.267578125,81 21.732421875,81\" fill=\"#010203\" fill-opacity=\"0.82\"/>",
+                "<circle cx=\"15\" cy=\"80\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\"/>",
+                "<polygon points=\"30,78 28.267578125,81 31.732421875,81\" fill=\"#040506\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" fill-opacity=\"1.00\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
             ]
         );
     }
@@ -2827,10 +2617,10 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"3 2\"/>",
-                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"4 3\"/>",
-                "<polyline points=\"1.000,99.000 2.000,98.000\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"5 3\"/>",
+                "<polyline points=\"1,99 2,98\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+                "<polyline points=\"1,99 2,98\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"3 2\"/>",
+                "<polyline points=\"1,99 2,98\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"4 3\"/>",
+                "<polyline points=\"1,99 2,98\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-dasharray=\"5 3\"/>",
             ]
         );
         assert!(!svg.contains("fill-opacity=\"NaN\""));
@@ -2865,7 +2655,7 @@ mod tests {
         assert_eq!(
             rounded_rects,
             [
-                "<rect x=\"10.00\" y=\"74.00\" width=\"30.00\" height=\"20.00\" rx=\"3.0\" ry=\"3.0\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"
+                "<rect x=\"10\" y=\"74\" width=\"30\" height=\"20\" rx=\"3\" ry=\"3\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"
             ]
         );
         assert!(!svg.contains("<polygon"));
@@ -2975,8 +2765,8 @@ mod tests {
             [
                 "<rect width=\"100%\" height=\"100%\" fill=\"#010203\"/>",
                 "<rect width=\"100%\" height=\"100%\" fill=\"#040506\" fill-opacity=\"0\"/>",
-                "<rect x=\"10.000\" y=\"40.000\" width=\"20.000\" height=\"20.000\" fill=\"#070809\"/>",
-                "<rect x=\"12.000\" y=\"38.000\" width=\"20.000\" height=\"20.000\" fill=\"#0A0B0C\" fill-opacity=\"0\"/>",
+                "<rect x=\"10\" y=\"40\" width=\"20\" height=\"20\" fill=\"#070809\"/>",
+                "<rect x=\"12\" y=\"38\" width=\"20\" height=\"20\" fill=\"#0A0B0C\" fill-opacity=\"0\"/>",
             ]
         );
     }
@@ -3125,14 +2915,14 @@ mod tests {
 
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert!(svg.contains(
-            "<clipPath id=\"clip-0\"><rect x=\"0.000\" y=\"99.999\" width=\"0.001\" height=\"0.001\"/></clipPath>"
+            "<clipPath id=\"clip-0\"><rect x=\"0\" y=\"99.9990234375\" width=\"0.0009765625\" height=\"0.0009765625\"/></clipPath>"
         ));
         assert!(svg.contains("<stop offset=\"0.000001\" stop-color=\"#7F7F7F\"/>"));
         assert!(svg.contains(
-            "<rect x=\"0.000\" y=\"99.999\" width=\"0.001\" height=\"0.001\" fill=\"url(#linear-gradient-0)\"/>"
+            "<rect x=\"0\" y=\"99.9990234375\" width=\"0.0009765625\" height=\"0.0009765625\" fill=\"url(#linear-gradient-0)\"/>"
         ));
         assert!(svg.contains(
-            "<rect x=\"0.00\" y=\"99.99\" width=\"0.01\" height=\"0.01\" rx=\"0.0\" ry=\"0.0\""
+            "<rect x=\"0\" y=\"99.994140625\" width=\"0.005859375\" height=\"0.005859375\" rx=\"0\" ry=\"0\""
         ));
     }
 
@@ -3165,7 +2955,7 @@ mod tests {
 
         let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
         assert!(svg.contains(
-            "d=\"M 0.000 80.000 L 0.001 80.000 M 0.000 80.000 L 0.000 87.000 M 0.001 80.000 L 0.001 87.000\""
+            "d=\"M 0 80 L 0.0009765625 80 M 0 80 L 0 87 M 0.0009765625 80 L 0.0009765625 87\""
         ));
     }
 
@@ -3576,7 +3366,10 @@ mod tests {
                     == run_source
             })
             .unwrap();
-        assert!(tag.starts_with(&format!("x=\"{}\" ", CanonicalQuantum(expected_x))));
+        assert!(tag.starts_with(&format!(
+            "x=\"{}\" ",
+            coordinates::CanonicalCoordinate::from_quanta(expected_x)
+        )));
     }
 
     #[test]
@@ -3843,10 +3636,10 @@ mod tests {
         let second = render();
         assert_eq!(first, second);
         assert!(first.contains(
-            "<linearGradient id=\"linear-gradient-0\" gradientUnits=\"userSpaceOnUse\" x1=\"16.000\" y1=\"80.000\" x2=\"16.000\" y2=\"20.000\">\n<stop offset=\"0.000000\" stop-color=\"#3182BD\"/>\n<stop offset=\"0.250000\" stop-color=\"#F7F7F7\"/>\n<stop offset=\"1.000000\" stop-color=\"#DE2D26\"/>\n</linearGradient>\n"
+            "<linearGradient id=\"linear-gradient-0\" gradientUnits=\"userSpaceOnUse\" x1=\"16\" y1=\"80\" x2=\"16\" y2=\"20\">\n<stop offset=\"0.000000\" stop-color=\"#3182BD\"/>\n<stop offset=\"0.250000\" stop-color=\"#F7F7F7\"/>\n<stop offset=\"1.000000\" stop-color=\"#DE2D26\"/>\n</linearGradient>\n"
         ));
         assert!(first.contains(
-            "<rect x=\"10.000\" y=\"20.000\" width=\"12.000\" height=\"60.000\" fill=\"url(#linear-gradient-0)\"/>"
+            "<rect x=\"10\" y=\"20\" width=\"12\" height=\"60\" fill=\"url(#linear-gradient-0)\"/>"
         ));
         let first_gradient = first.find("id=\"linear-gradient-0\"").unwrap();
         let second_gradient = first.find("id=\"linear-gradient-1\"").unwrap();

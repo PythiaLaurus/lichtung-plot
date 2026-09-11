@@ -257,7 +257,7 @@ fn publication_frame_uses_axis_color_on_all_sides() {
         .expect("scatter render must succeed");
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
-    assert!(svg.contains("stroke=\"#000000\" stroke-width=\"0.8\""));
+    assert!(svg.contains("stroke=\"#000000\" stroke-width=\"0.7998046875\""));
     assert!(
         !svg.contains("stroke=\"#DCDCDC\" stroke-width=\"1\""),
         "top/right frame should not use the grid color"
@@ -279,7 +279,7 @@ fn violin_draws_inner_whisker_mark() {
     let svg = std::fs::read_to_string(&out).expect("svg must exist");
 
     let black_lines = svg
-        .matches("stroke=\"#000000\" stroke-width=\"0.8\"")
+        .matches("stroke=\"#000000\" stroke-width=\"0.7998046875\"")
         .count();
     assert!(
         black_lines >= 6,

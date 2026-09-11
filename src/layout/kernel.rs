@@ -5,6 +5,10 @@ use std::cmp::Ordering;
 use crate::Error;
 
 const QUANTA_PER_CSS_PIXEL: i64 = 1024;
+
+pub(crate) fn nearest_spatial_quanta(value: f64) -> Result<i64, Error> {
+    LayoutScalar::from_css_pixels(value, SpatialRounding::NearestEven).map(|value| value.0)
+}
 const TOPOLOGY_SLOT_LIMIT: u128 = 1_000_000;
 
 #[cfg(test)]
@@ -502,6 +506,14 @@ pub(crate) struct FinalStage<'a> {
 }
 
 impl FinalStage<'_> {
+    pub(crate) fn claim_capture_bytes(&self, bytes: usize, payload: &str) -> Result<(), Error> {
+        let bytes = u64::try_from(bytes)
+            .map_err(|_| Error::Render(format!("{payload}: capture byte count overflow")))?;
+        self.resources
+            .font_resources
+            .claim_bytes(bytes)
+            .map_err(|error| Error::Render(format!("{payload}: {error}")))
+    }
     pub(crate) fn claim_capture_call(&self) -> Result<(), Error> {
         self.resources
             .generation_resources

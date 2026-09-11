@@ -464,7 +464,7 @@ fn precomputed_histogram_renders_without_sample_columns_and_maps_explicit_rug_en
         "explicit-histogram",
     )
     .unwrap();
-    assert!(svg.contains("stroke-width=\"1\"") && svg.contains("stroke-width=\"0.7\""));
+    assert!(svg.contains("stroke-width=\"1\"") && svg.contains("stroke-width=\"0.7001953125\""));
 }
 
 #[test]
@@ -596,7 +596,7 @@ fn histogram_rug_retains_every_source_observation_including_duplicates() {
         "histogram-rugs",
     )
     .unwrap();
-    assert_eq!(svg.matches("stroke-width=\"0.7\"").count(), 5);
+    assert_eq!(svg.matches("stroke-width=\"0.7001953125\"").count(), 5);
 }
 
 #[test]

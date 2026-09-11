@@ -61,7 +61,9 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>, name: &str) -> String {
 
 fn connector_tags(svg: &str) -> Vec<&str> {
     svg.lines()
-        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.4\""))
+        .filter(|line| {
+            line.starts_with("<polyline ") && line.contains("stroke-width=\"1.400390625\"")
+        })
         .collect()
 }
 
@@ -499,7 +501,7 @@ fn trajectory_svg_is_deterministic_and_exposes_neutral_connector_and_hue_points(
     let first = svg(trajectory_with_hue(&data), "trajectory-first");
     let second = svg(trajectory_with_hue(&data), "trajectory-second");
     assert_eq!(first, second);
-    assert!(first.contains("stroke=\"#000000\" stroke-width=\"1.4\""));
+    assert!(first.contains("stroke=\"#000000\" stroke-width=\"1.400390625\""));
     assert!(first.contains("fill=\"#0072B2\"") && first.contains("fill=\"#D55E00\""));
     assert!(!first.contains("subject-one"));
 }

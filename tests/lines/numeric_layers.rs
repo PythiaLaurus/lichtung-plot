@@ -421,20 +421,18 @@ fn point_layer_and_line_ribbon_share_one_projection() {
         .lines()
         .find(|line| line.starts_with("<circle ") && line.contains("#7B2DC8"))
         .unwrap();
-    let coordinate = format!(
-        "{:.3},{:.3}",
-        attribute(point, "cx"),
-        attribute(point, "cy")
-    );
+    let coordinate = format!("{},{}", attribute(point, "cx"), attribute(point, "cy"));
     let line = output
         .lines()
-        .find(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .find(|line| {
+            line.starts_with("<polyline ") && line.contains("stroke-width=\"1.7998046875\"")
+        })
         .unwrap();
     let ribbon = output
         .lines()
         .find(|line| line.starts_with("<polygon ") && line.contains("fill-opacity=\"0.18\""))
         .unwrap();
-    let x_prefix = format!("{:.3},", attribute(point, "cx"));
+    let x_prefix = format!("{},", attribute(point, "cx"));
     assert!(line.contains(&coordinate) && ribbon.matches(&x_prefix).count() == 2);
 }
 

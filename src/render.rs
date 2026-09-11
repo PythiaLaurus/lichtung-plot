@@ -5,5 +5,6 @@ pub mod backend;
 
 pub(crate) mod coordinates;
 pub(crate) mod geometry;
+pub(crate) mod primitives;
 
 pub mod svg_backend;

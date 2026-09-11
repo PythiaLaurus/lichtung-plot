@@ -497,7 +497,9 @@ fn unavailable_text_avoids_estimate_guides() {
         );
     }
     assert!(
-        (text_x(&point, "Not estimable") - vertical_line_x(&point, "stroke-width=\"0.8\"")).abs()
+        (text_x(&point, "Not estimable")
+            - vertical_line_x(&point, "stroke-width=\"0.7998046875\""))
+        .abs()
             >= separation
     );
 }

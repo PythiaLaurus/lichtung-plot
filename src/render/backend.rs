@@ -11,6 +11,10 @@
 
 use crate::Error;
 
+use super::primitives::{
+    CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalPlannedBracket,
+    CanonicalPlannedText, CanonicalScatter,
+};
 use crate::layout::{
     DeferredAnnotationTextPlan, PanelBox, PhysicalTextAlignment, ResolvedTextPlan,
 };
@@ -555,11 +559,91 @@ pub(crate) struct PlannedSignificanceCall<'a> {
 /// `Result<(), Error>`. Backends may buffer internally and
 /// only emit output on `end()` (or `finalize()`).
 ///
-/// Geometry passed to draw methods is already projected into math-style
+/// Geometry passed to raw draw methods is already projected into math-style
 /// canvas coordinates: X increases rightward and Y increases upward. Data
 /// scaling and panel placement are renderer responsibilities, not backend
-/// responsibilities.
+/// responsibilities. Canonical methods consume retained top-down operands for
+/// the selected canvas and must not delegate back through raw draw methods.
 pub trait Backend {
+    /// Draw retained line, run and glyph placement without layout or conversion.
+    fn draw_canonical_text(&mut self, _text: &CanonicalPlannedText) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical text".into(),
+        ))
+    }
+
+    /// Draw a retained bracket and its canonical label placement.
+    fn draw_canonical_bracket(&mut self, _bracket: &CanonicalPlannedBracket) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical bracket".into(),
+        ))
+    }
+
+    /// Draw retained top-down markers without raw geometry conversion.
+    fn draw_canonical_scatter(&mut self, _scatter: &CanonicalScatter) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical scatter".into(),
+        ))
+    }
+
+    /// Draw retained top-down line points and stroke operands.
+    fn draw_canonical_line(
+        &mut self,
+        _points: &[CanonicalPoint],
+        _style: &CanonicalLineStyle,
+    ) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical lines".into(),
+        ))
+    }
+
+    /// Draw retained top-down polygon points and paint operands.
+    fn draw_canonical_polygon(
+        &mut self,
+        _points: &[CanonicalPoint],
+        _style: &CanonicalFillStyle,
+    ) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical polygons".into(),
+        ))
+    }
+
+    /// Draw retained top-down gradient geometry and normalized stops.
+    fn draw_canonical_gradient(&mut self, _gradient: &CanonicalGradientFill) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical gradients".into(),
+        ))
+    }
+
+    /// Begin a clip from retained, checked top-down spatial operands.
+    fn begin_canonical_clip(&mut self, _region: coordinates::CanonicalBox) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical clips".into(),
+        ))
+    }
+
+    /// Paint a surface from retained, checked top-down spatial operands.
+    fn draw_canonical_surface(
+        &mut self,
+        _bounds: coordinates::CanonicalBox,
+        _paint: Rgba,
+        _role: SurfaceRole,
+    ) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical surfaces".into(),
+        ))
+    }
+
+    /// Draw a rectangle from retained top-down geometry, stroke, and paint.
+    fn draw_canonical_rounded_rect(
+        &mut self,
+        _rounded: coordinates::CanonicalRoundedBox,
+    ) -> Result<(), Error> {
+        Err(Error::Render(
+            "backend does not support canonical rectangles".into(),
+        ))
+    }
+
     /// Begin a chart of the given pixel size. Must be called before
     /// any draw method.
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error>;
@@ -790,7 +874,7 @@ pub(crate) fn validate_text(position: Point2D, style: &TextStyle) -> Result<Cano
     coordinates::canonical_text(
         position,
         style.rotation,
-        coordinates::CoordinatePrecision::Integer,
+        coordinates::CoordinatePrecision::CssQuantum,
     )
 }
 
@@ -820,10 +904,6 @@ pub(crate) const fn nearest_even_text_half(value: i64) -> Option<i64> {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one protocol validator checks linked immutable style, line, discretionary-break, and glyph spans"
-)]
 pub(crate) fn validate_planned_text(
     placement: PlannedTextPlacement,
     plan: &ResolvedTextPlan,
@@ -831,8 +911,20 @@ pub(crate) fn validate_planned_text(
     let canonical = coordinates::canonical_text(
         placement.position,
         placement.rotation,
-        coordinates::CoordinatePrecision::Millionths,
+        coordinates::CoordinatePrecision::CssQuantum,
     )?;
+    validate_text_plan(placement, plan)?;
+    Ok(canonical)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one protocol validator checks linked immutable style, line, discretionary-break, and glyph spans"
+)]
+pub(crate) fn validate_text_plan(
+    placement: PlannedTextPlacement,
+    plan: &ResolvedTextPlan,
+) -> Result<(), Error> {
     let expected_alignment = match placement.anchor {
         TextAnchor::Start => PhysicalTextAlignment::Start,
         TextAnchor::Middle => PhysicalTextAlignment::Center,
@@ -944,7 +1036,7 @@ pub(crate) fn validate_planned_text(
             }
         }
     }
-    Ok(canonical)
+    Ok(())
 }
 
 pub(crate) fn validate_rounded_rect(
@@ -986,9 +1078,7 @@ pub(crate) fn validate_bracket(
 }
 
 pub(crate) fn planned_bracket_placement(canonical: CanonicalBracket) -> PlannedTextPlacement {
-    // Bracket labels remain a deferred producer, separate from subpixel root text.
     let position = canonical.label_position.value();
-    let position = Point2D::new(position.x.round_ties_even(), position.y.round_ties_even());
     match canonical.orientation {
         BracketOrientation::Vertical => {
             PlannedTextPlacement::baseline(position, TextAnchor::Middle, 0.0)
@@ -1003,8 +1093,16 @@ pub(crate) fn validate_planned_bracket(
     call: PlannedSignificanceCall<'_>,
 ) -> Result<CanonicalBracket, Error> {
     let canonical = validate_bracket(call.bracket, call.style)?;
+    validate_bracket_label(canonical, call)?;
+    Ok(canonical)
+}
+
+pub(crate) fn validate_bracket_label(
+    canonical: CanonicalBracket,
+    call: PlannedSignificanceCall<'_>,
+) -> Result<(), Error> {
     let plan = &call.label.plan;
-    validate_planned_text(planned_bracket_placement(canonical), plan)?;
+    validate_text_plan(planned_bracket_placement(canonical), plan)?;
     if call.label.exact_override != plan.style.exact_override
         || call.bracket.label != plan.source
         || call.style.label_color != plan.style.paint
@@ -1016,7 +1114,7 @@ pub(crate) fn validate_planned_bracket(
             "planned significance label does not match its frozen source and style".into(),
         ));
     }
-    Ok(canonical)
+    Ok(())
 }
 
 pub(crate) fn with_clip<T>(
@@ -1239,7 +1337,7 @@ mod tests {
     }
 
     #[test]
-    fn deferred_bracket_labels_keep_old_final_pixel_placement() {
+    fn deferred_bracket_labels_keep_canonical_subpixel_placement() {
         let (mut bracket, style) = valid_bracket();
         bracket.x_left = 10.25;
         bracket.x_right = 20.75;
@@ -1256,7 +1354,7 @@ mod tests {
             assert_ne!(canonical.label_position.value(), old.position.value());
             assert_eq!(
                 planned_bracket_placement(canonical).position,
-                old.position.value()
+                canonical.label_position.value()
             );
         }
     }
@@ -1304,7 +1402,7 @@ mod tests {
     fn coordinate_conversion_rejects_values_outside_exact_signed_range() {
         let error = validate_points(&[Point2D::new(f64::MAX, 0.0)], "test").unwrap_err();
 
-        assert!(error.to_string().contains("signed coordinate range"));
+        assert!(error.to_string().contains("quantum conversion overflowed"));
     }
 
     #[test]
@@ -1316,10 +1414,10 @@ mod tests {
 
         assert!(nonfinite
             .to_string()
-            .contains("text position x must be finite"));
+            .contains("layout spatial input must be finite"));
         assert!(unrepresentable
             .to_string()
-            .contains("signed coordinate range"));
+            .contains("quantum conversion overflowed"));
     }
 
     #[test]
@@ -1327,7 +1425,7 @@ mod tests {
         let points =
             validate_line_points(&[Point2D::new(0.0, 0.0), Point2D::new(0.0006, 0.0006)]).unwrap();
 
-        assert_eq!(points[1].value(), Point2D::new(0.001, 0.001));
+        assert_eq!(points[1].value(), Point2D::new(1.0 / 1024.0, 1.0 / 1024.0));
     }
 
     #[test]
@@ -1394,7 +1492,10 @@ mod tests {
     fn clip_conversion_retains_positive_subprecision_extents() {
         let rect = validate_clip_region(PanelBox::new(0.0, 0.0006, 0.0, 0.0006)).unwrap();
 
-        assert_eq!(rect.panel(), PanelBox::new(0.0, 0.001, 0.0, 0.001));
+        assert_eq!(
+            rect.panel(),
+            PanelBox::new(0.0, 1.0 / 1024.0, 0.0, 1.0 / 1024.0)
+        );
     }
 
     #[test]
@@ -1530,7 +1631,7 @@ mod tests {
 
     #[test]
     fn rounded_rectangle_conversion_rejects_collapsed_positive_extent() {
-        let error = validate_rounded_rect(0.0, 0.0, 0.004, 1.0, 0.0).unwrap_err();
+        let error = validate_rounded_rect(0.0, 0.0, 0.0004, 1.0, 0.0).unwrap_err();
 
         assert!(error.to_string().contains("positive extent collapses"));
     }

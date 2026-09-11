@@ -13,6 +13,12 @@ use crate::render::backend::{
     PlannedSignificanceCall, PlannedTextPlacement, Point2D, PointStyle, Rgba, SignificanceBracket,
     SurfaceRole, TextAnchor, TextStyle,
 };
+use crate::render::coordinates::CanonicalPoint;
+use crate::render::coordinates::{CanonicalBox, CanonicalRoundedBox};
+use crate::render::primitives::{
+    self, CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalPlannedBracket,
+    CanonicalPlannedText, CanonicalScatter, PathKind,
+};
 
 #[cfg(test)]
 thread_local! {
@@ -260,7 +266,6 @@ impl TextReplayPlan {
             .iter()
             .filter_map(|call| match call {
                 PlannedCall::PlannedText(text) => Some((text.placement, &text.plan)),
-                PlannedCall::RawText(_) => panic!("measured producer used raw final capture"),
                 _ => None,
             })
             .collect()
@@ -300,41 +305,25 @@ impl TextReplayPlan {
                 backend.begin_layer_with_role(name, *role)?;
             }
             PlannedCall::EndLayer => backend.end_layer()?,
-            PlannedCall::BeginClip(region) => backend.begin_clip(*region)?,
+            PlannedCall::BeginClip(region) => backend.begin_canonical_clip(*region)?,
             PlannedCall::EndClip => backend.end_clip()?,
             PlannedCall::Surface {
                 bounds,
                 paint,
                 role,
-            } => backend.draw_surface(*bounds, *paint, *role)?,
-            PlannedCall::Scatter { points, style } => {
-                backend.draw_scatter(points, style)?;
+            } => backend.draw_canonical_surface(*bounds, *paint, *role)?,
+            PlannedCall::Scatter(scatter) => backend.draw_canonical_scatter(scatter)?,
+            PlannedCall::Line { points, style } => backend.draw_canonical_line(points, style)?,
+            PlannedCall::Polygon { points, style } => {
+                backend.draw_canonical_polygon(points, style)?;
             }
-            PlannedCall::Line { points, style } => backend.draw_line(points, style)?,
-            PlannedCall::Polygon { points, style } => backend.draw_polygon(points, style)?,
-            PlannedCall::LinearGradient {
-                bounds,
-                start,
-                end,
-                stops,
-            } => backend.draw_linear_gradient(*bounds, *start, *end, stops)?,
-            PlannedCall::RawText(call) | PlannedCall::PlannedText(call) => {
-                backend.draw_planned_text(call.placement, &call.plan)?;
+            PlannedCall::LinearGradient(gradient) => backend.draw_canonical_gradient(gradient)?,
+            PlannedCall::PlannedText(call) => {
+                backend.draw_canonical_text(&call.canonical)?;
             }
-            PlannedCall::RoundedRect {
-                x,
-                y,
-                width,
-                height,
-                radius,
-                style,
-            } => backend.draw_rounded_rect(*x, *y, *width, *height, *radius, style)?,
-            PlannedCall::RawBracket(call) | PlannedCall::PlannedBracket(call) => {
-                backend.draw_planned_bracket(PlannedSignificanceCall {
-                    bracket: &call.bracket,
-                    style: &call.style,
-                    label: &call.label,
-                })?;
+            PlannedCall::RoundedRect(rounded) => backend.draw_canonical_rounded_rect(*rounded)?,
+            PlannedCall::PlannedBracket(call) => {
+                backend.draw_canonical_bracket(&call.canonical)?;
             }
         }
         Ok(())
@@ -379,42 +368,25 @@ enum PlannedCall {
     BeginLayer(String),
     BeginLayerWithRole(String, LayerRole),
     EndLayer,
-    BeginClip(PanelBox),
+    BeginClip(CanonicalBox),
     EndClip,
     Surface {
-        bounds: PanelBox,
+        bounds: CanonicalBox,
         paint: Rgba,
         role: SurfaceRole,
     },
-    Scatter {
-        points: Vec<Point2D>,
-        style: PointStyle,
-    },
+    Scatter(CanonicalScatter),
     Line {
-        points: Vec<Point2D>,
-        style: LineStyle,
+        points: Vec<CanonicalPoint>,
+        style: CanonicalLineStyle,
     },
     Polygon {
-        points: Vec<Point2D>,
-        style: FillStyle,
+        points: Vec<CanonicalPoint>,
+        style: CanonicalFillStyle,
     },
-    LinearGradient {
-        bounds: PanelBox,
-        start: Point2D,
-        end: Point2D,
-        stops: Vec<GradientStop>,
-    },
-    RawText(PlannedTextCall),
+    LinearGradient(CanonicalGradientFill),
     PlannedText(PlannedTextCall),
-    RoundedRect {
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-        radius: f64,
-        style: FillStyle,
-    },
-    RawBracket(PlannedBracketCall),
+    RoundedRect(CanonicalRoundedBox),
     PlannedBracket(PlannedBracketCall),
 }
 
@@ -429,39 +401,22 @@ impl PlannedCall {
                 serializer.begin_layer_with_role(name, *role)?;
             }
             Self::EndLayer => serializer.end_layer()?,
-            Self::BeginClip(region) => serializer.begin_clip(*region)?,
+            Self::BeginClip(region) => serializer.begin_canonical_clip(*region)?,
             Self::EndClip => serializer.end_clip()?,
             Self::Surface {
                 bounds,
                 paint,
                 role,
-            } => serializer.draw_surface(*bounds, *paint, *role)?,
-            Self::Scatter { points, style } => serializer.draw_scatter(points, style)?,
-            Self::Line { points, style } => serializer.draw_line(points, style)?,
-            Self::Polygon { points, style } => serializer.draw_polygon(points, style)?,
-            Self::LinearGradient {
-                bounds,
-                start,
-                end,
-                stops,
-            } => serializer.draw_linear_gradient(*bounds, *start, *end, stops)?,
-            Self::RawText(call) | Self::PlannedText(call) => {
-                serializer.draw_planned_text(call.placement, &call.plan)?;
+            } => serializer.draw_canonical_surface(*bounds, *paint, *role)?,
+            Self::Scatter(scatter) => serializer.draw_canonical_scatter(scatter)?,
+            Self::Line { points, style } => serializer.draw_canonical_line(points, style)?,
+            Self::Polygon { points, style } => serializer.draw_canonical_polygon(points, style)?,
+            Self::LinearGradient(gradient) => serializer.draw_canonical_gradient(gradient)?,
+            Self::PlannedText(call) => {
+                serializer.draw_canonical_text(&call.canonical)?;
             }
-            Self::RoundedRect {
-                x,
-                y,
-                width,
-                height,
-                radius,
-                style,
-            } => serializer.draw_rounded_rect(*x, *y, *width, *height, *radius, style)?,
-            Self::RawBracket(call) | Self::PlannedBracket(call) => serializer
-                .draw_planned_bracket(PlannedSignificanceCall {
-                    bracket: &call.bracket,
-                    style: &call.style,
-                    label: &call.label,
-                })?,
+            Self::RoundedRect(rounded) => serializer.draw_canonical_rounded_rect(*rounded)?,
+            Self::PlannedBracket(call) => serializer.draw_canonical_bracket(&call.canonical)?,
         }
         serializer.check_buffers()
     }
@@ -471,9 +426,7 @@ impl PlannedCall {
 impl PlannedCall {
     const fn kind(&self) -> &'static str {
         match self {
-            Self::RawText(_) => "raw text",
             Self::PlannedText(_) => "planned text",
-            Self::RawBracket(_) => "raw bracket",
             Self::PlannedBracket(_) => "planned bracket",
             _ => "non-text draw call",
         }
@@ -482,18 +435,26 @@ impl PlannedCall {
 
 #[derive(Debug)]
 struct PlannedTextCall {
+    canonical: CanonicalPlannedText,
+    #[cfg(test)]
     placement: PlannedTextPlacement,
+    #[cfg(test)]
     plan: ResolvedTextPlan,
 }
 
 #[derive(Debug)]
 struct PlannedBracketCall {
+    canonical: CanonicalPlannedBracket,
+    #[cfg(test)]
     bracket: SignificanceBracket,
+    #[cfg(test)]
     style: BracketStyle,
+    #[cfg(test)]
     label: DeferredAnnotationTextPlan,
 }
 
 pub(super) struct TextPlanningBackend<'a, 'b> {
+    height: u32,
     font_environment: PreparedFontEnvironment,
     operation_default_stack: String,
     calls: Vec<PlannedCall>,
@@ -504,6 +465,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
     fn new(
         theme: &crate::theme::ResolvedTheme,
         final_stage: &'a mut crate::layout::kernel::FinalStage<'b>,
+        height: u32,
     ) -> Result<Self, Error> {
         #[cfg(test)]
         TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(calls.get() + 1));
@@ -515,6 +477,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         )?;
         stack.extend_from_slice(theme.font_family.as_bytes());
         Ok(Self {
+            height,
             font_environment: theme.prepared_font_environment()?.clone(),
             operation_default_stack: String::from_utf8(stack)
                 .map_err(|error| Error::Render(format!("prepared default font stack: {error}")))?,
@@ -601,23 +564,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
         let calls = self.calls;
         let mut depth = 0_usize;
         let mut scopes = 0_usize;
-        let mut points = 0_usize;
-        let mut runs = 0_usize;
         for call in &calls {
-            let text = match call {
-                PlannedCall::RawText(call) | PlannedCall::PlannedText(call) => Some(&call.plan),
-                PlannedCall::RawBracket(call) | PlannedCall::PlannedBracket(call) => {
-                    Some(&call.label.plan)
-                }
-                _ => None,
-            };
-            if let Some(text) = text {
-                for line in &text.lines {
-                    if line.runs.len() > 1 {
-                        runs = runs.max(line.runs.len());
-                    }
-                }
-            }
             match call {
                 PlannedCall::BeginLayer(_)
                 | PlannedCall::BeginLayerWithRole(_, _)
@@ -632,12 +579,6 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
                         Error::Render("prepared scene scope closes without opening".into())
                     })?;
                 }
-                PlannedCall::Line { points: values, .. } if values.len() >= 2 => {
-                    points = points.max(values.len());
-                }
-                PlannedCall::Polygon { points: values, .. } if values.len() >= 3 => {
-                    points = points.max(values.len());
-                }
                 _ => {}
             }
         }
@@ -648,11 +589,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
             width,
             height,
             self.font_environment,
-            crate::render::svg_backend::SvgStorageRequirements {
-                scopes,
-                points,
-                runs,
-            },
+            crate::render::svg_backend::SvgStorageRequirements { scopes },
             self.final_stage,
             |serializer| {
                 for call in &calls {
@@ -667,11 +604,6 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
             &mut null.recorder.scopes,
             scopes,
             "final Null scopes",
-        )?;
-        null.recorder.validation.prepare(
-            points,
-            self.final_stage,
-            "final Null validation points",
         )?;
         null.recorder.fixed = true;
         Ok(TextReplayPlan {
@@ -703,6 +635,7 @@ impl<'a, 'b> TextPlanningBackend<'a, 'b> {
             .reserve_capture(&mut self.calls, 1, "prepared scene calls")
     }
 
+    #[cfg(test)]
     fn copy_bracket(
         &mut self,
         bracket: &SignificanceBracket,
@@ -751,7 +684,7 @@ pub(crate) fn capture_text_replay_plan(
             "prepared scene dimensions must be positive".into(),
         ));
     }
-    let mut backend = TextPlanningBackend::new(theme, final_stage)?;
+    let mut backend = TextPlanningBackend::new(theme, final_stage, height)?;
     #[cfg(test)]
     super::measurements::producer();
     capture(&mut backend)?;
@@ -790,6 +723,8 @@ impl Backend for TextPlanningBackend<'_, '_> {
 
     fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
         self.claim_call()?;
+        let region =
+            CanonicalBox::from_bottom_up(backend::validate_clip_region(region)?, self.height)?;
         self.calls.push(PlannedCall::BeginClip(region));
         Ok(())
     }
@@ -808,7 +743,10 @@ impl Backend for TextPlanningBackend<'_, '_> {
     ) -> Result<(), Error> {
         self.claim_call()?;
         self.calls.push(PlannedCall::Surface {
-            bounds,
+            bounds: CanonicalBox::from_bottom_up(
+                backend::validate_surface_bounds(bounds)?,
+                self.height,
+            )?,
             paint,
             role,
         });
@@ -817,30 +755,38 @@ impl Backend for TextPlanningBackend<'_, '_> {
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.claim_call()?;
-        let points = self.copy_slice(points, "prepared scatter points")?;
-        self.calls.push(PlannedCall::Scatter {
-            points,
-            style: style.clone(),
-        });
+        let scatter = CanonicalScatter::new(points, style, self.height, Some(self.final_stage))?;
+        self.calls.push(PlannedCall::Scatter(scatter));
         Ok(())
     }
 
     fn draw_line(&mut self, points: &[Point2D], style: &LineStyle) -> Result<(), Error> {
         self.claim_call()?;
-        let points = self.copy_slice(points, "prepared line points")?;
+        if points.len() < 2 {
+            return Ok(());
+        }
+        let points = primitives::path(points, PathKind::Line, self.height, Some(self.final_stage))?;
         self.calls.push(PlannedCall::Line {
             points,
-            style: style.clone(),
+            style: CanonicalLineStyle::new(style)?,
         });
         Ok(())
     }
 
     fn draw_polygon(&mut self, points: &[Point2D], style: &FillStyle) -> Result<(), Error> {
         self.claim_call()?;
-        let points = self.copy_slice(points, "prepared polygon points")?;
+        if points.len() < 3 {
+            return Ok(());
+        }
+        let points = primitives::path(
+            points,
+            PathKind::Polygon,
+            self.height,
+            Some(self.final_stage),
+        )?;
         self.calls.push(PlannedCall::Polygon {
             points,
-            style: style.clone(),
+            style: CanonicalFillStyle::new(style)?,
         });
         Ok(())
     }
@@ -853,21 +799,26 @@ impl Backend for TextPlanningBackend<'_, '_> {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.claim_call()?;
-        let stops = self.copy_slice(stops, "prepared gradient stops")?;
-        self.calls.push(PlannedCall::LinearGradient {
+        let gradient = CanonicalGradientFill::new(
             bounds,
             start,
             end,
             stops,
-        });
+            self.height,
+            Some(self.final_stage),
+        )?;
+        self.calls.push(PlannedCall::LinearGradient(gradient));
         Ok(())
     }
 
     fn draw_text(&mut self, position: Point2D, text: &str, style: &TextStyle) -> Result<(), Error> {
         self.claim_call()?;
-        let canonical = backend::validate_text(position, style)?;
-        let placement =
-            PlannedTextPlacement::middle(canonical.position.value(), style.anchor, style.rotation);
+        let canonical = crate::render::coordinates::canonical_text(
+            position,
+            style.rotation,
+            crate::render::coordinates::CoordinatePrecision::CssQuantum,
+        )?;
+        let placement = PlannedTextPlacement::middle(position, style.anchor, style.rotation);
         let plan = self.plan_text(
             text,
             style,
@@ -875,8 +826,21 @@ impl Backend for TextPlanningBackend<'_, '_> {
             alignment(style.anchor),
             "raw text capture",
         )?;
-        self.calls
-            .push(PlannedCall::RawText(PlannedTextCall { placement, plan }));
+        backend::validate_text_plan(placement, &plan)?;
+        let canonical = CanonicalPlannedText::from_validated(
+            canonical,
+            placement,
+            &plan,
+            self.height,
+            Some(self.final_stage),
+        )?;
+        self.calls.push(PlannedCall::PlannedText(PlannedTextCall {
+            canonical,
+            #[cfg(test)]
+            placement,
+            #[cfg(test)]
+            plan,
+        }));
         Ok(())
     }
 
@@ -886,8 +850,13 @@ impl Backend for TextPlanningBackend<'_, '_> {
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
         self.claim_call()?;
+        let canonical =
+            CanonicalPlannedText::new(placement, plan, self.height, Some(self.final_stage))?;
         self.calls.push(PlannedCall::PlannedText(PlannedTextCall {
+            canonical,
+            #[cfg(test)]
             placement,
+            #[cfg(test)]
             plan: plan.clone(),
         }));
         Ok(())
@@ -903,14 +872,10 @@ impl Backend for TextPlanningBackend<'_, '_> {
         style: &FillStyle,
     ) -> Result<(), Error> {
         self.claim_call()?;
-        self.calls.push(PlannedCall::RoundedRect {
-            x,
-            y,
-            width,
-            height,
-            radius,
-            style: style.clone(),
-        });
+        let rounded = backend::validate_rounded_rect(x, y, width, height, radius)?;
+        backend::validate_fill_style(style)?;
+        let rounded = CanonicalRoundedBox::from_bottom_up(rounded, style, self.height)?;
+        self.calls.push(PlannedCall::RoundedRect(rounded));
         Ok(())
     }
 
@@ -920,24 +885,46 @@ impl Backend for TextPlanningBackend<'_, '_> {
         style: &BracketStyle,
     ) -> Result<(), Error> {
         self.claim_call()?;
-        backend::validate_bracket(bracket, style)?;
+        let geometry = backend::validate_bracket(bracket, style)?;
         let label = self.plan_raw_bracket(bracket, style)?;
+        let canonical = CanonicalPlannedBracket::from_geometry(
+            geometry,
+            PlannedSignificanceCall {
+                bracket,
+                style,
+                label: &label,
+            },
+            self.height,
+            Some(self.final_stage),
+        )?;
+        #[cfg(test)]
         let (bracket, style) = self.copy_bracket(bracket, style)?;
-        self.calls.push(PlannedCall::RawBracket(PlannedBracketCall {
-            bracket,
-            style,
-            label,
-        }));
+        self.calls
+            .push(PlannedCall::PlannedBracket(PlannedBracketCall {
+                canonical,
+                #[cfg(test)]
+                bracket,
+                #[cfg(test)]
+                style,
+                #[cfg(test)]
+                label,
+            }));
         Ok(())
     }
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
         self.claim_call()?;
+        let canonical = CanonicalPlannedBracket::new(call, self.height, Some(self.final_stage))?;
+        #[cfg(test)]
         let (bracket, style) = self.copy_bracket(call.bracket, call.style)?;
         self.calls
             .push(PlannedCall::PlannedBracket(PlannedBracketCall {
+                canonical,
+                #[cfg(test)]
                 bracket,
+                #[cfg(test)]
                 style,
+                #[cfg(test)]
                 label: call.label.clone(),
             }));
         Ok(())
@@ -1052,14 +1039,13 @@ impl Backend for TextReplayBackend<'_> {
                 "text replay received unexpected raw text call {call_index} after all planned calls were consumed"
             ))
         })?;
-        let PlannedCall::RawText(expected) = expected else {
+        let PlannedCall::PlannedText(expected) = expected else {
             return Err(self.mismatch(expected, "raw text"));
         };
         let _ = text;
-        let canonical = backend::validate_text(position, style)?;
         if !same_placement(
             expected.placement,
-            PlannedTextPlacement::middle(canonical.position.value(), style.anchor, style.rotation),
+            PlannedTextPlacement::middle(position, style.anchor, style.rotation),
         ) {
             return Err(Error::Render(format!(
                 "text replay raw text call {} does not match its captured source, style, or placement",
@@ -1067,8 +1053,7 @@ impl Backend for TextReplayBackend<'_> {
             )));
         }
         self.next = call_index + 1;
-        self.backend
-            .draw_planned_text(expected.placement, &expected.plan)
+        self.backend.draw_canonical_text(&expected.canonical)
     }
 
     fn draw_planned_text(
@@ -1092,8 +1077,7 @@ impl Backend for TextReplayBackend<'_> {
             )));
         }
         self.next = call_index + 1;
-        self.backend
-            .draw_planned_text(expected.placement, &expected.plan)
+        self.backend.draw_canonical_text(&expected.canonical)
     }
 
     fn draw_rounded_rect(
@@ -1120,7 +1104,7 @@ impl Backend for TextReplayBackend<'_> {
                 "text replay received unexpected raw bracket call {call_index} after all planned calls were consumed"
             ))
         })?;
-        let PlannedCall::RawBracket(expected) = expected else {
+        let PlannedCall::PlannedBracket(expected) = expected else {
             return Err(self.mismatch(expected, "raw bracket"));
         };
         if !same_bracket(&expected.bracket, bracket) || !same_bracket_style(&expected.style, style)
@@ -1131,11 +1115,7 @@ impl Backend for TextReplayBackend<'_> {
             )));
         }
         self.next = call_index + 1;
-        self.backend.draw_planned_bracket(PlannedSignificanceCall {
-            bracket: &expected.bracket,
-            style: &expected.style,
-            label: &expected.label,
-        })
+        self.backend.draw_canonical_bracket(&expected.canonical)
     }
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
@@ -1158,11 +1138,7 @@ impl Backend for TextReplayBackend<'_> {
             )));
         }
         self.next = call_index + 1;
-        self.backend.draw_planned_bracket(PlannedSignificanceCall {
-            bracket: &expected.bracket,
-            style: &expected.style,
-            label: &expected.label,
-        })
+        self.backend.draw_canonical_bracket(&expected.canonical)
     }
 
     fn end(&mut self) -> Result<(), Error> {
@@ -1211,9 +1187,9 @@ pub(super) struct NullBackend {
 
 #[derive(Default)]
 struct ValidationRecorder {
+    height: u32,
     state: NullCanvasState,
     scopes: Vec<NullScope>,
-    validation: crate::render::coordinates::ValidationScratch,
     fixed: bool,
 }
 
@@ -1268,6 +1244,7 @@ pub(super) fn validate_with_null_backend<T>(
     }
     // Measurement validates commands without opening a final backend lifecycle.
     let mut backend = ValidationRecorder {
+        height,
         state: NullCanvasState::Open,
         ..ValidationRecorder::default()
     };
@@ -1308,6 +1285,32 @@ pub(crate) fn validate_text_replay_plan(
 }
 
 impl Backend for ValidationRecorder {
+    fn draw_canonical_text(&mut self, _text: &CanonicalPlannedText) -> Result<(), Error> {
+        self.ensure_open("draw_planned_text")
+    }
+    fn draw_canonical_bracket(&mut self, _bracket: &CanonicalPlannedBracket) -> Result<(), Error> {
+        self.ensure_open("draw_planned_bracket")
+    }
+    fn draw_canonical_scatter(&mut self, _scatter: &CanonicalScatter) -> Result<(), Error> {
+        self.ensure_open("draw_scatter")
+    }
+    fn draw_canonical_line(
+        &mut self,
+        _points: &[CanonicalPoint],
+        _style: &CanonicalLineStyle,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_line")
+    }
+    fn draw_canonical_polygon(
+        &mut self,
+        _points: &[CanonicalPoint],
+        _style: &CanonicalFillStyle,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_polygon")
+    }
+    fn draw_canonical_gradient(&mut self, _gradient: &CanonicalGradientFill) -> Result<(), Error> {
+        self.ensure_open("draw_linear_gradient")
+    }
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         if self.state == NullCanvasState::Open {
             return Err(Error::Render(
@@ -1320,6 +1323,7 @@ impl Backend for ValidationRecorder {
             ));
         }
         self.scopes.clear();
+        self.height = height;
         self.state = NullCanvasState::Open;
         Ok(())
     }
@@ -1348,7 +1352,13 @@ impl Backend for ValidationRecorder {
 
     fn begin_clip(&mut self, region: PanelBox) -> Result<(), Error> {
         self.ensure_open("begin_clip")?;
-        backend::validate_clip_region(region)?;
+        let region =
+            CanonicalBox::from_bottom_up(backend::validate_clip_region(region)?, self.height)?;
+        self.begin_canonical_clip(region)
+    }
+
+    fn begin_canonical_clip(&mut self, _region: CanonicalBox) -> Result<(), Error> {
+        self.ensure_open("begin_clip")?;
         self.push_scope(NullScope::Clip)?;
         Ok(())
     }
@@ -1376,21 +1386,26 @@ impl Backend for ValidationRecorder {
         _role: SurfaceRole,
     ) -> Result<(), Error> {
         self.ensure_open("draw_surface")?;
-        backend::validate_surface_bounds(bounds)?;
+        CanonicalBox::from_bottom_up(backend::validate_surface_bounds(bounds)?, self.height)?;
         Ok(())
+    }
+
+    fn draw_canonical_surface(
+        &mut self,
+        _bounds: CanonicalBox,
+        _paint: Rgba,
+        _role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.ensure_open("draw_surface")
+    }
+
+    fn draw_canonical_rounded_rect(&mut self, _rounded: CanonicalRoundedBox) -> Result<(), Error> {
+        self.ensure_open("draw_rounded_rect")
     }
 
     fn draw_scatter(&mut self, points: &[Point2D], style: &PointStyle) -> Result<(), Error> {
         self.ensure_open("draw_scatter")?;
-        for point in crate::render::coordinates::canonical_points_iter(points, "scatter") {
-            point?;
-        }
-        backend::validate_point_style(style)?;
-        if style.shape == crate::PointShape::TriangleUp {
-            for (index, point) in points.iter().copied().enumerate() {
-                crate::render::coordinates::canonical_triangle(point, style.radius, index)?;
-            }
-        }
+        CanonicalScatter::new(points, style, self.height, None)?;
         Ok(())
     }
 
@@ -1399,8 +1414,9 @@ impl Backend for ValidationRecorder {
         if points.len() < 2 {
             return Ok(());
         }
-        self.validation.line(points)?;
-        backend::validate_line_style(style)
+        primitives::path(points, PathKind::Line, self.height, None)?;
+        CanonicalLineStyle::new(style)?;
+        Ok(())
     }
 
     fn draw_polygon(&mut self, points: &[Point2D], style: &FillStyle) -> Result<(), Error> {
@@ -1408,8 +1424,9 @@ impl Backend for ValidationRecorder {
         if points.len() < 3 {
             return Ok(());
         }
-        self.validation.polygon(points)?;
-        backend::validate_fill_style(style)
+        primitives::path(points, PathKind::Polygon, self.height, None)?;
+        CanonicalFillStyle::new(style)?;
+        Ok(())
     }
 
     fn draw_linear_gradient(
@@ -1420,7 +1437,7 @@ impl Backend for ValidationRecorder {
         stops: &[GradientStop],
     ) -> Result<(), Error> {
         self.ensure_open("draw_linear_gradient")?;
-        crate::render::coordinates::validate_gradient_geometry(bounds, start, end, stops)?;
+        CanonicalGradientFill::new(bounds, start, end, stops, self.height, None)?;
         Ok(())
     }
 
@@ -1441,7 +1458,7 @@ impl Backend for ValidationRecorder {
         plan: &ResolvedTextPlan,
     ) -> Result<(), Error> {
         self.ensure_open("draw_planned_text")?;
-        backend::validate_planned_text(placement, plan)?;
+        CanonicalPlannedText::new(placement, plan, self.height, None)?;
         Ok(())
     }
 
@@ -1455,8 +1472,10 @@ impl Backend for ValidationRecorder {
         style: &FillStyle,
     ) -> Result<(), Error> {
         self.ensure_open("draw_rounded_rect")?;
-        backend::validate_rounded_rect(x, y, width, height, radius)?;
-        backend::validate_fill_style(style)
+        let rounded = backend::validate_rounded_rect(x, y, width, height, radius)?;
+        backend::validate_fill_style(style)?;
+        CanonicalRoundedBox::from_bottom_up(rounded, style, self.height)?;
+        Ok(())
     }
 
     fn draw_bracket(
@@ -1471,7 +1490,7 @@ impl Backend for ValidationRecorder {
 
     fn draw_planned_bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
         self.ensure_open("draw_planned_bracket")?;
-        backend::validate_planned_bracket(call)?;
+        CanonicalPlannedBracket::new(call, self.height, None)?;
         Ok(())
     }
 
@@ -1509,6 +1528,15 @@ macro_rules! null_backend_methods {
 }
 
 null_backend_methods! {
+    fn draw_canonical_text(text: &CanonicalPlannedText);
+    fn draw_canonical_bracket(bracket: &CanonicalPlannedBracket);
+    fn draw_canonical_scatter(scatter: &CanonicalScatter);
+    fn draw_canonical_line(points: &[CanonicalPoint], style: &CanonicalLineStyle);
+    fn draw_canonical_polygon(points: &[CanonicalPoint], style: &CanonicalFillStyle);
+    fn draw_canonical_gradient(gradient: &CanonicalGradientFill);
+    fn begin_canonical_clip(region: CanonicalBox);
+    fn draw_canonical_surface(bounds: CanonicalBox, paint: Rgba, role: SurfaceRole);
+    fn draw_canonical_rounded_rect(rounded: CanonicalRoundedBox);
     fn begin_layer(name: &str);
     fn begin_layer_with_role(name: &str, role: LayerRole);
     fn end_layer();
@@ -1558,6 +1586,65 @@ mod tests {
         assert_eq!(paired_draw_result(draw).0, Ok(()));
     }
 
+    #[test]
+    fn canonical_primitive_collapse_and_y_overflow_reject_equally() {
+        let points = [
+            Point2D::new(0.0, 0.0),
+            Point2D::new(1.0, 1.0),
+            Point2D::new(2.0, 0.0),
+        ];
+        assert_paired_rejection(|backend| {
+            backend.draw_line(&points, &LineStyle::solid((0, 0, 0), 1.0 / 4096.0))
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_polygon(
+                &points,
+                &FillStyle {
+                    color: (0, 0, 0),
+                    stroke: (0, 0, 0),
+                    stroke_width: 1.0 / 4096.0,
+                    opacity: 1.0,
+                },
+            )
+        });
+        let outlined = PointStyle::with_outline(
+            (0, 0, 0),
+            1,
+            Some(crate::render::backend::PointOutline {
+                color: (0, 0, 0),
+                width_ratio: 1.0 / 4096.0,
+            }),
+        );
+        assert_paired_rejection(|backend| backend.draw_scatter(&points, &outlined));
+        assert_paired_rejection(|backend| {
+            backend.draw_scatter(
+                &[Point2D::new(0.0, -9_007_199_254_740_992.0)],
+                &PointStyle::plain((0, 0, 0), 1),
+            )
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_line(
+                &[
+                    Point2D::new(0.0, -9_007_199_254_740_992.0),
+                    Point2D::new(1.0, 0.0),
+                ],
+                &LineStyle::solid((0, 0, 0), 1.0),
+            )
+        });
+        assert_paired_rejection(|backend| {
+            backend.draw_line(
+                &[points[0], points[1], Point2D::new(1.0 / 4096.0, 0.0)],
+                &LineStyle::solid((0, 0, 0), 1.0),
+            )
+        });
+        assert_paired_success(|backend| {
+            backend.draw_line(
+                &[points[0], points[1], points[0]],
+                &LineStyle::solid((0, 0, 0), 1.0),
+            )
+        });
+    }
+
     fn replay_text_style(theme: &crate::theme::ResolvedTheme) -> TextStyle {
         theme
             .typography
@@ -1580,6 +1667,394 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    #[test]
+    fn frozen_marks_and_gradients_convert_once_before_count_and_replay() {
+        use crate::render::coordinates::{
+            COORDINATE_CONVERSIONS, SPATIAL_CONVERSIONS, Y_CONVERSIONS,
+        };
+        let counters = |expected, spatial, y| {
+            COORDINATE_CONVERSIONS.with(|count| {
+                assert_eq!(count.get(), expected);
+                count.set(0);
+            });
+            SPATIAL_CONVERSIONS.with(|count| {
+                assert_eq!(count.get(), spatial);
+                count.set(0);
+            });
+            Y_CONVERSIONS.with(|count| {
+                assert_eq!(count.get(), y);
+                count.set(0);
+            });
+        };
+        let theme = crate::Theme::Publication.resolve();
+        let root = capture_test_plan(&theme, |backend| {
+            COORDINATE_CONVERSIONS.with(|count| count.set(0));
+            SPATIAL_CONVERSIONS.with(|count| count.set(0));
+            Y_CONVERSIONS.with(|count| count.set(0));
+            let points = [
+                Point2D::new(-0.5 / 1024.0, 0.75),
+                Point2D::new(1.25, 2.5),
+                Point2D::new(3.0, -2.25),
+            ];
+            backend.draw_scatter(&points[..2], &PointStyle::new((1, 2, 3), 2))?;
+            backend.draw_scatter(
+                &points[1..2],
+                &PointStyle::new((4, 5, 6), 2).with_shape(crate::PointShape::TriangleUp),
+            )?;
+            backend.draw_line(&points, &LineStyle::short_dashed((7, 8, 9), 0.8))?;
+            backend.draw_polygon(
+                &[points[0], points[1], points[2], points[0]],
+                &FillStyle {
+                    color: (10, 11, 12),
+                    stroke: (13, 14, 15),
+                    stroke_width: 0.8,
+                    opacity: 0.75,
+                },
+            )?;
+            backend.draw_linear_gradient(
+                PanelBox::new(-0.25, 4.5, -3.0, 5.75),
+                points[0],
+                points[1],
+                &[
+                    GradientStop::new(0.0, (1, 2, 3)),
+                    GradientStop::new(0.25, (4, 5, 6)),
+                    GradientStop::new(1.0, (7, 8, 9)),
+                ],
+            )?;
+            counters(40, 37, 16);
+            Ok(())
+        });
+        counters(0, 0, 0);
+        let plan = root.plan();
+        assert_eq!(plan.call_count(), 5);
+        validate_text_replay_plan(100, 100, plan, "canonical primitive Null").unwrap();
+        counters(0, 0, 0);
+        let mut writer = plan.take_svg_backend().unwrap();
+        plan.replay(100, 100, &mut writer, "canonical primitive SVG")
+            .unwrap();
+        let svg = String::from_utf8(writer.into_bytes().unwrap()).unwrap();
+        counters(0, 0, 0);
+        assert!(svg.contains("points=\"0,99.25 1.25,97.5 3,102.25\""));
+        assert!(svg.contains("stroke-width=\"0.7998046875\""));
+        assert!(svg.contains("x1=\"0\" y1=\"99.25\" x2=\"1.25\" y2=\"97.5\""));
+        assert_eq!(svg.matches("<circle ").count(), 2);
+        assert_eq!(svg.matches("<polygon ").count(), 2);
+        assert_eq!(svg.matches("<stop ").count(), 3);
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one lifecycle checks every text origin, anchor, rotation and both bracket orientations"
+    )]
+    fn frozen_text_and_brackets_never_relayout_or_convert_during_count_replay_and_outline() {
+        use crate::font::canonical::FONT_SHAPE_CALLS;
+        use crate::render::coordinates::{COORDINATE_CONVERSIONS, Y_CONVERSIONS};
+        use crate::render::primitives::TEXT_PLACEMENTS;
+        let reset = || {
+            COORDINATE_CONVERSIONS.with(|count| count.set(0));
+            Y_CONVERSIONS.with(|count| count.set(0));
+            TEXT_PLACEMENTS.with(|count| count.set(0));
+            FONT_SHAPE_CALLS.with(|count| count.set(0));
+        };
+        let unchanged = || {
+            COORDINATE_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
+            Y_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
+            TEXT_PLACEMENTS.with(|count| assert_eq!(count.get(), 0));
+            FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
+        };
+        let theme = crate::Theme::Publication.resolve();
+        let source = " A & B\n\nC \u{5d0}\u{5d1}  D";
+        let root = capture_test_plan(&theme, |backend| {
+            for (anchor, alignment) in [
+                (TextAnchor::Start, PhysicalTextAlignment::Start),
+                (TextAnchor::Middle, PhysicalTextAlignment::Center),
+                (TextAnchor::End, PhysicalTextAlignment::End),
+            ] {
+                let plan = theme.measure_text(
+                    source,
+                    &theme.typography.title,
+                    alignment,
+                    "canonical text",
+                    false,
+                )?;
+                for angle in [-0.0, -0.04, 0.06, -89.96] {
+                    let position = Point2D::new(-0.5 / 1024.0, 31.25 + 1.5 / 1024.0);
+                    backend.draw_planned_text(
+                        PlannedTextPlacement::middle(position, anchor, angle),
+                        &plan,
+                    )?;
+                    backend.draw_planned_text(
+                        PlannedTextPlacement::baseline(position, anchor, angle),
+                        &plan,
+                    )?;
+                }
+            }
+            backend.draw_text(
+                Point2D::new(20.125, 30.25),
+                source,
+                &replay_text_style(&theme),
+            )?;
+            for orientation in [BracketOrientation::Vertical, BracketOrientation::Horizontal] {
+                backend.draw_bracket(
+                    &SignificanceBracket {
+                        x_left: -0.0,
+                        x_right: 21.125,
+                        y: 31.25,
+                        label: "**".into(),
+                        orientation,
+                    },
+                    &BracketStyle {
+                        color: Rgba::rgb(1, 2, 3),
+                        label_color: Rgba::rgb(4, 5, 6),
+                        width: 0.8,
+                        font_family: theme.font_family.clone(),
+                        font_size: 12,
+                        line_height: 14.4,
+                        weight: crate::TextWeight::Normal,
+                        label_gap: 4.125,
+                    },
+                )?;
+            }
+            reset();
+            Ok(())
+        });
+        unchanged();
+        let plan = root.plan();
+        let PlannedCall::PlannedText(first) = &plan.calls[0] else {
+            panic!("canonical text")
+        };
+        assert_eq!(first.canonical.0.plan.source, source);
+        assert_eq!(first.canonical.0.center.x.units(), 0);
+        assert_eq!(first.canonical.0.center.y.units(), 70_398);
+        assert_eq!(
+            first.canonical.0.rotation.value().to_bits(),
+            0.0_f64.to_bits()
+        );
+        validate_text_replay_plan(100, 100, plan, "text Null").unwrap();
+        unchanged();
+        let mut svg = plan.take_svg_backend().unwrap();
+        let addresses = svg.reserved_storage_addresses();
+        plan.replay(100, 100, &mut svg, "text SVG").unwrap();
+        let output = svg.into_output().unwrap();
+        assert_eq!(addresses, output.storage_addresses());
+        let (_, _, bytes, outline) = output.into_parts();
+        let preserve = std::str::from_utf8(&bytes).unwrap();
+        assert!(preserve.contains("A &amp; B"));
+        assert!(preserve.contains("<tspan "));
+        assert!(preserve.contains("rotate(0.1,"));
+        assert!(!preserve.contains("rotate(-0.0,"));
+        assert!(preserve.contains("stroke-width=\"0.7998046875\""));
+        unchanged();
+        let count = outline.count_bytes(100, 100).unwrap();
+        let first = outline.derive_counted(100, 100, count).unwrap();
+        assert_eq!(first.len(), count);
+        assert_eq!(first, outline.derive_counted(100, 100, count).unwrap());
+        unchanged();
+    }
+
+    #[test]
+    fn canonical_text_checks_absolute_origins_and_bottom_up_overflow_before_freeze() {
+        let theme = crate::Theme::Publication.resolve();
+        let plan = theme
+            .measure_text(
+                "A",
+                &theme.typography.title,
+                PhysicalTextAlignment::Start,
+                "absolute text",
+                false,
+            )
+            .unwrap();
+        let placement =
+            PlannedTextPlacement::baseline(Point2D::new(1.25, -2.5), TextAnchor::Start, -0.0);
+        crate::render::coordinates::COORDINATE_CONVERSIONS.with(|count| count.set(0));
+        crate::render::coordinates::Y_CONVERSIONS.with(|count| count.set(0));
+        let canonical = CanonicalPlannedText::new(placement, &plan, 100, None).unwrap();
+        crate::render::coordinates::COORDINATE_CONVERSIONS.with(|count| assert_eq!(count.get(), 3));
+        crate::render::coordinates::Y_CONVERSIONS.with(|count| assert_eq!(count.get(), 4));
+        let line = &canonical.0.lines[0];
+        assert_eq!(line.origin.y.units(), 104_960);
+        assert_eq!(
+            line.origin.x.units(),
+            1280 + plan.lines[0].translation_x_quanta
+        );
+        let glyph = &plan.lines[0].runs[0].glyphs[0];
+        assert_eq!(
+            line.runs[0].glyphs[0].x.units(),
+            line.origin.x.units() + glyph.glyph_origin_x_quanta
+        );
+        assert_eq!(
+            line.runs[0].glyphs[0].y.units(),
+            104_960 - glyph.glyph_origin_y_quanta
+        );
+        let mut overflow = plan.clone();
+        overflow.edit_for_test().lines[0].runs[0].glyphs[0].glyph_origin_x_quanta = i64::MAX;
+        assert!(CanonicalPlannedText::new(placement, &overflow, 100, None).is_err());
+        let mut inverted = placement;
+        inverted.position.y = -9_007_199_254_740_992.0;
+        assert!(CanonicalPlannedText::new(inverted, &plan, 100, None).is_err());
+        for (placement, plan) in [(placement, &overflow), (inverted, &plan)] {
+            let mut null = NullBackend::default();
+            let mut svg = SvgBackend::in_memory(100, 100);
+            null.begin(100, 100).unwrap();
+            svg.begin(100, 100).unwrap();
+            let null_error = null.draw_planned_text(placement, plan).unwrap_err();
+            let svg_error = svg.draw_planned_text(placement, plan).unwrap_err();
+            assert_eq!(null_error.to_string(), svg_error.to_string());
+        }
+        for angle in [f64::NAN, f64::INFINITY, f64::MAX] {
+            let mut invalid = placement;
+            invalid.rotation = angle;
+            assert!(CanonicalPlannedText::new(invalid, &plan, 100, None).is_err());
+        }
+    }
+
+    #[test]
+    fn canonical_text_storage_is_admitted_before_each_allocation() {
+        use crate::render::primitives::{CanonicalTextLine, CanonicalTextRun};
+        let theme = crate::Theme::Publication.resolve();
+        let plan = theme
+            .measure_text(
+                "A",
+                &theme.typography.title,
+                PhysicalTextAlignment::Start,
+                "text admission",
+                false,
+            )
+            .unwrap();
+        assert_eq!(plan.lines.len(), 1);
+        assert_eq!(plan.lines[0].runs.len(), 1);
+        assert_eq!(plan.lines[0].runs[0].glyphs.len(), 1);
+        let mut admitted = 0_u64;
+        for (payload, bytes) in [
+            (
+                "prepared text lines",
+                std::mem::size_of::<CanonicalTextLine>(),
+            ),
+            (
+                "prepared text runs",
+                std::mem::size_of::<CanonicalTextRun>(),
+            ),
+            ("prepared text run order", std::mem::size_of::<usize>()),
+            (
+                "prepared text glyph origins",
+                std::mem::size_of::<CanonicalPoint>(),
+            ),
+            ("prepared text shared geometry", 0),
+        ] {
+            let result = crate::layout::plan_exact_root(
+                100,
+                100,
+                |stage| Ok(stage.font_resources()),
+                |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |resources, _, (), stage| {
+                    let used = u64::try_from(resources.usage().unwrap().font_bytes).unwrap();
+                    resources
+                        .claim_bytes(536_870_912 - used - admitted)
+                        .unwrap();
+                    CanonicalPlannedText::new(
+                        PlannedTextPlacement::middle(
+                            Point2D::new(1.0, 2.0),
+                            TextAnchor::Start,
+                            0.0,
+                        ),
+                        &plan,
+                        100,
+                        Some(stage),
+                    )
+                },
+            );
+            let error = result
+                .err()
+                .expect("text storage must refuse at the shared limit");
+            assert!(error.to_string().contains(payload), "{payload}: {error}");
+            admitted += u64::try_from(bytes).unwrap();
+        }
+    }
+
+    #[test]
+    fn final_line_indices_are_admitted_before_any_point_conversion() {
+        use crate::render::coordinates::COORDINATE_CONVERSIONS;
+        let result = crate::layout::plan_exact_root(
+            100,
+            100,
+            |stage| Ok(stage.font_resources()),
+            |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |resources, _, (), stage| {
+                let used = u64::try_from(resources.usage().unwrap().font_bytes).unwrap();
+                let point_bytes = u64::try_from(2 * std::mem::size_of::<CanonicalPoint>()).unwrap();
+                resources
+                    .claim_bytes(536_870_912 - used - point_bytes)
+                    .unwrap();
+                COORDINATE_CONVERSIONS.with(|count| count.set(0));
+                primitives::path(
+                    &[Point2D::new(f64::NAN, 0.0); 2],
+                    PathKind::Line,
+                    100,
+                    Some(stage),
+                )
+            },
+        );
+        let error = result
+            .err()
+            .expect("line scratch must refuse before geometry");
+        assert!(
+            error
+                .to_string()
+                .contains("prepared line validation indices"),
+            "{error}"
+        );
+        COORDINATE_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
+    }
+
+    #[test]
+    fn frozen_rectangles_replay_without_spatial_conversion() {
+        use crate::render::coordinates::SPATIAL_CONVERSIONS;
+        let theme = crate::Theme::Publication.resolve();
+        let root = capture_test_plan(&theme, |backend| {
+            SPATIAL_CONVERSIONS.with(|count| count.set(0));
+            let bounds = PanelBox::new(-0.25, 50.125, -2.5, 80.25);
+            backend.draw_surface(bounds, Rgba::rgb(1, 2, 3), SurfaceRole::PlotPanel)?;
+            backend.begin_clip(bounds)?;
+            backend.draw_rounded_rect(
+                -0.25,
+                -2.5,
+                20.125,
+                10.25,
+                1.125,
+                &FillStyle {
+                    color: (4, 5, 6),
+                    stroke: (7, 8, 9),
+                    opacity: 0.75,
+                    stroke_width: 0.8,
+                },
+            )?;
+            backend.end_clip()?;
+            SPATIAL_CONVERSIONS.with(|count| {
+                assert_eq!(count.get(), 14);
+                count.set(0);
+            });
+            Ok(())
+        });
+        SPATIAL_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
+        let plan = root.plan();
+        let [PlannedCall::Surface { bounds, .. }, PlannedCall::BeginClip(clip), PlannedCall::RoundedRect(rounded), PlannedCall::EndClip] =
+            plan.calls.as_slice()
+        else {
+            panic!("expected only canonical rectangle calls");
+        };
+        assert_eq!(bounds, clip);
+        assert_eq!(bounds.y.to_string(), "19.75");
+        assert_eq!(rounded.stroke_width.to_string(), "0.7998046875");
+        validate_text_replay_plan(100, 100, plan, "canonical Null").unwrap();
+        let mut svg = plan.take_svg_backend().unwrap();
+        plan.replay(100, 100, &mut svg, "canonical SVG").unwrap();
+        let output = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+        assert!(output.contains("x=\"-0.25\" y=\"92.25\" width=\"20.125\" height=\"10.25\""));
+        assert!(output.contains("stroke-width=\"0.7998046875\""));
+        SPATIAL_CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
     }
 
     fn storage_fixture(
@@ -1705,7 +2180,7 @@ mod tests {
     }
 
     #[test]
-    fn prepared_storage_preserves_legacy_primitive_svg_and_png_bytes() {
+    fn prepared_storage_uses_quantum_primitive_svg_and_matching_png_bytes() {
         use sha2::{Digest as _, Sha256};
         let theme = crate::Theme::Publication.resolve();
         let root = capture_test_plan(&theme, |backend| {
@@ -1729,7 +2204,7 @@ mod tests {
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" role=\"img\">\n",
             "<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>\n",
             "<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n",
-            "<circle cx=\"10.000\" cy=\"80.000\" r=\"2\" fill=\"#010203\" fill-opacity=\"1\"/>\n",
+            "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#010203\" fill-opacity=\"1\"/>\n",
             "</svg>\n",
         ).as_bytes();
         assert_eq!(scene.svg_bytes(), legacy);
@@ -1817,8 +2292,6 @@ mod tests {
         let theme = crate::Theme::Publication.resolve();
         for payload in [
             "canonical SVG scopes",
-            "canonical SVG validation points",
-            "canonical SVG run-order scratch",
             "canonical SVG replacements",
             "canonical SVG document",
             "canonical SVG body",
@@ -1828,7 +2301,6 @@ mod tests {
             "canonical SVG clips",
             "canonical SVG gradients",
             "final Null scopes",
-            "final Null validation points",
         ] {
             NULL_BEGIN_CALLS.with(|calls| calls.set(0));
             crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
@@ -1881,9 +2353,7 @@ mod tests {
                 "canonical SVG document",
                 "canonical SVG replacements",
                 "canonical SVG scopes",
-                "canonical SVG validation points",
                 "final Null scopes",
-                "final Null validation points",
             ] {
                 NULL_BEGIN_CALLS.with(|calls| calls.set(0));
                 crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
@@ -1934,16 +2404,10 @@ mod tests {
 
         assert_eq!(plan.call_count(), 1);
         assert_eq!(plan.calls.capacity(), 1);
-        let PlannedCall::RawText(call) = &plan.calls[0] else {
+        let PlannedCall::PlannedText(call) = &plan.calls[0] else {
             panic!("captured raw text");
         };
-        assert_eq!(
-            call.placement.position,
-            backend::validate_text(position, &style)
-                .unwrap()
-                .position
-                .value()
-        );
+        assert_eq!(call.placement.position, position);
         for replay_plan in [plan, plan] {
             SVG_RAW_TEXT_CALLS.with(|calls| calls.set(0));
             SVG_PLANNED_TEXT_CALLS.with(|calls| calls.set(0));
@@ -2080,6 +2544,9 @@ mod tests {
         for payload in [
             "prepared layer name",
             "prepared scatter points",
+            "prepared scatter triangles",
+            "prepared line points",
+            "prepared polygon points",
             "prepared gradient stops",
         ] {
             let mut pass = 0;
@@ -2110,6 +2577,8 @@ mod tests {
                             crate::layout::kernel::force_reservation_failure(
                                 crate::layout::kernel::ReservationStage::Final,
                             );
+                            crate::render::coordinates::COORDINATE_CONVERSIONS
+                                .with(|count| count.set(0));
                             match payload {
                                 "prepared layer name" => {
                                     backend.begin_layer("retained name")?;
@@ -2118,6 +2587,28 @@ mod tests {
                                 "prepared scatter points" => backend.draw_scatter(
                                     &[Point2D::new(1.0, 2.0)],
                                     &PointStyle::plain((0, 0, 0), 1),
+                                ),
+                                "prepared scatter triangles" => backend.draw_scatter(
+                                    &[Point2D::new(1.0, 2.0)],
+                                    &PointStyle::plain((0, 0, 0), 1)
+                                        .with_shape(crate::PointShape::TriangleUp),
+                                ),
+                                "prepared line points" => backend.draw_line(
+                                    &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)],
+                                    &LineStyle::solid((0, 0, 0), 1.0),
+                                ),
+                                "prepared polygon points" => backend.draw_polygon(
+                                    &[
+                                        Point2D::new(0.0, 0.0),
+                                        Point2D::new(1.0, 1.0),
+                                        Point2D::new(2.0, 0.0),
+                                    ],
+                                    &FillStyle {
+                                        color: (0, 0, 0),
+                                        stroke: (0, 0, 0),
+                                        stroke_width: 1.0,
+                                        opacity: 1.0,
+                                    },
                                 ),
                                 _ => backend.draw_linear_gradient(
                                     PanelBox::new(0.0, 10.0, 0.0, 10.0),
@@ -2139,6 +2630,8 @@ mod tests {
             assert!(error.to_string().contains(payload), "{error}");
             assert_eq!(pass, 1);
             NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+            crate::render::coordinates::COORDINATE_CONVERSIONS
+                .with(|count| assert_eq!(count.get(), 0));
         }
     }
 
@@ -2221,6 +2714,57 @@ mod tests {
     }
 
     #[test]
+    fn direct_planned_bracket_null_and_svg_reject_absolute_and_y_overflow() {
+        let theme = crate::Theme::Publication.resolve();
+        let resolved = theme
+            .measure_text(
+                "A",
+                &theme.typography.significance_label,
+                PhysicalTextAlignment::Center,
+                "bracket overflow",
+                true,
+            )
+            .unwrap();
+        let mut deferred = DeferredAnnotationTextPlan::from_resolved(resolved);
+        let mut bracket = SignificanceBracket {
+            x_left: 10.0,
+            x_right: 20.0,
+            y: -9_007_199_254_740_992.0,
+            label: "A".into(),
+            orientation: BracketOrientation::Vertical,
+        };
+        let style = BracketStyle {
+            color: Rgba::rgb(0, 0, 0),
+            label_color: deferred.plan.style.paint,
+            width: 0.8,
+            font_family: deferred.plan.style.stack_source.clone(),
+            font_size: deferred.plan.style.font_size,
+            line_height: deferred.plan.line_height(),
+            weight: deferred.plan.style.weight,
+            label_gap: 4.0,
+        };
+        for absolute in [false, true] {
+            if absolute {
+                bracket.y = 30.0;
+                deferred.plan.edit_for_test().lines[0].runs[0].glyphs[0].glyph_origin_x_quanta =
+                    i64::MAX;
+            }
+            let mut null = NullBackend::default();
+            let mut svg = SvgBackend::in_memory(100, 100);
+            null.begin(100, 100).unwrap();
+            svg.begin(100, 100).unwrap();
+            let call = || PlannedSignificanceCall {
+                bracket: &bracket,
+                style: &style,
+                label: &deferred,
+            };
+            let null_error = null.draw_planned_bracket(call()).unwrap_err();
+            let svg_error = svg.draw_planned_bracket(call()).unwrap_err();
+            assert_eq!(null_error.to_string(), svg_error.to_string());
+        }
+    }
+
+    #[test]
     fn raw_bracket_capture_freezes_and_replays_one_label_plan() {
         let theme = crate::Theme::Publication.resolve();
         let bracket = SignificanceBracket {
@@ -2243,7 +2787,7 @@ mod tests {
         let plan = capture_test_plan(&theme, |backend| backend.draw_bracket(&bracket, &style));
         let plan = plan.plan();
 
-        let [PlannedCall::RawBracket(captured)] = plan.calls.as_slice() else {
+        let [PlannedCall::PlannedBracket(captured)] = plan.calls.as_slice() else {
             panic!("expected one raw bracket call");
         };
         assert_eq!(captured.label.plan.source, bracket.label);

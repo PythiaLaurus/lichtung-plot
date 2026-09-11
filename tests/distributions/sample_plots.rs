@@ -264,7 +264,7 @@ fn density_best_legend_avoids_top_right_curve_peak() {
     let sharp_line = svg
         .split("<polyline points=\"")
         .skip(1)
-        .filter(|segment| segment.contains("stroke-width=\"1.6\""))
+        .filter(|segment| segment.contains("stroke-width=\"1.599609375\""))
         .nth(1)
         .unwrap();
     let points = sharp_line.split_once('"').unwrap().0;
@@ -389,10 +389,10 @@ fn qq_svg_is_deterministic_and_line_modes_are_explicit() {
 
     let svg = std::fs::read_to_string(first).unwrap();
     assert_eq!(svg, std::fs::read_to_string(second).unwrap());
-    assert!(svg.contains("stroke-width=\"1.2\""));
+    assert!(svg.contains("stroke-width=\"1.2001953125\""));
     assert!(!std::fs::read_to_string(hidden)
         .unwrap()
-        .contains("stroke-width=\"1.2\""));
+        .contains("stroke-width=\"1.2001953125\""));
     assert!(svg.contains(">Theoretical normal quantiles</text>"));
     assert!(svg.contains(">Value</text>"));
     std::fs::remove_dir_all(dir).unwrap();

@@ -9,6 +9,12 @@ use crate::render::backend::{
     BracketStyle, FillStyle, GradientStop, LineStyle, Point2D, PointStyle, Rgba,
     SignificanceBracket, SurfaceRole, TextStyle,
 };
+use crate::render::coordinates::CanonicalPoint;
+use crate::render::coordinates::{CanonicalBox, CanonicalRoundedBox};
+use crate::render::primitives::{
+    CanonicalFillStyle, CanonicalGradientFill, CanonicalLineStyle, CanonicalMarkers,
+    CanonicalScatter,
+};
 use crate::{
     CategoryValues, HeatmapLayout, LegendPolicy, LegendPosition, NumericValues, Significance,
     SignificanceMark, ValueSort,
@@ -72,12 +78,197 @@ struct SurfaceCall {
 }
 
 impl RecordingBackend {
+    fn observed_point(&self, point: CanonicalPoint) -> Point2D {
+        Point2D::new(
+            point.x.value(),
+            f64::from(self.begin_sizes.last().expect("begun recorder").1) - point.y.value(),
+        )
+    }
+    fn observed_panel(&self, bounds: CanonicalBox) -> PanelBox {
+        let height = f64::from(self.begin_sizes.last().expect("begun recorder").1);
+        let top = height - bounds.y.value();
+        PanelBox::new(
+            bounds.x.value(),
+            bounds.x.value() + bounds.width.value(),
+            top - bounds.height.value(),
+            top,
+        )
+    }
+
     fn should_fail(&self, failure: BackendFailure) -> bool {
         self.failures.contains(&failure)
     }
 }
 
 impl Backend for RecordingBackend {
+    fn draw_canonical_text(
+        &mut self,
+        text: &crate::render::primitives::CanonicalPlannedText,
+    ) -> Result<(), Error> {
+        let plan = &text.0.plan;
+        let anchor = match plan.style.alignment {
+            crate::layout::PhysicalTextAlignment::Start => {
+                crate::render::backend::TextAnchor::Start
+            }
+            crate::layout::PhysicalTextAlignment::Center => {
+                crate::render::backend::TextAnchor::Middle
+            }
+            crate::layout::PhysicalTextAlignment::End => crate::render::backend::TextAnchor::End,
+        };
+        self.draw_text(
+            self.observed_point(text.0.center),
+            &plan.source,
+            &TextStyle {
+                color: plan.style.paint,
+                font_family: plan.style.stack_source.clone(),
+                font_size: plan.style.font_size,
+                weight: plan.style.weight,
+                anchor,
+                rotation: text.0.rotation.value(),
+            },
+        )
+    }
+
+    fn draw_canonical_bracket(
+        &mut self,
+        _bracket: &crate::render::primitives::CanonicalPlannedBracket,
+    ) -> Result<(), Error> {
+        self.bracket_clip_depths.push(self.active_clips);
+        Ok(())
+    }
+
+    fn draw_canonical_scatter(&mut self, scatter: &CanonicalScatter) -> Result<(), Error> {
+        if self.should_fail(BackendFailure::Scatter) {
+            return Err(Error::Render("scatter draw failed".into()));
+        }
+        let (points, radius, shape) = match &scatter.markers {
+            CanonicalMarkers::Circles { points, radius } => (
+                points
+                    .iter()
+                    .map(|&point| self.observed_point(point))
+                    .collect::<Vec<_>>(),
+                u32::try_from(radius.units() / 1024).unwrap(),
+                crate::PointShape::Circle,
+            ),
+            CanonicalMarkers::Triangles(triangles) => (
+                triangles
+                    .iter()
+                    .map(|triangle| {
+                        let top = self.observed_point(triangle[0]);
+                        let bottom = self.observed_point(triangle[1]);
+                        Point2D::new(top.x, (top.y + 2.0 * bottom.y) / 3.0)
+                    })
+                    .collect(),
+                triangles.first().map_or(0, |triangle| {
+                    u32::try_from(
+                        (i128::from(triangle[1].y.units()) - i128::from(triangle[0].y.units()))
+                            / 1536,
+                    )
+                    .unwrap()
+                }),
+                crate::PointShape::TriangleUp,
+            ),
+        };
+        let style = PointStyle {
+            color: scatter.color,
+            opacity: scatter.opacity,
+            radius,
+            shape,
+            outline: scatter
+                .outline
+                .map(|(color, width)| crate::render::backend::PointOutline {
+                    color,
+                    width_ratio: if radius == 0 {
+                        0.0
+                    } else {
+                        width.value() / f64::from(radius)
+                    },
+                }),
+        };
+        self.scatter_points.extend_from_slice(&points);
+        self.scatter_draws.push((points, style, self.active_clips));
+        Ok(())
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "test observations use the public f32 style carrier"
+    )]
+    fn draw_canonical_line(
+        &mut self,
+        points: &[CanonicalPoint],
+        style: &CanonicalLineStyle,
+    ) -> Result<(), Error> {
+        if self.should_fail(BackendFailure::Line) {
+            return Err(Error::Render("line draw failed".into()));
+        }
+        self.line_draws.push((
+            points
+                .iter()
+                .map(|&point| self.observed_point(point))
+                .collect(),
+            LineStyle {
+                color: style.color,
+                width: style.width.value() as f32,
+                pattern: style.pattern,
+            },
+            self.active_clips,
+        ));
+        Ok(())
+    }
+
+    fn draw_canonical_polygon(
+        &mut self,
+        _points: &[CanonicalPoint],
+        _style: &CanonicalFillStyle,
+    ) -> Result<(), Error> {
+        if self.should_fail(BackendFailure::PolygonInLayer) && self.active_layers > 0 {
+            Err(Error::Render("layer polygon draw failed".into()))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn draw_canonical_gradient(&mut self, gradient: &CanonicalGradientFill) -> Result<(), Error> {
+        self.gradients.push(
+            gradient
+                .stops
+                .iter()
+                .map(|stop| GradientStop::new(stop.offset.value(), stop.color))
+                .collect(),
+        );
+        Ok(())
+    }
+
+    fn begin_canonical_clip(&mut self, region: CanonicalBox) -> Result<(), Error> {
+        self.clips.push(self.observed_panel(region));
+        self.active_clips += 1;
+        Ok(())
+    }
+
+    fn draw_canonical_surface(
+        &mut self,
+        bounds: CanonicalBox,
+        paint: Rgba,
+        role: SurfaceRole,
+    ) -> Result<(), Error> {
+        self.surfaces.push(SurfaceCall {
+            bounds: self.observed_panel(bounds),
+            paint,
+            role,
+        });
+        Ok(())
+    }
+
+    fn draw_canonical_rounded_rect(&mut self, rounded: CanonicalRoundedBox) -> Result<(), Error> {
+        self.rounded_rects.push(self.observed_panel(rounded.bounds));
+        if self.should_fail(BackendFailure::PolygonInLayer) && self.active_layers > 0 {
+            Err(Error::Render("layer polygon draw failed".into()))
+        } else {
+            Ok(())
+        }
+    }
+
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.begins += 1;
         self.begin_sizes.push((width, height));

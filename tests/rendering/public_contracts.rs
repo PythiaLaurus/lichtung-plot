@@ -216,7 +216,7 @@ fn scatter_points_use_white_outline_by_default() {
     );
 
     assert!(
-        svg.contains("stroke=\"#FFFFFF\" stroke-width=\"0.3\""),
+        svg.contains("stroke=\"#FFFFFF\" stroke-width=\"0.2998046875\""),
         "scatter points should have a thin white outline by default"
     );
 }

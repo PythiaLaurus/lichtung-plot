@@ -246,7 +246,9 @@ fn faceted_interactions_keep_sparse_global_pair_styles_and_colors() {
                 clipped = false;
                 return false;
             }
-            clipped && line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\"")
+            clipped
+                && line.starts_with("<polyline ")
+                && line.contains("stroke-width=\"1.7998046875\"")
         })
         .collect::<Vec<_>>();
 
@@ -334,7 +336,9 @@ fn crossed_group_hue_interactions_render_only_observed_pair_traces() {
         .0;
     let connectors = marks
         .lines()
-        .filter(|line| line.starts_with("<polyline ") && line.contains("stroke-width=\"1.8\""))
+        .filter(|line| {
+            line.starts_with("<polyline ") && line.contains("stroke-width=\"1.7998046875\"")
+        })
         .collect::<Vec<_>>();
 
     assert_eq!(connectors.len(), 3);
