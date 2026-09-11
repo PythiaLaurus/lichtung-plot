@@ -27,7 +27,7 @@ fn marginal_auto_recovers_from_scoped_terminal_tick_miss() {
         .unwrap()
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-    let plot = prepared.attach(plot);
+    let plot = prepared.attach(plot).unwrap();
     let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
     measurements::start();
     let auto = plan_panel(&plot, plot.kind(), cell, LegendRole::Panel, &theme);
@@ -150,7 +150,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         .unwrap()
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-    let plot = prepared.attach(plot);
+    let plot = prepared.attach(plot).unwrap();
     let cell = PanelBox::new(80.0, 480.0, 60.0, 450.0);
     measurements::start();
     let before = resources.usage().unwrap();
@@ -357,7 +357,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                         plot.render_panel(
                             kind,
                             PlotRenderContext::new(plot.data(), panel, &theme)
-                                .with_retained_body(&result),
+                                .with_retained_body(result.retained_payload()),
                             backend,
                         )
                         .map(|_| ())

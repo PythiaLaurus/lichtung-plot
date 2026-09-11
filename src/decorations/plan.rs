@@ -4,6 +4,9 @@ use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendBox};
 use crate::layout::fit::{FitFailure, FitScope};
+use crate::layout::interior::{
+    ClearanceAxis, DeferredLegacyPanelMinimum, DomainExpansion, InteriorReserveRequest,
+};
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
@@ -264,13 +267,21 @@ pub(crate) fn plan_panel_with_context(
                     - gutters[1]
                     - ink[0]
                     - ink[1]
-                    - if horizontal { 0.0 } else { 80.0 + gap },
+                    - if horizontal {
+                        0.0
+                    } else {
+                        DeferredLegacyPanelMinimum::SIZE.0 + gap
+                    },
                 context.panel.height()
                     - gutters[2]
                     - gutters[3]
                     - ink[2]
                     - ink[3]
-                    - if horizontal { 60.0 + gap } else { 0.0 },
+                    - if horizontal {
+                        DeferredLegacyPanelMinimum::SIZE.1 + gap
+                    } else {
+                        0.0
+                    },
             );
             let guide = match Legend::measure_outside(
                 &title,
@@ -681,7 +692,7 @@ fn plan_panel_attempt(
         }
     }
     let gutter_request =
-        round.request_insets(address, address, FeedbackKind::AxisGutter, gutters)?;
+        InteriorReserveRequest::AxisGutter(gutters).submit(round, address, address)?;
     if gutter_request.is_some() && gutters.iter().any(|value| *value > 0.0) {
         round.miss(
             address,
@@ -792,11 +803,8 @@ fn plan_panel_attempt(
                 resolved.as_mut().expect("resolved legend exists").bounds = bounds;
             }
             if let Some(DomainExpansion { axis, limits }) = expansion {
-                let feedback_kind = match axis {
-                    ClearanceAxis::X => FeedbackKind::AutomaticDomainX,
-                    ClearanceAxis::Y => FeedbackKind::AutomaticDomainY,
-                };
-                domain_request = round.request_domain(address, address, feedback_kind, limits)?;
+                domain_request =
+                    DomainExpansion { axis, limits }.submit(round, address, address)?;
                 match axis {
                     ClearanceAxis::X => next_x = limits,
                     ClearanceAxis::Y => next_y = limits,
@@ -841,7 +849,7 @@ fn plan_panel_attempt(
                 *reserve += extra.ceil();
             }
             ink_request =
-                round.request_insets(address, address, FeedbackKind::OwnedInk, reserves)?;
+                InteriorReserveRequest::OwnedInk(reserves).submit(round, address, address)?;
             round.miss(
                 address,
                 FitKind::TrackOrResidual,
@@ -1217,22 +1225,10 @@ enum ClearanceEdge {
     Top,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClearanceAxis {
-    X,
-    Y,
-}
-
 #[derive(Debug, Clone, Copy)]
 struct AutomaticClearance {
     candidate_index: usize,
     expansion: Option<DomainExpansion>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DomainExpansion {
-    axis: ClearanceAxis,
-    limits: (f64, f64),
 }
 
 fn clearance_edge(position: LegendPosition, legend: LegendBox, panel: PanelBox) -> ClearanceEdge {
@@ -1729,7 +1725,7 @@ fn frame_requirements(legend: Option<&Legend>, position: LegendPosition) -> Fram
     // The legacy family adapter still owns this hard body floor. Native interior
     // migrations replace it with their traced scientific minimum requirements.
     FrameRequirements {
-        minimum_body: (80.0, 60.0),
+        minimum_body: DeferredLegacyPanelMinimum::SIZE,
         natural_insets,
     }
 }

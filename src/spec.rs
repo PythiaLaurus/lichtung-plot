@@ -780,14 +780,6 @@ impl<'a> PlotRenderContext<'a> {
         self.facet_scales
     }
 
-    pub(crate) const fn with_deferred_annotation_text(
-        mut self,
-        plans: &'a [crate::layout::DeferredAnnotationTextPlan],
-    ) -> Self {
-        self.deferred_annotation_text = Some(plans);
-        self
-    }
-
     pub(crate) const fn deferred_annotation_text(
         self,
     ) -> Option<&'a [crate::layout::DeferredAnnotationTextPlan]> {
@@ -826,7 +818,12 @@ impl<'a> PlotRenderContext<'a> {
         })
     }
 
-    pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
+    pub(crate) fn with_retained_body(
+        mut self,
+        payload: crate::layout::interior::RetainedInteriorPayload<'a>,
+    ) -> Self {
+        let crate::layout::interior::RetainedInteriorPayload::LegacyCombined(result) = payload;
+        self.deferred_annotation_text = Some(&result.deferred_annotation_text);
         self.retained_axes = result.axes.as_ref();
         self.retained_layout = Some(&result.layout);
         self.producer_text = Some(&result.producer_text);
@@ -1271,6 +1268,9 @@ impl ProducerText<'_> {
     }
 }
 
+/// Current constrained interior result. FitOutcome/PlanError distinguish measured,
+/// terminal fit and fatal outcomes; provisional misses belong to FeedbackRound.
+/// Axes and text are retained here, but marks remain combined until extraction.
 pub(crate) struct PlotRenderResult {
     pub(crate) layout: Layout,
     pub(crate) axes: Option<crate::layout::PanelAxisPlan>,
@@ -1302,6 +1302,10 @@ pub(crate) enum DecorationMode {
 }
 
 impl PlotRenderResult {
+    pub(crate) fn retained_payload(&self) -> crate::layout::interior::RetainedInteriorPayload<'_> {
+        crate::layout::interior::RetainedInteriorPayload::LegacyCombined(self)
+    }
+
     pub(crate) fn new(layout: Layout, legend_entries: Vec<LegendEntry>) -> Self {
         Self {
             layout,

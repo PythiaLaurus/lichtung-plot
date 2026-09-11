@@ -76,8 +76,9 @@ impl Plot {
         self.validate_category_order_configuration(kind)?;
         self.validate_channel_configuration(kind)?;
         self.validate_interval_configuration(kind)?;
-        self.validate_facet_configuration(kind)?;
-        self.validate_supplemental_configuration(kind)
+        self.validate_facet_configuration()?;
+        self.validate_supplemental_configuration(kind)?;
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self)
     }
 
     pub(crate) fn validate_category_order_configuration(
@@ -256,11 +257,9 @@ impl Plot {
         Ok(())
     }
 
-    pub(crate) fn validate_facet_configuration(&self, kind: PlotKind) -> Result<(), Error> {
-        if self.has_facets() && matches!(kind, PlotKind::Matrix | PlotKind::Marginal) {
-            return Err(Error::Render(format!(
-                "{kind:?} manages its own panels and cannot be nested in generic faceting"
-            )));
+    fn validate_facet_configuration(&self) -> Result<(), Error> {
+        if self.has_facets() {
+            crate::layout::interior::ParentCompositionAdapter::Facet.validate_child(self)?;
         }
         if self.has_facets() && !self.panel_text_annotations().is_empty() {
             return Err(Error::Data(

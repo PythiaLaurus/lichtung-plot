@@ -1139,11 +1139,7 @@ impl Canvas {
         for plot in self.panels.iter().flatten() {
             let kind = plot.kind();
             plot.validate_configuration(kind)?;
-            if plot.has_facets() {
-                return Err(Error::Render(
-                    "a faceted chart cannot be nested inside a composed canvas".into(),
-                ));
-            }
+            crate::layout::interior::ParentCompositionAdapter::Canvas.validate_child(plot)?;
         }
         for group in &self.x_range_groups {
             for &index in group {
@@ -2614,8 +2610,7 @@ impl Canvas {
                         )
                     },
                 )
-                .with_deferred_annotation_text(&panel.panel_plan.result.deferred_annotation_text)
-                .with_retained_body(&panel.panel_plan.result);
+                .with_retained_body(panel.panel_plan.result.retained_payload());
             plot_with_planned_limits.render_panel(panel.kind, context, backend)?;
             if let Some(significance) = &panel.panel_plan.result.significance {
                 crate::significance::render(plot, significance, theme, backend)?;

@@ -17,7 +17,7 @@ pub(super) struct PlotPlan {
 }
 
 struct PreparedPlotInputs {
-    axes: crate::plots::shared_x::PreparedPlotAxes,
+    axes: crate::layout::interior::PreparedInteriorInputs,
     theme: Box<ResolvedTheme>,
     text_census: crate::layout::PreparedTextCensus,
 }
@@ -221,7 +221,7 @@ impl PlotPlan {
                 let (width, height) = assigned.dimensions();
                 let source = prepared
                     .axes
-                    .attach(source.clone())
+                    .attach(source.clone())?
                     .with_canvas_size(width, height);
                 let plan = if source.has_facets() {
                     PlotLayoutPlan::Faceted(Box::new(super::facets::FacetPlan::new(
@@ -369,8 +369,7 @@ impl UnfacetedPlotPlan {
                     )
                 },
             )
-            .with_deferred_annotation_text(&self.panel_plan.result.deferred_annotation_text)
-            .with_retained_body(&self.panel_plan.result);
+            .with_retained_body(self.panel_plan.result.retained_payload());
         let rendered = self.plot.render_panel(kind, context, backend)?;
 
         if let Some(significance) = &self.panel_plan.result.significance {

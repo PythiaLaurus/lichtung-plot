@@ -1055,6 +1055,70 @@ mod tests {
     use super::*;
 
     #[test]
+    fn interior_consequences_keep_source_target_quantization_and_operation_budget() {
+        use crate::layout::interior::{ClearanceAxis, DomainExpansion, InteriorReserveRequest};
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        let target = ComponentAddress::root();
+        let source = target
+            .child(super::super::AddressRole::MarkLayer, 0)
+            .unwrap();
+        let before = resources.byte_usage().unwrap();
+        let request = InteriorReserveRequest::OwnedInk([1.0 / 2048.0, 0.0, 0.0, 0.0])
+            .submit(&mut round, &source, &target)
+            .unwrap();
+        assert!(request.is_some());
+        assert_eq!(round.state.requests[0].source, source);
+        assert_eq!(round.state.requests[0].entry.target, target);
+        assert_eq!(
+            round.state.requests[0].entry.value,
+            FeedbackValue::Insets([1, 0, 0, 0])
+        );
+        assert!(resources.byte_usage().unwrap() > before);
+        DomainExpansion {
+            axis: ClearanceAxis::X,
+            limits: (-1.0, 2.0),
+        }
+        .submit(&mut round, &source, &target)
+        .unwrap();
+        assert_eq!(
+            round.state.requests[1].entry.kind,
+            FeedbackKind::AutomaticDomainX
+        );
+        assert!(InteriorReserveRequest::OwnedInk([-1.0; 4])
+            .submit(&mut round, &source, &target)
+            .is_err());
+        assert!(DomainExpansion {
+            axis: ClearanceAxis::Y,
+            limits: (2.0, 1.0)
+        }
+        .submit(&mut round, &source, &target)
+        .is_err());
+        let checkpoint = round.begin_trial().unwrap();
+        InteriorReserveRequest::AxisGutter([2.0; 4])
+            .submit(&mut round, &source, &target)
+            .unwrap();
+        round
+            .miss(
+                &source,
+                FitKind::TrackOrResidual,
+                &[],
+                "rejected interior trial",
+            )
+            .unwrap();
+        let charged = resources.byte_usage().unwrap();
+        assert!(matches!(
+            round.finish_trial(checkpoint),
+            TrialOutcome::Miss(_)
+        ));
+        assert_eq!(resources.byte_usage().unwrap(), charged);
+        resources.claim_bytes(536_870_912 - charged).unwrap();
+        assert!(InteriorReserveRequest::OwnedInk([3.0; 4])
+            .submit(&mut round, &source, &target)
+            .is_err());
+    }
+
+    #[test]
     fn axis_semantics_and_standard_typography_are_feedback_identity() {
         let plot = crate::Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),

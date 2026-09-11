@@ -237,7 +237,7 @@ The approved theme and layout targets follow these rules:
 | T5a5 | Axis, range, tick, frame, and grid plans | COMPLETE |
 | T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
-| T5a6a1 | Prepared interior contracts and exhaustive classification | PENDING |
+| T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
 | T5a6a2 | Retained canonical primitive geometry | PENDING |
 | T5a6a3a | Point/path semantic and payload extraction | PENDING |
 | T5a6a3b | Distribution/reference semantic and payload extraction | PENDING |
@@ -4606,8 +4606,9 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-All steps below are PENDING. Each is one logical commit with focused evidence and
-`just verify`; complete each before its successor. The umbrella has no commit.
+T5a6a1 is complete with focused and primary integrated evidence below. All
+successor steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
+complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
 the later native axis/frame migrations; they must not duplicate those migrations.
 
@@ -4638,6 +4639,70 @@ change; data/statistical preparation is retained. Final capture consumes the
 selected payload without repeating preparation, projection, ticks, or shaping.
 The later T5a6b/c clusters replace the classified legacy axis/frame policy with
 the common native producer; they reuse, rather than rebuild, extracted payloads.
+
+T5a6a1 interface integration evidence (based on clean `214db73`):
+
+- `layout::interior` owns a closed route census and the actual combined dispatch:
+  eight standard-family legacy variants, twelve one-categorical-axis legacy
+  variants, five specialized legacy variants, and two independent parent
+  composition classifications. Classification, reverse identity, and renderer
+  selection are exhaustive matches, without wildcard dispatch, downcasts, or
+  native labels. Trajectory's numeric/categorical source distinction remains in
+  its retained axis inputs, not a falsely numeric-only route assumption.
+- `PreparedInteriorInputs` replaces the former axis-only container, retaining
+  T5a5's scientific ranges, provenance, exact/category sources, labels, and
+  Matrix axis inputs. Preparation uses the caller's existing operation resources;
+  attachment shares retained axis storage rather than storing a cloned Plot.
+  This is axis preparation, not a claim that family statistics are extracted.
+- `DeferredLegacyPanelMinimum` supplies the existing 80x60 parent/body floor.
+  `DomainExpansion` and closed `InteriorReserveRequest` consequences submit to
+  the existing `FeedbackRound`, preserving distinct source/target addresses,
+  spatial quantization, request handles, admission, stale-effect replacement,
+  and bounded root coordination. No adapter owns a fresh budget or retry loop.
+- The current constrained result remains `PlotRenderResult` under
+  `FitOutcome`/`PlanError`, with provisional failures owned by `FeedbackRound`.
+  Capture now consumes `RetainedInteriorPayload::LegacyCombined`; that boundary
+  supplies retained axes/layout, producer text, annotation text, panel text,
+  specialized legends, and Matrix axes together. The independent annotation-text
+  context setter and its separate capture wiring are removed.
+- Facet/Canvas validation consumes the parent classifications at the existing
+  semantic validation boundary. Invalid interior identities reject before fonts
+  and family/backend work; existing option-error precedence remains intact.
+  No supported nesting is added and no embedded title semantics change.
+
+Deferred mark/annotation extraction interface obligations:
+
+- `DeferredMarkAdapter` must produce one `DeferredMarkPlan` with typed
+  `DeferredLegacyPanelMinimum` (while still needed), automatic-domain
+  `DomainExpansion` envelopes, `InteriorReserveRequest` requests, and obstacle /
+  outward-ink `PanelBox` extents derived from its selected mark payload. Its
+  intrinsic result precedes parent allocation; constraint-dependent projection
+  may repeat, but retained scientific/statistical preparation may not.
+- `DeferredAnnotationAdapter` must consume the existing effective
+  `DeferredAnnotationTextPlan` values (including significance text), producing one
+  `DeferredAnnotationPlan` with the same typed domain/reserve/extent consequences
+  and retained annotation placements. Neither adapter may choose a root, mutate
+  the assigned panel, measure through a backend, or reconstruct during drawing.
+- These are extraction obligations, not implemented full mark/annotation plans
+  in T5a6a1. No unused Rust producer traits or empty future payload variants are
+  introduced. The active closed legacy retained-result variant explicitly
+  records that combined measurement/capture and geometry discovery still exist.
+  T5a6a2 owns canonical primitives; T5a6a3a-f and T5a6a4a-e own actual family
+  consequences/payload extraction; T5a6a5a-b own parent adapter/outer-title
+  integration. Native composition tracks remain T5b work.
+
+Focused verification: strict `just lint`; `cargo test --locked --offline --lib`
+filtered to `interior`, `layout::kernel::`, `plots::shared_x::`,
+`decorations::plan::`, `canvas::`, and `orchestrator::`. New tests cover the
+20+5+2 census, invalid route rejection without fallback/font work, retained
+source sharing, exact operation-limit admission/refusal, feedback source/target
+identity, outward quantization, invalid consequences, and no budget refund after
+a rejected trial. Existing lifecycle tests exercise every PlotKind, retained
+text/axis capture, Null/concrete replay, and composition cache equivalence.
+Primary `just verify` passed: 802 library tests (17 ignored), 442 integration
+tests, strict Clippy, formatting, API docs, and package verification (221 files).
+All six snapshots remain unchanged. Independent review found no runtime or
+scientific regression. Log: `/tmp/opencode/t5a6a1-verify.log`.
 
 T5a6a2 applies the `05` quantum spelling and checked bottom-up conversion once.
 Cover points, paths, clips, surfaces, gradients, rounded rectangles, bracket and

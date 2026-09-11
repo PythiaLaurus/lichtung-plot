@@ -73,8 +73,7 @@ pub(super) fn render_scene(
             theme,
         )
         .with_facet_scales(source.facet_scales_spec())
-        .with_deferred_annotation_text(&panel_plan.result.deferred_annotation_text)
-        .with_retained_body(&panel_plan.result);
+        .with_retained_body(panel_plan.result.retained_payload());
         panel_plan
             .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;

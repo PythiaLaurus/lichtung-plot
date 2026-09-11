@@ -1,7 +1,7 @@
 //! Font-independent scientific domains and categorical axis sources.
 
 mod prepared;
-pub(crate) use prepared::{prepare_plot, PreparedAxes, PreparedPlotAxes};
+pub(crate) use prepared::{prepare_plot, PreparedAxes};
 
 use crate::spec::PlotKind;
 use crate::{Error, Plot};

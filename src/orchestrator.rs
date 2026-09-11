@@ -17,6 +17,36 @@ pub(crate) mod measurements;
 mod output;
 mod validation;
 
+#[cfg(test)]
+#[test]
+fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [0.0, 1.0]),
+        crate::NumericValues::new("y", [1.0, 2.0]),
+    )
+    .erase();
+    let theme = crate::Theme::Publication.resolve();
+    let context = PlotRenderContext::new(
+        plot.data(),
+        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
+        &theme,
+    );
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let mut backend = backend::NullBackend::default();
+    let error = crate::layout::interior::InteriorRoute::classify(PlotKind::Line)
+        .combined(&plot, context, &mut backend)
+        .err()
+        .unwrap();
+    assert!(matches!(
+        error,
+        crate::layout::fit::PlanError::Fatal(Error::Data(_))
+    ));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
 pub(crate) use artifacts::write_atomic;
 #[cfg(test)]
 pub(crate) use artifacts::TEMP_RESERVATION_CALLS;
@@ -110,35 +140,8 @@ impl Plot {
             });
         }
         let context = context.with_prepared_axes(self);
-        let mut result = match kind {
-            PlotKind::Scatter => crate::plots::scatter::render(self, context, backend),
-            PlotKind::Histogram => crate::plots::histogram::render(self, context, backend),
-            PlotKind::Density => crate::plots::density::render(self, context, backend),
-            PlotKind::Qq => crate::plots::qq::render(self, context, backend),
-            PlotKind::PointInterval => crate::plots::point_interval::render(self, context, backend),
-            PlotKind::Line => crate::plots::line::render(self, context, backend),
-            PlotKind::Trajectory => crate::plots::line::render_trajectory(self, context, backend),
-            PlotKind::LinePath => crate::plots::line::render_path(self, context, backend),
-            PlotKind::Interaction => crate::plots::interaction::render(self, context, backend),
-            PlotKind::Coefficient => crate::plots::coefficient::render(self, context, backend),
-            PlotKind::Forest => crate::plots::forest::render(self, context, backend),
-            PlotKind::Dumbbell => crate::plots::dumbbell::render(self, context, backend),
-            PlotKind::Heatmap => crate::plots::heatmap::render(self, context, backend),
-            PlotKind::Bar | PlotKind::StackedBar => {
-                crate::plots::bar::render(self, context, backend)
-            }
-            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
-                crate::plots::horizontal_bar::render(self, context, backend)
-            }
-            PlotKind::Boxplot => crate::plots::boxplot::render(self, context, backend),
-            PlotKind::Violin => crate::plots::violin::render(self, context, backend),
-            PlotKind::Raincloud => crate::plots::violin::render_raincloud(self, context, backend),
-            PlotKind::Regression => crate::plots::regression::render(self, context, backend),
-            PlotKind::Marginal => crate::plots::marginal::render(self, context, backend),
-            PlotKind::Matrix => crate::plots::matrix::render(self, context, backend),
-            PlotKind::Beeswarm => crate::plots::beeswarm::render(self, context, backend),
-            PlotKind::Waterfall => crate::plots::waterfall::render(self, context, backend),
-        }?;
+        let mut result = crate::layout::interior::InteriorRoute::classify(kind)
+            .combined(self, context, backend)?;
         let domains = match kind {
             PlotKind::Interaction
             | PlotKind::Bar
@@ -158,7 +161,13 @@ impl Plot {
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 (result.x_domain, result.y_domain)
             }
-            _ => (AxisDomain::Continuous, AxisDomain::Continuous),
+            PlotKind::Scatter
+            | PlotKind::Histogram
+            | PlotKind::Density
+            | PlotKind::Qq
+            | PlotKind::Regression
+            | PlotKind::Marginal
+            | PlotKind::Matrix => (AxisDomain::Continuous, AxisDomain::Continuous),
         };
         result.x_domain = domains.0;
         result.y_domain = domains.1;
@@ -318,7 +327,7 @@ fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
     .erase();
     let prepared =
         crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new()).unwrap();
-    let plot = prepared.attach(plot);
+    let plot = prepared.attach(plot).unwrap();
     let axes = plot.prepared_axis_inputs().unwrap();
     let panel = PanelBox::new(0.0, 600.0, 0.0, 400.0);
     let template = crate::layout::Layout {

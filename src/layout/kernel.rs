@@ -682,7 +682,9 @@ impl<Plan, Prepared> FrozenRoot<Plan, Prepared> {
 mod feedback;
 pub(crate) use feedback::TrialOutcome;
 pub(crate) use feedback::{ChildFeedback, ChildFeedbackInputs};
-pub(crate) use feedback::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
+pub(crate) use feedback::{
+    FeedbackKind, FeedbackRequestId, FeedbackRound, FitKind, FrameRequirements,
+};
 
 pub(crate) fn compact_half_width(width: f64, gap: f64) -> Result<Option<f64>, Error> {
     let width = LayoutScalar::from_css_pixels(width, SpatialRounding::Floor)?.0;

@@ -1738,7 +1738,8 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             &crate::font::canonical::OperationGenerationResources::new(),
         )
         .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
-        .attach(plot.clone());
+        .attach(plot.clone())
+        .unwrap();
         if matches!(
             kind,
             PlotKind::Interaction

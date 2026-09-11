@@ -95,7 +95,8 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
         &crate::font::canonical::OperationGenerationResources::new(),
     )
     .unwrap()
-    .attach(plot.clone());
+    .attach(plot.clone())
+    .unwrap();
     assert_eq!(
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
@@ -136,7 +137,7 @@ fn matrix_dispatch_preserves_scoped_tick_fit_miss() {
         .unwrap()
         .generation_resources();
     let prepared = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
-    let plot = prepared.attach(plot);
+    let plot = prepared.attach(plot).unwrap();
     let scope = FitScope::root().child(AddressRole::CanvasCell, 2).unwrap();
     let outcome = plot
         .preflight_measurement(

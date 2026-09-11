@@ -13,8 +13,8 @@ use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextAppearance;
 
-const MIN_PANEL_WIDTH: f64 = 80.0;
-const MIN_PANEL_HEIGHT: f64 = 60.0;
+const MIN_PANEL_WIDTH: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.0;
+const MIN_PANEL_HEIGHT: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.1;
 const COMPOSED_PANEL_GAP: f64 = 12.0;
 pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
 

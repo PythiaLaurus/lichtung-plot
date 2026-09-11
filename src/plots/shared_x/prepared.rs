@@ -1,4 +1,5 @@
 use crate::data::PlotData;
+use crate::layout::interior::{InteriorRoute, PreparedInteriorInputs};
 use crate::layout::{AxisSpec, AxisTick};
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
@@ -14,23 +15,10 @@ pub(crate) struct PreparedAxes {
     pub(crate) logarithmic: bool,
 }
 
-pub(crate) struct PreparedPlotAxes {
-    pub(crate) axes: std::sync::Arc<Vec<(Option<String>, PreparedAxes)>>,
-    pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
-}
-
-impl PreparedPlotAxes {
-    pub(crate) fn attach(&self, mut plot: Plot) -> Plot {
-        plot.prepared_axes = self.axes.clone();
-        plot.prepared_matrix_axes.clone_from(&self.matrix);
-        plot
-    }
-}
-
 pub(crate) fn prepare_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationGenerationResources,
-) -> Result<PreparedPlotAxes, Error> {
+) -> Result<PreparedInteriorInputs, Error> {
     let mut matrix = None;
     let mut retained = Vec::new();
     let source_data = source
@@ -126,7 +114,8 @@ pub(crate) fn prepare_plot(
             prepare(source, source_data, None, None)?,
         ));
     }
-    Ok(PreparedPlotAxes {
+    Ok(PreparedInteriorInputs {
+        route: InteriorRoute::classify(source.kind()),
         axes: source_data.source_arc(retained)?,
         matrix,
     })
@@ -632,7 +621,7 @@ mod tests {
                 .labels(crate::Labels::humanized().alias("unreferenced", large));
             let resources = OperationGenerationResources::with_test_limits(u128::MAX, bytes);
             prepare_plot(&decorated, &resources).unwrap();
-            let attached = retained.attach(source);
+            let attached = retained.attach(source).unwrap();
             assert!(std::sync::Arc::ptr_eq(
                 &attached.prepared_axes,
                 &retained.axes
@@ -912,7 +901,10 @@ mod tests {
             .facet(FacetSpec::column(facets.clone()).scales(FacetScales::Free))
             .erase();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let free = prepare_plot(&free, &resources).unwrap().attach(free);
+        let free = prepare_plot(&free, &resources)
+            .unwrap()
+            .attach(free)
+            .unwrap();
         let union = (
             free.prepared_axes[0].1.ranges[1]
                 .0
@@ -925,7 +917,10 @@ mod tests {
             .clone()
             .facet(FacetSpec::column(facets.clone()).scales(FacetScales::FreeX))
             .erase();
-        let mixed = prepare_plot(&mixed, &resources).unwrap().attach(mixed);
+        let mixed = prepare_plot(&mixed, &resources)
+            .unwrap()
+            .attach(mixed)
+            .unwrap();
         for (index, (_, axes)) in mixed.prepared_axes.iter().enumerate() {
             assert_eq!(axes.ranges[1], union);
             assert_eq!(
@@ -965,7 +960,8 @@ mod tests {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let prepared = prepare_plot(&source, &resources)
             .unwrap()
-            .attach(source.clone());
+            .attach(source.clone())
+            .unwrap();
         let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
         let local = panels
             .iter()
