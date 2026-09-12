@@ -1266,6 +1266,29 @@ fn push_deferred_plot_requirements(
             &theme.typography.tick_label,
             prepared_stage,
         )?;
+    } else if kind == PlotKind::Waterfall {
+        let waterfall = interiors
+            .and_then(|inputs| inputs.waterfall.as_deref())
+            .ok_or_else(|| {
+                Error::Render("waterfall census requires root-prepared semantics".into())
+            })?;
+        for (_, marks) in &waterfall.panels {
+            let range = crate::layout::continuous_auto_range(marks.range, plot.x_axis_spec());
+            for (value, label) in &marks.totals {
+                if filter_point_label_x_to_limits && (*value < range.0 || *value > range.1) {
+                    continue;
+                }
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    label.as_str(),
+                    &[],
+                    &body,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+        }
     } else if kind == PlotKind::Beeswarm {
         let beeswarm = interiors
             .and_then(|inputs| inputs.beeswarm.as_deref())
@@ -1312,10 +1335,7 @@ fn push_deferred_plot_requirements(
     } else if plot.has_facets()
         && matches!(
             kind,
-            PlotKind::Coefficient
-                | PlotKind::Forest
-                | PlotKind::PointInterval
-                | PlotKind::Waterfall
+            PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval
         )
     {
         let resources = prepared_stage
@@ -1569,12 +1589,7 @@ fn specialized_text_census(
             }
         }
         PlotKind::Waterfall => {
-            crate::plots::waterfall::text_census_annotations(
-                plot,
-                data,
-                filter_x_to_limits,
-                &mut visit,
-            )?;
+            crate::plots::waterfall::text_census_annotations(plot, filter_x_to_limits, &mut visit)?;
         }
         _ => {}
     }

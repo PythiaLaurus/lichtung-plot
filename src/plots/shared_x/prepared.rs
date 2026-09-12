@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Waterfall(crate::plots::waterfall::PreparedWaterfall),
     Beeswarm(crate::plots::beeswarm::PreparedBeeswarm),
     Marginal(crate::plots::marginal::PreparedMarginal),
     Heatmap(crate::plots::heatmap::HeatmapData),
@@ -37,6 +38,9 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Waterfall => Ok(Self::Waterfall(crate::plots::waterfall::prepare(
+                source, data,
+            )?)),
             PlotKind::Beeswarm => Ok(Self::Beeswarm(crate::plots::beeswarm::prepare(
                 source, data,
             )?)),
@@ -96,6 +100,9 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Waterfall(marks) => {
+                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())
+            }
             Self::Beeswarm(marks) => {
                 crate::layout::continuous_auto_range(marks.x_data, source.x_axis_spec())
             }
@@ -127,6 +134,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    waterfall: Option<&'a crate::plots::waterfall::PreparedWaterfall>,
     beeswarm: Option<&'a crate::plots::beeswarm::PreparedBeeswarm>,
     marginal: Option<&'a crate::plots::marginal::PreparedMarginal>,
     heatmap: Option<&'a crate::plots::heatmap::HeatmapData>,
@@ -158,6 +166,7 @@ pub(crate) fn prepare_reference_plot(
         .with_axis_resources(resources);
     let mut bins = None;
     let mut beeswarm = None;
+    let mut waterfall = None;
     let mut heatmap = None;
     let mut marginal = None;
     let mut dumbbell = None;
@@ -169,6 +178,10 @@ pub(crate) fn prepare_reference_plot(
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Waterfall(marks) => {
+            waterfall = Some(marks);
+            PlotKind::Waterfall
+        }
         PreparedReference::Beeswarm(mut marks) => {
             if labels.is_some() {
                 marks.color_label = source.prepare_color_label(data, labels)?;
@@ -238,6 +251,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            waterfall: waterfall.as_ref(),
             beeswarm: beeswarm.as_ref(),
             marginal: marginal.as_ref(),
             heatmap: heatmap.as_ref(),
@@ -263,6 +277,14 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        waterfall: waterfall
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::waterfall::PreparedWaterfallInputs { panels })
+            })
+            .transpose()?,
         beeswarm: beeswarm
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -385,6 +407,7 @@ pub(crate) fn prepare_plot(
     let mut interaction = Vec::new();
     let mut heatmap = Vec::new();
     let mut beeswarm = Vec::new();
+    let mut waterfall = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -392,6 +415,7 @@ pub(crate) fn prepare_plot(
     if matches!(
         source.kind(),
         PlotKind::Histogram
+            | PlotKind::Waterfall
             | PlotKind::Beeswarm
             | PlotKind::Heatmap
             | PlotKind::Marginal
@@ -597,6 +621,9 @@ pub(crate) fn prepare_plot(
             let beeswarm_marks = (source.kind() == PlotKind::Beeswarm)
                 .then(|| crate::plots::beeswarm::prepare(source, data))
                 .transpose()?;
+            let waterfall_marks = (source.kind() == PlotKind::Waterfall)
+                .then(|| crate::plots::waterfall::prepare(source, data))
+                .transpose()?;
             let interaction_marks = (source.kind() == PlotKind::Interaction)
                 .then(|| {
                     crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())
@@ -642,6 +669,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    waterfall: waterfall_marks.as_ref(),
                     beeswarm: beeswarm_marks.as_ref(),
                     marginal: None,
                     heatmap: heatmap_marks.as_ref(),
@@ -655,6 +683,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = waterfall_marks {
+                source_data.reserve_source(&mut waterfall, 1)?;
+                waterfall.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(marks) = beeswarm_marks {
                 source_data.reserve_source(&mut beeswarm, 1)?;
                 beeswarm.push((Some(source_data.copy_source_string(&scope)?), marks));
@@ -785,6 +817,15 @@ pub(crate) fn prepare_plot(
     }
     Ok(PreparedInteriorInputs {
         marginal: None,
+        waterfall: if source.kind() == PlotKind::Waterfall {
+            Some(
+                source_data.source_arc(crate::plots::waterfall::PreparedWaterfallInputs {
+                    panels: waterfall,
+                })?,
+            )
+        } else {
+            None
+        },
         beeswarm: if source.kind() == PlotKind::Beeswarm {
             Some(
                 source_data.source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs {
@@ -948,6 +989,7 @@ pub(crate) fn prepare_scatter_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
         beeswarm: None,
+        waterfall: None,
         marginal: None,
         heatmap: None,
         bars: None,
@@ -1004,6 +1046,7 @@ pub(crate) fn prepare_line_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         beeswarm: None,
+        waterfall: None,
         marginal: None,
         heatmap: None,
         bars: None,
@@ -1091,13 +1134,6 @@ fn prepare(
     #[cfg(test)]
     super::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut categories: [Option<Vec<String>>; 2] = [None, None];
-    let strings = |column: Option<&str>| -> Result<Vec<String>, Error> {
-        crate::data::strict_strings(
-            data,
-            column.ok_or_else(|| Error::Data("axis category column not set".into()))?,
-            "axis",
-        )
-    };
     let mut ranges = match chart.kind() {
         PlotKind::Regression => {
             let ranges = regression
@@ -1295,13 +1331,25 @@ fn prepare(
             ]
         }
         PlotKind::Waterfall => {
-            let levels = strings(chart.x_col())?;
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.waterfall)
+                .ok_or_else(|| Error::Render("waterfall axes require retained semantics".into()))?;
+            let levels = data.collect_source(
+                marks
+                    .labels
+                    .iter()
+                    .map(|label| data.copy_source_string(label)),
+            )?;
             let slots = chart
                 .y_axis_spec()
                 .limits
                 .unwrap_or((0.0, levels.len() as f64));
             categories[1] = Some(levels);
-            [super::domain_with_data(chart, data)?, slots]
+            [
+                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec()),
+                slots,
+            ]
         }
         PlotKind::Heatmap => {
             let marks = reference_config

@@ -1,10 +1,12 @@
-//! Closed interior boundary. Extracted families consume prepared semantics and
-//! selected payloads; remaining families retain their classified combined routes.
+//! Closed interior boundary. All 25 families consume prepared semantics and
+//! selected payloads. Parent composition adapters remain separately classified.
 //! Axis/frame policies remain legacy until their native migration.
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
-use crate::spec::{PlotKind, PlotRenderContext, PlotRenderResult};
+#[cfg(test)]
+use crate::spec::PlotRenderContext;
+use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{Error, Plot};
 
 macro_rules! interior_routes {
@@ -24,8 +26,8 @@ macro_rules! interior_routes {
                 match self { Self::Scatter => PlotKind::Scatter, Self::Line => PlotKind::Line, Self::Trajectory => PlotKind::Trajectory, Self::LinePath => PlotKind::LinePath, Self::Histogram => PlotKind::Histogram, Self::Density => PlotKind::Density, Self::Qq => PlotKind::Qq, Self::Regression => PlotKind::Regression, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
             }
 
-            /// Transitional combined execution, deliberately requiring a backend.
-            /// This is not the future backend-free prepared producer interface.
+            /// Audit-only rejection of the removed combined execution route.
+            #[cfg(test)]
             pub(crate) fn combined(
                 self,
                 plot: &Plot,
@@ -59,7 +61,7 @@ interior_routes! {
         Marginal => crate::plots::marginal::reject_combined,
         Matrix => crate::plots::matrix::reject_combined,
         Beeswarm => crate::plots::beeswarm::reject_combined,
-        Waterfall => crate::plots::waterfall::render,
+        Waterfall => crate::plots::waterfall::reject_combined,
     },
 }
 
@@ -102,8 +104,9 @@ impl ParentCompositionAdapter {
 
 /// Root-owned scientific axes plus extracted mark semantics. Attachment shares
 /// storage; no prepared Plot clone or alternate preparation route is retained.
-/// Unextracted families remain combined. Trajectory retains its condition order.
+/// Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) waterfall: Option<std::sync::Arc<crate::plots::waterfall::PreparedWaterfallInputs>>,
     pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
     pub(crate) heatmap: Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
@@ -131,6 +134,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
+        plot.prepared_waterfall.clone_from(&self.waterfall);
         plot.prepared_beeswarm.clone_from(&self.beeswarm);
         plot.prepared_heatmap.clone_from(&self.heatmap);
         plot.prepared_marginal.clone_from(&self.marginal);
@@ -225,6 +229,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Waterfall(crate::plots::waterfall::WaterfallPayload),
     Beeswarm(crate::plots::beeswarm::BeeswarmPayload),
     Matrix(crate::plots::matrix::MatrixPayload),
     Marginal(crate::plots::marginal::MarginalPayload),
@@ -248,6 +253,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Waterfall(payload) => payload.draw(backend),
             MarkPayload::Beeswarm(payload) => payload.draw(backend),
             MarkPayload::Matrix(payload) => payload.draw(backend),
             MarkPayload::Marginal(payload) => payload.draw(backend),

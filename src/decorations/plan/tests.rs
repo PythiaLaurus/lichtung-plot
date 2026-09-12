@@ -326,16 +326,9 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     .as_ref()
                     .map_or_else(|| Ok(plot.clone()), |inputs| inputs.attach(plot.clone()))?;
                 let panel = PanelBox::new(100.0, 800.0, 100.0, 850.0);
-                let mut geometry = GeometryBackend::new(&theme)?;
-                geometry.begin(plot.width(), plot.height())?;
                 let result = plot
-                    .measure_panel(
-                        kind,
-                        PlotRenderContext::new(plot.data(), panel, &theme),
-                        &mut geometry,
-                    )
+                    .measure_panel(kind, PlotRenderContext::new(plot.data(), panel, &theme))
                     .map_err(crate::layout::fit::PlanError::into_error)?;
-                geometry.end()?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     (panel, result),

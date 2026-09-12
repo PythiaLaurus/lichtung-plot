@@ -9,54 +9,58 @@
 
 use crate::layout::{AxisTick, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
 use crate::render::backend::{
-    with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
+    with_clip, Backend, FillStyle, LineStyle, PlacedText, PlannedTextPlacement, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::Error;
 use crate::Plot;
 
-pub(crate) fn shared_x_domain(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<(f64, f64), Error> {
-    let column = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
-    let deltas = crate::data::strict_finite_f64(data, column, "waterfall")?;
-    if deltas.is_empty() {
-        return Err(Error::Data(
-            "waterfall: delta column contains no observations".into(),
-        ));
-    }
-    let mut running = chart
-        .waterfall_base()
-        .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
-    if !running.is_finite() {
-        return Err(Error::Data("waterfall: base value must be finite".into()));
-    }
-    let mut range = (running, running);
-    for (index, delta) in deltas.into_iter().enumerate() {
-        running += delta;
-        if !running.is_finite() {
-            return Err(Error::Data(format!(
-                "waterfall: cumulative endpoint is non-finite at source row {}",
-                data.source_row(index)
-            )));
-        }
-        range = (range.0.min(running), range.1.max(running));
-    }
-    Ok(crate::layout::continuous_auto_range(
-        range,
-        chart.x_axis_spec(),
-    ))
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[usize; 2]> = const { std::cell::Cell::new([0; 2]) };
 }
 
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
+#[cfg(test)]
+fn count(stage: usize) {
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[stage] += 1;
+        counts.set(next);
+    });
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedWaterfallInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedWaterfall)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedWaterfall {
+    pub(crate) labels: Vec<String>,
+    pub(crate) range: (f64, f64),
+    // Keep the source delta: subtracting rounded cumulative endpoints can lose its sign.
+    spans: Vec<(f64, f64, f64)>,
+    pub(crate) totals: [(f64, String); 2],
+}
+
+#[cfg(test)]
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+    Err(
+        Error::Render("waterfall requires prepared measurement or selected payload capture".into())
+            .into(),
+    )
+}
+
+pub(crate) fn prepare(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<PreparedWaterfall, Error> {
+    #[cfg(test)]
+    count(0);
     let label_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("waterfall: label column not set".into()))?;
@@ -66,35 +70,85 @@ pub(crate) fn render(
     let base = chart
         .waterfall_base()
         .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
-    let labels = crate::data::strict_strings(context.data, label_col, "waterfall")?;
-    let deltas = crate::data::strict_finite_f64(context.data, delta_col, "waterfall")?;
+    let labels = crate::data::strict_strings(data, label_col, "waterfall")?;
+    let deltas = crate::data::strict_finite_f64(data, delta_col, "waterfall")?;
     if labels.is_empty() || labels.len() != deltas.len() {
         return Err(Error::Data(
             "waterfall: labels and deltas must have equal non-zero lengths".into(),
-        )
-        .into());
+        ));
     }
     if !base.is_finite() {
-        return Err(Error::Data("waterfall: base value must be finite".into()).into());
+        return Err(Error::Data("waterfall: base value must be finite".into()));
     }
     let mut running = base;
-    let mut spans = Vec::with_capacity(deltas.len());
+    let mut spans = Vec::new();
+    data.reserve_source(&mut spans, deltas.len())?;
+    data.claim_source_visits(deltas.len())?;
     let mut range = (base, base);
     for (index, delta) in deltas.iter().enumerate() {
         let next = running + delta;
         if !next.is_finite() {
+            data.claim_source_bytes(128)?;
             return Err(Error::Data(format!(
                 "waterfall: cumulative endpoint is non-finite at source row {}",
-                context.data.source_row(index)
-            ))
-            .into());
+                data.source_row(index)
+            )));
         }
         range.0 = range.0.min(next);
         range.1 = range.1.max(next);
-        spans.push((running, next));
+        spans.push((running, next, *delta));
         running = next;
     }
-    let terminal = running;
+    let (base_label, terminal_label) = chart
+        .waterfall_labels_spec()
+        .map_or(("base", "total"), |labels| {
+            (labels.base(), labels.terminal())
+        });
+    let mut totals = [(base, String::new()), (running, String::new())];
+    for ((value, text), label) in totals.iter_mut().zip([base_label, terminal_label]) {
+        use std::fmt::Write;
+        data.reserve_source_string(
+            text,
+            label
+                .len()
+                .checked_add(316)
+                .ok_or_else(|| Error::Data("waterfall: label size overflow".into()))?,
+        )?;
+        write!(text, "{label} {value:.3}").expect("admitted total label");
+    }
+    Ok(PreparedWaterfall {
+        labels,
+        range,
+        spans,
+        totals,
+    })
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    count(1);
+    let prepared = chart
+        .prepared_waterfall
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| Error::Render("waterfall requires root-prepared semantics".into()))?;
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let labels = &prepared.labels;
+    let spans = &prepared.spans;
+    let range = prepared.range;
+    let base = prepared.totals[0].0;
+    let terminal = prepared.totals[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
         Ok(crate::layout::continuous_auto_range(
             range,
@@ -102,11 +156,12 @@ pub(crate) fn render(
         ))
     })?;
     let y_ticks = || {
-        labels
-            .iter()
-            .enumerate()
-            .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-            .collect::<Vec<_>>()
+        data.collect_source(labels.iter().enumerate().map(|(index, label)| {
+            Ok(AxisTick::new(
+                index as f64 + 0.5,
+                data.copy_source_string(label)?,
+            ))
+        }))
     };
     let panel = context.panel;
     let y_range = context.axis_range(crate::layout::AxisSide::Left, || {
@@ -116,23 +171,17 @@ pub(crate) fn render(
             .unwrap_or((0.0, labels.len() as f64)))
     })?;
     let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple());
-    let (base_label, terminal_label) = chart
-        .waterfall_labels_spec()
-        .map_or(("base", "total"), |labels| {
-            (labels.base(), labels.terminal())
-        });
     let annotations = plan_annotations(
         &annotation_projection,
         panel,
         labels.len() as f64,
-        [
-            (base, format!("{base_label} {base:.3}")),
-            (terminal, format!("{terminal_label} {terminal:.3}")),
-        ],
-        theme,
-        context.fit_scope(),
+        &prepared.totals,
+        context,
+        data,
     )?;
     if annotations.height > panel.height() - MINIMUM_MARK_PANEL_HEIGHT {
+        data.claim_source_bytes(context.fit_scope().address.storage_bytes())?;
+        data.claim_source_bytes(1024)?;
         return Err(context.fit_scope().failure(crate::layout::fit::FitKind::SpecializedGeometry, format!(
             "waterfall: total annotations require {:.0}px while preserving a {MINIMUM_MARK_PANEL_HEIGHT:.0}px mark panel; increase chart height or shorten the configured labels",
             annotations.height
@@ -146,66 +195,70 @@ pub(crate) fn render(
             x_range,
             (0.0, labels.len() as f64),
             mark_panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
             Vec::new(),
-            y_ticks(),
+            y_ticks()?,
             &x_axis_spec,
             chart.y_axis_spec(),
             theme,
         )
     })?;
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (index, ((start, end), delta)) in spans.iter().zip(&deltas).enumerate() {
-            let y0 = index as f64 + 0.2;
-            let y1 = index as f64 + 0.8;
-            let (left, bottom) = layout.projection.project(*start, y0);
-            let (right, top) = layout.projection.project(*end, y1);
-            let color = if *delta >= 0.0 {
-                theme.colors[0]
-            } else {
-                theme.colors[1 % theme.colors.len()]
-            };
-            backend.draw_polygon(
-                &[
-                    Point2D::new(left, bottom),
-                    Point2D::new(right, bottom),
-                    Point2D::new(right, top),
-                    Point2D::new(left, top),
-                ],
-                &FillStyle {
-                    color,
-                    stroke: theme.foreground,
-                    stroke_width: 0.8,
-                    opacity: 1.0,
-                },
-            )?;
-            if index + 1 < spans.len() {
-                let (x, from_y) = layout.projection.project(*end, y1);
-                let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
-                backend.draw_line(
-                    &[Point2D::new(x, from_y), Point2D::new(x, to_y)],
-                    &LineStyle::short_dashed(theme.foreground, 0.7),
-                )?;
-            }
+    let mut bars = Vec::new();
+    let mut connectors = Vec::new();
+    data.reserve_source(&mut bars, spans.len())?;
+    data.reserve_source(&mut connectors, spans.len().saturating_sub(1))?;
+    for (index, (start, end, delta)) in spans.iter().enumerate() {
+        let y0 = index as f64 + 0.2;
+        let y1 = index as f64 + 0.8;
+        let (left, bottom) = layout.projection.project(*start, y0);
+        let (right, top) = layout.projection.project(*end, y1);
+        let color = if *delta >= 0.0 {
+            theme.colors[0]
+        } else {
+            theme.colors[1 % theme.colors.len()]
+        };
+        bars.push((
+            [
+                Point2D::new(left, bottom),
+                Point2D::new(right, bottom),
+                Point2D::new(right, top),
+                Point2D::new(left, top),
+            ],
+            FillStyle {
+                color,
+                stroke: theme.foreground,
+                stroke_width: 0.8,
+                opacity: 1.0,
+            },
+        ));
+        if index + 1 < spans.len() {
+            let (x, from_y) = layout.projection.project(*end, y1);
+            let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
+            connectors.push((
+                [Point2D::new(x, from_y), Point2D::new(x, to_y)],
+                LineStyle::short_dashed(theme.foreground, 0.7),
+            ));
         }
-        for value in [base, terminal] {
-            let (x, y0) = layout.projection.project(value, 0.0);
-            let (_, y1) = layout.projection.project(value, labels.len() as f64);
-            backend.draw_line(
-                &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::medium_dashed(theme.foreground, 0.7),
-            )?;
-        }
-        Ok(())
-    })?;
+    }
+    data.claim_source_visits(2)?;
+    let references = [base, terminal].map(|value| {
+        let (x, y0) = layout.projection.project(value, 0.0);
+        let (_, y1) = layout.projection.project(value, labels.len() as f64);
+        (
+            [Point2D::new(x, y0), Point2D::new(x, y1)],
+            LineStyle::medium_dashed(theme.foreground, 0.7),
+        )
+    });
     let AnnotationPlan {
         items, row_height, ..
     } = annotations;
+    let mut text = Vec::new();
+    data.reserve_source(&mut text, items.len())?;
     for annotation in items {
         let text_plan = annotation.text_plan;
-        backend.draw_planned_text(
-            PlannedTextPlacement::middle(
+        text.push(PlacedText {
+            placement: PlannedTextPlacement::middle(
                 Point2D::new(
                     annotation.x.trunc(),
                     (layout.projection.panel_box().y1
@@ -217,51 +270,88 @@ pub(crate) fn render(
                 TextAnchor::Middle,
                 0.0,
             ),
-            &text_plan,
-        )?;
+            plan: text_plan,
+        });
     }
-    Ok(PlotRenderResult::new(layout, Vec::new()))
+    let payload = WaterfallPayload {
+        clip: layout.projection.panel_box(),
+        bars,
+        connectors,
+        references,
+        text,
+    };
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for (index, (points, style)) in payload.bars.iter().enumerate() {
+        geometry.polygon(points, style, Some(clip))?;
+        if let Some((points, style)) = payload.connectors.get(index) {
+            geometry.line(points, style, Some(clip))?;
+        }
+    }
+    for (points, style) in &payload.references {
+        geometry.line(points, style, Some(clip))?;
+    }
+    for text in &payload.text {
+        geometry.text(text.placement, &text.plan, None)?;
+    }
+    let mut result = PlotRenderResult::new(layout, Vec::new());
+    result.y_domain = crate::spec::AxisDomain::Categorical;
+    result.producer_text = data.collect_source(payload.text.iter().map(|text| Ok(text.clone())))?;
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Waterfall(payload),
+        geometry,
+    })?);
+    Ok(result)
 }
 
-pub(crate) fn text_census_annotations<'a>(
+#[derive(Debug)]
+pub(crate) struct WaterfallPayload {
+    clip: PanelBox,
+    bars: Vec<([Point2D; 4], FillStyle)>,
+    connectors: Vec<([Point2D; 2], LineStyle)>,
+    references: [([Point2D; 2], LineStyle); 2],
+    text: Vec<PlacedText>,
+}
+
+impl WaterfallPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        with_clip(backend, self.clip, |backend| {
+            for (index, (points, style)) in self.bars.iter().enumerate() {
+                backend.draw_polygon(points, style)?;
+                if let Some((points, style)) = self.connectors.get(index) {
+                    backend.draw_line(points, style)?;
+                }
+            }
+            for (points, style) in &self.references {
+                backend.draw_line(points, style)?;
+            }
+            Ok(())
+        })?;
+        for text in &self.text {
+            text.draw(backend)?;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn text_census_annotations(
     chart: &Plot,
-    data: impl Into<crate::data::PlotData<'a>>,
     filter_to_range: bool,
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
 ) -> Result<(), Error> {
-    let data = data.into();
-    let delta_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("waterfall: delta column not set".into()))?;
-    let base = chart
-        .waterfall_base()
-        .ok_or_else(|| Error::Data("waterfall: base value not set".into()))?;
-    let deltas = crate::data::strict_finite_f64(data, delta_col, "waterfall")?;
-    let mut range = (base, base);
-    let terminal = deltas
-        .into_iter()
-        .enumerate()
-        .try_fold(base, |running, (index, delta)| {
-            let next = running + delta;
-            if !next.is_finite() {
-                return Err(Error::Data(format!(
-                    "waterfall: cumulative endpoint is non-finite at source row {}",
-                    data.source_row(index)
-                )));
+    let inputs = chart
+        .prepared_waterfall
+        .as_ref()
+        .ok_or_else(|| Error::Render("waterfall census requires retained semantics".into()))?;
+    for (scope, marks) in &inputs.panels {
+        if chart.axis_scope().is_some() && scope.as_deref() != chart.axis_scope() {
+            continue;
+        }
+        let range = crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec());
+        for (value, label) in &marks.totals {
+            if !filter_to_range || (*value >= range.0 && *value <= range.1) {
+                visit(label.as_str().into())?;
             }
-            range.0 = range.0.min(next);
-            range.1 = range.1.max(next);
-            Ok(next)
-        })?;
-    let range = crate::layout::continuous_auto_range(range, chart.x_axis_spec());
-    let (base_label, terminal_label) = chart
-        .waterfall_labels_spec()
-        .map_or(("base", "total"), |labels| {
-            (labels.base(), labels.terminal())
-        });
-    for (value, label) in [(base, base_label), (terminal, terminal_label)] {
-        if !filter_to_range || (value >= range.0 && value <= range.1) {
-            visit(format_args!("{label} {value:.3}").into())?;
         }
     }
     Ok(())
@@ -271,6 +361,9 @@ const ANNOTATION_PADDING: f64 = 4.0;
 const ANNOTATION_GAP: f64 = 4.0;
 const ANNOTATION_ROW_GAP: f64 = 4.0;
 const MINIMUM_MARK_PANEL_HEIGHT: f64 = 24.0;
+
+#[cfg(test)]
+mod extraction;
 
 struct Annotation {
     text_plan: ResolvedTextPlan,
@@ -288,25 +381,52 @@ fn plan_annotations(
     projection: &crate::layout::Projection,
     panel: PanelBox,
     source_y: f64,
-    candidates: [(f64, String); 2],
-    theme: &crate::theme::ResolvedTheme,
-    scope: &crate::layout::fit::FitScope,
+    candidates: &[(f64, String); 2],
+    context: PlotRenderContext<'_>,
+    data: crate::data::PlotData<'_>,
 ) -> Result<AnnotationPlan, crate::layout::fit::PlanError> {
+    let theme = context.theme;
+    let scope = context.fit_scope();
     let mut rows: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut items = Vec::new();
     let mut miss = None;
-    for (index, (value, text)) in candidates.into_iter().enumerate() {
-        if !projection.contains_data(value, source_y) {
+    data.reserve_source(&mut items, 2)?;
+    data.reserve_source(&mut rows, 2)?;
+    for (index, (value, text)) in candidates.iter().enumerate() {
+        if !projection.contains_data(*value, source_y) {
             continue;
         }
-        let text_plan = theme.measure_legacy_text(
-            &text,
-            theme.detail_font_size,
-            PhysicalTextAlignment::Center,
-            "waterfall total annotation",
-        )?;
+        let text_plan =
+            context
+                .producer_text()?
+                .plan(text, "waterfall total annotation", || {
+                    Ok(theme.measure_legacy_text(
+                        text,
+                        theme.detail_font_size,
+                        PhysicalTextAlignment::Center,
+                        "waterfall total annotation",
+                    )?)
+                })?;
         let width = text_plan.width();
         if width + 2.0 * ANNOTATION_PADDING > panel.width() {
+            let identity_bytes = scope
+                .address
+                .storage_bytes()
+                .checked_add(std::mem::size_of::<crate::layout::kernel::AddressSegment>())
+                .and_then(|bytes| bytes.checked_mul(2))
+                .ok_or_else(|| {
+                    Error::Render("waterfall: diagnostic identity size overflow".into())
+                })?;
+            data.claim_source_bytes(identity_bytes)?;
+            // Debug escaping can expand each source byte; admit both the text
+            // diagnostic and its child/failure address copies before allocation.
+            let diagnostic_bytes = text
+                .len()
+                .checked_mul(10)
+                .and_then(|bytes| bytes.checked_add(1024))
+                .ok_or_else(|| Error::Render("waterfall: diagnostic text size overflow".into()))?;
+            data.claim_source_visits(diagnostic_bytes)?;
+            data.claim_source_bytes(diagnostic_bytes)?;
             crate::layout::fit::FitFailure::retain_least(&mut miss, scope.child(if index == 0 { crate::layout::AddressRole::WaterfallBaseLabel } else { crate::layout::AddressRole::WaterfallTerminalLabel }, 0)?.failure(crate::layout::fit::FitKind::Text, format!(
                 "waterfall: total annotation {text:?} requires {:.0}px but only {:.0}px is available; increase chart width or shorten the configured label",
                 width + 2.0 * ANNOTATION_PADDING,
@@ -314,7 +434,7 @@ fn plan_annotations(
             )));
             continue;
         }
-        let (projected_x, _) = projection.project(value, source_y);
+        let (projected_x, _) = projection.project(*value, source_y);
         let half_width = width / 2.0;
         let x = projected_x
             .clamp(
@@ -338,6 +458,7 @@ fn plan_annotations(
         if row == rows.len() {
             rows.push(Vec::new());
         }
+        data.reserve_source(&mut rows[row], 1)?;
         rows[row].push(bounds);
         items.push(Annotation { text_plan, x, row });
     }

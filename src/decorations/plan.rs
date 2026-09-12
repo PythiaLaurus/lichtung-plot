@@ -1189,52 +1189,38 @@ fn plan_panel_attempt(
     }))
 }
 
-fn record_brackets(
-    plot: &Plot,
-    result: &PlotRenderResult,
-    theme: &crate::theme::ResolvedTheme,
-    geometry: &mut GeometryBackend,
-) -> Result<(), Error> {
-    if let Some(significance) = &result.significance {
-        crate::significance::render(plot, significance, theme, geometry)?;
-    }
-    Ok(())
-}
-
 fn measure_geometry(
     plot: &Plot,
     kind: PlotKind,
     context: PlotRenderContext<'_>,
 ) -> Result<crate::layout::fit::FitOutcome<(PlotRenderResult, GeometrySnapshot)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
-    if matches!(
-        kind,
+    match kind {
         PlotKind::Scatter
-            | PlotKind::Line
-            | PlotKind::Trajectory
-            | PlotKind::LinePath
-            | PlotKind::Histogram
-            | PlotKind::Density
-            | PlotKind::Qq
-            | PlotKind::Regression
-            | PlotKind::Dumbbell
-            | PlotKind::PointInterval
-            | PlotKind::Coefficient
-            | PlotKind::Forest
-            | PlotKind::Bar
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedBar
-            | PlotKind::StackedHorizontalBar
-            | PlotKind::Boxplot
-            | PlotKind::Violin
-            | PlotKind::Raincloud
-            | PlotKind::Interaction
-            | PlotKind::Heatmap
-            | PlotKind::Beeswarm
-            | PlotKind::Marginal
-            | PlotKind::Matrix
-    ) {
-        return match fit::outcome(plot.measure_selected_interior(context))? {
+        | PlotKind::Line
+        | PlotKind::Trajectory
+        | PlotKind::LinePath
+        | PlotKind::Histogram
+        | PlotKind::Density
+        | PlotKind::Qq
+        | PlotKind::Regression
+        | PlotKind::Dumbbell
+        | PlotKind::PointInterval
+        | PlotKind::Coefficient
+        | PlotKind::Forest
+        | PlotKind::Bar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedBar
+        | PlotKind::StackedHorizontalBar
+        | PlotKind::Boxplot
+        | PlotKind::Violin
+        | PlotKind::Raincloud
+        | PlotKind::Interaction
+        | PlotKind::Heatmap
+        | PlotKind::Beeswarm
+        | PlotKind::Waterfall
+        | PlotKind::Marginal
+        | PlotKind::Matrix => match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {
                 let mut geometry = GeometrySnapshot::new(context.theme)?;
                 geometry.append(
@@ -1254,22 +1240,7 @@ fn measure_geometry(
                 Ok(FitOutcome::Measured((result, geometry)))
             }
             FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
-        };
-    }
-    let mut geometry = GeometryBackend::new(context.theme)?;
-    geometry.begin(plot.width(), plot.height())?;
-    let result = plot
-        .measure_panel(kind, context, &mut geometry)
-        .and_then(|result| {
-            record_brackets(plot, &result, context.theme, &mut geometry)?;
-            Ok(result)
-        });
-    let result = backend::finish_scope(fit::outcome(result), geometry.end(), "geometry discovery")?;
-    match result {
-        FitOutcome::Measured(result) => {
-            Ok(FitOutcome::Measured((result, geometry.into_snapshot())))
-        }
-        FitOutcome::Miss(failure) => Ok(FitOutcome::Miss(failure)),
+        },
     }
 }
 

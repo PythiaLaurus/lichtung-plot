@@ -1532,6 +1532,7 @@ impl Canvas {
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
                             | PlotKind::Beeswarm
+                            | PlotKind::Waterfall
                             | PlotKind::Marginal
                     )
                 }) {
@@ -1603,6 +1604,7 @@ impl Canvas {
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
                             | PlotKind::Beeswarm
+                            | PlotKind::Waterfall
                             | PlotKind::Marginal
                             | PlotKind::Line
                             | PlotKind::Trajectory

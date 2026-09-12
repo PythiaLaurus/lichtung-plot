@@ -11,3 +11,4 @@ mod beeswarm;
 mod dumbbell;
 mod grouping;
 mod plots;
+mod waterfall;

@@ -296,6 +296,10 @@ pub(crate) struct ComponentAddress {
 }
 
 impl ComponentAddress {
+    pub(crate) fn storage_bytes(&self) -> usize {
+        std::mem::size_of_val(self.descendants.as_ref())
+    }
+
     pub(crate) fn leaf_role(&self) -> AddressRole {
         self.descendants
             .last()

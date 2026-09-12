@@ -124,6 +124,7 @@ impl MarginalPayload {
 /// Explicit graphical groups are rendered separately; hue supplies their color
 /// and legend entries.
 #[allow(clippy::if_not_else)]
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: PlotRenderContext<'_>,

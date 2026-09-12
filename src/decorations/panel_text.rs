@@ -4,9 +4,7 @@
 use crate::Error;
 
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, ResolvedTextPlan};
-use crate::render::backend::{
-    with_clip, with_layer, Backend, PlannedTextPlacement, Point2D, TextAnchor,
-};
+use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::ResolvedTheme;
 use crate::{PanelCorner, Plot};
 
@@ -48,29 +46,6 @@ impl PanelTextPlan {
         let (position, anchor, _) = placement(panel, self.corner, &self.text_plan);
         PlannedTextPlacement::middle(position, anchor, 0.0)
     }
-}
-
-pub(crate) fn draw(
-    plot: &Plot,
-    layout: &Layout,
-    plans: &[PanelTextPlan],
-    backend: &mut dyn Backend,
-) -> Result<(), crate::layout::fit::PlanError> {
-    if plot.panel_text_annotations().is_empty() {
-        return Ok(());
-    }
-    with_layer(backend, &plot.layer_name("panel-text"), |backend| {
-        with_clip(backend, layout.projection.panel_box(), |backend| {
-            for plan in plans {
-                backend.draw_planned_text(
-                    PlannedTextPlacement::middle(plan.position, plan.anchor, 0.0),
-                    &plan.text_plan,
-                )?;
-            }
-            Ok(())
-        })
-    })
-    .map_err(Into::into)
 }
 
 pub(crate) fn conflicting_legend_corner(

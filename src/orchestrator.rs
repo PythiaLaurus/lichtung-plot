@@ -120,59 +120,55 @@ impl Plot {
         context: PlotRenderContext<'_>,
         backend: &mut dyn Backend,
     ) -> Result<crate::spec::DecorationMode, Error> {
-        if matches!(
-            kind,
+        match kind {
             PlotKind::Scatter
-                | PlotKind::Line
-                | PlotKind::Trajectory
-                | PlotKind::LinePath
-                | PlotKind::Histogram
-                | PlotKind::Density
-                | PlotKind::Qq
-                | PlotKind::Regression
-                | PlotKind::Dumbbell
-                | PlotKind::PointInterval
-                | PlotKind::Coefficient
-                | PlotKind::Forest
-                | PlotKind::Bar
-                | PlotKind::HorizontalBar
-                | PlotKind::StackedBar
-                | PlotKind::StackedHorizontalBar
-                | PlotKind::Boxplot
-                | PlotKind::Violin
-                | PlotKind::Raincloud
-                | PlotKind::Interaction
-                | PlotKind::Heatmap
-                | PlotKind::Beeswarm
-                | PlotKind::Marginal
-                | PlotKind::Matrix
-        ) {
-            crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
-            let result = context.selected_interior.ok_or_else(|| {
-                Error::Render("extracted capture requires its selected interior payload".into())
-            })?;
-            result
-                .marks
-                .as_ref()
-                .ok_or_else(|| Error::Render("selected mark payload is missing".into()))?
-                .draw(backend)?;
-            result
-                .annotations
-                .as_ref()
-                .ok_or_else(|| Error::Render("selected annotation payload is missing".into()))?
-                .draw(backend)?;
-            return Ok(result.decoration_mode);
+            | PlotKind::Line
+            | PlotKind::Trajectory
+            | PlotKind::LinePath
+            | PlotKind::Histogram
+            | PlotKind::Density
+            | PlotKind::Qq
+            | PlotKind::Regression
+            | PlotKind::Dumbbell
+            | PlotKind::PointInterval
+            | PlotKind::Coefficient
+            | PlotKind::Forest
+            | PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar
+            | PlotKind::Boxplot
+            | PlotKind::Violin
+            | PlotKind::Raincloud
+            | PlotKind::Interaction
+            | PlotKind::Heatmap
+            | PlotKind::Beeswarm
+            | PlotKind::Waterfall
+            | PlotKind::Marginal
+            | PlotKind::Matrix => {
+                crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+                let result = context.selected_interior.ok_or_else(|| {
+                    Error::Render("extracted capture requires its selected interior payload".into())
+                })?;
+                result
+                    .marks
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("selected mark payload is missing".into()))?
+                    .draw(backend)?;
+                result
+                    .annotations
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("selected annotation payload is missing".into()))?
+                    .draw(backend)?;
+                Ok(result.decoration_mode)
+            }
         }
-        self.measure_panel(kind, context, backend)
-            .map(|result| result.decoration_mode)
-            .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     pub(crate) fn measure_panel(
         &self,
         kind: PlotKind,
         context: PlotRenderContext<'_>,
-        backend: &mut dyn Backend,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         #[cfg(test)]
         {
@@ -184,79 +180,34 @@ impl Plot {
             });
         }
         let context = context.with_prepared_axes(self);
-        if matches!(
-            kind,
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+        match kind {
             PlotKind::Scatter
-                | PlotKind::Line
-                | PlotKind::Trajectory
-                | PlotKind::LinePath
-                | PlotKind::Histogram
-                | PlotKind::Density
-                | PlotKind::Qq
-                | PlotKind::Regression
-                | PlotKind::Dumbbell
-                | PlotKind::PointInterval
-                | PlotKind::Coefficient
-                | PlotKind::Forest
-                | PlotKind::Bar
-                | PlotKind::HorizontalBar
-                | PlotKind::StackedBar
-                | PlotKind::StackedHorizontalBar
-                | PlotKind::Boxplot
-                | PlotKind::Violin
-                | PlotKind::Raincloud
-                | PlotKind::Interaction
-                | PlotKind::Heatmap
-                | PlotKind::Beeswarm
-                | PlotKind::Marginal
-                | PlotKind::Matrix
-        ) {
-            return self.measure_selected_interior(context);
-        }
-        let mut result = crate::layout::interior::InteriorRoute::classify(kind)
-            .combined(self, context, backend)?;
-        let domains = match kind {
-            PlotKind::Interaction
-            | PlotKind::Bar
-            | PlotKind::StackedBar
-            | PlotKind::Boxplot
-            | PlotKind::Violin
-            | PlotKind::Raincloud => (AxisDomain::Categorical, AxisDomain::Continuous),
-            PlotKind::PointInterval
-            | PlotKind::Coefficient
-            | PlotKind::Forest
-            | PlotKind::Dumbbell
-            | PlotKind::HorizontalBar
-            | PlotKind::StackedHorizontalBar
-            | PlotKind::Beeswarm
-            | PlotKind::Waterfall => (AxisDomain::Continuous, AxisDomain::Categorical),
-            PlotKind::Heatmap => (AxisDomain::Categorical, AxisDomain::Categorical),
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                (result.x_domain, result.y_domain)
-            }
-            PlotKind::Scatter
+            | PlotKind::Line
+            | PlotKind::Trajectory
+            | PlotKind::LinePath
             | PlotKind::Histogram
             | PlotKind::Density
             | PlotKind::Qq
             | PlotKind::Regression
+            | PlotKind::Dumbbell
+            | PlotKind::PointInterval
+            | PlotKind::Coefficient
+            | PlotKind::Forest
+            | PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar
+            | PlotKind::Boxplot
+            | PlotKind::Violin
+            | PlotKind::Raincloud
+            | PlotKind::Interaction
+            | PlotKind::Heatmap
+            | PlotKind::Beeswarm
+            | PlotKind::Waterfall
             | PlotKind::Marginal
-            | PlotKind::Matrix => (AxisDomain::Continuous, AxisDomain::Continuous),
-        };
-        result.x_domain = domains.0;
-        result.y_domain = domains.1;
-        layers::apply(self, &mut result, backend)?;
-        resolve_rendered_labels(self, kind, &mut result, context)?;
-        result.panel_text = match context.panel_text {
-            Some(plans) => plans.to_vec(),
-            None => crate::decorations::panel_text::measure_plans(
-                self,
-                &result.layout,
-                context.theme,
-                context.fit_scope(),
-            )?,
-        };
-        crate::decorations::panel_text::draw(self, &result.layout, &result.panel_text, backend)?;
-        Ok(result)
+            | PlotKind::Matrix => self.measure_selected_interior(context),
+        }
     }
 
     #[expect(
@@ -298,12 +249,7 @@ impl Plot {
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 crate::plots::line::measure(self, context)?
             }
-            PlotKind::Waterfall => {
-                return Err(Error::Render(
-                    "selected measurement requires an extracted family".into(),
-                )
-                .into())
-            }
+            PlotKind::Waterfall => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context
             .theme

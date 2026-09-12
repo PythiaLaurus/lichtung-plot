@@ -2,9 +2,7 @@
 
 use crate::Error;
 
-use super::backend::{
-    capture_text_replay_plan, validate_text_replay_plan, validate_with_null_backend, TextReplayPlan,
-};
+use super::backend::{capture_text_replay_plan, validate_text_replay_plan, TextReplayPlan};
 use crate::builder::Plot;
 use crate::decorations::plan::PanelPlan;
 use crate::layout::PanelBox;
@@ -434,13 +432,7 @@ impl Plot {
             || PlotRenderContext::new(self.data(), panel, theme),
             |rows| PlotRenderContext::with_source_rows(self.data(), rows, panel, theme),
         );
-        validate_with_null_backend(self.width(), self.height(), "panel preflight", |backend| {
-            crate::layout::fit::outcome(self.measure_panel(
-                kind,
-                context.with_fit_scope(scope),
-                backend,
-            ))
-        })
+        crate::layout::fit::outcome(self.measure_panel(kind, context.with_fit_scope(scope)))
     }
 
     pub(crate) fn configured_source_rows(&self) -> Result<Option<&[usize]>, Error> {

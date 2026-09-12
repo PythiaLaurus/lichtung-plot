@@ -250,6 +250,7 @@ pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
         .ok_or_else(|| Error::Render("bar measurement requires root-prepared semantics".into()))
 }
 
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: crate::spec::PlotRenderContext<'_>,

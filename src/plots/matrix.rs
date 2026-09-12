@@ -312,17 +312,11 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
     let mut theme = crate::Theme::Publication.resolve();
     theme.prepare_font_environment().unwrap();
     theme.typography.tick_label.font_size = 0;
-    let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
-    backend.begin(plot.width(), plot.height()).unwrap();
     let context =
         PlotRenderContext::new(plot.data(), PanelBox::new(80.0, 600.0, 60.0, 440.0), &theme);
-    let error = plot
-        .measure_panel(plot.kind(), context, &mut backend)
-        .err()
-        .unwrap();
+    let error = plot.measure_panel(plot.kind(), context).err().unwrap();
     assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
     let error = error.into_error();
-    backend.end().unwrap();
     assert!(
         error.to_string().contains("font size must be positive"),
         "{error}"
@@ -334,6 +328,7 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
 ///
 /// Returns a dummy `Layout` (the matrix is self-decorated) and
 /// legend entries (empty — legend is drawn internally).
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: PlotRenderContext<'_>,

@@ -63,7 +63,7 @@ fn preflight_panels(
     panels: &[FacetPanel],
     facet_scales: crate::FacetScales,
     theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
+    _backend: &mut dyn Backend,
     children: &mut crate::decorations::plan::children::ChildPlans,
     round: &crate::layout::kernel::FeedbackRound,
     phase: MeasurementPhase,
@@ -85,7 +85,7 @@ fn preflight_panels(
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
         let result = children.measure(&panel_plot, context, &owner, phase, round, || {
-            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context, backend))
+            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context))
         })?;
         preflight.push(
             crate::layout::fit::measured(Ok(result))

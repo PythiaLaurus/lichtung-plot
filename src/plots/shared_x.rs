@@ -85,7 +85,10 @@ pub(super) fn domain_with_data(
                 chart.x_axis_spec(),
             )
         }
-        PlotKind::Waterfall => super::waterfall::shared_x_domain(chart, data)?,
+        PlotKind::Waterfall => {
+            let marks = super::waterfall::prepare(chart, data)?;
+            crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec())
+        }
         PlotKind::Interaction
         | PlotKind::Heatmap
         | PlotKind::Bar

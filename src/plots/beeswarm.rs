@@ -46,6 +46,7 @@ fn count(stage: usize) {
     });
 }
 
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: PlotRenderContext<'_>,

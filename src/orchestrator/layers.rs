@@ -77,47 +77,6 @@ impl Plot {
     }
 }
 
-pub(crate) fn apply(
-    chart: &Plot,
-    result: &mut PlotRenderResult,
-    backend: &mut dyn Backend,
-) -> Result<(), crate::layout::fit::PlanError> {
-    let projection = &result.layout.projection;
-    if chart.explicit_x_ticks().is_some() {
-        crate::layout::Axis::validate_ticks(
-            &result.layout.x_axis.ticks,
-            projection.x_range(),
-            "x-axis",
-        )?;
-    }
-    if chart.explicit_y_ticks().is_some() {
-        crate::layout::Axis::validate_ticks(
-            &result.layout.y_axis.ticks,
-            projection.y_range(),
-            "y-axis",
-        )?;
-    }
-    if chart.guides().is_empty() {
-        return Ok(());
-    }
-
-    let x_range = projection.x_range();
-    let y_range = projection.y_range();
-    let projected = chart
-        .guides()
-        .iter()
-        .enumerate()
-        .map(|(index, guide)| project_guide(guide, index, projection, x_range, y_range))
-        .collect::<Result<Vec<_>, _>>()?;
-    with_clip(backend, projection.panel_box(), |backend| {
-        for (points, style) in projected {
-            backend.draw_line(&points, &style)?;
-        }
-        Ok(())
-    })
-    .map_err(Into::into)
-}
-
 #[derive(Debug)]
 pub(crate) struct GuideSnapshot {
     clip: crate::layout::PanelBox,

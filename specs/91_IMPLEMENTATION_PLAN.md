@@ -249,7 +249,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a4b | Marginal deferred interior | COMPLETE |
 | T5a6a4c | Matrix deferred interior and outer title integration | COMPLETE |
 | T5a6a4d | Beeswarm deferred interior | COMPLETE |
-| T5a6a4e | Waterfall deferred interior | PENDING |
+| T5a6a4e | Waterfall deferred interior | COMPLETE |
 | T5a6a5a | Facet parent adapter and outer title integration | PENDING |
 | T5a6a5b | Canvas parent adapter and outer title integration | PENDING |
 | T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
@@ -4606,9 +4606,11 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and specialized
-extraction steps T5a6a4a-d are COMPLETE with focused and primary integrated
-evidence below. T5a6a4e and later extraction steps remain PENDING.
+T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and all five specialized
+extraction steps T5a6a4a-e are COMPLETE with focused and primary integrated
+evidence below. All 25 family interiors use selected measurement/capture without
+backend discovery or a production family combined-dispatch branch. Parent
+adapters T5a6a5a-b and later native-route migrations remain PENDING.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4631,6 +4633,47 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a4e completion evidence: COMPLETE. Primary review reported no actionable
+bugs.
+
+- From clean `0e8c344`, Waterfall retains source-row-validated labels, exact
+  signed deltas, cumulative spans, initial-base-inclusive domains, and formatted
+  total labels before fonts. Finite cumulative endpoints do not require a finite
+  detached delta sum. Standalone, facet, and shared-x Canvas components prepare
+  once; shared ranges consume retained endpoints.
+- Backend-free constrained measurement retains typed bars, connectors, reference
+  lines, and total text placements with one mark geometry snapshot. Current
+  orientation, signed theme colors, annotation rows/reserve, clipping, native
+  quantization/axes, and the common root title producer are preserved. Source and
+  candidate storage, annotation vectors, diagnostic strings, and scope identity
+  copies are admitted before allocation.
+- All 25 families now use exhaustive selected measurement/capture dispatch;
+  family measurement has no backend parameter, geometry discovery fallback, or
+  NullBackend preflight wrapper. Combined dispatch exists only as test-only
+  rejection evidence. Deferred parent chrome remains unchanged; T5a6a5a-b are
+  not started and existing composition restrictions remain in force.
+- Eighteen full preserve-text SVG fingerprints match a separate clean
+  `0e8c344` worktree: Publication/Science, exact limits, configured total labels,
+  all four facet scales, shared-x Canvas, and titled roots. Persisted focused
+  tests cover root counts/admission, source-row errors before unavailable fonts,
+  finite endpoints despite detached-sum overflow, selected geometry, exact-limit
+  refusal, typed fit identities, poisoned capture, and output scene reuse.
+- Focused handoff checks passed: strict locked/offline all-target Clippy,
+  formatting, the full library suite (912 passed, 17 ignored), 44 categorical
+  integrations, 57 composition integrations, and all six unchanged visual
+  snapshots. The 25-family lifecycle audit passes with Waterfall on the retained
+  selected route.
+- Final primary `just verify` in `/tmp/opencode/t5a6a4e-verify.log` passed:
+  formatting, strict locked/offline all-target Clippy, 912 library tests passed
+  with 17 ignored, and 448 integration tests passed, including 44 categorical
+  tests, 57 composition tests, and all six unchanged visual snapshots. Four
+  example targets ran zero tests; warning-denied rustdoc and offline package
+  verification passed for 235 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
+- All five specialized extractions are COMPLETE; parent adapters T5a6a5a-b and
+  later native-route migrations remain PENDING. This completion update changes
+  documentation only; no code or snapshots are edited, no tests are rerun, and
+  no commit is made, as explicitly requested.
 
 T5a6a4d completion evidence: COMPLETE. Static review reported no actionable
 findings.
@@ -4658,10 +4701,10 @@ findings.
   57 composition tests, and all six unchanged visual snapshots. Four example
   targets ran zero tests; warning-denied rustdoc and offline package verification
   passed for 233 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
-- T5e packing remains deferred; T5a6a4e onward remain PENDING and no successor
-  is started. This completion update changes documentation only; no code or
-  snapshots are edited, no tests are rerun, and no commit is made, as explicitly
-  requested.
+- T5e packing remains deferred; at T5a6a4d completion, T5a6a4e onward were PENDING
+  and no successor was started. This completion update changes documentation
+  only; no code or snapshots are edited, no tests are rerun, and no commit is
+  made, as explicitly requested.
 
 T5a6a4c completion evidence: COMPLETE.
 

@@ -181,7 +181,7 @@ pub(super) fn layout_panels(
     shape: (usize, usize),
     facet_scales: FacetScales,
     theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
+    _backend: &mut dyn Backend,
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
     probe_cells: &[PanelBox],
@@ -299,7 +299,6 @@ pub(super) fn layout_panels(
                         )
                         .with_facet_scales(facet_scales)
                         .with_fit_scope(&cell_scope),
-                        backend,
                     ),
                 )
             },

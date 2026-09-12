@@ -112,6 +112,7 @@ pub(crate) fn text_census(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: PlotRenderContext<'_>,

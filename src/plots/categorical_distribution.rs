@@ -183,6 +183,7 @@ impl DistributionPayload {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn reject_combined(
     _: &Plot,
     _: crate::spec::PlotRenderContext<'_>,
