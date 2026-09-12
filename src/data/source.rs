@@ -120,20 +120,6 @@ impl PlotData<'_> {
         self.claim_source_bytes(layout.size())?;
         Ok(std::sync::Arc::new(value))
     }
-    pub(crate) fn source_numeric_range(
-        self,
-        values: &crate::NumericValues,
-        context: &str,
-    ) -> Result<(f64, f64), Error> {
-        self.claim_source_visits(values.len())?;
-        let mut range: Option<(f64, f64)> = None;
-        for row in 0..values.len() {
-            let value = super::strict_numeric_value(values, row, context)?;
-            range = Some(range.map_or((value, value), |(lo, hi)| (lo.min(value), hi.max(value))));
-        }
-        range.ok_or_else(|| Error::Data(format!("{context}: cannot compute range from no values")))
-    }
-
     pub(crate) fn copy_source_string(self, source: &str) -> Result<String, Error> {
         self.claim_source_visits(source.len())?;
         if let Some(resources) = self.axis_resources {
@@ -357,52 +343,6 @@ mod tests {
             .to_string()
             .contains("work admission"));
         assert_eq!(resources.usage().unwrap().1, 7);
-    }
-
-    #[test]
-    fn numeric_range_needs_no_storage_and_refuses_before_validation() {
-        let plot = crate::Plot::scatter(
-            crate::NumericValues::new("x", [1.0]),
-            crate::NumericValues::new("y", [1.0]),
-        )
-        .erase();
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-        let values = crate::NumericValues::new("layer", [3.0, -4.0, 2.0]);
-        let resources = OperationGenerationResources::with_test_limits(3, 0);
-        assert_eq!(
-            plot.data()
-                .with_axis_resources(&resources)
-                .source_numeric_range(&values, "layer")
-                .unwrap(),
-            (-4.0, 3.0)
-        );
-        let invalid = crate::NumericValues::new("layer", [f64::INFINITY]);
-        let error = plot
-            .data()
-            .with_axis_resources(&resources)
-            .source_numeric_range(&invalid, "layer")
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("axis source work admission"),
-            "{error}"
-        );
-        for values in [
-            invalid,
-            crate::NumericValues::nullable("layer", [None]),
-            values,
-        ] {
-            let expected = crate::data::strict_numeric_values(&values, "layer")
-                .and_then(|values| crate::data::min_max(values, "layer"));
-            let actual = plot.data().source_numeric_range(&values, "layer");
-            assert_eq!(
-                actual.map_err(|error| error.to_string()),
-                expected.map_err(|error| error.to_string())
-            );
-        }
-        assert_eq!(
-            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-            0
-        );
     }
 
     #[test]

@@ -242,7 +242,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3a | Point/path semantic and payload extraction | COMPLETE |
 | T5a6a3b | Distribution/reference semantic and payload extraction | COMPLETE |
 | T5a6a3c | Estimate-display semantic and payload extraction | COMPLETE |
-| T5a6a3d | Bar semantic and payload extraction | PENDING |
+| T5a6a3d | Bar semantic and payload extraction | COMPLETE |
 | T5a6a3e | Categorical-distribution semantic and payload extraction | PENDING |
 | T5a6a3f | Interaction semantic and payload extraction | PENDING |
 | T5a6a4a | Heatmap deferred interior | PENDING |
@@ -4607,7 +4607,8 @@ Evidence:
 #### T5a6a Execution Partition
 
 T5a6a1, T5a6a2, and T5a6a3a-c are complete with focused and primary integrated
-evidence below. Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
+evidence below. T5a6a3d is also complete; successor
+extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
 the later native axis/frame migrations; they must not duplicate those migrations.
@@ -4899,6 +4900,42 @@ regression. Primary `just verify` passed: 854 library tests (17 ignored), 442
 integration tests, strict Clippy, formatting, API docs, and package verification
 (223 files). All six snapshots remain unchanged.
 Log: `/tmp/opencode/t5a6a3c-verify.log`.
+
+T5a6a3d completion evidence (based on clean `4c67f93`):
+
+- Bar, HorizontalBar, StackedBar, and StackedHorizontalBar prepare scientific
+  cells once per component before fonts. Axes consume those retained categories,
+  intervals, supplemental point extents, and signed stacks instead of recomputing
+  statistics. The superseded interval-skipping axis preparation is removed.
+- Shared Canvas preparation borrows scope, label, and reconciled-range inputs.
+  Facets borrow ownership selectors and global series/hue order; deterministic
+  bootstrap identity remains facet-local. Absent series keep their dodge slots
+  without acquiring marks. Parent-suppressed horizontal category labels retain
+  raw keys and tick positions while omitting only their measured display text.
+- Measurement retains orientation-specific polygons, interval stems/caps, points,
+  zero lines, and attached text. GeometrySnapshot records their selected extents
+  and pairwise bracket consequences without GeometryBackend. Final capture uses
+  selected marks/annotations, never the removed combined renderers. The four
+  categorical legacy variants remain unchanged until T5a6c2.
+- Operation admission precedes source/category/point identity storage, retained
+  panel allocation, and payload vectors. Seven extraction tests cover exact
+  semantic budgets, cumulative refusal, standalone/facet/mixed shared-Canvas
+  stage counts, global colors and absence, exact ticks, facet-owned annotations,
+  bit-exact bootstrap intervals, invalid inputs before fonts, extent/draw parity,
+  and poisoned-source capture. Selected capture repeats no source reads,
+  preparation, projection, axis work, or shaping; Null/SVG replay preserves counts.
+- Focused checks pass: 46 bar-filtered library tests, 16 shared-axis tests,
+  44 lifecycle tests, 26 significance tests (one ignored benchmark), 42 categorical,
+  27 annotation, and 57 composition integration tests. All six snapshots pass
+  with `INSTA_UPDATE=no` and remain unchanged. Strict offline all-target Clippy
+  and `git diff --check` pass.
+- Review corrected an unadmitted legend dimension string by sharing the admitted
+  identity constructor. Long caller dimensions have exact work/storage and
+  cumulative-candidate refusal evidence. Two clearance unit fixtures now attach
+  prepared bar inputs without altering their assertions or adding a fallback.
+- Primary `just verify` passed: 861 library tests (17 ignored), 442 integration
+  tests, strict Clippy, formatting, API docs, and package verification (224 files).
+  All six snapshots remain unchanged. Log: `/tmp/opencode/t5a6a3d-verify.log`.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

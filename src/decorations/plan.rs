@@ -1210,6 +1210,10 @@ fn measure_geometry(
             | PlotKind::PointInterval
             | PlotKind::Coefficient
             | PlotKind::Forest
+            | PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

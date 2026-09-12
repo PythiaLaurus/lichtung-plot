@@ -53,6 +53,7 @@ impl<'a> DataColumn<'a> {
 /// Global axis inputs normally installed on a generic facet child Plot.
 #[derive(Clone, Copy)]
 pub(crate) struct FacetAxisSources<'a> {
+    pub(crate) hues: Option<&'a [String]>,
     pub(crate) groups: Option<&'a [String]>,
     pub(crate) conditions: Option<&'a [String]>,
 }
@@ -202,12 +203,6 @@ thread_local! {
     pub(crate) static SOURCE_COLUMN_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-pub(crate) fn strict_numeric_values(values: &NumericValues, plot: &str) -> Result<Vec<f64>, Error> {
-    (0..values.len())
-        .map(|row| strict_numeric_value(values, row, plot))
-        .collect()
-}
-
 pub(crate) fn strict_numeric_value(
     values: &NumericValues,
     row: usize,
@@ -227,23 +222,6 @@ pub(crate) fn strict_numeric_value(
         ))),
         None => unreachable!("row is bounded by NumericValues::len"),
     }
-}
-
-pub(crate) fn strict_category_values(
-    values: &CategoryValues,
-    plot: &str,
-) -> Result<Vec<String>, Error> {
-    (0..values.len())
-        .map(|row| match values.get(row) {
-            Some(Some(value)) => Ok(value.to_owned()),
-            Some(None) => Err(Error::Data(format!(
-                "{plot}: value {:?} contains null at source row {}",
-                values.name(),
-                row
-            ))),
-            None => unreachable!("row is bounded by CategoryValues::len"),
-        })
-        .collect()
 }
 
 pub(crate) fn nullable_finite_f64<'a>(

@@ -1814,6 +1814,10 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::PointInterval
                     | PlotKind::Coefficient
                     | PlotKind::Forest
+                    | PlotKind::Bar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedBar
+                    | PlotKind::StackedHorizontalBar
             ) {
                 &prepared
             } else {

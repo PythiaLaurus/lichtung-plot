@@ -46,10 +46,10 @@ interior_routes! {
         Coefficient => crate::plots::interval_estimate::reject_combined,
         Forest => crate::plots::interval_estimate::reject_combined,
         Dumbbell => crate::plots::dumbbell::reject_combined,
-        Bar => crate::plots::bar::render,
-        StackedBar => crate::plots::bar::render,
-        HorizontalBar => crate::plots::horizontal_bar::render,
-        StackedHorizontalBar => crate::plots::horizontal_bar::render,
+        Bar => crate::plots::bar_data::reject_combined,
+        StackedBar => crate::plots::bar_data::reject_combined,
+        HorizontalBar => crate::plots::bar_data::reject_combined,
+        StackedHorizontalBar => crate::plots::bar_data::reject_combined,
         Boxplot => crate::plots::boxplot::render,
         Violin => crate::plots::violin::render,
         Raincloud => crate::plots::violin::render_raincloud,
@@ -104,6 +104,7 @@ impl ParentCompositionAdapter {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
     pub(crate) estimate:
         Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
     pub(crate) dumbbell: Option<std::sync::Arc<crate::plots::dumbbell::PreparedDumbbellInputs>>,
@@ -131,6 +132,7 @@ impl PreparedInteriorInputs {
         plot.prepared_qq.clone_from(&self.qq);
         plot.prepared_dumbbell.clone_from(&self.dumbbell);
         plot.prepared_estimate.clone_from(&self.estimate);
+        plot.prepared_bars.clone_from(&self.bars);
         plot.prepared_regression.clone_from(&self.regression);
         Ok(plot)
     }
@@ -211,6 +213,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Bars(crate::plots::bar_data::BarPayload),
     Estimate(crate::plots::interval_estimate::EstimatePayload),
     Dumbbell(crate::plots::dumbbell::DumbbellPayload),
     Scatter(crate::plots::scatter::ScatterPayload),
@@ -227,6 +230,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Bars(payload) => payload.draw(backend),
             MarkPayload::Estimate(payload) => payload.draw(backend),
             MarkPayload::Dumbbell(payload) => payload.draw(backend),
             MarkPayload::Scatter(payload) => payload.draw(backend),

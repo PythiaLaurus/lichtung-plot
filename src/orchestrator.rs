@@ -134,6 +134,10 @@ impl Plot {
                 | PlotKind::PointInterval
                 | PlotKind::Coefficient
                 | PlotKind::Forest
+                | PlotKind::Bar
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
@@ -186,6 +190,10 @@ impl Plot {
                 | PlotKind::PointInterval
                 | PlotKind::Coefficient
                 | PlotKind::Forest
+                | PlotKind::Bar
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar
         ) {
             return self.measure_selected_interior(context);
         }
@@ -247,6 +255,10 @@ impl Plot {
         });
         let context = context.with_prepared_axes(self);
         let mut result = match self.kind() {
+            PlotKind::Bar | PlotKind::StackedBar => crate::plots::bar::measure(self, context)?,
+            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
+                crate::plots::horizontal_bar::measure(self, context)?
+            }
             PlotKind::Scatter => crate::plots::scatter::measure(self, context)?,
             PlotKind::Histogram => crate::plots::histogram::measure(self, context)?,
             PlotKind::Density => crate::plots::density::measure(self, context)?,
@@ -316,6 +328,10 @@ impl Plot {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "raw category identities, parent-suppressed display labels, and measured axes share one resolution boundary"
+)]
 fn resolve_rendered_labels(
     plot: &Plot,
     kind: PlotKind,
@@ -387,6 +403,16 @@ fn resolve_rendered_labels(
             tick.label = label;
         }
         result.y_tick_keys = Some(raw);
+    }
+    if matches!(
+        kind,
+        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+    ) && !plot.y_tick_labels_visible()
+    {
+        data.claim_source_visits(result.layout.y_axis.ticks.len())?;
+        for tick in &mut result.layout.y_axis.ticks {
+            tick.label.clear();
+        }
     }
     if !result.legend_entries.is_empty() {
         crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;

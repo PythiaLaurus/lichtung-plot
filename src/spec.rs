@@ -718,7 +718,6 @@ pub(crate) struct PlotRenderContext<'a> {
     prepared_kind: Option<PlotKind>,
     pub(crate) theme: &'a crate::theme::ResolvedTheme,
     facet_scales: Option<FacetScales>,
-    deferred_annotation_text: Option<&'a [crate::layout::DeferredAnnotationTextPlan]>,
     producer_text: Option<&'a [crate::render::backend::PlacedText]>,
     pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
     pub(crate) self_managed_legend:
@@ -746,7 +745,6 @@ impl<'a> PlotRenderContext<'a> {
             prepared_kind: None,
             theme,
             facet_scales: None,
-            deferred_annotation_text: None,
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
@@ -773,7 +771,6 @@ impl<'a> PlotRenderContext<'a> {
             prepared_kind: None,
             theme,
             facet_scales: None,
-            deferred_annotation_text: None,
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
@@ -807,12 +804,6 @@ impl<'a> PlotRenderContext<'a> {
 
     pub(crate) const fn facet_scales(self) -> Option<FacetScales> {
         self.facet_scales
-    }
-
-    pub(crate) const fn deferred_annotation_text(
-        self,
-    ) -> Option<&'a [crate::layout::DeferredAnnotationTextPlan]> {
-        self.deferred_annotation_text
     }
 
     pub(crate) fn producer_text(self) -> Result<ProducerText<'a>, Error> {
@@ -858,7 +849,6 @@ impl<'a> PlotRenderContext<'a> {
                 result
             }
         };
-        self.deferred_annotation_text = Some(&result.deferred_annotation_text);
         self.retained_axes = result.axes.as_ref();
         self.retained_layout = Some(&result.layout);
         self.producer_text = Some(&result.producer_text);

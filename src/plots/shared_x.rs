@@ -68,7 +68,7 @@ pub(super) fn domain_with_data(
             } else {
                 super::bar_data::BarMode::Single
             };
-            let (_, range) = super::bar_data::axis_inputs(chart, data, mode, None)?;
+            let range = super::bar_data::prepare(chart, data, mode)?.value_range;
             crate::layout::anchored_auto_range(range, chart.x_axis_spec(), 0.0)
         }
         PlotKind::Marginal => super::marginal::shared_x_domain(chart, data)?,

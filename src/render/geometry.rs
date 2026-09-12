@@ -366,6 +366,55 @@ impl GeometrySnapshot {
         )
     }
 
+    pub(crate) fn bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
+        let canonical = backend::validate_planned_bracket(call)?;
+        let width = super::coordinates::CanonicalCoordinate::nonnegative_length(
+            f64::from(call.style.width),
+            "bracket stroke width",
+        )?;
+        let path = (width.units() > 0)
+            .then(|| {
+                GeometryBox::from_canonical_points(
+                    &[
+                        canonical.line_start,
+                        canonical.line_end,
+                        canonical.first_tick_end,
+                        canonical.second_tick_end,
+                    ],
+                    i128::from(width.units()),
+                )
+            })
+            .transpose()?
+            .flatten()
+            .map(|bounds| GeometryBox {
+                weight: ANNOTATION_COLLISION_WEIGHT,
+                ..bounds
+            });
+        let placement = backend::planned_bracket_placement(canonical);
+        backend::reserve_text_records(&mut self.text, 1, &self.font_environment)?;
+        self.text.push(PositionedText {
+            placement,
+            plan: call.label.plan.clone(),
+            clip: None,
+            bounds_index: None,
+        });
+        let label = planned_text_ink_bounds(
+            &call.label.plan,
+            placement.position,
+            placement.anchor,
+            placement.rotation,
+            placement.origin,
+            placement.reverse_lines,
+        );
+        self.record(
+            match (path, label) {
+                (Some(path), Some(label)) => Some(path.union(label)),
+                (path, label) => path.or(label),
+            },
+            None,
+        )
+    }
+
     pub(crate) fn append(&mut self, other: &Self) -> Result<(), Error> {
         backend::reserve_text_records(
             &mut self.bounds,

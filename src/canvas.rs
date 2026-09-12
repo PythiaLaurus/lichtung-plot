@@ -1519,6 +1519,10 @@ impl Canvas {
                             | PlotKind::PointInterval
                             | PlotKind::Coefficient
                             | PlotKind::Forest
+                            | PlotKind::Bar
+                            | PlotKind::HorizontalBar
+                            | PlotKind::StackedBar
+                            | PlotKind::StackedHorizontalBar
                     )
                 }) {
                     Some(plot) => {
@@ -1579,6 +1583,10 @@ impl Canvas {
                             | PlotKind::PointInterval
                             | PlotKind::Coefficient
                             | PlotKind::Forest
+                            | PlotKind::Bar
+                            | PlotKind::HorizontalBar
+                            | PlotKind::StackedBar
+                            | PlotKind::StackedHorizontalBar
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath

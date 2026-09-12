@@ -952,7 +952,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    /// Point/path payload identities own both strings under the projection's gate.
+    /// Payload identities own both strings under the projection's gate.
     pub(crate) fn point_legend_identity(
         &self,
         label: &str,

@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Bars(crate::PlotKind, crate::plots::bar_data::PreparedBars),
     Estimate(crate::plots::interval_estimate::PreparedEstimate),
     Dumbbell(crate::plots::dumbbell::DumbbellData),
     Histogram(crate::plots::histogram::HistogramSemantics),
@@ -28,6 +29,17 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar => Ok(Self::Bars(
+                source.kind(),
+                crate::plots::bar_data::prepare(
+                    source,
+                    data,
+                    crate::plots::bar_data::mode(source),
+                )?,
+            )),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => Ok(
                 Self::Estimate(crate::plots::interval_estimate::PreparedEstimate::new(
                     source,
@@ -54,8 +66,22 @@ impl PreparedReference {
         }
     }
 
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "category counts are admitted source rows"
+    )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Bars(kind, marks) => {
+                if matches!(
+                    kind,
+                    PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
+                ) {
+                    crate::layout::anchored_auto_range(marks.value_range, source.x_axis_spec(), 0.0)
+                } else {
+                    (0.0, marks.categories.len() as f64)
+                }
+            }
             Self::Estimate(marks) => marks.x_range()?,
             Self::Dumbbell(marks) => {
                 crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())
@@ -70,6 +96,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    bars: Option<&'a crate::plots::bar_data::PreparedBars>,
     estimate: Option<&'a crate::plots::interval_estimate::PreparedEstimate>,
     estimate_fallback: Option<(f64, f64)>,
     dumbbell: Option<&'a crate::plots::dumbbell::DumbbellData>,
@@ -96,10 +123,15 @@ pub(crate) fn prepare_reference_plot(
     let mut bins = None;
     let mut dumbbell = None;
     let mut estimate = None;
+    let mut bars = None;
     let mut curves = None;
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Bars(kind, marks) => {
+            bars = Some(marks);
+            kind
+        }
         PreparedReference::Estimate(marks) => {
             let kind = marks.kind;
             estimate = Some(marks);
@@ -139,6 +171,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            bars: bars.as_ref(),
             x_limits,
             labels,
             dumbbell: dumbbell.as_ref(),
@@ -155,6 +188,14 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        bars: bars
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::bar_data::PreparedBarInputs { panels })
+            })
+            .transpose()?,
         estimate: estimate
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -229,6 +270,7 @@ pub(crate) fn prepare_plot(
     let mut regression = Vec::new();
     let mut dumbbell = Vec::new();
     let mut estimate = Vec::new();
+    let mut bars = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -243,6 +285,10 @@ pub(crate) fn prepare_plot(
             | PlotKind::PointInterval
             | PlotKind::Coefficient
             | PlotKind::Forest
+            | PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar
     ) && !source.has_facets()
     {
         return prepare_reference_plot(
@@ -345,10 +391,30 @@ pub(crate) fn prepare_plot(
         } else {
             None
         };
+        let hues = source
+            .hue_col()
+            .filter(|_| {
+                matches!(
+                    source.kind(),
+                    PlotKind::Bar
+                        | PlotKind::HorizontalBar
+                        | PlotKind::StackedBar
+                        | PlotKind::StackedHorizontalBar
+                )
+            })
+            .map(|column| {
+                source_data.source_levels(&crate::data::strict_strings(
+                    source_data,
+                    column,
+                    "facet hue",
+                )?)
+            })
+            .transpose()?;
         source_data.reserve_source(&mut retained, panels.len())?;
         for (index, panel) in panels.into_iter().enumerate() {
             let data = panel.data().with_axis_resources(resources);
             let facet = crate::data::FacetAxisSources {
+                hues: hues.as_deref(),
                 groups: groups.as_deref(),
                 conditions: conditions.as_deref(),
             };
@@ -385,6 +451,23 @@ pub(crate) fn prepare_plot(
                 .then(|| crate::plots::dumbbell::prepare(source, data))
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
+            let bar_marks = matches!(
+                source.kind(),
+                PlotKind::Bar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedBar
+                    | PlotKind::StackedHorizontalBar
+            )
+            .then(|| {
+                crate::plots::bar_data::prepare_scoped(
+                    source,
+                    data,
+                    crate::plots::bar_data::mode(source),
+                    Some(facet),
+                    panel.significance_annotations(source_data)?,
+                )
+            })
+            .transpose()?;
             let axes = prepare(
                 source,
                 data,
@@ -396,6 +479,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    bars: bar_marks.as_ref(),
                     dumbbell: pairs.as_ref(),
                     estimate: estimates.as_ref(),
                     estimate_fallback,
@@ -403,6 +487,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = bar_marks {
+                source_data.reserve_source(&mut bars, 1)?;
+                bars.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(estimates) = estimates {
                 source_data.reserve_source(&mut estimate, 1)?;
                 estimate.push((Some(source_data.copy_source_string(&scope)?), estimates));
@@ -459,6 +547,24 @@ pub(crate) fn prepare_plot(
             quantiles.validate_ranges(axes.ranges, source_data)?;
         }
         for (_, axes) in &retained {
+            if matches!(
+                source.kind(),
+                PlotKind::Bar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedBar
+                    | PlotKind::StackedHorizontalBar
+            ) {
+                for side in 0..2 {
+                    if let Some(ticks) = &axes.specs[side].exact_ticks {
+                        source_data.claim_source_visits(ticks.len())?;
+                        crate::layout::Axis::validate_ticks(
+                            ticks,
+                            axes.ranges[side],
+                            if side == 0 { "x-axis" } else { "y-axis" },
+                        )?;
+                    }
+                }
+            }
             crate::orchestrator::layers::GuideSnapshot::validate_sources(
                 source,
                 axes.ranges,
@@ -491,6 +597,20 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        bars: if matches!(
+            source.kind(),
+            PlotKind::Bar
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar
+        ) {
+            Some(
+                source_data
+                    .source_arc(crate::plots::bar_data::PreparedBarInputs { panels: bars })?,
+            )
+        } else {
+            None
+        },
         estimate: if matches!(
             source.kind(),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
@@ -601,6 +721,7 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        bars: None,
         estimate: None,
         dumbbell: None,
         qq: None,
@@ -651,6 +772,7 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        bars: None,
         estimate: None,
         dumbbell: None,
         axes: data.source_arc(retained_axes)?,
@@ -804,18 +926,17 @@ fn prepare(
         | PlotKind::StackedBar
         | PlotKind::HorizontalBar
         | PlotKind::StackedHorizontalBar => {
-            use crate::plots::bar_data::{self, BarMode};
-            let mode = if matches!(
-                chart.kind(),
-                PlotKind::StackedBar | PlotKind::StackedHorizontalBar
-            ) {
-                BarMode::Stacked
-            } else if chart.group_col().is_some() {
-                BarMode::Grouped
-            } else {
-                BarMode::Single
-            };
-            let (levels, range) = bar_data::axis_inputs(chart, data, mode, facet)?;
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.bars)
+                .ok_or_else(|| Error::Render("bar axes require prepared semantics".into()))?;
+            let levels = data.collect_source(
+                marks
+                    .categories
+                    .iter()
+                    .map(|label| data.copy_source_string(label)),
+            )?;
+            let range = marks.value_range;
             let horizontal = matches!(
                 chart.kind(),
                 PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
@@ -1067,6 +1188,17 @@ fn prepare(
         }
         let spec = &specs[side];
         if let Some(exact) = &spec.exact_ticks {
+            if facet.is_some()
+                && matches!(
+                    chart.kind(),
+                    PlotKind::Bar
+                        | PlotKind::HorizontalBar
+                        | PlotKind::StackedBar
+                        | PlotKind::StackedHorizontalBar
+                )
+            {
+                continue;
+            }
             data.claim_source_visits(exact.len())?;
             crate::layout::Axis::validate_ticks(
                 exact,

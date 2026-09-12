@@ -1,4 +1,4 @@
-//! Horizontal bar plot implementation.
+//! Constrained horizontal bar payloads from retained scientific preparation.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -10,48 +10,26 @@
 
 use crate::Error;
 
-use crate::layout::{
-    AxisTick, Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan,
-};
+use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
-use crate::render::backend::{
-    with_clip, Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
-};
-use crate::spec::{BarSpacing, PlotKind, PlotRenderContext, PlotRenderResult};
+use crate::render::backend::{FillStyle, LineStyle, PlacedText, Point2D, TextAnchor};
+use crate::spec::{BarSpacing, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
-pub(crate) fn render(
+pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
-    let mode = match chart.kind() {
-        PlotKind::StackedHorizontalBar => BarMode::Stacked,
-        _ if chart.group_col().is_some() => BarMode::Grouped,
-        _ => BarMode::Single,
-    };
-    let prepared = bar_data::prepare(chart, context.data, mode)?;
-    let legend_entries = bar_data::legend_entries(&prepared, chart, theme);
+    #[cfg(test)]
+    bar_data::count(chart.kind(), 1);
+    let mode = bar_data::mode(chart);
+    let prepared = bar_data::retained(chart)?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let legend_entries = bar_data::legend_entries(prepared, chart, theme, data)?;
     let y_count = prepared.categories.len() as f64;
-    let y_ticks = || {
-        prepared
-            .categories
-            .iter()
-            .enumerate()
-            .map(|(i, label)| {
-                AxisTick::new(
-                    i as f64 + 0.5,
-                    if chart.y_tick_labels_visible() {
-                        label.clone()
-                    } else {
-                        String::new()
-                    },
-                )
-            })
-            .collect()
-    };
     let panel_box = context.panel;
     let mark_style = chart.significance_mark_style_spec();
     let significance_label = theme
@@ -72,16 +50,14 @@ pub(crate) fn render(
         chart.significance_mark_style_override().is_some(),
     )?;
     let base_x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        Ok(crate::layout::anchored_auto_range(
-            prepared.value_range,
-            chart.x_axis_spec(),
-            0.0,
+        Err(Error::Render(
+            "bar measurement requires root-prepared axes".into(),
         ))
     })?;
     let base_x_range = if context.retained_axes.is_none() {
         range_for_bar_marks(
             chart,
-            &prepared,
+            prepared,
             panel_box,
             base_x_range,
             &attached_label_plans,
@@ -90,8 +66,10 @@ pub(crate) fn render(
         base_x_range
     };
     let anchor_count = prepared.series.len().max(1);
-    let mut rendered_maxima =
-        vec![vec![f64::NEG_INFINITY; anchor_count]; prepared.categories.len()];
+    let mut rendered_maxima = data.collect_source(
+        (0..prepared.categories.len())
+            .map(|_| data.collect_source((0..anchor_count).map(|_| Ok(f64::NEG_INFINITY)))),
+    )?;
     for bar in &prepared.bars {
         let anchor = bar.series_index.unwrap_or(0);
         rendered_maxima[bar.category_index][anchor] = rendered_maxima[bar.category_index][anchor]
@@ -154,10 +132,10 @@ pub(crate) fn render(
             x_range,
             (0.0, y_count),
             panel_box,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
             Vec::new(),
-            y_ticks(),
+            Vec::new(),
             &x_axis_spec,
             chart.y_axis_spec(),
             theme,
@@ -165,96 +143,88 @@ pub(crate) fn render(
     })?;
     validate_bar_significance_collisions(
         chart,
-        &prepared,
+        prepared,
         mode,
         &layout,
         &attached_label_plans,
         context.fit_scope(),
+        data,
     )?;
 
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
-            let (x, y0) = layout.projection.project(0.0, 0.0);
-            let (_, y1) = layout.projection.project(0.0, y_count);
-            backend.draw_line(
-                &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::solid(theme.foreground, 0.8),
-            )?;
-        }
-        for bar in &prepared.bars {
-            let (y_center, height) = bar_geometry(bar, &prepared, mode, chart.bar_spacing_spec());
-            let color_index = bar.hue_index.unwrap_or_else(|| {
-                if chart.group_col().is_some() {
-                    0
-                } else {
-                    bar.category_index
-                }
-            });
-            let color = if chart.colors_by_sign() {
-                if bar.end >= bar.start {
-                    theme.colors[0]
-                } else {
-                    theme.colors[1 % theme.colors.len()]
-                }
-            } else {
-                theme.colors[color_index % theme.colors.len()]
-            };
-            draw_bar(
-                backend,
-                &layout.projection,
-                bar.start,
-                bar.end,
-                y_center,
-                height,
-                &FillStyle {
-                    color,
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 1.0,
-                },
-            )?;
-            if let Some((lower, upper)) = bar.interval {
-                let style = LineStyle::solid(theme.foreground, theme.interval_width);
-                draw_error_bar(
-                    backend,
-                    &layout.projection,
-                    lower,
-                    upper,
-                    y_center,
-                    height,
-                    &style,
-                )?;
-            }
-        }
-        for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
-            draw_bar_significance(chart, mark, text_plan, &prepared, mode, &layout, backend)?;
-        }
-        for point in &prepared.points {
-            let y_center = point_center(point.category_index, point.series_index, &prepared, mode);
-            let projected = layout.projection.project(point.value, y_center);
-            backend.draw_scatter(&[Point2D::new(projected.0, projected.1)], &point.style)?;
-        }
-        Ok(())
-    })?;
-    if legend_entries.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new())
-            .with_significance_plan(significance)
-            .with_deferred_annotation_text(deferred_annotation_text(&attached_label_plans)))
-    } else {
-        Ok(PlotRenderResult::new(layout, legend_entries)
-            .with_significance_plan(significance)
-            .with_deferred_annotation_text(deferred_annotation_text(&attached_label_plans)))
+    let mut payload = bar_data::BarPayload {
+        clip: layout.projection.panel_box(),
+        zero: None,
+        zero_style: LineStyle::solid(theme.foreground, 0.8),
+        interval_style: LineStyle::solid(theme.foreground, theme.interval_width),
+        bars: Vec::new(),
+        text: Vec::new(),
+        points: Vec::new(),
+        #[cfg(test)]
+        kind: chart.kind(),
+    };
+    data.reserve_source(&mut payload.bars, prepared.bars.len())?;
+    data.reserve_source(&mut payload.text, prepared.significance.len())?;
+    data.reserve_source(&mut payload.points, prepared.points.len())?;
+    if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
+        let (x, y0) = layout.projection.project(0.0, 0.0);
+        let (_, y1) = layout.projection.project(0.0, y_count);
+        payload.zero = Some([Point2D::new(x, y0), Point2D::new(x, y1)]);
     }
-}
-
-fn deferred_annotation_text(
-    plans: &[ResolvedTextPlan],
-) -> Vec<crate::layout::DeferredAnnotationTextPlan> {
-    plans
-        .iter()
-        .cloned()
-        .map(crate::layout::DeferredAnnotationTextPlan::from_resolved)
-        .collect()
+    for bar in &prepared.bars {
+        let (y_center, height) = bar_geometry(bar, prepared, mode, chart.bar_spacing_spec());
+        let color_index = bar.hue_index.unwrap_or_else(|| {
+            if chart.group_col().is_some() {
+                0
+            } else {
+                bar.category_index
+            }
+        });
+        let color = if chart.colors_by_sign() {
+            if bar.end >= bar.start {
+                theme.colors[0]
+            } else {
+                theme.colors[1 % theme.colors.len()]
+            }
+        } else {
+            theme.colors[color_index % theme.colors.len()]
+        };
+        let polygon = project_bar(&layout.projection, bar.start, bar.end, y_center, height);
+        payload.bars.push(bar_data::BarShape {
+            polygon,
+            fill: FillStyle {
+                color,
+                stroke: theme.foreground,
+                stroke_width: 1.0,
+                opacity: 1.0,
+            },
+            interval: bar.interval.map(|(lower, upper)| {
+                project_error_bar(&layout.projection, lower, upper, y_center, height)
+            }),
+        });
+    }
+    for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
+        payload.text.push(place_bar_significance(
+            chart, mark, text_plan, prepared, mode, &layout,
+        )?);
+    }
+    for point in &prepared.points {
+        let y_center = point_center(point.category_index, point.series_index, prepared, mode);
+        let projected = layout.projection.project(point.value, y_center);
+        payload
+            .points
+            .push((Point2D::new(projected.0, projected.1), point.style.clone()));
+    }
+    let mut result = PlotRenderResult::new(layout, legend_entries)
+        .with_significance_plan(significance)
+        .with_deferred_annotation_text(data.collect_source(
+            attached_label_plans.into_iter().map(|plan| {
+                Ok(crate::layout::DeferredAnnotationTextPlan::from_resolved(
+                    plan,
+                ))
+            }),
+        )?);
+    result.y_domain = crate::spec::AxisDomain::Categorical;
+    payload.retain(result, context, chart).map_err(Into::into)
 }
 
 fn range_for_bar_marks(
@@ -282,15 +252,14 @@ fn range_for_bar_marks(
     crate::layout::anchored_auto_range(extent, chart.x_axis_spec(), 0.0)
 }
 
-fn draw_bar_significance(
+fn place_bar_significance(
     chart: &Plot,
     mark: &PreparedBarSignificance,
     text_plan: &ResolvedTextPlan,
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
+) -> Result<PlacedText, Error> {
     let style = chart.significance_mark_style_spec();
     let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
     let (edge_x, y) = layout.projection.project(mark.edge, y);
@@ -309,10 +278,12 @@ fn draw_bar_significance(
             mark.label
         )));
     }
-    backend.draw_planned_text(
-        PlannedTextPlacement::middle(Point2D::new(x.round(), y.round()), anchor, 0.0),
-        text_plan,
-    )
+    Ok(PlacedText::middle(
+        text_plan.clone(),
+        Point2D::new(x.round(), y.round()),
+        anchor,
+        0.0,
+    ))
 }
 
 fn validate_bar_significance_collisions(
@@ -322,9 +293,11 @@ fn validate_bar_significance_collisions(
     layout: &Layout,
     text_plans: &[ResolvedTextPlan],
     scope: &crate::layout::fit::FitScope,
+    data: crate::data::PlotData<'_>,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
+    data.reserve_source(&mut bounds, prepared.significance.len())?;
     for (index, (mark, text_plan)) in prepared.significance.iter().zip(text_plans).enumerate() {
         let scope = scope.child(crate::layout::AddressRole::Annotation, index)?;
         let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
@@ -341,6 +314,7 @@ fn validate_bar_significance_collisions(
         if x0 < panel.x0 || x1 > panel.x1 {
             return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range", mark.label)).into());
         }
+        data.claim_source_visits(bounds.len())?;
         if bounds.iter().any(|&(x0, x1, y0, y1)| {
             candidate.0 < x1 && x0 < candidate.1 && candidate.2 < y1 && y0 < candidate.3
         }) {
@@ -403,56 +377,36 @@ fn bar_geometry(
     }
 }
 
-fn draw_bar(
-    backend: &mut dyn Backend,
-    proj: &Projection,
-    x0: f64,
-    x1: f64,
-    y_center: f64,
-    height: f64,
-    fill: &FillStyle,
-) -> Result<(), Error> {
+fn project_bar(proj: &Projection, x0: f64, x1: f64, y_center: f64, height: f64) -> [Point2D; 4] {
     let (left, bottom) = proj.project(x0, y_center - height / 2.0);
     let (right, top) = proj.project(x1, y_center + height / 2.0);
-    backend.draw_polygon(
-        &[
-            Point2D::new(left, bottom),
-            Point2D::new(right, bottom),
-            Point2D::new(right, top),
-            Point2D::new(left, top),
-        ],
-        fill,
-    )
+    [
+        Point2D::new(left, bottom),
+        Point2D::new(right, bottom),
+        Point2D::new(right, top),
+        Point2D::new(left, top),
+    ]
 }
 
-fn draw_error_bar(
-    backend: &mut dyn Backend,
+fn project_error_bar(
     proj: &Projection,
     lower: f64,
     upper: f64,
     y_center: f64,
     height: f64,
-    style: &LineStyle,
-) -> Result<(), Error> {
+) -> [[Point2D; 2]; 3] {
     let (x_left, y_px) = proj.project(lower, y_center);
     let (x_right, _) = proj.project(upper, y_center);
     let cap_px = (proj.project(0.0, height).1 - proj.project(0.0, 0.0).1).abs() * 0.2;
-    backend.draw_line(
-        &[Point2D::new(x_left, y_px), Point2D::new(x_right, y_px)],
-        style,
-    )?;
-    backend.draw_line(
-        &[
+    [
+        [Point2D::new(x_left, y_px), Point2D::new(x_right, y_px)],
+        [
             Point2D::new(x_left, y_px - cap_px),
             Point2D::new(x_left, y_px + cap_px),
         ],
-        style,
-    )?;
-    backend.draw_line(
-        &[
+        [
             Point2D::new(x_right, y_px - cap_px),
             Point2D::new(x_right, y_px + cap_px),
         ],
-        style,
-    )
+    ]
 }

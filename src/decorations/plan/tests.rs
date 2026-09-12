@@ -1405,6 +1405,11 @@ fn right_edge_legend_expands_generic_continuous_x_axis() {
 fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        .unwrap()
+        .attach(plot)
+        .unwrap();
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
 
     let (initial, initial_geometry) = discover_geometry(
@@ -1550,6 +1555,11 @@ fn negative_vertical_bars_keep_zero_maximum_with_outside_guide() {
 fn automatic_clearance_does_not_expand_categorical_domains() {
     let data = dense_horizontal_data();
     let plot = dense_bar_plot(&data, true);
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let plot = crate::plots::shared_x::prepare_plot(&plot, &resources)
+        .unwrap()
+        .attach(plot)
+        .unwrap();
     let cell = PanelBox::new(90.0, 500.0, 50.0, 310.0);
     let (mut result, geometry) = discover_geometry(
         &plot,

@@ -2,6 +2,9 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+#[cfg(test)]
+mod extraction;
+
 use crate::data::{
     source::{sort_numeric_source, sort_source_by, SourceAdmission},
     PlotData,
@@ -89,6 +92,175 @@ pub(crate) struct PreparedBars {
     pub(crate) significance: Vec<PreparedBarSignificance>,
 }
 
+#[derive(Debug)]
+pub(crate) struct PreparedBarInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedBars)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct BarShape {
+    pub(crate) polygon: [crate::render::backend::Point2D; 4],
+    pub(crate) fill: FillStyle,
+    pub(crate) interval: Option<[[crate::render::backend::Point2D; 2]; 3]>,
+}
+
+#[derive(Debug)]
+pub(crate) struct BarPayload {
+    pub(crate) clip: crate::layout::PanelBox,
+    pub(crate) zero: Option<[crate::render::backend::Point2D; 2]>,
+    pub(crate) zero_style: crate::render::backend::LineStyle,
+    pub(crate) interval_style: crate::render::backend::LineStyle,
+    pub(crate) bars: Vec<BarShape>,
+    pub(crate) text: Vec<crate::render::backend::PlacedText>,
+    pub(crate) points: Vec<(crate::render::backend::Point2D, PointStyle)>,
+    #[cfg(test)]
+    pub(crate) kind: crate::PlotKind,
+}
+
+impl BarPayload {
+    pub(crate) fn draw(
+        &self,
+        backend: &mut dyn crate::render::backend::Backend,
+    ) -> Result<(), Error> {
+        #[cfg(test)]
+        count(self.kind, 3);
+        crate::render::backend::with_clip(backend, self.clip, |backend| {
+            if let Some(line) = &self.zero {
+                backend.draw_line(line, &self.zero_style)?;
+            }
+            for bar in &self.bars {
+                backend.draw_polygon(&bar.polygon, &bar.fill)?;
+                for line in bar.interval.iter().flatten() {
+                    backend.draw_line(line, &self.interval_style)?;
+                }
+            }
+            for text in &self.text {
+                text.draw(backend)?;
+            }
+            for (point, style) in &self.points {
+                backend.draw_scatter(std::slice::from_ref(point), style)?;
+            }
+            Ok(())
+        })
+    }
+
+    pub(crate) fn retain(
+        self,
+        mut result: crate::spec::PlotRenderResult,
+        context: crate::spec::PlotRenderContext<'_>,
+        chart: &Plot,
+    ) -> Result<crate::spec::PlotRenderResult, Error> {
+        let resources = context
+            .theme
+            .prepared_font_environment()?
+            .generation_resources();
+        let data = context.data.with_axis_resources(&resources);
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        let clip = crate::render::backend::validate_clip_region(self.clip)?.panel();
+        if let Some(line) = &self.zero {
+            geometry.line(line, &self.zero_style, Some(clip))?;
+        }
+        for bar in &self.bars {
+            geometry.polygon(&bar.polygon, &bar.fill, Some(clip))?;
+            for line in bar.interval.iter().flatten() {
+                geometry.line(line, &self.interval_style, Some(clip))?;
+            }
+        }
+        for text in &self.text {
+            geometry.text(text.placement, &text.plan, Some(clip))?;
+        }
+        for (point, style) in &self.points {
+            geometry.scatter(std::slice::from_ref(point), style, clip)?;
+        }
+        if let Some(significance) = &result.significance {
+            for bracket in &significance.brackets {
+                let label = &bracket.label.plan;
+                let style = crate::render::backend::BracketStyle {
+                    color: context.theme.foreground.into(),
+                    width: context.theme.bracket_width,
+                    label_color: label.style.paint,
+                    font_family: data.copy_source_string(&label.style.stack_source)?,
+                    font_size: label.style.font_size,
+                    line_height: label.line_height(),
+                    weight: label.style.weight,
+                    label_gap: chart.significance_mark_style_spec().gap_spec(),
+                };
+                geometry.bracket(crate::render::backend::PlannedSignificanceCall {
+                    bracket: &bracket.geometry,
+                    style: &style,
+                    label: &bracket.label,
+                })?;
+            }
+        }
+        #[cfg(test)]
+        count(self.kind, 2);
+        result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+            payload: crate::layout::interior::MarkPayload::Bars(self),
+            geometry,
+        })?);
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 4]> = const { std::cell::Cell::new([[0; 4]; 4]) };
+}
+
+#[cfg(test)]
+pub(crate) fn count(kind: crate::PlotKind, stage: usize) {
+    let family = match kind {
+        crate::PlotKind::Bar => 0,
+        crate::PlotKind::HorizontalBar => 1,
+        crate::PlotKind::StackedBar => 2,
+        crate::PlotKind::StackedHorizontalBar => 3,
+        _ => unreachable!(),
+    };
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[family][stage] += 1;
+        counts.set(next);
+    });
+}
+
+pub(crate) fn mode(chart: &Plot) -> BarMode {
+    if matches!(
+        chart.kind(),
+        crate::PlotKind::StackedBar | crate::PlotKind::StackedHorizontalBar
+    ) {
+        BarMode::Stacked
+    } else if chart.group_col().is_some() {
+        BarMode::Grouped
+    } else {
+        BarMode::Single
+    }
+}
+
+pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
+    chart
+        .prepared_bars
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| Error::Render("bar measurement requires root-prepared semantics".into()))
+}
+
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: crate::spec::PlotRenderContext<'_>,
+    _: &mut dyn crate::render::backend::Backend,
+) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(
+        Error::Render("bars require prepared measurement or selected payload capture".into())
+            .into(),
+    )
+}
+
 pub(crate) fn attached_significance_text_plans(
     context: crate::spec::PlotRenderContext<'_>,
     marks: &[PreparedBarSignificance],
@@ -97,41 +269,17 @@ pub(crate) fn attached_significance_text_plans(
     owner: &str,
     exact_override: bool,
 ) -> Result<Vec<crate::layout::ResolvedTextPlan>, Error> {
-    if let Some(frozen) = context.deferred_annotation_text() {
-        if frozen.len() != marks.len() {
-            return Err(Error::Render(format!(
-                "{owner} frozen plan count does not match its prepared labels"
-            )));
-        }
-        return marks
-            .iter()
-            .zip(frozen)
-            .map(|(mark, frozen)| {
-                let plan = &frozen.plan;
-                if plan.source != mark.label
-                    || plan.style.stack_source != appearance.stack
-                    || plan.style.paint != appearance.paint
-                    || plan.style.font_size != appearance.font_size
-                    || plan.style.weight != appearance.weight
-                    || plan.style.alignment != alignment(mark)
-                    || plan.style.exact_override != exact_override
-                    || frozen.exact_override != exact_override
-                {
-                    return Err(Error::Render(format!(
-                        "{owner} frozen plan does not match its prepared source and style"
-                    )));
-                }
-                Ok(plan.clone())
-            })
-            .collect();
-    }
-
     #[cfg(test)]
     ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-    marks
-        .iter()
-        .map(|mark| {
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    context
+        .data
+        .with_axis_resources(&resources)
+        .collect_source(marks.iter().map(|mark| {
             context.theme.measure_text(
                 &mark.label,
                 appearance,
@@ -139,8 +287,7 @@ pub(crate) fn attached_significance_text_plans(
                 owner,
                 exact_override,
             )
-        })
-        .collect()
+        }))
 }
 
 #[derive(Clone, Copy)]
@@ -149,7 +296,6 @@ struct BarSummaryInput<'a> {
     input: &'a BarInput,
     facet_identity: &'a FacetIdentity,
     data: PlotData<'a>,
-    intervals: bool,
 }
 
 struct FacetIdentity(Vec<(String, String)>);
@@ -176,9 +322,21 @@ pub(crate) fn prepare<'a>(
     mode: BarMode,
 ) -> Result<PreparedBars, Error> {
     let data = data.into();
-    let mut prepared = prepare_core(chart, data, mode, true, None)?;
-    apply_attached_significance(chart, &mut prepared, mode)?;
-    prepared.points = prepare_point_layers(chart, &prepared, mode)?;
+    prepare_scoped(chart, data, mode, None, chart.significance_annotations())
+}
+
+pub(crate) fn prepare_scoped<'a>(
+    chart: &Plot,
+    data: PlotData<'_>,
+    mode: BarMode,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
+    annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
+) -> Result<PreparedBars, Error> {
+    #[cfg(test)]
+    count(chart.kind(), 0);
+    let mut prepared = prepare_core(chart, data, mode, facet)?;
+    apply_attached_significance(annotations, &mut prepared, mode, data)?;
+    prepared.points = prepare_point_layers(chart, &prepared, mode, data)?;
     for point in &prepared.points {
         prepared.value_range.0 = prepared.value_range.0.min(point.value);
         prepared.value_range.1 = prepared.value_range.1.max(point.value);
@@ -186,37 +344,10 @@ pub(crate) fn prepare<'a>(
     Ok(prepared)
 }
 
-pub(crate) fn axis_inputs(
-    chart: &Plot,
-    data: PlotData<'_>,
-    mode: BarMode,
-    facet: Option<crate::data::FacetAxisSources<'_>>,
-) -> Result<(Vec<String>, (f64, f64)), Error> {
-    let limits = if matches!(
-        chart.kind(),
-        crate::PlotKind::HorizontalBar | crate::PlotKind::StackedHorizontalBar
-    ) {
-        chart.x_axis_spec().limits
-    } else {
-        chart.y_axis_spec().limits
-    };
-    let prepared = prepare_core(chart, data, mode, limits.is_none(), facet)?;
-    if let Some(limits) = limits {
-        return Ok((prepared.categories, limits));
-    }
-    let mut range = prepared.value_range;
-    for layer in chart.bar_point_layers() {
-        let extra = data.source_numeric_range(layer.values(), "bar point layer")?;
-        range = (range.0.min(extra.0), range.1.max(extra.1));
-    }
-    Ok((prepared.categories, range))
-}
-
 fn prepare_core(
     chart: &Plot,
     data: PlotData<'_>,
     mode: BarMode,
-    intervals: bool,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<PreparedBars, Error> {
     let x_col = chart
@@ -244,22 +375,17 @@ fn prepare_core(
             .map(|s| data.copy_source_string(s)),
     )?;
     let hue_order = data.collect_source(
-        chart
-            .global_hue_levels()
+        facet
+            .map_or_else(|| chart.global_hue_levels(), |sources| sources.hues)
             .unwrap_or(&channels.hue_levels)
             .iter()
             .map(|s| data.copy_source_string(s)),
     )?;
     let units = chart
         .bar_units_col()
-        .filter(|_| intervals)
         .map(|column| crate::data::strict_strings(data, column, "bar sampling units"))
         .transpose()?;
-    let facet_identity = if intervals && facet.is_none() {
-        facet_identity(chart, data)?
-    } else {
-        FacetIdentity(Vec::new())
-    };
+    let facet_identity = facet_identity(chart, data)?;
     let summary = || -> Result<_, Error> {
         Ok(BarSummaryInput {
             units: units.as_deref(),
@@ -268,7 +394,6 @@ fn prepare_core(
                 .ok_or_else(|| Error::Data("ordinary bar input is not configured".into()))?,
             facet_identity: &facet_identity,
             data,
-            intervals,
         })
     };
     let mut prepared = match mode {
@@ -315,7 +440,7 @@ fn prepare_core(
         !data.is_full_plot(),
         data,
     )?;
-    if let Some(bounds) = chart.bar_bound_cols().filter(|_| intervals) {
+    if let Some(bounds) = chart.bar_bound_cols() {
         apply_precomputed_bounds(chart, data, &mut prepared, bounds)?;
     }
     Ok(prepared)
@@ -345,15 +470,20 @@ fn facet_identity(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Facet
     Ok(FacetIdentity(identity))
 }
 
-fn apply_attached_significance(
-    chart: &Plot,
+fn apply_attached_significance<'a>(
+    annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     prepared: &mut PreparedBars,
     mode: BarMode,
+    data: PlotData<'_>,
 ) -> Result<(), Error> {
-    for annotation in chart.significance_annotations() {
+    for annotation in annotations {
         let Some(target) = annotation.at_target() else {
             continue;
         };
+        data.claim_source_visits(prepared.categories.len())?;
+        data.claim_source_visits(prepared.series.len())?;
+        data.claim_source_visits(prepared.significance.len())?;
+        data.claim_source_visits(prepared.bars.len())?;
         let category_index = prepared
             .categories
             .iter()
@@ -418,12 +548,13 @@ fn apply_attached_significance(
             .map(|edge| (edge, true))
             .or_else(|| negative_edge.map(|edge| (edge, false)))
             .ok_or_else(|| Error::Data("bar significance target has no rendered bar".into()))?;
+        data.reserve_source(&mut prepared.significance, 1)?;
         prepared.significance.push(PreparedBarSignificance {
             category_index,
             series_index,
             edge,
             positive,
-            label: annotation.mark().glyph()?.to_owned(),
+            label: data.copy_source_string(annotation.mark().glyph()?)?,
         });
     }
     Ok(())
@@ -501,6 +632,7 @@ fn prepare_point_layers(
     chart: &Plot,
     prepared: &PreparedBars,
     mode: BarMode,
+    data: PlotData<'_>,
 ) -> Result<Vec<PreparedBarPoint>, Error> {
     if chart.bar_point_layers().is_empty() {
         return Ok(Vec::new());
@@ -519,18 +651,30 @@ fn prepare_point_layers(
                 "{context}: layer series configuration must match the bar chart"
             )));
         }
-        let categories = crate::data::strict_category_values(layer.category_values(), &context)?;
-        let series = layer
-            .series_values()
-            .map(|values| crate::data::strict_category_values(values, &context))
-            .transpose()?;
-        let values = crate::data::strict_numeric_values(layer.values(), &context)?;
+        let category_values = |values: &crate::CategoryValues| {
+            data.collect_source((0..values.len()).map(|row| match values.get(row) {
+                Some(Some(value)) => data.copy_source_string(value),
+                _ => Err(Error::Data(format!(
+                    "{context}: value {:?} contains null at source row {row}",
+                    values.name()
+                ))),
+            }))
+        };
+        let categories = category_values(layer.category_values())?;
+        let series = layer.series_values().map(category_values).transpose()?;
+        let values = data.collect_source(
+            (0..layer.values().len())
+                .map(|row| crate::data::strict_numeric_value(layer.values(), row, &context)),
+        )?;
         if categories.is_empty() || categories.len() != values.len() {
             return Err(Error::Data(format!(
                 "{context}: category and value columns must have equal non-zero lengths"
             )));
         }
         for row in 0..values.len() {
+            data.claim_source_visits(prepared.categories.len())?;
+            data.claim_source_visits(prepared.series.len())?;
+            data.claim_source_visits(prepared.bars.len())?;
             let category_index = prepared
                 .categories
                 .iter()
@@ -565,6 +709,7 @@ fn prepare_point_layers(
                     "{context}: category/series at row {row} does not resolve to a prepared bar cell"
                 )));
             }
+            data.reserve_source(&mut points, 1)?;
             points.push(PreparedBarPoint {
                 category_index,
                 series_index,
@@ -779,23 +924,19 @@ pub(crate) fn legend_entries(
     prepared: &PreparedBars,
     chart: &Plot,
     theme: &ResolvedTheme,
-) -> Vec<LegendEntry> {
-    prepared
-        .hues
-        .iter()
-        .enumerate()
-        .map(|(index, label)| {
-            LegendEntry::fill(
-                chart.legend_identity(label.clone()),
-                FillStyle {
-                    color: theme.colors[index % theme.colors.len()],
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 1.0,
-                },
-            )
-        })
-        .collect()
+    data: PlotData<'_>,
+) -> Result<Vec<LegendEntry>, Error> {
+    data.collect_source(prepared.hues.iter().enumerate().map(|(index, label)| {
+        Ok(LegendEntry::fill(
+            chart.point_legend_identity(label, data)?,
+            FillStyle {
+                color: theme.colors[index % theme.colors.len()],
+                stroke: theme.foreground,
+                stroke_width: 1.0,
+                opacity: 1.0,
+            },
+        ))
+    }))
 }
 
 fn prepare_single(
@@ -1142,9 +1283,6 @@ fn summarize(
     match &summary.input.source {
         BarSource::Samples { error_bar, .. } => {
             let mean = stable_mean(values, data).map_err(&contextualize)?;
-            if !summary.intervals {
-                return Ok((mean, None));
-            }
             let interval = generated_interval(
                 values,
                 units,
@@ -1663,7 +1801,6 @@ mod tests {
                 input: chart.bar_input().unwrap(),
                 facet_identity: &FacetIdentity(Vec::new()),
                 data,
-                intervals: true,
             },
         )
         .unwrap_err();
@@ -1714,10 +1851,11 @@ mod tests {
     }
 
     #[test]
-    fn exact_axis_limits_and_omitted_intervals_do_not_resample() {
+    fn omitted_intervals_do_not_resample() {
         let chart = Plot::bar(
             CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
-            BarInput::samples(NumericValues::new("value", [1.0, 3.0, 5.0, 7.0])),
+            BarInput::samples(NumericValues::new("value", [1.0, 3.0, 5.0, 7.0]))
+                .error_bar(ErrorBar(ErrorBarKind::Hidden)),
         )
         .category_order(crate::ValueSort::Descending)
         .y_limits(-10.0, 10.0)
@@ -1737,14 +1875,14 @@ mod tests {
         let resources =
             crate::font::canonical::OperationGenerationResources::with_test_limits(1000, 4096);
         assert_eq!(
-            super::axis_inputs(
+            super::prepare(
                 &chart,
                 chart.data().with_axis_resources(&resources),
                 BarMode::Single,
-                None,
             )
-            .unwrap(),
-            (vec!["b".to_owned(), "a".to_owned()], (-10.0, 10.0))
+            .unwrap()
+            .categories,
+            vec!["b".to_owned(), "a".to_owned()]
         );
         let resources =
             crate::font::canonical::OperationGenerationResources::with_test_limits(0, 0);
@@ -1789,10 +1927,11 @@ mod tests {
         let compare = |chart: &Plot, data: crate::data::PlotData<'_>, mode| {
             let expected = prepare(chart, data, mode).unwrap();
             let resources = crate::font::canonical::OperationGenerationResources::new();
-            let actual =
-                super::axis_inputs(chart, data.with_axis_resources(&resources), mode, None)
-                    .unwrap();
-            assert_eq!(actual, (expected.categories, expected.value_range));
+            let actual = super::prepare(chart, data.with_axis_resources(&resources), mode).unwrap();
+            assert_eq!(
+                (actual.categories, actual.value_range),
+                (expected.categories, expected.value_range)
+            );
         };
         let categories =
             CategoryValues::new("category", ["b", "a", "b", "a", "b", "a", "b", "a"]).unwrap();
@@ -1867,7 +2006,6 @@ mod tests {
             &chart,
             chart.data().with_axis_resources(&resources),
             BarMode::Single,
-            true,
             None,
         )
         .unwrap();
@@ -1876,11 +2014,10 @@ mod tests {
             before_points,
             u64::MAX,
         );
-        assert!(super::axis_inputs(
+        assert!(super::prepare(
             &chart,
             chart.data().with_axis_resources(&resources),
             BarMode::Single,
-            None,
         )
         .unwrap_err()
         .to_string()
