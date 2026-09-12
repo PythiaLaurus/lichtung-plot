@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Marginal(crate::plots::marginal::PreparedMarginal),
     Heatmap(crate::plots::heatmap::HeatmapData),
     Interaction(crate::plots::interaction::PreparedInteraction),
     Distribution(
@@ -35,6 +36,9 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Marginal => Ok(Self::Marginal(crate::plots::marginal::prepare(
+                source, data,
+            )?)),
             PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(source, data)?)),
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
@@ -88,6 +92,7 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Marginal(marks) => marks.ranges[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
             Self::Distribution(_, marks) => (0.0, marks.categories().len() as f64),
@@ -115,6 +120,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    marginal: Option<&'a crate::plots::marginal::PreparedMarginal>,
     heatmap: Option<&'a crate::plots::heatmap::HeatmapData>,
     interaction: Option<&'a crate::plots::interaction::PreparedInteraction>,
     distribution: Option<&'a crate::plots::categorical_distribution::PreparedDistribution>,
@@ -144,6 +150,7 @@ pub(crate) fn prepare_reference_plot(
         .with_axis_resources(resources);
     let mut bins = None;
     let mut heatmap = None;
+    let mut marginal = None;
     let mut dumbbell = None;
     let mut estimate = None;
     let mut bars = None;
@@ -153,6 +160,10 @@ pub(crate) fn prepare_reference_plot(
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Marginal(marks) => {
+            marginal = Some(crate::plots::marginal::finish(marks, x_limits, data)?);
+            PlotKind::Marginal
+        }
         PreparedReference::Heatmap(mut marks) => {
             if labels.is_some() {
                 marks.color_label = source.prepare_color_label(data, labels)?;
@@ -211,6 +222,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            marginal: marginal.as_ref(),
             heatmap: heatmap.as_ref(),
             interaction: interaction.as_ref(),
             distribution: distribution.as_ref(),
@@ -231,6 +243,7 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        marginal: marginal.map(|marks| data.source_arc(marks)).transpose()?,
         heatmap: heatmap
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -351,6 +364,7 @@ pub(crate) fn prepare_plot(
         source.kind(),
         PlotKind::Histogram
             | PlotKind::Heatmap
+            | PlotKind::Marginal
             | PlotKind::Density
             | PlotKind::Qq
             | PlotKind::Regression
@@ -595,6 +609,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    marginal: None,
                     heatmap: heatmap_marks.as_ref(),
                     interaction: interaction_marks.as_ref(),
                     distribution: distribution_marks.as_ref(),
@@ -728,6 +743,7 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        marginal: None,
         heatmap: if source.kind() == PlotKind::Heatmap {
             Some(
                 source_data
@@ -881,6 +897,7 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        marginal: None,
         heatmap: None,
         bars: None,
         interaction: None,
@@ -935,6 +952,7 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        marginal: None,
         heatmap: None,
         bars: None,
         interaction: None,
@@ -1080,7 +1098,13 @@ fn prepare(
                 chart.y_axis_spec().limits.unwrap_or(line.ranges[1]),
             ]
         }
-        PlotKind::Marginal => crate::plots::marginal::axis_ranges(chart, data)?,
+        PlotKind::Marginal => {
+            reference_config
+                .as_ref()
+                .and_then(|config| config.marginal)
+                .ok_or_else(|| Error::Render("marginal axes require retained semantics".into()))?
+                .ranges
+        }
         PlotKind::Bar
         | PlotKind::StackedBar
         | PlotKind::HorizontalBar

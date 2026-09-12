@@ -24,7 +24,7 @@ use crate::layout::{self, AxisSpec, PanelBox};
 use crate::render::backend::{with_clip, Backend, FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{
-    gaussian_kde_with_bandwidth, kde_support_range, strict_scott_bandwidth,
+    gaussian_kde_with_source, kde_support_range, strict_scott_bandwidth,
 };
 use crate::Error;
 use crate::Plot;
@@ -34,7 +34,22 @@ const MARGINAL_KDE_GRID_POINTS: usize = 256;
 const MARGINAL_KDE_VISIBLE_FRACTION: f64 = 0.02;
 const MARGINAL_DATA_MARGIN_FRACTION: f64 = 0.06;
 
+#[cfg(test)]
+thread_local! {
+    static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
+}
+
+#[cfg(test)]
+fn count(stage: usize) {
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[stage] += 1;
+        counts.set(next);
+    });
+}
+
 /// One graphical group's data and optional color identity.
+#[derive(Debug)]
 struct HueGroup {
     identity: crate::data::CollectivePair,
     collapsed: bool,
@@ -43,6 +58,60 @@ struct HueGroup {
     x_bandwidth: f64,
     y_bandwidth: f64,
     color_index: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedMarginal {
+    groups: Vec<HueGroup>,
+    pub(crate) ranges: [(f64, f64); 2],
+    curves: MarginalCurves,
+}
+
+#[derive(Debug, Default)]
+struct MarginalCurves {
+    x_grid: Vec<f64>,
+    y_grid: Vec<f64>,
+    x_densities: Vec<Vec<f64>>,
+    y_densities: Vec<Vec<f64>>,
+}
+
+#[derive(Debug)]
+struct MarginalGroupPayload {
+    points: Vec<Point2D>,
+    point_style: crate::render::backend::PointStyle,
+    top: Vec<Point2D>,
+    right: Vec<Point2D>,
+    fill: FillStyle,
+}
+
+#[derive(Debug)]
+pub(crate) struct MarginalPayload {
+    clips: [PanelBox; 3],
+    ticks: Vec<[Point2D; 2]>,
+    tick_style: Option<crate::render::backend::LineStyle>,
+    groups: Vec<MarginalGroupPayload>,
+}
+
+impl MarginalPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        if let Some(style) = &self.tick_style {
+            for tick in &self.ticks {
+                backend.draw_line(tick, style)?;
+            }
+        }
+        for group in &self.groups {
+            with_clip(backend, self.clips[0], |backend| {
+                backend.draw_scatter(&group.points, &group.point_style)
+            })?;
+            with_clip(backend, self.clips[1], |backend| {
+                backend.draw_polygon(&group.top, &group.fill)
+            })?;
+            with_clip(backend, self.clips[2], |backend| {
+                backend.draw_polygon(&group.right, &group.fill)
+            })?;
+        }
+        Ok(())
+    }
 }
 
 /// Render a marginal plot: central scatter with
@@ -55,23 +124,28 @@ struct HueGroup {
 /// Explicit graphical groups are rendered separately; hue supplies their color
 /// and legend entries.
 #[allow(clippy::if_not_else)]
-pub(crate) fn render(
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(Error::Render("marginal requires selected payload capture".into()).into())
+}
+
+pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    count(2);
     let theme = context.theme;
-
-    // --- Extract data (grouped or ungrouped) ---
-    let (groups, _hue_levels) = build_groups(chart, context.data)?;
-
-    // Collect all x/y for range computation.
-    let all_x: Vec<f64> = groups.iter().flat_map(|g| g.x.iter().copied()).collect();
-    let all_y: Vec<f64> = groups.iter().flat_map(|g| g.y.iter().copied()).collect();
-
-    if all_x.is_empty() {
-        return Err(Error::Data("marginal: no rows".into()).into());
-    }
+    let prepared = chart
+        .prepared_marginal
+        .as_ref()
+        .ok_or_else(|| Error::Render("marginal requires root-prepared semantics".into()))?;
+    let groups = &prepared.groups;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
 
     // --- Layout geometry ---
     let outer = context.panel;
@@ -88,35 +162,16 @@ pub(crate) fn render(
     let right_x1 = (right_x0 + right_w).min(outer.x1);
 
     // --- Data ranges ---
-    let (x_min, x_max) = all_x
-        .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| {
-            (lo.min(v), hi.max(v))
-        });
-    let (y_min, y_max) = all_y
-        .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| {
-            (lo.min(v), hi.max(v))
-        });
-    let (x_low, x_high) = context.axis_range(layout::AxisSide::Bottom, || {
-        marginal_display_range(
-            groups.iter().map(|group| group.x.as_slice()),
-            (x_min, x_max),
-            chart.x_axis_spec(),
-            None,
-        )
-    })?;
-    let y_display_range = context.axis_range(layout::AxisSide::Left, || {
-        marginal_display_range(
-            groups.iter().map(|group| group.y.as_slice()),
-            (y_min, y_max),
-            chart.y_axis_spec(),
-            None,
-        )
-    })?;
-    validate_marginal_range(&groups, (x_low, x_high), |group| &group.x, "x", None)?;
-    validate_marginal_range(&groups, y_display_range, |group| &group.y, "y", None)?;
-    let (y_low, y_high) = y_display_range;
+    let (x_low, x_high) =
+        context.axis_range(layout::AxisSide::Bottom, || Ok(prepared.ranges[0]))?;
+    let (y_low, y_high) = context.axis_range(layout::AxisSide::Left, || Ok(prepared.ranges[1]))?;
+    let ranges = [(x_low, x_high), (y_low, y_high)];
+    // Parent domain feedback changes the render grid, not the prepared samples
+    // or visible-support semantics. Stable candidates borrow the root curves.
+    let changed_curves = (ranges != prepared.ranges)
+        .then(|| render_curves(groups, ranges, data))
+        .transpose()?;
+    let curves = changed_curves.as_ref().unwrap_or(&prepared.curves);
 
     // --- Build Layout for the central scatter ---
     let layout = context.axis_layout(|| {
@@ -124,8 +179,8 @@ pub(crate) fn render(
             (x_low, x_high),
             (y_low, y_high),
             crate::layout::PanelBox::new(central_x0, central_x1, central_y0, central_y1),
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
             &layout::display_axis_spec(chart.x_axis_spec(), (x_low, x_high)),
             &layout::display_axis_spec(chart.y_axis_spec(), (y_low, y_high)),
             theme,
@@ -148,17 +203,19 @@ pub(crate) fn render(
 
     // Top KDE panel: x-axis ticks along the bottom edge (y = top_y0).
     // Positions match the central scatter's x-axis ticks.
-    if let Some(tick_style) = &tick_style {
+    let mut ticks = Vec::new();
+    data.reserve_source(
+        &mut ticks,
+        layout.x_axis.ticks.len() + layout.y_axis.ticks.len(),
+    )?;
+    if tick_style.is_some() {
         for tick in &layout.x_axis.ticks {
             let (x_px, _) = proj.project(tick.position, y_low);
             if x_px >= central_x0 && x_px <= central_x1 {
-                backend.draw_line(
-                    &[
-                        Point2D::new(x_px, top_y0),
-                        Point2D::new(x_px, top_y0 - tick_len),
-                    ],
-                    tick_style,
-                )?;
+                ticks.push([
+                    Point2D::new(x_px, top_y0),
+                    Point2D::new(x_px, top_y0 - tick_len),
+                ]);
             }
         }
 
@@ -167,49 +224,211 @@ pub(crate) fn render(
         for tick in &layout.y_axis.ticks {
             let (_, y_px) = proj.project(x_low, tick.position);
             if y_px >= central_y0 && y_px <= central_y1 {
-                backend.draw_line(
-                    &[
-                        Point2D::new(right_x0, y_px),
-                        Point2D::new(right_x0 - tick_len, y_px),
-                    ],
-                    tick_style,
-                )?;
+                ticks.push([
+                    Point2D::new(right_x0, y_px),
+                    Point2D::new(right_x0 - tick_len, y_px),
+                ]);
             }
         }
     }
 
+    let x_densities = &curves.x_densities;
+    let y_densities = &curves.y_densities;
+    let y_grid = &curves.y_grid;
+    let n_grid = curves.x_grid.len();
+    for density in x_densities.iter().chain(y_densities) {
+        data.claim_source_visits(density.len())?;
+    }
+    let x_dens_max = x_densities
+        .iter()
+        .flatten()
+        .copied()
+        .fold(0.0_f64, f64::max)
+        .max(1e-12);
+    let y_dens_max = y_densities
+        .iter()
+        .flatten()
+        .copied()
+        .fold(0.0_f64, f64::max)
+        .max(1e-12);
+
+    let usable_h = (top_y1 - top_y0) * 0.90;
+    let usable_w = (right_x1 - right_x0) * 0.90;
+    let central_panel = PanelBox::new(central_x0, central_x1, central_y0, central_y1);
+    let top_panel = PanelBox::new(central_x0, central_x1, top_y0, top_y1);
+    let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
+    let mut selected = Vec::new();
+    data.reserve_source(&mut selected, groups.len())?;
+    let mut legend_entries = Vec::new();
+    data.reserve_source(&mut legend_entries, groups.len())?;
+    for (gi, group) in groups.iter().enumerate() {
+        let color_index = if let Some(levels) = chart.global_hue_levels() {
+            data.claim_source_visits(levels.len())?;
+            group
+                .identity
+                .hue
+                .as_ref()
+                .and_then(|hue| levels.iter().position(|level| level == hue))
+                .unwrap_or(0)
+        } else {
+            group.color_index
+        };
+        let color = theme.colors[color_index % theme.colors.len()];
+        let point_style = chart.point_style(color, 3);
+        let pts = data.collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
+            let (x, y) = proj.project(x, y);
+            Ok(Point2D::new(x, y))
+        }))?;
+        let mut top_poly = Vec::new();
+        let mut right_poly = Vec::new();
+        data.reserve_source(&mut top_poly, n_grid + 2)?;
+        data.reserve_source(&mut right_poly, n_grid + 2)?;
+        top_poly.push(Point2D::new(central_x0, top_y0));
+        right_poly.push(Point2D::new(right_x0, central_y0));
+        for i in 0..n_grid {
+            let fraction = i as f64 / (n_grid - 1) as f64;
+            let px = if i == 0 {
+                central_x0
+            } else if i + 1 == n_grid {
+                central_x1
+            } else {
+                central_x0 + fraction * (central_x1 - central_x0)
+            };
+            let py = if i == 0 {
+                central_y0
+            } else if i + 1 == n_grid {
+                central_y1
+            } else {
+                proj.project(x_low, y_grid[i]).1
+            };
+            top_poly.push(Point2D::new(
+                px,
+                top_y0 + x_densities[gi][i] / x_dens_max * usable_h,
+            ));
+            right_poly.push(Point2D::new(
+                right_x0 + y_densities[gi][i] / y_dens_max * usable_w,
+                py,
+            ));
+        }
+        top_poly.push(Point2D::new(central_x1, top_y0));
+        right_poly.push(Point2D::new(right_x0, central_y1));
+        let fill = FillStyle {
+            color,
+            stroke: color,
+            stroke_width: 1.0,
+            opacity: 0.45,
+        };
+        if group.identity.hue.is_some() {
+            legend_entries.push(LegendEntry::point_fill(
+                chart.collective_legend_identity(&group.identity, data)?,
+                point_style.clone(),
+                fill.clone(),
+            ));
+        }
+        selected.push(MarginalGroupPayload {
+            points: pts,
+            point_style,
+            top: top_poly,
+            right: right_poly,
+            fill,
+        });
+    }
+    let payload = MarginalPayload {
+        clips: [central_panel, top_panel, right_panel],
+        ticks,
+        tick_style,
+        groups: selected,
+    };
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    if let Some(style) = &payload.tick_style {
+        for tick in &payload.ticks {
+            geometry.line(tick, style, None)?;
+        }
+    }
+    for group in &payload.groups {
+        geometry.scatter(&group.points, &group.point_style, central_panel)?;
+        geometry.polygon(&group.top, &group.fill, Some(top_panel))?;
+        geometry.polygon(&group.right, &group.fill, Some(right_panel))?;
+    }
+    let mut result = PlotRenderResult::new(layout, legend_entries);
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Marginal(payload),
+        geometry,
+    })?);
+    Ok(result)
+}
+
+pub(crate) fn prepare(
+    chart: &Plot,
+    data: crate::data::PlotData<'_>,
+) -> Result<PreparedMarginal, Error> {
+    #[cfg(test)]
+    count(0);
+    let (groups, _) = build_groups(chart, data)?;
+    let ranges = ranges_from_groups(chart, data, &groups)?;
+    Ok(PreparedMarginal {
+        groups,
+        ranges,
+        curves: MarginalCurves::default(),
+    })
+}
+
+pub(crate) fn finish(
+    mut prepared: PreparedMarginal,
+    x_limits: Option<(f64, f64)>,
+    data: crate::data::PlotData<'_>,
+) -> Result<PreparedMarginal, Error> {
+    #[cfg(test)]
+    count(1);
+    if let Some(limits) = x_limits {
+        prepared.ranges[0] = limits;
+    }
+    prepared.curves = render_curves(&prepared.groups, prepared.ranges, data)?;
+    Ok(prepared)
+}
+
+fn render_curves(
+    groups: &[HueGroup],
+    ranges: [(f64, f64); 2],
+    data: crate::data::PlotData<'_>,
+) -> Result<MarginalCurves, Error> {
+    let [(x_low, x_high), (y_low, y_high)] = ranges;
     // --- KDE grid (shared across groups) ---
     let n_grid = 80;
-    let x_grid: Vec<f64> = (0..n_grid)
-        .map(|i| x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))
-        .collect();
-    let y_grid: Vec<f64> = (0..n_grid)
-        .map(|i| y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))
-        .collect();
+    let x_grid = data.collect_source(
+        (0..n_grid).map(|i| Ok(x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))),
+    )?;
+    let y_grid = data.collect_source(
+        (0..n_grid).map(|i| Ok(y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))),
+    )?;
 
     // Compute per-group KDE densities to find the shared max.
-    let mut x_densities: Vec<Vec<f64>> = groups
-        .iter()
-        .map(|group| {
-            gaussian_kde_with_bandwidth(&group.x, &x_grid, group.x_bandwidth).map_err(|error| {
+    let mut x_densities = data.collect_source(groups.iter().map(|group| {
+        gaussian_kde_with_source(&group.x, &x_grid, group.x_bandwidth, Some(data)).map_err(
+            |error| {
+                if !matches!(error, Error::Data(_)) {
+                    return error;
+                }
                 Error::Data(format!(
                     "marginal: x distribution for {}: {error}",
                     group.identity.description(group.collapsed)
                 ))
-            })
-        })
-        .collect::<Result<_, _>>()?;
-    let mut y_densities: Vec<Vec<f64>> = groups
-        .iter()
-        .map(|group| {
-            gaussian_kde_with_bandwidth(&group.y, &y_grid, group.y_bandwidth).map_err(|error| {
+            },
+        )
+    }))?;
+    let mut y_densities = data.collect_source(groups.iter().map(|group| {
+        gaussian_kde_with_source(&group.y, &y_grid, group.y_bandwidth, Some(data)).map_err(
+            |error| {
+                if !matches!(error, Error::Data(_)) {
+                    return error;
+                }
                 Error::Data(format!(
                     "marginal: y distribution for {}: {error}",
                     group.identity.description(group.collapsed)
                 ))
-            })
-        })
-        .collect::<Result<_, _>>()?;
+            },
+        )
+    }))?;
 
     for density in x_densities.iter_mut().chain(y_densities.iter_mut()) {
         if let Some(first) = density.first_mut() {
@@ -220,111 +439,12 @@ pub(crate) fn render(
         }
     }
 
-    let x_dens_max = x_densities
-        .iter()
-        .flat_map(|d| d.iter())
-        .fold(0.0_f64, |a, &v| a.max(v))
-        .max(1e-12);
-    let y_dens_max = y_densities
-        .iter()
-        .flat_map(|d| d.iter())
-        .fold(0.0_f64, |a, &v| a.max(v))
-        .max(1e-12);
-
-    let usable_h = (top_y1 - top_y0) * 0.90;
-    let usable_w = (right_x1 - right_x0) * 0.90;
-    let central_panel = PanelBox::new(central_x0, central_x1, central_y0, central_y1);
-    let top_panel = PanelBox::new(central_x0, central_x1, top_y0, top_y1);
-    let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
-
-    // --- Render each group ---
-    let mut legend_entries = Vec::new();
-
-    for (gi, group) in groups.iter().enumerate() {
-        let color = theme.colors[group.color_index % theme.colors.len()];
-
-        // Scatter points in central panel.
-        let point_style = chart.point_style(color, 3);
-        let pts: Vec<Point2D> = group
-            .x
-            .iter()
-            .zip(group.y.iter())
-            .map(|(xi, yi)| {
-                let (px, py) = proj.project(*xi, *yi);
-                Point2D::new(px, py)
-            })
-            .collect();
-        with_clip(backend, central_panel, |backend| {
-            backend.draw_scatter(&pts, &point_style)
-        })?;
-
-        // Top marginal KDE (filled polygon).
-        let x_density = &x_densities[gi];
-        let mut top_poly = Vec::with_capacity(n_grid + 2);
-        top_poly.push(Point2D::new(central_x0, top_y0));
-        for (i, &d) in x_density.iter().enumerate() {
-            if i == 0 {
-                top_poly.push(Point2D::new(central_x0, top_y0));
-                continue;
-            }
-            if i + 1 == x_density.len() {
-                top_poly.push(Point2D::new(central_x1, top_y0));
-                continue;
-            }
-            let px = central_x0 + (i as f64 / (n_grid - 1) as f64) * (central_x1 - central_x0);
-            let py = top_y0 + (d / x_dens_max) * usable_h;
-            top_poly.push(Point2D::new(px, py));
-        }
-        top_poly.push(Point2D::new(central_x1, top_y0));
-        let fill_top = FillStyle {
-            color,
-            stroke: color,
-            stroke_width: 1.0,
-            opacity: 0.45,
-        };
-        with_clip(backend, top_panel, |backend| {
-            backend.draw_polygon(&top_poly, &fill_top)
-        })?;
-
-        // Right marginal KDE (filled polygon, rotated 90°).
-        let y_density = &y_densities[gi];
-        let mut right_poly = Vec::with_capacity(n_grid + 2);
-        right_poly.push(Point2D::new(right_x0, central_y0));
-        for (i, &d) in y_density.iter().enumerate() {
-            if i == 0 {
-                right_poly.push(Point2D::new(right_x0, central_y0));
-                continue;
-            }
-            if i + 1 == y_density.len() {
-                right_poly.push(Point2D::new(right_x0, central_y1));
-                continue;
-            }
-            let gy = y_grid[i];
-            let py = proj.project(x_low, gy).1;
-            let px = right_x0 + (d / y_dens_max) * usable_w;
-            right_poly.push(Point2D::new(px, py));
-        }
-        right_poly.push(Point2D::new(right_x0, central_y1));
-        let fill_right = FillStyle {
-            color,
-            stroke: color,
-            stroke_width: 1.0,
-            opacity: 0.45,
-        };
-        with_clip(backend, right_panel, |backend| {
-            backend.draw_polygon(&right_poly, &fill_right)
-        })?;
-
-        if group.identity.hue.is_some() {
-            legend_entries.push(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity, chart.data())?,
-                point_style,
-                fill_top,
-            ));
-        }
-    }
-
-    Ok(PlotRenderResult::new(layout, legend_entries))
+    Ok(MarginalCurves {
+        x_grid,
+        y_grid,
+        x_densities,
+        y_densities,
+    })
 }
 
 fn validate_marginal_range<'a>(
@@ -365,12 +485,11 @@ fn validate_marginal_range<'a>(
     )))
 }
 
-/// Build graphical groups while keeping hue as color-only metadata.
-pub(crate) fn axis_ranges(
+fn ranges_from_groups(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
+    groups: &[HueGroup],
 ) -> Result<[(f64, f64); 2], Error> {
-    let (groups, _) = build_groups(chart, data)?;
     let mut ranges = [(0.0, 1.0); 2];
     for (index, spec) in [chart.x_axis_spec(), chart.y_axis_spec()]
         .into_iter()
@@ -381,7 +500,7 @@ pub(crate) fn axis_ranges(
         } else {
             |group| &group.y
         };
-        for group in &groups {
+        for group in groups {
             data.claim_source_visits(values(group).len())?;
         }
         let range = crate::data::min_max(
@@ -392,7 +511,7 @@ pub(crate) fn axis_ranges(
         )?;
         ranges[index] = marginal_display_range(groups.iter().map(values), range, spec, Some(data))?;
         validate_marginal_range(
-            &groups,
+            groups,
             ranges[index],
             values,
             if index == 0 { "x" } else { "y" },
@@ -605,6 +724,9 @@ fn kde_visible_support_range<'a>(
 
     Ok((low.is_finite() && high.is_finite() && low < high).then_some((low, high)))
 }
+
+#[cfg(test)]
+mod extraction;
 
 #[cfg(test)]
 #[test]

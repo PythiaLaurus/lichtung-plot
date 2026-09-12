@@ -6,3 +6,4 @@ mod support;
 use support::*;
 
 mod contracts;
+mod parity;

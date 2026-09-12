@@ -246,7 +246,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3e | Categorical-distribution semantic and payload extraction | COMPLETE |
 | T5a6a3f | Interaction semantic and payload extraction | COMPLETE |
 | T5a6a4a | Heatmap deferred interior | COMPLETE |
-| T5a6a4b | Marginal deferred interior | PENDING |
+| T5a6a4b | Marginal deferred interior | COMPLETE |
 | T5a6a4c | Matrix deferred interior and outer title integration | PENDING |
 | T5a6a4d | Beeswarm deferred interior | PENDING |
 | T5a6a4e | Waterfall deferred interior | PENDING |
@@ -4607,8 +4607,8 @@ Evidence:
 #### T5a6a Execution Partition
 
 T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and T5a6a4a are
-complete with focused and primary integrated evidence below. Later extraction
-steps are PENDING.
+complete with focused and primary integrated evidence below. T5a6a4b is
+COMPLETE with primary integrated evidence below; later extraction steps are PENDING.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4631,6 +4631,28 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a4b completion evidence: COMPLETE. Primary review reported no actionable
+findings. Marginal-only semantics and selected payload extraction preserve
+the current central scatter/KDE geometry and admitted Canvas/shared-x routes;
+generic facets remain rejected. No line/histogram mode is exposed by the clean
+`13ce394` Marginal API, and none is introduced. T5e packing remains deferred.
+Eight full preserve-text SVG fingerprints across Publication/Science, ungrouped,
+hued, crossed group/hue, and exact-limit cases match a separate clean `13ce394`
+worktree. Focused extraction tests cover admitted root/curve storage, pre-font
+semantic failures, shared-domain preparation, operand geometry parity, and
+zero-source/projection/axis/shaping poisoned capture.
+Final primary `just verify` in `/tmp/opencode/t5a6a4b-verify.log` passed:
+formatting, strict offline all-target Clippy, 886 library tests passed with
+17 ignored, and 446 integration tests passed, including 19 Marginal/Matrix
+tests, 57 composition tests, and all six unchanged visual snapshots. Four
+example targets ran zero tests; warning-denied rustdoc and offline package
+verification passed for 231 files (6.5 MiB; 1.4 MiB compressed). No tests failed.
+No tests are rerun and no commit is made in this documentation-only completion
+update, as explicitly requested. Parent hue coordination
+is applied to retained identities at selection without rebuilding groups. Root
+curves are reused for stable domains; parent domain feedback evaluates only its
+changed render grid from retained samples/bandwidths, without replanning support.
 
 T5a6a4a completion evidence:
 

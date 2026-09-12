@@ -1229,6 +1229,7 @@ fn measure_geometry(
             | PlotKind::Raincloud
             | PlotKind::Interaction
             | PlotKind::Heatmap
+            | PlotKind::Marginal
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

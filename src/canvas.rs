@@ -1531,6 +1531,7 @@ impl Canvas {
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
+                            | PlotKind::Marginal
                     )
                 }) {
                     Some(plot) => {
@@ -1600,6 +1601,7 @@ impl Canvas {
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
+                            | PlotKind::Marginal
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath
