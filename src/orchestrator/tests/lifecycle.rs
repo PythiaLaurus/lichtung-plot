@@ -1824,6 +1824,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::Interaction
                     | PlotKind::Heatmap
                     | PlotKind::Marginal
+                    | PlotKind::Beeswarm
             ) {
                 &prepared
             } else {

@@ -1230,6 +1230,7 @@ fn measure_geometry(
             | PlotKind::Raincloud
             | PlotKind::Interaction
             | PlotKind::Heatmap
+            | PlotKind::Beeswarm
             | PlotKind::Marginal
             | PlotKind::Matrix
     ) {

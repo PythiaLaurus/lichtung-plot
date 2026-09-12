@@ -58,7 +58,7 @@ interior_routes! {
         Heatmap => crate::plots::heatmap::reject_combined,
         Marginal => crate::plots::marginal::reject_combined,
         Matrix => crate::plots::matrix::reject_combined,
-        Beeswarm => crate::plots::beeswarm::render,
+        Beeswarm => crate::plots::beeswarm::reject_combined,
         Waterfall => crate::plots::waterfall::render,
     },
 }
@@ -104,6 +104,7 @@ impl ParentCompositionAdapter {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) beeswarm: Option<std::sync::Arc<crate::plots::beeswarm::PreparedBeeswarmInputs>>,
     pub(crate) marginal: Option<std::sync::Arc<crate::plots::marginal::PreparedMarginal>>,
     pub(crate) heatmap: Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
     pub(crate) interaction:
@@ -130,6 +131,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
+        plot.prepared_beeswarm.clone_from(&self.beeswarm);
         plot.prepared_heatmap.clone_from(&self.heatmap);
         plot.prepared_marginal.clone_from(&self.marginal);
         plot.prepared_interaction.clone_from(&self.interaction);
@@ -223,6 +225,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Beeswarm(crate::plots::beeswarm::BeeswarmPayload),
     Matrix(crate::plots::matrix::MatrixPayload),
     Marginal(crate::plots::marginal::MarginalPayload),
     Heatmap(crate::plots::heatmap::HeatmapPayload),
@@ -245,6 +248,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Beeswarm(payload) => payload.draw(backend),
             MarkPayload::Matrix(payload) => payload.draw(backend),
             MarkPayload::Marginal(payload) => payload.draw(backend),
             MarkPayload::Heatmap(payload) => payload.draw(backend),

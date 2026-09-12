@@ -248,7 +248,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a4a | Heatmap deferred interior | COMPLETE |
 | T5a6a4b | Marginal deferred interior | COMPLETE |
 | T5a6a4c | Matrix deferred interior and outer title integration | COMPLETE |
-| T5a6a4d | Beeswarm deferred interior | PENDING |
+| T5a6a4d | Beeswarm deferred interior | COMPLETE |
 | T5a6a4e | Waterfall deferred interior | PENDING |
 | T5a6a5a | Facet parent adapter and outer title integration | PENDING |
 | T5a6a5b | Canvas parent adapter and outer title integration | PENDING |
@@ -4606,9 +4606,9 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and T5a6a4a are
-complete with focused and primary integrated evidence below. T5a6a4b is
-COMPLETE with primary integrated evidence below; later extraction steps are PENDING.
+T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and specialized
+extraction steps T5a6a4a-d are COMPLETE with focused and primary integrated
+evidence below. T5a6a4e and later extraction steps remain PENDING.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4631,6 +4631,37 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a4d completion evidence: COMPLETE. Static review reported no actionable
+findings.
+
+- From clean `0a41f1c`, Beeswarm now retains admitted categories, source-row
+  sorting, color domains/mappings, and deterministic signed-bin offsets once per
+  root component. Shared ranges settle before binning; tangent-search packing
+  remains deferred to T5e. No new axes, scales, or supported nesting are added.
+- Constrained measurement retains typed point, zero-reference, gradient, and
+  detail-text operands with current axis plans and a backend-free geometry
+  snapshot. Selected capture consumes these operands without source reads,
+  preparation, projection, shaping, tick selection, binning, or theme/style
+  reconstruction. Existing deferred parent-composition chrome remains T5b-owned.
+- Twenty full preserve-text SVG fingerprints match clean `0a41f1c`: Publication
+  and Science, automatic/exact/constant/extreme colors, all four facet scale
+  modes, shared-range Canvas, and mixed Beeswarm/Heatmap Canvas. The existing
+  Beeswarm clip snapshot is unchanged.
+- Focused evidence covers exact root/candidate admission and limit refusal,
+  component preparation counts, data failure before unavailable fonts, capped
+  jitter/tie ordering, missing-color rejection, geometry/text preservation,
+  poisoned capture, and selected-scene reuse across all output modes.
+- Final primary `just verify` in `/tmp/opencode/t5a6a4d-verify.log` passed:
+  formatting, strict offline all-target Clippy, 904 library tests passed with
+  17 ignored, and 447 integration tests passed, including 43 categorical tests,
+  57 composition tests, and all six unchanged visual snapshots. Four example
+  targets ran zero tests; warning-denied rustdoc and offline package verification
+  passed for 233 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
+- T5e packing remains deferred; T5a6a4e onward remain PENDING and no successor
+  is started. This completion update changes documentation only; no code or
+  snapshots are edited, no tests are rerun, and no commit is made, as explicitly
+  requested.
 
 T5a6a4c completion evidence: COMPLETE.
 
@@ -4659,9 +4690,10 @@ T5a6a4c completion evidence: COMPLETE.
   tests, 57 composition tests, and all six visual snapshots. Four example
   targets ran zero tests; warning-denied rustdoc and offline package verification
   passed for 231 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
-- Native Matrix packing remains deferred to T5e; T5a6a4d onward remain PENDING
-  and no successor is started. This completion update changes documentation only;
-  no code or snapshots are edited, no tests are rerun, and no commit is made,
+- Native Matrix packing remains deferred to T5e; at T5a6a4c completion,
+  T5a6a4d onward were PENDING and no successor was started. That completion update
+  changed documentation only; no code or snapshots were edited, no tests were
+  rerun, and no commit was made,
   as explicitly requested.
 
 T5a6a4b completion evidence: COMPLETE. Primary review reported no actionable
@@ -4723,9 +4755,9 @@ T5a6a4a completion evidence:
   57 composition tests, and all six still-unchanged snapshots. Four example
   targets ran zero tests; warning-denied rustdoc and offline package verification
   passed for 229 files (6.5 MiB; 1.4 MiB compressed). No tests failed.
-- T5e packing remains deferred; T5a6a4b onward remain PENDING and no successor
-  is started. No commit is made in this documentation-only completion update,
-  as explicitly requested.
+- T5e packing remains deferred; at T5a6a4a completion, T5a6a4b onward were
+  PENDING and no successor was started. No commit was made in that
+  documentation-only completion update, as explicitly requested.
 
 T5a6a3f completion evidence:
 

@@ -289,17 +289,19 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
             plot.width(),
             plot.height(),
             |stage| {
-                let inputs =
-                    if matches!(kind, PlotKind::Line | PlotKind::Heatmap | PlotKind::Matrix) {
-                        Some(crate::plots::shared_x::prepare_plot(
-                            &plot,
-                            &stage.generation_resources(),
-                        )?)
-                    } else {
-                        None
-                    };
+                let inputs = if matches!(
+                    kind,
+                    PlotKind::Line | PlotKind::Heatmap | PlotKind::Matrix | PlotKind::Beeswarm
+                ) {
+                    Some(crate::plots::shared_x::prepare_plot(
+                        &plot,
+                        &stage.generation_resources(),
+                    )?)
+                } else {
+                    None
+                };
                 let requirements = crate::layout::foundational_plot_requirements(
-                    inputs.as_ref().and_then(|inputs| inputs.heatmap.as_deref()),
+                    inputs.as_ref(),
                     &plot,
                     kind,
                     &theme,

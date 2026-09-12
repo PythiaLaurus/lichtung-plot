@@ -1531,6 +1531,7 @@ impl Canvas {
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
+                            | PlotKind::Beeswarm
                             | PlotKind::Marginal
                     )
                 }) {
@@ -1601,6 +1602,7 @@ impl Canvas {
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
                             | PlotKind::Heatmap
+                            | PlotKind::Beeswarm
                             | PlotKind::Marginal
                             | PlotKind::Line
                             | PlotKind::Trajectory
@@ -1891,10 +1893,7 @@ impl Canvas {
                 .iter()
                 .any(|group| group.contains(&index));
             crate::layout::PreparedTextRequirement::append_plot(
-                interiors
-                    .get(index)
-                    .and_then(Option::as_ref)
-                    .and_then(|inputs| inputs.heatmap.as_deref()),
+                interiors.get(index).and_then(Option::as_ref),
                 &mut requirements,
                 &plot,
                 plot.kind(),

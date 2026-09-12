@@ -882,13 +882,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         [x, y]
     }
 
-    pub(crate) fn resolved_color_label(&self) -> String {
-        self.color_label.clone().unwrap_or_else(|| {
-            self.color_values()
-                .map_or_else(String::new, |values| self.resolve_label(values.name()))
-        })
-    }
-
     pub(crate) fn prepare_color_label(
         &self,
         data: crate::data::PlotData<'_>,

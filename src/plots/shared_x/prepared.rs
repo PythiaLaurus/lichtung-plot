@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Beeswarm(crate::plots::beeswarm::PreparedBeeswarm),
     Marginal(crate::plots::marginal::PreparedMarginal),
     Heatmap(crate::plots::heatmap::HeatmapData),
     Interaction(crate::plots::interaction::PreparedInteraction),
@@ -36,6 +37,9 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Beeswarm => Ok(Self::Beeswarm(crate::plots::beeswarm::prepare(
+                source, data,
+            )?)),
             PlotKind::Marginal => Ok(Self::Marginal(crate::plots::marginal::prepare(
                 source, data,
             )?)),
@@ -92,6 +96,9 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Beeswarm(marks) => {
+                crate::layout::continuous_auto_range(marks.x_data, source.x_axis_spec())
+            }
             Self::Marginal(marks) => marks.ranges[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
@@ -120,6 +127,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    beeswarm: Option<&'a crate::plots::beeswarm::PreparedBeeswarm>,
     marginal: Option<&'a crate::plots::marginal::PreparedMarginal>,
     heatmap: Option<&'a crate::plots::heatmap::HeatmapData>,
     interaction: Option<&'a crate::plots::interaction::PreparedInteraction>,
@@ -149,6 +157,7 @@ pub(crate) fn prepare_reference_plot(
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
     let mut bins = None;
+    let mut beeswarm = None;
     let mut heatmap = None;
     let mut marginal = None;
     let mut dumbbell = None;
@@ -160,6 +169,13 @@ pub(crate) fn prepare_reference_plot(
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Beeswarm(mut marks) => {
+            if labels.is_some() {
+                marks.color_label = source.prepare_color_label(data, labels)?;
+            }
+            beeswarm = Some(marks);
+            PlotKind::Beeswarm
+        }
         PreparedReference::Marginal(marks) => {
             marginal = Some(crate::plots::marginal::finish(marks, x_limits, data)?);
             PlotKind::Marginal
@@ -222,6 +238,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            beeswarm: beeswarm.as_ref(),
             marginal: marginal.as_ref(),
             heatmap: heatmap.as_ref(),
             interaction: interaction.as_ref(),
@@ -238,11 +255,22 @@ pub(crate) fn prepare_reference_plot(
         quantiles.validate_ranges(axes.ranges, data)?;
     }
     crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    if let Some(marks) = &mut beeswarm {
+        marks.finish(axes.ranges[0], data)?;
+    }
     let scope = || scope.map(|s| data.copy_source_string(s)).transpose();
     let mut retained = Vec::new();
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        beeswarm: beeswarm
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs { panels })
+            })
+            .transpose()?,
         marginal: marginal.map(|marks| data.source_arc(marks)).transpose()?,
         heatmap: heatmap
             .map(|marks| {
@@ -356,6 +384,7 @@ pub(crate) fn prepare_plot(
     let mut distributions = Vec::new();
     let mut interaction = Vec::new();
     let mut heatmap = Vec::new();
+    let mut beeswarm = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -363,6 +392,7 @@ pub(crate) fn prepare_plot(
     if matches!(
         source.kind(),
         PlotKind::Histogram
+            | PlotKind::Beeswarm
             | PlotKind::Heatmap
             | PlotKind::Marginal
             | PlotKind::Density
@@ -564,6 +594,9 @@ pub(crate) fn prepare_plot(
             let heatmap_marks = (source.kind() == PlotKind::Heatmap)
                 .then(|| crate::plots::heatmap::prepare(source, data))
                 .transpose()?;
+            let beeswarm_marks = (source.kind() == PlotKind::Beeswarm)
+                .then(|| crate::plots::beeswarm::prepare(source, data))
+                .transpose()?;
             let interaction_marks = (source.kind() == PlotKind::Interaction)
                 .then(|| {
                     crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())
@@ -609,6 +642,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    beeswarm: beeswarm_marks.as_ref(),
                     marginal: None,
                     heatmap: heatmap_marks.as_ref(),
                     interaction: interaction_marks.as_ref(),
@@ -621,6 +655,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = beeswarm_marks {
+                source_data.reserve_source(&mut beeswarm, 1)?;
+                beeswarm.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(marks) = heatmap_marks {
                 source_data.reserve_source(&mut heatmap, 1)?;
                 heatmap.push((Some(source_data.copy_source_string(&scope)?), marks));
@@ -692,6 +730,9 @@ pub(crate) fn prepare_plot(
         for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
             quantiles.validate_ranges(axes.ranges, source_data)?;
         }
+        for ((_, marks), (_, axes)) in beeswarm.iter_mut().zip(&retained) {
+            marks.finish(axes.ranges[0], source_data)?;
+        }
         for (_, axes) in &retained {
             if matches!(
                 source.kind(),
@@ -744,6 +785,15 @@ pub(crate) fn prepare_plot(
     }
     Ok(PreparedInteriorInputs {
         marginal: None,
+        beeswarm: if source.kind() == PlotKind::Beeswarm {
+            Some(
+                source_data.source_arc(crate::plots::beeswarm::PreparedBeeswarmInputs {
+                    panels: beeswarm,
+                })?,
+            )
+        } else {
+            None
+        },
         heatmap: if source.kind() == PlotKind::Heatmap {
             Some(
                 source_data
@@ -897,6 +947,7 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        beeswarm: None,
         marginal: None,
         heatmap: None,
         bars: None,
@@ -952,6 +1003,7 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        beeswarm: None,
         marginal: None,
         heatmap: None,
         bars: None,
@@ -1221,17 +1273,29 @@ fn prepare(
                 crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec()),
             ]
         }
-        PlotKind::Beeswarm | PlotKind::Waterfall => {
-            let levels = strings(if chart.kind() == PlotKind::Beeswarm {
-                chart.y_col()
-            } else {
-                chart.x_col()
-            })?;
-            let levels = if chart.kind() == PlotKind::Beeswarm {
-                data.source_levels(&levels)?
-            } else {
-                levels
-            };
+        PlotKind::Beeswarm => {
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.beeswarm)
+                .ok_or_else(|| Error::Render("beeswarm axes require retained semantics".into()))?;
+            let levels = data.collect_source(
+                marks
+                    .levels
+                    .iter()
+                    .map(|level| data.copy_source_string(level)),
+            )?;
+            let slots = chart
+                .y_axis_spec()
+                .limits
+                .unwrap_or((0.0, levels.len() as f64));
+            categories[1] = Some(levels);
+            [
+                crate::layout::continuous_auto_range(marks.x_data, chart.x_axis_spec()),
+                slots,
+            ]
+        }
+        PlotKind::Waterfall => {
+            let levels = strings(chart.x_col())?;
             let slots = chart
                 .y_axis_spec()
                 .limits

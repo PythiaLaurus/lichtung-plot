@@ -830,8 +830,6 @@ impl<'a> PlotRenderContext<'a> {
         Ok(ProducerText {
             frozen: self.producer_text,
             lookup,
-            retained: Vec::new(),
-            environment: self.theme,
         })
     }
 
@@ -1227,8 +1225,6 @@ fn native_axis_consumption_admits_every_owned_source_copy() {
 pub(crate) struct ProducerText<'a> {
     frozen: Option<&'a [crate::render::backend::PlacedText]>,
     lookup: std::collections::HashMap<(&'a str, &'a str), &'a crate::layout::ResolvedTextPlan>,
-    retained: Vec<crate::render::backend::PlacedText>,
-    environment: &'a crate::theme::ResolvedTheme,
 }
 
 impl ProducerText<'_> {
@@ -1251,41 +1247,6 @@ impl ProducerText<'_> {
                 });
         }
         measure()
-    }
-
-    pub(crate) fn draw(
-        &mut self,
-        text: crate::render::backend::PlacedText,
-        backend: &mut dyn crate::render::backend::Backend,
-    ) -> Result<(), Error> {
-        let text = if let Some(frozen) = self.frozen {
-            let retained = frozen
-                .get(self.retained.len())
-                .ok_or_else(|| Error::Render("extra frozen producer text call".into()))?;
-            if retained.plan != text.plan || retained.placement != text.placement {
-                return Err(Error::Render(
-                    "frozen producer text identity changed".into(),
-                ));
-            }
-            retained.clone()
-        } else {
-            text
-        };
-        let environment = self.environment.prepared_font_environment()?;
-        crate::render::backend::reserve_text_records(&mut self.retained, 1, environment)?;
-        text.draw(backend)?;
-        self.retained.push(text);
-        Ok(())
-    }
-
-    pub(crate) fn finish(self) -> Result<Vec<crate::render::backend::PlacedText>, Error> {
-        if self
-            .frozen
-            .is_some_and(|text| text.len() != self.retained.len())
-        {
-            return Err(Error::Render("missing frozen producer text calls".into()));
-        }
-        Ok(self.retained)
     }
 }
 

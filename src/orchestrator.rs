@@ -143,6 +143,7 @@ impl Plot {
                 | PlotKind::Raincloud
                 | PlotKind::Interaction
                 | PlotKind::Heatmap
+                | PlotKind::Beeswarm
                 | PlotKind::Marginal
                 | PlotKind::Matrix
         ) {
@@ -206,6 +207,7 @@ impl Plot {
                 | PlotKind::Raincloud
                 | PlotKind::Interaction
                 | PlotKind::Heatmap
+                | PlotKind::Beeswarm
                 | PlotKind::Marginal
                 | PlotKind::Matrix
         ) {
@@ -276,6 +278,7 @@ impl Plot {
             PlotKind::Matrix => crate::plots::matrix::measure(self, context)?,
             PlotKind::Marginal => crate::plots::marginal::measure(self, context)?,
             PlotKind::Heatmap => crate::plots::heatmap::measure(self, context)?,
+            PlotKind::Beeswarm => crate::plots::beeswarm::measure(self, context)?,
             PlotKind::Interaction => crate::plots::interaction::measure(self, context)?,
             PlotKind::Boxplot => crate::plots::boxplot::measure(self, context)?,
             PlotKind::Violin | PlotKind::Raincloud => crate::plots::violin::measure(self, context)?,
@@ -295,7 +298,7 @@ impl Plot {
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 crate::plots::line::measure(self, context)?
             }
-            _ => {
+            PlotKind::Waterfall => {
                 return Err(Error::Render(
                     "selected measurement requires an extracted family".into(),
                 )

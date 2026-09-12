@@ -809,7 +809,7 @@ fn prepared_address_clone(
     reason = "the closed text census keeps both axis policies and canonical producer order explicit"
 )]
 pub(crate) fn foundational_plot_requirements(
-    heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
+    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
     plot: &Plot,
     kind: PlotKind,
     theme: &crate::theme::ResolvedTheme,
@@ -821,7 +821,7 @@ pub(crate) fn foundational_plot_requirements(
 ) -> Result<Vec<PreparedTextRequirement>, Error> {
     let mut requirements = Vec::new();
     PreparedTextRequirement::append_plot(
-        heatmap,
+        interiors,
         &mut requirements,
         plot,
         kind,
@@ -843,7 +843,7 @@ impl PreparedTextRequirement {
         reason = "the closed producer traversal preserves axis policies and visible source identities"
     )]
     pub(crate) fn append_plot(
-        heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
+        interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
         requirements: &mut Vec<Self>,
         plot: &Plot,
         kind: PlotKind,
@@ -977,7 +977,7 @@ impl PreparedTextRequirement {
             )?;
         }
         push_deferred_plot_requirements(
-            heatmap,
+            interiors,
             requirements,
             plot,
             kind,
@@ -1014,7 +1014,7 @@ impl PreparedTextRequirement {
     reason = "one closed plot-kind match keeps both range filters and every deferred T5b/T5e census source auditable"
 )]
 fn push_deferred_plot_requirements(
-    heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
+    interiors: Option<&crate::layout::interior::PreparedInteriorInputs>,
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &Plot,
     kind: PlotKind,
@@ -1266,10 +1266,31 @@ fn push_deferred_plot_requirements(
             &theme.typography.tick_label,
             prepared_stage,
         )?;
+    } else if kind == PlotKind::Beeswarm {
+        let beeswarm = interiors
+            .and_then(|inputs| inputs.beeswarm.as_deref())
+            .ok_or_else(|| {
+                Error::Render("beeswarm census requires root-prepared semantics".into())
+            })?;
+        for (_, marks) in &beeswarm.panels {
+            marks.text_census(|source| {
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    source,
+                    &[],
+                    &body,
+                    prepared_stage.as_deref_mut(),
+                )
+            })?;
+        }
     } else if kind == PlotKind::Heatmap {
-        let heatmap = heatmap.ok_or_else(|| {
-            Error::Render("heatmap census requires root-prepared semantics".into())
-        })?;
+        let heatmap = interiors
+            .and_then(|inputs| inputs.heatmap.as_deref())
+            .ok_or_else(|| {
+                Error::Render("heatmap census requires root-prepared semantics".into())
+            })?;
         let mut visit = |source: CensusSource<'_>| {
             push_deferred_body(
                 requirements,
@@ -1291,8 +1312,7 @@ fn push_deferred_plot_requirements(
     } else if plot.has_facets()
         && matches!(
             kind,
-            PlotKind::Beeswarm
-                | PlotKind::Coefficient
+            PlotKind::Coefficient
                 | PlotKind::Forest
                 | PlotKind::PointInterval
                 | PlotKind::Waterfall
@@ -1515,14 +1535,10 @@ fn specialized_text_census(
     use crate::data::DataColumn;
 
     match kind {
-        PlotKind::Heatmap => {
+        PlotKind::Heatmap | PlotKind::Beeswarm => {
             return Err(Error::Render(
-                "heatmap census requires retained traversal".into(),
+                "continuous color census requires retained traversal".into(),
             ));
-        }
-        PlotKind::Beeswarm => {
-            visit(plot.resolved_color_label().into())?;
-            crate::plots::beeswarm::text_census_colorbar_values(plot, data, &mut visit)?;
         }
         PlotKind::Coefficient | PlotKind::Forest | PlotKind::PointInterval => {
             let has_unavailable = data
