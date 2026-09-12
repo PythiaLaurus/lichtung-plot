@@ -319,10 +319,7 @@ impl UnfacetedPlotPlan {
     ) -> Result<Self, Error> {
         let canvas_layout = source.measured_canvas_layout(theme)?;
         round.observe_canvas(&canvas_layout)?;
-        let cell = match kind {
-            PlotKind::Matrix => crate::plots::matrix::panel_box(source, theme)?,
-            _ => canvas_layout.panel_box,
-        };
+        let cell = canvas_layout.panel_box;
         let panel_plan = crate::layout::fit::measured(crate::decorations::plan::plan_panel(
             source,
             kind,
@@ -464,6 +461,92 @@ impl Plot {
 mod root_title_tests {
     use super::*;
     use crate::theme::TitleAlignment::{Center, End, Start};
+
+    #[test]
+    fn matrix_root_uses_one_title_producer_with_independent_odd_size_alignments() {
+        for preset in [crate::Theme::Publication, crate::Theme::Science] {
+            for explicit in [false, true] {
+                let mut plot = Plot::matrix(vec![
+                    crate::NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
+                    crate::NumericValues::new("y", [2.0, 1.0, 3.0, 4.0]),
+                ])
+                .title("Title\nx")
+                .subtitle("Subtitle\ny")
+                .caption("Caption\nz")
+                .size(533, 681)
+                .erase();
+                if explicit {
+                    plot.title_alignment = Some(End);
+                    plot.subtitle_alignment = Some(Start);
+                }
+                let theme = preset.resolve();
+                assert_eq!(theme.composition.root_title_alignment, Center);
+                assert_eq!(theme.composition.root_subtitle_alignment, None);
+                assert_eq!(theme.composition.root_caption_alignment, Start);
+                let canvas = plot.measured_canvas_layout(&theme).unwrap();
+                assert!(matches!(
+                    canvas.root_text,
+                    crate::layout::canvas::CanvasRootText::Planned(_)
+                ));
+                assert!(
+                    canvas.title_y.is_none()
+                        && canvas.subtitle_y.is_none()
+                        && canvas.caption_y.is_none()
+                );
+                let plan =
+                    PlotPlan::new_with_resolved_theme(&plot, PlotKind::Matrix, theme).unwrap();
+                let retained = plan.root.plan().retained_text();
+                for (source, alignment) in [
+                    (
+                        "Title\nx",
+                        if explicit {
+                            crate::layout::PhysicalTextAlignment::End
+                        } else {
+                            crate::layout::PhysicalTextAlignment::Center
+                        },
+                    ),
+                    (
+                        "Subtitle\ny",
+                        if explicit {
+                            crate::layout::PhysicalTextAlignment::Start
+                        } else {
+                            crate::layout::PhysicalTextAlignment::Center
+                        },
+                    ),
+                    ("Caption\nz", crate::layout::PhysicalTextAlignment::Start),
+                ] {
+                    let matching = retained
+                        .iter()
+                        .filter(|(_, text)| text.source == source)
+                        .collect::<Vec<_>>();
+                    assert_eq!(matching.len(), 1);
+                    assert_eq!(matching[0].1.style.alignment, alignment);
+                    assert_eq!(matching[0].1.lines.len(), 2);
+                }
+                let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                let mut backend = plan.take_svg_backend().unwrap();
+                plan.render(&mut backend).unwrap();
+                let svg = backend.into_bytes().unwrap();
+                let document =
+                    roxmltree::Document::parse(std::str::from_utf8(&svg).unwrap()).unwrap();
+                assert_eq!(
+                    document.root_element().attribute("viewBox"),
+                    Some("0 0 533 681")
+                );
+                assert_eq!(
+                    document
+                        .descendants()
+                        .filter(|node| node.has_tag_name("clipPath"))
+                        .count(),
+                    4
+                );
+                assert_eq!(
+                    shapes,
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
+                );
+            }
+        }
+    }
 
     #[test]
     fn standalone_root_freezes_independent_alignment_before_null_and_svg() {

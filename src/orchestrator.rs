@@ -144,6 +144,7 @@ impl Plot {
                 | PlotKind::Interaction
                 | PlotKind::Heatmap
                 | PlotKind::Marginal
+                | PlotKind::Matrix
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
@@ -206,6 +207,7 @@ impl Plot {
                 | PlotKind::Interaction
                 | PlotKind::Heatmap
                 | PlotKind::Marginal
+                | PlotKind::Matrix
         ) {
             return self.measure_selected_interior(context);
         }
@@ -271,6 +273,7 @@ impl Plot {
         });
         let context = context.with_prepared_axes(self);
         let mut result = match self.kind() {
+            PlotKind::Matrix => crate::plots::matrix::measure(self, context)?,
             PlotKind::Marginal => crate::plots::marginal::measure(self, context)?,
             PlotKind::Heatmap => crate::plots::heatmap::measure(self, context)?,
             PlotKind::Interaction => crate::plots::interaction::measure(self, context)?,
@@ -468,7 +471,7 @@ fn resolve_rendered_labels(
         }
     }
     if !result.legend_entries.is_empty() {
-        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries)?;
+        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries, theme)?;
     }
     if result.y_domain == AxisDomain::Categorical
         && result.layout.y_axis.assigned_tick_width.is_none()

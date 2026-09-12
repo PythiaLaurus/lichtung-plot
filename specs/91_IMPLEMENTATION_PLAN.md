@@ -247,7 +247,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3f | Interaction semantic and payload extraction | COMPLETE |
 | T5a6a4a | Heatmap deferred interior | COMPLETE |
 | T5a6a4b | Marginal deferred interior | COMPLETE |
-| T5a6a4c | Matrix deferred interior and outer title integration | PENDING |
+| T5a6a4c | Matrix deferred interior and outer title integration | COMPLETE |
 | T5a6a4d | Beeswarm deferred interior | PENDING |
 | T5a6a4e | Waterfall deferred interior | PENDING |
 | T5a6a5a | Facet parent adapter and outer title integration | PENDING |
@@ -4631,6 +4631,38 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a4c completion evidence: COMPLETE.
+
+- Matrix retains admitted groups, numeric columns, bandwidths, support ranges,
+  and common-normalized diagonal KDE densities before fonts. Constrained
+  measurement selects typed cell marks, clips, axes, labels, and legend operands
+  without rebuilding groups or statistics. Selected capture and output replay
+  perform no source reads, projection, tick selection, packing, or shaping.
+- The Matrix outer root now uses the T5a4 title-block producer, including
+  independent title/subtitle/caption alignment at odd dimensions. The intentional
+  titled Matrix clip-structure snapshot change reflects this root integration;
+  it remained unchanged after review fixes, not a no-title parity regression.
+- All 16 no-title preserve-text SVG fingerprints match between
+  `/tmp/opencode/t5a6a4c-baseline-parity.log` and
+  `/tmp/opencode/t5a6a4c-current-parity.log`: four cases each for Publication and
+  Science at 533x681 and 800x600.
+- Review fixes admit legend identity/label/title strings, merge storage, shared
+  ownership, and packing storage/work through the operation ledger before
+  allocation or processing. Exact-limit and many-hue Matrix coverage exercise
+  this path end to end. KDE diagnostic context is constructed only on failure;
+  successful KDE work and byte budgets do not depend on diagnostic name lengths,
+  while failures preserve column and group/hue context.
+- Final primary `just verify` in `/tmp/opencode/t5a6a4c-verify.log` passed:
+  formatting, strict offline all-target Clippy, 897 library tests passed with
+  17 ignored, and 446 integration tests passed, including 19 Marginal/Matrix
+  tests, 57 composition tests, and all six visual snapshots. Four example
+  targets ran zero tests; warning-denied rustdoc and offline package verification
+  passed for 231 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
+- Native Matrix packing remains deferred to T5e; T5a6a4d onward remain PENDING
+  and no successor is started. This completion update changes documentation only;
+  no code or snapshots are edited, no tests are rerun, and no commit is made,
+  as explicitly requested.
 
 T5a6a4b completion evidence: COMPLETE. Primary review reported no actionable
 findings. Marginal-only semantics and selected payload extraction preserve

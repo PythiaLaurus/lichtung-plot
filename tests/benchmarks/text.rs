@@ -153,7 +153,8 @@ fn matrix_case(long: bool, size: u32) -> CaseMeasurement {
         true,
     );
     let passes = sample.observations.counters[Counter::MatrixLayoutPass as usize];
-    assert_eq!(passes, if long && size == 600 { 6 } else { 3 });
+    // The two measurements retain their packing; capture only replays operands.
+    assert_eq!(passes, if long && size == 600 { 4 } else { 2 });
     assert_eq!(sample.observations.roots.len(), 1);
     assert!(sample.observations.roots.last().unwrap().successful);
     assert_eq!(

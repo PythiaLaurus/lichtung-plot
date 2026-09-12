@@ -78,14 +78,6 @@ pub(crate) fn kde_with_source(
 }
 
 /// Evaluate a Gaussian KDE with an already validated bandwidth.
-pub(crate) fn gaussian_kde_with_bandwidth(
-    samples: &[f64],
-    grid_points: &[f64],
-    bandwidth: f64,
-) -> Result<Vec<f64>, crate::Error> {
-    gaussian_kde_with_source(samples, grid_points, bandwidth, None)
-}
-
 pub(crate) fn gaussian_kde_with_source(
     samples: &[f64],
     grid_points: &[f64],

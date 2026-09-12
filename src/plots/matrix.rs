@@ -22,20 +22,19 @@
 )]
 
 use crate::decorations::legend::{Legend, LegendEntry};
-use crate::layout::{
-    self, CanvasLayout, CanvasLayoutSpec, Layout, PanelBox, PhysicalTextAlignment, TextBlock,
-};
+use crate::layout::{self, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle,
     PlacedText, Point2D, TextAnchor,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{gaussian_kde_with_bandwidth, strict_scott_bandwidth};
+use crate::stats::distribution::{gaussian_kde_with_source, strict_scott_bandwidth};
 use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::{LegendPosition, Plot};
 
 /// One graphical group for the matrix plot.
+#[derive(Debug)]
 struct HueGroup {
     identity: crate::data::CollectivePair,
     collapsed: bool,
@@ -50,6 +49,133 @@ struct HueGroup {
 pub(crate) struct PreparedMatrixAxes {
     ranges: Vec<(f64, f64)>,
     labels: Vec<String>,
+    groups: Vec<HueGroup>,
+    diagonals: Vec<MatrixDensity>,
+}
+
+#[derive(Debug)]
+struct MatrixDensity {
+    densities: Vec<Vec<f64>>,
+    maximum: f64,
+}
+
+const KDE_POINTS: usize = 60;
+
+#[derive(Debug)]
+enum MatrixPrimitive {
+    Line([Point2D; 2]),
+    Scatter(Vec<Point2D>, crate::render::backend::PointStyle),
+    Polygon(Vec<Point2D>, FillStyle),
+    Text(PlacedText),
+}
+
+impl MatrixPrimitive {
+    fn draw(&self, backend: &mut dyn Backend, tick: Option<&LineStyle>) -> Result<(), Error> {
+        match self {
+            Self::Line(points) => backend.draw_line(
+                points,
+                tick.ok_or_else(|| Error::Render("matrix tick style missing".into()))?,
+            ),
+            Self::Scatter(points, style) => backend.draw_scatter(points, style),
+            Self::Polygon(points, style) => backend.draw_polygon(points, style),
+            Self::Text(text) => text.draw(backend),
+        }
+    }
+
+    fn geometry(
+        &self,
+        geometry: &mut crate::render::geometry::GeometrySnapshot,
+        clip: Option<PanelBox>,
+        tick: Option<&LineStyle>,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Line(points) => geometry.line(
+                points,
+                tick.ok_or_else(|| Error::Render("matrix tick style missing".into()))?,
+                clip,
+            ),
+            Self::Scatter(points, style) => geometry.scatter(
+                points,
+                style,
+                clip.ok_or_else(|| Error::Render("matrix scatter clip missing".into()))?,
+            ),
+            Self::Polygon(points, style) => geometry.polygon(points, style, clip),
+            Self::Text(text) => geometry.text(text.placement, &text.plan, clip),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct MatrixCellPayload {
+    clip: PanelBox,
+    frame: [[Point2D; 2]; 2],
+    marks: Vec<MatrixPrimitive>,
+    guides: Vec<MatrixPrimitive>,
+}
+
+#[derive(Debug)]
+pub(crate) struct MatrixPayload {
+    cells: Vec<MatrixCellPayload>,
+    frame_style: Option<LineStyle>,
+    tick_style: Option<LineStyle>,
+    legend: Option<crate::decorations::legend::LegendDrawPlan>,
+}
+
+impl MatrixPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        for cell in &self.cells {
+            if let Some(style) = &self.frame_style {
+                for line in &cell.frame {
+                    backend.draw_line(line, style)?;
+                }
+            }
+            with_clip(backend, cell.clip, |backend| {
+                for mark in &cell.marks {
+                    mark.draw(backend, None)?;
+                }
+                Ok(())
+            })?;
+            for guide in &cell.guides {
+                guide.draw(backend, self.tick_style.as_ref())?;
+            }
+        }
+        if let Some(legend) = &self.legend {
+            with_layer(backend, "legend", |backend| legend.draw(backend))?;
+        }
+        Ok(())
+    }
+
+    fn geometry(
+        &self,
+        theme: &ResolvedTheme,
+    ) -> Result<crate::render::geometry::GeometrySnapshot, Error> {
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+        for cell in &self.cells {
+            if let Some(style) = &self.frame_style {
+                for line in &cell.frame {
+                    geometry.line(line, style, None)?;
+                }
+            }
+            let clip = crate::render::backend::validate_clip_region(cell.clip)?.panel();
+            for mark in &cell.marks {
+                mark.geometry(&mut geometry, Some(clip), None)?;
+            }
+            for guide in &cell.guides {
+                guide.geometry(&mut geometry, None, self.tick_style.as_ref())?;
+            }
+        }
+        if let Some(legend) = &self.legend {
+            legend.geometry(&mut geometry)?;
+        }
+        Ok(geometry)
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static SEMANTIC_STAGES: std::cell::Cell<[usize; 2]> = const { std::cell::Cell::new([0; 2]) };
+    static SELECTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static DIAGNOSTIC_CONTEXTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub(crate) fn prepare_axes(
@@ -62,7 +188,7 @@ pub(crate) fn prepare_axes(
     data.reserve_source(&mut cols, chart.matrix_variable_names().len())?;
     cols.extend(chart.matrix_variable_names().iter().map(String::as_str));
     let labels = chart.resolve_axis_label_domain("matrix variables", cols.iter().copied(), data)?;
-    let (groups, _) = build_groups(chart, &cols, data)?;
+    let groups = build_groups(chart, &cols, data)?;
     let mut ranges = Vec::new();
     data.reserve_source(&mut ranges, cols.len())?;
     for (index, column) in cols.iter().enumerate() {
@@ -78,7 +204,15 @@ pub(crate) fn prepare_axes(
             chart.hue_name(),
         )?);
     }
-    Ok(PreparedMatrixAxes { ranges, labels })
+    let diagonals = data.collect_source(cols.iter().enumerate().map(|(index, column)| {
+        prepare_density(chart, &groups, index, column, ranges[index], data)
+    }))?;
+    Ok(PreparedMatrixAxes {
+        ranges,
+        labels,
+        groups,
+        diagonals,
+    })
 }
 
 #[cfg(test)]
@@ -105,13 +239,10 @@ fn prefont_variable_domains_and_labels_are_consumed_by_matrix_measurement() {
     let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
     let theme = crate::Theme::Publication.resolve();
     let panel = panel_box(&plot, &theme).unwrap();
-    let baseline = plot
-        .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
-        .unwrap();
     let measured = prepared
         .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
         .unwrap();
-    assert_eq!(inputs.ranges, baseline.matrix_axes.as_ref().unwrap().ranges);
+    assert_eq!(inputs.labels, ["First value", "Second value"]);
     assert_eq!(inputs.ranges, measured.matrix_axes.as_ref().unwrap().ranges);
     assert_eq!(
         crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
@@ -171,6 +302,13 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
         crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
     ])
     .erase();
+    let plot = crate::plots::shared_x::prepare_plot(
+        &plot,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap()
+    .attach(plot)
+    .unwrap();
     let mut theme = crate::Theme::Publication.resolve();
     theme.prepare_font_environment().unwrap();
     theme.typography.tick_label.font_size = 0;
@@ -196,49 +334,39 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
 ///
 /// Returns a dummy `Layout` (the matrix is self-decorated) and
 /// legend entries (empty — legend is drawn internally).
-pub(crate) fn render(
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(Error::Render("matrix requires selected payload capture".into()).into())
+}
+
+pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    SELECTIONS.with(|count| count.set(count.get() + 1));
     let theme = context.theme;
-    let mut text = context.producer_text()?;
-    let df = context.data;
+    let text = context.producer_text()?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let prepared = chart
+        .prepared_matrix_axes
+        .as_ref()
+        .ok_or_else(|| Error::Render("matrix requires root-prepared semantics".into()))?;
+    let n = prepared.labels.len();
+    let display_cols = &prepared.labels;
 
-    let cols = chart
-        .matrix_variable_names()
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let n = cols.len();
-    let display_cols = match &chart.prepared_matrix_axes {
-        Some(axes) => axes.labels.clone(),
-        None => chart.resolve_label_domain("matrix variables", cols.iter().copied())?,
-    };
-
-    // --- Build graphical groups ---
-    let (groups, _hue_levels) = build_groups(chart, &cols, df)?;
-    let legend = match context.self_managed_legend {
-        Some(legend) => legend.clone(),
-        None => matrix_legend(chart, &groups, theme)?
-            .map(|legend| {
-                let environment = theme.prepared_font_environment()?;
-                environment
-                    .claim_text_generation_slots(1)
-                    .map_err(|error| Error::Render(format!("matrix legend slot: {error:?}")))?;
-                environment
-                    .claim_unicode_bytes(
-                        (std::mem::size_of::<Legend>() + 2 * std::mem::size_of::<usize>()) as u64,
-                    )
-                    .map_err(|error| Error::Render(format!("matrix legend bytes: {error}")))?;
-                Ok::<_, Error>(std::sync::Arc::new(legend))
-            })
-            .transpose()?,
-    };
+    let groups = &prepared.groups;
+    let legend = matrix_legend(chart, groups, theme, data)?
+        .map(|legend| data.source_arc(legend))
+        .transpose()?;
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
-    let canvas = matrix_canvas_layout(chart, theme)?;
+    let canvas = chart.base_canvas_layout(theme);
     let outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
         (legend_total_width(legend) + 32.0 - canvas.insets.right).max(0.0)
@@ -256,38 +384,34 @@ pub(crate) fn render(
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::MatrixLayoutPass,
         );
-        let column_blocks = display_cols
-            .iter()
-            .map(|label| {
-                text.plan(label, "matrix column label", || {
-                    Ok(theme.plan_legacy_appearance_text(
-                        label,
-                        &theme.typography.axis_title,
-                        candidate_cell_width.max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "matrix column label",
-                        false,
-                    )?)
-                })
-                .map(TextBlock::from_resolved)
+        let column_blocks = data.collect_source(display_cols.iter().map(|label| {
+            text.plan(label, "matrix column label", || {
+                Ok(theme.plan_legacy_appearance_text(
+                    label,
+                    &theme.typography.axis_title,
+                    candidate_cell_width.max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "matrix column label",
+                    false,
+                )?)
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        let row_blocks = display_cols
-            .iter()
-            .map(|label| {
-                text.plan(label, "matrix row label", || {
-                    Ok(theme.plan_legacy_appearance_text(
-                        label,
-                        &theme.typography.axis_title,
-                        candidate_cell_height.max(1.0),
-                        PhysicalTextAlignment::Center,
-                        "matrix row label",
-                        false,
-                    )?)
-                })
-                .map(TextBlock::from_resolved)
+            .map(TextBlock::from_resolved)
+            .map_err(crate::layout::fit::PlanError::into_error)
+        }))?;
+        let row_blocks = data.collect_source(display_cols.iter().map(|label| {
+            text.plan(label, "matrix row label", || {
+                Ok(theme.plan_legacy_appearance_text(
+                    label,
+                    &theme.typography.axis_title,
+                    candidate_cell_height.max(1.0),
+                    PhysicalTextAlignment::Center,
+                    "matrix row label",
+                    false,
+                )?)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(TextBlock::from_resolved)
+            .map_err(crate::layout::fit::PlanError::into_error)
+        }))?;
         let extra_bottom = column_blocks
             .iter()
             .map(|block| block.lines().len().saturating_sub(1) as f64 * label_line_height)
@@ -341,46 +465,7 @@ pub(crate) fn render(
     // canonical range wherever it appears, not one range as x and another
     // as y. The range includes the diagonal KDE evaluation extent so the
     // diagonal and off-diagonal cells stay visually aligned.
-    let retained_axes = context
-        .matrix_axes
-        .map(|plan| {
-            plan.as_ref()
-                .ok_or_else(|| Error::Render("frozen matrix axis plan is missing".into()))
-        })
-        .transpose()?;
-    let mut prepared_ranges = Vec::new();
-    let variable_ranges = if let Some(axes) = retained_axes {
-        if axes.ranges.len() != n || axes.cell_span != (cell_w, cell_h) {
-            return Err(Error::Render("frozen matrix axis assignment changed".into()).into());
-        }
-        &axes.ranges
-    } else if let Some(axes) = &chart.prepared_matrix_axes {
-        crate::render::backend::reserve_text_records(
-            &mut prepared_ranges,
-            axes.ranges.len(),
-            theme.prepared_font_environment()?,
-        )?;
-        prepared_ranges.extend_from_slice(&axes.ranges);
-        &prepared_ranges
-    } else {
-        crate::render::backend::reserve_text_records(
-            &mut prepared_ranges,
-            n,
-            theme.prepared_font_environment()?,
-        )?;
-        for range in (0..n).map(|column_index| {
-            matrix_support_range(
-                &groups,
-                column_index,
-                cols[column_index],
-                chart.group_name(),
-                chart.hue_name(),
-            )
-        }) {
-            prepared_ranges.push(range?);
-        }
-        &prepared_ranges
-    };
+    let prepared_ranges = data.collect_source(prepared.ranges.iter().copied().map(Ok))?;
 
     // --- Styles ---
     let frame_style = theme
@@ -403,7 +488,7 @@ pub(crate) fn render(
     // selection depends only on a row's range and Y coordinates. Retain the
     // complete sources across capture; outer cells alone paint their labels.
     let environment = theme.prepared_font_environment()?;
-    let cache_count = if retained_axes.is_some() { 0 } else { n };
+    let cache_count = n;
     let cache_records = cache_count
         .checked_mul(2)
         .ok_or_else(|| Error::Render("matrix tick cache count overflow".into()))?;
@@ -429,8 +514,22 @@ pub(crate) fn render(
         .map_err(|_| Error::Render("cannot reserve matrix Y tick cache".into()))?;
     x_ticks.resize_with(cache_count, || None);
     y_ticks.resize_with(cache_count, || None);
+    let mut axes = MatrixAxisPlan {
+        ranges: prepared_ranges,
+        cell_span: (cell_w, cell_h),
+        x_ticks,
+        y_ticks,
+    };
+    let variable_ranges = &axes.ranges;
+    let (cell_w, cell_h) = axes.cell_span;
 
-    // --- Render cells ---
+    let mut cells = Vec::new();
+    data.reserve_source(
+        &mut cells,
+        n.checked_mul(n)
+            .ok_or_else(|| Error::Render("matrix cell count overflow".into()))?,
+    )?;
+    // Preserve the legacy cell order and local packing until T5e.
     for row in 0..n {
         for col in 0..n {
             let x0 = grid_left + col as f64 * (cell_w + gap);
@@ -439,54 +538,44 @@ pub(crate) fn render(
             let y0 = grid_bottom + (n - 1 - row) as f64 * (cell_h + gap);
             let y1 = y0 + cell_h;
             let cell_panel = PanelBox::new(x0, x1, y0, y1);
+            let mut cell = MatrixCellPayload {
+                clip: cell_panel,
+                frame: [
+                    [Point2D::new(x0, y0), Point2D::new(x1, y0)],
+                    [Point2D::new(x0, y0), Point2D::new(x0, y1)],
+                ],
+                marks: Vec::new(),
+                guides: Vec::new(),
+            };
+            data.reserve_source(&mut cell.marks, groups.len())?;
 
             if row == col {
-                // --- Diagonal: KDE density curves + open frame ---
-                if let Some(frame_style) = &frame_style {
-                    draw_frame(backend, x0, x1, y0, y1, frame_style)?;
-                }
-                with_clip(backend, cell_panel, |backend| {
-                    draw_diagonal_kde(
-                        theme,
-                        backend,
-                        &groups,
-                        row,
-                        cols[row],
-                        chart.hue_col(),
-                        chart.group_col(),
-                        x0,
-                        x1,
-                        y0,
-                        cell_h,
-                        &variable_ranges[row],
-                    )
-                })?;
+                select_diagonal_kde(
+                    theme,
+                    &mut cell.marks,
+                    groups,
+                    &prepared.diagonals[row],
+                    x0,
+                    x1,
+                    y0,
+                    cell_h,
+                    data,
+                )?;
             } else {
-                // --- Off-diagonal: scatter + open frame ---
-                if let Some(frame_style) = &frame_style {
-                    draw_frame(backend, x0, x1, y0, y1, frame_style)?;
-                }
                 let (x_lo, x_hi) = variable_ranges[col];
                 let (y_lo, y_hi) = variable_ranges[row];
-                with_clip(backend, cell_panel, |backend| {
-                    for group in &groups {
-                        let xs = &group.columns[col];
-                        let ys = &group.columns[row];
-                        let ps = chart
-                            .point_style(theme.colors[group.color_index % theme.colors.len()], 2);
-                        let pts: Vec<Point2D> = xs
-                            .iter()
-                            .zip(ys.iter())
-                            .map(|(&xi, &yi)| {
-                                let px = x0 + ((xi - x_lo) / (x_hi - x_lo)) * cell_w;
-                                let py = y0 + ((yi - y_lo) / (y_hi - y_lo)) * cell_h;
-                                Point2D::new(px, py)
-                            })
-                            .collect();
-                        backend.draw_scatter(&pts, &ps)?;
-                    }
-                    Ok(())
-                })?;
+                for group in groups {
+                    let xs = &group.columns[col];
+                    let ys = &group.columns[row];
+                    let ps =
+                        chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2);
+                    let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
+                        let px = x0 + ((xi - x_lo) / (x_hi - x_lo)) * cell_w;
+                        let py = y0 + ((yi - y_lo) / (y_hi - y_lo)) * cell_h;
+                        Ok(Point2D::new(px, py))
+                    }))?;
+                    cell.marks.push(MatrixPrimitive::Scatter(pts, ps));
+                }
             }
 
             // --- X-axis ticks ---
@@ -497,30 +586,34 @@ pub(crate) fn render(
                     variable_ranges[row],
                     (x0, x1, y0, y1),
                 );
-                let ticks = if let Some(axes) = retained_axes {
-                    axes.ticks(layout::AxisSide::Bottom, col)?
-                } else {
-                    matrix_ticks(
-                        &mut x_ticks[col],
-                        (x_lo, x_hi),
-                        &projection,
-                        crate::layout::AxisSide::Bottom,
-                        theme,
-                        &context
-                            .fit_scope()
-                            .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
-                    )?
-                };
+                let ticks = matrix_ticks(
+                    &mut axes.x_ticks[col],
+                    (x_lo, x_hi),
+                    &projection,
+                    crate::layout::AxisSide::Bottom,
+                    theme,
+                    &context
+                        .fit_scope()
+                        .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
+                )?;
+                data.reserve_source(
+                    &mut cell.guides,
+                    ticks
+                        .len()
+                        .checked_mul(2)
+                        .and_then(|n| n.checked_add(1))
+                        .ok_or_else(|| Error::Render("matrix guide count overflow".into()))?,
+                )?;
                 for tick in ticks {
                     let tv = tick.position;
                     let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
                     let px = x0 + t * cell_w;
                     // Tick mark on every cell
-                    if let Some(tick_style) = &tick_style {
-                        backend.draw_line(
-                            &[Point2D::new(px, y0), Point2D::new(px, y0 - tick_len)],
-                            tick_style,
-                        )?;
+                    if tick_style.is_some() {
+                        cell.guides.push(MatrixPrimitive::Line([
+                            Point2D::new(px, y0),
+                            Point2D::new(px, y0 - tick_len),
+                        ]));
                     }
                     // Tick label only on bottom row
                     if row == n - 1 {
@@ -536,30 +629,27 @@ pub(crate) fn render(
                         let label_x = px
                             .max(x0 + plan.fit_width() / 2.0)
                             .min(x1 - plan.fit_width() / 2.0);
-                        text.draw(
+                        cell.guides.push(MatrixPrimitive::Text(
                             PlacedText::from_deferred_first_line(
                                 plan,
                                 Point2D::new(label_x.round(), (y0 - tick_len - 8.0).round()),
                                 TextAnchor::Middle,
                                 0.0,
                             ),
-                            backend,
-                        )?;
+                        ));
                     }
                 }
                 // Column label below ticks (bottom row only)
                 if row == n - 1 {
                     let cx = f64::midpoint(x0, x1);
                     let first_y = y0 - tick_len - 28.0;
-                    text.draw(
-                        PlacedText::from_deferred_first_line(
+                    cell.guides
+                        .push(MatrixPrimitive::Text(PlacedText::from_deferred_first_line(
                             column_blocks[col].plan().clone(),
                             Point2D::new(cx.round(), first_y.round()),
                             TextAnchor::Middle,
                             0.0,
-                        ),
-                        backend,
-                    )?;
+                        )));
                 }
             }
             // --- Y-axis ticks ---
@@ -570,30 +660,34 @@ pub(crate) fn render(
                     (y_lo, y_hi),
                     (x0, x1, y0, y1),
                 );
-                let ticks = if let Some(axes) = retained_axes {
-                    axes.ticks(layout::AxisSide::Left, row)?
-                } else {
-                    matrix_ticks(
-                        &mut y_ticks[row],
-                        (y_lo, y_hi),
-                        &projection,
-                        crate::layout::AxisSide::Left,
-                        theme,
-                        &context
-                            .fit_scope()
-                            .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
-                    )?
-                };
+                let ticks = matrix_ticks(
+                    &mut axes.y_ticks[row],
+                    (y_lo, y_hi),
+                    &projection,
+                    crate::layout::AxisSide::Left,
+                    theme,
+                    &context
+                        .fit_scope()
+                        .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
+                )?;
+                data.reserve_source(
+                    &mut cell.guides,
+                    ticks
+                        .len()
+                        .checked_mul(2)
+                        .and_then(|n| n.checked_add(1))
+                        .ok_or_else(|| Error::Render("matrix guide count overflow".into()))?,
+                )?;
                 for tick in ticks {
                     let tv = tick.position;
                     let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
                     let py = y0 + t * cell_h;
                     // Tick mark on every cell
-                    if let Some(tick_style) = &tick_style {
-                        backend.draw_line(
-                            &[Point2D::new(x0, py), Point2D::new(x0 - tick_len, py)],
-                            tick_style,
-                        )?;
+                    if tick_style.is_some() {
+                        cell.guides.push(MatrixPrimitive::Line([
+                            Point2D::new(x0, py),
+                            Point2D::new(x0 - tick_len, py),
+                        ]));
                     }
                     // Tick label only on left column
                     if col == 0 {
@@ -609,7 +703,7 @@ pub(crate) fn render(
                         let label_y = py
                             .max(y0 + plan.height() / 2.0)
                             .min(y1 - plan.height() / 2.0);
-                        text.draw(
+                        cell.guides.push(MatrixPrimitive::Text(
                             PlacedText::from_deferred_first_line(
                                 plan,
                                 Point2D::new(
@@ -619,8 +713,7 @@ pub(crate) fn render(
                                 TextAnchor::End,
                                 0.0,
                             ),
-                            backend,
-                        )?;
+                        ));
                     }
                 }
                 // Row label to the left of ticks (left column only)
@@ -631,7 +724,7 @@ pub(crate) fn render(
                         - row_blocks[row].plan().lines.len().saturating_sub(1) as f64
                             * row_blocks[row].line_height())
                     .max(4.0);
-                    text.draw(
+                    cell.guides.push(MatrixPrimitive::Text(
                         PlacedText::from_deferred_first_line(
                             row_blocks[row].plan().clone(),
                             Point2D::new(first_x.round(), cy.round()),
@@ -639,15 +732,15 @@ pub(crate) fn render(
                             -90.0,
                         )
                         .with_reversed_lines(),
-                        backend,
-                    )?;
+                    ));
                 }
             }
+            cells.push(cell);
         }
     }
 
     // --- Legend (when hue is active) ---
-    if let Some(legend) = &legend {
+    let legend_payload = if let Some(legend) = &legend {
         let right_edge = (w - 16.0).max(legend_total_width(legend));
         let top_edge = grid_top - 4.0;
         let legend_w = legend.compute_box_width();
@@ -660,31 +753,36 @@ pub(crate) fn render(
         }
         .max(0.0);
         let (lx, ly) = legend.box_at(left, bottom).anchor();
-        with_layer(backend, "legend", |backend| legend.draw(backend, lx, ly))?;
-    }
+        Some(legend.select(lx, ly, data)?)
+    } else {
+        None
+    };
 
     // Return a dummy layout — matrix is self-decorated.
     let layout = Layout::self_managed(chart.width(), chart.height());
 
     let mut result = PlotRenderResult::new(layout, Vec::new()).with_self_managed_decorations();
-    result.producer_text = text.finish()?;
+    let payload = MatrixPayload {
+        cells,
+        frame_style,
+        tick_style,
+        legend: legend_payload,
+    };
+    for cell in &payload.cells {
+        for guide in &cell.guides {
+            if let MatrixPrimitive::Text(text) = guide {
+                data.reserve_source(&mut result.producer_text, 1)?;
+                result.producer_text.push(text.clone());
+            }
+        }
+    }
+    let geometry = payload.geometry(theme)?;
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Matrix(payload),
+        geometry,
+    })?);
     result.self_managed_legend = legend;
-    result.matrix_axes = Some(if let Some(axes) = retained_axes {
-        std::sync::Arc::clone(axes)
-    } else {
-        environment
-            .claim_text_generation_slots(1)
-            .map_err(|error| Error::Render(format!("matrix axis plan slot: {error:?}")))?;
-        environment
-            .claim_unicode_bytes((size_of::<MatrixAxisPlan>() + 2 * size_of::<usize>()) as u64)
-            .map_err(|error| Error::Render(format!("matrix axis plan bytes: {error}")))?;
-        std::sync::Arc::new(MatrixAxisPlan {
-            ranges: prepared_ranges,
-            cell_span: (cell_w, cell_h),
-            x_ticks,
-            y_ticks,
-        })
-    });
+    result.matrix_axes = Some(data.source_arc(axes)?);
     Ok(result)
 }
 
@@ -694,20 +792,6 @@ pub(crate) struct MatrixAxisPlan {
     cell_span: (f64, f64),
     x_ticks: Vec<Option<layout::NumericTickPlan>>,
     y_ticks: Vec<Option<layout::NumericTickPlan>>,
-}
-
-impl MatrixAxisPlan {
-    fn ticks(&self, side: layout::AxisSide, index: usize) -> Result<&[layout::AxisTick], Error> {
-        let ticks = match side {
-            layout::AxisSide::Bottom => &self.x_ticks,
-            layout::AxisSide::Left => &self.y_ticks,
-        };
-        ticks
-            .get(index)
-            .and_then(Option::as_ref)
-            .map(|plan| plan.ticks.as_slice())
-            .ok_or_else(|| Error::Render("frozen matrix tick source is missing".into()))
-    }
 }
 
 fn matrix_ticks<'a>(
@@ -816,42 +900,39 @@ fn matrix_tick_source_refusal_leaves_no_retained_cache_entry() {
     assert!(cached.is_none());
 }
 
-pub(crate) fn panel_box(
-    chart: &Plot,
-    theme: &ResolvedTheme,
-) -> Result<crate::layout::PanelBox, Error> {
-    Ok(matrix_canvas_layout(chart, theme)?.panel_box)
+#[cfg(test)]
+fn panel_box(chart: &Plot, theme: &ResolvedTheme) -> Result<crate::layout::PanelBox, Error> {
+    Ok(chart.measured_canvas_layout(theme)?.panel_box)
 }
 
 fn matrix_legend(
     chart: &Plot,
     groups: &[HueGroup],
     theme: &ResolvedTheme,
+    data: crate::data::PlotData<'_>,
 ) -> Result<Option<Legend>, Error> {
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
         return Ok(None);
     }
-    let mut entries = groups
-        .iter()
-        .filter(|group| group.identity.hue.is_some())
-        .map(|group| {
-            Ok(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity, chart.data())?,
-                chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2),
-                FillStyle {
-                    color: theme.colors[group.color_index % theme.colors.len()],
-                    stroke: theme.colors[group.color_index % theme.colors.len()],
-                    stroke_width: 1.0,
-                    opacity: 0.40,
-                },
-            ))
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    crate::decorations::legend::resolve_entries(chart, &mut entries)?;
+    let mut entries = Vec::new();
+    data.reserve_source(&mut entries, groups.len())?;
+    for group in groups.iter().filter(|group| group.identity.hue.is_some()) {
+        entries.push(LegendEntry::point_fill(
+            chart.collective_legend_identity(&group.identity, data)?,
+            chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2),
+            FillStyle {
+                color: theme.colors[group.color_index % theme.colors.len()],
+                stroke: theme.colors[group.color_index % theme.colors.len()],
+                stroke_width: 1.0,
+                opacity: 0.40,
+            },
+        ));
+    }
+    crate::decorations::legend::resolve_entries(chart, &mut entries, theme)?;
     Ok(Some(Legend::new(
-        &crate::decorations::legend::resolved_title(&entries)?,
+        &crate::decorations::legend::resolved_title(&entries, theme)?,
         entries,
         f64::from(chart.width()),
         f64::from(chart.height()),
@@ -863,78 +944,61 @@ fn legend_total_width(legend: &Legend) -> f64 {
     legend.compute_box_width()
 }
 
-fn matrix_canvas_layout(chart: &Plot, theme: &ResolvedTheme) -> Result<CanvasLayout, Error> {
-    CanvasLayout::measured_single_panel(
-        chart.width(),
-        chart.height(),
-        theme,
-        CanvasLayoutSpec {
-            has_title: chart.title_text().is_some_and(|s| !s.is_empty()),
-            has_subtitle: chart.subtitle_text().is_some_and(|s| !s.is_empty()),
-            has_caption: chart.caption_text().is_some_and(|s| !s.is_empty()),
-            has_x_label: true,
-            has_y_label: true,
-        },
-        (
-            chart.title_text(),
-            chart.subtitle_text(),
-            chart.caption_text(),
-        ),
-    )
-}
-
-/// Draw KDE curves on a diagonal cell (one per graphical group).
-#[allow(clippy::too_many_arguments)]
-fn draw_diagonal_kde(
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
+fn prepare_density(
+    chart: &Plot,
     groups: &[HueGroup],
     col_idx: usize,
     column: &str,
-    hue_column: Option<&str>,
-    group_column: Option<&str>,
-    x0: f64,
-    x1: f64,
-    y0: f64,
-    cell_h: f64,
-    range: &(f64, f64),
-) -> Result<(), Error> {
-    let cell_w = x1 - x0;
-    let (d_lo, d_hi) = *range;
-    let n_kde = 60;
-    let grid_pts: Vec<f64> = (0..n_kde)
-        .map(|i| d_lo + (d_hi - d_lo) * (i as f64 / (n_kde - 1) as f64))
-        .collect();
+    range: (f64, f64),
+    data: crate::data::PlotData<'_>,
+) -> Result<MatrixDensity, Error> {
+    #[cfg(test)]
+    SEMANTIC_STAGES.with(|counts| {
+        let [groups, densities] = counts.get();
+        counts.set([groups, densities + 1]);
+    });
+    let (d_lo, d_hi) = range;
+    let grid_pts = data.collect_source(
+        (0..KDE_POINTS).map(|i| Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))),
+    )?;
 
     // Total sample count across all groups for common_norm scaling
     // (matches seaborn pairplot default: area proportional to group size).
-    #[allow(clippy::cast_precision_loss)]
+    data.claim_source_visits(groups.len())?;
     let n_total: f64 = groups.iter().map(|g| g.columns[col_idx].len() as f64).sum();
 
     // Compute KDE for each group, scaled by group proportion (common_norm).
-    let densities_per_group: Vec<Vec<f64>> = groups
-        .iter()
-        .map(|g| {
-            let context = matrix_group_context(column, group_column, hue_column, g);
-            let raw =
-                gaussian_kde_with_bandwidth(&g.columns[col_idx], &grid_pts, g.bandwidths[col_idx])
-                    .map_err(|error| Error::Data(format!("matrix: {context}: {error}")))?;
-            #[allow(clippy::cast_precision_loss)]
-            let weight = g.columns[col_idx].len() as f64 / n_total;
-            let weighted = raw
-                .into_iter()
-                .map(|density| density * weight)
-                .collect::<Vec<_>>();
-            if weighted.iter().any(|density| !density.is_finite()) {
-                return Err(Error::Data(format!(
-                    "matrix: {context} produced non-finite weighted KDE density"
-                )));
-            }
-            Ok(weighted)
-        })
-        .collect::<Result<_, Error>>()?;
+    let densities_per_group = data.collect_source(groups.iter().map(|g| {
+        let mut weighted = gaussian_kde_with_source(
+            &g.columns[col_idx],
+            &grid_pts,
+            g.bandwidths[col_idx],
+            Some(data),
+        )
+        .map_err(|error| {
+            let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
+            Error::Data(format!("matrix: {context}: {error}"))
+        })?;
+        #[allow(clippy::cast_precision_loss)]
+        let weight = g.columns[col_idx].len() as f64 / n_total;
+        data.claim_source_visits(weighted.len())?;
+        for density in &mut weighted {
+            *density *= weight;
+        }
+        data.claim_source_visits(weighted.len())?;
+        if weighted.iter().any(|density| !density.is_finite()) {
+            let context = matrix_group_context(column, chart.group_name(), chart.hue_name(), g);
+            return Err(Error::Data(format!(
+                "matrix: {context} produced non-finite weighted KDE density"
+            )));
+        }
+        Ok(weighted)
+    }))?;
 
     // Shared max across all weighted densities.
+    for densities in &densities_per_group {
+        data.claim_source_visits(densities.len())?;
+    }
     let d_max = densities_per_group
         .iter()
         .flat_map(|d| d.iter())
@@ -945,15 +1009,36 @@ fn draw_diagonal_kde(
         )));
     }
 
+    Ok(MatrixDensity {
+        densities: densities_per_group,
+        maximum: d_max,
+    })
+}
+
+/// Project root-prepared KDE curves into admitted cell operands.
+#[allow(clippy::too_many_arguments)]
+fn select_diagonal_kde(
+    theme: &ResolvedTheme,
+    marks: &mut Vec<MatrixPrimitive>,
+    groups: &[HueGroup],
+    density: &MatrixDensity,
+    x0: f64,
+    x1: f64,
+    y0: f64,
+    cell_h: f64,
+    data: crate::data::PlotData<'_>,
+) -> Result<(), Error> {
+    let cell_w = x1 - x0;
     let usable_h = cell_h * 0.85;
 
-    for (gi, densities) in densities_per_group.iter().enumerate() {
+    for (gi, densities) in density.densities.iter().enumerate() {
         let color = theme.colors[groups[gi].color_index % theme.colors.len()];
-        let mut poly = Vec::with_capacity(n_kde + 2);
+        let mut poly = Vec::new();
+        data.reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
         for (i, &d) in densities.iter().enumerate() {
-            let px = x0 + (i as f64 / (n_kde - 1) as f64) * cell_w;
-            let py = y0 + (d / d_max) * usable_h;
+            let px = x0 + (i as f64 / (KDE_POINTS - 1) as f64) * cell_w;
+            let py = y0 + (d / density.maximum) * usable_h;
             let point = Point2D::new(px, py);
             let closure = if i == 0 {
                 Some(Point2D::new(x0, y0))
@@ -977,7 +1062,7 @@ fn draw_diagonal_kde(
             stroke_width: 1.0,
             opacity: 0.40,
         };
-        backend.draw_polygon(&poly, &fill)?;
+        marks.push(MatrixPrimitive::Polygon(poly, fill));
     }
     Ok(())
 }
@@ -987,7 +1072,12 @@ fn build_groups(
     chart: &Plot,
     cols: &[&str],
     data: crate::data::PlotData<'_>,
-) -> Result<(Vec<HueGroup>, Vec<String>), Error> {
+) -> Result<Vec<HueGroup>, Error> {
+    #[cfg(test)]
+    SEMANTIC_STAGES.with(|counts| {
+        let [groups, densities] = counts.get();
+        counts.set([groups + 1, densities]);
+    });
     let columns = extract_columns_f64(data, cols)?;
     let channels = crate::data::observed_collectives(
         data,
@@ -1053,7 +1143,7 @@ fn build_groups(
         chart.hue_name(),
         data,
     )?;
-    Ok((groups, hue_levels))
+    Ok(groups)
 }
 
 fn validate_group_kdes(
@@ -1140,6 +1230,8 @@ fn matrix_group_context(
     hue_column: Option<&str>,
     group: &HueGroup,
 ) -> String {
+    #[cfg(test)]
+    DIAGNOSTIC_CONTEXTS.with(|calls| calls.set(calls.get() + 1));
     match (
         group_column,
         hue_column,
@@ -1177,17 +1269,429 @@ fn extract_columns_f64(
     Ok(columns)
 }
 
-/// Draw an open frame (despine): only bottom and left spines.
-fn draw_frame(
-    backend: &mut dyn Backend,
-    x0: f64,
-    x1: f64,
-    y0: f64,
-    y1: f64,
-    style: &LineStyle,
-) -> Result<(), Error> {
-    // Bottom spine
-    backend.draw_line(&[Point2D::new(x0, y0), Point2D::new(x1, y0)], style)?;
-    // Left spine
-    backend.draw_line(&[Point2D::new(x0, y0), Point2D::new(x0, y1)], style)
+#[cfg(test)]
+mod semantic_tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn successful_kde_budget_does_not_depend_on_diagnostic_names() {
+        let source = source();
+        DIAGNOSTIC_CONTEXTS.with(|calls| calls.set(0));
+        let mut prepared = prepare_axes(&source, source.data()).unwrap();
+        assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 0);
+        let run = |name: &str, resources: &OperationGenerationResources| {
+            prepare_density(
+                &source,
+                &prepared.groups,
+                0,
+                name,
+                prepared.ranges[0],
+                source.data().with_axis_resources(resources),
+            )
+        };
+        let resources = OperationGenerationResources::new();
+        run("first_value", &resources).unwrap();
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+        run(&"long diagnostic name".repeat(1000), &exact).unwrap();
+        assert_eq!(exact.usage().unwrap().1, visits);
+        assert_eq!(exact.byte_usage().unwrap(), bytes);
+        assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 0);
+        prepared.groups[0].bandwidths[0] = 0.0;
+        let error = prepare_density(
+            &source,
+            &prepared.groups,
+            0,
+            "first_value",
+            prepared.ranges[0],
+            source.data(),
+        )
+        .unwrap_err();
+        assert_eq!(DIAGNOSTIC_CONTEXTS.with(std::cell::Cell::get), 1);
+        assert!(error
+            .to_string()
+            .contains("column \"first_value\" in hue \"hue\"=\"b\""));
+        assert!(error.to_string().contains("positive finite bandwidth"));
+    }
+
+    #[test]
+    fn many_hue_matrix_legend_uses_the_operation_ledger_end_to_end() {
+        let source = Plot::matrix(vec![
+            NumericValues::new("x", (0..24).map(f64::from)),
+            NumericValues::new("y", (0..24).map(|index| f64::from(index * index))),
+        ])
+        .hue(
+            CategoryValues::new(
+                "measurement_condition",
+                (0..24).map(|index| format!("long_named_measurement_condition_{}", index / 2)),
+            )
+            .unwrap(),
+        )
+        .size(1600, 1000)
+        .erase();
+        let prepared = prepare_axes(&source, source.data()).unwrap();
+        let run = |limits: Option<(u128, u64)>| {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let result = matrix_legend(
+                &source,
+                &prepared.groups,
+                &theme,
+                source.data().with_axis_resources(&resources),
+            );
+            (resources, result)
+        };
+        let (resources, legend) = run(None);
+        assert_eq!(legend.unwrap().unwrap().text_plans().count(), 13);
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for limits in [
+            (visits - 1, bytes),
+            (visits, bytes - 1),
+            (0, bytes),
+            (visits, 0),
+        ] {
+            assert!(run(Some(limits)).1.is_err());
+        }
+        run(Some((visits, bytes))).1.unwrap();
+    }
+
+    fn source() -> Plot {
+        Plot::matrix(vec![
+            NumericValues::new("first_value", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
+            NumericValues::new("second_value", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
+        ])
+        .hue(CategoryValues::new("hue", ["b", "b", "b", "a", "a", "a"]).unwrap())
+        .size(800, 600)
+        .erase()
+    }
+
+    #[test]
+    fn root_semantics_and_density_storage_have_exact_pre_font_admission() {
+        let source = source();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        SEMANTIC_STAGES.with(|counts| counts.set([0; 2]));
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), [1, 2]);
+        let prepared = inputs.matrix.as_ref().unwrap();
+        assert_eq!(prepared.groups.len(), 2);
+        assert_eq!(prepared.labels, ["First value", "Second value"]);
+        assert_eq!(prepared.groups[0].identity.hue.as_deref(), Some("b"));
+        assert_eq!(prepared.groups[1].identity.hue.as_deref(), Some("a"));
+        assert_eq!(prepared.groups[0].columns[0], [1.0, 1.2, 1.4]);
+        assert_eq!(prepared.groups[1].columns[1], [4.0, 4.2, 4.3]);
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+            assert!(crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::with_test_limits(visits, bytes),
+            )
+            .is_err());
+        }
+        crate::plots::shared_x::prepare_plot(
+            &source,
+            &OperationGenerationResources::with_test_limits(visits, bytes),
+        )
+        .unwrap();
+        let attached = inputs.attach(source).unwrap();
+        assert!(std::sync::Arc::ptr_eq(
+            attached.prepared_matrix_axes.as_ref().unwrap(),
+            prepared,
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn retained_densities_match_legacy_grid_and_common_normalization() {
+        let source = source();
+        let prepared = prepare_axes(&source, source.data()).unwrap();
+        for (index, &(low, high)) in prepared.ranges.iter().enumerate() {
+            let grid = (0..60)
+                .map(|i| low + (high - low) * (i as f64 / 59.0))
+                .collect::<Vec<_>>();
+            let total = prepared
+                .groups
+                .iter()
+                .map(|group| group.columns[index].len() as f64)
+                .sum::<f64>();
+            let expected = prepared
+                .groups
+                .iter()
+                .map(|group| {
+                    let weight = group.columns[index].len() as f64 / total;
+                    gaussian_kde_with_source(
+                        &group.columns[index],
+                        &grid,
+                        group.bandwidths[index],
+                        None,
+                    )
+                    .unwrap()
+                    .into_iter()
+                    .map(|density| density * weight)
+                    .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(prepared.diagonals[index].densities, expected);
+            assert_eq!(
+                prepared.diagonals[index].maximum.to_bits(),
+                expected
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .fold(0.0_f64, f64::max)
+                    .to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn repeated_matrix_measurements_do_not_rebuild_groups_or_statistics() {
+        let source = source();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let source = inputs.attach(source).unwrap();
+        let stages = SEMANTIC_STAGES.with(std::cell::Cell::get);
+        let theme = crate::Theme::Publication.resolve();
+        for panel in [
+            PanelBox::new(80.0, 700.0, 60.0, 540.0),
+            PanelBox::new(80.25, 700.75, 60.5, 500.25),
+        ] {
+            source
+                .preflight_panel(crate::PlotKind::Matrix, panel, &theme)
+                .unwrap();
+        }
+        assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), stages);
+    }
+
+    #[test]
+    fn selected_matrix_cells_preserve_geometry_and_poisoned_capture_does_no_layout_work() {
+        for preset in [crate::Theme::Publication, crate::Theme::Science] {
+            let source = source();
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                    .unwrap();
+            let source = inputs.attach(source).unwrap();
+            let theme = preset.resolve();
+            let panel = PanelBox::new(80.25, 700.75, 60.5, 500.25);
+            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+            let begins =
+                crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
+            let stages = SEMANTIC_STAGES.with(std::cell::Cell::get);
+            let selected = source
+                .measure_selected_interior(PlotRenderContext::new(source.data(), panel, &theme))
+                .unwrap();
+            assert_eq!(
+                reads,
+                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
+            );
+            assert_eq!(
+                begins,
+                crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get)
+            );
+            assert_eq!(stages, SEMANTIC_STAGES.with(std::cell::Cell::get));
+            let marks = selected.marks.as_ref().unwrap();
+            let crate::layout::interior::MarkPayload::Matrix(payload) = &marks.payload else {
+                panic!("wrong payload")
+            };
+            assert_eq!(payload.cells.len(), 4);
+            assert!(payload.legend.is_some());
+            let axes = selected.matrix_axes.as_ref().unwrap();
+            for (index, cell) in payload.cells.iter().enumerate() {
+                assert_eq!(cell.marks.len(), 2);
+                assert!((cell.clip.width() - axes.cell_span.0).abs() < 1e-10);
+                assert!((cell.clip.height() - axes.cell_span.1).abs() < 1e-10);
+                for mark in &cell.marks {
+                    if index == 0 || index == 3 {
+                        assert!(
+                            matches!(mark, MatrixPrimitive::Polygon(points, _) if points.len() == 62)
+                        );
+                    } else {
+                        assert!(
+                            matches!(mark, MatrixPrimitive::Scatter(points, _) if points.len() == 3)
+                        );
+                    }
+                }
+            }
+            let mut expected = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+            expected.begin(800, 600).unwrap();
+            marks.draw(&mut expected).unwrap();
+            expected.end().unwrap();
+            assert_eq!(marks.geometry.bounds(), expected.bounds());
+            let poison = Plot::matrix(vec![NumericValues::new("poison", [f64::NAN])]).erase();
+            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+            let projections = crate::layout::Projection::test_projection_calls();
+            let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+            let selections = SELECTIONS.with(std::cell::Cell::get);
+            crate::orchestrator::measurements::start();
+            let mut captured = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+            captured.begin(800, 600).unwrap();
+            poison
+                .render_panel(
+                    crate::PlotKind::Matrix,
+                    PlotRenderContext::new(
+                        poison.data(),
+                        PanelBox::new(-10.0, -1.0, -10.0, -1.0),
+                        &theme,
+                    )
+                    .with_retained_body(selected.retained_payload()),
+                    &mut captured,
+                )
+                .unwrap();
+            captured.end().unwrap();
+            let work = crate::orchestrator::measurements::finish();
+            for counter in [
+                crate::orchestrator::measurements::Counter::TickSource,
+                crate::orchestrator::measurements::Counter::TickDistinctList,
+                crate::orchestrator::measurements::Counter::TickMetricLookup,
+                crate::orchestrator::measurements::Counter::MatrixLayoutPass,
+            ] {
+                assert_eq!(work.counters[counter as usize], 0);
+            }
+            assert_eq!(captured.bounds(), expected.bounds());
+            assert_eq!(
+                reads,
+                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
+            );
+            assert_eq!(
+                projections,
+                crate::layout::Projection::test_projection_calls()
+            );
+            assert_eq!(
+                shapes,
+                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
+            );
+            assert_eq!(stages, SEMANTIC_STAGES.with(std::cell::Cell::get));
+            assert_eq!(selections, SELECTIONS.with(std::cell::Cell::get));
+        }
+    }
+
+    #[test]
+    fn selected_matrix_storage_refuses_at_exact_operation_limits() {
+        let source = source();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let source = inputs.attach(source).unwrap();
+        let run = |limits: Option<(u128, u64)>| {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let result = source.measure_selected_interior(PlotRenderContext::new(
+                source.data(),
+                PanelBox::new(80.0, 700.0, 60.0, 500.0),
+                &theme,
+            ));
+            (resources, result)
+        };
+        let (resources, selected) = run(None);
+        selected.unwrap();
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for (visits, bytes) in [
+            (visits - 1, bytes),
+            (visits, bytes - 1),
+            (0, bytes),
+            (visits, 0),
+        ] {
+            assert!(run(Some((visits, bytes))).1.is_err());
+        }
+        run(Some((visits, bytes))).1.unwrap();
+    }
+
+    #[test]
+    fn matrix_output_modes_reuse_one_selected_scene_and_identical_clips() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first.svg");
+        let second = directory.path().join("second.svg");
+        let outline = directory.path().join("outline.svg");
+        let png = directory.path().join("matrix.png");
+        SEMANTIC_STAGES.with(|counts| counts.set([0; 2]));
+        crate::scene::SCENE_CONSTRUCTION_CALLS.with(|calls| calls.set(0));
+        let begins = crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
+        let output = source().svg_preserve_text(&first).unwrap();
+        assert_eq!(
+            begins,
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get)
+        );
+        assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), [1, 2]);
+        let selections = SELECTIONS.with(std::cell::Cell::get);
+        let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+        let projections = crate::layout::Projection::test_projection_calls();
+        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+        output
+            .svg(&outline)
+            .unwrap()
+            .png_preview(&png)
+            .unwrap()
+            .svg_preserve_text(&second)
+            .unwrap();
+        assert_eq!(SEMANTIC_STAGES.with(std::cell::Cell::get), [1, 2]);
+        assert_eq!(SELECTIONS.with(std::cell::Cell::get), selections);
+        assert_eq!(
+            crate::scene::SCENE_CONSTRUCTION_CALLS.with(std::cell::Cell::get),
+            1
+        );
+        assert_eq!(
+            reads,
+            crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
+        );
+        assert_eq!(
+            projections,
+            crate::layout::Projection::test_projection_calls()
+        );
+        assert_eq!(
+            shapes,
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
+        );
+        let first = std::fs::read_to_string(first).unwrap();
+        assert_eq!(first, std::fs::read_to_string(second).unwrap());
+        let outline = std::fs::read_to_string(outline).unwrap();
+        let preserved = roxmltree::Document::parse(&first).unwrap();
+        let outlined = roxmltree::Document::parse(&outline).unwrap();
+        assert_eq!(
+            preserved.root_element().attribute("viewBox"),
+            outlined.root_element().attribute("viewBox")
+        );
+        let clips = |document: &roxmltree::Document<'_>| {
+            document
+                .descendants()
+                .filter(|node| {
+                    node.has_tag_name("rect")
+                        && node
+                            .parent()
+                            .is_some_and(|parent| parent.has_tag_name("clipPath"))
+                })
+                .map(|node| {
+                    ["x", "y", "width", "height"]
+                        .map(|name| node.attribute(name).unwrap().to_owned())
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(clips(&preserved).len(), 4);
+        assert_eq!(clips(&preserved), clips(&outlined));
+        assert!(!outline.contains("<text"));
+        assert!(std::fs::read(png)
+            .unwrap()
+            .starts_with(b"\x89PNG\r\n\x1a\n"));
+    }
 }

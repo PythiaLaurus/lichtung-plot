@@ -769,6 +769,14 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.labels.resolve(raw)
     }
 
+    pub(crate) fn resolve_source_label(
+        &self,
+        raw: &str,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<String, Error> {
+        self.labels.resolve_source(raw, Some(data))
+    }
+
     pub(crate) fn resolve_axis_label_domain<'b>(
         &self,
         domain: &str,

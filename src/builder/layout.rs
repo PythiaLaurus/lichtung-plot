@@ -55,7 +55,7 @@ impl Plot {
     ) -> Result<CanvasLayout, Error> {
         let labels_present = self.axis_label_presence();
         let measure = |spec, text| {
-            if self.kind == PlotKind::Matrix || self.has_facets() {
+            if self.has_facets() {
                 CanvasLayout::measured_single_panel(self.width, self.height, theme, spec, text)
             } else {
                 CanvasLayout::measured_plot_root(
@@ -93,6 +93,9 @@ impl Plot {
     }
 
     fn axis_label_presence(&self) -> (bool, bool) {
+        if self.kind == PlotKind::Matrix {
+            return (true, true);
+        }
         let (x, y) = self.resolved_axis_labels(self.kind);
         (!x.is_empty(), !y.is_empty())
     }

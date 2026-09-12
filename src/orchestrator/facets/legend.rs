@@ -131,6 +131,7 @@ pub(super) fn shared_legend_entries(
     source: &Plot,
     shared_plot: &Plot,
     preflight: &[std::sync::Arc<PlotRenderResult>],
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<Vec<crate::decorations::legend::LegendEntry>, Error> {
     let mut entries = if source.legend_policy_spec() == LegendPolicy::Hidden {
         Vec::new()
@@ -140,6 +141,7 @@ pub(super) fn shared_legend_entries(
                 .iter()
                 .flat_map(|result| result.legend_entries.iter().cloned()),
             "shared facet legend",
+            theme,
         )?
     };
     if !entries.is_empty() {

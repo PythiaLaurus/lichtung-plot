@@ -203,7 +203,8 @@ pub(crate) fn plan_panel_with_context(
             Some((discovered, discovery)),
         );
     }
-    let title = crate::decorations::legend::resolved_title(&discovered.legend_entries)?;
+    let title =
+        crate::decorations::legend::resolved_title(&discovered.legend_entries, context.theme)?;
     let entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
         std::mem::take(&mut discovered.legend_entries).into();
     let automatic_edges = [
@@ -594,7 +595,7 @@ fn plan_panel_attempt(
         Some(guide)
     } else if visible {
         Some(Legend::new(
-            &crate::decorations::legend::resolved_title(&discovered.legend_entries)?,
+            &crate::decorations::legend::resolved_title(&discovered.legend_entries, context.theme)?,
             discovered.legend_entries.clone(),
             f64::from(planning_plot.width()),
             f64::from(planning_plot.height()),
@@ -1230,6 +1231,7 @@ fn measure_geometry(
             | PlotKind::Interaction
             | PlotKind::Heatmap
             | PlotKind::Marginal
+            | PlotKind::Matrix
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

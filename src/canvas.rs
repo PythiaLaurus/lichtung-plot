@@ -3139,14 +3139,17 @@ impl Canvas {
             }
             probes[index] = Some(result);
         }
-        let entries =
-            crate::decorations::legend::merge_exact_entries(entries, "shared canvas legend")?;
+        let entries = crate::decorations::legend::merge_exact_entries(
+            entries,
+            "shared canvas legend",
+            themes.root(),
+        )?;
         if entries.is_empty() {
             Ok((None, probes))
         } else {
             Ok((
                 Some((
-                    crate::decorations::legend::resolved_title(&entries)?,
+                    crate::decorations::legend::resolved_title(&entries, themes.root())?,
                     entries,
                 )),
                 probes,

@@ -212,8 +212,8 @@ impl FacetPlan {
             .with_parent_axis_gutters();
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
         let legend_entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
-            legend::shared_legend_entries(source, &shared_plot, &preflight)?.into();
-        let title = crate::decorations::legend::resolved_title(&legend_entries)?;
+            legend::shared_legend_entries(source, &shared_plot, &preflight, theme)?.into();
+        let title = crate::decorations::legend::resolved_title(&legend_entries, theme)?;
         let position = source.legend_position_spec();
         let automatic = position == LegendPosition::Auto && !legend_entries.is_empty();
         let automatic_edges = [

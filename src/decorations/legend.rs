@@ -25,6 +25,62 @@ use crate::render::backend::{
 };
 use crate::Error;
 
+#[derive(Debug)]
+enum LegendCall {
+    Background([f64; 5], FillStyle),
+    Fill([Point2D; 4], FillStyle),
+    Line([Point2D; 2], LineStyle),
+    Point([Point2D; 1], PointStyle),
+    Text(crate::render::backend::PlacedText),
+}
+
+impl LegendCall {
+    fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        match self {
+            Self::Background([x, y, width, height, radius], style) => {
+                backend.draw_rounded_rect(*x, *y, *width, *height, *radius, style)
+            }
+            Self::Fill(points, style) => backend.draw_polygon(points, style),
+            Self::Line(points, style) => backend.draw_line(points, style),
+            Self::Point(points, style) => backend.draw_scatter(points, style),
+            Self::Text(text) => text.draw(backend),
+        }
+    }
+}
+
+/// Assigned legend operands, including glyph and text placement.
+#[derive(Debug)]
+pub(crate) struct LegendDrawPlan {
+    calls: Vec<LegendCall>,
+}
+
+impl LegendDrawPlan {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        for call in &self.calls {
+            call.draw(backend)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn geometry(
+        &self,
+        geometry: &mut crate::render::geometry::GeometrySnapshot,
+    ) -> Result<(), Error> {
+        for call in &self.calls {
+            match call {
+                LegendCall::Background(rect, style) => geometry.rounded_rect(*rect, style, None)?,
+                LegendCall::Fill(points, style) => geometry.polygon(points, style, None)?,
+                LegendCall::Line(points, style) => geometry.line(points, style, None)?,
+                LegendCall::Point(points, style) => {
+                    geometry.scatter_with_clip(points, style, None)?;
+                }
+                LegendCall::Text(text) => geometry.text(text.placement, &text.plan, None)?,
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) fn address_role(position: crate::LegendPosition) -> crate::layout::AddressRole {
     use crate::layout::AddressRole;
     use crate::LegendPosition::{
@@ -61,13 +117,6 @@ pub(crate) enum LegendIdentity {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum LegendTitleIdentity {
-    Single(String),
-    Pair(String, String),
-    Literal(String),
-}
-
 impl LegendIdentity {
     pub(crate) fn single(field: impl Into<String>, value: impl Into<String>) -> Self {
         Self::Single {
@@ -97,39 +146,100 @@ impl LegendIdentity {
         }
     }
 
-    fn title_identity(&self) -> LegendTitleIdentity {
-        match self {
-            Self::Single { field, .. } => LegendTitleIdentity::Single(field.clone()),
-            Self::Pair {
-                group_field,
-                hue_field,
-                ..
-            } => LegendTitleIdentity::Pair(group_field.clone(), hue_field.clone()),
-            Self::Literal { title, .. } => LegendTitleIdentity::Literal(title.clone()),
+    fn same_title(&self, other: &Self, theme: &crate::theme::ResolvedTheme) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Single { field: left, .. }, Self::Single { field: right, .. })
+            | (Self::Literal { title: left, .. }, Self::Literal { title: right, .. }) => {
+                legend_text_eq(left, right, theme)
+            }
+            (
+                Self::Pair {
+                    group_field: left_group,
+                    hue_field: left_hue,
+                    ..
+                },
+                Self::Pair {
+                    group_field: right_group,
+                    hue_field: right_hue,
+                    ..
+                },
+            ) => Ok(legend_text_eq(left_group, right_group, theme)?
+                && legend_text_eq(left_hue, right_hue, theme)?),
+            _ => Ok(false),
         }
     }
 
-    pub(crate) fn resolved_text(&self, plot: &crate::Plot) -> (String, String) {
+    fn same_identity(
+        &self,
+        other: &Self,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<bool, Error> {
+        if !self.same_title(other, theme)? {
+            return Ok(false);
+        }
+        match (self, other) {
+            (Self::Single { value: left, .. }, Self::Single { value: right, .. })
+            | (Self::Literal { value: left, .. }, Self::Literal { value: right, .. }) => {
+                legend_text_eq(left, right, theme)
+            }
+            (
+                Self::Pair {
+                    group_value: left_group,
+                    hue_value: left_hue,
+                    ..
+                },
+                Self::Pair {
+                    group_value: right_group,
+                    hue_value: right_hue,
+                    ..
+                },
+            ) => Ok(legend_text_eq(left_group, right_group, theme)?
+                && legend_text_eq(left_hue, right_hue, theme)?),
+            _ => Ok(false),
+        }
+    }
+
+    pub(crate) fn resolved_text(
+        &self,
+        plot: &crate::Plot,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(String, String), Error> {
+        let join = |mut first: String, separator: &str, second: String| -> Result<String, Error> {
+            let additional = separator
+                .len()
+                .checked_add(second.len())
+                .ok_or_else(|| Error::Render("legend label length overflow".into()))?;
+            data.reserve_source_string(&mut first, additional)?;
+            first.push_str(separator);
+            first.push_str(&second);
+            Ok(first)
+        };
         match self {
-            Self::Single { field, value } => (plot.resolve_label(field), plot.resolve_label(value)),
+            Self::Single { field, value } => Ok((
+                plot.resolve_source_label(field, data)?,
+                plot.resolve_source_label(value, data)?,
+            )),
             Self::Pair {
                 group_field,
                 group_value,
                 hue_field,
                 hue_value,
-            } => (
-                format!(
-                    "{} × {}",
-                    plot.resolve_label(group_field),
-                    plot.resolve_label(hue_field)
-                ),
-                format!(
-                    "{}, {}",
-                    plot.resolve_label(group_value),
-                    plot.resolve_label(hue_value)
-                ),
-            ),
-            Self::Literal { title, value } => (title.clone(), value.clone()),
+            } => Ok((
+                join(
+                    plot.resolve_source_label(group_field, data)?,
+                    " × ",
+                    plot.resolve_source_label(hue_field, data)?,
+                )?,
+                join(
+                    plot.resolve_source_label(group_value, data)?,
+                    ", ",
+                    plot.resolve_source_label(hue_value, data)?,
+                )?,
+            )),
+            Self::Literal { title, value } => Ok((
+                data.copy_source_string(title)?,
+                data.copy_source_string(value)?,
+            )),
         }
     }
 
@@ -269,10 +379,6 @@ impl LegendEntry {
         )
     }
 
-    pub(crate) fn resolve(&mut self, plot: &crate::Plot) {
-        (self.title, self.label) = self.identity.resolved_text(plot);
-    }
-
     pub(crate) fn identity(&self) -> &LegendIdentity {
         &self.identity
     }
@@ -306,67 +412,129 @@ impl LegendEntry {
 pub(crate) fn resolve_entries(
     plot: &crate::Plot,
     entries: &mut Vec<LegendEntry>,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<(), Error> {
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = plot.data().with_axis_resources(&resources);
+    data.claim_source_visits(entries.len())?;
     for entry in entries.iter_mut() {
-        entry.resolve(plot);
+        (entry.title, entry.label) = entry.identity.resolved_text(plot, data)?;
     }
-    *entries = merge_exact_entries(std::mem::take(entries), "plot legend")?;
+    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", theme)?;
     Ok(())
 }
 
 pub(crate) fn merge_exact_entries(
     entries: impl IntoIterator<Item = LegendEntry>,
     context: &str,
+    theme: &crate::theme::ResolvedTheme,
 ) -> Result<Vec<LegendEntry>, Error> {
     let mut merged: Vec<LegendEntry> = Vec::new();
     for entry in entries {
+        legend_visits(theme, 1)?;
         if let Some(first) = merged.first() {
-            if first.identity.title_identity() != entry.identity.title_identity()
-                || first.title != entry.title
+            if !first.identity.same_title(&entry.identity, theme)?
+                || !legend_text_eq(&first.title, &entry.title, theme)?
             {
                 return Err(Error::Render(format!(
                     "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
                 )));
             }
         }
-        if merged
-            .iter()
-            .any(|existing| existing.identity != entry.identity && existing.label == entry.label)
-        {
-            return Err(Error::Render(format!(
-                "{context} has distinct raw identities resolving to display label {:?}",
-                entry.label
-            )));
+        let mut duplicate = None;
+        for existing in &merged {
+            legend_visits(theme, 1)?;
+            if !existing.identity.same_identity(&entry.identity, theme)? {
+                if legend_text_eq(&existing.label, &entry.label, theme)? {
+                    return Err(Error::Render(format!(
+                        "{context} has distinct raw identities resolving to display label {:?}",
+                        entry.label
+                    )));
+                }
+            } else if duplicate.is_none() {
+                duplicate = Some(existing);
+            }
         }
-        if let Some(existing) = merged
-            .iter()
-            .find(|existing| existing.identity == entry.identity)
-        {
-            if !existing.exact_eq(&entry) {
+        if let Some(existing) = duplicate {
+            if !legend_text_eq(&existing.title, &entry.title, theme)?
+                || !legend_text_eq(&existing.label, &entry.label, theme)?
+                || !existing.glyph.exact_eq(&entry.glyph)
+            {
                 return Err(Error::Render(format!(
                     "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
                 )));
             }
         } else {
+            crate::layout::fit::reserve(theme, &mut merged, 1, "merged legend entries")?;
             merged.push(entry);
         }
     }
     Ok(merged)
 }
 
-pub(crate) fn resolved_title(entries: &[LegendEntry]) -> Result<String, Error> {
+pub(crate) fn resolved_title(
+    entries: &[LegendEntry],
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<String, Error> {
     let Some(first) = entries.first() else {
         return Ok(String::new());
     };
-    if entries.iter().any(|entry| {
-        entry.identity.title_identity() != first.identity.title_identity()
-            || entry.title != first.title
-    }) {
-        return Err(Error::Render(
-            "legend entries require one compatible semantic title".into(),
-        ));
+    legend_visits(theme, entries.len())?;
+    for entry in entries {
+        if !entry.identity.same_title(&first.identity, theme)?
+            || !legend_text_eq(&entry.title, &first.title, theme)?
+        {
+            return Err(Error::Render(
+                "legend entries require one compatible semantic title".into(),
+            ));
+        }
     }
-    Ok(first.title.clone())
+    copy_legend_string(&first.title, theme)
+}
+
+fn legend_visits(theme: &crate::theme::ResolvedTheme, count: usize) -> Result<(), Error> {
+    theme
+        .prepared_font_environment()?
+        .claim_processing_visits(count as u128)
+        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))
+}
+
+fn legend_text_eq(
+    left: &str,
+    right: &str,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<bool, Error> {
+    legend_visits(theme, 1)?;
+    if left.len() != right.len() {
+        return Ok(false);
+    }
+    if std::ptr::eq(left, right) {
+        return Ok(true);
+    }
+    for index in 0..left.len() {
+        legend_visits(theme, 1)?;
+        if left.as_bytes()[index] != right.as_bytes()[index] {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn copy_legend_string(source: &str, theme: &crate::theme::ResolvedTheme) -> Result<String, Error> {
+    legend_visits(theme, source.len())?;
+    theme
+        .prepared_font_environment()?
+        .claim_unicode_bytes(
+            u64::try_from(source.len())
+                .map_err(|_| Error::Render("legend string length overflow".into()))?,
+        )
+        .map_err(|error| Error::Render(format!("legend string admission: {error}")))?;
+    let mut value = String::new();
+    value
+        .try_reserve_exact(source.len())
+        .map_err(|error| Error::Render(format!("legend string reservation: {error}")))?;
+    value.push_str(source);
+    Ok(value)
 }
 
 fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>) -> bool {
@@ -857,6 +1025,10 @@ impl Legend {
         Ok(())
     }
     /// Create a new legend with metrics derived from canvas size.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "admission and unchanged legacy packing share one constructor"
+    )]
     pub fn new(
         title: &str,
         entries: Vec<LegendEntry>,
@@ -864,17 +1036,50 @@ impl Legend {
         canvas_h: f64,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<Self, Error> {
+        let mut entry_blocks = Vec::new();
+        crate::layout::fit::reserve(
+            theme,
+            &mut entry_blocks,
+            entries.len(),
+            "legend text blocks",
+        )?;
+        let allocation = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
+            .extend(
+                std::alloc::Layout::array::<LegendEntry>(entries.len())
+                    .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
+            )
+            .map_err(|_| Error::Render("legend entry Arc layout overflow".into()))?
+            .0
+            .pad_to_align();
+        legend_visits(theme, entries.len())?;
+        theme
+            .prepared_font_environment()?
+            .claim_unicode_bytes(
+                u64::try_from(allocation.size())
+                    .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
+            )
+            .map_err(|error| Error::Render(format!("legend entry Arc admission: {error}")))?;
+        // Stable Arc has no fallible slice constructor; admit its exact layout first.
+        let entries: std::sync::Arc<[LegendEntry]> = entries.into();
         let metrics = LegendMetrics::from_canvas(canvas_w, canvas_h);
         let title_maximum_width = (canvas_w * 0.5).max(metrics.font_size);
         let entry_maximum_width = (canvas_w * 0.35).max(metrics.font_size);
         let title_font_size = (metrics.font_size * 1.1).round() as u32;
         let entry_font_size = metrics.font_size.round() as u32;
-        let mut title_appearance =
-            theme.legacy_text_appearance(title_font_size, crate::TextWeight::Normal);
-        title_appearance.paint = (60, 60, 60).into();
-        let mut entry_appearance =
-            theme.legacy_text_appearance(entry_font_size, crate::TextWeight::Normal);
-        entry_appearance.paint = (40, 40, 40).into();
+        let title_appearance = crate::theme::TextAppearance {
+            stack: copy_legend_string(&theme.font_family, theme)?,
+            paint: (60, 60, 60).into(),
+            font_size: title_font_size,
+            weight: crate::TextWeight::Normal,
+            line_height_multiplier: 1.2,
+        };
+        let entry_appearance = crate::theme::TextAppearance {
+            stack: copy_legend_string(&theme.font_family, theme)?,
+            paint: (40, 40, 40).into(),
+            font_size: entry_font_size,
+            weight: crate::TextWeight::Normal,
+            line_height_multiplier: 1.2,
+        };
         let title_block = TextBlock::from_resolved(theme.plan_legacy_appearance_text(
             title,
             &title_appearance,
@@ -883,9 +1088,9 @@ impl Legend {
             "legend title",
             false,
         )?);
-        let entry_blocks = entries
-            .iter()
-            .map(|entry| {
+        legend_visits(theme, entries.len())?;
+        for entry in entries.iter() {
+            entry_blocks.push(
                 theme
                     .plan_legacy_appearance_text(
                         &entry.label,
@@ -895,17 +1100,17 @@ impl Legend {
                         "legend entry",
                         false,
                     )
-                    .map(TextBlock::from_resolved)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    .map(TextBlock::from_resolved)?,
+            );
+        }
         let mut legend = Self {
-            entries: entries.into(),
+            entries,
             metrics,
             available_width: canvas_w * 0.8,
             available_height: canvas_h * 0.8,
             title_block,
             entry_blocks,
-            font_family: theme.font_family.clone(),
+            font_family: copy_legend_string(&theme.font_family, theme)?,
             layout: LegendLayout {
                 width: 0.0,
                 height: 0.0,
@@ -914,15 +1119,18 @@ impl Legend {
                 entries: Vec::new(),
             },
         };
-        let columns = legend.balanced_column_count(legend.available_width, legend.available_height);
-        let (width, height) = legend.box_size_for_columns(columns);
-        let widths = legend.column_widths(columns, &legend.entry_blocks);
-        let centers = legend.row_centers(columns, &legend.title_block, &legend.entry_blocks);
+        let columns =
+            legend.balanced_column_count(legend.available_width, legend.available_height, theme)?;
+        let (width, height) = legend.box_size_for_columns(columns, theme)?;
+        let widths = legend.column_widths(columns, &legend.entry_blocks, theme)?;
+        let centers =
+            legend.row_centers(columns, &legend.title_block, &legend.entry_blocks, theme)?;
         let mut slots = Vec::new();
         crate::layout::fit::reserve(theme, &mut slots, legend.entries.len(), "legend slots")?;
         for (index, block) in legend.entry_blocks.iter().enumerate() {
             let column = index % columns;
             let row = index / columns;
+            legend_visits(theme, column + 1)?;
             let x = widths[..column].iter().sum::<f64>() + column as f64 * legend.column_spacing();
             slots.push(LegendSlot {
                 key: Point2D::new(x, centers[row]),
@@ -961,16 +1169,17 @@ impl Legend {
         self.layout.width
     }
 
-    fn box_size_for_columns(&self, columns: usize) -> (f64, f64) {
+    fn box_size_for_columns(
+        &self,
+        columns: usize,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<(f64, f64), Error> {
         let m = &self.metrics;
         let columns = columns.clamp(1, self.entries.len().max(1));
         let title_block = &self.title_block;
         let entry_blocks = &self.entry_blocks;
-        let mut column_widths = vec![m.handle_w + m.handle_text; columns];
-        for (index, block) in entry_blocks.iter().enumerate() {
-            column_widths[index % columns] =
-                column_widths[index % columns].max(m.handle_w + m.handle_text + block.width());
-        }
+        let column_widths = self.column_widths(columns, entry_blocks, theme)?;
+        legend_visits(theme, column_widths.len())?;
         let entries_width = column_widths.iter().sum::<f64>()
             + (columns.saturating_sub(1) as f64) * self.column_spacing();
         let title_width = title_block.width();
@@ -978,12 +1187,14 @@ impl Legend {
         let content_height = if self.entries.is_empty() {
             title_block.height()
         } else {
-            let centers = self.row_centers(columns, title_block, entry_blocks);
+            let centers = self.row_centers(columns, title_block, entry_blocks, theme)?;
+            legend_visits(theme, self.entries.len())?;
+            legend_visits(theme, entry_blocks.len())?;
             self.title_half_height()
                 + -centers.last().copied().unwrap_or(0.0)
                 + self.last_row_half_height(columns, entry_blocks)
         };
-        (width, content_height + self.glyph_edge_pad() * 2.0)
+        Ok((width, content_height + self.glyph_edge_pad() * 2.0))
     }
 
     /// Compute the total bounding box height.
@@ -1071,6 +1282,40 @@ impl Legend {
     /// The legend extends *downward* (decreasing y in math coords) from this
     /// anchor point. The SVG backend's y-flip ensures correct visual output.
     pub fn draw(&self, backend: &mut dyn Backend, x: f64, y: f64) -> Result<(), Error> {
+        self.visit_calls(x, y, |call| call.draw(backend))
+    }
+
+    pub(crate) fn select(
+        &self,
+        x: f64,
+        y: f64,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<LegendDrawPlan, Error> {
+        data.claim_source_visits(self.entries.len())?;
+        let count = self.entries.iter().try_fold(2_usize, |count, entry| {
+            count
+                .checked_add(
+                    1 + usize::from(entry.glyph.fill.is_some())
+                        + usize::from(entry.glyph.line.is_some())
+                        + usize::from(entry.glyph.point.is_some()),
+                )
+                .ok_or_else(|| Error::Render("legend call count overflow".into()))
+        })?;
+        let mut calls = Vec::new();
+        data.reserve_source(&mut calls, count)?;
+        self.visit_calls(x, y, |call| {
+            calls.push(call);
+            Ok(())
+        })?;
+        Ok(LegendDrawPlan { calls })
+    }
+
+    fn visit_calls(
+        &self,
+        x: f64,
+        y: f64,
+        mut emit: impl FnMut(LegendCall) -> Result<(), Error>,
+    ) -> Result<(), Error> {
         let m = &self.metrics;
         let title_block = &self.title_block;
         let entry_blocks = &self.entry_blocks;
@@ -1089,14 +1334,16 @@ impl Legend {
             stroke_width: 1.0,
             opacity: FRAME_ALPHA,
         };
-        backend.draw_rounded_rect(
-            rx + 0.5,
-            ry_bot + 0.5,
-            box_w - 1.0,
-            box_h - 1.0,
-            CORNER_RADIUS,
-            &bg_fill,
-        )?;
+        emit(LegendCall::Background(
+            [
+                rx + 0.5,
+                ry_bot + 0.5,
+                box_w - 1.0,
+                box_h - 1.0,
+                CORNER_RADIUS,
+            ],
+            bg_fill,
+        ))?;
 
         // ─── Title ───
         let translate = |placement: PlannedTextPlacement| PlannedTextPlacement {
@@ -1106,7 +1353,10 @@ impl Legend {
             ),
             ..placement
         };
-        backend.draw_planned_text(translate(self.layout.title), title_block.plan())?;
+        emit(LegendCall::Text(crate::render::backend::PlacedText {
+            placement: translate(self.layout.title),
+            plan: title_block.plan().clone(),
+        }))?;
         // ─── Entries (top to bottom = decreasing y) ───
         for (index, entry) in self.entries.iter().enumerate() {
             let slot = &self.layout.entries[index];
@@ -1116,31 +1366,37 @@ impl Legend {
             let marker_x = column_x + m.handle_w * 0.5;
             if let Some(fill_style) = &entry.glyph.fill {
                 let half_height = self.entry_font_size() * 0.32;
-                backend.draw_polygon(
-                    &[
+                emit(LegendCall::Fill(
+                    [
                         Point2D::new(column_x, row_y - half_height),
                         Point2D::new(column_x + m.handle_w, row_y - half_height),
                         Point2D::new(column_x + m.handle_w, row_y + half_height),
                         Point2D::new(column_x, row_y + half_height),
                     ],
-                    fill_style,
-                )?;
+                    fill_style.clone(),
+                ))?;
             }
             if let Some(line_style) = &entry.glyph.line {
-                backend.draw_line(
-                    &[
+                emit(LegendCall::Line(
+                    [
                         Point2D::new(column_x, row_y),
                         Point2D::new(column_x + m.handle_w, row_y),
                     ],
-                    line_style,
-                )?;
+                    line_style.clone(),
+                ))?;
             }
             if let Some(point_style) = &entry.glyph.point {
-                backend.draw_scatter(&[Point2D::new(marker_x, row_y)], point_style)?;
+                emit(LegendCall::Point(
+                    [Point2D::new(marker_x, row_y)],
+                    point_style.clone(),
+                ))?;
             }
             // Label text
             let block = &entry_blocks[index];
-            backend.draw_planned_text(translate(slot.label), block.plan())?;
+            emit(LegendCall::Text(crate::render::backend::PlacedText {
+                placement: translate(slot.label),
+                plan: block.plan().clone(),
+            }))?;
         }
 
         Ok(())
@@ -1188,13 +1444,22 @@ impl Legend {
         COLUMN_SPACING_FACTOR * self.metrics.font_size
     }
 
-    fn column_widths(&self, columns: usize, entry_blocks: &[TextBlock]) -> Vec<f64> {
-        let mut widths = vec![self.metrics.handle_w + self.metrics.handle_text; columns];
+    fn column_widths(
+        &self,
+        columns: usize,
+        entry_blocks: &[TextBlock],
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Vec<f64>, Error> {
+        let mut widths = Vec::new();
+        crate::layout::fit::reserve(theme, &mut widths, columns, "legend column widths")?;
+        legend_visits(theme, columns)?;
+        widths.resize(columns, self.metrics.handle_w + self.metrics.handle_text);
+        legend_visits(theme, entry_blocks.len())?;
         for (index, block) in entry_blocks.iter().enumerate() {
             widths[index % columns] = widths[index % columns]
                 .max(self.metrics.handle_w + self.metrics.handle_text + block.width());
         }
-        widths
+        Ok(widths)
     }
 
     fn row_centers(
@@ -1202,21 +1467,27 @@ impl Legend {
         columns: usize,
         title_block: &TextBlock,
         entry_blocks: &[TextBlock],
-    ) -> Vec<f64> {
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<Vec<f64>, Error> {
         let rows = self.entries.len().div_ceil(columns);
         if rows == 0 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let title_extra =
             title_block.lines().len().saturating_sub(1) as f64 * title_block.line_height();
-        let mut centers = vec![-self.metrics.title_h - title_extra];
+        let mut centers = Vec::new();
+        crate::layout::fit::reserve(theme, &mut centers, rows, "legend row centers")?;
+        legend_visits(theme, rows)?;
+        centers.push(-self.metrics.title_h - title_extra);
         let row_gap = self.metrics.entry_h - self.entry_font_size() * 1.2;
         for row in 1..rows {
+            legend_visits(theme, entry_blocks.len())?;
+            legend_visits(theme, entry_blocks.len())?;
             let previous_half = self.row_half_height(row - 1, columns, entry_blocks);
             let current_half = self.row_half_height(row, columns, entry_blocks);
             centers.push(centers[row - 1] - previous_half - row_gap - current_half);
         }
-        centers
+        Ok(centers)
     }
 
     fn row_half_height(&self, row: usize, columns: usize, entry_blocks: &[TextBlock]) -> f64 {
@@ -1232,31 +1503,137 @@ impl Legend {
         self.layout.columns
     }
 
-    fn balanced_column_count(&self, available_width: f64, available_height: f64) -> usize {
+    fn balanced_column_count(
+        &self,
+        available_width: f64,
+        available_height: f64,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<usize, Error> {
         if self.entries.len() <= MAX_SINGLE_COLUMN_ENTRIES {
-            return 1;
+            return Ok(1);
         }
         let minimum_columns = self.entries.len().div_ceil(MAX_SINGLE_COLUMN_ENTRIES);
-        (minimum_columns..=self.entries.len())
-            .filter_map(|columns| {
-                let (width, height) = self.box_size_for_columns(columns);
-                (width <= available_width && height <= available_height).then_some((
-                    (width / available_width).max(height / available_height),
-                    columns,
-                ))
-            })
-            .min_by(|left, right| {
-                left.0
-                    .total_cmp(&right.0)
-                    .then_with(|| left.1.cmp(&right.1))
-            })
-            .map_or(1, |(_, columns)| columns)
+        let mut best: Option<(f64, usize)> = None;
+        for columns in minimum_columns..=self.entries.len() {
+            legend_visits(theme, 1)?;
+            let (width, height) = self.box_size_for_columns(columns, theme)?;
+            if width <= available_width && height <= available_height {
+                let score = (width / available_width).max(height / available_height);
+                if best.is_none_or(|(previous, _)| score.total_cmp(&previous).is_lt()) {
+                    best = Some((score, columns));
+                }
+            }
+        }
+        Ok(best.map_or(1, |(_, columns)| columns))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn constructor_admits_long_labels_arc_and_packing_before_work() {
+        let run = |limits: Option<(u128, u64)>| {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            let entries = (0..16)
+                .map(|index| {
+                    entry(format!(
+                        "Long measurement condition number {index} with repeated observations"
+                    ))
+                })
+                .collect();
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+            let legend = Legend::new(
+                "Long measurement conditions",
+                entries,
+                1600.0,
+                1000.0,
+                &theme,
+            );
+            (
+                resources,
+                legend,
+                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get) - shapes,
+            )
+        };
+        let (resources, legend, _) = run(None);
+        let legend = legend.unwrap();
+        assert_eq!(legend.entry_blocks.len(), 16);
+        assert_eq!(legend.layout.columns, 1);
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for limits in [(visits - 1, bytes), (visits, bytes - 1)] {
+            assert!(run(Some(limits)).1.is_err());
+        }
+        for limits in [(0, bytes), (visits, 0)] {
+            let (_, result, shapes) = run(Some(limits));
+            assert!(result.is_err());
+            assert_eq!(shapes, 0, "constructor refusal must precede text planning");
+        }
+        let (_, exact, _) = run(Some((visits, bytes)));
+        let exact = exact.unwrap();
+        assert_eq!(exact.layout.columns, legend.layout.columns);
+        assert_eq!(exact.layout.width.to_bits(), legend.layout.width.to_bits());
+        assert_eq!(
+            exact.layout.height.to_bits(),
+            legend.layout.height.to_bits()
+        );
+    }
+
+    #[test]
+    fn resolved_pair_strings_merge_and_title_obey_exact_limits() {
+        let plot = crate::Plot::matrix(vec![crate::NumericValues::new("x", [1.0, 2.0])]).erase();
+        let run = |limits: Option<(u128, u64)>| {
+            let theme = crate::Theme::Publication.resolve();
+            let resources = theme
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            let mut entries = (0..12)
+                .map(|index| {
+                    LegendEntry::point(
+                        LegendIdentity::pair(
+                            "long_group_field",
+                            format!("measured_group_{index}"),
+                            "long_hue_field",
+                            "first_condition",
+                        ),
+                        PointStyle::new((0, 0, 0), 3),
+                    )
+                })
+                .collect::<Vec<_>>();
+            entries.push(entries[0].clone());
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let result = resolve_entries(&plot, &mut entries, &theme)
+                .and_then(|()| resolved_title(&entries, &theme));
+            (resources, entries, result)
+        };
+        let (resources, entries, title) = run(None);
+        assert_eq!(entries.len(), 12);
+        assert_eq!(title.unwrap(), "Long group field × Long hue field");
+        assert_eq!(entries[0].label, "Measured group 0, First condition");
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for limits in [
+            (visits - 1, bytes),
+            (visits, bytes - 1),
+            (0, bytes),
+            (visits, 0),
+        ] {
+            assert!(run(Some(limits)).2.is_err());
+        }
+        run(Some((visits, bytes))).2.unwrap();
+    }
 
     fn entry(label: impl Into<String>) -> LegendEntry {
         let mut entry = LegendEntry::point(
@@ -1411,7 +1788,13 @@ mod tests {
         let entry_blocks = &legend.entry_blocks;
         let last_center = title_center
             + legend
-                .row_centers(columns, title_block, entry_blocks)
+                .row_centers(
+                    columns,
+                    title_block,
+                    entry_blocks,
+                    &crate::Theme::Publication.resolve(),
+                )
+                .unwrap()
                 .last()
                 .copied()
                 .unwrap();

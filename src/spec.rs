@@ -723,8 +723,6 @@ pub(crate) struct PlotRenderContext<'a> {
     pub(crate) panel_text: Option<&'a [crate::decorations::panel_text::PanelTextPlan]>,
     pub(crate) self_managed_legend:
         Option<&'a Option<std::sync::Arc<crate::decorations::legend::Legend>>>,
-    pub(crate) matrix_axes:
-        Option<&'a Option<std::sync::Arc<crate::plots::matrix::MatrixAxisPlan>>>,
     fit_scope: &'a crate::layout::fit::FitScope,
 }
 
@@ -749,7 +747,6 @@ impl<'a> PlotRenderContext<'a> {
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
-            matrix_axes: None,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -775,7 +772,6 @@ impl<'a> PlotRenderContext<'a> {
             producer_text: None,
             panel_text: None,
             self_managed_legend: None,
-            matrix_axes: None,
             fit_scope: &crate::layout::fit::ROOT_SCOPE,
         }
     }
@@ -855,7 +851,6 @@ impl<'a> PlotRenderContext<'a> {
         self.producer_text = Some(&result.producer_text);
         self.panel_text = Some(&result.panel_text);
         self.self_managed_legend = Some(&result.self_managed_legend);
-        self.matrix_axes = Some(&result.matrix_axes);
         self
     }
 

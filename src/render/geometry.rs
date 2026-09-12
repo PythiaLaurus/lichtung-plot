@@ -285,12 +285,58 @@ impl GeometrySnapshot {
         style: &PointStyle,
         clip: PanelBox,
     ) -> Result<(), Error> {
+        self.scatter_with_clip(points, style, Some(clip))
+    }
+
+    pub(crate) fn scatter_with_clip(
+        &mut self,
+        points: &[Point2D],
+        style: &PointStyle,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
         self.admit_scratch::<CanonicalPoint>(points.len())?;
         if style.shape == PointShape::TriangleUp {
             self.admit_scratch::<[CanonicalPoint; 3]>(points.len())?;
             self.admit_scratch::<[Option<[StrokeInterval; 2]>; 3]>(points.len())?;
         }
-        scatter_bounds(points, style, |bounds| self.record(bounds, Some(clip)))
+        scatter_bounds(points, style, |bounds| self.record(bounds, clip))
+    }
+
+    pub(crate) fn rounded_rect(
+        &mut self,
+        [x, y, width, height, radius]: [f64; 5],
+        style: &FillStyle,
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        let rounded = backend::validate_rounded_rect(x, y, width, height, radius)?;
+        backend::validate_fill_style(style)?;
+        if rounded.rect.width.value() == 0.0
+            || rounded.rect.height.value() == 0.0
+            || (style.opacity == 0.0 && style.stroke_width == 0.0)
+        {
+            return Ok(());
+        }
+        let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
+            f64::from(style.stroke_width),
+            "rectangle stroke width",
+        )?
+        .units();
+        self.record(
+            GeometryBox::from_canonical_points(
+                &[
+                    CanonicalPoint {
+                        x: rounded.rect.left,
+                        y: rounded.rect.bottom,
+                    },
+                    CanonicalPoint {
+                        x: rounded.rect.right,
+                        y: rounded.rect.top,
+                    },
+                ],
+                i128::from(padding),
+            )?,
+            clip,
+        )
     }
 
     pub(crate) fn line(

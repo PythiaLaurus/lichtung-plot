@@ -57,7 +57,7 @@ interior_routes! {
     SpecializedLegacy {
         Heatmap => crate::plots::heatmap::reject_combined,
         Marginal => crate::plots::marginal::reject_combined,
-        Matrix => crate::plots::matrix::render,
+        Matrix => crate::plots::matrix::reject_combined,
         Beeswarm => crate::plots::beeswarm::render,
         Waterfall => crate::plots::waterfall::render,
     },
@@ -223,6 +223,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Matrix(crate::plots::matrix::MatrixPayload),
     Marginal(crate::plots::marginal::MarginalPayload),
     Heatmap(crate::plots::heatmap::HeatmapPayload),
     Interaction(crate::plots::interaction::InteractionPayload),
@@ -244,6 +245,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Matrix(payload) => payload.draw(backend),
             MarkPayload::Marginal(payload) => payload.draw(backend),
             MarkPayload::Heatmap(payload) => payload.draw(backend),
             MarkPayload::Interaction(payload) => payload.draw(backend),

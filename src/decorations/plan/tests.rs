@@ -289,14 +289,15 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
             plot.width(),
             plot.height(),
             |stage| {
-                let inputs = if matches!(kind, PlotKind::Line | PlotKind::Heatmap) {
-                    Some(crate::plots::shared_x::prepare_plot(
-                        &plot,
-                        &stage.generation_resources(),
-                    )?)
-                } else {
-                    None
-                };
+                let inputs =
+                    if matches!(kind, PlotKind::Line | PlotKind::Heatmap | PlotKind::Matrix) {
+                        Some(crate::plots::shared_x::prepare_plot(
+                            &plot,
+                            &stage.generation_resources(),
+                        )?)
+                    } else {
+                        None
+                    };
                 let requirements = crate::layout::foundational_plot_requirements(
                     inputs.as_ref().and_then(|inputs| inputs.heatmap.as_deref()),
                     &plot,
@@ -338,7 +339,10 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     (panel, result),
                 ))
             },
-            |_, assigned, (panel, result), stage| {
+            |inputs, assigned, (panel, result), stage| {
+                let plot = inputs
+                    .as_ref()
+                    .map_or_else(|| Ok(plot.clone()), |inputs| inputs.attach(plot.clone()))?;
                 assert!(
                     result.marks.is_some() || !result.producer_text.is_empty(),
                     "{kind:?}"
@@ -878,7 +882,8 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     PanelBox::new(100.0, 500.0, 80.0, 400.0),
                     &theme,
                 )?;
-                let title = crate::decorations::legend::resolved_title(&initial.legend_entries)?;
+                let title =
+                    crate::decorations::legend::resolved_title(&initial.legend_entries, &theme)?;
                 let legend = Legend::new(
                     &title,
                     initial.legend_entries,
