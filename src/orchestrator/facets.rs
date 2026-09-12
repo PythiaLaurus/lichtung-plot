@@ -75,6 +75,32 @@ impl FacetTextCensusPanel<'_> {
     pub(crate) fn scope(&self, data: crate::data::PlotData<'_>) -> Result<String, Error> {
         self.panel.render_scope(data)
     }
+
+    pub(crate) fn significance_annotations(
+        &self,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<impl Iterator<Item = &crate::significance::SignificanceAnnotation>, Error> {
+        for _ in self.plot.significance_annotations() {
+            data.claim_source_visits(1)?;
+            for selector in &self.panel.cell {
+                data.claim_source_visits(selector.level.len())?;
+            }
+        }
+        Ok(self
+            .plot
+            .significance_annotations()
+            .iter()
+            .filter(|annotation| {
+                annotation.facet_cell().is_some_and(|cell| {
+                    cell.matches(
+                        self.panel
+                            .cell
+                            .iter()
+                            .map(|selector| selector.level.as_str()),
+                    )
+                })
+            }))
+    }
 }
 
 pub(crate) fn text_census_panels<'a>(

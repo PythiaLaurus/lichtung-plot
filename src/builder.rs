@@ -505,6 +505,10 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
         Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
     pub(crate) prepared_line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
     pub(crate) prepared_qq: Option<std::sync::Arc<crate::plots::qq::PreparedQqInputs>>,
+    pub(crate) prepared_estimate:
+        Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
+    pub(crate) prepared_dumbbell:
+        Option<std::sync::Arc<crate::plots::dumbbell::PreparedDumbbellInputs>>,
     pub(crate) prepared_regression:
         Option<std::sync::Arc<crate::plots::regression::PreparedRegressionInputs>>,
     pub(crate) prepared_histogram:
@@ -622,6 +626,8 @@ impl Plot<crate::kind::Any> {
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_scatter: None,
             prepared_qq: None,
+            prepared_estimate: None,
+            prepared_dumbbell: None,
             prepared_regression: None,
             prepared_histogram: None,
             prepared_density: None,
@@ -1043,8 +1049,12 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_density,
             prepared_qq,
             prepared_regression,
+            prepared_dumbbell,
+            prepared_estimate,
         } = self;
         Plot {
+            prepared_estimate,
+            prepared_dumbbell,
             prepared_scatter,
             prepared_qq,
             prepared_regression,

@@ -4,168 +4,14 @@
 
 use crate::Error;
 
-use crate::layout::{AxisSpec, AxisTick};
-use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
-use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult, ValueSort};
+use crate::layout::AxisSpec;
+use crate::spec::{CategoryOrder, ValueSort};
 use crate::Plot;
 
-const CAP_HALF_HEIGHT_PX: f64 = 4.0;
-
 #[derive(Debug, PartialEq)]
-struct PointIntervalRow {
-    label: String,
-    estimate: Option<crate::plots::interval_estimate::EstimateTuple>,
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "point-interval range, layout, and estimated/unavailable row geometry share one renderer boundary"
-)]
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let rows = prepare(chart, context.data)?;
-    let row_count = rows.len() as f64;
-    let panel = context.panel;
-    let layout = context.axis_layout(|| {
-        let estimates = rows.iter().map(|row| row.estimate).collect::<Vec<_>>();
-        let x_data_range = crate::plots::interval_estimate::estimate_data_range(&estimates);
-        let facet_fallback = if x_data_range.is_none() && chart.x_axis_spec().limits.is_none() {
-            crate::plots::interval_estimate::fixed_facet_estimate_tuples(
-                chart,
-                context,
-                "point_interval",
-                true,
-            )?
-            .and_then(|estimates| crate::plots::interval_estimate::estimate_data_range(&estimates))
-        } else {
-            None
-        };
-        let x_range = match x_data_range {
-            Some(range) => point_interval_display_range(range, chart.x_axis_spec())?,
-            None => match (chart.x_axis_spec().limits, facet_fallback) {
-                (Some(limits), _) => limits,
-                (None, Some(range)) if range.0 < range.1 => range,
-                (None, Some(range)) => point_interval_display_range(range, chart.x_axis_spec())?,
-                (None, None) => {
-                    return Err(Error::Data(
-                        "point_interval: all rows are not_estimable; set explicit x-axis limits"
-                            .into(),
-                    )
-                    .into())
-                }
-            },
-        };
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = AxisSpec::default().limits(0.0, row_count);
-        let labels = rows.iter().map(|row| row.label.clone()).collect::<Vec<_>>();
-        let y_ticks = labels
-            .iter()
-            .enumerate()
-            .map(|(index, label)| AxisTick::new(row_y(index, rows.len()), label.clone()))
-            .collect();
-        context.layout_with_ticks(
-            x_range,
-            (0.0, row_count),
-            panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            Vec::new(),
-            y_ticks,
-            &x_axis_spec,
-            &y_axis_spec,
-            context.theme,
-        )
-    })?;
-    let x_range = layout.projection.x_range();
-    let theme = context.theme;
-    let interval_style = LineStyle::solid(theme.foreground, 1.4);
-    let zero_line_x = (chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0)
-        .then(|| layout.projection.project(0.0, 0.0).0);
-    let not_estimable_plan = rows
-        .iter()
-        .position(|row| row.estimate.is_none())
-        .map(|index| {
-            crate::plots::interval_estimate::plan_not_estimable(
-                theme,
-                &layout,
-                zero_line_x,
-                &context
-                    .fit_scope()
-                    .child(crate::layout::AddressRole::CategoricalValueLabel, index)?,
-            )
-        })
-        .transpose()?;
-
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        if let Some(x) = zero_line_x {
-            let (_, y0) = layout.projection.project(0.0, 0.0);
-            let (_, y1) = layout.projection.project(0.0, row_count);
-            backend.draw_line(
-                &[Point2D::new(x, y0), Point2D::new(x, y1)],
-                &LineStyle::solid(theme.foreground, 0.8),
-            )?;
-        }
-
-        for (index, row) in rows.iter().enumerate() {
-            let y = row_y(index, rows.len());
-            let Some(tuple) = row.estimate else {
-                let (plan, x) = not_estimable_plan
-                    .as_ref()
-                    .expect("unavailable rows have a measured status plan");
-                crate::plots::interval_estimate::draw_planned_not_estimable(
-                    plan, *x, &layout, y, backend,
-                )?;
-                continue;
-            };
-            let lower = tuple.lower.ok_or_else(|| {
-                Error::Render("point_interval: prepared lower bound is absent".into())
-            })?;
-            let upper = tuple.upper.ok_or_else(|| {
-                Error::Render("point_interval: prepared upper bound is absent".into())
-            })?;
-            let visible_lower = lower.max(x_range.0);
-            let visible_upper = upper.min(x_range.1);
-            let (_, center_y) = layout
-                .projection
-                .project(tuple.estimate.clamp(x_range.0, x_range.1), y);
-            if visible_lower <= visible_upper {
-                let (lower_x, _) = layout.projection.project(visible_lower, y);
-                let (upper_x, _) = layout.projection.project(visible_upper, y);
-                backend.draw_line(
-                    &[
-                        Point2D::new(lower_x, center_y),
-                        Point2D::new(upper_x, center_y),
-                    ],
-                    &interval_style,
-                )?;
-            }
-            for bound in [lower, upper] {
-                if bound >= x_range.0 && bound <= x_range.1 {
-                    let (x, _) = layout.projection.project(bound, y);
-                    backend.draw_line(
-                        &[
-                            Point2D::new(x, center_y - CAP_HALF_HEIGHT_PX),
-                            Point2D::new(x, center_y + CAP_HALF_HEIGHT_PX),
-                        ],
-                        &interval_style,
-                    )?;
-                }
-            }
-            if tuple.estimate >= x_range.0 && tuple.estimate <= x_range.1 {
-                let (estimate_x, _) = layout.projection.project(tuple.estimate, y);
-                backend.draw_scatter(
-                    &[Point2D::new(estimate_x, center_y)],
-                    &chart.point_style(theme.colors[0], 4),
-                )?;
-            }
-        }
-        Ok(())
-    })?;
-
-    Ok(PlotRenderResult::new(layout, Vec::new()))
+pub(crate) struct PointIntervalRow {
+    pub(crate) label: String,
+    pub(crate) estimate: Option<crate::plots::interval_estimate::EstimateTuple>,
 }
 
 pub(crate) fn shared_x_domain(
@@ -187,14 +33,7 @@ pub(crate) fn shared_x_domain(
     point_interval_display_range(range, chart.x_axis_spec())
 }
 
-pub(crate) fn axis_categories(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<Vec<String>, Error> {
-    data.collect_source(prepare(chart, data)?.into_iter().map(|row| Ok(row.label)))
-}
-
-fn prepare<'a>(
+pub(crate) fn prepare<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<Vec<PointIntervalRow>, Error> {
@@ -369,10 +208,6 @@ fn sort_rows(
         }
     }
     Ok(())
-}
-
-fn row_y(index: usize, row_count: usize) -> f64 {
-    row_count as f64 - index as f64 - 0.5
 }
 
 pub(crate) fn point_interval_display_range(

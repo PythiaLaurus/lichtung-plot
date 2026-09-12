@@ -1810,6 +1810,10 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::Density
                     | PlotKind::Qq
                     | PlotKind::Regression
+                    | PlotKind::Dumbbell
+                    | PlotKind::PointInterval
+                    | PlotKind::Coefficient
+                    | PlotKind::Forest
             ) {
                 &prepared
             } else {

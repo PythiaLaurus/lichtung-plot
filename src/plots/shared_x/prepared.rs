@@ -15,8 +15,10 @@ pub(crate) struct PreparedAxes {
     pub(crate) logarithmic: bool,
 }
 
-/// Scientific reference/distribution inputs before a parent's shared range is known.
+/// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Estimate(crate::plots::interval_estimate::PreparedEstimate),
+    Dumbbell(crate::plots::dumbbell::DumbbellData),
     Histogram(crate::plots::histogram::HistogramSemantics),
     Density(crate::plots::density::PreparedDensity),
     Qq(crate::plots::qq::PreparedQq),
@@ -26,6 +28,16 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => Ok(
+                Self::Estimate(crate::plots::interval_estimate::PreparedEstimate::new(
+                    source,
+                    data,
+                    source.significance_annotations(),
+                )?),
+            ),
+            PlotKind::Dumbbell => Ok(Self::Dumbbell(crate::plots::dumbbell::prepare(
+                source, data,
+            )?)),
             PlotKind::Histogram => Ok(Self::Histogram(
                 crate::plots::histogram::HistogramSemantics::new(source, data)?,
             )),
@@ -37,13 +49,17 @@ impl PreparedReference {
                 crate::plots::regression::PreparedRegression::new(source, data)?,
             )),
             _ => Err(Error::Render(
-                "reference semantics require a distribution/reference family".into(),
+                "shared semantics require an extracted reference or paired-endpoint family".into(),
             )),
         }
     }
 
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Estimate(marks) => marks.x_range()?,
+            Self::Dumbbell(marks) => {
+                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())
+            }
             Self::Histogram(marks) => marks.ranges[0],
             Self::Density(marks) => marks.ranges(source, data)?[0],
             Self::Qq(marks) => marks.ranges(source, data)?[0],
@@ -54,10 +70,17 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    estimate: Option<&'a crate::plots::interval_estimate::PreparedEstimate>,
+    estimate_fallback: Option<(f64, f64)>,
+    dumbbell: Option<&'a crate::plots::dumbbell::DumbbellData>,
     x_limits: Option<(f64, f64)>,
     labels: Option<&'a crate::Labels>,
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "borrowed root configuration attaches each admitted family payload without cloning source-owned plots"
+)]
 pub(crate) fn prepare_reference_plot(
     source: &Plot,
     resources: &crate::font::canonical::OperationGenerationResources,
@@ -71,10 +94,21 @@ pub(crate) fn prepare_reference_plot(
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
     let mut bins = None;
+    let mut dumbbell = None;
+    let mut estimate = None;
     let mut curves = None;
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Estimate(marks) => {
+            let kind = marks.kind;
+            estimate = Some(marks);
+            kind
+        }
+        PreparedReference::Dumbbell(marks) => {
+            dumbbell = Some(marks);
+            PlotKind::Dumbbell
+        }
         PreparedReference::Histogram(marks) => {
             bins = Some(marks);
             PlotKind::Histogram
@@ -100,12 +134,17 @@ pub(crate) fn prepare_reference_plot(
         None,
         None,
         None,
-        None,
         bins.as_ref(),
         curves.as_ref(),
         quantiles.as_ref(),
         fit.as_ref(),
-        Some(ReferenceAxisConfig { x_limits, labels }),
+        Some(ReferenceAxisConfig {
+            x_limits,
+            labels,
+            dumbbell: dumbbell.as_ref(),
+            estimate: estimate.as_ref(),
+            estimate_fallback: None,
+        }),
     )?;
     if let Some(quantiles) = &quantiles {
         quantiles.validate_ranges(axes.ranges, data)?;
@@ -116,6 +155,22 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        estimate: estimate
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::interval_estimate::PreparedEstimateInputs { panels })
+            })
+            .transpose()?,
+        dumbbell: dumbbell
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::dumbbell::PreparedDumbbellInputs { panels })
+            })
+            .transpose()?,
         route,
         axes: data.source_arc(retained)?,
         matrix: None,
@@ -172,13 +227,22 @@ pub(crate) fn prepare_plot(
     let mut density = Vec::new();
     let mut qq = Vec::new();
     let mut regression = Vec::new();
+    let mut dumbbell = Vec::new();
+    let mut estimate = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
     if matches!(
         source.kind(),
-        PlotKind::Histogram | PlotKind::Density | PlotKind::Qq | PlotKind::Regression
+        PlotKind::Histogram
+            | PlotKind::Density
+            | PlotKind::Qq
+            | PlotKind::Regression
+            | PlotKind::Dumbbell
+            | PlotKind::PointInterval
+            | PlotKind::Coefficient
+            | PlotKind::Forest
     ) && !source.has_facets()
     {
         return prepare_reference_plot(
@@ -210,6 +274,36 @@ pub(crate) fn prepare_plot(
     }
     if source.has_facets() {
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
+        let mut estimate_panels = if matches!(
+            source.kind(),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
+        ) {
+            source_data.collect_source(panels.iter().map(|panel| {
+                crate::plots::interval_estimate::PreparedEstimate::new(
+                    source,
+                    panel.data().with_axis_resources(resources),
+                    panel.significance_annotations(source_data)?,
+                )
+                .map(Some)
+            }))?
+        } else {
+            Vec::new()
+        };
+        let mut estimate_fallback: Option<(f64, f64)> = None;
+        if matches!(
+            source.facet_scales_spec(),
+            FacetScales::Fixed | FacetScales::FreeY
+        ) {
+            for marks in estimate_panels.iter().flatten() {
+                source_data.claim_source_visits(1)?;
+                if let Some(range) = marks.range {
+                    estimate_fallback = Some(
+                        estimate_fallback
+                            .map_or(range, |prior| (prior.0.min(range.0), prior.1.max(range.1))),
+                    );
+                }
+            }
+        }
         let groups = source
             .group_col()
             .filter(|_| {
@@ -252,12 +346,7 @@ pub(crate) fn prepare_plot(
             None
         };
         source_data.reserve_source(&mut retained, panels.len())?;
-        for panel in panels {
-            let fixed_data = matches!(
-                source.facet_scales_spec(),
-                FacetScales::Fixed | FacetScales::FreeY
-            )
-            .then_some(source_data);
+        for (index, panel) in panels.into_iter().enumerate() {
             let data = panel.data().with_axis_resources(resources);
             let facet = crate::data::FacetAxisSources {
                 groups: groups.as_deref(),
@@ -292,10 +381,13 @@ pub(crate) fn prepare_plot(
             let fit = (source.kind() == PlotKind::Regression)
                 .then(|| crate::plots::regression::PreparedRegression::new(source, data))
                 .transpose()?;
+            let pairs = (source.kind() == PlotKind::Dumbbell)
+                .then(|| crate::plots::dumbbell::prepare(source, data))
+                .transpose()?;
+            let estimates = estimate_panels.get_mut(index).and_then(Option::take);
             let axes = prepare(
                 source,
                 data,
-                fixed_data,
                 Some(facet),
                 marks.as_ref(),
                 paths.as_ref(),
@@ -303,9 +395,22 @@ pub(crate) fn prepare_plot(
                 curves.as_ref(),
                 quantiles.as_ref(),
                 fit.as_ref(),
-                None,
+                Some(ReferenceAxisConfig {
+                    dumbbell: pairs.as_ref(),
+                    estimate: estimates.as_ref(),
+                    estimate_fallback,
+                    ..ReferenceAxisConfig::default()
+                }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(estimates) = estimates {
+                source_data.reserve_source(&mut estimate, 1)?;
+                estimate.push((Some(source_data.copy_source_string(&scope)?), estimates));
+            }
+            if let Some(pairs) = pairs {
+                source_data.reserve_source(&mut dumbbell, 1)?;
+                dumbbell.push((Some(source_data.copy_source_string(&scope)?), pairs));
+            }
             if let Some(quantiles) = quantiles {
                 source_data.reserve_source(&mut qq, 1)?;
                 qq.push((Some(source_data.copy_source_string(&scope)?), quantiles));
@@ -375,7 +480,6 @@ pub(crate) fn prepare_plot(
             None,
             None,
             None,
-            None,
         )?;
         source_data.reserve_source(&mut retained, 1)?;
         retained.push((
@@ -387,6 +491,25 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        estimate: if matches!(
+            source.kind(),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
+        ) {
+            Some(source_data.source_arc(
+                crate::plots::interval_estimate::PreparedEstimateInputs { panels: estimate },
+            )?)
+        } else {
+            None
+        },
+        dumbbell: if source.kind() == PlotKind::Dumbbell {
+            Some(
+                source_data.source_arc(crate::plots::dumbbell::PreparedDumbbellInputs {
+                    panels: dumbbell,
+                })?,
+            )
+        } else {
+            None
+        },
         qq: if source.kind() == PlotKind::Qq {
             Some(source_data.source_arc(crate::plots::qq::PreparedQqInputs { panels: qq })?)
         } else {
@@ -455,7 +578,6 @@ pub(crate) fn prepare_scatter_plot(
         source,
         data,
         None,
-        None,
         Some(&marks),
         None,
         None,
@@ -479,6 +601,8 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        estimate: None,
+        dumbbell: None,
         qq: None,
         regression: None,
         histogram: None,
@@ -505,7 +629,6 @@ pub(crate) fn prepare_line_plot(
         data,
         None,
         None,
-        None,
         Some(&marks),
         None,
         None,
@@ -528,6 +651,8 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        estimate: None,
+        dumbbell: None,
         axes: data.source_arc(retained_axes)?,
         histogram: None,
         qq: None,
@@ -594,7 +719,6 @@ fn validate_range(range: (f64, f64)) -> Result<(), Error> {
 fn prepare(
     chart: &Plot,
     data: PlotData<'_>,
-    fixed_data: Option<PlotData<'_>>,
     facet: Option<crate::data::FacetAxisSources<'_>>,
     scatter: Option<&crate::plots::scatter::PreparedScatter>,
     line: Option<&crate::plots::line::PreparedLine>,
@@ -769,64 +893,44 @@ fn prepare(
                 crate::layout::continuous_auto_range(values, chart.y_axis_spec()),
             ]
         }
-        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest | PlotKind::Dumbbell => {
-            let levels = match chart.kind() {
-                PlotKind::PointInterval => {
-                    crate::plots::point_interval::axis_categories(chart, data)?
-                }
-                PlotKind::Dumbbell => crate::plots::dumbbell::axis_categories(chart, data)?,
-                _ => crate::plots::interval_estimate::axis_categories(
-                    chart,
-                    data,
-                    if chart.kind() == PlotKind::Forest {
-                        "forest"
-                    } else {
-                        "coefficient"
-                    },
+        PlotKind::Dumbbell => {
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.dumbbell)
+                .ok_or_else(|| Error::Render("Dumbbell axes require prepared semantics".into()))?;
+            categories[1] = Some(
+                data.collect_source(
+                    marks
+                        .categories
+                        .iter()
+                        .map(|label| data.copy_source_string(label)),
                 )?,
-            };
-            let slots = (0.0, levels.len() as f64);
-            categories[1] = Some(levels);
-            let fallback = if chart.kind() != PlotKind::Dumbbell
-                && chart.x_axis_spec().limits.is_none()
-                && fixed_data.is_some()
-            {
-                let tuples = crate::plots::interval_estimate::prepare_estimate_tuples(
-                    chart,
-                    data,
-                    "estimate axis",
-                    chart.kind() != PlotKind::Coefficient,
-                )?;
-                data.claim_source_visits(tuples.len())?;
-                tuples
-                    .iter()
-                    .all(Option::is_none)
-                    .then_some(fixed_data)
-                    .flatten()
-            } else {
-                None
-            };
-            let x = if let Some(full_data) = fallback {
-                if chart.kind() == PlotKind::PointInterval {
-                    let tuples = crate::plots::interval_estimate::prepare_estimate_tuples(
-                        chart,
-                        full_data,
-                        "point_interval",
-                        true,
-                    )?;
-                    full_data.claim_source_visits(tuples.len())?;
-                    let range = crate::plots::interval_estimate::estimate_data_range(&tuples).ok_or_else(|| Error::Data("point_interval: all rows are not_estimable; set explicit x-axis limits".into()))?;
-                    crate::plots::point_interval::point_interval_display_range(
-                        range,
-                        chart.x_axis_spec(),
-                    )?
-                } else {
-                    crate::plots::interval_estimate::shared_x_domain(chart, full_data)?
-                }
-            } else {
-                super::domain_with_data(chart, data)?
-            };
-            [x, slots]
+            );
+            [
+                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec()),
+                (0.0, marks.categories.len() as f64),
+            ]
+        }
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            let config = reference_config.as_ref().ok_or_else(|| {
+                Error::Render("estimate axes require root-prepared semantics".into())
+            })?;
+            let marks = config
+                .estimate
+                .ok_or_else(|| Error::Render("estimate axes require retained rows".into()))?;
+            categories[1] = Some(
+                data.collect_source(
+                    marks
+                        .labels
+                        .iter()
+                        .map(|label| data.copy_source_string(label)),
+                )?,
+            );
+            let range = marks
+                .range
+                .or(config.estimate_fallback)
+                .map_or_else(|| marks.x_range(), Ok)?;
+            [range, (0.0, marks.labels.len() as f64)]
         }
         PlotKind::Interaction => {
             let levels = data.source_levels(&strings(chart.x_col())?)?;
@@ -880,7 +984,9 @@ fn prepare(
     if let Some(shared) = chart.resolved_facet_x_range() {
         ranges[0] = shared;
     }
-    let ReferenceAxisConfig { x_limits, labels } = reference_config.unwrap_or_default();
+    let ReferenceAxisConfig {
+        x_limits, labels, ..
+    } = reference_config.unwrap_or_default();
     if let Some(limits) = x_limits {
         ranges[0] = limits;
     }
@@ -918,7 +1024,8 @@ fn prepare(
         };
     }
     if logarithmic {
-        specs[0].limits = specs[0].limits.map(|(lo, hi)| (lo.log10(), hi.log10()));
+        // Both explicit and parent-coordinated domains are already transformed.
+        specs[0].limits = specs[0].limits.map(|_| ranges[0]);
     }
     let mut ticks = [None, None];
     let mut display_categories = [None, None];

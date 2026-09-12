@@ -5,16 +5,15 @@
     reason = "validated row counts are converted to bounded plotting coordinates"
 )]
 
-use std::collections::HashSet;
-
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{AxisSpec, AxisTick};
+use crate::layout::AxisSpec;
 use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
 use crate::spec::{CategoryOrder, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
+#[derive(Debug)]
 struct DumbbellRow {
     category_index: usize,
     group_index: usize,
@@ -22,85 +21,143 @@ struct DumbbellRow {
     right: f64,
 }
 
-struct DumbbellData {
-    categories: Vec<String>,
+#[derive(Debug)]
+pub(crate) struct DumbbellData {
+    pub(crate) categories: Vec<String>,
     group_count: usize,
     rows: Vec<DumbbellRow>,
-    range: (f64, f64),
+    pub(crate) range: (f64, f64),
 }
 
-pub(crate) fn render(
+#[derive(Debug)]
+pub(crate) struct PreparedDumbbellInputs {
+    pub(crate) panels: Vec<(Option<String>, DumbbellData)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct DumbbellPayload {
+    clip: crate::layout::PanelBox,
+    pairs: Vec<[Point2D; 2]>,
+    connector: LineStyle,
+    points: [crate::render::backend::PointStyle; 2],
+}
+
+impl DumbbellPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        count(3);
+        with_clip(backend, self.clip, |backend| {
+            for pair in &self.pairs {
+                backend.draw_line(pair, &self.connector)?;
+                backend.draw_scatter(&pair[..1], &self.points[0])?;
+                backend.draw_scatter(&pair[1..], &self.points[1])?;
+            }
+            Ok(())
+        })
+    }
+}
+
+pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let prepared = prepare(chart, context.data)?;
+    #[cfg(test)]
+    count(1);
+    let prepared = chart
+        .prepared_dumbbell
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
+    let layout = context
+        .axis_layout(|| Err(Error::Render("Dumbbell requires root-prepared axes".into()).into()))?;
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(chart, prepared, layout, context.theme, data).map_err(Into::into)
+}
+
+fn project(
+    chart: &Plot,
+    prepared: &DumbbellData,
+    layout: crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+    data: crate::data::PlotData<'_>,
+) -> Result<PlotRenderResult, Error> {
     let endpoints = chart
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
     let category_count = prepared.categories.len();
-    let layout = context.axis_layout(|| {
-        let x_range = crate::layout::continuous_auto_range(prepared.range, chart.x_axis_spec());
-        let x_axis = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_ticks = prepared
-            .categories
-            .iter()
-            .enumerate()
-            .map(|(index, category)| AxisTick::new(row_y(index, category_count), category.clone()))
-            .collect();
-        let y_axis = AxisSpec::default().limits(0.0, category_count as f64);
-        let panel = context.panel;
-        context.layout_with_ticks(
-            x_range,
-            (0.0, category_count as f64),
-            panel,
-            chart.x_label_text().unwrap_or("").to_owned(),
-            chart.y_label_text().unwrap_or("").to_owned(),
-            Vec::new(),
-            y_ticks,
-            &x_axis,
-            &y_axis,
-            context.theme,
-        )
-    })?;
-    let connector = LineStyle::solid(context.theme.foreground, 1.2);
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for row in &prepared.rows {
-            let y = replicate_y(
-                row.category_index,
-                category_count,
-                row.group_index,
-                prepared.group_count,
-            );
-            let (left_x, left_y) = layout.projection.project(row.left, y);
-            let (right_x, right_y) = layout.projection.project(row.right, y);
-            backend.draw_line(
-                &[Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)],
-                &connector,
-            )?;
-            backend.draw_scatter(
-                &[Point2D::new(left_x, left_y)],
-                &chart.point_style(endpoints.left_color(), 4),
-            )?;
-            backend.draw_scatter(
-                &[Point2D::new(right_x, right_y)],
-                &chart.point_style(endpoints.right_color(), 4),
-            )?;
-        }
-        Ok(())
-    })?;
-
-    let legend = vec![
-        LegendEntry::point(
-            chart.legend_identity(endpoints.left_label()),
+    let connector = LineStyle::solid(theme.foreground, 1.2);
+    let mut payload = DumbbellPayload {
+        clip: layout.projection.panel_box(),
+        pairs: Vec::new(),
+        connector,
+        points: [
             chart.point_style(endpoints.left_color(), 4),
-        ),
-        LegendEntry::point(
-            chart.legend_identity(endpoints.right_label()),
             chart.point_style(endpoints.right_color(), 4),
-        ),
-    ];
-    Ok(PlotRenderResult::new(layout, legend))
+        ],
+    };
+    data.reserve_source(&mut payload.pairs, prepared.rows.len())?;
+    data.claim_source_visits(prepared.rows.len())?;
+    for row in &prepared.rows {
+        let y = replicate_y(
+            row.category_index,
+            category_count,
+            row.group_index,
+            prepared.group_count,
+        );
+        let (left_x, left_y) = layout.projection.project(row.left, y);
+        let (right_x, right_y) = layout.projection.project(row.right, y);
+        payload
+            .pairs
+            .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
+    }
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for pair in &payload.pairs {
+        geometry.line(pair, &payload.connector, Some(clip))?;
+        geometry.scatter(&pair[..1], &payload.points[0], clip)?;
+        geometry.scatter(&pair[1..], &payload.points[1], clip)?;
+    }
+    let mut legend = Vec::new();
+    data.reserve_source(&mut legend, 2)?;
+    for (label, style) in [endpoints.left_label(), endpoints.right_label()]
+        .into_iter()
+        .zip(&payload.points)
+    {
+        legend.push(LegendEntry::point(
+            chart.point_legend_identity(label, data)?,
+            style.clone(),
+        ));
+    }
+    #[cfg(test)]
+    count(2);
+    let mut result = PlotRenderResult::new(layout, legend);
+    result.y_domain = crate::spec::AxisDomain::Categorical;
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Dumbbell(payload),
+        geometry,
+    })?);
+    Ok(result)
+}
+
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(
+        Error::Render("Dumbbell requires prepared measurement or selected payload capture".into())
+            .into(),
+    )
 }
 
 pub(crate) fn shared_x_domain(
@@ -129,26 +186,13 @@ pub(crate) fn shared_x_domain(
     ))
 }
 
-pub(crate) fn axis_categories(
-    chart: &Plot,
-    data: crate::data::PlotData<'_>,
-) -> Result<Vec<String>, Error> {
-    let categories = crate::data::strict_normalized_strings(
-        data,
-        chart
-            .x_col()
-            .ok_or_else(|| Error::Data("dumbbell: category column not set".into()))?,
-        "dumbbell",
-        "category",
-    )?;
-    data.source_levels(&categories)
-}
-
-fn prepare<'a>(
+pub(crate) fn prepare<'a>(
     chart: &Plot,
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
+    #[cfg(test)]
+    count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
         return Err(Error::Data(
             "dumbbell: categorical y-axis limits are not supported".into(),
@@ -197,16 +241,22 @@ fn prepare<'a>(
         ));
     }
 
-    let category_levels = crate::data::stable_levels(&categories);
+    let category_levels = data.source_levels(&categories)?;
     let group_levels = groups
         .as_ref()
-        .map_or_else(Vec::new, |values| crate::data::stable_levels(values));
-    let mut seen = HashSet::with_capacity(categories.len());
-    let mut rows = Vec::with_capacity(categories.len());
+        .map(|values| data.source_levels(values))
+        .transpose()?
+        .unwrap_or_default();
+    let mut rows = Vec::new();
+    data.reserve_source(&mut rows, categories.len())?;
     for index in 0..categories.len() {
         let source_row = data.source_row(index);
         let group = groups.as_ref().map(|values| values[index].as_str());
-        if !seen.insert((categories[index].as_str(), group)) {
+        data.claim_source_visits(index)?;
+        if (0..index).any(|previous| {
+            categories[previous] == categories[index]
+                && groups.as_ref().map(|values| values[previous].as_str()) == group
+        }) {
             return Err(Error::Data(format!(
                 "dumbbell: duplicate normalized (category, group) key ({:?}, {:?}) at source row {}",
                 categories[index],
@@ -214,6 +264,8 @@ fn prepare<'a>(
                 source_row
             )));
         }
+        data.claim_source_visits(category_levels.len())?;
+        data.claim_source_visits(group_levels.len())?;
         let category_index =
             resolved_level_index(&category_levels, &categories[index], "category", source_row)?;
         let group_index = group
@@ -227,6 +279,8 @@ fn prepare<'a>(
             right: right[index],
         });
     }
+    data.claim_source_visits(left.len())?;
+    data.claim_source_visits(right.len())?;
     let range = crate::data::min_max(left.into_iter().chain(right), "dumbbell")?;
     Ok(DumbbellData {
         categories: category_levels,
@@ -256,6 +310,20 @@ fn row_y(category_index: usize, category_count: usize) -> f64 {
     category_count as f64 - category_index as f64 - 0.5
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[usize; 4]> = const { std::cell::Cell::new([0; 4]) };
+}
+
+#[cfg(test)]
+fn count(stage: usize) {
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[stage] += 1;
+        counts.set(next);
+    });
+}
+
 fn replicate_y(
     category_index: usize,
     category_count: usize,
@@ -265,4 +333,311 @@ fn replicate_y(
     let center = row_y(category_index, category_count);
     let slot = 0.72 / group_count as f64;
     center + 0.36 - slot * (group_index as f64 + 0.5)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::{CategoryValues, DumbbellEndpoints, FacetScales, FacetSpec, NumericValues};
+
+    fn source() -> Plot<crate::kind::Dumbbell> {
+        Plot::dumbbell(
+            CategoryValues::new("category", ["b", "a", "b", "a"]).unwrap(),
+            NumericValues::new("left", [1.0, 2.0, 3.0, 4.0]),
+            NumericValues::new("right", [4.0, 3.0, 2.0, 1.0]),
+            DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40)).unwrap(),
+        )
+        .group(CategoryValues::new("replicate", ["one", "one", "two", "two"]).unwrap())
+    }
+
+    #[test]
+    fn semantic_limits_and_shared_facets_prepare_once() {
+        let plot = source().erase();
+        STAGES.with(|counts| counts.set([0; 4]));
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get), [1, 0, 0, 0]);
+        assert_eq!(inputs.axes[0].1.ranges, [(0.85, 4.15), (0.0, 2.0)]);
+        let bytes = resources.byte_usage().unwrap();
+        let visits = resources.usage().unwrap().1;
+        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+            assert!(crate::plots::shared_x::prepare_plot(
+                &plot,
+                &OperationGenerationResources::with_test_limits(visits, bytes)
+            )
+            .is_err());
+        }
+        crate::plots::shared_x::prepare_plot(
+            &plot,
+            &OperationGenerationResources::with_test_limits(visits, bytes),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        for scales in [
+            FacetScales::Fixed,
+            FacetScales::FreeX,
+            FacetScales::FreeY,
+            FacetScales::Free,
+        ] {
+            STAGES.with(|counts| counts.set([0; 4]));
+            source()
+                .facet(
+                    FacetSpec::column(
+                        CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+                    )
+                    .scales(scales),
+                )
+                .size(960, 640)
+                .preflight()
+                .unwrap();
+            let counts = STAGES.with(std::cell::Cell::get);
+            assert_eq!(counts[0], 2);
+            assert_eq!(counts[1], counts[2]);
+            assert_eq!(counts[3], 2);
+        }
+        STAGES.with(|counts| counts.set([0; 4]));
+        crate::Canvas::grid(1, 2)
+            .unwrap()
+            .size(1000, 480)
+            .panel(0, 0, source())
+            .unwrap()
+            .panel(
+                0,
+                1,
+                Plot::scatter(
+                    NumericValues::new("x", [-1.0, 8.0]),
+                    NumericValues::new("y", [1.0, 2.0]),
+                ),
+            )
+            .unwrap()
+            .x_range_group([(0, 0), (0, 1)])
+            .unwrap()
+            .preflight()
+            .unwrap();
+        let counts = STAGES.with(std::cell::Cell::get);
+        assert_eq!(counts[0], 1);
+        assert_eq!(counts[1], counts[2]);
+        assert_eq!(counts[3], 1);
+    }
+
+    #[test]
+    fn projected_limits_and_geometry_match_drawn_ink() {
+        let source = source().x_limits(1.5, 3.5).erase();
+        let theme = crate::Theme::Publication.resolve();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let attached = inputs.attach(source).unwrap();
+        let selected = attached
+            .measure_selected_interior(PlotRenderContext::new(
+                attached.data(),
+                crate::layout::PanelBox::new(10.25, 410.75, 20.5, 320.25),
+                &theme,
+            ))
+            .unwrap();
+        let project = |resources: &OperationGenerationResources| {
+            super::project(
+                &attached,
+                &inputs.dumbbell.as_ref().unwrap().panels[0].1,
+                selected.layout.clone(),
+                &theme,
+                attached.data().with_axis_resources(resources),
+            )
+        };
+        let resources = OperationGenerationResources::new();
+        let projected = project(&resources).unwrap();
+        let bytes = resources.byte_usage().unwrap();
+        let visits = resources.usage().unwrap().1;
+        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+            assert!(project(&OperationGenerationResources::with_test_limits(
+                visits, bytes
+            ))
+            .is_err());
+        }
+        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+        project(&exact).unwrap();
+        assert!(project(&exact).is_err());
+        let plan = projected.marks.unwrap();
+        let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+        drawn.begin(640, 480).unwrap();
+        plan.draw(&mut drawn).unwrap();
+        drawn.end().unwrap();
+        assert_eq!(plan.geometry.bounds(), drawn.bounds());
+    }
+
+    #[test]
+    fn reconciled_facet_guides_are_validated_before_fonts() {
+        for scales in [
+            FacetScales::Fixed,
+            FacetScales::FreeX,
+            FacetScales::FreeY,
+            FacetScales::Free,
+        ] {
+            for (value, inside_union) in [
+                (5.0, true),
+                (100.0, false),
+                (f64::NAN, false),
+                (f64::INFINITY, false),
+            ] {
+                let plot = Plot::dumbbell(
+                    CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
+                    NumericValues::new("left", [0.0, 1.0, 10.0, 11.0]),
+                    NumericValues::new("right", [0.5, 1.5, 10.5, 11.5]),
+                    DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40))
+                        .unwrap(),
+                )
+                .guide(crate::GuideSpec::vertical(
+                    value,
+                    crate::GuideStyle::new((0, 0, 0), 1.0, crate::LinePattern::Solid).unwrap(),
+                ))
+                .facet(
+                    FacetSpec::column(
+                        CategoryValues::new("panel", ["left", "left", "right", "right"]).unwrap(),
+                    )
+                    .scales(scales),
+                )
+                .erase();
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+                let prepared = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &OperationGenerationResources::new(),
+                );
+                if inside_union && matches!(scales, FacetScales::Fixed | FacetScales::FreeY) {
+                    let prepared = prepared.unwrap();
+                    assert_eq!(prepared.axes[0].1.ranges[0], prepared.axes[1].1.ranges[0]);
+                } else {
+                    assert!(matches!(prepared, Err(Error::Data(_))));
+                }
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    0
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "root preparation, measurement, poisoned capture and both frozen replays share the same test operation"
+    )]
+    fn selected_capture_does_not_read_project_or_shape() {
+        let source = source().erase();
+        let theme = crate::Theme::Publication.resolve();
+        STAGES.with(|counts| counts.set([0; 4]));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
+        let root = crate::layout::plan_exact_root(
+            640,
+            480,
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &source,
+                    source.kind(),
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|error| Error::Render(error.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(inputs)
+            },
+            |inputs, assigned, _| {
+                let attached = inputs.attach(source.clone())?;
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let selected = attached
+                    .measure_selected_interior(PlotRenderContext::new(
+                        attached.data(),
+                        crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
+                        &theme,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                Ok(crate::layout::MeasuredLayout::new(assigned, selected))
+            },
+            |_, _, selected, stage| {
+                let poison = Plot::dumbbell(
+                    CategoryValues::new("poison", ["invalid"]).unwrap(),
+                    NumericValues::new("left", [f64::NAN]),
+                    NumericValues::new("right", [f64::INFINITY]),
+                    DumbbellEndpoints::new(
+                        "different left",
+                        (0, 0, 0),
+                        "different right",
+                        (0, 0, 0),
+                    )
+                    .unwrap(),
+                )
+                .erase();
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let projections = crate::layout::Projection::test_projection_calls();
+                let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                let captured = crate::orchestrator::capture_text_replay_plan(
+                    640,
+                    480,
+                    "selected Dumbbell",
+                    &theme,
+                    stage,
+                    |backend| {
+                        let context = PlotRenderContext::new(
+                            poison.data(),
+                            selected.layout.projection.panel_box(),
+                            &theme,
+                        )
+                        .with_retained_body(selected.retained_payload());
+                        poison.render_panel(source.kind(), context, backend)?;
+                        selected.axes.as_ref().unwrap().draw(backend)
+                    },
+                )?;
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                assert_eq!(
+                    crate::layout::Projection::test_projection_calls(),
+                    projections
+                );
+                assert_eq!(
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                    shapes
+                );
+                Ok(captured)
+            },
+        )
+        .unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get), [1, 1, 1, 1]);
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        crate::orchestrator::validate_text_replay_plan(
+            640,
+            480,
+            root.plan(),
+            "Dumbbell Null replay",
+        )
+        .unwrap();
+        let mut backend = root.plan().take_svg_backend().unwrap();
+        root.plan()
+            .replay(640, 480, &mut backend, "Dumbbell SVG replay")
+            .unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get), [1, 1, 1, 1]);
+    }
 }

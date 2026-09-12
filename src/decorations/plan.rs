@@ -1206,6 +1206,10 @@ fn measure_geometry(
             | PlotKind::Density
             | PlotKind::Qq
             | PlotKind::Regression
+            | PlotKind::Dumbbell
+            | PlotKind::PointInterval
+            | PlotKind::Coefficient
+            | PlotKind::Forest
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

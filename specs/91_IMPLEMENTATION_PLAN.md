@@ -241,7 +241,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a2 | Retained canonical primitive geometry | COMPLETE |
 | T5a6a3a | Point/path semantic and payload extraction | COMPLETE |
 | T5a6a3b | Distribution/reference semantic and payload extraction | COMPLETE |
-| T5a6a3c | Estimate-display semantic and payload extraction | PENDING |
+| T5a6a3c | Estimate-display semantic and payload extraction | COMPLETE |
 | T5a6a3d | Bar semantic and payload extraction | PENDING |
 | T5a6a3e | Categorical-distribution semantic and payload extraction | PENDING |
 | T5a6a3f | Interaction semantic and payload extraction | PENDING |
@@ -4606,7 +4606,7 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, T5a6a3a, and T5a6a3b are complete with focused and primary integrated
+T5a6a1, T5a6a2, and T5a6a3a-c are complete with focused and primary integrated
 evidence below. Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4852,7 +4852,53 @@ T5a6a3b completion evidence:
   verification (224 files). All six snapshots are unchanged.
   Log: `/tmp/opencode/t5a6a3b-verify.log`.
 
-T5a6a3c has not been started.
+T5a6a3c is complete. PointInterval, Coefficient,
+Forest, and Dumbbell retain admitted scientific inputs at the root and consume
+selected mark/annotation payloads in standalone, facet, and shared Canvas routes.
+Axis/frame classification remains categorical legacy; native migration belongs
+to T5a6c1.
+
+PointInterval/Coefficient/Forest implementation evidence:
+
+- Retained rows preserve categorical order, unavailable status, original source
+  diagnostics, interval bounds, reference values, and adjacent numeric/significance
+  label text. Forest transforms scientific tuples once and retains raw exact-tick
+  policy separately; coordinated ranges are never log-transformed a second time.
+- Fixed-x unavailable facets inherit the union of already prepared sibling
+  domains without pooling or rereading tuples. Facet significance uses borrowed
+  panel ownership selectors, so an estimated sibling's mark is never assigned to
+  an unavailable row. Final reconciled guides validate before font discovery.
+- Measurement produces immutable row-ordered intervals, fixed-pixel caps, points,
+  status labels, adjacent labels, and reference geometry with GeometrySnapshot,
+  not GeometryBackend. Capture consumes selected payloads. Obsolete combined
+  renderers, fallback facet tuple reads, and attached-label reconstruction paths
+  are removed. Canvas borrows source configuration throughout preparation.
+- Row vectors, source label formatting, typography strings, selected geometry,
+  annotation records, and shared storage use operation admission before allocation.
+  Eight cross-family extraction tests cover exact limits and cumulative refusal,
+  mixed shared Canvas and all facet scale policies, source-row identity, font-error
+  precedence, facet-owned annotations, Forest exact ranges/ticks, geometry parity,
+  and poisoned capture. Capture performs no source reads, semantic preparation,
+  projection, axis generation, or shaping; Null/SVG replay preserves stage counts.
+- Strict offline all-target Clippy and focused checks pass: 13 interval-estimate
+  unit tests (including eight extraction tests), 174 orchestrator tests (10 ignored
+  benchmarks), eight Canvas root tests, 38 estimate integration tests, 57 composition
+  tests, and all six unchanged snapshots. These precede the primary full gate.
+
+Dumbbell-focused evidence: four extraction tests cover exact semantic/payload
+budget refusal, cumulative candidate charges, all facet scale policies, mixed
+shared Canvas counts, final reconciled guides before fonts, geometry/draw extent
+parity, and poisoned-source selected capture. Capture has zero column reads,
+coordinate projections, or shaping; frozen Null/SVG replay leaves stage counts
+unchanged. The 42 categorical, 57 composition, 38 estimate, 37 lifecycle, 13
+Canvas, and 12 shared-axis tests pass, as do all six unchanged snapshots. These
+are focused checks, not the primary `just verify` gate.
+
+Independent review found no actionable scientific, admission, or capture
+regression. Primary `just verify` passed: 854 library tests (17 ignored), 442
+integration tests, strict Clippy, formatting, API docs, and package verification
+(223 files). All six snapshots remain unchanged.
+Log: `/tmp/opencode/t5a6a3c-verify.log`.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

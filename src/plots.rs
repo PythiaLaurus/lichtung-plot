@@ -16,8 +16,6 @@ pub mod horizontal_bar;
 pub mod scatter;
 // Phase 3: violin (KDE + box overlay), regression, marginal, matrix.
 pub mod beeswarm;
-pub mod coefficient;
-pub mod forest;
 pub mod interaction;
 pub(crate) mod interval_estimate;
 pub mod line;

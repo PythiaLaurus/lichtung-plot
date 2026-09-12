@@ -130,6 +130,10 @@ impl Plot {
                 | PlotKind::Density
                 | PlotKind::Qq
                 | PlotKind::Regression
+                | PlotKind::Dumbbell
+                | PlotKind::PointInterval
+                | PlotKind::Coefficient
+                | PlotKind::Forest
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
@@ -178,6 +182,10 @@ impl Plot {
                 | PlotKind::Density
                 | PlotKind::Qq
                 | PlotKind::Regression
+                | PlotKind::Dumbbell
+                | PlotKind::PointInterval
+                | PlotKind::Coefficient
+                | PlotKind::Forest
         ) {
             return self.measure_selected_interior(context);
         }
@@ -243,6 +251,10 @@ impl Plot {
             PlotKind::Histogram => crate::plots::histogram::measure(self, context)?,
             PlotKind::Density => crate::plots::density::measure(self, context)?,
             PlotKind::Qq => crate::plots::qq::measure(self, context)?,
+            PlotKind::Dumbbell => crate::plots::dumbbell::measure(self, context)?,
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+                crate::plots::interval_estimate::measure(self, context)?
+            }
             PlotKind::Regression => crate::plots::regression::measure(self, context)?,
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 crate::plots::line::measure(self, context)?

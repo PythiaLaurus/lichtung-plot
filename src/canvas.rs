@@ -1515,6 +1515,10 @@ impl Canvas {
                             | PlotKind::Density
                             | PlotKind::Qq
                             | PlotKind::Regression
+                            | PlotKind::Dumbbell
+                            | PlotKind::PointInterval
+                            | PlotKind::Coefficient
+                            | PlotKind::Forest
                     )
                 }) {
                     Some(plot) => {
@@ -1571,19 +1575,31 @@ impl Canvas {
                             | PlotKind::Density
                             | PlotKind::Qq
                             | PlotKind::Regression
+                            | PlotKind::Dumbbell
+                            | PlotKind::PointInterval
+                            | PlotKind::Coefficient
+                            | PlotKind::Forest
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath
                     )
                 }) {
                     Some(plot) if reference[index].is_some() => {
+                        let data = plot.data().with_axis_resources(&resources);
+                        let scope_bytes = 6 + index
+                            .checked_ilog10()
+                            .map_or(1, |digits| digits as usize + 1);
+                        let mut scope = String::new();
+                        data.reserve_source_string(&mut scope, scope_bytes)?;
+                        std::fmt::Write::write_fmt(&mut scope, format_args!("panel-{index}"))
+                            .map_err(|error| Error::Render(format!("Canvas scope: {error}")))?;
                         Some(crate::plots::shared_x::prepare_reference_plot(
                             plot,
                             &resources,
                             reference[index]
                                 .take()
                                 .expect("prepared reference component"),
-                            Some(&format!("panel-{index}")),
+                            Some(&scope),
                             shared_x.get(index).copied().flatten(),
                             self.labels.as_ref(),
                         )?)

@@ -272,6 +272,32 @@ impl NumericLabelFormat {
         self.display(value).to_string()
     }
 
+    pub(crate) fn format_source(
+        &self,
+        value: f64,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<String, crate::Error> {
+        use std::fmt::Write;
+        struct Count(usize);
+        impl Write for Count {
+            fn write_str(&mut self, value: &str) -> std::fmt::Result {
+                self.0 = self.0.checked_add(value.len()).ok_or(std::fmt::Error)?;
+                Ok(())
+            }
+        }
+        // A finite f64 needs at most 309 integral digits and 12 fractional digits.
+        data.claim_source_visits(324)?;
+        data.claim_source_visits(self.suffix.as_ref().map_or(0, String::len))?;
+        let mut count = Count(0);
+        write!(count, "{}", self.display(value))
+            .map_err(|error| crate::Error::Render(format!("estimate label count: {error}")))?;
+        let mut text = String::new();
+        data.reserve_source_string(&mut text, count.0)?;
+        write!(text, "{}", self.display(value))
+            .map_err(|error| crate::Error::Render(format!("estimate label: {error}")))?;
+        Ok(text)
+    }
+
     pub(crate) fn display(&self, value: f64) -> impl std::fmt::Display + '_ {
         NumericLabelDisplay {
             format: self,

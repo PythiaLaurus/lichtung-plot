@@ -1,14 +1,87 @@
-//! Shared geometry for distinct coefficient and forest semantic renderers.
+//! Root-prepared estimate semantics and selected point/interval/label geometry.
+
+#[cfg(test)]
+mod extraction;
 
 use crate::Error;
 
-use crate::layout::{AxisSpec, AxisTick, Layout, PhysicalTextAlignment, ResolvedTextPlan};
-use crate::render::backend::{
-    with_clip, Backend, LineStyle, PlannedTextPlacement, Point2D, TextAnchor,
-};
-use crate::spec::{AxisScale, EstimateStatus, FacetScales, PlotRenderContext, PlotRenderResult};
+#[cfg(test)]
+use crate::layout::AxisTick;
+use crate::layout::{AxisSpec, Layout, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, TextAnchor};
+use crate::spec::{AxisScale, EstimateStatus, PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::Plot;
+
+#[derive(Debug)]
+pub(crate) struct PreparedEstimate {
+    pub(crate) kind: crate::PlotKind,
+    pub(crate) labels: Vec<String>,
+    estimates: Vec<Option<EstimateTuple>>,
+    adjacent: Vec<Option<(String, bool)>>,
+    reference: Option<f64>,
+    pub(crate) range: Option<(f64, f64)>,
+    family: &'static str,
+    point_interval: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedEstimateInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedEstimate)>,
+}
+
+impl PreparedEstimate {
+    pub(crate) fn new<'a>(
+        chart: &Plot,
+        data: crate::data::PlotData<'_>,
+        annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
+    ) -> Result<Self, Error> {
+        #[cfg(test)]
+        count(chart.kind(), 0);
+        if chart.kind() != crate::PlotKind::PointInterval {
+            return prepare_model(chart, data, annotations)
+                .map_err(crate::layout::fit::PlanError::into_error);
+        }
+        let rows = crate::plots::point_interval::prepare(chart, data)?;
+        data.claim_source_visits(rows.len())?;
+        let range = estimate_data_range(rows.iter().map(|row| &row.estimate));
+        let range = match (chart.x_axis_spec().limits, range) {
+            (Some(limits), _) => Some(limits),
+            (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
+                range,
+                chart.x_axis_spec(),
+            )?),
+            _ => None,
+        };
+        let mut labels = Vec::new();
+        let mut estimates = Vec::new();
+        data.reserve_source(&mut labels, rows.len())?;
+        data.reserve_source(&mut estimates, rows.len())?;
+        for row in rows {
+            labels.push(row.label);
+            estimates.push(row.estimate);
+        }
+        Ok(Self {
+            kind: chart.kind(),
+            labels,
+            estimates,
+            adjacent: Vec::new(),
+            reference: chart.zero_line_visible().then_some(0.0),
+            range,
+            family: "point_interval",
+            point_interval: true,
+        })
+    }
+
+    pub(crate) fn x_range(&self) -> Result<(f64, f64), Error> {
+        self.range.ok_or_else(|| {
+            Error::Data(format!(
+                "{}: all rows are not_estimable; set explicit x-axis limits",
+                self.family
+            ))
+        })
+    }
+}
 
 pub(crate) const NOT_ESTIMABLE_TEXT: &str = "Not estimable";
 
@@ -17,6 +90,84 @@ struct AdjacentTextPlan {
     position: Point2D,
     anchor: TextAnchor,
     deferred_annotation: bool,
+}
+
+#[derive(Debug)]
+struct EstimateRowPayload {
+    interval: Option<[Point2D; 2]>,
+    caps: [Option<[Point2D; 2]>; 2],
+    point: Option<Point2D>,
+    text: Option<crate::render::backend::PlacedText>,
+}
+
+#[derive(Debug)]
+pub(crate) struct EstimatePayload {
+    clip: crate::layout::PanelBox,
+    reference: Option<[Point2D; 2]>,
+    reference_style: LineStyle,
+    interval_style: LineStyle,
+    point_style: crate::render::backend::PointStyle,
+    rows: Vec<EstimateRowPayload>,
+    #[cfg(test)]
+    kind: crate::PlotKind,
+}
+
+impl EstimatePayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        count(self.kind, 3);
+        with_clip(backend, self.clip, |backend| {
+            if let Some(line) = &self.reference {
+                backend.draw_line(line, &self.reference_style)?;
+            }
+            for row in &self.rows {
+                if let Some(line) = &row.interval {
+                    backend.draw_line(line, &self.interval_style)?;
+                }
+                for cap in row.caps.iter().flatten() {
+                    backend.draw_line(cap, &self.interval_style)?;
+                }
+                if let Some(point) = &row.point {
+                    backend.draw_scatter(std::slice::from_ref(point), &self.point_style)?;
+                }
+                if let Some(text) = &row.text {
+                    text.draw(backend)?;
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(Error::Render(
+        "estimate displays require prepared measurement or selected payload capture".into(),
+    )
+    .into())
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
+}
+
+#[cfg(test)]
+fn count(kind: crate::PlotKind, stage: usize) {
+    let family = match kind {
+        crate::PlotKind::PointInterval => 0,
+        crate::PlotKind::Coefficient => 1,
+        crate::PlotKind::Forest => 2,
+        _ => unreachable!(),
+    };
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[family][stage] += 1;
+        counts.set(next);
+    });
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -157,36 +308,19 @@ pub(crate) fn estimate_data_range<'a>(
         })
 }
 
-pub(crate) fn fixed_facet_estimate_tuples(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    family: &str,
-    require_intervals: bool,
-) -> Result<Option<Vec<Option<EstimateTuple>>>, Error> {
-    if context.data.is_full_plot()
-        || !matches!(
-            context.facet_scales(),
-            Some(FacetScales::Fixed | FacetScales::FreeY)
-        )
-    {
-        return Ok(None);
-    }
-    let source_rows = chart.configured_source_rows()?;
-    let data = source_rows.map_or_else(|| chart.data(), |rows| chart.data().map_source_rows(rows));
-    prepare_estimate_tuples(chart, data, family, require_intervals).map(Some)
-}
-
 pub(crate) fn plan_not_estimable(
     theme: &ResolvedTheme,
+    appearance: &crate::theme::TextAppearance,
     layout: &Layout,
     vertical_guide_x: Option<f64>,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<(ResolvedTextPlan, f64), crate::layout::fit::PlanError> {
-    let text_plan = theme.measure_legacy_text(
+    let text_plan = theme.measure_legacy_appearance_text(
         NOT_ESTIMABLE_TEXT,
-        theme.detail_font_size,
+        appearance,
         PhysicalTextAlignment::Center,
         "not estimable status",
+        false,
     )?;
     let x = not_estimable_text_x(
         layout.projection.panel_box(),
@@ -195,20 +329,6 @@ pub(crate) fn plan_not_estimable(
         scope,
     )?;
     Ok((text_plan, x))
-}
-
-pub(crate) fn draw_planned_not_estimable(
-    text_plan: &ResolvedTextPlan,
-    x: f64,
-    layout: &Layout,
-    y: f64,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    let (_, y) = layout.projection.project(layout.projection.x_range().0, y);
-    backend.draw_planned_text(
-        PlannedTextPlacement::middle(Point2D::new(x.round(), y.round()), TextAnchor::Middle, 0.0),
-        text_plan,
-    )
 }
 
 fn not_estimable_text_x(
@@ -322,37 +442,41 @@ pub(crate) fn shared_x_domain(
 
 #[expect(
     clippy::too_many_lines,
-    clippy::cast_precision_loss,
-    reason = "validated row counts are converted to plot coordinates"
+    reason = "model semantics validate tuples, attached labels, and transformed domains before fonts"
 )]
-pub(crate) fn render(
+fn prepare_model<'a>(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-    family: &'static str,
-    require_intervals: bool,
-    reference: f64,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let estimate_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data(format!("{family}: estimate column not set")))?;
+    data: crate::data::PlotData<'_>,
+    annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
+) -> Result<PreparedEstimate, crate::layout::fit::PlanError> {
+    let require_intervals = chart.kind() == crate::PlotKind::Forest;
+    let family = if require_intervals {
+        "forest"
+    } else {
+        "coefficient"
+    };
+    let reference = if require_intervals {
+        chart.forest_reference_value()
+    } else {
+        chart.coefficient_reference_line_value().unwrap_or(0.0)
+    };
     if chart.hue_col().is_some() || chart.color_col().is_some() {
         return Err(Error::Data(format!(
             "{family}: hue and continuous color channels are not supported"
         ))
         .into());
     }
-    let labels = axis_categories(chart, context.data, family)?;
-    let estimates = prepare_estimate_tuples(chart, context.data, family, require_intervals)?;
+    let labels = axis_categories(chart, data, family)?;
+    let estimates = prepare_estimate_tuples(chart, data, family, require_intervals)?;
     let has_intervals = chart.interval_bound_cols().is_some();
     if chart.estimate_labels_spec().is_some() && has_intervals {
         return Err(Error::Data(format!(
             "{family}: numeric estimate labels are supported only for point-only displays without intervals"
         )).into());
     }
-    let mut coefficient_significance = vec![None; labels.len()];
-    for annotation in chart.significance_annotations() {
+    let mut coefficient_significance = data.collect_source((0..labels.len()).map(|_| Ok(None)))?;
+    for annotation in annotations {
+        data.claim_source_visits(labels.len())?;
         let Some(target) = annotation.at_target() else {
             return Err(Error::Data(
                 "coefficient: only attached significance annotations are supported".into(),
@@ -382,7 +506,8 @@ pub(crate) fn render(
             ))
             .into());
         }
-        coefficient_significance[index] = Some(annotation.mark().glyph()?.to_owned());
+        coefficient_significance[index] =
+            Some(data.copy_source_string(annotation.mark().glyph()?)?);
     }
     if !reference.is_finite() {
         return Err(Error::Data(format!(
@@ -397,13 +522,14 @@ pub(crate) fn render(
         .into());
     }
     for (index, estimate) in estimates.iter().enumerate() {
+        data.claim_source_visits(1)?;
         if estimate.is_some_and(|tuple| {
             tuple
                 .lower
                 .zip(tuple.upper)
                 .is_some_and(|(lower, upper)| lower > tuple.estimate || tuple.estimate > upper)
         }) {
-            let source_row = context.data.source_row(index);
+            let source_row = data.source_row(index);
             return Err(Error::Data(format!(
                 "{family}: source row {source_row} must satisfy lower <= estimate <= upper"
             ))
@@ -412,7 +538,7 @@ pub(crate) fn render(
         if estimate.is_none() && coefficient_significance[index].is_some() {
             return Err(Error::Data(format!(
                 "coefficient: not_estimable source row {} cannot carry a significance mark",
-                context.data.source_row(index)
+                data.source_row(index)
             ))
             .into());
         }
@@ -427,139 +553,131 @@ pub(crate) fn render(
             ))),
         }
     };
-    let transformed_estimates = estimates
-        .iter()
-        .map(|estimate| {
-            estimate
-                .map(|tuple| {
-                    Ok::<_, Error>(EstimateTuple {
-                        estimate: transform(tuple.estimate)?,
-                        lower: tuple.lower.map(transform).transpose()?,
-                        upper: tuple.upper.map(transform).transpose()?,
-                    })
+    let transformed_estimates = data.collect_source(estimates.iter().map(|estimate| {
+        estimate
+            .map(|tuple| {
+                Ok::<_, Error>(EstimateTuple {
+                    estimate: transform(tuple.estimate)?,
+                    lower: tuple.lower.map(transform).transpose()?,
+                    upper: tuple.upper.map(transform).transpose()?,
                 })
-                .transpose()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let transformed_reference = transform(reference)?;
-    let row_count = labels.len() as f64;
-    let panel = context.panel;
-    let layout = context.axis_layout(|| {
-    let data_range = estimate_data_range(&transformed_estimates);
-    let mut transformed_x_spec = chart.x_axis_spec().clone();
-    if scale == AxisScale::Log10 {
-        transformed_x_spec.limits = chart
-            .x_axis_spec()
-            .limits
-            .map(|(lower, upper)| Ok::<_, Error>((transform(lower)?, transform(upper)?)))
-            .transpose()?;
-        if transformed_x_spec
-            .limits
-            .is_some_and(|(lower, upper)| lower >= upper)
-        {
-            return Err(Error::Data(format!(
-                "{family}: logarithmic x-axis limits must remain distinguishable after transformation"
-            )).into());
-        }
-        transformed_x_spec.exact_ticks = chart.projected_explicit_x_ticks(context.data)?;
-    }
-    let facet_fallback = if data_range.is_none() && transformed_x_spec.limits.is_none() {
-        fixed_facet_estimate_tuples(chart, context, family, require_intervals)?
-            .map(|estimates| {
-                estimates
-                    .into_iter()
-                    .map(|estimate| {
-                        estimate
-                            .map(|tuple| {
-                                Ok::<_, Error>(EstimateTuple {
-                                    estimate: transform(tuple.estimate)?,
-                                    lower: tuple.lower.map(transform).transpose()?,
-                                    upper: tuple.upper.map(transform).transpose()?,
-                                })
-                            })
-                            .transpose()
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map(|estimates| estimate_data_range(&estimates))
             })
-            .transpose()?
-            .flatten()
-    } else {
-        None
-    };
-    let x_range = if let Some(range) = chart.resolved_facet_x_range() {
-        range
-    } else if let Some(data_range) = data_range {
-        crate::layout::continuous_auto_range(
-            (
-                data_range.0.min(transformed_reference),
-                data_range.1.max(transformed_reference),
-            ),
-            &transformed_x_spec,
-        )
-    } else if let Some(data_range) = facet_fallback {
-        let provisional = (
-            data_range.0.min(transformed_reference),
-            data_range.1.max(transformed_reference),
-        );
-        if provisional.0 < provisional.1 {
-            provisional
-        } else {
-            crate::layout::continuous_auto_range(provisional, &transformed_x_spec)
+            .transpose()
+    }))?;
+    let transformed_reference = transform(reference)?;
+    data.claim_source_visits(transformed_estimates.len())?;
+    let range = if let Some((lower, upper)) = chart.x_axis_spec().limits {
+        let limits = (transform(lower)?, transform(upper)?);
+        if limits.0 >= limits.1 {
+            return Err(Error::Data(format!("{family}: logarithmic x-axis limits must remain distinguishable after transformation")).into());
         }
+        Some(limits)
     } else {
-        transformed_x_spec.limits.ok_or_else(|| {
-            Error::Data(format!(
-                "{family}: all rows are not_estimable; set explicit x-axis limits"
-            ))
-        })?
+        estimate_data_range(&transformed_estimates).map(|(lower, upper)| {
+            crate::layout::continuous_auto_range(
+                (
+                    lower.min(transformed_reference),
+                    upper.max(transformed_reference),
+                ),
+                &AxisSpec::default(),
+            )
+        })
     };
-    let x_axis = crate::layout::display_axis_spec(&transformed_x_spec, x_range);
-    let y_axis = AxisSpec::default().limits(0.0, row_count);
-        let y_ticks = labels
-            .iter()
-            .enumerate()
-            .map(|(index, label)| AxisTick::new(row_count - index as f64 - 0.5, label.clone()))
-            .collect();
-        let log_plan = if x_axis.exact_ticks.is_some() {
-            None
-        } else if scale == AxisScale::Log10 {
-            Some(log_tick_plan(x_range, x_axis.interval, panel, theme, context.fit_scope())?)
-        } else {
-            None
-        };
-        let source = log_plan.as_ref().map(|plan| plan.source);
-        let x_ticks = log_plan.map_or_else(Vec::new, |plan| plan.ticks);
-        let mut layout = context.layout_with_ticks(
-            x_range,
-            (0.0, row_count),
-            panel,
-            chart.x_label_text().unwrap_or(estimate_col).to_owned(),
-            chart.y_label_text().unwrap_or("").to_owned(),
-            x_ticks,
-            y_ticks,
-            &x_axis,
-            &y_axis,
-            theme,
-        )?;
-        if let Some(source) = source {
-            layout.x_axis.source = source;
-        }
-        Ok(layout)
+    let adjacent = data.collect_source(estimates.iter().zip(coefficient_significance).map(
+        |(estimate, mark)| {
+            if let (Some(tuple), Some(format)) = (estimate, chart.estimate_labels_spec()) {
+                Ok(Some((format.format_source(tuple.estimate, data)?, false)))
+            } else {
+                Ok(mark.map(|mark| (mark, true)))
+            }
+        },
+    ))?;
+    Ok(PreparedEstimate {
+        kind: chart.kind(),
+        labels,
+        estimates: transformed_estimates,
+        adjacent,
+        reference: Some(transformed_reference),
+        range,
+        family,
+        point_interval: false,
+    })
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    count(chart.kind(), 1);
+    let prepared = chart
+        .prepared_estimate
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| {
+            Error::Render("estimate measurement requires root-prepared semantics".into())
+        })?;
+    let layout = context.axis_layout(|| {
+        Err(Error::Render("estimate measurement requires root-prepared axes".into()).into())
     })?;
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(chart, prepared, layout, context, data)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    reason = "project rows and their selected text in scientific order before capture"
+)]
+fn project(
+    chart: &Plot,
+    prepared: &PreparedEstimate,
+    layout: Layout,
+    context: PlotRenderContext<'_>,
+    data: crate::data::PlotData<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    let theme = context.theme;
+    let labels = &prepared.labels;
+    let estimates = &prepared.estimates;
+    let family = prepared.family;
+    let row_count = labels.len() as f64;
     let x_range = layout.projection.x_range();
-    let reference_line_x = (transformed_reference >= x_range.0
-        && transformed_reference <= x_range.1)
-        .then(|| layout.projection.project(transformed_reference, 0.0).0);
-    let significance_label = theme
-        .typography
-        .effective_significance_label(chart.significance_mark_style_override());
+    let reference_line_x = prepared
+        .reference
+        .filter(|value| *value >= x_range.0 && *value <= x_range.1)
+        .map(|value| layout.projection.project(value, 0.0).0);
+    let base = &theme.typography.significance_label;
+    let exact = chart.significance_mark_style_override();
+    let significance_label = crate::theme::TextAppearance {
+        stack: data.copy_source_string(&base.stack)?,
+        paint: base.paint,
+        font_size: exact.map_or(base.font_size, crate::SignificanceMarkStyle::font_size_spec),
+        weight: exact.map_or(base.weight, crate::SignificanceMarkStyle::weight_spec),
+        line_height_multiplier: base.line_height_multiplier,
+    };
+    let detail_label = crate::theme::TextAppearance {
+        stack: data.copy_source_string(&theme.font_family)?,
+        paint: theme.foreground.into(),
+        font_size: theme.detail_font_size,
+        weight: crate::TextWeight::Normal,
+        line_height_multiplier: 1.2,
+    };
+    data.claim_source_visits(estimates.len())?;
     let not_estimable_plan = estimates
         .iter()
         .position(Option::is_none)
         .map(|index| {
             plan_not_estimable(
                 theme,
+                &detail_label,
                 &layout,
                 reference_line_x,
                 &context
@@ -568,33 +686,15 @@ pub(crate) fn render(
             )
         })
         .transpose()?;
-    let detail_label =
-        theme.legacy_text_appearance(theme.detail_font_size, crate::TextWeight::Normal);
-    let frozen_significance = context.deferred_annotation_text();
-    let mut frozen_significance_index = 0_usize;
     let adjacent_label_plans = crate::layout::fit::collect(theme, "estimate adjacent labels", (0..labels.len())
         .map(|index| {
-            let Some(tuple) = transformed_estimates[index] else {
+            let Some(tuple) = estimates[index] else {
                 return Ok(None);
             };
-            let original_estimate = estimates[index]
-                .ok_or_else(|| {
-                    Error::Render(format!(
-                        "{family}: prepared estimated row is missing its original estimate"
-                    ))
-                })?
-                .estimate;
-            let adjacent_label = chart
-                .estimate_labels_spec()
-                .map(|format| (format.format(original_estimate), false))
-                .or_else(|| {
-                    coefficient_significance[index]
-                        .clone()
-                        .map(|mark| (mark, true))
-                });
-            let Some((source, is_significance)) = adjacent_label else {
+            let Some((source, is_significance)) = prepared.adjacent.get(index).and_then(Option::as_ref) else {
                 return Ok(None);
             };
+            let is_significance = *is_significance;
             let scope = context.fit_scope().child(if is_significance { crate::layout::AddressRole::Annotation } else { crate::layout::AddressRole::CategoricalValueLabel }, index)?;
             let (x, y) = layout
                 .projection
@@ -610,64 +710,13 @@ pub(crate) fn render(
                 (&detail_label, 7.0, "coefficient estimate label", false)
             };
             let panel = layout.projection.panel_box();
-            let frozen = if is_significance {
-                frozen_significance
-                    .map(|plans| {
-                        let plan = plans.get(frozen_significance_index).ok_or_else(|| {
-                            Error::Render(format!(
-                                "{family}: frozen attached significance plan count is too short"
-                            ))
-                        })?;
-                        frozen_significance_index += 1;
-                        if plan.plan.source != source
-                            || plan.plan.style.stack_source != appearance.stack
-                            || plan.plan.style.paint != appearance.paint
-                            || plan.plan.style.font_size != appearance.font_size
-                            || plan.plan.style.weight != appearance.weight
-                            || plan.plan.style.exact_override != exact_override
-                            || plan.exact_override != exact_override
-                        {
-                            return Err(Error::Render(format!(
-                                "{family}: frozen attached significance plan does not match its source and style"
-                            )));
-                        }
-                        Ok(plan.plan.clone())
-                    })
-                    .transpose()?
-            } else {
-                None
-            };
-            let (position, anchor, plan) = if let Some(plan) = frozen {
-                let (position, anchor, fits) = match plan.style.alignment {
-                    PhysicalTextAlignment::Start => (
-                        Point2D::new((x + gap).round(), y.round()),
-                        TextAnchor::Start,
-                        x + gap + plan.width() <= panel.x1,
-                    ),
-                    PhysicalTextAlignment::End => (
-                        Point2D::new((x - gap).round(), y.round()),
-                        TextAnchor::End,
-                        x - gap - plan.width() >= panel.x0,
-                    ),
-                    PhysicalTextAlignment::Center => {
-                        return Err(Error::Render(format!(
-                            "{family}: frozen attached significance plan has invalid alignment"
-                        )).into());
-                    }
-                };
-                if !fits {
-                    return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!(
-                        "{family}: frozen attached significance plan no longer fits beside its point"
-                    )).into());
-                }
-                (position, anchor, plan)
-            } else {
+            let (position, anchor, plan) = {
                 let measure = |alignment| {
                     if is_significance {
-                        theme.measure_text(&source, appearance, alignment, owner, exact_override)
+                        theme.measure_text(source, appearance, alignment, owner, exact_override)
                     } else {
                         theme.measure_legacy_appearance_text(
-                            &source,
+                            source,
                             appearance,
                             alignment,
                             owner,
@@ -711,58 +760,126 @@ pub(crate) fn render(
             }))
         })
         )?;
-    if frozen_significance.is_some_and(|plans| plans.len() != frozen_significance_index) {
-        return Err(Error::Render(format!(
-            "{family}: frozen attached significance plan count is too long"
-        ))
-        .into());
-    }
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        let (reference_x, y0) = layout.projection.project(transformed_reference, 0.0);
-        let (_, y1) = layout.projection.project(transformed_reference, row_count);
-        backend.draw_line(
-            &[Point2D::new(reference_x, y0), Point2D::new(reference_x, y1)],
-            &LineStyle::medium_dashed(theme.foreground, 1.0),
-        )?;
-        for index in 0..labels.len() {
-            let y = row_count - index as f64 - 0.5;
-            let Some(tuple) = transformed_estimates[index] else {
-                let (plan, x) = not_estimable_plan
-                    .as_ref()
-                    .ok_or_else(|| Error::Render("not estimable text plan is missing".into()))?;
-                draw_planned_not_estimable(plan, *x, &layout, y, backend)?;
-                continue;
-            };
+    let reference = prepared
+        .reference
+        .filter(|_| !prepared.point_interval || reference_line_x.is_some())
+        .map(|value| {
+            let (x, y0) = layout.projection.project(value, 0.0);
+            let (_, y1) = layout.projection.project(value, row_count);
+            [Point2D::new(x, y0), Point2D::new(x, y1)]
+        });
+    let mut payload = EstimatePayload {
+        clip: layout.projection.panel_box(),
+        reference,
+        reference_style: if prepared.point_interval {
+            LineStyle::solid(theme.foreground, 0.8)
+        } else {
+            LineStyle::medium_dashed(theme.foreground, 1.0)
+        },
+        interval_style: LineStyle::solid(theme.foreground, 1.4),
+        point_style: chart.point_style(theme.colors[0], 4),
+        rows: Vec::new(),
+        #[cfg(test)]
+        kind: chart.kind(),
+    };
+    data.reserve_source(&mut payload.rows, estimates.len())?;
+    let mut deferred_annotation_text = Vec::new();
+    for (index, adjacent) in adjacent_label_plans.into_iter().enumerate() {
+        data.claim_source_visits(1)?;
+        let y = row_count - index as f64 - 0.5;
+        let mut row = EstimateRowPayload {
+            interval: None,
+            caps: [None, None],
+            point: None,
+            text: None,
+        };
+        if let Some(tuple) = estimates[index] {
             if let Some((lower, upper)) = tuple.lower.zip(tuple.upper) {
-                let (left, py) = layout.projection.project(lower, y);
-                let (right, _) = layout.projection.project(upper, y);
-                backend.draw_line(
-                    &[Point2D::new(left, py), Point2D::new(right, py)],
-                    &LineStyle::solid(theme.foreground, 1.4),
-                )?;
+                let (visible_lower, visible_upper) = if prepared.point_interval {
+                    (lower.max(x_range.0), upper.min(x_range.1))
+                } else {
+                    (lower, upper)
+                };
+                if visible_lower <= visible_upper {
+                    let (left, py) = layout.projection.project(visible_lower, y);
+                    let (right, _) = layout.projection.project(visible_upper, y);
+                    row.interval = Some([Point2D::new(left, py), Point2D::new(right, py)]);
+                }
+                if prepared.point_interval {
+                    for (index, bound) in [lower, upper].into_iter().enumerate() {
+                        if bound >= x_range.0 && bound <= x_range.1 {
+                            let (x, py) = layout.projection.project(bound, y);
+                            row.caps[index] =
+                                Some([Point2D::new(x, py - 4.0), Point2D::new(x, py + 4.0)]);
+                        }
+                    }
+                }
             }
-            let (x, y) = layout.projection.project(tuple.estimate, y);
-            backend.draw_scatter(
-                &[Point2D::new(x, y)],
-                &chart.point_style(theme.colors[0], 4),
-            )?;
-            if let Some(adjacent) = &adjacent_label_plans[index] {
-                backend.draw_planned_text(
-                    PlannedTextPlacement::middle(adjacent.position, adjacent.anchor, 0.0),
-                    &adjacent.plan,
-                )?;
+            if !prepared.point_interval
+                || (tuple.estimate >= x_range.0 && tuple.estimate <= x_range.1)
+            {
+                let (x, py) = layout.projection.project(tuple.estimate, y);
+                row.point = Some(Point2D::new(x, py));
             }
+            if let Some(adjacent) = adjacent {
+                if adjacent.deferred_annotation {
+                    data.reserve_source(&mut deferred_annotation_text, 1)?;
+                    deferred_annotation_text.push(
+                        crate::layout::DeferredAnnotationTextPlan::from_resolved(
+                            adjacent.plan.clone(),
+                        ),
+                    );
+                }
+                row.text = Some(crate::render::backend::PlacedText::middle(
+                    adjacent.plan,
+                    adjacent.position,
+                    adjacent.anchor,
+                    0.0,
+                ));
+            }
+        } else {
+            let (plan, x) = not_estimable_plan
+                .as_ref()
+                .ok_or_else(|| Error::Render("not estimable text plan is missing".into()))?;
+            let (_, py) = layout.projection.project(x_range.0, y);
+            row.text = Some(crate::render::backend::PlacedText::middle(
+                plan.clone(),
+                Point2D::new(x.round(), py.round()),
+                TextAnchor::Middle,
+                0.0,
+            ));
         }
-        Ok(())
-    })?;
-    let deferred_annotation_text = adjacent_label_plans
-        .into_iter()
-        .flatten()
-        .filter(|plan| plan.deferred_annotation)
-        .map(|plan| crate::layout::DeferredAnnotationTextPlan::from_resolved(plan.plan))
-        .collect();
-    Ok(PlotRenderResult::new(layout, Vec::new())
-        .with_deferred_annotation_text(deferred_annotation_text))
+        payload.rows.push(row);
+    }
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    if let Some(line) = &payload.reference {
+        geometry.line(line, &payload.reference_style, Some(clip))?;
+    }
+    for row in &payload.rows {
+        if let Some(line) = &row.interval {
+            geometry.line(line, &payload.interval_style, Some(clip))?;
+        }
+        for cap in row.caps.iter().flatten() {
+            geometry.line(cap, &payload.interval_style, Some(clip))?;
+        }
+        if let Some(point) = &row.point {
+            geometry.scatter(std::slice::from_ref(point), &payload.point_style, clip)?;
+        }
+        if let Some(text) = &row.text {
+            geometry.text(text.placement, &text.plan, Some(clip))?;
+        }
+    }
+    #[cfg(test)]
+    count(chart.kind(), 2);
+    let mut result = PlotRenderResult::new(layout, Vec::new())
+        .with_deferred_annotation_text(deferred_annotation_text);
+    result.y_domain = crate::spec::AxisDomain::Categorical;
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Estimate(payload),
+        geometry,
+    })?);
+    Ok(result)
 }
 
 pub(crate) fn log_tick_plan(
