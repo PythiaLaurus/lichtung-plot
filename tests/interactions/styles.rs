@@ -72,6 +72,39 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
     render_svg(plot, "interaction-style").unwrap()
 }
 
+#[test]
+fn extracted_interaction_preserves_original_svg_bytes() {
+    // Full-output fingerprints captured from the original combined renderer at ae5591f.
+    for (theme, expected) in [
+        (
+            lichtung_plot::Theme::Publication,
+            [
+                (11174, 0x27e8_e930_2ede_82fd_u64),
+                (11518, 0x6bd5_2e5c_dd5b_0609),
+            ],
+        ),
+        (
+            lichtung_plot::Theme::Science,
+            [
+                (11021, 0x3ec0_90f9_5970_8127),
+                (11365, 0xd835_28b0_4c40_759f),
+            ],
+        ),
+    ] {
+        for (styled, expected) in [false, true].into_iter().zip(expected) {
+            let output = svg(chart(&interaction_data(), styled)
+                .theme(theme)
+                .size(800, 600));
+            let hash = output
+                .bytes()
+                .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+                    (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+                });
+            assert_eq!((output.len(), hash), expected, "{theme:?}, styled={styled}");
+        }
+    }
+}
+
 fn triangle_vertices(line: &str) -> Vec<(f64, f64)> {
     let points = line
         .split_once("points=\"")

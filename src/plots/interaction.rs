@@ -1,31 +1,73 @@
-//! Interaction profiles from precomputed estimates and intervals.
+//! Root-prepared interaction cells and immutable selected trace operands.
 
-use std::collections::HashSet;
-
-use crate::Error;
-
+use crate::data::{ObservedCollectives, PlotData};
 use crate::decorations::legend::LegendEntry;
-use crate::layout::AxisTick;
-use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
+use crate::render::backend::{Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
-use crate::Plot;
+use crate::{Error, Plot};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg(test)]
+mod extraction;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
+}
+
+#[cfg(test)]
+fn count(stage: usize) {
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[stage] += 1;
+        counts.set(next);
+    });
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 struct TraceStyle {
     point_shape: PointShape,
     line_pattern: LinePattern,
 }
 
+#[derive(Debug)]
+struct Cell {
+    condition: usize,
+    estimate: f64,
+    lower: f64,
+    upper: f64,
+}
+
+#[derive(Debug)]
+struct Trace {
+    identity: crate::data::CollectivePair,
+    color_index: usize,
+    style: TraceStyle,
+    cells: Vec<Cell>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedInteraction {
+    pub(crate) conditions: Vec<String>,
+    pub(crate) range: (f64, f64),
+    traces: Vec<Trace>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PreparedInteractionInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedInteraction)>,
+}
+
 #[expect(
     clippy::too_many_lines,
-    clippy::cast_precision_loss,
-    reason = "validated category indices and panel coordinates are bounded by the canvas"
+    reason = "one admitted semantic preparation boundary"
 )]
-pub(crate) fn render(
+pub(crate) fn prepare(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    data: PlotData<'_>,
+    parent: Option<&ObservedCollectives>,
+) -> Result<PreparedInteraction, Error> {
+    #[cfg(test)]
+    count(0);
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("interaction: x factor column not set".into()))?;
@@ -35,12 +77,12 @@ pub(crate) fn render(
     chart
         .group_col()
         .ok_or_else(|| Error::Data("interaction: graphical group column not set".into()))?;
-    let (lower_col, upper_col) = chart.interval_bound_cols().ok_or_else(|| {
+    let (lo, hi) = chart.interval_bound_cols().ok_or_else(|| {
         Error::Data("interaction: complete precomputed interval columns are required".into())
     })?;
-    let x = crate::data::strict_strings(context.data, x_col, "interaction")?;
+    let x = crate::data::strict_strings(data, x_col, "interaction")?;
     let channels = crate::data::observed_collectives(
-        context.data,
+        data,
         chart.group_col(),
         chart.group_name(),
         chart.hue_col(),
@@ -48,9 +90,9 @@ pub(crate) fn render(
         None,
         "interaction",
     )?;
-    let estimate = crate::data::strict_finite_f64(context.data, estimate_col, "interaction")?;
-    let lower = crate::data::strict_finite_f64(context.data, lower_col, "interaction")?;
-    let upper = crate::data::strict_finite_f64(context.data, upper_col, "interaction")?;
+    let estimate = crate::data::strict_finite_f64(data, estimate_col, "interaction")?;
+    let lower = crate::data::strict_finite_f64(data, lo, "interaction")?;
+    let upper = crate::data::strict_finite_f64(data, hi, "interaction")?;
     if x.is_empty()
         || [
             channels.rows.len(),
@@ -63,209 +105,300 @@ pub(crate) fn render(
     {
         return Err(Error::Data(
             "interaction: all channels must have equal non-zero lengths".into(),
-        )
-        .into());
+        ));
     }
-    let mut x_levels = Vec::new();
-    let trace_levels = chart.resolved_group_levels(channels.group_levels.clone());
-    let hue_levels = chart.resolved_hue_levels(channels.hue_levels.clone());
-    let identities = chart.resolved_collective_pairs(channels.identities.clone());
-    let trace_styles = resolve_trace_styles(chart, &trace_levels)?;
-    let mut cells = HashSet::new();
-    for index in 0..x.len() {
-        if lower[index] > estimate[index] || estimate[index] > upper[index] {
-            let source_row = context.data.source_row(index);
+    let conditions = data.source_levels(&x)?;
+    let domain = parent.unwrap_or(&channels);
+    let groups = chart.global_group_levels().unwrap_or(&domain.group_levels);
+    let hues = chart.global_hue_levels().unwrap_or(&domain.hue_levels);
+    let identities = chart
+        .global_collective_pairs()
+        .unwrap_or(&domain.identities);
+    let styles = resolve_trace_styles(chart, groups, data)?;
+    data.claim_source_visits(x.len())?;
+    for row in 0..x.len() {
+        if lower[row] > estimate[row] || estimate[row] > upper[row] {
             return Err(Error::Data(format!(
-                "interaction: source row {source_row} must satisfy lower <= estimate <= upper"
-            ))
-            .into());
+                "interaction: source row {} must satisfy lower <= estimate <= upper",
+                data.source_row(row)
+            )));
         }
-        if !cells.insert((x[index].clone(), channels.rows[index].clone())) {
-            let source_row = context.data.source_row(index);
-            return Err(Error::Data(format!(
-                "interaction: duplicate (condition, group, hue) cell ({:?}, {:?}, {:?}) at source row {source_row}",
-                x[index], channels.rows[index].group, channels.rows[index].hue
-            )).into());
-        }
-        if !x_levels.contains(&x[index]) {
-            x_levels.push(x[index].clone());
+        data.claim_source_visits(row)?;
+        if (0..row).any(|prior| x[prior] == x[row] && channels.rows[prior] == channels.rows[row]) {
+            return Err(Error::Data(format!("interaction: duplicate (condition, group, hue) cell ({:?}, {:?}, {:?}) at source row {}", x[row], channels.rows[row].group, channels.rows[row].hue, data.source_row(row))));
         }
     }
-    let layout = context.axis_layout(|| {
-        let y_range = crate::layout::continuous_auto_range(
-            crate::data::min_max(lower.iter().chain(&upper).copied(), "interaction")?,
-            chart.y_axis_spec(),
-        );
-        let y_axis = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        let x_ticks = x_levels
+    let mut traces = Vec::new();
+    data.reserve_source(&mut traces, identities.len())?;
+    for identity in identities {
+        data.claim_source_visits(channels.rows.len())?;
+        if !channels.rows.contains(identity) {
+            continue;
+        }
+        let group = identity.group.as_deref().ok_or_else(|| {
+            Error::Data("interaction: graphical group channel did not resolve".into())
+        })?;
+        data.claim_source_visits(groups.len())?;
+        let index = groups
             .iter()
-            .enumerate()
-            .map(|(index, label)| AxisTick::new(index as f64 + 0.5, label.clone()))
-            .collect();
-        let panel = context.panel;
+            .position(|level| level == group)
+            .ok_or_else(|| {
+                Error::Data(format!(
+                    "interaction: graphical group {group:?} is absent from the resolved order"
+                ))
+            })?;
+        let color_index = if let Some(hue) = &identity.hue {
+            data.claim_source_visits(hues.len())?;
+            hues.iter().position(|level| level == hue).ok_or_else(|| {
+                Error::Data(format!(
+                    "interaction: hue {hue:?} is absent from the resolved order"
+                ))
+            })?
+        } else {
+            0
+        };
+        let mut cells = Vec::new();
+        data.claim_source_visits(channels.rows.len())?;
+        let cell_count = channels.rows.iter().filter(|row| *row == identity).count();
+        data.reserve_source(&mut cells, cell_count)?;
+        for (condition, level) in conditions.iter().enumerate() {
+            data.claim_source_visits(x.len())?;
+            if let Some(row) =
+                (0..x.len()).find(|row| &x[*row] == level && &channels.rows[*row] == identity)
+            {
+                cells.push(Cell {
+                    condition,
+                    estimate: estimate[row],
+                    lower: lower[row],
+                    upper: upper[row],
+                });
+            }
+        }
+        traces.push(Trace {
+            identity: data.copy_source_pair(identity)?,
+            color_index,
+            style: styles
+                .as_ref()
+                .map_or_else(TraceStyle::default, |styles| styles[index]),
+            cells,
+        });
+    }
+    data.claim_source_visits(lower.len())?;
+    data.claim_source_visits(upper.len())?;
+    Ok(PreparedInteraction {
+        conditions,
+        range: crate::data::min_max(lower.into_iter().chain(upper), "interaction")?,
+        traces,
+    })
+}
+
+#[derive(Debug)]
+pub(crate) struct InteractionPayload {
+    clip: crate::layout::PanelBox,
+    traces: Vec<TracePayload>,
+}
+
+#[derive(Debug)]
+struct TracePayload {
+    intervals: Vec<[Point2D; 2]>,
+    points: Vec<Point2D>,
+    interval: LineStyle,
+    connector: Option<LineStyle>,
+    marker: Option<PointStyle>,
+}
+
+impl InteractionPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        count(2);
+        crate::render::backend::with_clip(backend, self.clip, |backend| {
+            for trace in &self.traces {
+                for interval in &trace.intervals {
+                    backend.draw_line(interval, &trace.interval)?;
+                }
+                if let Some(style) = &trace.connector {
+                    backend.draw_line(&trace.points, style)?;
+                }
+                if let Some(style) = &trace.marker {
+                    backend.draw_scatter(&trace.points, style)?;
+                }
+            }
+            Ok(())
+        })
+    }
+}
+
+#[expect(
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    reason = "selected bounded category projection and frozen trace styles"
+)]
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    count(1);
+    let marks = chart
+        .prepared_interaction
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| {
+            Error::Render("interaction measurement requires root-prepared semantics".into())
+        })?;
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let layout = context.axis_layout(|| {
+        let range = crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec());
+        let axis = crate::layout::display_axis_spec(chart.y_axis_spec(), range);
         context.layout_with_ticks(
-            (0.0, x_levels.len() as f64),
-            y_range,
-            panel,
-            chart.x_label_text().unwrap_or(x_col).to_owned(),
-            chart.y_label_text().unwrap_or(estimate_col).to_owned(),
-            x_ticks,
+            (0.0, marks.conditions.len() as f64),
+            range,
+            context.panel,
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
+            Vec::new(),
             Vec::new(),
             chart.x_axis_spec(),
-            &y_axis,
+            &axis,
             context.theme,
         )
     })?;
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for identity in &identities {
-            if !channels.rows.contains(identity) {
-                continue;
-            }
-            let trace_level = identity.group.as_ref().ok_or_else(|| {
-                Error::Data("interaction: graphical group channel did not resolve".into())
-            })?;
-            let trace_index = trace_levels
-                .iter()
-                .position(|level| level == trace_level)
-                .ok_or_else(|| {
-                    Error::Data(format!(
-                        "interaction: graphical group {trace_level:?} is absent from the resolved order"
-                    ))
-                })?;
-            let hue = identity.hue.as_deref();
-            let color_index = hue
-                .and_then(|hue| hue_levels.iter().position(|level| level == hue))
-                .unwrap_or(0);
-            let color = chart.categorical_color(
-                "interaction",
-                hue.unwrap_or(trace_level),
-                color_index,
-                context.theme,
-            )?;
-            let mut points = Vec::new();
-            for (x_index, x_level) in x_levels.iter().enumerate() {
-                if let Some(row) =
-                    (0..x.len()).find(|row| &x[*row] == x_level && &channels.rows[*row] == identity)
-                {
-                    let (px, py) = layout
-                        .projection
-                        .project(x_index as f64 + 0.5, estimate[row]);
-                    let (_, low) = layout.projection.project(x_index as f64 + 0.5, lower[row]);
-                    let (_, high) = layout.projection.project(x_index as f64 + 0.5, upper[row]);
-                    backend.draw_line(
-                        &[Point2D::new(px, low), Point2D::new(px, high)],
-                        &LineStyle::solid(color, 1.2),
-                    )?;
-                    points.push(Point2D::new(px, py));
-                }
-            }
-            if chart.interaction_connectors_visible() && points.len() > 1 {
-                let line_style = trace_styles.as_ref().map_or_else(
-                    || LineStyle::solid(color, 1.8),
-                    |styles| styles[trace_index].line_pattern.line_style(color, 1.8),
-                );
-                backend.draw_line(&points, &line_style)?;
-            }
-            if chart.markers_visible() {
-                let point_shape = trace_styles
-                    .as_ref()
-                    .map_or(PointShape::Circle, |styles| styles[trace_index].point_shape);
-                backend.draw_scatter(
-                    &points,
-                    &chart.point_style(color, 4).with_shape(point_shape),
-                )?;
-            }
+    let mut payload = InteractionPayload {
+        clip: layout.projection.panel_box(),
+        traces: Vec::new(),
+    };
+    let mut legends = Vec::new();
+    data.reserve_source(&mut payload.traces, marks.traces.len())?;
+    data.reserve_source(&mut legends, marks.traces.len())?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for trace in &marks.traces {
+        let key = trace
+            .identity
+            .hue
+            .as_deref()
+            .or(trace.identity.group.as_deref())
+            .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
+        let color =
+            chart.categorical_color("interaction", key, trace.color_index, context.theme)?;
+        let point = chart
+            .point_style(color, 4)
+            .with_shape(trace.style.point_shape);
+        let line = trace.style.line_pattern.line_style(color, 1.8);
+        let mut selected = TracePayload {
+            intervals: Vec::new(),
+            points: Vec::new(),
+            interval: LineStyle::solid(color, 1.2),
+            connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
+                .then(|| line.clone()),
+            marker: chart.markers_visible().then(|| point.clone()),
+        };
+        data.reserve_source(&mut selected.intervals, trace.cells.len())?;
+        data.reserve_source(&mut selected.points, trace.cells.len())?;
+        for cell in &trace.cells {
+            let x = cell.condition as f64 + 0.5;
+            let (px, py) = layout.projection.project(x, cell.estimate);
+            let (_, low) = layout.projection.project(x, cell.lower);
+            let (_, high) = layout.projection.project(x, cell.upper);
+            let interval = [Point2D::new(px, low), Point2D::new(px, high)];
+            geometry.line(&interval, &selected.interval, Some(clip))?;
+            selected.intervals.push(interval);
+            selected.points.push(Point2D::new(px, py));
         }
-        Ok(())
-    })?;
-    let legends = identities
-        .iter()
-        .filter(|identity| channels.rows.contains(identity))
-        .filter(|identity| identity.hue.is_some() || trace_styles.is_some())
-        .map(|identity| {
-            let trace_level = identity.group.as_ref().ok_or_else(|| {
-                Error::Render("interaction legend identity has no graphical group".into())
-            })?;
-            let trace_index = trace_levels
-                .iter()
-                .position(|level| level == trace_level)
-                .ok_or_else(|| {
-                    Error::Render("interaction legend group is absent from resolved order".into())
-                })?;
-            let hue = identity.hue.as_deref();
-            let color_index = hue
-                .and_then(|hue| hue_levels.iter().position(|level| level == hue))
-                .unwrap_or(0);
-            let color = chart.categorical_color(
-                "interaction",
-                hue.unwrap_or(trace_level),
-                color_index,
-                context.theme,
-            )?;
-            let style = trace_styles
-                .as_ref()
-                .map_or(TraceStyle::default(), |styles| styles[trace_index]);
-            let legend_identity = chart.collective_legend_identity(identity, chart.data())?;
-            let point = chart.point_style(color, 4).with_shape(style.point_shape);
-            let line = style.line_pattern.line_style(color, 1.8);
-            match (
-                chart.markers_visible(),
-                chart.interaction_connectors_visible(),
-            ) {
-                (true, true) => Ok(LegendEntry::point_line(legend_identity, point, line)),
-                (true, false) => Ok(LegendEntry::point(legend_identity, point)),
-                (false, true) => Ok(LegendEntry::line(legend_identity, line)),
-                (false, false) => Err(Error::Render(
-                    "interaction legend has no visible glyph component".into(),
-                )),
-            }
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    Ok(PlotRenderResult::new(layout, legends))
+        if let Some(style) = &selected.connector {
+            geometry.line(&selected.points, style, Some(clip))?;
+        }
+        if let Some(style) = &selected.marker {
+            geometry.scatter(&selected.points, style, clip)?;
+        }
+        if trace.identity.hue.is_some() || chart.interaction_styles_spec().is_some() {
+            let identity = chart.collective_legend_identity(&trace.identity, data)?;
+            legends.push(
+                match (
+                    chart.markers_visible(),
+                    chart.interaction_connectors_visible(),
+                ) {
+                    (true, true) => LegendEntry::point_line(identity, point, line),
+                    (true, false) => LegendEntry::point(identity, point),
+                    (false, true) => LegendEntry::line(identity, line),
+                    (false, false) => {
+                        return Err(Error::Render(
+                            "interaction legend has no visible glyph component".into(),
+                        )
+                        .into())
+                    }
+                },
+            );
+        }
+        payload.traces.push(selected);
+    }
+    let mut result = PlotRenderResult::new(layout, legends);
+    result.x_domain = crate::spec::AxisDomain::Categorical;
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Interaction(payload),
+        geometry,
+    })?);
+    Ok(result)
+}
+
+pub(crate) fn reject_combined(
+    _: &Plot,
+    _: PlotRenderContext<'_>,
+    _: &mut dyn Backend,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    Err(Error::Render(
+        "interaction requires prepared measurement or selected payload capture".into(),
+    )
+    .into())
 }
 
 fn resolve_trace_styles(
     chart: &Plot,
-    trace_levels: &[String],
+    levels: &[String],
+    data: PlotData<'_>,
 ) -> Result<Option<Vec<TraceStyle>>, Error> {
     let Some(configured) = chart.interaction_styles_spec() else {
         return Ok(None);
     };
-
-    let mut styles = vec![None; trace_levels.len()];
-    for configured_style in configured {
-        let style = TraceStyle {
-            point_shape: configured_style.point_shape(),
-            line_pattern: configured_style.line_pattern(),
-        };
-        let index = trace_levels
+    let mut styles = data.collect_source(levels.iter().map(|_| Ok(None)))?;
+    for configured in configured {
+        data.claim_source_visits(levels.len())?;
+        let index = levels
             .iter()
-            .position(|level| level == configured_style.group())
+            .position(|level| level == configured.group())
             .ok_or_else(|| {
                 Error::Data(format!(
                     "interaction: style references unknown graphical group {:?}",
-                    configured_style.group()
+                    configured.group()
                 ))
             })?;
         if styles[index].is_some() {
             return Err(Error::Data(format!(
                 "interaction: graphical group {:?} has more than one configured style",
-                configured_style.group()
+                configured.group()
             )));
         }
-        styles[index] = Some(style);
+        styles[index] = Some(TraceStyle {
+            point_shape: configured.point_shape(),
+            line_pattern: configured.line_pattern(),
+        });
     }
-
-    styles
-        .into_iter()
-        .zip(trace_levels)
-        .map(|(style, trace)| {
-            style.ok_or_else(|| {
-                Error::Data(format!(
-                    "interaction: graphical group {trace:?} has no configured style"
-                ))
-            })
+    data.collect_source(styles.into_iter().zip(levels).map(|(style, trace)| {
+        style.ok_or_else(|| {
+            Error::Data(format!(
+                "interaction: graphical group {trace:?} has no configured style"
+            ))
         })
-        .collect::<Result<Vec<_>, _>>()
-        .map(Some)
+    }))
+    .map(Some)
 }

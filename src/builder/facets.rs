@@ -217,10 +217,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
-    pub(crate) fn resolved_hue_levels(&self, observed: Vec<String>) -> Vec<String> {
-        self.global_hue_levels.clone().unwrap_or(observed)
-    }
-
     pub(crate) fn global_hue_levels(&self) -> Option<&[String]> {
         self.global_hue_levels.as_deref()
     }
@@ -228,10 +224,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn with_global_group_levels(mut self, levels: Vec<String>) -> Self {
         self.global_group_levels = Some(levels);
         self
-    }
-
-    pub(crate) fn resolved_group_levels(&self, observed: Vec<String>) -> Vec<String> {
-        self.global_group_levels.clone().unwrap_or(observed)
     }
 
     pub(crate) fn global_group_levels(&self) -> Option<&[String]> {
@@ -244,13 +236,6 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> Self {
         self.global_collective_pairs = Some(identities);
         self
-    }
-
-    pub(crate) fn resolved_collective_pairs(
-        &self,
-        observed: Vec<crate::data::CollectivePair>,
-    ) -> Vec<crate::data::CollectivePair> {
-        self.global_collective_pairs.clone().unwrap_or(observed)
     }
 
     pub(crate) fn global_collective_pairs(&self) -> Option<&[crate::data::CollectivePair]> {

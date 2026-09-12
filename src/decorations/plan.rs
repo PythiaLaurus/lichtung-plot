@@ -1217,6 +1217,7 @@ fn measure_geometry(
             | PlotKind::Boxplot
             | PlotKind::Violin
             | PlotKind::Raincloud
+            | PlotKind::Interaction
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

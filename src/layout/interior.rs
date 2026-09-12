@@ -41,7 +41,7 @@ macro_rules! interior_routes {
 
 interior_routes! {
     CategoricalLegacy {
-        Interaction => crate::plots::interaction::render,
+        Interaction => crate::plots::interaction::reject_combined,
         PointInterval => crate::plots::interval_estimate::reject_combined,
         Coefficient => crate::plots::interval_estimate::reject_combined,
         Forest => crate::plots::interval_estimate::reject_combined,
@@ -104,6 +104,8 @@ impl ParentCompositionAdapter {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) interaction:
+        Option<std::sync::Arc<crate::plots::interaction::PreparedInteractionInputs>>,
     pub(crate) distributions:
         Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
     pub(crate) bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
@@ -126,6 +128,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
+        plot.prepared_interaction.clone_from(&self.interaction);
         plot.prepared_matrix_axes.clone_from(&self.matrix);
         plot.prepared_scatter.clone_from(&self.scatter);
         plot.prepared_line.clone_from(&self.line);
@@ -216,6 +219,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Interaction(crate::plots::interaction::InteractionPayload),
     Distribution(crate::plots::categorical_distribution::DistributionPayload),
     Bars(crate::plots::bar_data::BarPayload),
     Estimate(crate::plots::interval_estimate::EstimatePayload),
@@ -234,6 +238,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Interaction(payload) => payload.draw(backend),
             MarkPayload::Distribution(payload) => payload.draw(backend),
             MarkPayload::Bars(payload) => payload.draw(backend),
             MarkPayload::Estimate(payload) => payload.draw(backend),

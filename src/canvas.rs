@@ -1526,6 +1526,7 @@ impl Canvas {
                             | PlotKind::Boxplot
                             | PlotKind::Violin
                             | PlotKind::Raincloud
+                            | PlotKind::Interaction
                     )
                 }) {
                     Some(plot) => {
@@ -1593,6 +1594,7 @@ impl Canvas {
                             | PlotKind::Boxplot
                             | PlotKind::Violin
                             | PlotKind::Raincloud
+                            | PlotKind::Interaction
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath

@@ -244,7 +244,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3c | Estimate-display semantic and payload extraction | COMPLETE |
 | T5a6a3d | Bar semantic and payload extraction | COMPLETE |
 | T5a6a3e | Categorical-distribution semantic and payload extraction | COMPLETE |
-| T5a6a3f | Interaction semantic and payload extraction | PENDING |
+| T5a6a3f | Interaction semantic and payload extraction | COMPLETE |
 | T5a6a4a | Heatmap deferred interior | PENDING |
 | T5a6a4b | Marginal deferred interior | PENDING |
 | T5a6a4c | Matrix deferred interior and outer title integration | PENDING |
@@ -4606,8 +4606,8 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, and T5a6a3a-e are complete with focused and primary integrated
-evidence below. Successor extraction steps are PENDING.
+T5a6a1, T5a6a2, and all ordinary extraction steps T5a6a3a-f are complete with
+focused and primary integrated evidence below; later extraction steps are PENDING.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4630,6 +4630,26 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a3f completion evidence:
+
+- Interaction retains admitted condition, collective, sparse-cell, interval, and
+  configured-style semantics per root component. Axes consume retained domains;
+  facets retain parent collective ordering, and Canvas uses borrowed configuration.
+- Selected marks and common annotations capture without source reads or mark
+  projection. The combined Interaction renderer is removed; categorical legacy
+  classification remains until T5a6c4.
+- Focused extraction, Interaction integration, and canonical lifecycle tests pass,
+  as does strict offline all-target Clippy. Publication/Science default and styled
+  full-SVG fingerprints match the original renderer at `ae5591f` at 800x600.
+- Final primary verification in `/tmp/opencode/t5a6a3f-verify.log` passed:
+  formatting, strict offline all-target Clippy, 873 library tests passed with
+  17 ignored, 443 integration tests passed (including 23 Interaction tests),
+  four example targets with zero tests, warning-denied rustdoc, and offline
+  package verification of 228 files (6.5 MiB; 1.4 MiB compressed). No tests failed.
+- Final primary review reported no actionable bugs. All twenty ordinary routes
+  now use retained dispatch under the current legacy axis/frame policy; native
+  migration remains pending in T5a6b/c, including Interaction in T5a6c4.
 
 T5a6a1 declares the interfaces; each extraction step replaces its family's
 combined preparation/drawing use with those interfaces and deletes superseded

@@ -1821,6 +1821,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::Boxplot
                     | PlotKind::Violin
                     | PlotKind::Raincloud
+                    | PlotKind::Interaction
             ) {
                 &prepared
             } else {

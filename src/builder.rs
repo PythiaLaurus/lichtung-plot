@@ -508,6 +508,8 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     pub(crate) prepared_estimate:
         Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
     pub(crate) prepared_bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
+    pub(crate) prepared_interaction:
+        Option<std::sync::Arc<crate::plots::interaction::PreparedInteractionInputs>>,
     pub(crate) prepared_distributions:
         Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
     pub(crate) prepared_dumbbell:
@@ -631,6 +633,7 @@ impl Plot<crate::kind::Any> {
             prepared_qq: None,
             prepared_estimate: None,
             prepared_bars: None,
+            prepared_interaction: None,
             prepared_distributions: None,
             prepared_dumbbell: None,
             prepared_regression: None,
@@ -1057,9 +1060,11 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_dumbbell,
             prepared_estimate,
             prepared_bars,
+            prepared_interaction,
             prepared_distributions,
         } = self;
         Plot {
+            prepared_interaction,
             prepared_distributions,
             prepared_bars,
             prepared_estimate,

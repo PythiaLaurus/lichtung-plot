@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Interaction(crate::plots::interaction::PreparedInteraction),
     Distribution(
         crate::PlotKind,
         crate::plots::categorical_distribution::PreparedDistribution,
@@ -33,6 +34,9 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
+                source, data, None,
+            )?)),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Distribution(
                 source.kind(),
                 crate::plots::categorical_distribution::PreparedDistribution::new(
@@ -82,6 +86,7 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
             Self::Distribution(_, marks) => (0.0, marks.categories().len() as f64),
             Self::Bars(kind, marks) => {
                 if matches!(
@@ -107,6 +112,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    interaction: Option<&'a crate::plots::interaction::PreparedInteraction>,
     distribution: Option<&'a crate::plots::categorical_distribution::PreparedDistribution>,
     bars: Option<&'a crate::plots::bar_data::PreparedBars>,
     estimate: Option<&'a crate::plots::interval_estimate::PreparedEstimate>,
@@ -137,10 +143,15 @@ pub(crate) fn prepare_reference_plot(
     let mut estimate = None;
     let mut bars = None;
     let mut distribution = None;
+    let mut interaction = None;
     let mut curves = None;
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Interaction(marks) => {
+            interaction = Some(marks);
+            PlotKind::Interaction
+        }
         PreparedReference::Distribution(kind, marks) => {
             distribution = Some(marks);
             kind
@@ -188,6 +199,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            interaction: interaction.as_ref(),
             distribution: distribution.as_ref(),
             bars: bars.as_ref(),
             x_limits,
@@ -206,6 +218,14 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        interaction: interaction
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::interaction::PreparedInteractionInputs { panels })
+            })
+            .transpose()?,
         distributions: distribution
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -300,6 +320,7 @@ pub(crate) fn prepare_plot(
     let mut estimate = Vec::new();
     let mut bars = Vec::new();
     let mut distributions = Vec::new();
+    let mut interaction = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -321,6 +342,7 @@ pub(crate) fn prepare_plot(
             | PlotKind::Boxplot
             | PlotKind::Violin
             | PlotKind::Raincloud
+            | PlotKind::Interaction
     ) && !source.has_facets()
     {
         return prepare_reference_plot(
@@ -352,6 +374,19 @@ pub(crate) fn prepare_plot(
     }
     if source.has_facets() {
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
+        let interaction_parent = (source.kind() == PlotKind::Interaction)
+            .then(|| {
+                crate::data::observed_collectives(
+                    source_data,
+                    source.group_col(),
+                    source.group_name(),
+                    source.hue_col(),
+                    source.hue_name(),
+                    None,
+                    "interaction",
+                )
+            })
+            .transpose()?;
         let mut estimate_panels = if matches!(
             source.kind(),
             PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
@@ -489,6 +524,11 @@ pub(crate) fn prepare_plot(
                 .then(|| crate::plots::dumbbell::prepare(source, data))
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
+            let interaction_marks = (source.kind() == PlotKind::Interaction)
+                .then(|| {
+                    crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())
+                })
+                .transpose()?;
             let distribution_marks = matches!(
                 source.kind(),
                 PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
@@ -529,6 +569,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    interaction: interaction_marks.as_ref(),
                     distribution: distribution_marks.as_ref(),
                     bars: bar_marks.as_ref(),
                     dumbbell: pairs.as_ref(),
@@ -538,6 +579,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = interaction_marks {
+                source_data.reserve_source(&mut interaction, 1)?;
+                interaction.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(marks) = distribution_marks {
                 source_data.reserve_source(&mut distributions, 1)?;
                 distributions.push((Some(source_data.copy_source_string(&scope)?), marks));
@@ -652,6 +697,15 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        interaction: if source.kind() == PlotKind::Interaction {
+            Some(
+                source_data.source_arc(crate::plots::interaction::PreparedInteractionInputs {
+                    panels: interaction,
+                })?,
+            )
+        } else {
+            None
+        },
         distributions: if matches!(
             source.kind(),
             PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
@@ -789,6 +843,7 @@ pub(crate) fn prepare_scatter_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
         bars: None,
+        interaction: None,
         distributions: None,
         estimate: None,
         dumbbell: None,
@@ -841,6 +896,7 @@ pub(crate) fn prepare_line_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         bars: None,
+        interaction: None,
         distributions: None,
         estimate: None,
         dumbbell: None,
@@ -924,13 +980,6 @@ fn prepare(
     #[cfg(test)]
     super::AXIS_PREPARATIONS.with(|count| count.set(count.get() + 1));
     let mut categories: [Option<Vec<String>>; 2] = [None, None];
-    let numeric = |column: Option<&str>| -> Result<Vec<f64>, Error> {
-        crate::data::strict_finite_f64(
-            data,
-            column.ok_or_else(|| Error::Data("axis column not set".into()))?,
-            "axis",
-        )
-    };
     let strings = |column: Option<&str>| -> Result<Vec<String>, Error> {
         crate::data::strict_strings(
             data,
@@ -1088,22 +1137,23 @@ fn prepare(
             [range, (0.0, marks.labels.len() as f64)]
         }
         PlotKind::Interaction => {
-            let levels = data.source_levels(&strings(chart.x_col())?)?;
-            let (lo, hi) = chart
-                .interval_bound_cols()
-                .ok_or_else(|| Error::Data("interaction: interval columns not set".into()))?;
-            let lower = numeric(Some(lo))?;
-            let upper = numeric(Some(hi))?;
-            data.claim_source_visits(lower.len())?;
-            data.claim_source_visits(upper.len())?;
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.interaction)
+                .ok_or_else(|| {
+                    Error::Render("interaction axes require retained semantics".into())
+                })?;
+            let levels = data.collect_source(
+                marks
+                    .conditions
+                    .iter()
+                    .map(|level| data.copy_source_string(level)),
+            )?;
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(
-                    crate::data::min_max(lower.into_iter().chain(upper), "axis")?,
-                    chart.y_axis_spec(),
-                ),
+                crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec()),
             ]
         }
         PlotKind::Beeswarm | PlotKind::Waterfall => {
