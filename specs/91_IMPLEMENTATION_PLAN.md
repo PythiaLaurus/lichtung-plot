@@ -243,7 +243,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3b | Distribution/reference semantic and payload extraction | COMPLETE |
 | T5a6a3c | Estimate-display semantic and payload extraction | COMPLETE |
 | T5a6a3d | Bar semantic and payload extraction | COMPLETE |
-| T5a6a3e | Categorical-distribution semantic and payload extraction | PENDING |
+| T5a6a3e | Categorical-distribution semantic and payload extraction | COMPLETE |
 | T5a6a3f | Interaction semantic and payload extraction | PENDING |
 | T5a6a4a | Heatmap deferred interior | PENDING |
 | T5a6a4b | Marginal deferred interior | PENDING |
@@ -4606,9 +4606,9 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, and T5a6a3a-c are complete with focused and primary integrated
-evidence below. T5a6a3d is also complete; successor
-extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
+T5a6a1, T5a6a2, and T5a6a3a-e are complete with focused and primary integrated
+evidence below. Successor extraction steps are PENDING.
+Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
 the later native axis/frame migrations; they must not duplicate those migrations.
@@ -4936,6 +4936,45 @@ T5a6a3d completion evidence (based on clean `4c67f93`):
 - Primary `just verify` passed: 861 library tests (17 ignored), 442 integration
   tests, strict Clippy, formatting, API docs, and package verification (224 files).
   All six snapshots remain unchanged. Log: `/tmp/opencode/t5a6a3d-verify.log`.
+
+T5a6a3e completion evidence (based on clean `7534bc9`):
+
+**Status**: COMPLETE
+
+- Boxplot, Violin, and Raincloud retain component-scoped samples, quartiles,
+  family-specific whiskers/outliers, KDE grid/densities, or admitted supplied
+  geometry before fonts. Axis preparation consumes retained category order and
+  ranges; facets retain global series/hue slots and reconcile their ranges.
+  Canvas prepares each component once. Categorical shared-x rejection is unchanged.
+- Backend-free measurement creates ordered polygon/line/scatter payloads and
+  GeometrySnapshot consequences. Parent axis/frame policy remains categorical
+  legacy until T5a6c3. The combined renderers and their fit/backend clip helper
+  are removed. No native-axis or final T5c mark policy is introduced.
+- Selected common annotations retain guide/panel text geometry and pairwise
+  bracket styles in DeferredAnnotationPlan. Standalone, facet, and Canvas capture
+  use those styles and the retained deferred text without consulting frontend
+  significance appearance. Bracket ink is recorded once in annotation geometry,
+  not duplicated in mark geometry; existing draw order is preserved.
+- Supplied Histogram/Raincloud source geometry uses shared immutable ownership,
+  eliminating nested vector/string clones when parent composition clones a Plot.
+  Statistical sorts use the existing admitted in-place source sorter, and KDE
+  uses the existing operation-bearing statistical helper. Retained and projected
+  vectors and legend identity strings use the existing source admission gates.
+- Six extraction tests cover exact prefont semantic budgets, shared attachment,
+  source-geometry clone identity, invalid statistical inputs before discovery,
+  standalone/all facet policies/Canvas stage counts, mark and annotation
+  snapshot parity, poisoned-source capture, and Null/SVG replay. Capture repeats
+  no source-column reads, statistics, projection, tick/axis work, or shaping.
+- Strict offline all-target Clippy passes. Focused integration checks pass:
+  42 categorical, 67 distribution, 27 annotation, and six unchanged visual
+  snapshots. Full library test output is persisted in
+  `/tmp/opencode/t5a6a3e-unit.log` (867 passed, 17 ignored).
+- Review P2 is resolved: supplied hue indices are retained during semantic
+  preparation, with zero repeated hue lookups during measurement or capture.
+- Primary integrated `just verify` passed: 869 library tests (17 ignored),
+  442 integration tests, strict offline all-target Clippy, formatting, API docs,
+  and package verification (227 files). All six snapshots pass and remain
+  unchanged. Log: `/tmp/opencode/t5a6a3e-verify.log`.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

@@ -138,6 +138,9 @@ impl Plot {
                 | PlotKind::HorizontalBar
                 | PlotKind::StackedBar
                 | PlotKind::StackedHorizontalBar
+                | PlotKind::Boxplot
+                | PlotKind::Violin
+                | PlotKind::Raincloud
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
@@ -194,6 +197,9 @@ impl Plot {
                 | PlotKind::HorizontalBar
                 | PlotKind::StackedBar
                 | PlotKind::StackedHorizontalBar
+                | PlotKind::Boxplot
+                | PlotKind::Violin
+                | PlotKind::Raincloud
         ) {
             return self.measure_selected_interior(context);
         }
@@ -243,6 +249,10 @@ impl Plot {
         Ok(result)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "selected marks and common annotation snapshot share one measurement boundary"
+    )]
     pub(crate) fn measure_selected_interior(
         &self,
         context: PlotRenderContext<'_>,
@@ -255,6 +265,8 @@ impl Plot {
         });
         let context = context.with_prepared_axes(self);
         let mut result = match self.kind() {
+            PlotKind::Boxplot => crate::plots::boxplot::measure(self, context)?,
+            PlotKind::Violin | PlotKind::Raincloud => crate::plots::violin::measure(self, context)?,
             PlotKind::Bar | PlotKind::StackedBar => crate::plots::bar::measure(self, context)?,
             PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
                 crate::plots::horizontal_bar::measure(self, context)?
@@ -284,6 +296,37 @@ impl Plot {
             .generation_resources();
         let data = context.data.with_axis_resources(&resources);
         let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        let significance_styles = if matches!(
+            self.kind(),
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
+        ) {
+            let mut styles = Vec::new();
+            if let Some(significance) = &result.significance {
+                data.reserve_source(&mut styles, significance.brackets.len())?;
+                for bracket in &significance.brackets {
+                    let label = &bracket.label.plan;
+                    let style = crate::render::backend::BracketStyle {
+                        color: context.theme.foreground.into(),
+                        width: context.theme.bracket_width,
+                        label_color: label.style.paint,
+                        font_family: data.copy_source_string(&label.style.stack_source)?,
+                        font_size: label.style.font_size,
+                        line_height: label.line_height(),
+                        weight: label.style.weight,
+                        label_gap: self.significance_mark_style_spec().gap_spec(),
+                    };
+                    geometry.bracket(crate::render::backend::PlannedSignificanceCall {
+                        bracket: &bracket.geometry,
+                        style: &style,
+                        label: &bracket.label,
+                    })?;
+                    styles.push(style);
+                }
+            }
+            Some(styles)
+        } else {
+            None
+        };
         let guides = layers::GuideSnapshot::measure(self, &result, data, &mut geometry)?;
         resolve_rendered_labels(self, self.kind(), &mut result, context)?;
         result.panel_text = crate::decorations::panel_text::measure_plans(
@@ -317,6 +360,7 @@ impl Plot {
         };
         result.annotations = Some(data.source_arc(
             crate::layout::interior::DeferredAnnotationPlan {
+                significance_styles,
                 guides,
                 panel_layer,
                 panel_clip,

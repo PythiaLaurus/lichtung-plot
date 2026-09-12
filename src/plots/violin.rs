@@ -7,9 +7,9 @@
 //!
 //! KDE and quantiles are display geometry; the plot performs no inferential
 //! test.
-//! The KDE is computed via [`kde`]; the quantiles
+//! The KDE is computed via [`crate::stats::distribution::kde`]; the quantiles
 //! (Q1, median, Q3, whiskers) are computed via the same module's
-//! [`quantile`].
+//! [`crate::stats::distribution::quantile`].
 //!
 //! Explicit pairwise comparisons are rendered as stacked brackets above their
 //! named categorical groups. Omnibus results are not interpreted as pairs.
@@ -25,16 +25,16 @@
     clippy::redundant_closure_for_method_calls
 )]
 
-mod precomputed;
+pub(crate) mod precomputed;
 
 use crate::Error;
 
+use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
-use crate::layout::fit::with_clip;
-use crate::layout::AxisTick;
-use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D};
+use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
+use crate::render::backend::{FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
-use crate::stats::distribution::{kde, kde_support_range, quantile};
+use crate::stats::distribution::{kde_support_range, kde_with_source};
 use crate::theme::ResolvedTheme;
 use crate::Plot;
 
@@ -53,65 +53,64 @@ enum DistributionLayout {
     Raincloud,
 }
 
-/// Render a violin plot. Returns the `Layout` used to project
-/// the violins so the orchestrator can apply decorations (frame
-/// / grid / axes / legend). Categorical x-ticks carry the
-/// group labels.
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    render_samples(chart, context, theme, backend, DistributionLayout::Mirrored)
+#[derive(Debug)]
+struct ViolinDensity {
+    summary: ViolinSummary,
+    densities: Vec<f64>,
+    maximum: f64,
 }
 
-pub(crate) fn render_raincloud(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    if let Some(input) = chart.raincloud_geometry_input() {
-        return precomputed::render(chart, input, context, backend);
-    }
-    render_samples(
-        chart,
-        context,
-        theme,
-        backend,
-        DistributionLayout::Raincloud,
-    )
+#[derive(Debug)]
+pub(crate) struct PreparedViolin {
+    pub(crate) sample: crate::plots::distribution_sample::DistributionSample,
+    pub(crate) support_range: (f64, f64),
+    grid: Vec<f64>,
+    densities: Vec<ViolinDensity>,
 }
 
-fn render_samples(
+pub(crate) fn prepare(
     chart: &Plot,
-    context: PlotRenderContext<'_>,
-    theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
-    distribution_layout: DistributionLayout,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let family = match distribution_layout {
-        DistributionLayout::Mirrored => "violin",
-        DistributionLayout::Raincloud => "raincloud",
+    data: PlotData<'_>,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
+) -> Result<PreparedViolin, Error> {
+    let family = if chart.kind() == crate::PlotKind::Violin {
+        "violin"
+    } else {
+        "raincloud"
     };
-    let sample = crate::plots::distribution_sample::prepare(chart, context.data, family)?;
-    let x_levels = &sample.x_levels;
-    let group_levels = &sample.group_levels;
-    let hue_levels = &sample.hue_levels;
-    if distribution_layout == DistributionLayout::Raincloud {
-        let mut source_rows = std::collections::HashSet::new();
-        for observation in sample.groups.iter().flat_map(|group| &group.observations) {
-            if !source_rows.insert(observation.source_row) {
-                return Err(Error::Data(format!(
-                    "raincloud: duplicate source-row identity {}",
-                    observation.source_row
-                ))
-                .into());
-            }
+    let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, family, facet)?;
+    if chart.kind() == crate::PlotKind::Raincloud {
+        let mut source_rows = Vec::new();
+        for group in &sample.groups {
+            data.reserve_source(&mut source_rows, group.observations.len())?;
+            let start = source_rows.len();
+            source_rows.extend(
+                group
+                    .observations
+                    .iter()
+                    .enumerate()
+                    .map(|(index, observation)| (observation.source_row, start + index)),
+            );
+        }
+        crate::data::source::sort_source_by(&mut source_rows, Some(data), Ord::cmp)?;
+        data.claim_source_visits(source_rows.len())?;
+        // Keep the former traversal's first duplicate diagnostic without a hash
+        // table allocation or quadratic identity scans.
+        if let Some((row, _)) = source_rows
+            .windows(2)
+            .filter(|pair| pair[0].0 == pair[1].0)
+            .map(|pair| pair[1])
+            .min_by_key(|(_, index)| *index)
+        {
+            return Err(Error::Data(format!(
+                "raincloud: duplicate source-row identity {row}"
+            )));
         }
     }
 
+    for group in &sample.groups {
+        data.claim_source_visits(group.observations.len())?;
+    }
     let (data_y_min, data_y_max) = sample
         .groups
         .iter()
@@ -127,43 +126,86 @@ fn render_samples(
     if data_y_min >= data_y_max {
         return Err(Error::Data(format!(
             "{family}: data has zero variance (all y values are equal)"
-        ))
-        .into());
+        )));
     }
 
-    let extent_groups: Vec<(String, Vec<f64>)> = sample
-        .groups
-        .iter()
-        .map(|group| {
-            (
-                group.hue_label.as_ref().map_or_else(
-                    || group.label.clone(),
-                    |hue| format!("{}/{hue}", group.label),
-                ),
-                group.values(),
-            )
+    let extent_groups = data.collect_source(
+        sample
+            .groups
+            .iter()
+            .map(|group| data.collect_source(group.observations.iter().map(|o| Ok(o.value)))),
+    )?;
+    for values in &extent_groups {
+        data.claim_source_visits(values.len().saturating_mul(3))?;
+    }
+    let support_range = kde_support_range(extent_groups.iter().map(Vec::as_slice), 2.0)
+        .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
+    let grid = data
+        .collect_source((0..64).map(|k| {
+            Ok(support_range.0 + (support_range.1 - support_range.0) * (k as f64) / 63.0)
+        }))?;
+    let densities = data.collect_source(extent_groups.iter().map(|values| {
+        let summary = violin_summary_with_source(values, Some(data))?;
+        let mut densities = kde_with_source(values, &grid, Some(data))?;
+        densities[0] = 0.0;
+        densities[63] = 0.0;
+        data.claim_source_visits(densities.len())?;
+        let maximum = densities.iter().copied().fold(0.0_f64, f64::max);
+        Ok(ViolinDensity {
+            summary,
+            densities,
+            maximum: if maximum <= 0.0 { 1.0 } else { maximum },
         })
-        .collect();
-    let support_range = kde_support_range(
-        extent_groups.iter().map(|(_, values)| values.as_slice()),
-        2.0,
-    )
-    .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
+    }))?;
+    Ok(PreparedViolin {
+        sample,
+        support_range,
+        grid,
+        densities,
+    })
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    categorical_distribution::count(chart.kind(), 1);
+    let retained = categorical_distribution::retained(chart)?;
+    if let PreparedDistribution::Supplied(input) = retained {
+        return precomputed::measure(chart, input, context);
+    }
+    let PreparedDistribution::Violin(prepared) = retained else {
+        return Err(Error::Render("violin requires retained density samples".into()).into());
+    };
+    let distribution_layout = if chart.kind() == crate::PlotKind::Violin {
+        DistributionLayout::Mirrored
+    } else {
+        DistributionLayout::Raincloud
+    };
+    let family = if distribution_layout == DistributionLayout::Mirrored {
+        "violin"
+    } else {
+        "raincloud"
+    };
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let sample = &prepared.sample;
+    let x_levels = &sample.x_levels;
+    let group_levels = &sample.group_levels;
+    let hue_levels = &sample.hue_levels;
+    let support_range = prepared.support_range;
     let base_display_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Ok(crate::layout::continuous_auto_range(
-            support_range,
-            chart.y_axis_spec(),
-        ))
+        Err(Error::Render("violin requires root-prepared axes".into()))
     })?;
-    let rendered_maxima = vec![support_range.1; x_levels.len()];
+    let rendered_maxima = data.collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let legend_entries = hue_levels
-        .iter()
-        .enumerate()
-        .map(|(idx, label)| {
+    let legend_entries =
+        data.collect_source(hue_levels.iter().enumerate().map(|(idx, label)| {
             let color = chart.categorical_color(family, label, idx, theme)?;
-            let identity = chart.legend_identity(label.clone());
+            let identity = chart.point_legend_identity(label, data)?;
             let fill = FillStyle {
                 color,
                 stroke: theme.foreground,
@@ -179,8 +221,7 @@ fn render_samples(
             } else {
                 LegendEntry::fill(identity, fill)
             })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+        }))?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -192,7 +233,9 @@ fn render_samples(
             context.fit_scope(),
         )?
     } else {
-        let mut grouped_maxima = vec![vec![f64::NEG_INFINITY; group_levels.len()]; x_levels.len()];
+        let mut grouped_maxima = data.collect_source((0..x_levels.len()).map(|_| {
+            data.collect_source((0..group_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))
+        }))?;
         for group in &sample.groups {
             grouped_maxima[group.x_index][group.group_index] = support_range.1;
         }
@@ -215,18 +258,13 @@ fn render_samples(
     let n_groups = x_levels.len();
     let layout = context.axis_layout(|| {
         let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
-        let x_ticks: Vec<AxisTick> = x_levels
-            .iter()
-            .enumerate()
-            .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
-            .collect();
         context.layout_with_ticks(
             (0.0, n_groups as f64),
             display_range,
             panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            x_ticks,
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
+            Vec::new(),
             Vec::new(),
             chart.x_axis_spec(),
             &y_axis_spec,
@@ -238,232 +276,225 @@ fn render_samples(
     let n_grid: usize = 64;
     let (support_low, support_high) = support_range;
 
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (i, group) in sample.groups.iter().enumerate() {
-            let ys = group.values();
-            let summary = violin_summary(&ys)?;
+    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    for (i, group) in sample.groups.iter().enumerate() {
+        let density = &prepared.densities[i];
+        let summary = &density.summary;
+        let grid = &prepared.grid;
+        let densities = &density.densities;
+        let max_d = density.maximum;
 
-            let grid: Vec<f64> = (0..n_grid)
-                .map(|k| {
-                    support_low + (support_high - support_low) * (k as f64) / ((n_grid - 1) as f64)
-                })
-                .collect();
-            let mut densities = kde(&ys, &grid)?;
-            if let Some(first) = densities.first_mut() {
-                *first = 0.0;
-            }
-            if let Some(last) = densities.last_mut() {
-                *last = 0.0;
-            }
-            let max_d = densities.iter().fold(0.0_f64, |a, b| a.max(*b));
-            let max_d = if max_d <= 0.0 { 1.0 } else { max_d };
+        let center_x_data = crate::plots::distribution_sample::center(group, group_levels.len());
+        let violin_w_data = if group_active {
+            (0.72 / group_levels.len() as f64).min(0.34)
+        } else {
+            0.8
+        };
 
-            let center_x_data =
-                crate::plots::distribution_sample::center(group, group_levels.len());
-            let violin_w_data = if group_active {
-                (0.72 / group_levels.len() as f64).min(0.34)
-            } else {
-                0.8
-            };
+        let fill = FillStyle {
+            color: group_color(chart, group, i, group_active, family, theme)?,
+            stroke: theme.foreground,
+            stroke_width: 1.0,
+            opacity: 0.70,
+        };
+        match distribution_layout {
+            DistributionLayout::Mirrored => {
+                // Violin shape
+                let mut pts = Vec::new();
+                data.reserve_source(&mut pts, 2 * n_grid + 1)?;
+                for (gy, d) in grid.iter().zip(densities.iter()) {
+                    let x_off = (*d / max_d) * (violin_w_data / 2.0);
+                    let (px, py) = proj.project(center_x_data + x_off, *gy);
+                    pts.push(Point2D::new(px, py));
+                }
+                for (gy, d) in grid.iter().zip(densities.iter()).rev() {
+                    let x_off = (*d / max_d) * (violin_w_data / 2.0);
+                    let (px, py) = proj.project(center_x_data - x_off, *gy);
+                    pts.push(Point2D::new(px, py));
+                }
+                payload.polygon(pts, fill, data)?;
 
-            let fill = FillStyle {
-                color: group_color(chart, group, i, group_active, family, theme)?,
-                stroke: theme.foreground,
-                stroke_width: 1.0,
-                opacity: 0.70,
-            };
-            match distribution_layout {
-                DistributionLayout::Mirrored => {
-                    // Violin shape
-                    let mut pts: Vec<Point2D> = Vec::with_capacity(2 * n_grid + 1);
-                    for (gy, d) in grid.iter().zip(densities.iter()) {
-                        let x_off = (*d / max_d) * (violin_w_data / 2.0);
-                        let (px, py) = proj.project(center_x_data + x_off, *gy);
-                        pts.push(Point2D::new(px, py));
-                    }
-                    for (gy, d) in grid.iter().zip(densities.iter()).rev() {
-                        let x_off = (*d / max_d) * (violin_w_data / 2.0);
-                        let (px, py) = proj.project(center_x_data - x_off, *gy);
-                        pts.push(Point2D::new(px, py));
-                    }
-                    backend.draw_polygon(&pts, &fill)?;
-
-                    // Inner box-and-whisker mark, matching seaborn's default inner="box" cue.
-                    let (cx_px, _) = proj.project(center_x_data, 0.0);
-                    let box_w_px = (proj.project(violin_w_data * 0.08, 0.0).0
-                        - proj.project(0.0, 0.0).0)
-                        .abs();
-                    let cap_w_px = box_w_px;
-                    let (_, lo_whisker_px) = proj.project(center_x_data, summary.lo_whisker);
-                    let (_, q1_px) = proj.project(center_x_data, summary.q1);
-                    let (_, q3_px) = proj.project(center_x_data, summary.q3);
-                    let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
-                    let (_, median_px) = proj.project(center_x_data, summary.median);
-                    let whisker_line = LineStyle::solid(theme.foreground, theme.interval_width);
-                    backend.draw_line(
-                        &[
-                            Point2D::new(cx_px, lo_whisker_px),
-                            Point2D::new(cx_px, hi_whisker_px),
-                        ],
-                        &whisker_line,
-                    )?;
-                    backend.draw_line(
-                        &[
-                            Point2D::new(cx_px - cap_w_px, lo_whisker_px),
-                            Point2D::new(cx_px + cap_w_px, lo_whisker_px),
-                        ],
-                        &whisker_line,
-                    )?;
-                    backend.draw_line(
-                        &[
-                            Point2D::new(cx_px - cap_w_px, hi_whisker_px),
-                            Point2D::new(cx_px + cap_w_px, hi_whisker_px),
-                        ],
-                        &whisker_line,
-                    )?;
-                    let box_pts = vec![
+                // Inner box-and-whisker mark, matching seaborn's default inner="box" cue.
+                let (cx_px, _) = proj.project(center_x_data, 0.0);
+                let box_w_px =
+                    (proj.project(violin_w_data * 0.08, 0.0).0 - proj.project(0.0, 0.0).0).abs();
+                let cap_w_px = box_w_px;
+                let (_, lo_whisker_px) = proj.project(center_x_data, summary.lo_whisker);
+                let (_, q1_px) = proj.project(center_x_data, summary.q1);
+                let (_, q3_px) = proj.project(center_x_data, summary.q3);
+                let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
+                let (_, median_px) = proj.project(center_x_data, summary.median);
+                let whisker_line = LineStyle::solid(theme.foreground, theme.interval_width);
+                payload.line(
+                    &[
+                        Point2D::new(cx_px, lo_whisker_px),
+                        Point2D::new(cx_px, hi_whisker_px),
+                    ],
+                    &whisker_line,
+                    data,
+                )?;
+                payload.line(
+                    &[
+                        Point2D::new(cx_px - cap_w_px, lo_whisker_px),
+                        Point2D::new(cx_px + cap_w_px, lo_whisker_px),
+                    ],
+                    &whisker_line,
+                    data,
+                )?;
+                payload.line(
+                    &[
+                        Point2D::new(cx_px - cap_w_px, hi_whisker_px),
+                        Point2D::new(cx_px + cap_w_px, hi_whisker_px),
+                    ],
+                    &whisker_line,
+                    data,
+                )?;
+                let box_pts = data.collect_source(
+                    [
                         Point2D::new(cx_px - box_w_px, q1_px),
                         Point2D::new(cx_px + box_w_px, q1_px),
                         Point2D::new(cx_px + box_w_px, q3_px),
                         Point2D::new(cx_px - box_w_px, q3_px),
-                    ];
-                    let box_fill = FillStyle {
-                        color: (255, 255, 255),
-                        stroke: theme.foreground,
-                        stroke_width: 1.0,
-                        opacity: 1.0,
-                    };
-                    backend.draw_polygon(&box_pts, &box_fill)?;
+                    ]
+                    .into_iter()
+                    .map(Ok),
+                )?;
+                let box_fill = FillStyle {
+                    color: (255, 255, 255),
+                    stroke: theme.foreground,
+                    stroke_width: 1.0,
+                    opacity: 1.0,
+                };
+                payload.polygon(box_pts, box_fill, data)?;
 
-                    let median_line = LineStyle::solid(theme.foreground, 1.5);
-                    backend.draw_line(
-                        &[
-                            Point2D::new(cx_px - box_w_px, median_px),
-                            Point2D::new(cx_px + box_w_px, median_px),
-                        ],
-                        &median_line,
-                    )?;
+                let median_line = LineStyle::solid(theme.foreground, 1.5);
+                payload.line(
+                    &[
+                        Point2D::new(cx_px - box_w_px, median_px),
+                        Point2D::new(cx_px + box_w_px, median_px),
+                    ],
+                    &median_line,
+                    data,
+                )?;
+            }
+            DistributionLayout::Raincloud => {
+                let baseline = center_x_data - violin_w_data * 0.10;
+                let mut cloud = Vec::new();
+                data.reserve_source(&mut cloud, n_grid + 2)?;
+                for (gy, density) in grid.iter().zip(densities) {
+                    let offset = (*density / max_d) * violin_w_data * 0.40;
+                    let (x, y) = proj.project(baseline - offset, *gy);
+                    cloud.push(Point2D::new(x, y));
                 }
-                DistributionLayout::Raincloud => {
-                    let baseline = center_x_data - violin_w_data * 0.10;
-                    let mut cloud = Vec::with_capacity(n_grid + 2);
-                    for (gy, density) in grid.iter().zip(&densities) {
-                        let offset = (*density / max_d) * violin_w_data * 0.40;
-                        let (x, y) = proj.project(baseline - offset, *gy);
-                        cloud.push(Point2D::new(x, y));
-                    }
-                    let (baseline_high_x, baseline_high_y) = proj.project(baseline, support_high);
-                    let (baseline_low_x, baseline_low_y) = proj.project(baseline, support_low);
-                    cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
-                    cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-                    backend.draw_polygon(&cloud, &fill)?;
+                let (baseline_high_x, baseline_high_y) = proj.project(baseline, support_high);
+                let (baseline_low_x, baseline_low_y) = proj.project(baseline, support_low);
+                cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
+                cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
+                payload.polygon(cloud, fill, data)?;
 
-                    let box_center = center_x_data + violin_w_data * 0.02;
-                    let box_half_width = violin_w_data * 0.08;
-                    let (box_left, _) = proj.project(box_center - box_half_width, 0.0);
-                    let (box_right, _) = proj.project(box_center + box_half_width, 0.0);
-                    let (_, q1) = proj.project(box_center, summary.q1);
-                    let (_, q3) = proj.project(box_center, summary.q3);
-                    let (_, median) = proj.project(box_center, summary.median);
-                    backend.draw_polygon(
-                        &[
+                let box_center = center_x_data + violin_w_data * 0.02;
+                let box_half_width = violin_w_data * 0.08;
+                let (box_left, _) = proj.project(box_center - box_half_width, 0.0);
+                let (box_right, _) = proj.project(box_center + box_half_width, 0.0);
+                let (_, q1) = proj.project(box_center, summary.q1);
+                let (_, q3) = proj.project(box_center, summary.q3);
+                let (_, median) = proj.project(box_center, summary.median);
+                payload.polygon(
+                    data.collect_source(
+                        [
                             Point2D::new(box_left, q1),
                             Point2D::new(box_right, q1),
                             Point2D::new(box_right, q3),
                             Point2D::new(box_left, q3),
-                        ],
-                        &FillStyle {
-                            color: (255, 255, 255),
-                            stroke: theme.foreground,
-                            stroke_width: 1.0,
-                            opacity: 1.0,
-                        },
-                    )?;
-                    backend.draw_line(
-                        &[
-                            Point2D::new(box_left, median),
-                            Point2D::new(box_right, median),
-                        ],
-                        &LineStyle::solid(theme.foreground, 1.5),
-                    )?;
-                }
+                        ]
+                        .into_iter()
+                        .map(Ok),
+                    )?,
+                    FillStyle {
+                        color: (255, 255, 255),
+                        stroke: theme.foreground,
+                        stroke_width: 1.0,
+                        opacity: 1.0,
+                    },
+                    data,
+                )?;
+                payload.line(
+                    &[
+                        Point2D::new(box_left, median),
+                        Point2D::new(box_right, median),
+                    ],
+                    &LineStyle::solid(theme.foreground, 1.5),
+                    data,
+                )?;
             }
         }
-        if distribution_layout == DistributionLayout::Raincloud {
-            let violin_w_data = if group_active {
-                (0.72 / group_levels.len() as f64).min(0.34)
-            } else {
-                0.8
-            };
-            for (index, group) in sample.groups.iter().enumerate() {
-                let center = crate::plots::distribution_sample::center(group, group_levels.len());
-                let (box_right, _) = proj.project(center + violin_w_data * 0.10, 0.0);
-                let (strip_left, _) = proj.project(center + violin_w_data * 0.24, 0.0);
-                let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
-                let point_radius = 2.0;
-                let strip_min = strip_left + point_radius;
-                let strip_max = strip_right - point_radius;
-                if strip_min - point_radius <= box_right || strip_max < strip_min {
-                    return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
+    }
+    if distribution_layout == DistributionLayout::Raincloud {
+        let violin_w_data = if group_active {
+            (0.72 / group_levels.len() as f64).min(0.34)
+        } else {
+            0.8
+        };
+        for (index, group) in sample.groups.iter().enumerate() {
+            let center = crate::plots::distribution_sample::center(group, group_levels.len());
+            let (box_right, _) = proj.project(center + violin_w_data * 0.10, 0.0);
+            let (strip_left, _) = proj.project(center + violin_w_data * 0.24, 0.0);
+            let (strip_right, _) = proj.project(center + violin_w_data * 0.46, 0.0);
+            let point_radius = 2.0;
+            let strip_min = strip_left + point_radius;
+            let strip_max = strip_right - point_radius;
+            if strip_min - point_radius <= box_right || strip_max < strip_min {
+                return Err(context.fit_scope().child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(crate::layout::fit::FitKind::SpecializedGeometry,
                         "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width or reduce series"
                     ).into());
-                }
-                let color = group_color(chart, group, index, group_active, family, theme)?;
-                let points = group
-                    .observations
-                    .iter()
-                    .map(|observation| {
-                        let unit = crate::plots::distribution_sample::source_row_unit(
-                            observation.source_row,
-                        );
-                        let x = strip_min + unit * (strip_max - strip_min);
-                        let (_, y) = proj.project(center, observation.value);
-                        Point2D::new(x, y)
-                    })
-                    .collect::<Vec<_>>();
-                backend.draw_scatter(
-                    &points,
-                    &crate::plots::distribution_sample::overlay_style(color),
-                )?;
             }
+            let color = group_color(chart, group, index, group_active, family, theme)?;
+            let points = data.collect_source(group.observations.iter().map(|observation| {
+                let unit =
+                    crate::plots::distribution_sample::source_row_unit(observation.source_row);
+                let x = strip_min + unit * (strip_max - strip_min);
+                let (_, y) = proj.project(center, observation.value);
+                Ok(Point2D::new(x, y))
+            }))?;
+            payload.scatter(
+                points,
+                crate::plots::distribution_sample::overlay_style(color),
+                data,
+            )?;
         }
-        if overlay.is_visible() {
-            let violin_w_data = if group_active {
-                (0.72 / group_levels.len() as f64).min(0.34)
-            } else {
-                0.8
-            };
-            for (index, group) in sample.groups.iter().enumerate() {
-                let center = crate::plots::distribution_sample::center(group, group_levels.len());
-                let color = group_color(chart, group, index, group_active, family, theme)?;
-                let points = group
-                    .observations
-                    .iter()
-                    .map(|observation| {
-                        let x = crate::plots::distribution_sample::overlay_x(
-                            overlay,
-                            center,
-                            violin_w_data,
-                            observation.source_row,
-                        );
-                        let (x, y) = proj.project(x, observation.value);
-                        Point2D::new(x, y)
-                    })
-                    .collect::<Vec<_>>();
-                backend.draw_scatter(
-                    &points,
-                    &crate::plots::distribution_sample::overlay_style(color),
-                )?;
-            }
-        }
-        Ok(())
-    })?;
-
-    if hue_levels.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new()).with_significance_plan(significance))
-    } else {
-        Ok(PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance))
     }
+    if overlay.is_visible() {
+        let violin_w_data = if group_active {
+            (0.72 / group_levels.len() as f64).min(0.34)
+        } else {
+            0.8
+        };
+        for (index, group) in sample.groups.iter().enumerate() {
+            let center = crate::plots::distribution_sample::center(group, group_levels.len());
+            let color = group_color(chart, group, index, group_active, family, theme)?;
+            let points = data.collect_source(group.observations.iter().map(|observation| {
+                let x = crate::plots::distribution_sample::overlay_x(
+                    overlay,
+                    center,
+                    violin_w_data,
+                    observation.source_row,
+                );
+                let (x, y) = proj.project(x, observation.value);
+                Ok(Point2D::new(x, y))
+            }))?;
+            payload.scatter(
+                points,
+                crate::plots::distribution_sample::overlay_style(color),
+                data,
+            )?;
+        }
+    }
+    payload
+        .retain(
+            PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance),
+            context,
+        )
+        .map_err(Into::into)
 }
 
 fn group_color(
@@ -484,10 +515,30 @@ fn group_color(
     }
 }
 
+#[cfg(test)]
 fn violin_summary(values: &[f64]) -> Result<ViolinSummary, Error> {
-    let q1 = quantile(values, 0.25)?;
-    let median = quantile(values, 0.5)?;
-    let q3 = quantile(values, 0.75)?;
+    violin_summary_with_source(values, None)
+}
+
+fn violin_summary_with_source(
+    values: &[f64],
+    data: Option<PlotData<'_>>,
+) -> Result<ViolinSummary, Error> {
+    use crate::data::source::SourceAdmission;
+    data.source_visits(values.len())?;
+    if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
+        return Err(Error::Data(
+            "violin: samples must be finite and nonempty".into(),
+        ));
+    }
+    let mut sorted = Vec::new();
+    data.source_reserve(&mut sorted, values.len())?;
+    sorted.extend_from_slice(values);
+    crate::data::source::sort_numeric_source(&mut sorted, data)?;
+    let q1 = crate::stats::distribution::sorted_quantile(&sorted, 0.25);
+    let median = crate::stats::distribution::sorted_quantile(&sorted, 0.5);
+    let q3 = crate::stats::distribution::sorted_quantile(&sorted, 0.75);
+    data.source_visits(values.len().saturating_mul(2))?;
     let iqr = q3 - q1;
     let lo_whisker = values
         .iter()
@@ -513,6 +564,27 @@ fn violin_summary(values: &[f64]) -> Result<ViolinSummary, Error> {
 #[cfg(test)]
 mod tests {
     use super::{violin_summary, ViolinSummary};
+
+    #[test]
+    fn admitted_identity_sort_preserves_first_group_traversal_duplicate() {
+        let chart = crate::Plot::raincloud(crate::RaincloudInput::samples(
+            crate::CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
+            crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+        ))
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let data = chart
+            .data()
+            .map_source_rows(&[5, 4, 5, 4])
+            .with_axis_resources(&resources);
+        let error = super::prepare(&chart, data, None).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate source-row identity 5"),
+            "{error}"
+        );
+    }
 
     #[test]
     fn violin_summary_preserves_type_7_singleton_geometry() {

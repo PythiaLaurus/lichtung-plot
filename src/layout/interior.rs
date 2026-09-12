@@ -50,9 +50,9 @@ interior_routes! {
         StackedBar => crate::plots::bar_data::reject_combined,
         HorizontalBar => crate::plots::bar_data::reject_combined,
         StackedHorizontalBar => crate::plots::bar_data::reject_combined,
-        Boxplot => crate::plots::boxplot::render,
-        Violin => crate::plots::violin::render,
-        Raincloud => crate::plots::violin::render_raincloud,
+        Boxplot => crate::plots::categorical_distribution::reject_combined,
+        Violin => crate::plots::categorical_distribution::reject_combined,
+        Raincloud => crate::plots::categorical_distribution::reject_combined,
     },
     SpecializedLegacy {
         Heatmap => crate::plots::heatmap::render,
@@ -104,6 +104,8 @@ impl ParentCompositionAdapter {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) distributions:
+        Option<std::sync::Arc<crate::plots::categorical_distribution::PreparedDistributionInputs>>,
     pub(crate) bars: Option<std::sync::Arc<crate::plots::bar_data::PreparedBarInputs>>,
     pub(crate) estimate:
         Option<std::sync::Arc<crate::plots::interval_estimate::PreparedEstimateInputs>>,
@@ -133,6 +135,7 @@ impl PreparedInteriorInputs {
         plot.prepared_dumbbell.clone_from(&self.dumbbell);
         plot.prepared_estimate.clone_from(&self.estimate);
         plot.prepared_bars.clone_from(&self.bars);
+        plot.prepared_distributions.clone_from(&self.distributions);
         plot.prepared_regression.clone_from(&self.regression);
         Ok(plot)
     }
@@ -213,6 +216,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Distribution(crate::plots::categorical_distribution::DistributionPayload),
     Bars(crate::plots::bar_data::BarPayload),
     Estimate(crate::plots::interval_estimate::EstimatePayload),
     Dumbbell(crate::plots::dumbbell::DumbbellPayload),
@@ -230,6 +234,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Distribution(payload) => payload.draw(backend),
             MarkPayload::Bars(payload) => payload.draw(backend),
             MarkPayload::Estimate(payload) => payload.draw(backend),
             MarkPayload::Dumbbell(payload) => payload.draw(backend),
@@ -246,6 +251,7 @@ impl DeferredMarkPlan {
 /// Current ordinary guide and panel-text placements, not future T5c semantics.
 #[derive(Debug)]
 pub(crate) struct DeferredAnnotationPlan {
+    pub(crate) significance_styles: Option<Vec<crate::render::backend::BracketStyle>>,
     pub(crate) guides: crate::orchestrator::layers::GuideSnapshot,
     pub(crate) panel_layer: Option<String>,
     pub(crate) panel_clip: crate::layout::PanelBox,

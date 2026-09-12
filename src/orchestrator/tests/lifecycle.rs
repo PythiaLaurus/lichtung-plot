@@ -1818,6 +1818,9 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::HorizontalBar
                     | PlotKind::StackedBar
                     | PlotKind::StackedHorizontalBar
+                    | PlotKind::Boxplot
+                    | PlotKind::Violin
+                    | PlotKind::Raincloud
             ) {
                 &prepared
             } else {

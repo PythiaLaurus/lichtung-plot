@@ -7,6 +7,7 @@
 pub mod bar;
 pub(crate) mod bar_data;
 pub mod boxplot;
+pub(crate) mod categorical_distribution;
 pub mod density;
 pub(crate) mod distribution_sample;
 pub mod dumbbell;

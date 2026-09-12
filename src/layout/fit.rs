@@ -143,20 +143,6 @@ pub(crate) fn measured<T>(result: Result<FitOutcome<T>, Error>) -> Result<T, Pla
     }
 }
 
-pub(crate) fn with_clip<T>(
-    backend: &mut dyn crate::render::backend::Backend,
-    region: crate::layout::PanelBox,
-    draw: impl FnOnce(&mut dyn crate::render::backend::Backend) -> Result<T, PlanError>,
-) -> Result<T, PlanError> {
-    backend.begin_clip(region)?;
-    let result = outcome(draw(backend));
-    measured(crate::render::backend::finish_scope(
-        result,
-        backend.end_clip(),
-        "clip scope",
-    ))
-}
-
 pub(crate) fn text(
     theme: &ResolvedTheme,
     source: &str,
@@ -277,27 +263,6 @@ pub(crate) fn intrinsic_widths(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cleanup_failure_is_fatal_even_after_a_typed_clip_miss() {
-        use crate::render::backend::Backend;
-        let theme = crate::Theme::Publication.resolve();
-        theme.prepare_font_environment().unwrap();
-        let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
-        backend.begin(640, 480).unwrap();
-        let result: Result<(), PlanError> = with_clip(
-            &mut backend,
-            crate::layout::PanelBox::new(80.0, 400.0, 80.0, 300.0),
-            |backend| {
-                backend.end_clip()?;
-                Err(FitScope::root()
-                    .failure(FitKind::Text, "earlier fit")
-                    .into())
-            },
-        );
-        assert!(matches!(result, Err(PlanError::Fatal(_))));
-        backend.end().unwrap();
-    }
 
     #[test]
     fn sibling_collection_preserves_later_fatal_and_canonical_child_identity() {

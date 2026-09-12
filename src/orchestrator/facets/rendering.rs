@@ -77,9 +77,7 @@ pub(super) fn render_scene(
         panel_plan
             .plot_with_planned_limits(&panel_plot)
             .render_panel(kind, context, backend)?;
-        if let Some(significance) = &panel_plan.result.significance {
-            crate::significance::render(&panel_plot, significance, theme, backend)?;
-        }
+        crate::significance::render_selected(&panel_plot, &panel_plan.result, theme, backend)?;
         crate::decorations::apply::apply_axes(&panel_plot, panel_plan, backend)?;
         crate::decorations::apply::apply_planned_legend(
             &panel_plot,

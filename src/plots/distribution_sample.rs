@@ -6,11 +6,13 @@ use crate::data::PlotData;
 use crate::render::backend::PointStyle;
 use crate::{Plot, RawOverlay};
 
+#[derive(Debug)]
 pub(crate) struct DistributionObservation {
     pub(crate) source_row: usize,
     pub(crate) value: f64,
 }
 
+#[derive(Debug)]
 pub(crate) struct DistributionGroup {
     pub(crate) label: String,
     pub(crate) group_label: Option<String>,
@@ -21,6 +23,7 @@ pub(crate) struct DistributionGroup {
     pub(crate) observations: Vec<DistributionObservation>,
 }
 
+#[derive(Debug)]
 pub(crate) struct DistributionSample {
     pub(crate) x_levels: Vec<String>,
     pub(crate) group_levels: Vec<String>,
@@ -30,12 +33,13 @@ pub(crate) struct DistributionSample {
 
 #[expect(
     clippy::too_many_lines,
-    reason = "ordered grouping admits each nested source buffer before populating it"
+    reason = "ordered grouping admits nested source buffers"
 )]
-pub(crate) fn prepare(
+pub(crate) fn prepare_scoped(
     chart: &Plot,
     data: PlotData<'_>,
     family: &str,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<DistributionSample, Error> {
     let x_column = chart
         .x_col()
@@ -57,15 +61,17 @@ pub(crate) fn prepare(
     )?;
     let mut x_levels = Vec::new();
     let group_levels = data.collect_source(
-        chart
-            .global_group_levels()
+        facet
+            .and_then(|scope| scope.groups)
+            .or_else(|| chart.global_group_levels())
             .unwrap_or(&channels.group_levels)
             .iter()
             .map(|level| data.copy_source_string(level)),
     )?;
     let hue_levels = data.collect_source(
-        chart
-            .global_hue_levels()
+        facet
+            .and_then(|scope| scope.hues)
+            .or_else(|| chart.global_hue_levels())
             .unwrap_or(&channels.hue_levels)
             .iter()
             .map(|level| data.copy_source_string(level)),
@@ -139,15 +145,6 @@ pub(crate) fn prepare(
         hue_levels,
         groups,
     })
-}
-
-impl DistributionGroup {
-    pub(crate) fn values(&self) -> Vec<f64> {
-        self.observations
-            .iter()
-            .map(|observation| observation.value)
-            .collect()
-    }
 }
 
 #[expect(

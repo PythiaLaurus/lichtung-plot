@@ -14,7 +14,7 @@ pub struct HistogramInput {
 #[derive(Debug, Clone)]
 enum HistogramSource {
     Samples(NumericValues),
-    Geometry(HistogramGeometry),
+    Geometry(std::sync::Arc<HistogramGeometry>),
 }
 
 impl HistogramInput {
@@ -30,7 +30,7 @@ impl HistogramInput {
     #[must_use]
     pub fn geometry(input: HistogramGeometry) -> Self {
         Self {
-            source: HistogramSource::Geometry(input),
+            source: HistogramSource::Geometry(std::sync::Arc::new(input)),
         }
     }
 
@@ -41,7 +41,7 @@ impl HistogramInput {
         }
     }
 
-    pub(crate) const fn geometry_input(&self) -> Option<&HistogramGeometry> {
+    pub(crate) fn geometry_input(&self) -> Option<&HistogramGeometry> {
         match &self.source {
             HistogramSource::Samples(_) => None,
             HistogramSource::Geometry(input) => Some(input),
@@ -61,7 +61,7 @@ enum RaincloudSource {
         category: CategoryValues,
         values: NumericValues,
     },
-    Geometry(RaincloudGeometry),
+    Geometry(std::sync::Arc<RaincloudGeometry>),
 }
 
 impl RaincloudInput {
@@ -77,7 +77,7 @@ impl RaincloudInput {
     #[must_use]
     pub fn geometry(input: RaincloudGeometry) -> Self {
         Self {
-            source: RaincloudSource::Geometry(input),
+            source: RaincloudSource::Geometry(std::sync::Arc::new(input)),
         }
     }
 
@@ -88,7 +88,7 @@ impl RaincloudInput {
         }
     }
 
-    pub(crate) const fn geometry_input(&self) -> Option<&RaincloudGeometry> {
+    pub(crate) fn geometry_input(&self) -> Option<&RaincloudGeometry> {
         match &self.source {
             RaincloudSource::Samples { .. } => None,
             RaincloudSource::Geometry(input) => Some(input),

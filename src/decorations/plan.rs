@@ -1214,6 +1214,9 @@ fn measure_geometry(
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
             | PlotKind::StackedHorizontalBar
+            | PlotKind::Boxplot
+            | PlotKind::Violin
+            | PlotKind::Raincloud
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

@@ -17,6 +17,10 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Distribution(
+        crate::PlotKind,
+        crate::plots::categorical_distribution::PreparedDistribution,
+    ),
     Bars(crate::PlotKind, crate::plots::bar_data::PreparedBars),
     Estimate(crate::plots::interval_estimate::PreparedEstimate),
     Dumbbell(crate::plots::dumbbell::DumbbellData),
@@ -29,6 +33,12 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => Ok(Self::Distribution(
+                source.kind(),
+                crate::plots::categorical_distribution::PreparedDistribution::new(
+                    source, data, None,
+                )?,
+            )),
             PlotKind::Bar
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
@@ -72,6 +82,7 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Distribution(_, marks) => (0.0, marks.categories().len() as f64),
             Self::Bars(kind, marks) => {
                 if matches!(
                     kind,
@@ -96,6 +107,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    distribution: Option<&'a crate::plots::categorical_distribution::PreparedDistribution>,
     bars: Option<&'a crate::plots::bar_data::PreparedBars>,
     estimate: Option<&'a crate::plots::interval_estimate::PreparedEstimate>,
     estimate_fallback: Option<(f64, f64)>,
@@ -124,10 +136,15 @@ pub(crate) fn prepare_reference_plot(
     let mut dumbbell = None;
     let mut estimate = None;
     let mut bars = None;
+    let mut distribution = None;
     let mut curves = None;
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Distribution(kind, marks) => {
+            distribution = Some(marks);
+            kind
+        }
         PreparedReference::Bars(kind, marks) => {
             bars = Some(marks);
             kind
@@ -171,6 +188,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            distribution: distribution.as_ref(),
             bars: bars.as_ref(),
             x_limits,
             labels,
@@ -188,6 +206,16 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        distributions: distribution
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(
+                    crate::plots::categorical_distribution::PreparedDistributionInputs { panels },
+                )
+            })
+            .transpose()?,
         bars: bars
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -271,6 +299,7 @@ pub(crate) fn prepare_plot(
     let mut dumbbell = Vec::new();
     let mut estimate = Vec::new();
     let mut bars = Vec::new();
+    let mut distributions = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -289,6 +318,9 @@ pub(crate) fn prepare_plot(
             | PlotKind::HorizontalBar
             | PlotKind::StackedBar
             | PlotKind::StackedHorizontalBar
+            | PlotKind::Boxplot
+            | PlotKind::Violin
+            | PlotKind::Raincloud
     ) && !source.has_facets()
     {
         return prepare_reference_plot(
@@ -359,6 +391,9 @@ pub(crate) fn prepare_plot(
                         | PlotKind::StackedBar
                         | PlotKind::HorizontalBar
                         | PlotKind::StackedHorizontalBar
+                        | PlotKind::Boxplot
+                        | PlotKind::Violin
+                        | PlotKind::Raincloud
                 )
             })
             .map(|column| {
@@ -400,6 +435,9 @@ pub(crate) fn prepare_plot(
                         | PlotKind::HorizontalBar
                         | PlotKind::StackedBar
                         | PlotKind::StackedHorizontalBar
+                        | PlotKind::Boxplot
+                        | PlotKind::Violin
+                        | PlotKind::Raincloud
                 )
             })
             .map(|column| {
@@ -451,6 +489,18 @@ pub(crate) fn prepare_plot(
                 .then(|| crate::plots::dumbbell::prepare(source, data))
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
+            let distribution_marks = matches!(
+                source.kind(),
+                PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
+            )
+            .then(|| {
+                crate::plots::categorical_distribution::PreparedDistribution::new(
+                    source,
+                    data,
+                    Some(facet),
+                )
+            })
+            .transpose()?;
             let bar_marks = matches!(
                 source.kind(),
                 PlotKind::Bar
@@ -479,6 +529,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    distribution: distribution_marks.as_ref(),
                     bars: bar_marks.as_ref(),
                     dumbbell: pairs.as_ref(),
                     estimate: estimates.as_ref(),
@@ -487,6 +538,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = distribution_marks {
+                source_data.reserve_source(&mut distributions, 1)?;
+                distributions.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(marks) = bar_marks {
                 source_data.reserve_source(&mut bars, 1)?;
                 bars.push((Some(source_data.copy_source_string(&scope)?), marks));
@@ -597,6 +652,18 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        distributions: if matches!(
+            source.kind(),
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud
+        ) {
+            Some(source_data.source_arc(
+                crate::plots::categorical_distribution::PreparedDistributionInputs {
+                    panels: distributions,
+                },
+            )?)
+        } else {
+            None
+        },
         bars: if matches!(
             source.kind(),
             PlotKind::Bar
@@ -722,6 +789,7 @@ pub(crate) fn prepare_scatter_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
         bars: None,
+        distributions: None,
         estimate: None,
         dumbbell: None,
         qq: None,
@@ -773,6 +841,7 @@ pub(crate) fn prepare_line_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         bars: None,
+        distributions: None,
         estimate: None,
         dumbbell: None,
         axes: data.source_arc(retained_axes)?,
@@ -959,54 +1028,19 @@ fn prepare(
             }
         }
         PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
-            let (levels, values) = if let Some(input) = chart.raincloud_geometry_input() {
-                let range = input.validate(Some(data))?;
-                (
-                    data.collect_source(
-                        input
-                            .groups
-                            .iter()
-                            .map(|group| data.copy_source_string(&group.category)),
-                    )?,
-                    range,
-                )
-            } else {
-                let family = match chart.kind() {
-                    PlotKind::Boxplot => "boxplot",
-                    PlotKind::Violin => "violin",
-                    _ => "raincloud",
-                };
-                let sample = crate::plots::distribution_sample::prepare(chart, data, family)?;
-                let values = if chart.kind() == PlotKind::Boxplot {
-                    for group in &sample.groups {
-                        data.claim_source_visits(group.observations.len())?;
-                    }
-                    crate::data::min_max(
-                        sample
-                            .groups
-                            .iter()
-                            .flat_map(|group| group.observations.iter().map(|value| value.value)),
-                        "boxplot",
-                    )?
-                } else {
-                    let groups = data.collect_source(sample.groups.iter().map(|group| {
-                        data.collect_source(group.observations.iter().map(|value| Ok(value.value)))
-                    }))?;
-                    for group in &groups {
-                        data.claim_source_visits(group.len())?;
-                        if group.len() >= 2 {
-                            data.claim_source_visits(group.len())?;
-                            data.claim_source_visits(group.len())?;
-                        }
-                    }
-                    crate::stats::distribution::kde_support_range(
-                        groups.iter().map(Vec::as_slice),
-                        2.0,
-                    )
-                    .ok_or_else(|| Error::Data("distribution: no finite KDE support".into()))?
-                };
-                (sample.x_levels, values)
-            };
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.distribution)
+                .ok_or_else(|| {
+                    Error::Render("categorical distribution axes require retained semantics".into())
+                })?;
+            let levels = data.collect_source(
+                marks
+                    .categories()
+                    .iter()
+                    .map(|label| data.copy_source_string(label)),
+            )?;
+            let values = marks.range();
             let slots = (0.0, levels.len() as f64);
             categories[0] = Some(levels);
             [

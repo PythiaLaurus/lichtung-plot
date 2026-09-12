@@ -1523,6 +1523,9 @@ impl Canvas {
                             | PlotKind::HorizontalBar
                             | PlotKind::StackedBar
                             | PlotKind::StackedHorizontalBar
+                            | PlotKind::Boxplot
+                            | PlotKind::Violin
+                            | PlotKind::Raincloud
                     )
                 }) {
                     Some(plot) => {
@@ -1587,6 +1590,9 @@ impl Canvas {
                             | PlotKind::HorizontalBar
                             | PlotKind::StackedBar
                             | PlotKind::StackedHorizontalBar
+                            | PlotKind::Boxplot
+                            | PlotKind::Violin
+                            | PlotKind::Raincloud
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath
@@ -2974,9 +2980,7 @@ impl Canvas {
                 )
                 .with_retained_body(panel.panel_plan.result.retained_payload());
             plot_with_planned_limits.render_panel(panel.kind, context, backend)?;
-            if let Some(significance) = &panel.panel_plan.result.significance {
-                crate::significance::render(plot, significance, theme, backend)?;
-            }
+            crate::significance::render_selected(plot, &panel.panel_plan.result, theme, backend)?;
             crate::decorations::apply::apply_axes(plot, &panel.panel_plan, backend)?;
             crate::decorations::apply::apply_planned_legend(
                 plot,

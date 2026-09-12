@@ -560,7 +560,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         &self.histogram_composite
     }
 
-    pub(crate) const fn histogram_composite_geometry_input(&self) -> Option<&HistogramGeometry> {
+    pub(crate) fn histogram_composite_geometry_input(&self) -> Option<&HistogramGeometry> {
         match &self.input {
             PlotInput::Histogram { input } => input.geometry_input(),
             _ => None,
@@ -647,7 +647,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.raw_overlay
     }
 
-    pub(crate) const fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometry> {
+    pub(crate) fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometry> {
         match &self.input {
             PlotInput::Raincloud { input } => input.geometry_input(),
             _ => None,

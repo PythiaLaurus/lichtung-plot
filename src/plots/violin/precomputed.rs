@@ -1,57 +1,121 @@
 use crate::Error;
 
+use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
-use crate::layout::{AxisTick, Layout};
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
+use crate::layout::Layout;
+use crate::plots::categorical_distribution::DistributionPayload;
+use crate::render::backend::{FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
-use crate::{Plot, RaincloudGeometry, RaincloudGroup};
+use crate::{Plot, RaincloudGroup};
 
-pub(super) fn render(
-    chart: &Plot,
-    input: &RaincloudGeometry,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let data_y_range = input.validate(None)?;
-    let hue_levels = input
-        .groups
-        .iter()
-        .filter_map(|group| group.hue.as_ref())
-        .fold(Vec::new(), |mut levels, hue| {
-            if !levels.contains(hue) {
-                levels.push(hue.clone());
-            }
-            levels
-        });
-    let panel = context.panel;
-    let layout = context.axis_layout(|| {
-        let display_range = crate::layout::continuous_auto_range(data_y_range, chart.y_axis_spec());
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
-        let x_ticks = input
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug)]
+pub(crate) struct PreparedRaincloud {
+    pub(crate) range: (f64, f64),
+    pub(crate) categories: Vec<String>,
+    groups: Vec<PreparedRaincloudGroup>,
+    hues: Vec<String>,
+}
+
+#[derive(Debug)]
+struct PreparedRaincloudGroup {
+    geometry: RaincloudGroup,
+    local_color_index: usize,
+}
+
+#[cfg(test)]
+thread_local! {
+    static HUE_LOOKUP_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn prepare(chart: &Plot, data: PlotData<'_>) -> Result<PreparedRaincloud, Error> {
+    let input = chart
+        .raincloud_geometry_input()
+        .ok_or_else(|| Error::Render("raincloud requires supplied geometry".into()))?;
+    let range = input.validate(Some(data))?;
+    let categories = data.collect_source(
+        input
             .groups
             .iter()
-            .enumerate()
-            .map(|(index, group)| AxisTick::new(index as f64 + 0.5, group.category.clone()))
-            .collect();
+            .map(|group| data.copy_source_string(&group.category)),
+    )?;
+    let mut hues = Vec::new();
+    let groups = data.collect_source(input.groups.iter().enumerate().map(|(index, group)| {
+        let local_color_index = if let Some(hue) = &group.hue {
+            data.claim_source_visits(hues.len())?;
+            #[cfg(test)]
+            HUE_LOOKUP_VISITS.with(|count| count.set(count.get() + hues.len()));
+            if let Some(index) = hues.iter().position(|level| level == hue) {
+                index
+            } else {
+                let index = hues.len();
+                data.reserve_source(&mut hues, 1)?;
+                hues.push(data.copy_source_string(hue)?);
+                index
+            }
+        } else {
+            index
+        };
+        Ok(PreparedRaincloudGroup {
+            local_color_index,
+            geometry: RaincloudGroup {
+                category: data.copy_source_string(&group.category)?,
+                hue: group
+                    .hue
+                    .as_ref()
+                    .map(|hue| data.copy_source_string(hue))
+                    .transpose()?,
+                density: data.collect_source(group.density.iter().copied().map(Ok))?,
+                q1: group.q1,
+                median: group.median,
+                q3: group.q3,
+                points: data.collect_source(group.points.iter().copied().map(Ok))?,
+            },
+        })
+    }))?;
+    Ok(PreparedRaincloud {
+        range,
+        categories,
+        groups,
+        hues,
+    })
+}
+
+pub(super) fn measure(
+    chart: &Plot,
+    input: &PreparedRaincloud,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let hue_levels = &input.hues;
+    let panel = context.panel;
+    let display_range = context.axis_range(crate::layout::AxisSide::Left, || {
+        Err(Error::Render(
+            "raincloud requires root-prepared axes".into(),
+        ))
+    })?;
+    let layout = context.axis_layout(|| {
+        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
         context.layout_with_ticks(
             (0.0, input.groups.len() as f64),
             display_range,
             panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            x_ticks,
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
+            Vec::new(),
             Vec::new(),
             chart.x_axis_spec(),
             &y_axis_spec,
             theme,
         )
     })?;
-    let legend_entries = hue_levels
-        .iter()
-        .enumerate()
-        .map(|(index, hue)| {
+    let legend_entries =
+        data.collect_source(hue_levels.iter().enumerate().map(|(index, hue)| {
             let color = chart.categorical_color(
                 "raincloud",
                 hue,
@@ -59,7 +123,7 @@ pub(super) fn render(
                 theme,
             )?;
             Ok(LegendEntry::point_fill(
-                chart.legend_identity(hue.clone()),
+                chart.point_legend_identity(hue, data)?,
                 crate::plots::distribution_sample::overlay_style(color),
                 FillStyle {
                     color,
@@ -68,35 +132,57 @@ pub(super) fn render(
                     opacity: 0.70,
                 },
             ))
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+        }))?;
 
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (index, group) in input.groups.iter().enumerate() {
-            draw_cloud_and_summary(chart, &layout, group, &hue_levels, index, theme, backend)?;
-        }
-        for (index, group) in input.groups.iter().enumerate() {
-            draw_strip(chart, &layout, group, &hue_levels, index, theme, backend)?;
-        }
-        Ok(())
-    })?;
-
-    Ok(PlotRenderResult::new(layout, legend_entries))
+    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    for (index, group) in input.groups.iter().enumerate() {
+        project_cloud_and_summary(
+            chart,
+            &layout,
+            &group.geometry,
+            group.local_color_index,
+            index,
+            theme,
+            &mut payload,
+            data,
+        )?;
+    }
+    for (index, group) in input.groups.iter().enumerate() {
+        project_strip(
+            chart,
+            &layout,
+            &group.geometry,
+            group.local_color_index,
+            index,
+            theme,
+            &mut payload,
+            data,
+        )?;
+    }
+    payload
+        .retain(PlotRenderResult::new(layout, legend_entries), context)
+        .map_err(Into::into)
 }
 
-fn draw_cloud_and_summary(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "borrowed selected projection and styles"
+)]
+fn project_cloud_and_summary(
     chart: &Plot,
     layout: &Layout,
     group: &RaincloudGroup,
-    hue_levels: &[String],
+    local_color_index: usize,
     index: usize,
     theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
+    payload: &mut DistributionPayload,
+    data: PlotData<'_>,
 ) -> Result<(), Error> {
     let center = index as f64 + 0.5;
     let width = 0.8;
     let baseline = center - width * 0.10;
-    let mut cloud = Vec::with_capacity(group.density.len() + 2);
+    let mut cloud = Vec::new();
+    data.reserve_source(&mut cloud, group.density.len() + 2)?;
     for point in &group.density {
         let offset = point.normalized_width * width * 0.40;
         let (x, y) = layout.projection.project(baseline - offset, point.y);
@@ -108,14 +194,15 @@ fn draw_cloud_and_summary(
     let (baseline_low_x, baseline_low_y) = layout.projection.project(baseline, support_low);
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
-    backend.draw_polygon(
-        &cloud,
-        &FillStyle {
-            color: group_color(chart, group, hue_levels, index, theme)?,
+    payload.polygon(
+        cloud,
+        FillStyle {
+            color: group_color(chart, group, local_color_index, theme)?,
             stroke: theme.foreground,
             stroke_width: 1.0,
             opacity: 0.70,
         },
+        data,
     )?;
 
     let box_center = center + width * 0.02;
@@ -125,37 +212,48 @@ fn draw_cloud_and_summary(
     let (_, q1) = layout.projection.project(box_center, group.q1);
     let (_, q3) = layout.projection.project(box_center, group.q3);
     let (_, median) = layout.projection.project(box_center, group.median);
-    backend.draw_polygon(
-        &[
-            Point2D::new(box_left, q1),
-            Point2D::new(box_right, q1),
-            Point2D::new(box_right, q3),
-            Point2D::new(box_left, q3),
-        ],
-        &FillStyle {
+    payload.polygon(
+        data.collect_source(
+            [
+                Point2D::new(box_left, q1),
+                Point2D::new(box_right, q1),
+                Point2D::new(box_right, q3),
+                Point2D::new(box_left, q3),
+            ]
+            .into_iter()
+            .map(Ok),
+        )?,
+        FillStyle {
             color: (255, 255, 255),
             stroke: theme.foreground,
             stroke_width: 1.0,
             opacity: 1.0,
         },
+        data,
     )?;
-    backend.draw_line(
+    payload.line(
         &[
             Point2D::new(box_left, median),
             Point2D::new(box_right, median),
         ],
         &LineStyle::solid(theme.foreground, 1.5),
+        data,
     )
 }
 
-fn draw_strip(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "borrowed selected projection and styles"
+)]
+fn project_strip(
     chart: &Plot,
     layout: &Layout,
     group: &RaincloudGroup,
-    hue_levels: &[String],
+    local_color_index: usize,
     index: usize,
     theme: &ResolvedTheme,
-    backend: &mut dyn Backend,
+    payload: &mut DistributionPayload,
+    data: PlotData<'_>,
 ) -> Result<(), Error> {
     let center = index as f64 + 0.5;
     let width = 0.8;
@@ -171,38 +269,33 @@ fn draw_strip(
                 .into(),
         ));
     }
-    let points = group
-        .points
-        .iter()
-        .map(|point| {
-            let x = strip_min + point.normalized_strip * (strip_max - strip_min);
-            let (_, y) = layout.projection.project(center, point.y);
-            Point2D::new(x, y)
-        })
-        .collect::<Vec<_>>();
-    backend.draw_scatter(
-        &points,
-        &crate::plots::distribution_sample::overlay_style(group_color(
-            chart, group, hue_levels, index, theme,
+    let points = data.collect_source(group.points.iter().map(|point| {
+        let x = strip_min + point.normalized_strip * (strip_max - strip_min);
+        let (_, y) = layout.projection.project(center, point.y);
+        Ok(Point2D::new(x, y))
+    }))?;
+    payload.scatter(
+        points,
+        crate::plots::distribution_sample::overlay_style(group_color(
+            chart,
+            group,
+            local_color_index,
+            theme,
         )?),
+        data,
     )
 }
 
 fn group_color(
     chart: &Plot,
     group: &RaincloudGroup,
-    hue_levels: &[String],
-    index: usize,
+    local_color_index: usize,
     theme: &ResolvedTheme,
 ) -> Result<(u8, u8, u8), Error> {
     if let Some(hue) = &group.hue {
-        let local_index = hue_levels
-            .iter()
-            .position(|level| level == hue)
-            .unwrap_or(index);
-        let color_index = chart.hue_color_index(hue, local_index);
+        let color_index = chart.hue_color_index(hue, local_color_index);
         chart.categorical_color("raincloud", hue, color_index, theme)
     } else {
-        Ok(theme.colors[index % theme.colors.len()])
+        Ok(theme.colors[local_color_index % theme.colors.len()])
     }
 }

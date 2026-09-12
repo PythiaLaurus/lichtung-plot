@@ -372,9 +372,7 @@ impl UnfacetedPlotPlan {
             .with_retained_body(self.panel_plan.result.retained_payload());
         let rendered = self.plot.render_panel(kind, context, backend)?;
 
-        if let Some(significance) = &self.panel_plan.result.significance {
-            crate::significance::render(source, significance, theme, backend)?;
-        }
+        crate::significance::render_selected(source, &self.panel_plan.result, theme, backend)?;
 
         match self.panel_plan.result.decoration_mode {
             DecorationMode::Standard => {

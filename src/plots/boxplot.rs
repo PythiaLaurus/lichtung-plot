@@ -17,10 +17,12 @@
 
 use crate::Error;
 
+use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
-use crate::layout::AxisTick;
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
+use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
+use crate::render::backend::{FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
+#[cfg(test)]
 use crate::stats::distribution::quantile;
 use crate::{Plot, RawOverlay};
 
@@ -34,6 +36,7 @@ struct BoxSummary {
     fliers: Vec<f64>,
 }
 
+#[derive(Debug)]
 struct BoxStats {
     x_index: usize,
     group_index: usize,
@@ -46,29 +49,25 @@ struct BoxStats {
     fliers: Vec<f64>,
 }
 
-/// Render a boxplot: per-group quartiles with whiskers, grouped
-/// by `x_col`. Returns the `Layout` used to project the boxes
-/// so the orchestrator can apply decorations (frame / grid /
-/// axes / legend). Categorical x-ticks carry the group labels.
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
+#[derive(Debug)]
+pub(crate) struct PreparedBoxplot {
+    pub(crate) sample: crate::plots::distribution_sample::DistributionSample,
+    stats: Vec<BoxStats>,
+    pub(crate) range: (f64, f64),
+}
 
-    let sample = crate::plots::distribution_sample::prepare(chart, context.data, "boxplot")?;
-    let x_levels = &sample.x_levels;
-    let group_levels = &sample.group_levels;
-    let hue_levels = &sample.hue_levels;
+pub(crate) fn prepare(
+    chart: &Plot,
+    data: PlotData<'_>,
+    facet: Option<crate::data::FacetAxisSources<'_>>,
+) -> Result<PreparedBoxplot, Error> {
+    let sample = crate::plots::distribution_sample::prepare_scoped(chart, data, "boxplot", facet)?;
 
     // Display stats per group: Q1, median, Q3, lower whisker, upper whisker.
-    let stats: Vec<BoxStats> = sample
-        .groups
-        .iter()
-        .map(|group| -> Result<BoxStats, Error> {
-            let mut ys = group.values();
-            let summary = box_summary(&mut ys)?;
+    let stats = data.collect_source(sample.groups.iter().map(
+        |group| -> Result<BoxStats, Error> {
+            let mut ys = data.collect_source(group.observations.iter().map(|o| Ok(o.value)))?;
+            let summary = box_summary_with_source(&mut ys, Some(data))?;
             Ok(BoxStats {
                 x_index: group.x_index,
                 group_index: group.group_index,
@@ -80,9 +79,12 @@ pub(crate) fn render(
                 hi_whisker: summary.hi_whisker,
                 fliers: summary.fliers,
             })
-        })
-        .collect::<Result<_, _>>()?;
+        },
+    ))?;
 
+    for stat in &stats {
+        data.claim_source_visits(stat.fliers.len().saturating_add(1).saturating_mul(2))?;
+    }
     let y_min = stats.iter().fold(f64::INFINITY, |min, stat| {
         stat.fliers
             .iter()
@@ -96,38 +98,52 @@ pub(crate) fn render(
             .fold(max.max(stat.hi_whisker), f64::max)
     });
 
+    Ok(PreparedBoxplot {
+        sample,
+        stats,
+        range: (y_min, y_max),
+    })
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    categorical_distribution::count(chart.kind(), 1);
+    let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
+        return Err(Error::Render("boxplot requires retained box summaries".into()).into());
+    };
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let sample = &prepared.sample;
+    let stats = &prepared.stats;
+    let x_levels = &sample.x_levels;
+    let group_levels = &sample.group_levels;
+    let hue_levels = &sample.hue_levels;
     let group_active = !group_levels.is_empty();
     let n_boxes = x_levels.len() as f64;
-    let x_ticks = || {
-        x_levels
-            .iter()
-            .enumerate()
-            .map(|(i, label)| AxisTick::new(i as f64 + 0.5, label.clone()))
-            .collect()
-    };
     let base_y_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Ok(crate::layout::continuous_auto_range(
-            (y_min, y_max),
-            chart.y_axis_spec(),
-        ))
+        Err(Error::Render("boxplot requires root-prepared axes".into()))
     })?;
-    let mut rendered_maxima = vec![f64::NEG_INFINITY; x_levels.len()];
-    let mut grouped_maxima =
-        vec![vec![f64::NEG_INFINITY; group_levels.len().max(1)]; x_levels.len()];
-    for stat in &stats {
+    let mut rendered_maxima =
+        data.collect_source((0..x_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))?;
+    let mut grouped_maxima = data.collect_source((0..x_levels.len()).map(|_| {
+        data.collect_source((0..group_levels.len().max(1)).map(|_| Ok(f64::NEG_INFINITY)))
+    }))?;
+    for stat in stats {
         let maximum = stat.fliers.iter().copied().fold(stat.hi_whisker, f64::max);
         rendered_maxima[stat.x_index] = rendered_maxima[stat.x_index].max(maximum);
         grouped_maxima[stat.x_index][stat.group_index] = maximum;
     }
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let legend_entries: Vec<LegendEntry> = hue_levels
-        .iter()
-        .enumerate()
-        .map(|(idx, label)| {
+    let legend_entries =
+        data.collect_source(hue_levels.iter().enumerate().map(|(idx, label)| {
             let color = theme.colors[idx % theme.colors.len()];
-            LegendEntry::line_fill(
-                chart.legend_identity(label.clone()),
+            Ok(LegendEntry::line_fill(
+                chart.point_legend_identity(label, data)?,
                 LineStyle::solid(theme.foreground, theme.interval_width),
                 FillStyle {
                     color,
@@ -135,9 +151,8 @@ pub(crate) fn render(
                     stroke_width: 1.0,
                     opacity: 1.0,
                 },
-            )
-        })
-        .collect();
+            ))
+        }))?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,
@@ -169,9 +184,9 @@ pub(crate) fn render(
             (0.0, n_boxes),
             y_range,
             panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            x_ticks(),
+            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
+            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
+            Vec::new(),
             Vec::new(),
             chart.x_axis_spec(),
             &y_axis_spec,
@@ -185,120 +200,142 @@ pub(crate) fn render(
         0.5
     };
 
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (i, stat) in stats.iter().enumerate() {
-            let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
-            let color = theme.colors[color_index % theme.colors.len()];
-            let fill = FillStyle {
-                color,
-                stroke: theme.foreground,
-                stroke_width: 1.0,
-                opacity: 1.0,
-            };
-            let style = LineStyle::solid(theme.foreground, theme.interval_width);
+    let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
+    for (i, stat) in stats.iter().enumerate() {
+        let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
+        let color = theme.colors[color_index % theme.colors.len()];
+        let fill = FillStyle {
+            color,
+            stroke: theme.foreground,
+            stroke_width: 1.0,
+            opacity: 1.0,
+        };
+        let style = LineStyle::solid(theme.foreground, theme.interval_width);
 
-            let x_center_data =
-                crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());
-            let (xc, _) = proj.project(x_center_data, 0.0);
-            let box_w_px = (proj.project(box_w_data, 0.0).0 - proj.project(0.0, 0.0).0).abs();
-            let (_, y_lo) = proj.project(x_center_data, stat.lo_whisker);
-            let (_, y_q1) = proj.project(x_center_data, stat.q1);
-            let (_, y_med) = proj.project(x_center_data, stat.median);
-            let (_, y_q3) = proj.project(x_center_data, stat.q3);
-            let (_, y_hi) = proj.project(x_center_data, stat.hi_whisker);
+        let x_center_data =
+            crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());
+        let (xc, _) = proj.project(x_center_data, 0.0);
+        let box_w_px = (proj.project(box_w_data, 0.0).0 - proj.project(0.0, 0.0).0).abs();
+        let (_, y_lo) = proj.project(x_center_data, stat.lo_whisker);
+        let (_, y_q1) = proj.project(x_center_data, stat.q1);
+        let (_, y_med) = proj.project(x_center_data, stat.median);
+        let (_, y_q3) = proj.project(x_center_data, stat.q3);
+        let (_, y_hi) = proj.project(x_center_data, stat.hi_whisker);
 
-            // Box.
-            let pts = vec![
+        // Box.
+        let pts = data.collect_source(
+            [
                 Point2D::new(xc - box_w_px / 2.0, y_q1),
                 Point2D::new(xc - box_w_px / 2.0, y_q3),
                 Point2D::new(xc + box_w_px / 2.0, y_q3),
                 Point2D::new(xc + box_w_px / 2.0, y_q1),
-            ];
-            backend.draw_polygon(&pts, &fill)?;
+            ]
+            .into_iter()
+            .map(Ok),
+        )?;
+        payload.polygon(pts, fill, data)?;
 
-            // Median line.
-            backend.draw_line(
-                &[
-                    Point2D::new(xc - box_w_px / 2.0, y_med),
-                    Point2D::new(xc + box_w_px / 2.0, y_med),
-                ],
-                &style,
-            )?;
+        // Median line.
+        payload.line(
+            &[
+                Point2D::new(xc - box_w_px / 2.0, y_med),
+                Point2D::new(xc + box_w_px / 2.0, y_med),
+            ],
+            &style,
+            data,
+        )?;
 
-            // Whiskers.
-            backend.draw_line(&[Point2D::new(xc, y_q3), Point2D::new(xc, y_hi)], &style)?;
-            backend.draw_line(&[Point2D::new(xc, y_q1), Point2D::new(xc, y_lo)], &style)?;
-            let cap = box_w_px * 0.3;
-            backend.draw_line(
-                &[Point2D::new(xc - cap, y_hi), Point2D::new(xc + cap, y_hi)],
-                &style,
-            )?;
-            backend.draw_line(
-                &[Point2D::new(xc - cap, y_lo), Point2D::new(xc + cap, y_lo)],
-                &style,
-            )?;
+        // Whiskers.
+        payload.line(
+            &[Point2D::new(xc, y_q3), Point2D::new(xc, y_hi)],
+            &style,
+            data,
+        )?;
+        payload.line(
+            &[Point2D::new(xc, y_q1), Point2D::new(xc, y_lo)],
+            &style,
+            data,
+        )?;
+        let cap = box_w_px * 0.3;
+        payload.line(
+            &[Point2D::new(xc - cap, y_hi), Point2D::new(xc + cap, y_hi)],
+            &style,
+            data,
+        )?;
+        payload.line(
+            &[Point2D::new(xc - cap, y_lo), Point2D::new(xc + cap, y_lo)],
+            &style,
+            data,
+        )?;
 
-            if overlay == RawOverlay::Hidden {
-                let flier_style = chart.point_style(theme.foreground, 2);
-                let flier_points: Vec<Point2D> = stat
-                    .fliers
-                    .iter()
-                    .map(|y| {
-                        let (x_px, y_px) = proj.project(x_center_data, *y);
-                        Point2D::new(x_px, y_px)
-                    })
-                    .collect();
-                if !flier_points.is_empty() {
-                    backend.draw_scatter(&flier_points, &flier_style)?;
-                }
+        if overlay == RawOverlay::Hidden {
+            let flier_style = chart.point_style(theme.foreground, 2);
+            let flier_points = data.collect_source(stat.fliers.iter().map(|y| {
+                let (x_px, y_px) = proj.project(x_center_data, *y);
+                Ok(Point2D::new(x_px, y_px))
+            }))?;
+            if !flier_points.is_empty() {
+                payload.scatter(flier_points, flier_style, data)?;
             }
         }
-        if overlay.is_visible() {
-            for (index, group) in sample.groups.iter().enumerate() {
-                let center = crate::plots::distribution_sample::center(group, group_levels.len());
-                let color_index = group
-                    .hue_index
-                    .unwrap_or(if group_active { 0 } else { index });
-                let points = group
-                    .observations
-                    .iter()
-                    .map(|observation| {
-                        let x = crate::plots::distribution_sample::overlay_x(
-                            overlay,
-                            center,
-                            box_w_data,
-                            observation.source_row,
-                        );
-                        let (x, y) = proj.project(x, observation.value);
-                        Point2D::new(x, y)
-                    })
-                    .collect::<Vec<_>>();
-                backend.draw_scatter(
-                    &points,
-                    &crate::plots::distribution_sample::overlay_style(
-                        theme.colors[color_index % theme.colors.len()],
-                    ),
-                )?;
-            }
-        }
-        Ok(())
-    })?;
-
-    if hue_levels.is_empty() {
-        Ok(PlotRenderResult::new(layout, Vec::new()).with_significance_plan(significance))
-    } else {
-        Ok(PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance))
     }
+    if overlay.is_visible() {
+        for (index, group) in sample.groups.iter().enumerate() {
+            let center = crate::plots::distribution_sample::center(group, group_levels.len());
+            let color_index = group
+                .hue_index
+                .unwrap_or(if group_active { 0 } else { index });
+            let points = data.collect_source(group.observations.iter().map(|observation| {
+                let x = crate::plots::distribution_sample::overlay_x(
+                    overlay,
+                    center,
+                    box_w_data,
+                    observation.source_row,
+                );
+                let (x, y) = proj.project(x, observation.value);
+                Ok(Point2D::new(x, y))
+            }))?;
+            payload.scatter(
+                points,
+                crate::plots::distribution_sample::overlay_style(
+                    theme.colors[color_index % theme.colors.len()],
+                ),
+                data,
+            )?;
+        }
+    }
+    payload
+        .retain(
+            PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance),
+            context,
+        )
+        .map_err(Into::into)
 }
 
+#[cfg(test)]
 fn box_summary(values: &mut [f64]) -> Result<BoxSummary, Error> {
-    let q1 = quantile(values, 0.25)?;
-    let median = quantile(values, 0.5)?;
-    let q3 = quantile(values, 0.75)?;
-    values.sort_by(f64::total_cmp);
+    box_summary_with_source(values, None)
+}
+
+fn box_summary_with_source(
+    values: &mut [f64],
+    data: Option<PlotData<'_>>,
+) -> Result<BoxSummary, Error> {
+    use crate::data::source::SourceAdmission;
+    data.source_visits(values.len())?;
+    if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
+        return Err(Error::Data(
+            "boxplot: samples must be finite and nonempty".into(),
+        ));
+    }
+    crate::data::source::sort_numeric_source(values, data)?;
+    let q1 = crate::stats::distribution::sorted_quantile(values, 0.25);
+    let median = crate::stats::distribution::sorted_quantile(values, 0.5);
+    let q3 = crate::stats::distribution::sorted_quantile(values, 0.75);
     let iqr = q3 - q1;
     let lo_fence = q1 - 1.5 * iqr;
     let hi_fence = q3 + 1.5 * iqr;
+    data.source_visits(values.len().saturating_mul(3))?;
     let lo_whisker = values
         .iter()
         .copied()
@@ -310,11 +347,14 @@ fn box_summary(values: &mut [f64]) -> Result<BoxSummary, Error> {
         .copied()
         .find(|value| *value <= hi_fence)
         .unwrap_or(q3);
-    let fliers = values
-        .iter()
-        .copied()
-        .filter(|value| *value < lo_fence || *value > hi_fence)
-        .collect();
+    let mut fliers = Vec::new();
+    data.source_reserve(&mut fliers, values.len())?;
+    fliers.extend(
+        values
+            .iter()
+            .copied()
+            .filter(|value| *value < lo_fence || *value > hi_fence),
+    );
     Ok(BoxSummary {
         lo_whisker,
         q1,

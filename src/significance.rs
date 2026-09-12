@@ -1055,6 +1055,37 @@ fn bracket_metrics(style: SignificanceMarkStyle) -> BracketMetrics {
     }
 }
 
+pub(crate) fn render_selected(
+    chart: &Plot,
+    result: &crate::spec::PlotRenderResult,
+    theme: &crate::theme::ResolvedTheme,
+    backend: &mut dyn Backend,
+) -> Result<(), Error> {
+    let Some(plan) = &result.significance else {
+        return Ok(());
+    };
+    if let Some(styles) = result
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.significance_styles.as_ref())
+    {
+        if styles.len() != plan.brackets.len() {
+            return Err(Error::Render(
+                "selected significance styles do not match retained brackets".into(),
+            ));
+        }
+        for (bracket, style) in plan.brackets.iter().zip(styles) {
+            backend.draw_planned_bracket(PlannedSignificanceCall {
+                bracket: &bracket.geometry,
+                style,
+                label: &bracket.label,
+            })?;
+        }
+        return Ok(());
+    }
+    render(chart, plan, theme, backend)
+}
+
 pub(crate) fn render(
     chart: &Plot,
     plan: &SignificancePlan,
