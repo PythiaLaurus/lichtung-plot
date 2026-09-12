@@ -55,22 +55,20 @@ impl Plot {
     ) -> Result<CanvasLayout, Error> {
         let labels_present = self.axis_label_presence();
         let measure = |spec, text| {
-            if self.has_facets() {
-                CanvasLayout::measured_single_panel(self.width, self.height, theme, spec, text)
-            } else {
-                CanvasLayout::measured_plot_root(
-                    self.width,
-                    self.height,
+            CanvasLayout::measured_plot_root(
+                self.width,
+                self.height,
+                theme,
+                spec,
+                text,
+                crate::decorations::title_block::plan::RootAlignments::resolve(
                     theme,
-                    spec,
-                    text,
-                    crate::decorations::title_block::plan::RootAlignments::resolve(
-                        theme,
-                        [self.title_alignment, self.subtitle_alignment],
-                        [None, None],
-                    ),
-                )
-            }
+                    [self.title_alignment, self.subtitle_alignment],
+                    [None, None],
+                ),
+                !self.has_facets(),
+            )
+            .map_err(crate::layout::fit::PlanError::into_error)
         };
         let canvas = measure(
             CanvasLayoutSpec {

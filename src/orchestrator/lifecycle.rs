@@ -223,13 +223,16 @@ impl PlotPlan {
                     .attach(source.clone())?
                     .with_canvas_size(width, height);
                 let plan = if source.has_facets() {
-                    PlotLayoutPlan::Faceted(Box::new(super::facets::FacetPlan::new(
-                        &source,
-                        kind,
-                        &prepared.theme,
-                        round,
-                        &mut children,
-                    )?))
+                    PlotLayoutPlan::Faceted(Box::new(
+                        super::facets::FacetPlan::new(
+                            &source,
+                            kind,
+                            &prepared.theme,
+                            round,
+                            &mut children,
+                        )
+                        .map_err(crate::layout::fit::PlanError::into_error)?,
+                    ))
                 } else {
                     PlotLayoutPlan::Unfaceted(Box::new(UnfacetedPlotPlan::new(
                         &source,

@@ -1231,34 +1231,6 @@ impl ValidationRecorder {
     }
 }
 
-pub(super) fn validate_with_null_backend<T>(
-    width: u32,
-    height: u32,
-    scope: &str,
-    validate: impl FnOnce(&mut dyn Backend) -> Result<T, Error>,
-) -> Result<T, Error> {
-    if width == 0 || height == 0 {
-        return Err(Error::Render(
-            "planning validation dimensions must be positive".into(),
-        ));
-    }
-    // Measurement validates commands without opening a final backend lifecycle.
-    let mut backend = ValidationRecorder {
-        height,
-        state: NullCanvasState::Open,
-        ..ValidationRecorder::default()
-    };
-    let validated = validate(&mut backend);
-    let ended = if backend.scopes.is_empty() {
-        Ok(())
-    } else {
-        Err(Error::Render(
-            "planning validation has unclosed scopes".into(),
-        ))
-    };
-    backend::finish_scope(validated, ended, scope)
-}
-
 pub(crate) fn validate_text_replay_plan(
     width: u32,
     height: u32,

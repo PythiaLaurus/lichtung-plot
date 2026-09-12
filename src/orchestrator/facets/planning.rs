@@ -10,8 +10,7 @@ use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
-use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, PhysicalTextAlignment, TextBlock};
-use crate::render::backend::Backend;
+use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, PhysicalTextAlignment};
 use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -21,8 +20,8 @@ pub(super) fn canvas_layout(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
     round: &mut FeedbackRound,
-) -> Result<CanvasLayout, Error> {
-    let mut canvas = CanvasLayout::measured_composed_canvas(
+) -> Result<CanvasLayout, crate::layout::fit::PlanError> {
+    let mut canvas = CanvasLayout::measured_plot_root(
         plot.width(),
         plot.height(),
         theme,
@@ -34,6 +33,12 @@ pub(super) fn canvas_layout(
             has_y_label: vertical_axis_label.is_some(),
         },
         (plot.title_text(), plot.subtitle_text(), plot.caption_text()),
+        crate::decorations::title_block::plan::RootAlignments::resolve(
+            theme,
+            [plot.title_alignment, plot.subtitle_alignment],
+            [None; 2],
+        ),
+        false,
     )?;
     let baseline = (
         usize::from(horizontal_axis_label.is_some()),
@@ -61,7 +66,7 @@ pub(super) fn reserve_rewrapped_shared_axis_titles(
     reserved_panel: PanelBox,
     candidate_panel: PanelBox,
     round: &mut FeedbackRound,
-) -> Result<PanelBox, Error> {
+) -> Result<PanelBox, crate::layout::fit::PlanError> {
     let baseline = shared_axis_line_counts(
         horizontal_axis_label,
         vertical_axis_label,
@@ -85,40 +90,34 @@ pub(super) fn shared_axis_line_counts(
     vertical_axis_label: Option<&str>,
     theme: &ResolvedTheme,
     panel: PanelBox,
-) -> Result<(usize, usize), Error> {
-    let horizontal_lines = horizontal_axis_label
-        .map(|label| {
-            theme
-                .plan_text(
-                    label,
-                    &theme.typography.axis_title,
-                    panel.width().max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "shared facet x-axis title",
-                    false,
-                )
-                .map(TextBlock::from_resolved)
-                .map(|block| block.lines().len())
-        })
-        .transpose()?
-        .unwrap_or(0);
-    let vertical_lines = vertical_axis_label
-        .map(|label| {
-            theme
-                .plan_text(
-                    label,
-                    &theme.typography.axis_title,
-                    panel.height().max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "shared facet y-axis title",
-                    false,
-                )
-                .map(TextBlock::from_resolved)
-                .map(|block| block.lines().len())
-        })
-        .transpose()?
-        .unwrap_or(0);
-    Ok((horizontal_lines, vertical_lines))
+) -> Result<(usize, usize), crate::layout::fit::PlanError> {
+    let mut lines = [0; 2];
+    for (index, (label, span, role)) in [
+        (
+            horizontal_axis_label,
+            panel.width(),
+            AddressRole::AxisBottom,
+        ),
+        (vertical_axis_label, panel.height(), AddressRole::AxisLeft),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if let Some(label) = label {
+            lines[index] = crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
+                label,
+                &theme.typography.axis_title,
+                span,
+                PhysicalTextAlignment::Center,
+                "shared facet axis title",
+                &crate::layout::fit::FitScope::root().child(role, 0)?,
+            ))?
+            .lines
+            .len();
+        }
+    }
+    Ok((lines[0], lines[1]))
 }
 
 #[expect(
@@ -133,22 +132,27 @@ fn adjusted_shared_axis_panel(
     candidate: PanelBox,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
-) -> Result<(PanelBox, f64, f64), Error> {
+) -> Result<(PanelBox, f64, f64), crate::layout::fit::PlanError> {
     let line_height = theme.typography.axis_title.line_height();
     let consumed = round.insets(address, FeedbackKind::AxisGutter);
-    let panel = FrameRequirements {
-        minimum_body: (80.0, 60.0),
-        natural_insets: [0.0; 4],
-    }
-    .assign(candidate, consumed)?;
+    let panel = crate::layout::fit::measured(
+        FrameRequirements {
+            minimum_body: (80.0, 60.0),
+            natural_insets: [0.0; 4],
+        }
+        .assign_fit(
+            candidate,
+            consumed,
+            &crate::layout::fit::FitScope::new(address, 0),
+        ),
+    )?;
     let lines = shared_axis_line_counts(horizontal_axis_label, vertical_axis_label, theme, panel)?;
     let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
     let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
     if candidate.width() - extra_left < 80.0 || candidate.height() - extra_bottom < 60.0 {
-        return Err(Error::Render(
+        return Err(crate::layout::fit::FitScope::new(address, 0).failure(FitKind::TrackOrResidual,
                 "multiline shared facet axis titles do not fit while preserving the minimum 80x60 plot region; increase chart size"
-                    .into(),
-            ));
+            ).into());
     }
     round.begin_owner(address)?;
     round.observe_box(panel)?;
@@ -173,7 +177,7 @@ fn adjusted_shared_axis_panel(
     clippy::too_many_lines,
     reason = "facet measurement keeps the immutable grid, scale, theme, and backend inputs explicit"
 )]
-pub(super) fn layout_panels(
+pub(super) fn legacy_parent_adapter(
     plot: &Plot,
     kind: PlotKind,
     panels: &mut [FacetPanel],
@@ -181,7 +185,6 @@ pub(super) fn layout_panels(
     shape: (usize, usize),
     facet_scales: FacetScales,
     theme: &ResolvedTheme,
-    _backend: &mut dyn Backend,
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
     probe_cells: &[PanelBox],
@@ -193,6 +196,8 @@ pub(super) fn layout_panels(
     let (rows, columns) = shape;
     let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
     let mut requirements = Vec::new();
+    plot.data()
+        .reserve_source(&mut requirements, panels.len())?;
     for (index, facet) in panels.iter().enumerate() {
         let address = grid.child(
             AddressRole::FacetCell,
@@ -210,12 +215,12 @@ pub(super) fn layout_panels(
             },
         ));
     }
-    let cells = match crate::layout::canvas::allocate_composed_grid_fit(
+    let cells = match allocate_legacy_grid(
+        plot.data(),
         outer,
         rows,
         columns,
         &requirements,
-        "facet layout",
         &scope.child(AddressRole::FacetGrid, 0)?,
     )? {
         FitOutcome::Measured(cells) => cells,
@@ -253,7 +258,7 @@ pub(super) fn layout_panels(
             )? {
                 fit::FitFailure::retain_least(&mut child_miss, reason);
             }
-            let label = facet_label(&panel_plot, &facet.cell);
+            let label = facet_label(&panel_plot, &facet.cell)?;
             let appearance = theme
                 .legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal);
             if let FitOutcome::Miss(reason) = fit::text(
@@ -309,7 +314,7 @@ pub(super) fn layout_panels(
                 continue;
             }
         };
-        let label = facet_label(&panel_plot, &facet.cell);
+        let label = facet_label(&panel_plot, &facet.cell)?;
         let cell = cells[facet.row * columns + facet.column];
         let requirement = match fit::outcome(PanelRequirements::measure(
             result
@@ -360,6 +365,43 @@ pub(super) fn layout_panels(
         facet.panel = cells[facet.row * columns + facet.column];
     }
     Ok(FitOutcome::Measured(()))
+}
+
+/// Admission boundary for the unchanged equal-panel allocator, not measured tracks.
+pub(super) fn allocate_legacy_grid(
+    data: crate::data::PlotData<'_>,
+    outer: PanelBox,
+    rows: usize,
+    columns: usize,
+    requirements: &[(usize, usize, PanelRequirements)],
+    scope: &crate::layout::fit::FitScope,
+) -> Result<crate::layout::fit::FitOutcome<Vec<PanelBox>>, Error> {
+    let cells = rows
+        .checked_mul(columns)
+        .ok_or_else(|| Error::Render("facet topology overflow".into()))?;
+    let tracks = rows
+        .checked_add(columns)
+        .and_then(|count| count.checked_mul(3))
+        .ok_or_else(|| Error::Render("facet track storage overflow".into()))?;
+    let bytes = cells
+        .checked_mul(std::mem::size_of::<PanelBox>())
+        .and_then(|bytes| {
+            tracks
+                .checked_mul(std::mem::size_of::<f64>())
+                .and_then(|extra| bytes.checked_add(extra))
+        })
+        .ok_or_else(|| Error::Render("facet allocation storage overflow".into()))?;
+    data.claim_source_visits(cells)?;
+    data.claim_source_visits(tracks)?;
+    data.claim_source_bytes(bytes)?;
+    crate::layout::canvas::allocate_composed_grid_fit(
+        outer,
+        rows,
+        columns,
+        requirements,
+        "facet layout",
+        scope,
+    )
 }
 
 pub(super) fn feedback_plot(
@@ -418,9 +460,7 @@ pub(super) fn plan_panels(
     children: &mut crate::decorations::plan::children::ChildPlans,
 ) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     let mut panel_plans = Vec::new();
-    panel_plans
-        .try_reserve_exact(panels.len())
-        .map_err(|_| Error::Render("facet panel plan reservation failed".into()))?;
+    plot.data().reserve_source(&mut panel_plans, panels.len())?;
     let mut legend_owner = !outside_legend;
     let mut child_miss = None;
     for (index, facet) in panels.iter().enumerate() {

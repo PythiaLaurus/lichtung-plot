@@ -250,7 +250,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a4c | Matrix deferred interior and outer title integration | COMPLETE |
 | T5a6a4d | Beeswarm deferred interior | COMPLETE |
 | T5a6a4e | Waterfall deferred interior | COMPLETE |
-| T5a6a5a | Facet parent adapter and outer title integration | PENDING |
+| T5a6a5a | Facet parent adapter and outer title integration | COMPLETE |
 | T5a6a5b | Canvas parent adapter and outer title integration | PENDING |
 | T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
 | T5a6b1 | Standard point and path families | PENDING |
@@ -4610,7 +4610,8 @@ T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and all five specialize
 extraction steps T5a6a4a-e are COMPLETE with focused and primary integrated
 evidence below. All 25 family interiors use selected measurement/capture without
 backend discovery or a production family combined-dispatch branch. Parent
-adapters T5a6a5a-b and later native-route migrations remain PENDING.
+adapter T5a6a5a is COMPLETE; next is the T5a6a5b Canvas parent adapter, which
+remains PENDING along with later native-route migrations. No T5b tracks start early.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4633,6 +4634,51 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a5a completion and integration evidence (from clean `5357472`): COMPLETE.
+Independent review reported no actionable findings, including the root title
+integration. No commit is made in this documentation-only completion update.
+
+- `FacetPlan` is the typed parent adapter. Its named legacy allocation boundary
+  retains equal panels, existing shared-domain/guide ownership, child-plan cache
+  keys, feedback rounds, and edge/compact candidate order. No measured-track
+  rewrite, legend policy redesign, or additional composition nesting is added.
+- Facet measurement no longer opens Null validation sessions or a geometry
+  backend. The obsolete measurement wrapper and untyped allocation/frame wrappers
+  are removed, with repository callers migrated. Typed title, strip, shared-axis,
+  child, and residual fit failures reach the root error boundary without parsing.
+- The common T5a4 root title producer now serves faceted Plot roots, including
+  independent title/subtitle instructions and Center/None/Start defaults. Cell
+  titles and facet strips remain separate roles; strips keep their centered
+  placement. The old faceted Plot root-text path is removed; Canvas remains for
+  T5a6a5b.
+- Selected parent capture retains scoped child Plot inputs, child plans, header
+  and shared-axis text, layer names, and common `LegendDrawPlan` calls. Parent
+  chrome/guide geometry is observed through `GeometrySnapshot`; capture does not
+  reconstruct layout, scopes, guide glyph placement, or source projections.
+  Parent topology scratch, header strings, shared legend storage, and retained
+  vectors are admitted before allocation. Census no longer allocates a dummy
+  grid just to enumerate facet labels.
+- Added tests cover unequal multiline root roles, common captions, title-only,
+  blank and RTL titles, independent alignment, no dual root producer, centered
+  strips, typed root failure before child measurement, exact residual fit,
+  operation-limit refusal, and no refund after a rejected allocation. Existing
+  cache-equivalence, shared-guide recovery, geometry/clip identity, and stage
+  counter tests remain in force. First parent capture performs zero source-column
+  reads, projections, or shaping.
+- Focused checks pass: strict locked/offline all-target Clippy, 916 library tests
+  (17 ignored), 57 composition integrations, and all six unchanged visual
+  snapshots. No snapshots were updated.
+- Final primary `just verify` in `/tmp/opencode/t5a6a5a-verify.log` passed:
+  formatting, strict locked/offline all-target Clippy, 916 library tests passed
+  with 17 ignored, and 448 integration tests passed, including 57 composition
+  tests and all six unchanged visual snapshots. Four example targets ran zero
+  tests; warning-denied rustdoc and offline package verification passed for
+  236 files (6.6 MiB; 1.4 MiB compressed). No tests failed.
+- Facet parent and common root title integration are COMPLETE. T5a6a5b Canvas
+  parent integration is next and remains PENDING; no T5b measured-track or
+  native-route work starts early. This update changes only spec 91, reruns no
+  tests, and makes no code, snapshot, or commit changes.
 
 T5a6a4e completion evidence: COMPLETE. Primary review reported no actionable
 bugs.

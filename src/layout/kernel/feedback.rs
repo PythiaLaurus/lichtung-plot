@@ -986,12 +986,6 @@ pub(crate) struct FrameRequirements {
 }
 
 impl FrameRequirements {
-    pub(crate) fn assign(&self, cell: PanelBox, gutters: [f64; 4]) -> Result<PanelBox, Error> {
-        match self.assign_fit(cell, gutters, &FitScope::root())? {
-            crate::layout::fit::FitOutcome::Measured(panel) => Ok(panel),
-            crate::layout::fit::FitOutcome::Miss(reason) => Err(reason.into_error()),
-        }
-    }
     #[expect(
         clippy::cast_precision_loss,
         reason = "assigned frame coordinates remain bounded by exact public u32 root dimensions"

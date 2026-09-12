@@ -169,27 +169,6 @@ impl PanelRequirements {
     }
 }
 
-/// Allocate equal data panels with measured decoration gutters and one safety gap.
-pub(crate) fn allocate_composed_grid(
-    outer: PanelBox,
-    rows: usize,
-    columns: usize,
-    requirements: &[(usize, usize, PanelRequirements)],
-    description: &str,
-) -> Result<Vec<PanelBox>, Error> {
-    match allocate_composed_grid_fit(
-        outer,
-        rows,
-        columns,
-        requirements,
-        description,
-        &crate::layout::fit::FitScope::root(),
-    )? {
-        crate::layout::fit::FitOutcome::Measured(cells) => Ok(cells),
-        crate::layout::fit::FitOutcome::Miss(reason) => Err(reason.into_error()),
-    }
-}
-
 #[expect(
     clippy::cast_precision_loss,
     reason = "validated declared tracks fit the exact root coordinate domain"
@@ -324,7 +303,7 @@ pub struct CanvasLayout {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum CanvasRootText {
     Planned(crate::decorations::title_block::plan::RootTitleBlockPlan),
-    // Composition adapters retain their existing placement until T5a6a.
+    // The Canvas adapter retains its existing placement until T5a6a5b.
     Deferred {
         plans: [Option<ResolvedTextPlan>; 3],
         baselines: [Vec<f64>; 3],
@@ -339,7 +318,8 @@ impl CanvasLayout {
         mut spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
         alignments: crate::decorations::title_block::plan::RootAlignments,
-    ) -> Result<Self, Error> {
+        reserve_axes: bool,
+    ) -> Result<Self, crate::layout::fit::PlanError> {
         spec.has_title = false;
         spec.has_subtitle = false;
         spec.has_caption = false;
@@ -350,7 +330,7 @@ impl CanvasLayout {
             spec,
             (0, 0, 0),
             false,
-            true,
+            reserve_axes,
         )?;
         let span = PanelBox::new(
             16.0,
@@ -365,8 +345,7 @@ impl CanvasLayout {
             alignments,
             MIN_PANEL_HEIGHT + canvas.insets.bottom - 8.0,
             &crate::layout::fit::FitScope::root(),
-        )
-        .map_err(crate::layout::fit::PlanError::into_error)?;
+        )?;
         canvas.insets.top = (12.0 + plan.top_reserve).max(30.0);
         canvas.insets.bottom += plan.bottom_reserve;
         canvas.panel_box = PanelBox::new(
@@ -383,7 +362,7 @@ impl CanvasLayout {
                     crate::layout::fit::FitKind::TrackOrResidual,
                     "root title block leaves less than the minimum 80x60 plot panel",
                 )
-                .into_error());
+                .into());
         }
         canvas.root_text = CanvasRootText::Planned(plan);
         Ok(canvas)
@@ -407,25 +386,6 @@ impl CanvasLayout {
             true,
         )
         .expect("unchecked canvas layout always clamps to the minimum panel")
-    }
-
-    pub(crate) fn measured_single_panel(
-        canvas_width: u32,
-        canvas_height: u32,
-        theme: &ResolvedTheme,
-        spec: CanvasLayoutSpec,
-        text: (Option<&str>, Option<&str>, Option<&str>),
-    ) -> Result<Self, Error> {
-        theme.prepare_font_environment()?;
-        let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let plans = planned_root_text(text, theme, maximum_width)?;
-        let counts = planned_line_counts(&plans);
-        let mut layout =
-            Self::resolve(canvas_width, canvas_height, theme, spec, counts, true, true)?;
-        if let CanvasRootText::Deferred { plans: stored, .. } = &mut layout.root_text {
-            *stored = [plans.0, plans.1, plans.2];
-        }
-        Ok(layout)
     }
 
     pub(crate) fn measured_composed_canvas(
@@ -725,7 +685,7 @@ mod tests {
             has_x_label: true,
             has_y_label: true,
         };
-        let layout = CanvasLayout::measured_single_panel(
+        let layout = CanvasLayout::measured_composed_canvas(
             360,
             240,
             &theme,
@@ -741,7 +701,7 @@ mod tests {
             panic!("deferred composition layout");
         };
         assert_eq!(baselines[2].len(), lines.len());
-        assert!(CanvasLayout::measured_single_panel(
+        assert!(CanvasLayout::measured_composed_canvas(
             160,
             120,
             &theme,
@@ -753,13 +713,14 @@ mod tests {
 
     #[test]
     fn composed_grid_retains_fixed_gap_between_adjacent_panels() {
-        let cells = allocate_composed_grid(
+        let cells = crate::layout::fit::measured(allocate_composed_grid_fit(
             PanelBox::new(0.0, 400.0, 0.0, 300.0),
             2,
             2,
             &[],
             "test grid",
-        )
+            &crate::layout::fit::FitScope::root(),
+        ))
         .unwrap();
 
         assert_eq!(
@@ -781,10 +742,11 @@ mod tests {
             has_y_label: false,
         };
         let content = (Some("title"), Some("subtitle"), None);
-        let base_layout = CanvasLayout::measured_single_panel(640, 480, &base, spec, content)
+        let base_layout = CanvasLayout::measured_composed_canvas(640, 480, &base, spec, content)
             .expect("base title block fits");
-        let spaced_layout = CanvasLayout::measured_single_panel(640, 480, &spaced, spec, content)
-            .expect("spaced title block fits");
+        let spaced_layout =
+            CanvasLayout::measured_composed_canvas(640, 480, &spaced, spec, content)
+                .expect("spaced title block fits");
 
         assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);
         assert!(

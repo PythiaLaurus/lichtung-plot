@@ -1516,11 +1516,17 @@ fn orchestration_begins_and_ends_once_and_projects_into_offset_panel() {
         NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
         NumericValues::new("y", [1.0, 3.0, 2.0, 5.0]),
     );
-    let expected_panel = crate::layout::kernel::FrameRequirements {
-        minimum_body: (1.0, 1.0),
-        natural_insets: [0.0; 4],
-    }
-    .assign(plot.canvas_layout().panel_box, [0.0; 4])
+    let expected_panel = crate::layout::fit::measured(
+        crate::layout::kernel::FrameRequirements {
+            minimum_body: (1.0, 1.0),
+            natural_insets: [0.0; 4],
+        }
+        .assign_fit(
+            plot.canvas_layout().panel_box,
+            [0.0; 4],
+            &crate::layout::fit::FitScope::root(),
+        ),
+    )
     .unwrap();
     let mut backend = RecordingBackend::default();
 

@@ -252,10 +252,12 @@ fn parent_feedback_reallocates_real_geometry_and_converges_on_round_eight() {
         |_| Ok(()),
         |(), assigned, round| {
             let consumed = round.insets(&address, FeedbackKind::AxisGutter);
-            let panel = frame.assign(
+            let panel = crate::layout::fit::measured(frame.assign_fit(
                 crate::layout::PanelBox::new(0.0, 100.0, 0.0, 100.0),
                 consumed,
-            )?;
+                &crate::layout::fit::FitScope::root(),
+            ))
+            .map_err(crate::layout::fit::PlanError::into_error)?;
             assignments.push(panel);
             round.begin_owner(&address)?;
             round.observe_box(panel)?;

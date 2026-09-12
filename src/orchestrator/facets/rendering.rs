@@ -15,16 +15,17 @@ pub(super) fn observe_arranged_chrome(
     theme: &ResolvedTheme,
     round: &mut crate::layout::kernel::FeedbackRound,
 ) -> Result<(), Error> {
-    let mut geometry = crate::render::geometry::GeometryBackend::new(theme)?;
-    geometry.begin(plan.plot.width(), plan.plot.height())?;
-    let result = (|| {
-        for (facet, text) in plan.panels.iter().zip(&plan.strip_text) {
-            round.observe_box(facet.panel)?;
-            draw_facet_strip(facet, text, &mut geometry)?;
-        }
-        draw_shared_facet_axis_labels(&plan.shared_axis_text, &mut geometry)
-    })();
-    crate::render::backend::finish_scope(result, geometry.end(), "arranged facet chrome")?;
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    for (facet, text) in plan.panels.iter().zip(&plan.strip_text) {
+        round.observe_box(facet.panel)?;
+        geometry.text(text.placement, &text.plan, None)?;
+    }
+    for text in &plan.shared_axis_text {
+        geometry.text(text.placement, &text.plan, None)?;
+    }
+    for legend in plan.legends.iter().flatten() {
+        legend.geometry(&mut geometry)?;
+    }
     geometry.observe_feedback(round)
 }
 
@@ -34,11 +35,13 @@ pub(super) fn observe_arranged_chrome(
 )]
 pub(super) fn render_scene(
     source: &Plot,
-    shared_plot: &Plot,
+    panel_plots: &[Plot],
     kind: PlotKind,
     panels: &[FacetPanel],
     panel_plans: &[std::sync::Arc<PanelPlan>],
-    outside_legend: Option<&crate::decorations::plan::ResolvedLegend>,
+    legends: &[Option<crate::decorations::legend::LegendDrawPlan>],
+    strip_layers: &[String],
+    panel_layers: &[[String; 3]],
     strip_text: &[PlacedText],
     shared_axis_text: &[PlacedText],
     canvas_layout: &crate::layout::CanvasLayout,
@@ -52,43 +55,49 @@ pub(super) fn render_scene(
             SurfaceRole::PlotPanel,
         )?;
     }
-    for (facet, panel_plan) in panels.iter().zip(panel_plans) {
-        let panel_plot = shared_plot
-            .clone()
-            .with_render_scope(facet.render_scope(shared_plot.data())?)
-            .with_significance_subset(facet.significance_selectors());
-        crate::decorations::apply::apply_grid(&panel_plot, panel_plan, backend)?;
+    for (layers, panel_plan) in panel_layers.iter().zip(panel_plans) {
+        crate::render::backend::with_layer_role(
+            backend,
+            &layers[0],
+            crate::render::backend::LayerRole::Grid,
+            |backend| {
+                panel_plan
+                    .result
+                    .axes
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("facet plan is missing immutable axes".into()))?
+                    .draw_grid(backend)
+            },
+        )?;
     }
 
     for (index, ((facet, panel_plan), strip)) in
         panels.iter().zip(panel_plans).zip(strip_text).enumerate()
     {
-        let panel_plot = shared_plot
-            .clone()
-            .with_render_scope(facet.render_scope(shared_plot.data())?)
-            .with_significance_subset(facet.significance_selectors());
+        let panel_plot = &panel_plots[index];
         let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
+            crate::data::PlotData::with_rows(panel_plot, &facet.rows, &facet.source_rows),
             panel_plan.panel_box,
             theme,
         )
         .with_facet_scales(source.facet_scales_spec())
         .with_retained_body(panel_plan.result.retained_payload());
-        panel_plan
-            .plot_with_planned_limits(&panel_plot)
-            .render_panel(kind, context, backend)?;
-        crate::significance::render_selected(&panel_plot, &panel_plan.result, theme, backend)?;
-        crate::decorations::apply::apply_axes(&panel_plot, panel_plan, backend)?;
-        crate::decorations::apply::apply_planned_legend(
-            &panel_plot,
-            if index == 0 {
-                outside_legend.or(panel_plan.legend.as_ref())
-            } else {
-                panel_plan.legend.as_ref()
-            },
-            backend,
-        )?;
-        draw_facet_strip(facet, strip, backend)?;
+        panel_plot.render_panel(kind, context, backend)?;
+        crate::significance::render_selected(panel_plot, &panel_plan.result, theme, backend)?;
+        crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {
+            panel_plan
+                .result
+                .axes
+                .as_ref()
+                .ok_or_else(|| Error::Render("facet plan is missing immutable axes".into()))?
+                .draw(backend)
+        })?;
+        if let Some(legend) = &legends[index] {
+            crate::render::backend::with_layer(backend, &panel_layers[index][2], |backend| {
+                legend.draw(backend)
+            })?;
+        }
+        draw_facet_strip(&strip_layers[index], strip, backend)?;
     }
     draw_shared_facet_axis_labels(shared_axis_text, backend)?;
     crate::decorations::apply::apply_canvas_text(source, canvas_layout, backend)
@@ -102,15 +111,19 @@ pub(super) fn plan_facet_strip(
     plot: &Plot,
     facet: &FacetPanel,
     theme: &ResolvedTheme,
-) -> Result<PlacedText, Error> {
-    let label = facet_label(plot, &facet.cell);
-    let plan = theme.plan_legacy_text(
+) -> Result<PlacedText, crate::layout::fit::PlanError> {
+    let label = facet_label(plot, &facet.cell)?;
+    let plan = crate::layout::fit::measured(crate::layout::fit::text(
+        theme,
         &label,
-        theme.facet_header_font_size,
-        (facet.panel.width() - 16.0).max(1.0),
+        &theme.legacy_text_appearance(theme.facet_header_font_size, crate::TextWeight::Normal),
+        facet.panel.width() - 16.0,
         PhysicalTextAlignment::Center,
         "facet strip",
-    )?;
+        &crate::layout::fit::FitScope::root()
+            .child(crate::layout::AddressRole::FacetCell, facet.panel_index)?
+            .child(crate::layout::AddressRole::FacetHeader, 0)?,
+    ))?;
     let first_y =
         facet.panel.y1 + 14.0 + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
     Ok(PlacedText::from_deferred_first_line(
@@ -125,15 +138,11 @@ pub(super) fn plan_facet_strip(
 }
 
 fn draw_facet_strip(
-    facet: &FacetPanel,
+    layer: &str,
     text: &PlacedText,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    crate::render::backend::with_layer(
-        backend,
-        &format!("facet-strip-{}", facet.panel_index),
-        |backend| text.draw(backend),
-    )
+    crate::render::backend::with_layer(backend, layer, |backend| text.draw(backend))
 }
 
 #[expect(
@@ -146,7 +155,7 @@ pub(super) fn plan_shared_facet_axis_labels(
     grid: PanelBox,
     axis_origin: (f64, f64),
     theme: &ResolvedTheme,
-) -> Result<Vec<PlacedText>, Error> {
+) -> Result<Vec<PlacedText>, crate::layout::fit::PlanError> {
     let mut plans = Vec::new();
     crate::render::backend::reserve_text_records(
         &mut plans,
@@ -154,14 +163,16 @@ pub(super) fn plan_shared_facet_axis_labels(
         theme.prepared_font_environment()?,
     )?;
     if let Some(label) = horizontal_label {
-        let plan = theme.plan_text(
+        let plan = crate::layout::fit::measured(crate::layout::fit::text(
+            theme,
             label,
             &theme.typography.axis_title,
-            grid.width().max(1.0),
+            grid.width(),
             PhysicalTextAlignment::Center,
             "shared facet x-axis title",
-            false,
-        )?;
+            &crate::layout::fit::FitScope::root()
+                .child(crate::layout::AddressRole::AxisBottom, 0)?,
+        ))?;
         let first_y = axis_origin.1 - f64::from(theme.typography.axis_title.font_size);
         plans.push(PlacedText::from_deferred_first_line(
             plan,
@@ -171,14 +182,15 @@ pub(super) fn plan_shared_facet_axis_labels(
         ));
     }
     if let Some(label) = vertical_label {
-        let plan = theme.plan_text(
+        let plan = crate::layout::fit::measured(crate::layout::fit::text(
+            theme,
             label,
             &theme.typography.axis_title,
-            grid.height().max(1.0),
+            grid.height(),
             PhysicalTextAlignment::Center,
             "shared facet y-axis title",
-            false,
-        )?;
+            &crate::layout::fit::FitScope::root().child(crate::layout::AddressRole::AxisLeft, 0)?,
+        ))?;
         let first_x = axis_origin.0 - f64::from(theme.typography.axis_title.font_size) - 8.0;
         let first_x = first_x - plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
         plans.push(
@@ -209,17 +221,25 @@ fn draw_shared_facet_axis_labels(
     })
 }
 
-pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> String {
-    cell.iter()
-        .map(|selector| {
-            format!(
-                "{} = {}",
-                plot.resolve_label(&selector.variable),
-                plot.resolve_label(&selector.level)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(" | ")
+pub(super) fn facet_label(plot: &Plot, cell: &FacetCell) -> Result<String, Error> {
+    let mut label = String::new();
+    for (index, selector) in cell.iter().enumerate() {
+        let variable = plot.resolve_source_label(&selector.variable, plot.data())?;
+        let level = plot.resolve_source_label(&selector.level, plot.data())?;
+        let length = variable
+            .len()
+            .checked_add(level.len())
+            .and_then(|length| length.checked_add(6))
+            .ok_or_else(|| Error::Render("facet header length overflow".into()))?;
+        plot.data().reserve_source_string(&mut label, length)?;
+        if index != 0 {
+            label.push_str(" | ");
+        }
+        label.push_str(&variable);
+        label.push_str(" = ");
+        label.push_str(&level);
+    }
+    Ok(label)
 }
 
 #[cfg(test)]

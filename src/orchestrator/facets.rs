@@ -1,11 +1,10 @@
 //! Faceted chart coordination.
 
 use crate::Error;
+use std::fmt::Write;
 
-use super::backend::validate_with_null_backend;
 use crate::builder::Plot;
 use crate::decorations::plan::ResolvedLegend;
-use crate::layout::canvas::allocate_composed_grid;
 use crate::layout::fit::{self, FitFailure, FitOutcome, FitScope};
 use crate::layout::kernel::{FitKind, TrialOutcome};
 use crate::render::backend::Backend;
@@ -14,6 +13,8 @@ use crate::theme::ResolvedTheme;
 
 mod data;
 mod legend;
+#[cfg(test)]
+mod parent_tests;
 mod planning;
 mod rendering;
 
@@ -22,29 +23,24 @@ pub(crate) fn text_census_labels(
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let selectors = data::facet_selectors(source, source.data())?;
-    let slots = selectors
-        .rows
-        .checked_mul(selectors.columns)
-        .ok_or_else(|| Error::Render("facet text census grid size overflowed".into()))?;
-    let provisional = vec![crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0); slots];
-    for panel in data::extract_panels(source, &selectors, Some(&provisional), source.data())? {
+    for panel in data::extract_panels(source, &selectors, None, source.data())? {
         match panel.cell.as_slice() {
             [] => visit("".into())?,
             [selector] => visit(
                 format_args!(
                     "{} = {}",
-                    source.resolve_label(&selector.variable),
-                    source.resolve_label(&selector.level)
+                    source.resolve_source_label(&selector.variable, source.data())?,
+                    source.resolve_source_label(&selector.level, source.data())?
                 )
                 .into(),
             )?,
             [row, column] => visit(
                 format_args!(
                     "{} = {} | {} = {}",
-                    source.resolve_label(&row.variable),
-                    source.resolve_label(&row.level),
-                    source.resolve_label(&column.variable),
-                    source.resolve_label(&column.level)
+                    source.resolve_source_label(&row.variable, source.data())?,
+                    source.resolve_source_label(&row.level, source.data())?,
+                    source.resolve_source_label(&column.variable, source.data())?,
+                    source.resolve_source_label(&column.level, source.data())?
                 )
                 .into(),
             )?,
@@ -127,7 +123,6 @@ pub(crate) fn text_census_panels<'a>(
 }
 
 pub(super) struct FacetPlan {
-    plot: Plot,
     panels: Vec<data::FacetPanel>,
     panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
     outside_legend: Option<ResolvedLegend>,
@@ -138,13 +133,17 @@ pub(super) struct FacetPlan {
     shared_axis_origin: (f64, f64),
     strip_text: Vec<crate::render::backend::PlacedText>,
     shared_axis_text: Vec<crate::render::backend::PlacedText>,
+    panel_plots: Vec<Plot>,
+    legends: Vec<Option<crate::decorations::legend::LegendDrawPlan>>,
+    strip_layers: Vec<String>,
+    panel_layers: Vec<[String; 3]>,
 }
 
 impl FacetPlan {
     #[expect(
         clippy::too_many_lines,
         clippy::cast_precision_loss,
-        reason = "facet coordination keeps both balanced validation sessions explicit"
+        reason = "the legacy parent adapter keeps complete-frame guide trials explicit"
     )]
     pub(super) fn new(
         source: &Plot,
@@ -152,17 +151,19 @@ impl FacetPlan {
         theme: &ResolvedTheme,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, crate::layout::fit::PlanError> {
         if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
         {
             return Err(Error::Data(format!(
                 "significance annotations are not supported for {kind:?}"
-            )));
+            ))
+            .into());
         }
 
         let selectors = data::facet_selectors(source, source.data())?;
-        let (horizontal_axis_label, vertical_axis_label) = source.resolved_axis_labels(kind);
+        let [horizontal_axis_label, vertical_axis_label] =
+            source.prepare_axis_labels(source.data(), None)?;
         let horizontal_axis_label =
             (!horizontal_axis_label.is_empty()).then_some(horizontal_axis_label);
         let vertical_axis_label = (!vertical_axis_label.is_empty()).then_some(vertical_axis_label);
@@ -175,13 +176,14 @@ impl FacetPlan {
         )?;
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let provisional = allocate_composed_grid(
+        let provisional = fit::measured(planning::allocate_legacy_grid(
+            source.data(),
             outer,
             selectors.rows,
             selectors.columns,
             &[],
-            "facet layout",
-        )?;
+            &FitScope::root(),
+        ))?;
         let base_plot = data::base_plot(
             source,
             kind,
@@ -193,15 +195,8 @@ impl FacetPlan {
         data::validate_significance_facet_anchors(source, &panels, source.data())?;
         let facet_scales = source.facet_scales_spec();
 
-        let (base_plot, preflight) = validate_with_null_backend(
-            source.width(),
-            source.height(),
-            "facet panel preflight",
-            |backend| {
-                legend::preflight_coordinated_panels(
-                    source, base_plot, kind, &panels, theme, backend, children, round,
-                )
-            },
+        let (base_plot, preflight) = legend::preflight_coordinated_panels(
+            source, base_plot, kind, &panels, theme, children, round,
         )?;
         let fix_x = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeY);
         let fix_y = matches!(facet_scales, FacetScales::Fixed | FacetScales::FreeX);
@@ -211,8 +206,18 @@ impl FacetPlan {
             .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
             .with_parent_axis_gutters();
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
+        let legend_entries =
+            legend::shared_legend_entries(source, &shared_plot, &preflight, theme)?;
+        let legend_storage = std::alloc::Layout::array::<crate::decorations::legend::LegendEntry>(
+            legend_entries.len(),
+        )
+        .and_then(|entries| std::alloc::Layout::new::<[usize; 2]>().extend(entries))
+        .map_err(|_| Error::Render("facet shared legend storage overflow".into()))?
+        .0
+        .pad_to_align();
+        source.data().claim_source_bytes(legend_storage.size())?;
         let legend_entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
-            legend::shared_legend_entries(source, &shared_plot, &preflight, theme)?.into();
+            legend_entries.into();
         let title = crate::decorations::legend::resolved_title(&legend_entries, theme)?;
         let position = source.legend_position_spec();
         let automatic = position == LegendPosition::Auto && !legend_entries.is_empty();
@@ -237,8 +242,14 @@ impl FacetPlan {
         // column/row gutters before measuring flow, not after fixing its width.
         let grid = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::FacetGrid, 0)?;
-        let mut columns = vec![[0.0_f64; 2]; selectors.columns];
-        let mut rows = vec![[0.0_f64; 2]; selectors.rows];
+        let mut columns = Vec::new();
+        source
+            .data()
+            .reserve_source(&mut columns, selectors.columns)?;
+        columns.resize(selectors.columns, [0.0_f64; 2]);
+        let mut rows = Vec::new();
+        source.data().reserve_source(&mut rows, selectors.rows)?;
+        rows.resize(selectors.rows, [0.0_f64; 2]);
         for (index, panel) in panels.iter().enumerate() {
             let address = grid.child(
                 crate::layout::AddressRole::FacetCell,
@@ -418,14 +429,27 @@ impl FacetPlan {
                 let checkpoint = round.begin_trial()?;
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
-                outer = planning::reserve_rewrapped_shared_axis_titles(
+                outer = match fit::outcome(planning::reserve_rewrapped_shared_axis_titles(
                     horizontal_axis_label.as_deref(),
                     vertical_axis_label.as_deref(),
                     theme,
                     canvas_layout.panel_box,
                     reserved_outer,
                     round,
-                )?;
+                ))? {
+                    FitOutcome::Measured(outer) => outer,
+                    FitOutcome::Miss(reason) => {
+                        #[cfg(test)]
+                        if let Some(trial) = &guide_trial {
+                            trial.reject();
+                        }
+                        round.record_failure(reason)?;
+                        if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
+                            FitFailure::retain_least(&mut first_miss, reason);
+                        }
+                        continue;
+                    }
+                };
                 let shared_axis_origin = position_shared_axis_guides(
                     edge,
                     canvas_layout.panel_box,
@@ -433,28 +457,20 @@ impl FacetPlan {
                     outer,
                     outside_legend.as_mut(),
                 );
-                let measured = validate_with_null_backend(
-                    source.width(),
-                    source.height(),
-                    "facet layout preflight",
-                    |backend| {
-                        planning::layout_panels(
-                            &shared_plot,
-                            kind,
-                            &mut panels,
-                            outer,
-                            (selectors.rows, selectors.columns),
-                            facet_scales,
-                            theme,
-                            backend,
-                            round,
-                            &preflight,
-                            &provisional,
-                            outside,
-                            &scope,
-                            children,
-                        )
-                    },
+                let measured = planning::legacy_parent_adapter(
+                    &shared_plot,
+                    kind,
+                    &mut panels,
+                    outer,
+                    (selectors.rows, selectors.columns),
+                    facet_scales,
+                    theme,
+                    round,
+                    &preflight,
+                    &provisional,
+                    outside,
+                    &scope,
+                    children,
                 )?;
                 if let FitOutcome::Miss(reason) = measured {
                     #[cfg(test)]
@@ -522,7 +538,62 @@ impl FacetPlan {
                 for facet in &panels {
                     strip_text.push(rendering::plan_facet_strip(&planned_plot, facet, theme)?);
                 }
+                let mut panel_plots = Vec::new();
+                let mut legends = Vec::new();
+                let mut strip_layers = Vec::new();
+                let mut panel_layers = Vec::new();
+                source
+                    .data()
+                    .reserve_source(&mut panel_layers, panels.len())?;
+                source
+                    .data()
+                    .reserve_source(&mut panel_plots, panels.len())?;
+                source.data().reserve_source(&mut legends, panels.len())?;
+                source
+                    .data()
+                    .reserve_source(&mut strip_layers, panels.len())?;
+                for (index, (facet, panel)) in panels.iter().zip(&panel_plans).enumerate() {
+                    let scope = facet.render_scope(source.data())?;
+                    let mut layers = [String::new(), String::new(), String::new()];
+                    for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend"]) {
+                        let length = scope
+                            .len()
+                            .checked_add(suffix.len() + 1)
+                            .ok_or_else(|| Error::Render("facet layer length overflow".into()))?;
+                        source.data().reserve_source_string(layer, length)?;
+                        layer.push_str(&scope);
+                        layer.push('-');
+                        layer.push_str(suffix);
+                    }
+                    panel_layers.push(layers);
+                    let plot = planned_plot
+                        .clone()
+                        .with_render_scope(scope)
+                        .with_significance_subset(facet.significance_selectors());
+                    panel_plots.push(panel.plot_with_planned_limits(&plot));
+                    let legend = if index == 0 {
+                        outside_legend.as_ref().or(panel.legend.as_ref())
+                    } else {
+                        panel.legend.as_ref()
+                    };
+                    legends.push(
+                        legend
+                            .map(|legend| {
+                                let (x, y) = legend.bounds.anchor();
+                                legend.legend.select(x, y, source.data())
+                            })
+                            .transpose()?,
+                    );
+                    let mut layer = String::new();
+                    source.data().reserve_source_string(&mut layer, 32)?;
+                    write!(layer, "facet-strip-{}", facet.panel_index).expect("reserved index");
+                    strip_layers.push(layer);
+                }
                 let plan = Self {
+                    panel_layers,
+                    panel_plots,
+                    legends,
+                    strip_layers,
                     strip_text,
                     shared_axis_text: rendering::plan_shared_facet_axis_labels(
                         horizontal_axis_label.as_deref(),
@@ -531,7 +602,6 @@ impl FacetPlan {
                         shared_axis_origin,
                         theme,
                     )?,
-                    plot: planned_plot,
                     panels,
                     panel_plans,
                     outside_legend,
@@ -556,7 +626,7 @@ impl FacetPlan {
                     "facet containing frame cannot fit its guide",
                 )
             })
-            .into_error())
+            .into())
     }
 
     fn observe_arranged(
@@ -602,11 +672,13 @@ impl FacetPlan {
     ) -> Result<(), Error> {
         rendering::render_scene(
             source,
-            &self.plot,
+            &self.panel_plots,
             kind,
             &self.panels,
             &self.panel_plans,
-            self.outside_legend.as_ref(),
+            &self.legends,
+            &self.strip_layers,
+            &self.panel_layers,
             &self.strip_text,
             &self.shared_axis_text,
             &self.canvas_layout,
@@ -735,7 +807,8 @@ mod feedback_tests {
                             &theme,
                             round,
                             &mut children,
-                        )?;
+                        )
+                        .map_err(crate::layout::fit::PlanError::into_error)?;
                         if calls == 2 {
                             retained_neighbor = Some(std::sync::Arc::clone(&plan.panel_plans[1]));
                             round.request_domain(
@@ -850,6 +923,10 @@ mod feedback_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "complete parent capture retains every producer and checks stage counters"
+    )]
     fn facet_producer_plans_survive_first_capture_without_shaping() {
         let text = format!(
             "{}AA\u{2029}A \u{202b}\u{5d0} A \u{5d0} \u{202c}A",
@@ -864,6 +941,10 @@ mod feedback_tests {
         ))
         .x_label(&text)
         .y_label(&text)
+        .title("Outer title\nShort")
+        .subtitle("Independent subtitle")
+        .caption("Common caption")
+        .hue(crate::CategoryValues::new("hue", ["a", "b", "a", "b"]).unwrap())
         .size(900, 900)
         .erase();
         let theme = crate::Theme::Publication.resolve();
@@ -904,7 +985,8 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
-                    )?,
+                    )
+                    .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
             },
             |_, assigned, plan, stage| {
@@ -923,6 +1005,8 @@ mod feedback_tests {
                     .iter()
                     .all(|planned| planned.plan.source == text));
                 crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let projections = crate::layout::Projection::test_projection_calls();
                 let (width, height) = assigned.dimensions();
                 let replay = crate::orchestrator::capture_text_replay_plan(
                     width,
@@ -934,6 +1018,14 @@ mod feedback_tests {
                 )?;
                 crate::font::canonical::FONT_SHAPE_CALLS
                     .with(|calls| assert_eq!(calls.get(), 0, "first capture must not shape"));
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                assert_eq!(
+                    crate::layout::Projection::test_projection_calls(),
+                    projections
+                );
                 let captured = replay.retained_text();
                 for text in expected {
                     assert!(captured
@@ -1010,7 +1102,8 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
-                    )?,
+                    )
+                    .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
             },
             |_, _, plan, _| Ok(plan),
@@ -1087,7 +1180,8 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
-                    )?,
+                    )
+                    .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
             },
             |_, _, plan, _| {

@@ -50,6 +50,12 @@ pub(crate) fn apply_canvas_text(
     canvas: &CanvasLayout,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
+    if let crate::layout::canvas::CanvasRootText::Planned(plan) = &canvas.root_text {
+        return plan.draw(
+            [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
+            backend,
+        );
+    }
     let mut title_block = TitleBlock::new();
     if let Some(title) = plot.title_text() {
         title_block = title_block.title(title.to_owned());
