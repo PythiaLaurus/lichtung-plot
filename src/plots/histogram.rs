@@ -20,6 +20,226 @@ const MAX_AUTO_BINS: usize = 512;
 const MAX_EXPLICIT_BINS: usize = 1_000_000;
 const KDE_GRID_POINTS: usize = 128;
 
+#[derive(Debug)]
+pub(crate) struct PreparedHistogramInputs {
+    pub(crate) panels: Vec<(Option<String>, HistogramSemantics)>,
+}
+
+#[derive(Debug)]
+pub(crate) struct HistogramSemantics {
+    pub(crate) ranges: [(f64, f64); 2],
+    bins: Vec<crate::HistogramBin>,
+    curve: Option<Vec<HistogramKdePoint>>,
+    rugs: Vec<crate::HistogramRug>,
+}
+
+impl HistogramSemantics {
+    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(0, 0);
+        let (range, bins, curve, rugs) = if let Some(input) =
+            chart.histogram_composite_geometry_input()
+        {
+            let range = input.validate(Some(data))?;
+            (
+                range,
+                data.collect_source(input.bins.iter().copied().map(Ok))?,
+                Some(data.collect_source(input.kde.iter().copied().map(Ok))?),
+                data.collect_source(input.rugs.iter().copied().map(Ok))?,
+            )
+        } else {
+            if let Some(hue) = chart.hue_col() {
+                return Err(Error::Data(format!("histogram: hue column {hue:?} is not supported yet; render separate single-series histograms")));
+            }
+            let column = chart
+                .x_col()
+                .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
+            let values = crate::data::strict_finite_f64(data, column, "histogram")?;
+            let prepared = prepare_histogram(
+                &values,
+                chart.histogram_bins_spec(),
+                chart.histogram_stat_spec(),
+                Some(data),
+            )?;
+            let range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
+            let curve = prepare_density_curve(
+                chart.histogram_composite_spec(),
+                &values,
+                range,
+                Some(data),
+            )?;
+            let bins =
+                data.collect_source(prepared.heights.iter().enumerate().map(|(i, height)| {
+                    Ok(crate::HistogramBin {
+                        lower: prepared.edges[i],
+                        upper: prepared.edges[i + 1],
+                        density: *height,
+                    })
+                }))?;
+            data.claim_source_visits(prepared.heights.len())?;
+            let mut maximum = prepared.heights.iter().copied().fold(0.0_f64, f64::max);
+            if let Some(curve) = &curve {
+                data.claim_source_visits(curve.len())?;
+                maximum = curve.iter().map(|p| p.y).fold(maximum, f64::max);
+            }
+            let rugs = if curve.is_some() {
+                data.collect_source(values.iter().map(|x| {
+                    Ok(crate::HistogramRug {
+                        x: *x,
+                        baseline: 0.0,
+                        top: maximum * 0.035,
+                    })
+                }))?
+            } else {
+                Vec::new()
+            };
+            (range, bins, curve, rugs)
+        };
+        data.claim_source_visits(bins.len())?;
+        data.claim_source_visits(curve.as_ref().map_or(0, Vec::len))?;
+        data.claim_source_visits(rugs.len())?;
+        let maximum = bins
+            .iter()
+            .map(|b| b.density)
+            .chain(curve.iter().flatten().map(|p| p.y))
+            .chain(rugs.iter().map(|r| r.top))
+            .fold(0.0_f64, f64::max);
+        Ok(Self {
+            ranges: [
+                chart.x_axis_spec().limits.unwrap_or(range),
+                crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+            ],
+            bins,
+            curve,
+            rugs,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct HistogramPayload {
+    clip: crate::layout::PanelBox,
+    bins: Vec<[Point2D; 4]>,
+    curve: Option<Vec<Point2D>>,
+    rugs: Vec<[Point2D; 2]>,
+    fill: FillStyle,
+    curve_style: LineStyle,
+    rug_style: LineStyle,
+}
+
+impl HistogramPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(0, 3);
+        with_clip(backend, self.clip, |backend| {
+            for bin in &self.bins {
+                backend.draw_polygon(bin, &self.fill)?;
+            }
+            if let Some(curve) = &self.curve {
+                backend.draw_line(curve, &self.curve_style)?;
+            }
+            for rug in &self.rugs {
+                backend.draw_line(rug, &self.rug_style)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(0, 1);
+    let prepared = chart
+        .prepared_histogram
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| {
+            Error::Render(
+                "Histogram measurement requires root-prepared semantics for its component".into(),
+            )
+        })?;
+    let layout = context.axis_layout(|| {
+        Err(Error::Render("Histogram requires root-prepared axes".into()).into())
+    })?;
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(prepared, layout, theme, data).map_err(Into::into)
+}
+
+pub(crate) fn project(
+    prepared: &HistogramSemantics,
+    layout: crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+    data: PlotData<'_>,
+) -> Result<PlotRenderResult, Error> {
+    let project = |x, y| {
+        let (x, y) = layout.projection.project(x, y);
+        Point2D::new(x, y)
+    };
+    let payload = HistogramPayload {
+        clip: layout.projection.panel_box(),
+        bins: data.collect_source(prepared.bins.iter().map(|bin| {
+            let left = project(bin.lower, 0.0);
+            let right = project(bin.upper, bin.density);
+            Ok([
+                left,
+                Point2D::new(right.x, left.y),
+                right,
+                Point2D::new(left.x, right.y),
+            ])
+        }))?,
+        curve: prepared
+            .curve
+            .as_ref()
+            .map(|curve| data.collect_source(curve.iter().map(|p| Ok(project(p.x, p.y)))))
+            .transpose()?,
+        rugs: data.collect_source(
+            prepared
+                .rugs
+                .iter()
+                .map(|r| Ok([project(r.x, r.baseline), project(r.x, r.top)])),
+        )?,
+        fill: FillStyle {
+            color: theme.colors[0],
+            stroke: theme.foreground,
+            stroke_width: 0.8,
+            opacity: 0.82,
+        },
+        curve_style: LineStyle::solid(theme.foreground, 1.0),
+        rug_style: LineStyle::solid(theme.foreground, 0.7),
+    };
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(0, 2);
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    for bin in &payload.bins {
+        geometry.polygon(bin, &payload.fill, Some(clip))?;
+    }
+    if let Some(curve) = &payload.curve {
+        geometry.line(curve, &payload.curve_style, Some(clip))?;
+    }
+    for rug in &payload.rugs {
+        geometry.line(rug, &payload.rug_style, Some(clip))?;
+    }
+    let mut result = PlotRenderResult::new(layout, Vec::new());
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Histogram(payload),
+        geometry,
+    })?);
+    Ok(result)
+}
+
+#[cfg(test)]
 pub(crate) fn axis_ranges(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
@@ -88,209 +308,57 @@ struct PreparedHistogram {
     heights: Vec<f64>,
 }
 
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    if let Some(input) = chart.histogram_composite_geometry_input() {
-        return render_precomputed_composite(chart, input, context, backend);
-    }
-    if let Some(hue) = chart.hue_col() {
-        return Err(Error::Data(format!(
-            "histogram: hue column {hue:?} is not supported yet; render separate single-series histograms"
-        )).into());
-    }
-    let value_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("histogram: value column not set".into()))?;
-    let values = crate::data::strict_finite_f64(context.data, value_col, "histogram")?;
-    let prepared = prepare_histogram(
-        &values,
-        chart.histogram_bins_spec(),
-        chart.histogram_stat_spec(),
-        None,
-    )?;
-    let x_range = (prepared.edges[0], prepared.edges[prepared.edges.len() - 1]);
-    let density_curve = prepare_density_curve(chart.histogram_composite_spec(), &values, x_range)?;
-    let mut y_max = prepared.heights.iter().copied().fold(0.0_f64, f64::max);
-    if let Some(curve) = &density_curve {
-        y_max = curve.iter().map(|point| point.y).fold(y_max, f64::max);
-    }
-    let layout = context.axis_layout(|| {
-        let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            context.panel,
-            chart.x_label_text().unwrap_or(value_col).to_string(),
-            chart
-                .y_label_text()
-                .unwrap_or(histogram_axis_label(chart.histogram_stat_spec()))
-                .to_string(),
-            &x_axis_spec,
-            &y_axis_spec,
-            context.theme,
-        )
-    })?;
-    let theme = context.theme;
-    let fill = FillStyle {
-        color: theme.colors[0],
-        stroke: theme.foreground,
-        stroke_width: 0.8,
-        opacity: 0.82,
-    };
-
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for (index, height) in prepared.heights.iter().enumerate() {
-            let (left, bottom) = layout.projection.project(prepared.edges[index], 0.0);
-            let (right, top) = layout
-                .projection
-                .project(prepared.edges[index + 1], *height);
-            backend.draw_polygon(
-                &[
-                    Point2D::new(left, bottom),
-                    Point2D::new(right, bottom),
-                    Point2D::new(right, top),
-                    Point2D::new(left, top),
-                ],
-                &fill,
-            )?;
-        }
-        if let Some(curve) = &density_curve {
-            let points = curve
-                .iter()
-                .map(|point| {
-                    let (x, y) = layout.projection.project(point.x, point.y);
-                    Point2D::new(x, y)
-                })
-                .collect::<Vec<_>>();
-            backend.draw_line(&points, &LineStyle::solid(theme.foreground, 1.0))?;
-
-            let rug_height = y_max * 0.035;
-            let rug_style = LineStyle::solid(theme.foreground, 0.7);
-            for value in &values {
-                let (x, bottom) = layout.projection.project(*value, 0.0);
-                let (_, top) = layout.projection.project(*value, rug_height);
-                backend.draw_line(&[Point2D::new(x, bottom), Point2D::new(x, top)], &rug_style)?;
-            }
-        }
-        Ok(())
-    })?;
-
-    Ok(PlotRenderResult::new(layout, Vec::new()))
-}
-
-fn render_precomputed_composite(
-    chart: &Plot,
-    input: &crate::HistogramGeometry,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let panel = context.panel;
-    let theme = context.theme;
-    let x_range = input.validate(None)?;
-    let y_max = input
-        .bins
-        .iter()
-        .map(|bin| bin.density)
-        .chain(input.kde.iter().map(|point| point.y))
-        .chain(input.rugs.iter().map(|rug| rug.top))
-        .fold(0.0_f64, f64::max);
-    let layout = context.axis_layout(|| {
-        let y_range = crate::layout::anchored_auto_range((0.0, y_max), chart.y_axis_spec(), 0.0);
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("Density").to_string(),
-            &x_axis_spec,
-            &y_axis_spec,
-            theme,
-        )
-    })?;
-    let fill = FillStyle {
-        color: theme.colors[0],
-        stroke: theme.foreground,
-        stroke_width: 0.8,
-        opacity: 0.82,
-    };
-
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        for bin in &input.bins {
-            let (left, bottom) = layout.projection.project(bin.lower, 0.0);
-            let (right, top) = layout.projection.project(bin.upper, bin.density);
-            backend.draw_polygon(
-                &[
-                    Point2D::new(left, bottom),
-                    Point2D::new(right, bottom),
-                    Point2D::new(right, top),
-                    Point2D::new(left, top),
-                ],
-                &fill,
-            )?;
-        }
-        let curve = input
-            .kde
-            .iter()
-            .map(|point| {
-                let (x, y) = layout.projection.project(point.x, point.y);
-                Point2D::new(x, y)
-            })
-            .collect::<Vec<_>>();
-        backend.draw_line(&curve, &LineStyle::solid(theme.foreground, 1.0))?;
-
-        let rug_style = LineStyle::solid(theme.foreground, 0.7);
-        for rug in &input.rugs {
-            let (x, baseline) = layout.projection.project(rug.x, rug.baseline);
-            let (_, top) = layout.projection.project(rug.x, rug.top);
-            backend.draw_line(
-                &[Point2D::new(x, baseline), Point2D::new(x, top)],
-                &rug_style,
-            )?;
-        }
-        Ok(())
-    })?;
-
-    Ok(PlotRenderResult::new(layout, Vec::new()))
-}
-
 fn prepare_density_curve(
     composite: &HistogramComposite,
     values: &[f64],
     x_range: (f64, f64),
+    data: Option<PlotData<'_>>,
 ) -> Result<Option<Vec<HistogramKdePoint>>, Error> {
     let HistogramComposite::KdeAndRug(kde) = composite else {
         return Ok(None);
     };
     let curve = match kde {
         HistogramKde::Internal => {
+            for _ in 0..5 {
+                data.source_visits(values.len())?;
+            }
             let bandwidth = crate::stats::distribution::strict_scott_bandwidth(values)
                 .map_err(|reason| Error::Data(format!("histogram KDE: {reason}")))?;
-            let grid = (0..KDE_GRID_POINTS)
-                .map(|index| histogram_grid_coordinate(x_range, index))
-                .collect::<Vec<_>>();
-            let densities =
-                crate::stats::distribution::gaussian_kde_with_bandwidth(values, &grid, bandwidth)
-                    .map_err(|error| Error::Data(format!("histogram KDE: {error}")))?;
-            grid.into_iter()
-                .zip(densities)
-                .map(|(x, y)| HistogramKdePoint { x, y })
-                .collect()
+            data.source_visits(KDE_GRID_POINTS)?;
+            let grid: [f64; KDE_GRID_POINTS] =
+                std::array::from_fn(|index| histogram_grid_coordinate(x_range, index));
+            let densities = crate::stats::distribution::gaussian_kde_with_source(
+                values, &grid, bandwidth, data,
+            )
+            .map_err(|error| match error {
+                Error::Data(_) => Error::Data(format!("histogram KDE: {error}")),
+                error => error,
+            })?;
+            let mut curve = Vec::new();
+            data.source_reserve(&mut curve, KDE_GRID_POINTS)?;
+            data.source_visits(KDE_GRID_POINTS)?;
+            curve.extend(
+                grid.into_iter()
+                    .zip(densities)
+                    .map(|(x, y)| HistogramKdePoint { x, y }),
+            );
+            curve
         }
         HistogramKde::Precomputed(points) => {
+            data.source_visits(points.len())?;
+            data.source_visits(points.len())?;
             validate_precomputed_kde(points, x_range)?;
-            points.clone()
+            let mut curve = Vec::new();
+            data.source_reserve(&mut curve, points.len())?;
+            data.source_visits(points.len())?;
+            curve.extend_from_slice(points);
+            curve
         }
     };
     Ok(Some(curve))
 }
 
+#[cfg(test)]
 fn density_maximum(
     composite: &HistogramComposite,
     values: &[f64],
@@ -722,14 +790,6 @@ fn finish_histogram(
     Ok(PreparedHistogram { edges, heights })
 }
 
-const fn histogram_axis_label(stat: HistogramStat) -> &'static str {
-    match stat {
-        HistogramStat::Count => "Count",
-        HistogramStat::Probability => "Probability",
-        HistogramStat::Density => "Density",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -798,7 +858,7 @@ mod tests {
         }
         let values = [1.0, 2.0, 3.0];
         let composite = HistogramComposite::KdeAndRug(HistogramKde::Internal);
-        let curve = prepare_density_curve(&composite, &values, (1.0, 3.0))
+        let curve = prepare_density_curve(&composite, &values, (1.0, 3.0), None)
             .unwrap()
             .unwrap();
         let expected = curve.iter().map(|point| point.y).fold(0.0, f64::max);

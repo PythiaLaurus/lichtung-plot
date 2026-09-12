@@ -1,0 +1,429 @@
+use crate::{Error, HistogramInput, NumericValues, Plot, PlotKind};
+
+thread_local! {
+    pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 4]> = const { std::cell::Cell::new([[0; 4]; 4]) };
+}
+
+pub(crate) fn count(family: usize, stage: usize) {
+    STAGES.with(|counts| {
+        let mut next = counts.get();
+        next[family][stage] += 1;
+        counts.set(next);
+    });
+}
+
+fn sources() -> [Plot; 4] {
+    sources_faceted(None)
+}
+
+fn sources_faceted(facet: Option<&crate::FacetSpec>) -> [Plot; 4] {
+    fn finish<K: crate::kind::ExactFamily + crate::kind::Facet>(
+        mut plot: Plot<K>,
+        facet: Option<&crate::FacetSpec>,
+    ) -> Plot {
+        if let Some(facet) = facet {
+            plot = plot.facet(facet.clone());
+        }
+        plot.erase()
+    }
+    let x = NumericValues::new("sample", [1.0, 2.0, 4.0, 5.0, 7.0, 8.0]);
+    [
+        finish(
+            Plot::histogram(HistogramInput::samples(x.clone()))
+                .stat(crate::HistogramStat::Density)
+                .composite(crate::HistogramComposite::KdeAndRug(
+                    crate::HistogramKde::Internal,
+                )),
+            facet,
+        ),
+        finish(
+            Plot::density(x.clone())
+                .hue(crate::CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap()),
+            facet,
+        ),
+        finish(Plot::qq(x.clone()), facet),
+        finish(
+            Plot::regression(
+                x,
+                NumericValues::new("response", [1.0, 4.0, 2.0, 8.0, 6.0, 9.0]),
+            ),
+            facet,
+        ),
+    ]
+}
+
+#[test]
+fn semantic_storage_and_statistics_are_admitted_once_before_fonts() {
+    use crate::font::canonical::OperationGenerationResources;
+    for (family, source) in sources().into_iter().enumerate() {
+        STAGES.with(|counts| counts.set([[0; 4]; 4]));
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get)[family], [1, 0, 0, 0]);
+        let bytes = resources.byte_usage().unwrap();
+        let visits = resources.usage().unwrap().1;
+        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+            let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+            assert!(matches!(
+                crate::plots::shared_x::prepare_plot(&source, &resources),
+                Err(Error::Render(_))
+            ));
+        }
+        let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+        crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let attached = inputs.attach(source).unwrap();
+        assert!(std::sync::Arc::ptr_eq(
+            &attached.prepared_axes,
+            &inputs.axes
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
+fn facets_and_shared_canvas_retain_each_components_statistics_once() {
+    for scales in [
+        crate::FacetScales::Fixed,
+        crate::FacetScales::FreeX,
+        crate::FacetScales::FreeY,
+        crate::FacetScales::Free,
+    ] {
+        let facet = crate::FacetSpec::column(
+            crate::CategoryValues::new(
+                "panel",
+                ["left", "left", "left", "right", "right", "right"],
+            )
+            .unwrap(),
+        )
+        .scales(scales);
+        for (family, source) in sources_faceted(Some(&facet)).into_iter().enumerate() {
+            STAGES.with(|counts| counts.set([[0; 4]; 4]));
+            source.size(960, 640).preflight().unwrap();
+            let counts = STAGES.with(std::cell::Cell::get)[family];
+            assert_eq!(counts[0], 2);
+            assert_eq!(counts[1], counts[2]);
+            assert_eq!(counts[3], 2);
+        }
+    }
+    STAGES.with(|counts| counts.set([[0; 4]; 4]));
+    let x = NumericValues::new("sample", [1.0, 2.0, 4.0, 5.0, 7.0, 8.0]);
+    crate::Canvas::grid(1, 4)
+        .unwrap()
+        .size(1600, 480)
+        .panel(0, 0, Plot::histogram(HistogramInput::samples(x.clone())))
+        .unwrap()
+        .panel(0, 1, Plot::density(x.clone()))
+        .unwrap()
+        .panel(0, 2, Plot::qq(x.clone()))
+        .unwrap()
+        .panel(
+            0,
+            3,
+            Plot::regression(
+                x,
+                NumericValues::new("response", [1.0, 4.0, 2.0, 8.0, 6.0, 9.0]),
+            ),
+        )
+        .unwrap()
+        .x_range_group([(0, 0), (0, 1), (0, 2), (0, 3)])
+        .unwrap()
+        .preflight()
+        .unwrap();
+    for counts in STAGES.with(std::cell::Cell::get) {
+        assert_eq!(counts[0], 1);
+        assert!(counts[1] > 0);
+        assert_eq!(counts[1], counts[2]);
+        assert_eq!(counts[3], 1);
+    }
+}
+
+#[test]
+fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink() {
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::render::backend::Backend;
+    for source in sources() {
+        let source = source
+            .with_planned_x_limits((2.0, 6.0))
+            .with_planned_y_limits((0.0, 5.0));
+        let theme = crate::Theme::Publication.resolve();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let attached = inputs.attach(source.clone()).unwrap();
+        let selected = attached
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                attached.data(),
+                crate::layout::PanelBox::new(10.25, 410.75, 20.5, 320.25),
+                &theme,
+            ))
+            .unwrap();
+        let project = |resources: &OperationGenerationResources| {
+            let data = attached.data().with_axis_resources(resources);
+            let layout = selected.layout.clone();
+            match source.kind() {
+                PlotKind::Histogram => crate::plots::histogram::project(
+                    &inputs.histogram.as_ref().unwrap().panels[0].1,
+                    layout,
+                    &theme,
+                    data,
+                ),
+                PlotKind::Density => crate::plots::density::project(
+                    &attached,
+                    &inputs.density.as_ref().unwrap().panels[0].1,
+                    layout,
+                    &theme,
+                    data,
+                ),
+                PlotKind::Qq => crate::plots::qq::project(
+                    &attached,
+                    &inputs.qq.as_ref().unwrap().panels[0].1,
+                    layout,
+                    &theme,
+                    data,
+                ),
+                PlotKind::Regression => crate::plots::regression::project(
+                    &attached,
+                    &inputs.regression.as_ref().unwrap().panels[0].1,
+                    layout,
+                    &theme,
+                    data,
+                ),
+                _ => unreachable!(),
+            }
+        };
+        let resources = OperationGenerationResources::new();
+        let projected = project(&resources).unwrap();
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
+            assert!(matches!(
+                project(&OperationGenerationResources::with_test_limits(
+                    visits, bytes
+                )),
+                Err(Error::Render(_))
+            ));
+        }
+        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+        project(&exact).unwrap();
+        assert!(
+            project(&exact).is_err(),
+            "another candidate must remain charged"
+        );
+        let plan = projected.marks.unwrap();
+        let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
+        drawn.begin(640, 480).unwrap();
+        plan.draw(&mut drawn).unwrap();
+        drawn.end().unwrap();
+        assert_eq!(plan.geometry.bounds(), drawn.bounds());
+    }
+}
+
+#[test]
+fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
+    let invalid = [
+        Plot::histogram(HistogramInput::samples(NumericValues::new(
+            "value", [1.0; 3],
+        )))
+        .stat(crate::HistogramStat::Density)
+        .composite(crate::HistogramComposite::KdeAndRug(
+            crate::HistogramKde::Internal,
+        ))
+        .erase(),
+        Plot::density(NumericValues::new("value", [1.0; 3])).erase(),
+        Plot::qq(NumericValues::new("value", [-f64::MAX, f64::MAX])).erase(),
+        Plot::regression(
+            NumericValues::new("x", [1.0, 2.0]),
+            NumericValues::new("y", [1.0, 2.0]),
+        )
+        .erase(),
+    ];
+    for source in invalid
+        .into_iter()
+        .chain(sources().into_iter().map(|source| {
+            source
+                .with_planned_x_limits((0.0, 1.0))
+                .with_test_axis_ticks(0, vec![crate::AxisTick::new(2.0, "outside")])
+        }))
+    {
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.tick_label.stack = "Lichtung unavailable T5a6a3b 901e".into();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+        let result = crate::layout::plan_exact_root(
+            640,
+            480,
+            |stage| {
+                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &source,
+                    source.kind(),
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|e| Error::Render(e.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        );
+        assert!(matches!(result, Err(Error::Data(_))));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "exercise preparation, selected measurement, poisoned capture and both replays under one root"
+)]
+fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shaping_work() {
+    use crate::orchestrator::measurements::{self, Counter};
+    use crate::spec::PlotRenderContext;
+    for (family, source) in sources().into_iter().enumerate() {
+        STAGES.with(|counts| counts.set([[0; 4]; 4]));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
+        let theme = crate::Theme::Publication.resolve();
+        let root = crate::layout::plan_exact_root(
+            640,
+            480,
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let requirements = crate::layout::foundational_plot_requirements(
+                    &source,
+                    source.kind(),
+                    &theme,
+                    &crate::layout::ComponentAddress::root(),
+                    true,
+                    true,
+                    true,
+                    Some(stage),
+                )?;
+                let mut presence = stage.reserve_scalar_presence_map()?;
+                let mut census = crate::layout::PreparedTextCensus::materialize(
+                    requirements,
+                    Some(stage),
+                    Some(&mut presence),
+                )
+                .map_err(|e| Error::Render(e.to_string()))?;
+                theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                Ok(inputs)
+            },
+            |inputs, assigned, _| {
+                let attached = inputs.attach(source.clone())?;
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let result = attached
+                    .measure_selected_interior(PlotRenderContext::new(
+                        attached.data(),
+                        crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
+                        &theme,
+                    ))
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads,
+                    "{:?} measurement reread columns",
+                    source.kind()
+                );
+                assert!(!result.marks.as_ref().unwrap().geometry.bounds().is_empty());
+                Ok(crate::layout::MeasuredLayout::new(assigned, result))
+            },
+            |_, _, selected, stage| {
+                let counts = STAGES.with(std::cell::Cell::get);
+                let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+                let projections = crate::layout::Projection::test_projection_calls();
+                let invalid = NumericValues::new("unusable", [f64::INFINITY]);
+                let poison = match source.kind() {
+                    PlotKind::Histogram => {
+                        Plot::histogram(HistogramInput::samples(invalid)).erase()
+                    }
+                    PlotKind::Density => Plot::density(invalid).erase(),
+                    PlotKind::Qq => Plot::qq(invalid).erase(),
+                    PlotKind::Regression => Plot::regression(invalid.clone(), invalid).erase(),
+                    _ => unreachable!(),
+                };
+                measurements::start();
+                let captured = crate::orchestrator::capture_text_replay_plan(
+                    640,
+                    480,
+                    "selected distribution/reference",
+                    &theme,
+                    stage,
+                    |backend| {
+                        let context = PlotRenderContext::new(
+                            poison.data(),
+                            selected.layout.projection.panel_box(),
+                            &theme,
+                        )
+                        .with_retained_body(selected.retained_payload());
+                        poison.render_panel(source.kind(), context, backend)?;
+                        selected.axes.as_ref().unwrap().draw(backend)
+                    },
+                )?;
+                let work = measurements::finish();
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+                assert_eq!(
+                    crate::layout::Projection::test_projection_calls(),
+                    projections
+                );
+                assert_eq!(
+                    crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                    shapes
+                );
+                let after = STAGES.with(std::cell::Cell::get)[family];
+                assert_eq!(&after[..3], &counts[family][..3]);
+                assert_eq!(after[3], counts[family][3] + 1);
+                for counter in [
+                    Counter::AxisRangePreparation,
+                    Counter::AxisSpecPreparation,
+                    Counter::AxisSourcePreparation,
+                    Counter::TickSource,
+                    Counter::TickMetricLookup,
+                    Counter::TextProposalVisit,
+                    Counter::TextExactTrial,
+                ] {
+                    assert_eq!(work.counters[counter as usize], 0, "{counter:?}");
+                }
+                Ok(captured)
+            },
+        )
+        .unwrap();
+        let counts = STAGES.with(std::cell::Cell::get);
+        assert_eq!(counts[family], [1, 1, 1, 1]);
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        crate::orchestrator::validate_text_replay_plan(
+            640,
+            480,
+            root.plan(),
+            "reference Null replay",
+        )
+        .unwrap();
+        let mut backend = root.plan().take_svg_backend().unwrap();
+        root.plan()
+            .replay(640, 480, &mut backend, "reference SVG replay")
+            .unwrap();
+        assert_eq!(STAGES.with(std::cell::Cell::get), counts);
+    }
+}

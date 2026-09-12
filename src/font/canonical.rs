@@ -998,6 +998,13 @@ pub(crate) struct OperationGenerationResources {
 
 impl OperationGenerationResources {
     #[cfg(test)]
+    pub(crate) fn set_test_limits(&self, visits: u128, bytes: u64) {
+        let mut counters = self.counters.lock().unwrap();
+        counters.visit_limit = visits;
+        counters.byte_limit = bytes;
+    }
+
+    #[cfg(test)]
     pub(crate) fn with_test_limits(visits: u128, bytes: u64) -> Self {
         Self {
             counters: Arc::new(Mutex::new(GenerationResourceCounters {

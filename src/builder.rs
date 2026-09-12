@@ -504,6 +504,13 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     pub(crate) prepared_scatter:
         Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
     pub(crate) prepared_line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
+    pub(crate) prepared_qq: Option<std::sync::Arc<crate::plots::qq::PreparedQqInputs>>,
+    pub(crate) prepared_regression:
+        Option<std::sync::Arc<crate::plots::regression::PreparedRegressionInputs>>,
+    pub(crate) prepared_histogram:
+        Option<std::sync::Arc<crate::plots::histogram::PreparedHistogramInputs>>,
+    pub(crate) prepared_density:
+        Option<std::sync::Arc<crate::plots::density::PreparedDensityInputs>>,
     axis_gutter_owner: AxisGutterOwner,
     y_tick_labels_visible: bool,
     waterfall_labels: Option<WaterfallLabels>,
@@ -614,6 +621,10 @@ impl Plot<crate::kind::Any> {
             render_scope: None,
             prepared_axes: std::sync::Arc::new(Vec::new()),
             prepared_scatter: None,
+            prepared_qq: None,
+            prepared_regression: None,
+            prepared_histogram: None,
+            prepared_density: None,
             prepared_line: None,
             prepared_matrix_axes: None,
             axis_gutter_owner: AxisGutterOwner::Root,
@@ -1028,9 +1039,17 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             prepared_matrix_axes,
             prepared_scatter,
             prepared_line,
+            prepared_histogram,
+            prepared_density,
+            prepared_qq,
+            prepared_regression,
         } = self;
         Plot {
             prepared_scatter,
+            prepared_qq,
+            prepared_regression,
+            prepared_histogram,
+            prepared_density,
             prepared_line,
             prepared_axes,
             prepared_matrix_axes,

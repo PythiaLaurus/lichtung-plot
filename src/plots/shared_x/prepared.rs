@@ -15,6 +15,147 @@ pub(crate) struct PreparedAxes {
     pub(crate) logarithmic: bool,
 }
 
+/// Scientific reference/distribution inputs before a parent's shared range is known.
+pub(crate) enum PreparedReference {
+    Histogram(crate::plots::histogram::HistogramSemantics),
+    Density(crate::plots::density::PreparedDensity),
+    Qq(crate::plots::qq::PreparedQq),
+    Regression(crate::plots::regression::PreparedRegression),
+}
+
+impl PreparedReference {
+    pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        match source.kind() {
+            PlotKind::Histogram => Ok(Self::Histogram(
+                crate::plots::histogram::HistogramSemantics::new(source, data)?,
+            )),
+            PlotKind::Density => Ok(Self::Density(crate::plots::density::PreparedDensity::new(
+                source, data,
+            )?)),
+            PlotKind::Qq => Ok(Self::Qq(crate::plots::qq::PreparedQq::new(source, data)?)),
+            PlotKind::Regression => Ok(Self::Regression(
+                crate::plots::regression::PreparedRegression::new(source, data)?,
+            )),
+            _ => Err(Error::Render(
+                "reference semantics require a distribution/reference family".into(),
+            )),
+        }
+    }
+
+    pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
+        Ok(match self {
+            Self::Histogram(marks) => marks.ranges[0],
+            Self::Density(marks) => marks.ranges(source, data)?[0],
+            Self::Qq(marks) => marks.ranges(source, data)?[0],
+            Self::Regression(marks) => marks.ranges[0],
+        })
+    }
+}
+
+#[derive(Default)]
+struct ReferenceAxisConfig<'a> {
+    x_limits: Option<(f64, f64)>,
+    labels: Option<&'a crate::Labels>,
+}
+
+pub(crate) fn prepare_reference_plot(
+    source: &Plot,
+    resources: &crate::font::canonical::OperationGenerationResources,
+    marks: PreparedReference,
+    scope: Option<&str>,
+    x_limits: Option<(f64, f64)>,
+    labels: Option<&crate::Labels>,
+) -> Result<PreparedInteriorInputs, Error> {
+    let data = source
+        .configured_source_rows()?
+        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
+        .with_axis_resources(resources);
+    let mut bins = None;
+    let mut curves = None;
+    let mut quantiles = None;
+    let mut fit = None;
+    let kind = match marks {
+        PreparedReference::Histogram(marks) => {
+            bins = Some(marks);
+            PlotKind::Histogram
+        }
+        PreparedReference::Density(marks) => {
+            curves = Some(marks);
+            PlotKind::Density
+        }
+        PreparedReference::Qq(marks) => {
+            quantiles = Some(marks);
+            PlotKind::Qq
+        }
+        PreparedReference::Regression(marks) => {
+            fit = Some(marks);
+            PlotKind::Regression
+        }
+    };
+    let route = InteriorRoute::classify(kind);
+    route.validate(source)?;
+    let axes = prepare(
+        source,
+        data,
+        None,
+        None,
+        None,
+        None,
+        bins.as_ref(),
+        curves.as_ref(),
+        quantiles.as_ref(),
+        fit.as_ref(),
+        Some(ReferenceAxisConfig { x_limits, labels }),
+    )?;
+    if let Some(quantiles) = &quantiles {
+        quantiles.validate_ranges(axes.ranges, data)?;
+    }
+    crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
+    let scope = || scope.map(|s| data.copy_source_string(s)).transpose();
+    let mut retained = Vec::new();
+    data.reserve_source(&mut retained, 1)?;
+    retained.push((scope()?, axes));
+    Ok(PreparedInteriorInputs {
+        route,
+        axes: data.source_arc(retained)?,
+        matrix: None,
+        scatter: None,
+        line: None,
+        histogram: bins
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::histogram::PreparedHistogramInputs { panels })
+            })
+            .transpose()?,
+        density: curves
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::density::PreparedDensityInputs { panels })
+            })
+            .transpose()?,
+        qq: quantiles
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::qq::PreparedQqInputs { panels })
+            })
+            .transpose()?,
+        regression: fit
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::regression::PreparedRegressionInputs { panels })
+            })
+            .transpose()?,
+    })
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "root preparation retains per-component scientific axes and admitted point/path semantics before fonts"
@@ -27,10 +168,28 @@ pub(crate) fn prepare_plot(
     let mut retained = Vec::new();
     let mut scatter = Vec::new();
     let mut line = Vec::new();
+    let mut histogram = Vec::new();
+    let mut density = Vec::new();
+    let mut qq = Vec::new();
+    let mut regression = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
+    if matches!(
+        source.kind(),
+        PlotKind::Histogram | PlotKind::Density | PlotKind::Qq | PlotKind::Regression
+    ) && !source.has_facets()
+    {
+        return prepare_reference_plot(
+            source,
+            resources,
+            PreparedReference::new(source, source_data)?,
+            source.axis_scope(),
+            None,
+            None,
+        );
+    }
     if source.kind() == PlotKind::Scatter && !source.has_facets() {
         return prepare_scatter_plot(
             source,
@@ -121,6 +280,18 @@ pub(crate) fn prepare_plot(
             } else {
                 None
             };
+            let bins = (source.kind() == PlotKind::Histogram)
+                .then(|| crate::plots::histogram::HistogramSemantics::new(source, data))
+                .transpose()?;
+            let curves = (source.kind() == PlotKind::Density)
+                .then(|| crate::plots::density::PreparedDensity::new(source, data))
+                .transpose()?;
+            let quantiles = (source.kind() == PlotKind::Qq)
+                .then(|| crate::plots::qq::PreparedQq::new(source, data))
+                .transpose()?;
+            let fit = (source.kind() == PlotKind::Regression)
+                .then(|| crate::plots::regression::PreparedRegression::new(source, data))
+                .transpose()?;
             let axes = prepare(
                 source,
                 data,
@@ -128,8 +299,29 @@ pub(crate) fn prepare_plot(
                 Some(facet),
                 marks.as_ref(),
                 paths.as_ref(),
+                bins.as_ref(),
+                curves.as_ref(),
+                quantiles.as_ref(),
+                fit.as_ref(),
+                None,
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(quantiles) = quantiles {
+                source_data.reserve_source(&mut qq, 1)?;
+                qq.push((Some(source_data.copy_source_string(&scope)?), quantiles));
+            }
+            if let Some(fit) = fit {
+                source_data.reserve_source(&mut regression, 1)?;
+                regression.push((Some(source_data.copy_source_string(&scope)?), fit));
+            }
+            if let Some(bins) = bins {
+                source_data.reserve_source(&mut histogram, 1)?;
+                histogram.push((Some(source_data.copy_source_string(&scope)?), bins));
+            }
+            if let Some(curves) = curves {
+                source_data.reserve_source(&mut density, 1)?;
+                density.push((Some(source_data.copy_source_string(&scope)?), curves));
+            }
             if let Some(paths) = paths {
                 source_data.reserve_source(&mut line, 1)?;
                 line.push((Some(source_data.copy_source_string(&scope)?), paths));
@@ -158,6 +350,9 @@ pub(crate) fn prepare_plot(
             }
             reconcile_facet_axis(&mut retained, side, source_data)?;
         }
+        for ((_, quantiles), (_, axes)) in qq.iter().zip(&retained) {
+            quantiles.validate_ranges(axes.ranges, source_data)?;
+        }
         for (_, axes) in &retained {
             crate::orchestrator::layers::GuideSnapshot::validate_sources(
                 source,
@@ -169,16 +364,60 @@ pub(crate) fn prepare_plot(
         matrix =
             Some(source_data.source_arc(crate::plots::matrix::prepare_axes(source, source_data)?)?);
     } else {
+        let axes = prepare(
+            source,
+            source_data,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )?;
         source_data.reserve_source(&mut retained, 1)?;
         retained.push((
             source
                 .axis_scope()
                 .map(|scope| source_data.copy_source_string(scope))
                 .transpose()?,
-            prepare(source, source_data, None, None, None, None)?,
+            axes,
         ));
     }
     Ok(PreparedInteriorInputs {
+        qq: if source.kind() == PlotKind::Qq {
+            Some(source_data.source_arc(crate::plots::qq::PreparedQqInputs { panels: qq })?)
+        } else {
+            None
+        },
+        regression: if source.kind() == PlotKind::Regression {
+            Some(
+                source_data.source_arc(crate::plots::regression::PreparedRegressionInputs {
+                    panels: regression,
+                })?,
+            )
+        } else {
+            None
+        },
+        histogram: if source.kind() == PlotKind::Histogram {
+            Some(
+                source_data.source_arc(crate::plots::histogram::PreparedHistogramInputs {
+                    panels: histogram,
+                })?,
+            )
+        } else {
+            None
+        },
+        density: if source.kind() == PlotKind::Density {
+            Some(
+                source_data
+                    .source_arc(crate::plots::density::PreparedDensityInputs { panels: density })?,
+            )
+        } else {
+            None
+        },
         route: InteriorRoute::classify(source.kind()),
         axes: source_data.source_arc(retained)?,
         matrix,
@@ -212,7 +451,19 @@ pub(crate) fn prepare_scatter_plot(
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
-    let axes = prepare(source, data, None, None, Some(&marks), None)?;
+    let axes = prepare(
+        source,
+        data,
+        None,
+        None,
+        Some(&marks),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
     let scope = || {
         source
@@ -228,6 +479,10 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        qq: None,
+        regression: None,
+        histogram: None,
+        density: None,
         axes: data.source_arc(retained_axes)?,
         matrix: None,
         line: None,
@@ -245,7 +500,19 @@ pub(crate) fn prepare_line_plot(
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
-    let axes = prepare(source, data, None, None, None, Some(&marks))?;
+    let axes = prepare(
+        source,
+        data,
+        None,
+        None,
+        None,
+        Some(&marks),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )?;
     crate::orchestrator::layers::GuideSnapshot::validate_sources(source, axes.ranges, data)?;
     let scope = || {
         source
@@ -262,6 +529,10 @@ pub(crate) fn prepare_line_plot(
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
         axes: data.source_arc(retained_axes)?,
+        histogram: None,
+        qq: None,
+        regression: None,
+        density: None,
         matrix: None,
         scatter: None,
         line: Some(data.source_arc(crate::plots::line::PreparedLineInputs { panels })?),
@@ -317,6 +588,7 @@ fn validate_range(range: (f64, f64)) -> Result<(), Error> {
 #[expect(
     clippy::cast_precision_loss,
     clippy::too_many_lines,
+    clippy::too_many_arguments,
     reason = "closed scientific axis dispatch; category lengths are bounded source rows"
 )]
 fn prepare(
@@ -326,6 +598,11 @@ fn prepare(
     facet: Option<crate::data::FacetAxisSources<'_>>,
     scatter: Option<&crate::plots::scatter::PreparedScatter>,
     line: Option<&crate::plots::line::PreparedLine>,
+    histogram: Option<&crate::plots::histogram::HistogramSemantics>,
+    density: Option<&crate::plots::density::PreparedDensity>,
+    qq: Option<&crate::plots::qq::PreparedQq>,
+    regression: Option<&crate::plots::regression::PreparedRegression>,
+    reference_config: Option<ReferenceAxisConfig<'_>>,
 ) -> Result<PreparedAxes, Error> {
     // Two scalar domain results and their fixed five-sample nice-range seeds.
     data.claim_source_visits(12)?;
@@ -347,7 +624,15 @@ fn prepare(
         )
     };
     let mut ranges = match chart.kind() {
-        PlotKind::Regression => crate::plots::regression::axis_ranges(chart, data)?,
+        PlotKind::Regression => {
+            let ranges = regression
+                .ok_or_else(|| Error::Render("Regression axes require prepared semantics".into()))?
+                .ranges;
+            [
+                chart.x_axis_spec().limits.unwrap_or(ranges[0]),
+                chart.y_axis_spec().limits.unwrap_or(ranges[1]),
+            ]
+        }
         PlotKind::Scatter => {
             let ranges = scatter
                 .ok_or_else(|| {
@@ -359,21 +644,21 @@ fn prepare(
                 crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec()),
             ]
         }
-        PlotKind::Histogram => crate::plots::histogram::axis_ranges(chart, data)?,
-        PlotKind::Density => crate::plots::density::axis_ranges(chart, data)?,
-        PlotKind::Qq => {
-            let x = super::domain_with_data(chart, data)?;
-            let values = numeric(chart.x_col())?;
-            data.claim_source_visits(values.len())?;
+        PlotKind::Histogram => {
+            let ranges = histogram
+                .ok_or_else(|| Error::Render("Histogram axes require prepared semantics".into()))?
+                .ranges;
             [
-                x,
-                crate::plots::qq::qq_display_range(
-                    crate::data::min_max(values, "Q-Q")?,
-                    chart.y_axis_spec(),
-                    "y-axis",
-                )?,
+                chart.x_axis_spec().limits.unwrap_or(ranges[0]),
+                chart.y_axis_spec().limits.unwrap_or(ranges[1]),
             ]
         }
+        PlotKind::Density => density
+            .ok_or_else(|| Error::Render("Density axes require prepared semantics".into()))?
+            .ranges(chart, data)?,
+        PlotKind::Qq => qq
+            .ok_or_else(|| Error::Render("Qq axes require prepared semantics".into()))?
+            .ranges(chart, data)?,
         PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
             let line = line.ok_or_else(|| {
                 Error::Render("line axis inputs require prepared semantics".into())
@@ -595,6 +880,10 @@ fn prepare(
     if let Some(shared) = chart.resolved_facet_x_range() {
         ranges[0] = shared;
     }
+    let ReferenceAxisConfig { x_limits, labels } = reference_config.unwrap_or_default();
+    if let Some(limits) = x_limits {
+        ranges[0] = limits;
+    }
     let logarithmic =
         chart.kind() == PlotKind::Forest && chart.axis_scale_spec() == AxisScale::Log10;
     let mut specs = [AxisSpec::default(), AxisSpec::default()];
@@ -604,7 +893,11 @@ fn prepare(
     {
         specs[side] = AxisSpec {
             provenance: source.provenance,
-            limits: source.limits,
+            limits: if side == 0 {
+                x_limits.or(source.limits)
+            } else {
+                source.limits
+            },
             interval: source.interval,
             exact_ticks: if logarithmic && side == 0 {
                 chart.projected_explicit_x_ticks(data)?
@@ -678,7 +971,7 @@ fn prepare(
     let labels = if facet.is_some() {
         [String::new(), String::new()]
     } else {
-        chart.prepare_axis_labels(data)?
+        chart.prepare_axis_labels(data, labels)?
     };
     Ok(PreparedAxes {
         ranges,

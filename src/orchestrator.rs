@@ -122,11 +122,18 @@ impl Plot {
     ) -> Result<crate::spec::DecorationMode, Error> {
         if matches!(
             kind,
-            PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+            PlotKind::Scatter
+                | PlotKind::Line
+                | PlotKind::Trajectory
+                | PlotKind::LinePath
+                | PlotKind::Histogram
+                | PlotKind::Density
+                | PlotKind::Qq
+                | PlotKind::Regression
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
-                Error::Render("point/path capture requires its selected interior payload".into())
+                Error::Render("extracted capture requires its selected interior payload".into())
             })?;
             result
                 .marks
@@ -163,7 +170,14 @@ impl Plot {
         let context = context.with_prepared_axes(self);
         if matches!(
             kind,
-            PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+            PlotKind::Scatter
+                | PlotKind::Line
+                | PlotKind::Trajectory
+                | PlotKind::LinePath
+                | PlotKind::Histogram
+                | PlotKind::Density
+                | PlotKind::Qq
+                | PlotKind::Regression
         ) {
             return self.measure_selected_interior(context);
         }
@@ -226,12 +240,16 @@ impl Plot {
         let context = context.with_prepared_axes(self);
         let mut result = match self.kind() {
             PlotKind::Scatter => crate::plots::scatter::measure(self, context)?,
+            PlotKind::Histogram => crate::plots::histogram::measure(self, context)?,
+            PlotKind::Density => crate::plots::density::measure(self, context)?,
+            PlotKind::Qq => crate::plots::qq::measure(self, context)?,
+            PlotKind::Regression => crate::plots::regression::measure(self, context)?,
             PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                 crate::plots::line::measure(self, context)?
             }
             _ => {
                 return Err(Error::Render(
-                    "selected measurement requires an extracted point/path family".into(),
+                    "selected measurement requires an extracted family".into(),
                 )
                 .into())
             }

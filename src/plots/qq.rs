@@ -2,11 +2,12 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use crate::data::{source::SourceAdmission, PlotData};
 use crate::Error;
 
-use crate::render::backend::{with_clip, Backend, LineStyle, Point2D};
+use crate::render::backend::{with_clip, Backend, LineStyle, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult, QqLine};
-use crate::stats::distribution::{quantile, standard_normal_quantile};
+use crate::stats::distribution::{sorted_quantile, standard_normal_quantile};
 use crate::Plot;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -16,69 +17,150 @@ struct LineGeometry {
 }
 
 #[derive(Debug)]
-struct PreparedQq {
+pub(crate) struct PreparedQq {
     theoretical: Vec<f64>,
     observed: Vec<f64>,
     line: Option<LineGeometry>,
 }
 
-pub(crate) fn render(
+#[derive(Debug)]
+pub(crate) struct PreparedQqInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedQq)>,
+}
+
+impl PreparedQq {
+    pub(crate) fn validate_ranges(
+        &self,
+        ranges: [(f64, f64); 2],
+        data: PlotData<'_>,
+    ) -> Result<(), Error> {
+        data.claim_source_visits(1)?;
+        if let Some(line) = self.line {
+            visible_line_segment(line, ranges[0], ranges[1])?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(2, 0);
+        if let Some(hue) = chart.hue_col() {
+            return Err(Error::Data(format!(
+                "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
+            )));
+        }
+        let column = chart
+            .x_col()
+            .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
+        let values = crate::data::strict_finite_f64(data, column, "Q-Q plot")?;
+        prepare_qq_admitted(&values, chart.qq_line_spec(), Some(data))
+    }
+
+    pub(crate) fn ranges(
+        &self,
+        chart: &Plot,
+        data: PlotData<'_>,
+    ) -> Result<[(f64, f64); 2], Error> {
+        data.claim_source_visits(4)?;
+        Ok([
+            qq_display_range(
+                (
+                    self.theoretical[0],
+                    self.theoretical[self.theoretical.len() - 1],
+                ),
+                chart.x_axis_spec(),
+                "x-axis",
+            )?,
+            qq_display_range(
+                (self.observed[0], self.observed[self.observed.len() - 1]),
+                chart.y_axis_spec(),
+                "y-axis",
+            )?,
+        ])
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct QqPayload {
+    clip: crate::layout::PanelBox,
+    line: Option<[Point2D; 2]>,
+    points: Vec<Point2D>,
+    line_style: LineStyle,
+    point_style: PointStyle,
+}
+
+impl QqPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(2, 3);
+        with_clip(backend, self.clip, |backend| {
+            if let Some(line) = &self.line {
+                backend.draw_line(line, &self.line_style)?;
+            }
+            backend.draw_scatter(&self.points, &self.point_style)
+        })
+    }
+}
+
+pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    if let Some(hue) = chart.hue_col() {
-        return Err(Error::Data(format!(
-            "Q-Q plot: hue column {hue:?} is not supported; render separate Q-Q plots"
-        ))
-        .into());
-    }
-    let value_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("Q-Q plot: value column not set".into()))?;
-    let values = crate::data::strict_finite_f64(context.data, value_col, "Q-Q plot")?;
-    let prepared = prepare_qq(&values, chart.qq_line_spec())?;
-    let layout = context.axis_layout(|| {
-        let theoretical_range =
-            crate::data::min_max(prepared.theoretical.iter().copied(), "Q-Q plot")?;
-        let observed_range = crate::data::min_max(prepared.observed.iter().copied(), "Q-Q plot")?;
-        let x_range = qq_display_range(theoretical_range, chart.x_axis_spec(), "x-axis")?;
-        let y_range = qq_display_range(observed_range, chart.y_axis_spec(), "y-axis")?;
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            context.panel,
-            chart
-                .x_label_text()
-                .unwrap_or("Theoretical normal quantiles")
-                .to_string(),
-            chart.y_label_text().unwrap_or(value_col).to_string(),
-            &x_axis_spec,
-            &y_axis_spec,
-            context.theme,
-        )
-    })?;
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(2, 1);
+    let prepared = chart
+        .prepared_qq
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| {
+            Error::Render(
+                "Qq measurement requires root-prepared semantics for its component".into(),
+            )
+        })?;
+    let layout = context
+        .axis_layout(|| Err(Error::Render("Qq requires root-prepared axes".into()).into()))?;
     let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(chart, prepared, layout, theme, data).map_err(Into::into)
+}
 
-    with_clip(backend, layout.projection.panel_box(), |backend| {
-        if let Some(line) = prepared.line {
-            if let Some(((line_x0, line_y0), (line_x1, line_y1))) = visible_line_segment(
-                line,
-                layout.projection.x_range(),
-                layout.projection.y_range(),
-            )? {
-                let (x0, y0) = layout.projection.project(line_x0, line_y0);
-                let (x1, y1) = layout.projection.project(line_x1, line_y1);
-                backend.draw_line(
-                    &[Point2D::new(x0, y0), Point2D::new(x1, y1)],
-                    &LineStyle::solid(theme.foreground, 1.2),
-                )?;
-            }
+pub(crate) fn project(
+    chart: &Plot,
+    prepared: &PreparedQq,
+    layout: crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+    data: PlotData<'_>,
+) -> Result<PlotRenderResult, Error> {
+    let mut payload = QqPayload {
+        clip: layout.projection.panel_box(),
+        line: None,
+        points: Vec::new(),
+        line_style: LineStyle::solid(theme.foreground, 1.2),
+        point_style: chart.point_style(theme.colors[0], 3),
+    };
+    data.claim_source_visits(1)?;
+    if let Some(line) = prepared.line {
+        if let Some(((line_x0, line_y0), (line_x1, line_y1))) = visible_line_segment(
+            line,
+            layout.projection.x_range(),
+            layout.projection.y_range(),
+        )? {
+            let (x0, y0) = layout.projection.project(line_x0, line_y0);
+            let (x1, y1) = layout.projection.project(line_x1, line_y1);
+            payload.line = Some([Point2D::new(x0, y0), Point2D::new(x1, y1)]);
         }
-        let point_style = chart.point_style(theme.colors[0], 3);
-        let points = prepared
+    }
+    data.reserve_source(&mut payload.points, prepared.theoretical.len())?;
+    data.claim_source_visits(prepared.theoretical.len())?;
+    payload.points.extend(
+        prepared
             .theoretical
             .iter()
             .zip(&prepared.observed)
@@ -100,13 +182,22 @@ pub(crate) fn render(
                 }
                 let (x, y) = layout.projection.project(*theoretical, *observed);
                 (x.is_finite() && y.is_finite()).then_some(Point2D::new(x, y))
-            })
-            .collect::<Vec<_>>();
-        backend.draw_scatter(&points, &point_style)?;
-        Ok(())
-    })?;
-
-    Ok(PlotRenderResult::new(layout, Vec::new()))
+            }),
+    );
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(2, 2);
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    if let Some(line) = &payload.line {
+        geometry.line(line, &payload.line_style, Some(clip))?;
+    }
+    geometry.scatter(&payload.points, &payload.point_style, clip)?;
+    let mut result = PlotRenderResult::new(layout, Vec::new());
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Qq(payload),
+        geometry,
+    })?);
+    Ok(result)
 }
 
 pub(crate) fn shared_x_domain(
@@ -271,27 +362,44 @@ fn reference_clip_error() -> Error {
     Error::Data("Q-Q plot: reference line cannot be clipped to the displayed finite range".into())
 }
 
+#[cfg(test)]
 fn prepare_qq(values: &[f64], line_mode: QqLine) -> Result<PreparedQq, Error> {
+    prepare_qq_admitted(values, line_mode, None)
+}
+
+fn prepare_qq_admitted(
+    values: &[f64],
+    line_mode: QqLine,
+    data: Option<PlotData<'_>>,
+) -> Result<PreparedQq, Error> {
     if values.len() < 2 {
         return Err(Error::Data(format!(
             "Q-Q plot: at least 2 finite observations are required, got {}",
             values.len()
         )));
     }
+    data.source_visits(values.len())?;
     if values.iter().any(|value| !value.is_finite()) {
         return Err(Error::Data("Q-Q plot: observations must be finite".into()));
     }
-    let mut observed = values.to_vec();
-    observed.sort_by(f64::total_cmp);
-    let theoretical = (0..observed.len())
-        .map(|index| theoretical_quantile(index, observed.len()))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut observed = Vec::new();
+    data.source_reserve(&mut observed, values.len())?;
+    data.source_visits(values.len())?;
+    observed.extend_from_slice(values);
+    crate::data::source::sort_numeric_source(&mut observed, data)?;
+    let mut theoretical = Vec::new();
+    data.source_reserve(&mut theoretical, observed.len())?;
+    data.source_visits(observed.len())?;
+    for index in 0..observed.len() {
+        theoretical.push(theoretical_quantile(index, observed.len())?);
+    }
     let line = match line_mode {
         QqLine::Quartiles => {
-            let theoretical_q1 = quantile(&theoretical, 0.25)?;
-            let theoretical_q3 = quantile(&theoretical, 0.75)?;
-            let observed_q1 = quantile(&observed, 0.25)?;
-            let observed_q3 = quantile(&observed, 0.75)?;
+            data.source_visits(4)?;
+            let theoretical_q1 = sorted_quantile(&theoretical, 0.25);
+            let theoretical_q3 = sorted_quantile(&theoretical, 0.75);
+            let observed_q1 = sorted_quantile(&observed, 0.25);
+            let observed_q3 = sorted_quantile(&observed, 0.75);
             let denominator = finite_difference(theoretical_q3, theoretical_q1)
                 .filter(|difference| *difference > 0.0)
                 .ok_or_else(quartile_geometry_error)?;
@@ -354,6 +462,7 @@ fn quartile_geometry_error() -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stats::distribution::quantile;
 
     #[test]
     fn qq_sorts_observations_and_theoretical_quantiles() {

@@ -1799,10 +1799,17 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             let theme = crate::Theme::Publication.resolve();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
             let panel = plot.base_canvas_layout(&theme).panel_box;
-            // Extracted point/path families have no unprepared combined route.
+            // Extracted families have no unprepared combined route.
             let expected_source = if matches!(
                 kind,
-                PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                PlotKind::Scatter
+                    | PlotKind::Line
+                    | PlotKind::Trajectory
+                    | PlotKind::LinePath
+                    | PlotKind::Histogram
+                    | PlotKind::Density
+                    | PlotKind::Qq
+                    | PlotKind::Regression
             ) {
                 &prepared
             } else {

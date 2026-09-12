@@ -1,4 +1,4 @@
-//! Closed interior boundary. Point/path families consume prepared semantics and
+//! Closed interior boundary. Extracted families consume prepared semantics and
 //! selected payloads; remaining families retain their classified combined routes.
 //! Axis/frame policies remain legacy until their native migration.
 
@@ -13,15 +13,15 @@ macro_rules! interior_routes {
         pub(crate) enum $class { $($kind),+ })+
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) enum InteriorRoute { Scatter, Line, Trajectory, LinePath, $($class($class)),+ }
+        pub(crate) enum InteriorRoute { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression, $($class($class)),+ }
 
         impl InteriorRoute {
             pub(crate) const fn classify(kind: PlotKind) -> Self {
-                match kind { PlotKind::Scatter => Self::Scatter, PlotKind::Line => Self::Line, PlotKind::Trajectory => Self::Trajectory, PlotKind::LinePath => Self::LinePath, $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
+                match kind { PlotKind::Scatter => Self::Scatter, PlotKind::Line => Self::Line, PlotKind::Trajectory => Self::Trajectory, PlotKind::LinePath => Self::LinePath, PlotKind::Histogram => Self::Histogram, PlotKind::Density => Self::Density, PlotKind::Qq => Self::Qq, PlotKind::Regression => Self::Regression, $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
             }
 
             pub(crate) const fn kind(self) -> PlotKind {
-                match self { Self::Scatter => PlotKind::Scatter, Self::Line => PlotKind::Line, Self::Trajectory => PlotKind::Trajectory, Self::LinePath => PlotKind::LinePath, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
+                match self { Self::Scatter => PlotKind::Scatter, Self::Line => PlotKind::Line, Self::Trajectory => PlotKind::Trajectory, Self::LinePath => PlotKind::LinePath, Self::Histogram => PlotKind::Histogram, Self::Density => PlotKind::Density, Self::Qq => PlotKind::Qq, Self::Regression => PlotKind::Regression, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
             }
 
             /// Transitional combined execution, deliberately requiring a backend.
@@ -33,19 +33,13 @@ macro_rules! interior_routes {
                 backend: &mut dyn crate::render::backend::Backend,
             ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
                 self.validate(plot)?;
-                match self { Self::Scatter | Self::Line | Self::Trajectory | Self::LinePath => Err(Error::Render("point/path families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
+                match self { Self::Scatter | Self::Line | Self::Trajectory | Self::LinePath | Self::Histogram | Self::Density | Self::Qq | Self::Regression => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
             }
         }
     };
 }
 
 interior_routes! {
-    StandardLegacy {
-        Histogram => crate::plots::histogram::render,
-        Density => crate::plots::density::render,
-        Qq => crate::plots::qq::render,
-        Regression => crate::plots::regression::render,
-    },
     CategoricalLegacy {
         Interaction => crate::plots::interaction::render,
         PointInterval => crate::plots::point_interval::render,
@@ -106,15 +100,20 @@ impl ParentCompositionAdapter {
     }
 }
 
-/// Root-owned scientific axes plus extracted point/path semantics. Attachment shares
+/// Root-owned scientific axes plus extracted mark semantics. Attachment shares
 /// storage; no prepared Plot clone or alternate preparation route is retained.
-/// Other families' statistics remain combined. Trajectory retains its condition order.
+/// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
     pub(crate) route: InteriorRoute,
     pub(crate) axes: std::sync::Arc<Vec<(Option<String>, crate::plots::shared_x::PreparedAxes)>>,
     pub(crate) matrix: Option<std::sync::Arc<crate::plots::matrix::PreparedMatrixAxes>>,
     pub(crate) scatter: Option<std::sync::Arc<crate::plots::scatter::PreparedScatterInputs>>,
     pub(crate) line: Option<std::sync::Arc<crate::plots::line::PreparedLineInputs>>,
+    pub(crate) qq: Option<std::sync::Arc<crate::plots::qq::PreparedQqInputs>>,
+    pub(crate) regression:
+        Option<std::sync::Arc<crate::plots::regression::PreparedRegressionInputs>>,
+    pub(crate) histogram: Option<std::sync::Arc<crate::plots::histogram::PreparedHistogramInputs>>,
+    pub(crate) density: Option<std::sync::Arc<crate::plots::density::PreparedDensityInputs>>,
 }
 
 impl PreparedInteriorInputs {
@@ -124,6 +123,10 @@ impl PreparedInteriorInputs {
         plot.prepared_matrix_axes.clone_from(&self.matrix);
         plot.prepared_scatter.clone_from(&self.scatter);
         plot.prepared_line.clone_from(&self.line);
+        plot.prepared_histogram.clone_from(&self.histogram);
+        plot.prepared_density.clone_from(&self.density);
+        plot.prepared_qq.clone_from(&self.qq);
+        plot.prepared_regression.clone_from(&self.regression);
         Ok(plot)
     }
 }
@@ -186,7 +189,7 @@ impl InteriorReserveRequest {
     }
 }
 
-/// Capture consumes selected point/path mark and annotation plans without
+/// Capture consumes selected mark and annotation plans without
 /// reconstruction. LegacyCombined retains only axes/text for unextracted families.
 #[derive(Clone, Copy)]
 pub(crate) enum RetainedInteriorPayload<'a> {
@@ -205,6 +208,10 @@ pub(crate) struct DeferredMarkPlan {
 pub(crate) enum MarkPayload {
     Scatter(crate::plots::scatter::ScatterPayload),
     Line(crate::plots::line::LinePayload),
+    Histogram(crate::plots::histogram::HistogramPayload),
+    Density(crate::plots::density::DensityPayload),
+    Qq(crate::plots::qq::QqPayload),
+    Regression(crate::plots::regression::RegressionPayload),
 }
 
 impl DeferredMarkPlan {
@@ -215,6 +222,10 @@ impl DeferredMarkPlan {
         match &self.payload {
             MarkPayload::Scatter(payload) => payload.draw(backend),
             MarkPayload::Line(payload) => payload.draw(backend),
+            MarkPayload::Histogram(payload) => payload.draw(backend),
+            MarkPayload::Density(payload) => payload.draw(backend),
+            MarkPayload::Qq(payload) => payload.draw(backend),
+            MarkPayload::Regression(payload) => payload.draw(backend),
         }
     }
 }
@@ -251,3 +262,6 @@ impl DeferredAnnotationPlan {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) mod distributions;

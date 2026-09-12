@@ -604,6 +604,130 @@ mod d1_tests {
             "MMMMMMMMMMMMMMMMMMMMMMMMMMMM"
         );
     }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exercise owned source variants and exact Canvas preparation budgets together"
+    )]
+    fn reference_canvas_owned_sources_obey_prepared_budgets() {
+        use crate::{HistogramInput, HistogramKdePoint, NumericValues};
+
+        for geometry in [false, true] {
+            let mut previous = None;
+            for count in [4_u32, 128] {
+                let kde = (0..count)
+                    .map(|index| HistogramKdePoint {
+                        x: f64::from(index),
+                        y: 0.1,
+                    })
+                    .collect();
+                let plot = if geometry {
+                    Plot::histogram(HistogramInput::geometry(crate::HistogramGeometry {
+                        dimensions: crate::HistogramDimensions {
+                            value: "sample".into(),
+                            density: "density".into(),
+                        },
+                        bins: (0..count - 1)
+                            .map(|index| crate::HistogramBin {
+                                lower: f64::from(index),
+                                upper: f64::from(index + 1),
+                                density: 0.1,
+                            })
+                            .collect(),
+                        kde,
+                        rugs: (0..count)
+                            .map(|index| crate::HistogramRug {
+                                x: f64::from(index),
+                                baseline: 0.0,
+                                top: 0.01,
+                            })
+                            .collect(),
+                    }))
+                } else {
+                    Plot::histogram(HistogramInput::samples(NumericValues::new(
+                        "sample",
+                        [0.0, 1.0, 2.0, 127.0],
+                    )))
+                    .stat(crate::HistogramStat::Density)
+                    .composite(crate::HistogramComposite::KdeAndRug(
+                        crate::HistogramKde::Precomputed(kde),
+                    ))
+                };
+                let canvas = Canvas::grid(1, 2)
+                    .unwrap()
+                    .panel(
+                        0,
+                        0,
+                        plot.x_ticks(vec![crate::AxisTick::new(150.0, "shared endpoint")]),
+                    )
+                    .unwrap()
+                    .panel(
+                        0,
+                        1,
+                        Plot::density(NumericValues::new("sample", [0.0, 100.0, 200.0])),
+                    )
+                    .unwrap()
+                    .labels(crate::Labels::humanized().alias("sample", "Shared sample"))
+                    .x_range_group([(0, 0), (0, 1)])
+                    .unwrap();
+                let prepare = |limits: Option<(u128, u64)>| {
+                    crate::layout::plan_exact_root(
+                        640,
+                        480,
+                        |stage| {
+                            let resources = stage.generation_resources();
+                            if let Some((visits, bytes)) = limits {
+                                resources.set_test_limits(visits, bytes);
+                            }
+                            let (inputs, shared) = canvas.prepare_interiors(stage)?;
+                            for (index, input) in inputs.iter().enumerate() {
+                                let input = input.as_ref().unwrap();
+                                assert_eq!(
+                                    input.axes[0].0.as_deref(),
+                                    Some(format!("panel-{index}").as_str())
+                                );
+                                assert_eq!(Some(input.axes[0].1.ranges[0]), shared[index]);
+                                assert_eq!(input.axes[0].1.specs[0].limits, shared[index]);
+                                assert_eq!(input.axes[0].1.labels[0], "Shared sample");
+                            }
+                            let usage = (
+                                resources.usage().unwrap().1,
+                                resources.byte_usage().unwrap(),
+                            );
+                            // This test bounds preparation, not the kernel's later feedback records.
+                            resources.set_test_limits(u128::MAX, u64::MAX);
+                            Ok(usage)
+                        },
+                        |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                        |usage, _, (), _| Ok(*usage),
+                    )
+                    .map(|root| *root.plan())
+                };
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+                let (visits, bytes) = prepare(None).unwrap();
+                for (limits, dimension) in [
+                    ((visits - 1, bytes), "axis source work admission"),
+                    ((visits, bytes - 1), "axis source storage admission"),
+                ] {
+                    let error = prepare(Some(limits)).unwrap_err();
+                    assert!(matches!(error, Error::Render(_)), "{error}");
+                    assert!(error.to_string().contains(dimension), "{error}");
+                }
+                assert_eq!(prepare(Some((visits, bytes))).unwrap(), (visits, bytes));
+                if let Some((small_visits, small_bytes)) = previous {
+                    assert!(visits > small_visits && bytes > small_bytes);
+                    assert!(prepare(Some((small_visits, u64::MAX))).is_err());
+                    assert!(prepare(Some((u128::MAX, small_bytes))).is_err());
+                }
+                previous = Some((visits, bytes));
+                assert_eq!(
+                    crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+                    0
+                );
+            }
+        }
+    }
 }
 
 struct ResolvedCanvasThemes {
@@ -1202,6 +1326,7 @@ impl Canvas {
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
         scatter: &[Option<crate::plots::scatter::PreparedScatter>],
         line: &[Option<crate::plots::line::PreparedLine>],
+        reference: &[Option<crate::plots::shared_x::PreparedReference>],
     ) -> Result<Vec<Option<(f64, f64)>>, Error> {
         let mut ranges = Vec::new();
         if self.x_range_groups.is_empty() {
@@ -1216,7 +1341,13 @@ impl Canvas {
                 let plot = self.panels[index]
                     .as_ref()
                     .expect("validated shared x member");
-                let range = if plot.kind() == PlotKind::Scatter {
+                let range = if let Some(marks) = &reference[index] {
+                    marks.x_range(
+                        plot,
+                        plot.data()
+                            .with_axis_resources(&stage.generation_resources()),
+                    )?
+                } else if plot.kind() == PlotKind::Scatter {
                     crate::layout::continuous_auto_range(
                         scatter[index]
                             .as_ref()
@@ -1349,6 +1480,7 @@ impl Canvas {
 
     #[expect(
         clippy::type_complexity,
+        clippy::too_many_lines,
         reason = "root component inputs and their coordinated x domains are prepared together before fonts"
     )]
     fn prepare_interiors(
@@ -1368,7 +1500,33 @@ impl Canvas {
         stage.reserve_prepared(&mut scatter, self.panels.len(), "Canvas Scatter semantics")?;
         let mut line = Vec::new();
         stage.reserve_prepared(&mut line, self.panels.len(), "Canvas line semantics")?;
+        let mut reference = Vec::new();
+        stage.reserve_prepared(
+            &mut reference,
+            self.panels.len(),
+            "Canvas distribution/reference semantics",
+        )?;
         for plot in &self.panels {
+            reference.push(
+                match plot.as_ref().filter(|plot| {
+                    matches!(
+                        plot.kind(),
+                        PlotKind::Histogram
+                            | PlotKind::Density
+                            | PlotKind::Qq
+                            | PlotKind::Regression
+                    )
+                }) {
+                    Some(plot) => {
+                        let data = plot
+                            .configured_source_rows()?
+                            .map_or_else(|| plot.data(), |rows| plot.data().map_source_rows(rows))
+                            .with_axis_resources(&resources);
+                        Some(crate::plots::shared_x::PreparedReference::new(plot, data)?)
+                    }
+                    None => None,
+                },
+            );
             line.push(
                 match plot.as_ref().filter(|plot| {
                     matches!(
@@ -1402,18 +1560,34 @@ impl Canvas {
                 },
             );
         }
-        let shared_x = self.prepare_shared_x(stage, &scatter, &line)?;
+        let shared_x = self.prepare_shared_x(stage, &scatter, &line, &reference)?;
         for (index, plot) in self.panels.iter().enumerate() {
             interiors.push(
                 match plot.as_ref().filter(|plot| {
                     matches!(
                         plot.kind(),
                         PlotKind::Scatter
+                            | PlotKind::Histogram
+                            | PlotKind::Density
+                            | PlotKind::Qq
+                            | PlotKind::Regression
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath
                     )
                 }) {
+                    Some(plot) if reference[index].is_some() => {
+                        Some(crate::plots::shared_x::prepare_reference_plot(
+                            plot,
+                            &resources,
+                            reference[index]
+                                .take()
+                                .expect("prepared reference component"),
+                            Some(&format!("panel-{index}")),
+                            shared_x.get(index).copied().flatten(),
+                            self.labels.as_ref(),
+                        )?)
+                    }
                     Some(plot) => {
                         let plot = self.labels.as_ref().map_or_else(
                             || plot.clone(),

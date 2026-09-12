@@ -1198,7 +1198,14 @@ fn measure_geometry(
     use crate::layout::fit::{self, FitOutcome};
     if matches!(
         kind,
-        PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+        PlotKind::Scatter
+            | PlotKind::Line
+            | PlotKind::Trajectory
+            | PlotKind::LinePath
+            | PlotKind::Histogram
+            | PlotKind::Density
+            | PlotKind::Qq
+            | PlotKind::Regression
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

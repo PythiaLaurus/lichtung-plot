@@ -8,16 +8,18 @@
     clippy::similar_names
 )]
 
+use crate::data::PlotData;
 use crate::Error;
 
 use crate::decorations::legend::LegendEntry;
-use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D};
+use crate::render::backend::{with_clip, Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::spec::{PlotRenderContext, PlotRenderResult, RegressionBand};
 use crate::stats::regression::OlsFit;
 use crate::Plot;
 
 const BAND_POINTS: usize = 40;
 
+#[cfg(test)]
 #[expect(
     clippy::cast_precision_loss,
     reason = "fixed regression band sample count"
@@ -112,61 +114,75 @@ fn regression_axis_channel_and_fit_work_is_admitted_before_preparation() {
     );
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "the renderer keeps fit, band, projection, marks, and provenance in one ordered lifecycle"
-)]
-pub(crate) fn render(
-    chart: &Plot,
-    context: PlotRenderContext<'_>,
-    backend: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    let theme = context.theme;
-    let x_col = chart
-        .x_col()
-        .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
-    let y_col = chart
-        .y_col()
-        .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
-    let points = crate::data::aligned_finite_f64(context.data, x_col, y_col, "regression")?;
-    let (x, y): (Vec<f64>, Vec<f64>) = points.into_iter().unzip();
-    let band = chart.regression_band_spec();
-    let minimum = match band {
-        RegressionBand::PointwiseMean95 => 3,
-        RegressionBand::Hidden => 2,
-    };
-    if x.len() < minimum {
-        return Err(Error::Data(format!(
-            "regression: {band:?} requires at least {minimum} points, got {}",
-            x.len()
-        ))
-        .into());
-    }
+#[derive(Debug)]
+pub(crate) struct PreparedRegressionInputs {
+    pub(crate) panels: Vec<(Option<String>, PreparedRegression)>,
+}
 
-    let fit = OlsFit::new(&x, &y)?;
-    let (x_min, x_max) = crate::data::min_max(x.iter().copied(), "regression")?;
-    let y_fit_lo = fit.predict(x_min)?;
-    let y_fit_hi = fit.predict(x_max)?;
-    let panel = context.panel;
+#[derive(Debug)]
+pub(crate) struct PreparedRegression {
+    pub(crate) ranges: [(f64, f64); 2],
+    points: Vec<(f64, f64)>,
+    fit_line: [(f64, f64); 2],
+    band_values: Option<Vec<(f64, f64, f64)>>,
+}
 
-    let band_values = if band == RegressionBand::PointwiseMean95 {
-        let mut values = Vec::with_capacity(BAND_POINTS);
-        for index in 0..BAND_POINTS {
-            let fraction = index as f64 / (BAND_POINTS - 1) as f64;
-            let x_value = x_min * (1.0 - fraction) + x_max * fraction;
-            let interval = fit.pointwise_mean_response_95(x_value)?;
-            values.push((x_value, interval.lower, interval.upper));
+impl PreparedRegression {
+    pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(3, 0);
+        let x_col = chart
+            .x_col()
+            .ok_or_else(|| Error::Data("regression: x column not set".into()))?;
+        let y_col = chart
+            .y_col()
+            .ok_or_else(|| Error::Data("regression: y column not set".into()))?;
+        let points = crate::data::aligned_finite_f64(data, x_col, y_col, "regression")?;
+        let x = data.collect_source(points.iter().map(|p| Ok(p.0)))?;
+        let y = data.collect_source(points.iter().map(|p| Ok(p.1)))?;
+        let band = chart.regression_band_spec();
+        let minimum = match band {
+            RegressionBand::PointwiseMean95 => 3,
+            RegressionBand::Hidden => 2,
+        };
+        if x.len() < minimum {
+            return Err(Error::Data(format!(
+                "regression: {band:?} requires at least {minimum} points, got {}",
+                x.len()
+            )));
         }
-        Some(values)
-    } else {
-        None
-    };
 
-    let layout = context.axis_layout(|| {
+        for _ in 0..10 {
+            data.claim_source_visits(x.len())?;
+        }
+        let fit = OlsFit::new(&x, &y)?;
+        data.claim_source_visits(x.len())?;
+        let (x_min, x_max) = crate::data::min_max(x.iter().copied(), "regression")?;
+        data.claim_source_visits(2)?;
+        let y_fit_lo = fit.predict(x_min)?;
+        let y_fit_hi = fit.predict(x_max)?;
+
+        let band_values = if band == RegressionBand::PointwiseMean95 {
+            let mut values = Vec::new();
+            data.reserve_source(&mut values, BAND_POINTS)?;
+            data.claim_source_visits(BAND_POINTS)?;
+            for index in 0..BAND_POINTS {
+                let fraction = index as f64 / (BAND_POINTS - 1) as f64;
+                let x_value = x_min * (1.0 - fraction) + x_max * fraction;
+                let interval = fit.pointwise_mean_response_95(x_value)?;
+                values.push((x_value, interval.lower, interval.upper));
+            }
+            Some(values)
+        } else {
+            None
+        };
+
+        data.claim_source_visits(y.len())?;
         let (mut y_min, mut y_max) = crate::data::min_max(y.iter().copied(), "regression")?;
         y_min = y_min.min(y_fit_lo).min(y_fit_hi);
         y_max = y_max.max(y_fit_lo).max(y_fit_hi);
         if let Some(values) = &band_values {
+            data.claim_source_visits(values.len())?;
             for (_, lower, upper) in values {
                 y_min = y_min.min(*lower);
                 y_max = y_max.max(*upper);
@@ -175,46 +191,111 @@ pub(crate) fn render(
 
         let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec());
         let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec());
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        context.layout_with_axis_specs(
-            x_range,
-            y_range,
-            panel,
-            chart.x_label_text().unwrap_or("").to_string(),
-            chart.y_label_text().unwrap_or("").to_string(),
-            &x_axis_spec,
-            &y_axis_spec,
-            theme,
-        )
+        Ok(Self {
+            ranges: [x_range, y_range],
+            points,
+            fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
+            band_values,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RegressionPayload {
+    clip: crate::layout::PanelBox,
+    points: Vec<Point2D>,
+    fit_line: [Point2D; 2],
+    band: Option<Vec<Point2D>>,
+    point_style: PointStyle,
+    line_style: LineStyle,
+    band_fill: FillStyle,
+}
+
+impl RegressionPayload {
+    pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        #[cfg(test)]
+        crate::layout::interior::distributions::count(3, 3);
+        with_clip(backend, self.clip, |backend| {
+            if let Some(band) = &self.band {
+                backend.draw_polygon(band, &self.band_fill)?;
+            }
+            backend.draw_scatter(&self.points, &self.point_style)?;
+            backend.draw_line(&self.fit_line, &self.line_style)
+        })
+    }
+}
+
+pub(crate) fn measure(
+    chart: &Plot,
+    context: PlotRenderContext<'_>,
+) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(3, 1);
+    let prepared = chart
+        .prepared_regression
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| {
+            Error::Render(
+                "Regression measurement requires root-prepared semantics for its component".into(),
+            )
+        })?;
+    let layout = context.axis_layout(|| {
+        Err(Error::Render("Regression requires root-prepared axes".into()).into())
     })?;
+    let theme = context.theme;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    project(chart, prepared, layout, theme, data).map_err(Into::into)
+}
+
+pub(crate) fn project(
+    chart: &Plot,
+    prepared: &PreparedRegression,
+    layout: crate::layout::Layout,
+    theme: &crate::theme::ResolvedTheme,
+    data: PlotData<'_>,
+) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
     let point_style = chart.point_style(theme.colors[0], 3);
-    let scatter_points = x
-        .iter()
-        .zip(&y)
-        .map(|(x_value, y_value)| {
+    let scatter_points =
+        data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
             let (x, y) = projection.project(*x_value, *y_value);
-            Point2D::new(x, y)
-        })
-        .collect::<Vec<_>>();
+            Ok(Point2D::new(x, y))
+        }))?;
     let line_style = LineStyle::solid(theme.foreground, 1.5);
-    let (fit_x0, fit_y0) = projection.project(x_min, y_fit_lo);
-    let (fit_x1, fit_y1) = projection.project(x_max, y_fit_hi);
+    data.claim_source_visits(2)?;
+    let (fit_x0, fit_y0) = projection.project(prepared.fit_line[0].0, prepared.fit_line[0].1);
+    let (fit_x1, fit_y1) = projection.project(prepared.fit_line[1].0, prepared.fit_line[1].1);
     let fit_line = [Point2D::new(fit_x0, fit_y0), Point2D::new(fit_x1, fit_y1)];
-    let band_polygon = band_values.map(|values| {
-        let mut upper = Vec::with_capacity(BAND_POINTS);
-        let mut lower = Vec::with_capacity(BAND_POINTS);
-        for (x_value, lower_value, upper_value) in values {
-            let (upper_x, upper_y) = projection.project(x_value, upper_value);
-            let (lower_x, lower_y) = projection.project(x_value, lower_value);
-            upper.push(Point2D::new(upper_x, upper_y));
-            lower.push(Point2D::new(lower_x, lower_y));
-        }
-        lower.reverse();
-        upper.extend(lower);
-        upper
-    });
+    let band_polygon = prepared
+        .band_values
+        .as_ref()
+        .map(|values| -> Result<_, Error> {
+            let mut upper = Vec::new();
+            let mut lower = Vec::new();
+            data.reserve_source(&mut upper, BAND_POINTS * 2)?;
+            data.reserve_source(&mut lower, BAND_POINTS)?;
+            data.claim_source_visits(values.len())?;
+            for (x_value, lower_value, upper_value) in values {
+                let (upper_x, upper_y) = projection.project(*x_value, *upper_value);
+                let (lower_x, lower_y) = projection.project(*x_value, *lower_value);
+                upper.push(Point2D::new(upper_x, upper_y));
+                lower.push(Point2D::new(lower_x, lower_y));
+            }
+            data.claim_source_visits(lower.len())?;
+            lower.reverse();
+            data.claim_source_visits(lower.len())?;
+            upper.extend(lower);
+            Ok(upper)
+        })
+        .transpose()?;
     let band_fill = FillStyle {
         color: theme.colors[0],
         stroke: theme.colors[0],
@@ -222,26 +303,44 @@ pub(crate) fn render(
         opacity: 0.25,
     };
 
-    with_clip(backend, projection.panel_box(), |backend| {
-        if let Some(polygon) = &band_polygon {
-            backend.draw_polygon(polygon, &band_fill)?;
-        }
-        backend.draw_scatter(&scatter_points, &point_style)?;
-        backend.draw_line(&fit_line, &line_style)
-    })?;
-    let legend_entries = if matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
-        let fit_identity = chart.legend_identity(band.legend_label());
+    let mut legend_entries = Vec::new();
+    let band = chart.regression_band_spec();
+    if matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
+        data.reserve_source(&mut legend_entries, 2)?;
+        let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
         let fit_entry = if band == RegressionBand::PointwiseMean95 {
-            LegendEntry::line_fill(fit_identity, line_style, band_fill)
+            LegendEntry::line_fill(fit_identity, line_style.clone(), band_fill.clone())
         } else {
-            LegendEntry::line(fit_identity, line_style)
+            LegendEntry::line(fit_identity, line_style.clone())
         };
-        vec![
-            LegendEntry::point(chart.legend_identity("Observations"), point_style),
-            fit_entry,
-        ]
-    } else {
-        Vec::new()
+        legend_entries.push(LegendEntry::point(
+            chart.point_legend_identity("Observations", data)?,
+            point_style.clone(),
+        ));
+        legend_entries.push(fit_entry);
+    }
+    let payload = RegressionPayload {
+        clip: projection.panel_box(),
+        points: scatter_points,
+        fit_line,
+        band: band_polygon,
+        point_style,
+        line_style,
+        band_fill,
     };
-    Ok(PlotRenderResult::new(layout, legend_entries))
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    #[cfg(test)]
+    crate::layout::interior::distributions::count(3, 2);
+    let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
+    if let Some(band) = &payload.band {
+        geometry.polygon(band, &payload.band_fill, Some(clip))?;
+    }
+    geometry.scatter(&payload.points, &payload.point_style, clip)?;
+    geometry.line(&payload.fit_line, &payload.line_style, Some(clip))?;
+    let mut result = PlotRenderResult::new(layout, legend_entries);
+    result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Regression(payload),
+        geometry,
+    })?);
+    Ok(result)
 }

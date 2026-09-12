@@ -240,7 +240,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
 | T5a6a2 | Retained canonical primitive geometry | COMPLETE |
 | T5a6a3a | Point/path semantic and payload extraction | COMPLETE |
-| T5a6a3b | Distribution/reference semantic and payload extraction | PENDING |
+| T5a6a3b | Distribution/reference semantic and payload extraction | COMPLETE |
 | T5a6a3c | Estimate-display semantic and payload extraction | PENDING |
 | T5a6a3d | Bar semantic and payload extraction | PENDING |
 | T5a6a3e | Categorical-distribution semantic and payload extraction | PENDING |
@@ -4606,7 +4606,7 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, and T5a6a3a are complete with focused and primary integrated
+T5a6a1, T5a6a2, T5a6a3a, and T5a6a3b are complete with focused and primary integrated
 evidence below. Successor extraction steps are PENDING. Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4819,8 +4819,40 @@ T5a6a3a completion evidence:
   package verification (223 files). All six snapshots remain unchanged.
   Log: `/tmp/opencode/t5a6a3a-verify.log`.
 
-The following unit is T5a6a3b, extracting Histogram,
-Density, Qq, and Regression through this same interior boundary.
+T5a6a3b completion evidence:
+
+- Histogram retains bins, internal/supplied KDE curves, and exact rug endpoints;
+  Density retains collective KDE curves; Qq retains sorted quantiles and reference
+  geometry; Regression retains observed points, fit endpoints, and confidence-band
+  samples. Scientific axes consume these results rather than preparing statistics
+  again. Standalone, facet, and shared-Canvas preparation precedes font discovery.
+- All four families now use selected mark/annotation capture. Their combined
+  routes and renderers are removed. Geometry snapshots consume the same projected
+  primitives as drawing; no geometry backend is used for their layout. Density
+  keeps parent collective order and palette slots without reading columns during
+  measurement. Qq validates reference clipping against final scientific ranges.
+- Source vectors, statistical scratch, supplied geometry copies, projected curves,
+  bands, rugs, legends, and shared allocations use operation admission. Tests cover
+  exact limits, cumulative candidate refusal, all four facet scale policies,
+  shared Canvas preparation counts, selected geometry/draw extent parity, invalid
+  statistics and exact ticks before unavailable fonts, and poisoned-source capture.
+  Capture repeats no source reads, projection, statistics, axis work, or shaping;
+  Null/SVG replay leaves the family-stage counts unchanged.
+- Strict offline all-target Clippy passes. Focused checks pass: 8 interior tests,
+  11 Density tests, 67 distribution integration tests, 57 composition tests,
+  38 estimate integration tests, and all 6 unchanged snapshots. Earlier checks in
+  this implementation also passed 154 plot unit tests and 174 orchestrator tests
+  (10 ignored benchmarks).
+- Review found a source-owning Plot clone in Canvas reference preparation. The
+  corrected path borrows configuration and passes scope/shared limits/label policy
+  separately. Actual Canvas tests cover supplied Histogram geometry and KDE,
+  work/storage refusal, exact-budget success, and zero font discovery.
+- Primary `just verify` passed after correction: 842 library tests (17 ignored),
+  442 integration tests, strict Clippy, formatting, API docs, and package
+  verification (224 files). All six snapshots are unchanged.
+  Log: `/tmp/opencode/t5a6a3b-verify.log`.
+
+T5a6a3c has not been started.
 
 Every extraction step proves font-independent error precedence with zero font
 discovery, admission before payload/cache allocation, actual consequence parity,

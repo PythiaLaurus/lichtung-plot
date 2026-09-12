@@ -782,11 +782,14 @@ impl<K: crate::kind::Marker> Plot<K> {
     pub(crate) fn prepare_axis_labels(
         &self,
         data: crate::data::PlotData<'_>,
+        policy: Option<&crate::Labels>,
     ) -> Result<[String; 2], Error> {
         let mut labels = [String::new(), String::new()];
         for (target, (raw, inferred)) in labels.iter_mut().zip(self.axis_label_sources(self.kind)) {
             *target = if inferred {
-                self.labels.resolve_source(raw, Some(data))?
+                policy
+                    .unwrap_or(&self.labels)
+                    .resolve_source(raw, Some(data))?
             } else {
                 data.copy_source_string(raw)?
             };
