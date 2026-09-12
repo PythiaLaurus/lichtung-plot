@@ -537,6 +537,7 @@ mod tests {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     source.kind(),
                     &theme,

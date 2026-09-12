@@ -809,6 +809,7 @@ fn prepared_address_clone(
     reason = "the closed text census keeps both axis policies and canonical producer order explicit"
 )]
 pub(crate) fn foundational_plot_requirements(
+    heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
     plot: &Plot,
     kind: PlotKind,
     theme: &crate::theme::ResolvedTheme,
@@ -820,6 +821,7 @@ pub(crate) fn foundational_plot_requirements(
 ) -> Result<Vec<PreparedTextRequirement>, Error> {
     let mut requirements = Vec::new();
     PreparedTextRequirement::append_plot(
+        heatmap,
         &mut requirements,
         plot,
         kind,
@@ -841,6 +843,7 @@ impl PreparedTextRequirement {
         reason = "the closed producer traversal preserves axis policies and visible source identities"
     )]
     pub(crate) fn append_plot(
+        heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
         requirements: &mut Vec<Self>,
         plot: &Plot,
         kind: PlotKind,
@@ -974,6 +977,7 @@ impl PreparedTextRequirement {
             )?;
         }
         push_deferred_plot_requirements(
+            heatmap,
             requirements,
             plot,
             kind,
@@ -1010,6 +1014,7 @@ impl PreparedTextRequirement {
     reason = "one closed plot-kind match keeps both range filters and every deferred T5b/T5e census source auditable"
 )]
 fn push_deferred_plot_requirements(
+    heatmap: Option<&crate::plots::heatmap::PreparedHeatmapInputs>,
     requirements: &mut Vec<PreparedTextRequirement>,
     plot: &Plot,
     kind: PlotKind,
@@ -1259,11 +1264,32 @@ fn push_deferred_plot_requirements(
             &theme.typography.tick_label,
             prepared_stage,
         )?;
+    } else if kind == PlotKind::Heatmap {
+        let heatmap = heatmap.ok_or_else(|| {
+            Error::Render("heatmap census requires root-prepared semantics".into())
+        })?;
+        let mut visit = |source: CensusSource<'_>| {
+            push_deferred_body(
+                requirements,
+                &body_address,
+                &mut body_index,
+                source,
+                &[],
+                &body,
+                prepared_stage.as_deref_mut(),
+            )
+        };
+        for (_, marks) in &heatmap.panels {
+            visit(marks.color_label.as_str().into())?;
+            crate::plots::heatmap::text_census(marks, &mut visit)?;
+            for annotation in plot.heatmap_null_row_annotations_spec() {
+                visit(annotation.text().into())?;
+            }
+        }
     } else if plot.has_facets()
         && matches!(
             kind,
-            PlotKind::Heatmap
-                | PlotKind::Beeswarm
+            PlotKind::Beeswarm
                 | PlotKind::Coefficient
                 | PlotKind::Forest
                 | PlotKind::PointInterval
@@ -1488,11 +1514,9 @@ fn specialized_text_census(
 
     match kind {
         PlotKind::Heatmap => {
-            visit(plot.resolved_color_label().into())?;
-            crate::plots::heatmap::text_census(plot, data, &mut visit)?;
-            for annotation in plot.heatmap_null_row_annotations_spec() {
-                visit(annotation.text().into())?;
-            }
+            return Err(Error::Render(
+                "heatmap census requires retained traversal".into(),
+            ));
         }
         PlotKind::Beeswarm => {
             visit(plot.resolved_color_label().into())?;
@@ -2237,6 +2261,7 @@ mod tests {
         .erase();
         let theme = crate::Theme::Publication.resolve();
         let requirements = foundational_plot_requirements(
+            None,
             &plot,
             PlotKind::Scatter,
             &theme,

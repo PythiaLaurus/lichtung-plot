@@ -245,7 +245,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a3d | Bar semantic and payload extraction | COMPLETE |
 | T5a6a3e | Categorical-distribution semantic and payload extraction | COMPLETE |
 | T5a6a3f | Interaction semantic and payload extraction | COMPLETE |
-| T5a6a4a | Heatmap deferred interior | PENDING |
+| T5a6a4a | Heatmap deferred interior | COMPLETE |
 | T5a6a4b | Marginal deferred interior | PENDING |
 | T5a6a4c | Matrix deferred interior and outer title integration | PENDING |
 | T5a6a4d | Beeswarm deferred interior | PENDING |
@@ -4606,8 +4606,9 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, and all ordinary extraction steps T5a6a3a-f are complete with
-focused and primary integrated evidence below; later extraction steps are PENDING.
+T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and T5a6a4a are
+complete with focused and primary integrated evidence below. Later extraction
+steps are PENDING.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4630,6 +4631,47 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a4a completion evidence:
+
+- Heatmap retains admitted grid cells, category order, highlights, null-row
+  annotations, color domains, numeric text identities, and color-label policy
+  before fonts. Standalone, facet, and Canvas components prepare once; Canvas
+  semantic preparation borrows configuration and census borrows retained inputs.
+- Backend-free constrained measurement keeps the current Wrap/Elide packing,
+  uniqueness policy, sparse/structural/missing cells, and mandatory colorbar.
+  Typed cell, annotation, gradient, swatch, and text operands survive selection.
+  GeometrySnapshot supplies mark/guide extents; the typed current heatmap minimum
+  feeds the existing frame result alongside the named legacy panel floor.
+  No T5e packing or public colorbar API is introduced.
+- Exact-limit tests cover root semantics, cell and guide storage, and elision.
+  Geometry parity, zero-source/projection/tick/shaping poisoned capture, root
+  preparation counts, and unchanged rejected composition routes are covered.
+- Focused strict offline all-target Clippy, the full library suite (878 passed,
+  17 ignored), all 35 heatmap integrations, 57 composition integrations, six
+  unchanged snapshots, and all ten unchanged release benchmark groups pass.
+  Logs: `/tmp/opencode/t5a6a4a-unit.log`,
+  `/tmp/opencode/t5a6a4a-integrations.log`, and
+  `/tmp/opencode/t5a6a4a-benchmarks.log`.
+- Twelve full-SVG fingerprints across Publication/Science, missing/merged rows,
+  highlighted/value-annotated cells, Wrap/Elide, explicit domains, and category
+  order match clean `b52c964`. The current audit was rebuilt after clearing the
+  shared package artifacts. Logs: `/tmp/opencode/t5a6a4a-baseline-parity.log` and
+  `/tmp/opencode/t5a6a4a-current-parity.log`.
+- Primary review fixed Canvas category-label policy inheritance: preparation
+  borrows the root policy without a deep clone, preserving raw category keys
+  while applying aliases or raw display mode on both axes. Regression evidence
+  covers exact admission, humanization collisions, inherited axis/color titles,
+  and verbatim explicit titles.
+- Final primary `just verify` in `/tmp/opencode/t5a6a4a-verify.log` passed:
+  formatting, strict offline all-target Clippy, 879 library tests passed with
+  17 ignored, and 445 integration tests passed, including 37 heatmap tests,
+  57 composition tests, and all six still-unchanged snapshots. Four example
+  targets ran zero tests; warning-denied rustdoc and offline package verification
+  passed for 229 files (6.5 MiB; 1.4 MiB compressed). No tests failed.
+- T5e packing remains deferred; T5a6a4b onward remain PENDING and no successor
+  is started. No commit is made in this documentation-only completion update,
+  as explicitly requested.
 
 T5a6a3f completion evidence:
 

@@ -198,6 +198,7 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &plot,
                     kind,
                     &theme,

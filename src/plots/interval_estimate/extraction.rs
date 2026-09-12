@@ -355,6 +355,7 @@ fn final_guides_ticks_and_invalid_tuples_precede_unavailable_fonts() {
             |stage| {
                 crate::plots::shared_x::prepare_plot(source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     source,
                     source.kind(),
                     &theme,
@@ -536,6 +537,7 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     source.kind(),
                     &theme,

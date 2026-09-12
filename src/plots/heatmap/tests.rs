@@ -25,7 +25,7 @@ fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Erro
 }
 
 #[test]
-fn census_streams_deferred_formatted_values_in_render_order() {
+fn census_borrows_retained_formatted_values_in_render_order() {
     let source = chart(&valid_data())
         .annotations(HeatmapAnnotations::Values(
             crate::NumericLabelFormat::new(2)
@@ -34,8 +34,14 @@ fn census_streams_deferred_formatted_values_in_render_order() {
                 .unwrap(),
         ))
         .erase();
+    let inputs = crate::plots::shared_x::prepare_plot(
+        &source,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap();
+    let source = inputs.attach(source).unwrap();
     let mut sources = Vec::new();
-    text_census(&source, source.data(), |source| {
+    text_census(retained(&source).unwrap(), |source| {
         sources.push(match source {
             crate::font::canonical::CensusSource::Formatted(arguments) => {
                 crate::font::canonical::format_census_source(arguments, None)
@@ -65,24 +71,32 @@ fn census_streams_deferred_formatted_values_in_render_order() {
 }
 
 #[test]
-fn census_stops_on_first_admission_refusal_without_formatting_later_values() {
+fn census_stops_on_first_admission_refusal_without_visiting_later_values() {
     let source = chart(&valid_data())
         .annotations(HeatmapAnnotations::Values(
             crate::NumericLabelFormat::default(),
         ))
         .erase();
+    let inputs = crate::plots::shared_x::prepare_plot(
+        &source,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap();
+    let source = inputs.attach(source).unwrap();
     crate::layout::plan_exact_root(
         320,
         240,
         |stage| {
             stage.font_resources().claim_visits(1_000_000).unwrap();
             let mut visits = 0;
-            let result = text_census(&source, source.data(), |source| {
+            let result = text_census(retained(&source).unwrap(), |source| {
                 visits += 1;
-                let crate::font::canonical::CensusSource::Formatted(arguments) = source else {
-                    panic!("numeric source must be deferred")
+                let crate::font::canonical::CensusSource::Text(std::borrow::Cow::Borrowed(source)) =
+                    source
+                else {
+                    panic!("numeric source must borrow prepared text")
                 };
-                crate::font::canonical::format_census_source(arguments, Some(stage))
+                crate::font::canonical::format_census_source(format_args!("{source}"), Some(stage))
                     .map(|_| ())
                     .map_err(|error| Error::Render(error.to_string()))
             });
@@ -127,7 +141,7 @@ fn colorbar_display_preserves_signed_zero_thresholds_and_trimming() {
                 .trim_end_matches('.')
                 .to_string()
         };
-        assert_eq!(format_colorbar_value(value), expected);
+        assert_eq!(ColorbarValue(value).to_string(), expected);
     }
 }
 
@@ -433,7 +447,18 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
         .unwrap()
         .fit_width();
 
-    let fitted = fitted_label(&theme, "e\u{301}e\u{301}e\u{301}e\u{301}", maximum_width).unwrap();
+    let source = chart(&valid_data()).erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let fitted = fitted_label(
+        source.data().with_axis_resources(&resources),
+        &theme,
+        "e\u{301}e\u{301}e\u{301}e\u{301}",
+        maximum_width,
+    )
+    .unwrap();
 
     assert_eq!(fitted, expected);
     assert!(
@@ -454,7 +479,13 @@ fn fitted_label_elides_only_at_extended_grapheme_boundaries() {
 #[test]
 fn fitted_unique_labels_rejects_space_too_narrow_for_an_ellipsis() {
     let theme = crate::Theme::Publication.resolve();
+    let source = chart(&valid_data()).erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
     let error = fitted_unique_labels(
+        source.data().with_axis_resources(&resources),
         &theme,
         &["category".into()],
         1.0,

@@ -142,6 +142,7 @@ impl Plot {
                 | PlotKind::Violin
                 | PlotKind::Raincloud
                 | PlotKind::Interaction
+                | PlotKind::Heatmap
         ) {
             crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
             let result = context.selected_interior.ok_or_else(|| {
@@ -202,6 +203,7 @@ impl Plot {
                 | PlotKind::Violin
                 | PlotKind::Raincloud
                 | PlotKind::Interaction
+                | PlotKind::Heatmap
         ) {
             return self.measure_selected_interior(context);
         }
@@ -267,6 +269,7 @@ impl Plot {
         });
         let context = context.with_prepared_axes(self);
         let mut result = match self.kind() {
+            PlotKind::Heatmap => crate::plots::heatmap::measure(self, context)?,
             PlotKind::Interaction => crate::plots::interaction::measure(self, context)?,
             PlotKind::Boxplot => crate::plots::boxplot::measure(self, context)?,
             PlotKind::Violin | PlotKind::Raincloud => crate::plots::violin::measure(self, context)?,

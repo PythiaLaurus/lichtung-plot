@@ -55,7 +55,7 @@ interior_routes! {
         Raincloud => crate::plots::categorical_distribution::reject_combined,
     },
     SpecializedLegacy {
-        Heatmap => crate::plots::heatmap::render,
+        Heatmap => crate::plots::heatmap::reject_combined,
         Marginal => crate::plots::marginal::render,
         Matrix => crate::plots::matrix::render,
         Beeswarm => crate::plots::beeswarm::render,
@@ -104,6 +104,7 @@ impl ParentCompositionAdapter {
 /// storage; no prepared Plot clone or alternate preparation route is retained.
 /// Unextracted families remain combined. Trajectory retains its condition order.
 pub(crate) struct PreparedInteriorInputs {
+    pub(crate) heatmap: Option<std::sync::Arc<crate::plots::heatmap::PreparedHeatmapInputs>>,
     pub(crate) interaction:
         Option<std::sync::Arc<crate::plots::interaction::PreparedInteractionInputs>>,
     pub(crate) distributions:
@@ -128,6 +129,7 @@ impl PreparedInteriorInputs {
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
+        plot.prepared_heatmap.clone_from(&self.heatmap);
         plot.prepared_interaction.clone_from(&self.interaction);
         plot.prepared_matrix_axes.clone_from(&self.matrix);
         plot.prepared_scatter.clone_from(&self.scatter);
@@ -219,6 +221,7 @@ pub(crate) struct DeferredMarkPlan {
 
 #[derive(Debug)]
 pub(crate) enum MarkPayload {
+    Heatmap(crate::plots::heatmap::HeatmapPayload),
     Interaction(crate::plots::interaction::InteractionPayload),
     Distribution(crate::plots::categorical_distribution::DistributionPayload),
     Bars(crate::plots::bar_data::BarPayload),
@@ -238,6 +241,7 @@ impl DeferredMarkPlan {
         backend: &mut dyn crate::render::backend::Backend,
     ) -> Result<(), Error> {
         match &self.payload {
+            MarkPayload::Heatmap(payload) => payload.draw(backend),
             MarkPayload::Interaction(payload) => payload.draw(backend),
             MarkPayload::Distribution(payload) => payload.draw(backend),
             MarkPayload::Bars(payload) => payload.draw(backend),

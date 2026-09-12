@@ -366,6 +366,29 @@ impl GeometrySnapshot {
         )
     }
 
+    pub(crate) fn linear_gradient(
+        &mut self,
+        bounds: PanelBox,
+        start: Point2D,
+        end: Point2D,
+        stops: &[GradientStop],
+        clip: Option<PanelBox>,
+    ) -> Result<(), Error> {
+        self.admit_scratch::<super::coordinates::CanonicalGradientStop>(stops.len())?;
+        let gradient = backend::validate_linear_gradient(bounds, start, end, stops)?;
+        let bounds = gradient.bounds;
+        self.record(
+            Some(GeometryBox {
+                left: bounds.left.value(),
+                right: bounds.right.value(),
+                bottom: bounds.bottom.value(),
+                top: bounds.top.value(),
+                weight: 1.0,
+            }),
+            clip,
+        )
+    }
+
     pub(crate) fn bracket(&mut self, call: PlannedSignificanceCall<'_>) -> Result<(), Error> {
         let canonical = backend::validate_planned_bracket(call)?;
         let width = super::coordinates::CanonicalCoordinate::nonnegative_length(

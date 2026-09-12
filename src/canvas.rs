@@ -314,7 +314,8 @@ mod d1_tests {
                 canvas.height,
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
-                    let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
+                    let (mut census, presence) =
+                        canvas.foundational_text_census(&themes, &interiors, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
                     Ok(interiors)
                 },
@@ -477,7 +478,8 @@ mod d1_tests {
                 canvas.height,
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
-                    let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
+                    let (mut census, presence) =
+                        canvas.foundational_text_census(&themes, &interiors, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
                     Ok(interiors)
                 },
@@ -576,7 +578,8 @@ mod d1_tests {
             canvas.height,
             |stage| {
                 let (interiors, _) = canvas.prepare_interiors(stage)?;
-                let (mut census, presence) = canvas.foundational_text_census(&themes, stage)?;
+                let (mut census, presence) =
+                    canvas.foundational_text_census(&themes, &interiors, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
                 Ok(interiors)
             },
@@ -1527,6 +1530,7 @@ impl Canvas {
                             | PlotKind::Violin
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
+                            | PlotKind::Heatmap
                     )
                 }) {
                     Some(plot) => {
@@ -1595,6 +1599,7 @@ impl Canvas {
                             | PlotKind::Violin
                             | PlotKind::Raincloud
                             | PlotKind::Interaction
+                            | PlotKind::Heatmap
                             | PlotKind::Line
                             | PlotKind::Trajectory
                             | PlotKind::LinePath
@@ -1674,7 +1679,7 @@ impl Canvas {
                 self.validate_structure()?;
                 let (interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
                 let (mut census, scalar_presence) =
-                    self.foundational_text_census(&themes, prepared_stage)?;
+                    self.foundational_text_census(&themes, &interiors, prepared_stage)?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
                 Ok(PreparedCanvasInputs {
                     themes,
@@ -1724,6 +1729,7 @@ impl Canvas {
     fn foundational_text_census(
         &self,
         themes: &ResolvedCanvasThemes,
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(crate::layout::PreparedTextCensus, Vec<u64>), Error> {
         let root = crate::layout::ComponentAddress::root();
@@ -1883,6 +1889,10 @@ impl Canvas {
                 .iter()
                 .any(|group| group.contains(&index));
             crate::layout::PreparedTextRequirement::append_plot(
+                interiors
+                    .get(index)
+                    .and_then(Option::as_ref)
+                    .and_then(|inputs| inputs.heatmap.as_deref()),
                 &mut requirements,
                 &plot,
                 plot.kind(),

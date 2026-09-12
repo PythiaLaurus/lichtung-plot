@@ -289,7 +289,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
             plot.width(),
             plot.height(),
             |stage| {
-                let inputs = if kind == PlotKind::Line {
+                let inputs = if matches!(kind, PlotKind::Line | PlotKind::Heatmap) {
                     Some(crate::plots::shared_x::prepare_plot(
                         &plot,
                         &stage.generation_resources(),
@@ -298,6 +298,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     None
                 };
                 let requirements = crate::layout::foundational_plot_requirements(
+                    inputs.as_ref().and_then(|inputs| inputs.heatmap.as_deref()),
                     &plot,
                     kind,
                     &theme,
@@ -461,6 +462,7 @@ fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &plot,
                     PlotKind::Scatter,
                     &theme,
@@ -845,6 +847,7 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let source = inputs.attach(source.clone())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     PlotKind::Scatter,
                     &theme,

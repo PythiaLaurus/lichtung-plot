@@ -603,7 +603,17 @@ fn plan_panel_attempt(
     } else {
         None
     };
-    let requirements = frame_requirements(legend.as_ref(), planning_plot.legend_position_spec());
+    let mut requirements =
+        frame_requirements(legend.as_ref(), planning_plot.legend_position_spec());
+    if let Some(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Heatmap(payload),
+        ..
+    }) = discovered.marks.as_deref()
+    {
+        let minimum = payload.minimum.body();
+        requirements.minimum_body.0 = requirements.minimum_body.0.max(minimum.0);
+        requirements.minimum_body.1 = requirements.minimum_body.1.max(minimum.1);
+    }
     let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter);
     let owned_ink = round.insets(address, FeedbackKind::OwnedInk);
     for (gutter, ink) in assigned_gutters.iter_mut().zip(owned_ink) {
@@ -1218,6 +1228,7 @@ fn measure_geometry(
             | PlotKind::Violin
             | PlotKind::Raincloud
             | PlotKind::Interaction
+            | PlotKind::Heatmap
     ) {
         return match fit::outcome(plot.measure_selected_interior(context))? {
             FitOutcome::Measured(result) => {

@@ -881,6 +881,22 @@ impl<K: crate::kind::Marker> Plot<K> {
         })
     }
 
+    pub(crate) fn prepare_color_label(
+        &self,
+        data: crate::data::PlotData<'_>,
+        policy: Option<&crate::Labels>,
+    ) -> Result<String, Error> {
+        if let Some(label) = self.color_label_text() {
+            data.copy_source_string(label)
+        } else if let Some(values) = self.color_values() {
+            policy
+                .unwrap_or(&self.labels)
+                .resolve_source(values.name(), Some(data))
+        } else {
+            Ok(String::new())
+        }
+    }
+
     pub(crate) fn legend_title_key(&self) -> &str {
         self.interaction_styles
             .as_ref()

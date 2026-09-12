@@ -257,6 +257,7 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
             |stage| {
                 crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     source.kind(),
                     &theme,
@@ -305,6 +306,7 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     source.kind(),
                     &theme,

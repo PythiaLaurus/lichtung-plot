@@ -299,6 +299,96 @@ fn composed_heatmap_separates_x_tick_labels_from_axis_title() {
     assert!(title_y - tick_y >= 18.0);
 }
 
+fn canvas_heatmap_label_policy(policy: &lichtung_plot::Labels, expected: [&str; 7]) {
+    for explicit in [false, true] {
+        let plot = Plot::heatmap(
+            CategoryValues::new("x_axis", ["a_b", "a b", "a_b", "a b"]).unwrap(),
+            CategoryValues::new("y_axis", ["c_d", "c_d", "c d", "c d"]).unwrap(),
+            NumericValues::new("color_value", [1.0, 2.0, 3.0, 4.0]),
+        );
+        let plot = if explicit {
+            plot.x_label("literal_x")
+                .y_label("literal_y")
+                .color_label("literal_color")
+        } else {
+            plot
+        };
+        let canvas = Canvas::grid(1, 1)
+            .unwrap()
+            .panel(0, 0, plot)
+            .unwrap()
+            .labels(
+                policy
+                    .clone()
+                    .alias("literal_x", "Must not replace x")
+                    .alias("literal_y", "Must not replace y")
+                    .alias("literal_color", "Must not replace color"),
+            )
+            .size(800, 600);
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("canvas.svg");
+        canvas.svg_preserve_text(&output).unwrap();
+        let svg = std::fs::read_to_string(output).unwrap();
+        for label in &expected[..4] {
+            assert!(
+                svg.contains(&format!(">{label}</text>")),
+                "missing tick {label}"
+            );
+        }
+        let titles = if explicit {
+            &["literal_x", "literal_y", "literal_color"]
+        } else {
+            &expected[4..]
+        };
+        for label in titles {
+            assert!(
+                svg.contains(&format!(">{label}</text>")),
+                "missing title {label}"
+            );
+        }
+        assert!(!svg.contains("Must not replace"));
+    }
+}
+
+#[test]
+fn canvas_heatmap_raw_labels_preserve_categories_that_collide_when_humanized() {
+    canvas_heatmap_label_policy(
+        &lichtung_plot::Labels::raw(),
+        [
+            "a_b",
+            "a b",
+            "c_d",
+            "c d",
+            "x_axis",
+            "y_axis",
+            "color_value",
+        ],
+    );
+}
+
+#[test]
+fn canvas_heatmap_aliases_disambiguate_both_category_axes() {
+    canvas_heatmap_label_policy(
+        &lichtung_plot::Labels::humanized()
+            .alias("a_b", "First X")
+            .alias("a b", "Second X")
+            .alias("c_d", "First Y")
+            .alias("c d", "Second Y")
+            .alias("x_axis", "Horizontal")
+            .alias("y_axis", "Vertical")
+            .alias("color_value", "Intensity"),
+        [
+            "First X",
+            "Second X",
+            "First Y",
+            "Second Y",
+            "Horizontal",
+            "Vertical",
+            "Intensity",
+        ],
+    );
+}
+
 #[test]
 fn heatmap_sequential_and_diverging_scales_use_pinned_endpoint_colors() {
     let sequential_data = HeatmapData::new(

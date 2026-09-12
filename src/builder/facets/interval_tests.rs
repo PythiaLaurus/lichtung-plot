@@ -95,6 +95,7 @@ fn interval_census_uses_the_source_alphabet_and_exact_precedence_suppresses_it()
             plot.x_axis_spec.exact_ticks = Some(vec![crate::AxisTick::new(1.0, "")]);
         }
         let census = crate::layout::foundational_plot_requirements(
+            None,
             &plot,
             PlotKind::Scatter,
             &theme,

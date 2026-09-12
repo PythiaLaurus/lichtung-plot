@@ -181,6 +181,7 @@ impl PlotPlan {
                     &prepared_stage.generation_resources(),
                 )?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    axes.heatmap.as_deref(),
                     source,
                     kind,
                     theme.as_ref(),

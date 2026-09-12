@@ -706,6 +706,7 @@ mod feedback_tests {
                             &stage.generation_resources(),
                         )?;
                         let requirements = crate::layout::foundational_plot_requirements(
+                            inputs.heatmap.as_deref(),
                             &source,
                             PlotKind::Scatter,
                             &theme,
@@ -873,6 +874,7 @@ mod feedback_tests {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    inputs.heatmap.as_deref(),
                     &source,
                     PlotKind::Scatter,
                     &theme,
@@ -978,6 +980,7 @@ mod feedback_tests {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    inputs.heatmap.as_deref(),
                     &source,
                     PlotKind::Scatter,
                     &theme,

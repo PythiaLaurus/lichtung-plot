@@ -262,8 +262,8 @@ pub(crate) fn strict_bool<'a>(
             data.column(column)?.name()
         )));
     };
-    (0..data.height())
-        .map(|row| match values.get(data.row_index(row)) {
+    data.collect_source(
+        (0..data.height()).map(|row| match values.get(data.row_index(row)) {
             Some(Some(value)) => Ok(value),
             Some(None) => Err(Error::Data(format!(
                 "{plot}: value {:?} contains null at source row {}",
@@ -271,8 +271,8 @@ pub(crate) fn strict_bool<'a>(
                 data.source_row(row)
             ))),
             None => Err(length_error(plot, values.name(), row)),
-        })
-        .collect()
+        }),
+    )
 }
 
 pub(crate) fn aligned_finite_f64<'a>(

@@ -342,6 +342,7 @@ mod tests {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &plot,
                     crate::PlotKind::Scatter,
                     &theme,

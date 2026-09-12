@@ -17,6 +17,7 @@ pub(crate) struct PreparedAxes {
 
 /// Scientific inputs before a parent's shared range is known.
 pub(crate) enum PreparedReference {
+    Heatmap(crate::plots::heatmap::HeatmapData),
     Interaction(crate::plots::interaction::PreparedInteraction),
     Distribution(
         crate::PlotKind,
@@ -34,6 +35,7 @@ pub(crate) enum PreparedReference {
 impl PreparedReference {
     pub(crate) fn new(source: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         match source.kind() {
+            PlotKind::Heatmap => Ok(Self::Heatmap(crate::plots::heatmap::prepare(source, data)?)),
             PlotKind::Interaction => Ok(Self::Interaction(crate::plots::interaction::prepare(
                 source, data, None,
             )?)),
@@ -86,6 +88,7 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
+            Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
             Self::Distribution(_, marks) => (0.0, marks.categories().len() as f64),
             Self::Bars(kind, marks) => {
@@ -112,6 +115,7 @@ impl PreparedReference {
 
 #[derive(Default)]
 struct ReferenceAxisConfig<'a> {
+    heatmap: Option<&'a crate::plots::heatmap::HeatmapData>,
     interaction: Option<&'a crate::plots::interaction::PreparedInteraction>,
     distribution: Option<&'a crate::plots::categorical_distribution::PreparedDistribution>,
     bars: Option<&'a crate::plots::bar_data::PreparedBars>,
@@ -139,6 +143,7 @@ pub(crate) fn prepare_reference_plot(
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
         .with_axis_resources(resources);
     let mut bins = None;
+    let mut heatmap = None;
     let mut dumbbell = None;
     let mut estimate = None;
     let mut bars = None;
@@ -148,6 +153,13 @@ pub(crate) fn prepare_reference_plot(
     let mut quantiles = None;
     let mut fit = None;
     let kind = match marks {
+        PreparedReference::Heatmap(mut marks) => {
+            if labels.is_some() {
+                marks.color_label = source.prepare_color_label(data, labels)?;
+            }
+            heatmap = Some(marks);
+            PlotKind::Heatmap
+        }
         PreparedReference::Interaction(marks) => {
             interaction = Some(marks);
             PlotKind::Interaction
@@ -199,6 +211,7 @@ pub(crate) fn prepare_reference_plot(
         quantiles.as_ref(),
         fit.as_ref(),
         Some(ReferenceAxisConfig {
+            heatmap: heatmap.as_ref(),
             interaction: interaction.as_ref(),
             distribution: distribution.as_ref(),
             bars: bars.as_ref(),
@@ -218,6 +231,14 @@ pub(crate) fn prepare_reference_plot(
     data.reserve_source(&mut retained, 1)?;
     retained.push((scope()?, axes));
     Ok(PreparedInteriorInputs {
+        heatmap: heatmap
+            .map(|marks| {
+                let mut panels = Vec::new();
+                data.reserve_source(&mut panels, 1)?;
+                panels.push((scope()?, marks));
+                data.source_arc(crate::plots::heatmap::PreparedHeatmapInputs { panels })
+            })
+            .transpose()?,
         interaction: interaction
             .map(|marks| {
                 let mut panels = Vec::new();
@@ -321,6 +342,7 @@ pub(crate) fn prepare_plot(
     let mut bars = Vec::new();
     let mut distributions = Vec::new();
     let mut interaction = Vec::new();
+    let mut heatmap = Vec::new();
     let source_data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -328,6 +350,7 @@ pub(crate) fn prepare_plot(
     if matches!(
         source.kind(),
         PlotKind::Histogram
+            | PlotKind::Heatmap
             | PlotKind::Density
             | PlotKind::Qq
             | PlotKind::Regression
@@ -524,6 +547,9 @@ pub(crate) fn prepare_plot(
                 .then(|| crate::plots::dumbbell::prepare(source, data))
                 .transpose()?;
             let estimates = estimate_panels.get_mut(index).and_then(Option::take);
+            let heatmap_marks = (source.kind() == PlotKind::Heatmap)
+                .then(|| crate::plots::heatmap::prepare(source, data))
+                .transpose()?;
             let interaction_marks = (source.kind() == PlotKind::Interaction)
                 .then(|| {
                     crate::plots::interaction::prepare(source, data, interaction_parent.as_ref())
@@ -569,6 +595,7 @@ pub(crate) fn prepare_plot(
                 quantiles.as_ref(),
                 fit.as_ref(),
                 Some(ReferenceAxisConfig {
+                    heatmap: heatmap_marks.as_ref(),
                     interaction: interaction_marks.as_ref(),
                     distribution: distribution_marks.as_ref(),
                     bars: bar_marks.as_ref(),
@@ -579,6 +606,10 @@ pub(crate) fn prepare_plot(
                 }),
             )?;
             let scope = panel.scope(source_data)?;
+            if let Some(marks) = heatmap_marks {
+                source_data.reserve_source(&mut heatmap, 1)?;
+                heatmap.push((Some(source_data.copy_source_string(&scope)?), marks));
+            }
             if let Some(marks) = interaction_marks {
                 source_data.reserve_source(&mut interaction, 1)?;
                 interaction.push((Some(source_data.copy_source_string(&scope)?), marks));
@@ -697,6 +728,14 @@ pub(crate) fn prepare_plot(
         ));
     }
     Ok(PreparedInteriorInputs {
+        heatmap: if source.kind() == PlotKind::Heatmap {
+            Some(
+                source_data
+                    .source_arc(crate::plots::heatmap::PreparedHeatmapInputs { panels: heatmap })?,
+            )
+        } else {
+            None
+        },
         interaction: if source.kind() == PlotKind::Interaction {
             Some(
                 source_data.source_arc(crate::plots::interaction::PreparedInteractionInputs {
@@ -842,6 +881,7 @@ pub(crate) fn prepare_scatter_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::Scatter,
+        heatmap: None,
         bars: None,
         interaction: None,
         distributions: None,
@@ -895,6 +935,7 @@ pub(crate) fn prepare_line_plot(
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
         route: InteriorRoute::classify(source.kind()),
+        heatmap: None,
         bars: None,
         interaction: None,
         distributions: None,
@@ -1175,7 +1216,14 @@ fn prepare(
             [super::domain_with_data(chart, data)?, slots]
         }
         PlotKind::Heatmap => {
-            let [x, y] = crate::plots::heatmap::axis_categories(chart, data)?;
+            let marks = reference_config
+                .as_ref()
+                .and_then(|config| config.heatmap)
+                .ok_or_else(|| Error::Render("heatmap axes require retained semantics".into()))?;
+            let x =
+                data.collect_source(marks.x_levels.iter().map(|s| data.copy_source_string(s)))?;
+            let y =
+                data.collect_source(marks.y_levels.iter().map(|s| data.copy_source_string(s)))?;
             let ranges = [(0.0, x.len() as f64), (0.0, y.len() as f64)];
             categories = [Some(x), Some(y)];
             ranges
@@ -1237,15 +1285,17 @@ fn prepare(
     for side in 0..2 {
         validate_range(ranges[side])?;
         if let Some(levels) = categories[side].take() {
-            display_categories[side] = Some(chart.resolve_axis_label_domain(
-                if side == 0 {
-                    "x-axis categories"
-                } else {
-                    "y-axis categories"
-                },
-                levels.iter().map(String::as_str),
-                data,
-            )?);
+            let domain = if side == 0 {
+                "x-axis categories"
+            } else {
+                "y-axis categories"
+            };
+            let raw_labels = levels.iter().map(String::as_str);
+            display_categories[side] = Some(if let Some(policy) = labels {
+                policy.resolve_domain_source(domain, raw_labels, Some(data))?
+            } else {
+                chart.resolve_axis_label_domain(domain, raw_labels, data)?
+            });
             let reverse = side == 1
                 && matches!(
                     chart.kind(),
@@ -1355,6 +1405,7 @@ mod tests {
                     // restriction on combining supplemental guides with faceting.
                     prepare_plot(plot, &stage.generation_resources())?;
                     let requirements = crate::layout::foundational_plot_requirements(
+                        None,
                         plot,
                         plot.kind(),
                         &theme,

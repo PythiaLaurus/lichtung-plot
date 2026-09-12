@@ -1822,6 +1822,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
                     | PlotKind::Violin
                     | PlotKind::Raincloud
                     | PlotKind::Interaction
+                    | PlotKind::Heatmap
             ) {
                 &prepared
             } else {

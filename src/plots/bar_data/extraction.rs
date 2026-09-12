@@ -446,6 +446,7 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
                 let requirements = crate::layout::foundational_plot_requirements(
+                    None,
                     &source,
                     source.kind(),
                     &theme,

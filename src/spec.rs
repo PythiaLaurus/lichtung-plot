@@ -268,6 +268,7 @@ impl NumericLabelFormat {
         self.precision
     }
 
+    #[cfg(test)]
     pub(crate) fn format(&self, value: f64) -> String {
         self.display(value).to_string()
     }
