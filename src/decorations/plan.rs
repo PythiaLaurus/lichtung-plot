@@ -163,7 +163,7 @@ pub(crate) fn plan_panel_with_context(
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
     let minimum = if crate::layout::interior::InteriorRoute::classify(kind).is_native() {
-        crate::layout::interior::standard::Intrinsics::new(plot, context.theme)?.minimum_body
+        crate::layout::interior::coordinate::Intrinsics::new(plot, context.theme)?.minimum_body
     } else {
         DeferredLegacyPanelMinimum::SIZE
     };
@@ -519,7 +519,7 @@ fn plan_panel_attempt(
     let context = context.with_fit_scope(&scope);
     let native = crate::layout::interior::InteriorRoute::classify(kind).is_native();
     let minimum = if native {
-        crate::layout::interior::standard::Intrinsics::new(plot, context.theme)?.minimum_body
+        crate::layout::interior::coordinate::Intrinsics::new(plot, context.theme)?.minimum_body
     } else {
         DeferredLegacyPanelMinimum::SIZE
     };

@@ -165,6 +165,8 @@ fn projected_x_ticks(
                     tick.position
                 )));
                 }
+                #[cfg(test)]
+                super::measurements::count(super::measurements::Counter::ForestRawTickProjection);
                 tick.position.log10()
             };
             Ok(AxisTick::new(position, data.copy_source_string(&tick.label)?))

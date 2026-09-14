@@ -33,10 +33,12 @@ pub(crate) enum Counter {
     StandardPanelIntrinsic,
     StandardCoordinateMeasure,
     LegacyPanelConstructor,
+    OneCategoricalAxisMeasure,
+    ForestRawTickProjection,
 }
 
 impl Counter {
-    pub(crate) const ALL: [Self; 27] = [
+    pub(crate) const ALL: [Self; 29] = [
         Self::GuideTrial,
         Self::GuideBodyCheck,
         Self::InsideLegendCandidate,
@@ -64,6 +66,8 @@ impl Counter {
         Self::StandardPanelIntrinsic,
         Self::StandardCoordinateMeasure,
         Self::LegacyPanelConstructor,
+        Self::OneCategoricalAxisMeasure,
+        Self::ForestRawTickProjection,
     ];
 
     pub(crate) const fn name(self) -> &'static str {
@@ -95,6 +99,8 @@ impl Counter {
             Self::StandardPanelIntrinsic => "StandardPanelIntrinsic",
             Self::StandardCoordinateMeasure => "StandardCoordinateMeasure",
             Self::LegacyPanelConstructor => "LegacyPanelConstructor",
+            Self::OneCategoricalAxisMeasure => "OneCategoricalAxisMeasure",
+            Self::ForestRawTickProjection => "ForestRawTickProjection",
         }
     }
 }

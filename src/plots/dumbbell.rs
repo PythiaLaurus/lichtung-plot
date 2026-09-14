@@ -57,9 +57,10 @@ impl DumbbellPayload {
     }
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
@@ -74,8 +75,6 @@ pub(crate) fn measure(
         })
         .map(|(_, prepared)| prepared)
         .ok_or_else(|| Error::Render("Dumbbell requires root-prepared semantics".into()))?;
-    let layout = context
-        .axis_layout(|| Err(Error::Render("Dumbbell requires root-prepared axes".into()).into()))?;
     let resources = context
         .theme
         .prepared_font_environment()?
@@ -147,18 +146,6 @@ fn project(
         geometry,
     })?);
     Ok(result)
-}
-
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(
-        Error::Render("Dumbbell requires prepared measurement or selected payload capture".into())
-            .into(),
-    )
 }
 
 pub(crate) fn shared_x_domain(
@@ -527,10 +514,12 @@ mod tests {
         reason = "root preparation, measurement, poisoned capture and both frozen replays share the same test operation"
     )]
     fn selected_capture_does_not_read_project_or_shape() {
+        use crate::orchestrator::measurements::{self, Counter};
         let source = source().erase();
         let theme = crate::Theme::Publication.resolve();
         STAGES.with(|counts| counts.set([0; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
         let root = crate::layout::plan_exact_root(
             640,
             480,
@@ -591,6 +580,7 @@ mod tests {
                 let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
                 let projections = crate::layout::Projection::test_projection_calls();
                 let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+                measurements::start();
                 let captured = crate::orchestrator::capture_text_replay_plan(
                     640,
                     480,
@@ -608,6 +598,21 @@ mod tests {
                         selected.axes.as_ref().unwrap().draw(backend)
                     },
                 )?;
+                let work = measurements::finish();
+                for counter in [
+                    Counter::StandardPanelIntrinsic,
+                    Counter::OneCategoricalAxisMeasure,
+                    Counter::LegacyPanelConstructor,
+                    Counter::AxisRangePreparation,
+                    Counter::AxisSpecPreparation,
+                    Counter::AxisSourcePreparation,
+                    Counter::TickSource,
+                    Counter::TickMetricLookup,
+                    Counter::TextProposalVisit,
+                    Counter::TextExactTrial,
+                ] {
+                    assert_eq!(work.counters[counter as usize], 0, "{counter:?}");
+                }
                 assert_eq!(
                     crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                     reads
@@ -627,6 +632,10 @@ mod tests {
         assert_eq!(STAGES.with(std::cell::Cell::get), [1, 1, 1, 1]);
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(std::cell::Cell::get),
             0
         );
         crate::orchestrator::validate_text_replay_plan(

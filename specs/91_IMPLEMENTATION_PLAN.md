@@ -255,8 +255,8 @@ The approved theme and layout targets follow these rules:
 | T5a6b | Standard-coordinate ordinary Plot migration | COMPLETE |
 | T5a6b1 | Standard point and path families | COMPLETE |
 | T5a6b2 | Standard distribution and reference families | COMPLETE |
-| T5a6c | One-categorical-axis ordinary Plot migration | PENDING |
-| T5a6c1 | Estimate-display families | PENDING |
+| T5a6c | One-categorical-axis ordinary Plot migration | IN PROGRESS |
+| T5a6c1 | Estimate-display families | COMPLETE |
 | T5a6c2 | Bar families | PENDING |
 | T5a6c3 | Categorical distribution families | PENDING |
 | T5a6c4 | Interaction family | PENDING |
@@ -4613,8 +4613,10 @@ umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
 T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
-routes are native. T5a6 and T5a remain IN PROGRESS. T5a6c and T5a6d remain PENDING;
-no stage C successor is started. T5b tracks and public T6 APIs/defaults remain deferred.
+routes are native. T5a6c1 is COMPLETE with four native `OneCategoricalAxis` routes,
+for twelve native ordinary routes in total. T5a6, T5a, and T5a6c remain IN PROGRESS.
+T5a6c2-c4 and T5a6d remain PENDING. T5b tracks and public T6 APIs/defaults remain
+deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -5305,8 +5307,9 @@ umbrella has no separate commit and completes only after both clusters.
 Completion evidence (2026-09-14): both clusters are COMPLETE. Scatter, Line,
 Trajectory, LinePath, Histogram, Density, Qq, and Regression use the common native
 standard-coordinate producer; their eight legacy variants are removed. Final
-primary verification and independent review evidence are recorded below. T5a6c
-and its four clusters remain PENDING; T5a6 and T5a remain IN PROGRESS.
+primary verification and independent review evidence are recorded below. At that
+completion, T5a6c and its four clusters remained PENDING; current stage C progress
+is recorded below. T5a6 and T5a remain IN PROGRESS.
 
 Requirements shared by both clusters:
 
@@ -5509,8 +5512,9 @@ Evidence:
 Completion evidence (from clean `13ebe09`, verified 2026-09-14): COMPLETE.
 Final primary `just verify` passed in `/tmp/opencode/t5a6b2-verify.log`.
 Independent review reported no actionable new bugs. T5a6b is also COMPLETE:
-all eight standard-coordinate routes are native. T5a6c and all four stage C
-clusters remain PENDING; no successor is started.
+all eight standard-coordinate routes are native. At that completion, T5a6c and
+all four stage C clusters remained PENDING; current stage C progress is recorded
+below.
 
 - Added Histogram, Density, Qq, and Regression to `StandardCoordinate`, removed
   their four legacy interior/dispatch variants, and made the legacy context
@@ -5576,13 +5580,17 @@ Commit: `refactor(layout): migrate distribution reference plans`.
 
 #### T5a6c: One-Categorical-Axis Ordinary Plot Migration
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: T5a6b2.
 
 Objective: migrate the ordinary categorical family through one orientation-aware
 producer in T5a6c1-T5a6c4. This umbrella has no separate commit and completes only
 after all four clusters.
+
+Progress evidence (2026-09-14): T5a6c1 is COMPLETE; PointInterval, Coefficient,
+Forest, and Dumbbell are native `OneCategoricalAxis` routes. T5a6c remains
+IN PROGRESS because T5a6c2-c4 remain PENDING; no successor cluster is started.
 
 Requirements shared by all four clusters:
 
@@ -5600,7 +5608,7 @@ Requirements shared by all four clusters:
 
 ##### T5a6c1: Estimate-Display Families
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6b2.
 
@@ -5619,6 +5627,85 @@ Evidence:
 - Per-family route, orientation, unavailable-row, exact-size, Forest Log10,
   deferred annotation/domain consequence, frozen-plan, lifecycle, and snapshot
   evidence; `just verify` passes.
+
+Completion evidence (from clean `2287bba`, verified 2026-09-14): COMPLETE.
+Final primary `just verify` passed in `/tmp/opencode/t5a6c1-verify.log` on the
+retry with a 300000 ms timeout. Independent review reported no actionable
+findings. T5a6c remains IN PROGRESS; T5a6c2-c4 remain PENDING and no successor
+cluster is started.
+
+- PointInterval, Coefficient, Forest, and Dumbbell now classify as native
+  `OneCategoricalAxis`; exactly their four `CategoricalLegacy` variants are
+  removed. Together with the eight `StandardCoordinate` routes, twelve ordinary
+  routes are native. Eight categorical and five specialized legacy routes remain.
+  The closed route macro covers both native classifications and the remaining
+  adapters without wildcard PlotKind dispatch.
+- Generalized the existing `standard.rs` producer as `coordinate.rs`, rather
+  than copying it. Both native classifications share orientation-aware prepared
+  source consumption, intrinsics, exact frame allocation, axis freezing, and
+  mark-layout injection. Vertical category hard slots use actual unwrapped text
+  heights, including mandatory lines; horizontal slots and hard title spans keep
+  the corrected standard policy. Absolute replaceable measured gutters and
+  independent root title/caption reserves are unchanged.
+- The T5a6a3c admitted semantic preparation and mark projection algorithms remain
+  unchanged. `interval_estimate::measure_marks` and `dumbbell::measure_marks`
+  receive the selected `Layout` only after both axes freeze. Their family-local
+  `axis_layout` calls and combined-dispatch stubs are removed. The legacy context
+  constructor rejects all twelve native kinds; Forest's sole logarithmic
+  preliminary source now feeds the native boundary directly. Exact raw ticks
+  retain their once-prepared transformed positions and verbatim labels.
+- Existing extraction tests retain partial/all-unavailable rows, optional
+  Coefficient intervals, fixed-facet/shared limits, exact all-unavailable limits,
+  status failures, and selected payload/geometry parity. Expanded common tests
+  cover all four new routes at default and multiple exact sizes with long labels,
+  title/caption clearance, contracting gutters, exact tick fit misses, missing
+  preparation rejection, exact resource caps, and refusal before projection or
+  GeometryBackend construction. Invalid exact sources for every new route reject
+  before unavailable-font setup.
+- New per-family tests assert top-first categorical midpoint and raw/display
+  identity, authoritative prepared category ranges even under parent numeric
+  overrides, changed assigned projections, real facet/shared-Canvas gutter
+  feedback and cache-on/off SVG identity. The common retained-child test also
+  exercises these four routes with cache hits, changed assignments/domains,
+  rejected ancestor trials, feedback replay, and cumulative resource charging.
+  Poisoned capture counts no source reads, projection, native measurement,
+  intrinsic work, tick selection, or shaping. A dedicated raw-Forest-tick counter
+  distinguishes preparation from selected measurement/capture. Final storage
+  refusal precedes Null begin; each successful root has one Null lifecycle.
+- Four new inspected SVG snapshots and PNG previews use exact 641x401 roots,
+  long categories, three-line x titles and separate two-line captions:
+  `visual_regression__native_point_interval.snap`,
+  `visual_regression__native_coefficient.snap`,
+  `visual_regression__native_forest.snap`, and
+  `visual_regression__native_dumbbell.snap`. The first three clips are
+  `(188,51,432,194)`; Dumbbell's outside legend leaves
+  `(188,51,349.833984375,194)`. Existing fifteen snapshots are unchanged; all
+  nineteen pass read-only. Keep these snapshots with the source change.
+- Focused verification passed 48 library tests and 169 integration tests
+  (categorical 44, composition 57, estimates 38, layout 20, visual regression 10).
+  The final full verification below supersedes the initial verification-pending
+  status.
+- `DeferredLegacyPanelMinimum`, current mark/annotation consequences, and parent
+  track adapters remain deferred to their existing T5c/T5b boundaries. No public
+  API, sizing mode, track policy, or post-T5a geometry policy is added. T5a6c2-c4,
+  T5a6d, and T5b onward are not started.
+
+Final primary `just verify` in `/tmp/opencode/t5a6c1-verify.log` passed in full:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 941 passed, 0 failed, 17 ignored (958 total).
+- All 452 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 10. Those ten visual tests cover all 19 snapshots: four new retained
+  snapshots and 15 unchanged existing snapshots.
+- In total, 1,393 tests passed with no failures and 17 ignored (1,410 total).
+  Four example targets ran zero tests. Warning-denied API documentation and
+  offline package verification passed for 254 files (7.0 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate estimate display plans`.
 

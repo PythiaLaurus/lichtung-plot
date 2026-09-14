@@ -1,7 +1,7 @@
-//! Native standard-coordinate panels. Parents allocate the frame; this producer
+//! Native coordinate panels. Parents allocate the frame; this common producer
 //! selects its axes once and hands the resulting projection to retained marks.
 
-use super::{DeferredLegacyPanelMinimum, InteriorRoute, StandardCoordinate};
+use super::{DeferredLegacyPanelMinimum, InteriorRoute, OneCategoricalAxis, StandardCoordinate};
 use crate::layout::fit::{self, FitKind, PlanError};
 use crate::layout::{Axis, AxisSide, Layout, PanelBox, Projection, StandardPanelInputs};
 use crate::spec::{AxisDomain, PlotRenderContext, PlotRenderResult};
@@ -21,7 +21,7 @@ impl Intrinsics {
             crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
         );
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
-            Error::Render("native standard panel requires root-prepared axes".into())
+            Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
         let standard = StandardPanelInputs::new(theme)?;
         let mut minimum_body = DeferredLegacyPanelMinimum::SIZE;
@@ -43,19 +43,29 @@ impl Intrinsics {
                 let mut category_pitch = 0.0_f64;
                 for label in labels {
                     if !label.is_empty() {
-                        let (hard, _) = fit::intrinsic_widths(
-                            theme,
-                            label,
-                            &standard.tick_label,
-                            "standard panel tick label intrinsic",
-                        )?;
-                        category_pitch = category_pitch.max(
-                            if side == 0 {
-                                hard
-                            } else {
-                                standard.tick_label.line_height()
-                            } + 2.0 * crate::layout::panel::LABEL_CLEARANCE,
-                        );
+                        let parallel = if side == 0 {
+                            fit::intrinsic_widths(
+                                theme,
+                                label,
+                                &standard.tick_label,
+                                "coordinate panel tick label intrinsic",
+                            )?
+                            .0
+                        } else {
+                            // Mandatory lines and actual font metrics, not a
+                            // nominal single-line height, constrain row slots.
+                            theme
+                                .measure_text(
+                                    label,
+                                    &standard.tick_label,
+                                    crate::layout::PhysicalTextAlignment::Center,
+                                    "coordinate panel tick label intrinsic",
+                                    false,
+                                )?
+                                .height()
+                        };
+                        category_pitch = category_pitch
+                            .max(parallel + 2.0 * crate::layout::panel::LABEL_CLEARANCE);
                     }
                 }
                 let span = category_pitch
@@ -77,7 +87,7 @@ impl Intrinsics {
     }
 }
 
-impl StandardCoordinate {
+impl InteriorRoute {
     #[expect(
         clippy::too_many_lines,
         reason = "one native boundary freezes both sibling axes before projecting retained marks"
@@ -88,22 +98,40 @@ impl StandardCoordinate {
         context: PlotRenderContext<'_>,
     ) -> Result<PlotRenderResult, PlanError> {
         #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
-        );
-        InteriorRoute::StandardCoordinate(self).validate(plot)?;
+        crate::orchestrator::measurements::count(match self {
+            Self::OneCategoricalAxis(_) => {
+                crate::orchestrator::measurements::Counter::OneCategoricalAxisMeasure
+            }
+            _ => crate::orchestrator::measurements::Counter::StandardCoordinateMeasure,
+        });
+        self.validate(plot)?;
         let inputs = plot.prepared_axis_inputs().ok_or_else(|| {
-            Error::Render("native standard panel requires root-prepared axes".into())
+            Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
-        // Only Trajectory has a conditional categorical source, always bottom.
-        if inputs.logarithmic
-            || inputs.categories[1].is_some()
-            || (inputs.categories[0].is_some() && self != Self::Trajectory)
-        {
-            return Err(Error::Render(
-                "invalid native standard-coordinate axis orientation".into(),
-            )
-            .into());
+        let valid = match self {
+            Self::StandardCoordinate(family) => {
+                !inputs.logarithmic
+                    && inputs.categories[1].is_none()
+                    && (inputs.categories[0].is_none() || family == StandardCoordinate::Trajectory)
+            }
+            Self::OneCategoricalAxis(family) => {
+                // The prepared source owns orientation and midpoint order. New
+                // categorical clusters reuse this boundary without rebuilding it.
+                let category_side = match family {
+                    OneCategoricalAxis::PointInterval
+                    | OneCategoricalAxis::Coefficient
+                    | OneCategoricalAxis::Forest
+                    | OneCategoricalAxis::Dumbbell => 1,
+                };
+                inputs.categories[category_side].is_some()
+                    && inputs.categories[1 - category_side].is_none()
+                    && (!inputs.logarithmic
+                        || (family == OneCategoricalAxis::Forest && inputs.categories[0].is_none()))
+            }
+            Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => false,
+        };
+        if !valid {
+            return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
         let intrinsics = Intrinsics::new(plot, context.theme)?;
         let panel = context.panel;
@@ -118,13 +146,18 @@ impl StandardCoordinate {
                 .fit_scope()
                 .failure(
                     FitKind::TrackOrResidual,
-                    "assigned standard panel is smaller than its foundational intrinsics",
+                    "assigned coordinate panel is smaller than its foundational intrinsics",
                 )
                 .into());
         }
-        let context = context.with_prepared_axes(plot);
-        let [x_range, y_range] = [AxisSide::Bottom, AxisSide::Left]
-            .map(|side| context.axis_range(side, || unreachable!("prepared native axes")));
+        let [x_range, y_range] = [AxisSide::Bottom, AxisSide::Left].map(|side| {
+            let index = usize::from(side == AxisSide::Left);
+            if inputs.categories[index].is_some() {
+                Ok(inputs.ranges[index])
+            } else {
+                context.axis_range(side, || unreachable!("prepared native axes"))
+            }
+        });
         let projection = Projection::new(x_range?, y_range?, panel.as_tuple());
         let resources = context
             .theme
@@ -141,7 +174,7 @@ impl StandardCoordinate {
         });
         let mut axes = fit::collect(
             context.theme,
-            "standard coordinate axes",
+            "native coordinate axes",
             (0..2).map(|side| {
                 let supplied = if let Some(categories) = &inputs.categories[side] {
                     let display = inputs.display_categories[side].as_ref().ok_or_else(|| {
@@ -169,17 +202,30 @@ impl StandardCoordinate {
                 } else {
                     Vec::new()
                 };
-                let ticks = inputs.specs[side].layout_ticks(
-                    supplied,
-                    &projection,
-                    if side == 0 {
-                        AxisSide::Bottom
-                    } else {
-                        AxisSide::Left
-                    },
-                    context.theme,
-                    context.fit_scope(),
-                )?;
+                let ticks = if side == 0
+                    && inputs.logarithmic
+                    && inputs.specs[side].exact_ticks.is_none()
+                {
+                    crate::plots::interval_estimate::log_tick_plan(
+                        projection.x_range(),
+                        inputs.specs[side].interval,
+                        panel,
+                        context.theme,
+                        context.fit_scope(),
+                    )?
+                } else {
+                    inputs.specs[side].layout_ticks(
+                        supplied,
+                        &projection,
+                        if side == 0 {
+                            AxisSide::Bottom
+                        } else {
+                            AxisSide::Left
+                        },
+                        context.theme,
+                        context.fit_scope(),
+                    )?
+                };
                 Ok(Axis {
                     label: data.copy_source_string(&inputs.labels[side])?,
                     ticks: ticks.ticks,
@@ -203,14 +249,37 @@ impl StandardCoordinate {
             || Ok(intrinsics.standard),
         )?;
         let mut result = match self {
-            Self::Scatter => crate::plots::scatter::measure_marks(plot, context, layout)?,
-            Self::Line | Self::Trajectory | Self::LinePath => {
-                crate::plots::line::measure_marks(plot, context, layout)?
+            Self::StandardCoordinate(StandardCoordinate::Scatter) => {
+                crate::plots::scatter::measure_marks(plot, context, layout)?
             }
-            Self::Histogram => crate::plots::histogram::measure_marks(plot, context, layout)?,
-            Self::Density => crate::plots::density::measure_marks(plot, context, layout)?,
-            Self::Qq => crate::plots::qq::measure_marks(plot, context, layout)?,
-            Self::Regression => crate::plots::regression::measure_marks(plot, context, layout)?,
+            Self::StandardCoordinate(
+                StandardCoordinate::Line
+                | StandardCoordinate::Trajectory
+                | StandardCoordinate::LinePath,
+            ) => crate::plots::line::measure_marks(plot, context, layout)?,
+            Self::StandardCoordinate(StandardCoordinate::Histogram) => {
+                crate::plots::histogram::measure_marks(plot, context, layout)?
+            }
+            Self::StandardCoordinate(StandardCoordinate::Density) => {
+                crate::plots::density::measure_marks(plot, context, layout)?
+            }
+            Self::StandardCoordinate(StandardCoordinate::Qq) => {
+                crate::plots::qq::measure_marks(plot, context, layout)?
+            }
+            Self::StandardCoordinate(StandardCoordinate::Regression) => {
+                crate::plots::regression::measure_marks(plot, context, layout)?
+            }
+            Self::OneCategoricalAxis(
+                OneCategoricalAxis::PointInterval
+                | OneCategoricalAxis::Coefficient
+                | OneCategoricalAxis::Forest,
+            ) => crate::plots::interval_estimate::measure_marks(plot, context, layout)?,
+            Self::OneCategoricalAxis(OneCategoricalAxis::Dumbbell) => {
+                crate::plots::dumbbell::measure_marks(plot, context, layout)?
+            }
+            Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => {
+                unreachable!("native route validated")
+            }
         };
         result.axes = Some(frozen);
         [result.x_tick_keys, result.y_tick_keys] = keys;

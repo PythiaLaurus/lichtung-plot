@@ -66,7 +66,7 @@ impl Plot {
         if crate::layout::interior::InteriorRoute::classify(self.kind()).is_native()
             && !self.has_facets()
         {
-            return crate::layout::interior::standard::canvas_layout(self, theme)
+            return crate::layout::interior::coordinate::canvas_layout(self, theme)
                 .map_err(crate::layout::fit::PlanError::into_error);
         }
         let labels_present = self.axis_label_presence();

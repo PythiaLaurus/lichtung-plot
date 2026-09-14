@@ -1,6 +1,6 @@
 //! Closed interior boundary. All 25 families consume prepared semantics and
 //! selected payloads. Parent composition adapters remain separately classified.
-//! Standard-coordinate axes and frames use the common native producer.
+//! Native coordinate axes and frames share one orientation-aware producer.
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
@@ -9,35 +9,33 @@ use crate::spec::PlotRenderContext;
 use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{Error, Plot};
 
-pub(crate) mod standard;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StandardCoordinate {
-    Scatter,
-    Line,
-    Trajectory,
-    LinePath,
-    Histogram,
-    Density,
-    Qq,
-    Regression,
-}
+pub(crate) mod coordinate;
 
 macro_rules! interior_routes {
-    ($($class:ident { $($kind:ident => $renderer:path),+ $(,)? }),+ $(,)?) => {
+    (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }
+     legacy { $($class:ident { $($kind:ident => $renderer:path),+ $(,)? }),+ $(,)? }) => {
+        $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub(crate) enum $native { $($native_kind),+ })+
+
         $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub(crate) enum $class { $($kind),+ })+
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) enum InteriorRoute { StandardCoordinate(StandardCoordinate), $($class($class)),+ }
+        pub(crate) enum InteriorRoute { $($native($native),)+ $($class($class)),+ }
 
         impl InteriorRoute {
             pub(crate) const fn classify(kind: PlotKind) -> Self {
-                match kind { PlotKind::Scatter => Self::StandardCoordinate(StandardCoordinate::Scatter), PlotKind::Line => Self::StandardCoordinate(StandardCoordinate::Line), PlotKind::Trajectory => Self::StandardCoordinate(StandardCoordinate::Trajectory), PlotKind::LinePath => Self::StandardCoordinate(StandardCoordinate::LinePath), PlotKind::Histogram => Self::StandardCoordinate(StandardCoordinate::Histogram), PlotKind::Density => Self::StandardCoordinate(StandardCoordinate::Density), PlotKind::Qq => Self::StandardCoordinate(StandardCoordinate::Qq), PlotKind::Regression => Self::StandardCoordinate(StandardCoordinate::Regression), $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
+                match kind {
+                    $($(PlotKind::$native_kind => Self::$native($native::$native_kind),)+)+
+                    $($(PlotKind::$kind => Self::$class($class::$kind),)+)+
+                }
             }
 
             pub(crate) const fn kind(self) -> PlotKind {
-                match self { Self::StandardCoordinate(StandardCoordinate::Scatter) => PlotKind::Scatter, Self::StandardCoordinate(StandardCoordinate::Line) => PlotKind::Line, Self::StandardCoordinate(StandardCoordinate::Trajectory) => PlotKind::Trajectory, Self::StandardCoordinate(StandardCoordinate::LinePath) => PlotKind::LinePath, Self::StandardCoordinate(StandardCoordinate::Histogram) => PlotKind::Histogram, Self::StandardCoordinate(StandardCoordinate::Density) => PlotKind::Density, Self::StandardCoordinate(StandardCoordinate::Qq) => PlotKind::Qq, Self::StandardCoordinate(StandardCoordinate::Regression) => PlotKind::Regression, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
+                match self {
+                    $($(Self::$native($native::$native_kind) => PlotKind::$native_kind,)+)+
+                    $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+
+                }
             }
 
             /// Audit-only rejection of the removed combined execution route.
@@ -49,40 +47,45 @@ macro_rules! interior_routes {
                 backend: &mut dyn crate::render::backend::Backend,
             ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
                 self.validate(plot)?;
-                match self { Self::StandardCoordinate(_) => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
+                match self {
+                    $(Self::$native(_) => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()),)+
+                    $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+
+                }
             }
         }
     };
 }
 
 interior_routes! {
-    CategoricalLegacy {
-        Interaction => crate::plots::interaction::reject_combined,
-        PointInterval => crate::plots::interval_estimate::reject_combined,
-        Coefficient => crate::plots::interval_estimate::reject_combined,
-        Forest => crate::plots::interval_estimate::reject_combined,
-        Dumbbell => crate::plots::dumbbell::reject_combined,
-        Bar => crate::plots::bar_data::reject_combined,
-        StackedBar => crate::plots::bar_data::reject_combined,
-        HorizontalBar => crate::plots::bar_data::reject_combined,
-        StackedHorizontalBar => crate::plots::bar_data::reject_combined,
-        Boxplot => crate::plots::categorical_distribution::reject_combined,
-        Violin => crate::plots::categorical_distribution::reject_combined,
-        Raincloud => crate::plots::categorical_distribution::reject_combined,
-    },
-    SpecializedLegacy {
-        Heatmap => crate::plots::heatmap::reject_combined,
-        Marginal => crate::plots::marginal::reject_combined,
-        Matrix => crate::plots::matrix::reject_combined,
-        Beeswarm => crate::plots::beeswarm::reject_combined,
-        Waterfall => crate::plots::waterfall::reject_combined,
-    },
+    native {
+        StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
+        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell },
+    }
+    legacy {
+        CategoricalLegacy {
+            Interaction => crate::plots::interaction::reject_combined,
+            Bar => crate::plots::bar_data::reject_combined,
+            StackedBar => crate::plots::bar_data::reject_combined,
+            HorizontalBar => crate::plots::bar_data::reject_combined,
+            StackedHorizontalBar => crate::plots::bar_data::reject_combined,
+            Boxplot => crate::plots::categorical_distribution::reject_combined,
+            Violin => crate::plots::categorical_distribution::reject_combined,
+            Raincloud => crate::plots::categorical_distribution::reject_combined,
+        },
+        SpecializedLegacy {
+            Heatmap => crate::plots::heatmap::reject_combined,
+            Marginal => crate::plots::marginal::reject_combined,
+            Matrix => crate::plots::matrix::reject_combined,
+            Beeswarm => crate::plots::beeswarm::reject_combined,
+            Waterfall => crate::plots::waterfall::reject_combined,
+        },
+    }
 }
 
 impl InteriorRoute {
     pub(crate) const fn is_native(self) -> bool {
         match self {
-            Self::StandardCoordinate(_) => true,
+            Self::StandardCoordinate(_) | Self::OneCategoricalAxis(_) => true,
             Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => false,
         }
     }
@@ -333,3 +336,6 @@ mod tests;
 
 #[cfg(test)]
 pub(crate) mod distributions;
+
+#[cfg(test)]
+pub(crate) mod estimates;

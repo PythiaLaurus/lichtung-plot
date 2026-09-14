@@ -2353,10 +2353,14 @@ mod tests {
     }
 
     #[test]
-    fn native_distribution_reference_preflight_gates_resources_before_the_only_null_lifecycle() {
+    fn native_distribution_and_estimate_preflight_gates_resources_before_the_only_null_lifecycle() {
         use crate::layout::interior::distributions::{sources, STAGES};
         use crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS;
-        for (family, source) in sources().into_iter().enumerate() {
+        for (family, source) in sources()
+            .into_iter()
+            .chain(crate::layout::interior::estimates::sources())
+            .enumerate()
+        {
             for payload in [
                 "canonical SVG body",
                 "canonical SVG document",
@@ -2374,6 +2378,8 @@ mod tests {
             }
             for small in [true, false] {
                 STAGES.with(|counts| counts.set([[0; 4]; 4]));
+                crate::plots::interval_estimate::STAGES.with(|counts| counts.set([[0; 4]; 3]));
+                crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
                 NULL_BEGIN_CALLS.with(|calls| calls.set(0));
                 let plot = if small {
                     source.clone().size(100, 100)
@@ -2383,7 +2389,12 @@ mod tests {
                 let result = plot.preflight();
                 assert_eq!(result.is_ok(), !small, "{result:?}");
                 NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), usize::from(!small)));
-                let counts = STAGES.with(std::cell::Cell::get)[family];
+                let counts = match family {
+                    0..=3 => STAGES.with(std::cell::Cell::get)[family],
+                    4..=6 => crate::plots::interval_estimate::STAGES.with(std::cell::Cell::get)
+                        [family - 4],
+                    _ => crate::plots::dumbbell::STAGES.with(std::cell::Cell::get),
+                };
                 assert_eq!(counts[0], 1);
                 assert_eq!(counts[3], usize::from(!small));
             }

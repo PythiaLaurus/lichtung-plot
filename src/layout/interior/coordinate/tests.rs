@@ -29,12 +29,18 @@ fn categorical_source() -> Plot {
     .erase()
 }
 
+fn all_sources() -> impl Iterator<Item = Plot> {
+    sources()
+        .into_iter()
+        .chain(super::super::estimates::sources())
+}
+
 #[test]
 fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves() {
     use crate::decorations::plan::{plan_panel_for_test, LegendRole};
     use crate::render::backend::Backend;
     use crate::render::geometry::GeometryBackend;
-    for source in sources().into_iter().chain([categorical_source()]) {
+    for source in all_sources().chain([categorical_source()]) {
         let source = source
             .x_label("First axis line\nSecond axis line\nThird axis line")
             .title("Root title\nSecond title line")
@@ -183,7 +189,7 @@ fn native_absolute_gutter_feedback_contracts_independently_of_multiline_caption(
     use crate::decorations::plan::{plan_panel, LegendRole};
     use crate::layout::kernel::FeedbackKind;
     use crate::layout::{AddressRole, ComponentAddress};
-    for source in sources().into_iter().chain([categorical_source()]) {
+    for source in all_sources().chain([categorical_source()]) {
         let source = source
             .caption("First caption line\nSecond caption line")
             .with_suppressed_legend();
@@ -249,8 +255,7 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
         CategoryValues::new("group", ["a", "a", "a"]).unwrap(),
     )
     .erase();
-    for (source, axis) in sources()
-        .into_iter()
+    for (source, axis) in all_sources()
         .flat_map(|source| {
             [
                 (source.clone().x_label(&word), 0),
@@ -312,7 +317,7 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
 
 #[test]
 fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() {
-    for source in sources().into_iter().chain([categorical_source()]) {
+    for source in all_sources().chain([categorical_source()]) {
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -329,6 +334,8 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         );
         crate::plots::scatter::STAGES.with(|counts| counts.set([0; 4]));
         crate::plots::line::STAGES.with(|counts| counts.set([[0; 4]; 3]));
+        crate::plots::interval_estimate::STAGES.with(|counts| counts.set([[0; 4]; 3]));
+        crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
         crate::layout::interior::distributions::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
@@ -353,6 +360,14 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         assert_eq!(
             crate::layout::interior::distributions::STAGES.with(std::cell::Cell::get),
             [[0; 4]; 4]
+        );
+        assert_eq!(
+            crate::plots::interval_estimate::STAGES.with(std::cell::Cell::get),
+            [[0; 4]; 3]
+        );
+        assert_eq!(
+            crate::plots::dumbbell::STAGES.with(std::cell::Cell::get),
+            [0; 4]
         );
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
@@ -622,7 +637,7 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 
 #[test]
 fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resource_caps() {
-    for source in sources() {
+    for source in all_sources() {
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -685,7 +700,10 @@ fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resourc
 
 #[test]
 fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout_backends() {
-    for source in sources() {
+    for source in all_sources() {
+        let source = source.labels(
+            crate::Labels::humanized().alias("after_visit", "A deliberately long category label"),
+        );
         for size in [None, Some((400, 300)), Some((801, 601))] {
             let plot = size.map_or_else(|| source.clone(), |(w, h)| source.clone().size(w, h));
             let (w, h) = size.unwrap_or((640, 480));
@@ -698,7 +716,11 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
             let work = measurements::finish();
             let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
             assert!(svg.contains(&format!("viewBox=\"0 0 {w} {h}\"")));
-            assert!(work.counters[Counter::StandardCoordinateMeasure as usize] > 0);
+            let counter = match InteriorRoute::classify(plot.kind()) {
+                InteriorRoute::OneCategoricalAxis(_) => Counter::OneCategoricalAxisMeasure,
+                _ => Counter::StandardCoordinateMeasure,
+            };
+            assert!(work.counters[counter as usize] > 0);
             assert!(work.counters[Counter::StandardPanelIntrinsic as usize] > 0);
             assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
             assert_eq!(
@@ -715,10 +737,16 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
 
 #[test]
 fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
-    for source in sources() {
-        let source = source
-            .with_planned_x_limits((0.0, 2.0))
-            .with_planned_y_limits((0.0, 4.0));
+    for source in all_sources() {
+        let source = source.with_planned_x_limits((0.0, 2.0));
+        let source = if matches!(
+            InteriorRoute::classify(source.kind()),
+            InteriorRoute::StandardCoordinate(_)
+        ) {
+            source.with_planned_y_limits((0.0, 4.0))
+        } else {
+            source
+        };
         let mut inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -727,7 +755,9 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
             crate::layout::AxisTick::new(0.0, "first"),
             crate::layout::AxisTick::new(2.0, "last"),
         ]);
-        axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
+        if axes.categories[1].is_none() {
+            axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
+        }
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication.resolve();
         let context =
@@ -741,14 +771,14 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
                 .unwrap()
                 .as_slice()
         );
-        assert_eq!(
-            selected.layout.y_axis.ticks,
-            plot.prepared_axis_inputs().unwrap().specs[1]
-                .exact_ticks
-                .as_ref()
-                .unwrap()
-                .as_slice()
-        );
+        if let Some(exact) = &plot.prepared_axis_inputs().unwrap().specs[1].exact_ticks {
+            assert_eq!(selected.layout.y_axis.ticks, *exact);
+        } else {
+            assert_eq!(
+                selected.layout.y_axis.source,
+                crate::layout::TickSource::SUPPLIED
+            );
+        }
         assert!(context
             .with_prepared_axes(&plot)
             .axis_layout(|| panic!("legacy fallback"))
@@ -770,16 +800,24 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
 
 #[test]
 fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks() {
-    for source in sources() {
-        let source = source
-            .with_planned_x_limits((0.0, 2.0))
-            .with_planned_y_limits((0.0, 4.0));
+    for source in all_sources() {
+        let source = source.with_planned_x_limits((0.0, 2.0));
+        let source = if matches!(
+            InteriorRoute::classify(source.kind()),
+            InteriorRoute::StandardCoordinate(_)
+        ) {
+            source.with_planned_y_limits((0.0, 4.0))
+        } else {
+            source
+        };
         let mut inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let axes = &mut std::sync::Arc::get_mut(&mut inputs.axes).unwrap()[0].1;
         axes.specs[0].exact_ticks = Some(vec![crate::layout::AxisTick::new(1.0, "W".repeat(200))]);
-        axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
+        if axes.categories[1].is_none() {
+            axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);
+        }
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication.resolve();
         let scope = fit::FitScope::new(
@@ -829,7 +867,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
     use crate::decorations::plan::LegendRole;
     use crate::layout::kernel::{FeedbackKind, TrialOutcome};
     use crate::layout::{AddressRole, ComponentAddress};
-    for source in sources().into_iter().chain([categorical_source()]) {
+    for source in all_sources().chain([categorical_source()]) {
         let mut outputs = Vec::new();
         for disabled in [false, true] {
             DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
@@ -920,7 +958,23 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &owner,
                     ))
                     .map_err(PlanError::into_error)?;
-                    assert_eq!(rejected.result.layout.projection.x_range(), (-10.0, 10.0));
+                    let axes = plot.prepared_axis_inputs().unwrap();
+                    assert_eq!(
+                        rejected.result.layout.projection.x_range(),
+                        if axes.categories[0].is_some() {
+                            axes.ranges[0]
+                        } else {
+                            (-10.0, 10.0)
+                        }
+                    );
+                    assert_eq!(
+                        rejected.result.layout.projection.y_range(),
+                        if axes.categories[1].is_some() {
+                            axes.ranges[1]
+                        } else {
+                            (-5.0, 5.0)
+                        }
+                    );
                     assert_ne!(first.panel_box, rejected.panel_box);
                     round.miss(
                         &owner,

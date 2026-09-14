@@ -232,7 +232,9 @@ impl Plot {
         });
         let context = context.with_prepared_axes(self);
         let mut result = match R::classify(self.kind()) {
-            R::StandardCoordinate(family) => family.measure(self, context)?,
+            route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {
+                route.measure(self, context)?
+            }
             R::SpecializedLegacy(S::Matrix) => crate::plots::matrix::measure(self, context)?,
             R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
             R::SpecializedLegacy(S::Heatmap) => crate::plots::heatmap::measure(self, context)?,
@@ -249,10 +251,6 @@ impl Plot {
             }
             R::CategoricalLegacy(C::HorizontalBar | C::StackedHorizontalBar) => {
                 crate::plots::horizontal_bar::measure(self, context)?
-            }
-            R::CategoricalLegacy(C::Dumbbell) => crate::plots::dumbbell::measure(self, context)?,
-            R::CategoricalLegacy(C::PointInterval | C::Coefficient | C::Forest) => {
-                crate::plots::interval_estimate::measure(self, context)?
             }
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
@@ -360,7 +358,7 @@ fn resolve_rendered_labels(
     if crate::layout::interior::InteriorRoute::classify(kind).is_native() {
         if result.axes.is_none() {
             return Err(
-                Error::Render("native standard panel is missing its frozen axes".into()).into(),
+                Error::Render("native coordinate panel is missing its frozen axes".into()).into(),
             );
         }
         if !result.legend_entries.is_empty() {

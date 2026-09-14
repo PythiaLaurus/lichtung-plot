@@ -140,18 +140,6 @@ impl EstimatePayload {
 }
 
 #[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(Error::Render(
-        "estimate displays require prepared measurement or selected payload capture".into(),
-    )
-    .into())
-}
-
-#[cfg(test)]
 thread_local! {
     pub(crate) static STAGES: std::cell::Cell<[[usize; 4]; 3]> = const { std::cell::Cell::new([[0; 4]; 3]) };
 }
@@ -605,9 +593,10 @@ fn prepare_model<'a>(
     })
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(chart.kind(), 1);
@@ -624,9 +613,6 @@ pub(crate) fn measure(
         .ok_or_else(|| {
             Error::Render("estimate measurement requires root-prepared semantics".into())
         })?;
-    let layout = context.axis_layout(|| {
-        Err(Error::Render("estimate measurement requires root-prepared axes".into()).into())
-    })?;
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);

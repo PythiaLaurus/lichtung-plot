@@ -166,6 +166,91 @@ fn matrix_clip_structure_snapshot() {
 }
 
 #[test]
+fn native_estimate_display_snapshots() {
+    use lichtung_plot::{
+        AxisScale, AxisTick, Bounds, CoefficientInput, DumbbellEndpoints, EstimateStatus,
+        Significance, SignificanceMark,
+    };
+    let terms = CategoryValues::new(
+        "term",
+        [
+            "a deliberately long category",
+            "unavailable row",
+            "last visit",
+        ],
+    )
+    .unwrap();
+    let values = NumericValues::nullable("estimate", [Some(2.0), None, Some(8.0)]);
+    let bounds = Bounds::new(
+        NumericValues::nullable("lower", [Some(1.0), None, Some(4.0)]),
+        NumericValues::nullable("upper", [Some(4.0), None, Some(12.0)]),
+    );
+    let statuses = [
+        EstimateStatus::Estimated,
+        EstimateStatus::NotEstimable,
+        EstimateStatus::Estimated,
+    ];
+    let plots = [
+        (
+            "point_interval",
+            Plot::point_interval(terms.clone(), values.clone(), bounds.clone())
+                .estimate_status(statuses)
+                .zero_line()
+                .x_limits(-2.0, 15.0)
+                .erase(),
+        ),
+        (
+            "coefficient",
+            Plot::coefficient(terms.clone(), CoefficientInput::estimates(values.clone()))
+                .estimate_status(statuses)
+                .significance([Significance::at("last visit", SignificanceMark::TwoStars)])
+                .erase(),
+        ),
+        (
+            "forest",
+            Plot::forest(terms.clone(), values, bounds, 1.0)
+                .estimate_status(statuses)
+                .scale(AxisScale::Log10)
+                .x_limits(0.1, 100.0)
+                .x_ticks(vec![
+                    AxisTick::new(0.1, "0.1"),
+                    AxisTick::new(1.0, "1"),
+                    AxisTick::new(10.0, "10"),
+                    AxisTick::new(100.0, "100"),
+                ])
+                .erase(),
+        ),
+        (
+            "dumbbell",
+            Plot::dumbbell(
+                terms,
+                NumericValues::new("before", [2.0, 4.0, 8.0]),
+                NumericValues::new("after", [4.0, 3.0, 6.0]),
+                DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40)).unwrap(),
+            )
+            .erase(),
+        ),
+    ];
+    for (name, plot) in plots {
+        let out = tempdir().join(format!("native-{name}.svg"));
+        plot.size(641, 401)
+            .title("Native estimate displays")
+            .x_label("First axis line\nSecond axis line\nThird axis line")
+            .caption("Independent caption\nSecond caption line")
+            .svg_preserve_text(&out)
+            .unwrap()
+            .png_preview(out.with_extension("png"))
+            .unwrap();
+        assert_eq!(
+            png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+            (641, 401)
+        );
+        let svg = std::fs::read_to_string(out).unwrap();
+        insta::assert_snapshot!(format!("native_{name}"), normalize_embedded_font(&svg));
+    }
+}
+
+#[test]
 fn beeswarm_clip_structure_snapshot() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);

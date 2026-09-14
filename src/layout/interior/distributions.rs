@@ -434,14 +434,16 @@ fn invalid_statistics_and_exact_sources_reject_before_unavailable_fonts() {
         )
         .erase(),
     ];
-    for source in invalid
-        .into_iter()
-        .chain(sources().into_iter().map(|source| {
-            source
-                .with_planned_x_limits((0.0, 1.0))
-                .with_test_axis_ticks(0, vec![crate::AxisTick::new(2.0, "outside")])
-        }))
-    {
+    for source in invalid.into_iter().chain(
+        sources()
+            .into_iter()
+            .chain(super::estimates::sources())
+            .map(|source| {
+                source
+                    .with_planned_x_limits((0.0, 1.0))
+                    .with_test_axis_ticks(0, vec![crate::AxisTick::new(2.0, "outside")])
+            }),
+    ) {
         let mut theme = crate::Theme::Publication.resolve();
         theme.typography.tick_label.stack = "Lichtung unavailable T5a6a3b 901e".into();
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));

@@ -1039,17 +1039,17 @@ impl<'a> PlotRenderContext<'a> {
                     | PlotKind::Histogram
                     | PlotKind::Density
                     | PlotKind::Qq
-                    | PlotKind::Regression => {
-                        return Err(Error::Render(
-                            "native axes require the standard-coordinate producer".into(),
-                        )
-                        .into())
-                    }
-                    PlotKind::Interaction
+                    | PlotKind::Regression
                     | PlotKind::PointInterval
                     | PlotKind::Coefficient
                     | PlotKind::Forest
-                    | PlotKind::Dumbbell => true,
+                    | PlotKind::Dumbbell => {
+                        return Err(Error::Render(
+                            "native axes require the coordinate producer".into(),
+                        )
+                        .into())
+                    }
+                    PlotKind::Interaction => true,
                     PlotKind::Bar
                     | PlotKind::StackedBar
                     | PlotKind::HorizontalBar
@@ -1070,33 +1070,18 @@ impl<'a> PlotRenderContext<'a> {
                         .generation_resources();
                     let data = self.data.with_axis_resources(&resources);
                     let x_spec = &axes.specs[0];
-                    let log = if axes.logarithmic && x_spec.exact_ticks.is_none() {
-                        Some(crate::plots::interval_estimate::log_tick_plan(
-                            self.prepared_limits[0].unwrap_or(axes.ranges[0]),
-                            x_spec.interval,
-                            self.panel,
-                            self.theme,
-                            self.fit_scope,
-                        )?)
-                    } else {
-                        None
-                    };
-                    let source = log.as_ref().map(|plan| plan.source);
-                    let mut layout = self.layout_with_ticks(
+                    let layout = self.layout_with_ticks(
                         axes.ranges[0],
                         axes.ranges[1],
                         self.panel,
                         data.copy_source_string(&axes.labels[0])?,
                         data.copy_source_string(&axes.labels[1])?,
-                        log.map_or_else(Vec::new, |plan| plan.ticks),
+                        Vec::new(),
                         Vec::new(),
                         x_spec,
                         &axes.specs[1],
                         self.theme,
                     )?;
-                    if let Some(source) = source {
-                        layout.x_axis.source = source;
-                    }
                     return Ok(layout);
                 }
             }

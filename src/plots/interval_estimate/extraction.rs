@@ -529,6 +529,7 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
     {
         STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
         let theme = crate::Theme::Publication.resolve();
         let root = crate::layout::plan_exact_root(
             640,
@@ -624,6 +625,10 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
                     assert_eq!(&before[..3], &after[..3]);
                 }
                 for counter in [
+                    Counter::StandardPanelIntrinsic,
+                    Counter::OneCategoricalAxisMeasure,
+                    Counter::ForestRawTickProjection,
+                    Counter::LegacyPanelConstructor,
                     Counter::AxisRangePreparation,
                     Counter::AxisSpecPreparation,
                     Counter::AxisSourcePreparation,
@@ -649,6 +654,10 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
         );
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(std::cell::Cell::get),
             0
         );
         crate::orchestrator::validate_text_replay_plan(
