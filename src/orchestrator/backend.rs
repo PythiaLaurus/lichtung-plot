@@ -2353,6 +2353,44 @@ mod tests {
     }
 
     #[test]
+    fn native_distribution_reference_preflight_gates_resources_before_the_only_null_lifecycle() {
+        use crate::layout::interior::distributions::{sources, STAGES};
+        use crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS;
+        for (family, source) in sources().into_iter().enumerate() {
+            for payload in [
+                "canonical SVG body",
+                "canonical SVG document",
+                "canonical SVG replacements",
+                "canonical SVG scopes",
+                "final Null scopes",
+            ] {
+                NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+                GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
+                crate::render::svg_backend::REFUSE_STORAGE.with(|refuse| refuse.set(Some(payload)));
+                let error = source.preflight().unwrap_err();
+                assert!(error.to_string().contains(payload), "{error}");
+                NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+                GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| assert_eq!(calls.get(), 0));
+            }
+            for small in [true, false] {
+                STAGES.with(|counts| counts.set([[0; 4]; 4]));
+                NULL_BEGIN_CALLS.with(|calls| calls.set(0));
+                let plot = if small {
+                    source.clone().size(100, 100)
+                } else {
+                    source.clone()
+                };
+                let result = plot.preflight();
+                assert_eq!(result.is_ok(), !small, "{result:?}");
+                NULL_BEGIN_CALLS.with(|calls| assert_eq!(calls.get(), usize::from(!small)));
+                let counts = STAGES.with(std::cell::Cell::get)[family];
+                assert_eq!(counts[0], 1);
+                assert_eq!(counts[3], usize::from(!small));
+            }
+        }
+    }
+
+    #[test]
     fn raw_text_capture_is_immutable_and_svg_replay_uses_only_planned_calls() {
         let theme = crate::Theme::Publication.resolve();
         let style = replay_text_style(&theme);

@@ -90,6 +90,61 @@ fn native_path_snapshots() {
 }
 
 #[test]
+fn native_distribution_reference_snapshots() {
+    let x = NumericValues::new("sample", [1.0, 2.0, 4.0, 5.0, 7.0, 8.0]);
+    let plots = [
+        (
+            "histogram",
+            Plot::histogram(lichtung_plot::HistogramInput::samples(x.clone()))
+                .bins(lichtung_plot::HistogramBins::Count(8))
+                .stat(lichtung_plot::HistogramStat::Density)
+                .composite(lichtung_plot::HistogramComposite::KdeAndRug(
+                    lichtung_plot::HistogramKde::Internal,
+                ))
+                .erase(),
+        ),
+        (
+            "density",
+            Plot::density(x.clone())
+                .hue(CategoryValues::new("series", ["a", "a", "a", "b", "b", "b"]).unwrap())
+                .erase(),
+        ),
+        (
+            "qq",
+            Plot::qq(x.clone())
+                .x_limits(-0.75, 0.75)
+                .y_limits(2.0, 6.0)
+                .erase(),
+        ),
+        (
+            "regression",
+            Plot::regression(
+                x,
+                NumericValues::new("response", [1.0, 4.0, 2.0, 8.0, 6.0, 9.0]),
+            )
+            .erase(),
+        ),
+    ];
+    for (name, plot) in plots {
+        let out = tempdir().join(format!("native-{name}.svg"));
+        plot.size(481, 401)
+            .title("Native distribution and reference")
+            .x_label("First axis line\nSecond axis line\nThird axis line")
+            .caption("Independent caption\nSecond caption line")
+            .svg_preserve_text(&out)
+            .unwrap()
+            .png_preview(out.with_extension("png"))
+            .unwrap();
+        assert_eq!(
+            png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+            (481, 401)
+        );
+        let svg = std::fs::read_to_string(out).unwrap();
+        insta::assert_snapshot!(format!("native_{name}"), normalize_embedded_font(&svg));
+    }
+}
+
+#[test]
 fn matrix_clip_structure_snapshot() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]);

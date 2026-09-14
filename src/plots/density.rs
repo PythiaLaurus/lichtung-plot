@@ -123,9 +123,10 @@ pub(crate) fn axis_ranges(
     ])
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     crate::layout::interior::distributions::count(1, 1);
@@ -144,8 +145,6 @@ pub(crate) fn measure(
                 "Density measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let layout = context
-        .axis_layout(|| Err(Error::Render("Density requires root-prepared axes".into()).into()))?;
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);

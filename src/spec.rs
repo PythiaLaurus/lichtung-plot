@@ -1035,17 +1035,17 @@ impl<'a> PlotRenderContext<'a> {
                     PlotKind::Scatter
                     | PlotKind::Line
                     | PlotKind::Trajectory
-                    | PlotKind::LinePath => {
+                    | PlotKind::LinePath
+                    | PlotKind::Histogram
+                    | PlotKind::Density
+                    | PlotKind::Qq
+                    | PlotKind::Regression => {
                         return Err(Error::Render(
                             "native axes require the standard-coordinate producer".into(),
                         )
                         .into())
                     }
-                    PlotKind::Regression
-                    | PlotKind::Histogram
-                    | PlotKind::Density
-                    | PlotKind::Qq
-                    | PlotKind::Interaction
+                    PlotKind::Interaction
                     | PlotKind::PointInterval
                     | PlotKind::Coefficient
                     | PlotKind::Forest

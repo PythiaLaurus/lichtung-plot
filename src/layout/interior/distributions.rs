@@ -12,7 +12,7 @@ pub(crate) fn count(family: usize, stage: usize) {
     });
 }
 
-fn sources() -> [Plot; 4] {
+pub(crate) fn sources() -> [Plot; 4] {
     sources_faceted(None)
 }
 
@@ -30,6 +30,7 @@ fn sources_faceted(facet: Option<&crate::FacetSpec>) -> [Plot; 4] {
     [
         finish(
             Plot::histogram(HistogramInput::samples(x.clone()))
+                .bins(crate::HistogramBins::Count(8))
                 .stat(crate::HistogramStat::Density)
                 .composite(crate::HistogramComposite::KdeAndRug(
                     crate::HistogramKde::Internal,
@@ -142,6 +143,10 @@ fn facets_and_shared_canvas_retain_each_components_statistics_once() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "compare retained marks against the prior assigned-panel constructor and exact resource boundaries"
+)]
 fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink() {
     use crate::font::canonical::OperationGenerationResources;
     use crate::render::backend::Backend;
@@ -160,9 +165,27 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
                 &theme,
             ))
             .unwrap();
+        // The parent-assigned panel is identical: only standalone root allocation
+        // changes in the native migration, never mark geometry or paint policy.
+        let axes = attached.prepared_axis_inputs().unwrap();
+        let prior = crate::layout::Layout::new_with_axis_specs_in_panel_box(
+            (2.0, 6.0),
+            (0.0, 5.0),
+            selected.layout.projection.panel_box(),
+            axes.labels[0].clone(),
+            axes.labels[1].clone(),
+            &axes.specs[0],
+            &axes.specs[1],
+            &theme,
+        )
+        .unwrap();
+        assert_eq!(prior.x_axis.ticks, selected.layout.x_axis.ticks);
+        assert_eq!(prior.y_axis.ticks, selected.layout.y_axis.ticks);
+        assert_eq!(prior.x_axis.source, selected.layout.x_axis.source);
+        assert_eq!(prior.y_axis.source, selected.layout.y_axis.source);
         let project = |resources: &OperationGenerationResources| {
             let data = attached.data().with_axis_resources(resources);
-            let layout = selected.layout.clone();
+            let layout = prior.clone();
             match source.kind() {
                 PlotKind::Histogram => crate::plots::histogram::project(
                     &inputs.histogram.as_ref().unwrap().panels[0].1,
@@ -213,11 +236,182 @@ fn projected_storage_refuses_exact_limits_and_selected_extents_match_drawn_ink()
             "another candidate must remain charged"
         );
         let plan = projected.marks.unwrap();
+        assert_eq!(
+            plan.geometry.bounds(),
+            selected.marks.as_ref().unwrap().geometry.bounds()
+        );
+        let mut outputs = Vec::new();
+        for marks in [&plan, selected.marks.as_ref().unwrap()] {
+            let mut svg = crate::render::svg_backend::SvgBackend::in_memory(640, 480);
+            svg.begin(640, 480).unwrap();
+            marks.draw(&mut svg).unwrap();
+            svg.end().unwrap();
+            outputs.push(svg.into_bytes().unwrap());
+        }
+        assert_eq!(outputs[0], outputs[1], "{:?} retained marks", source.kind());
         let mut drawn = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
         drawn.begin(640, 480).unwrap();
         plan.draw(&mut drawn).unwrap();
         drawn.end().unwrap();
         assert_eq!(plan.geometry.bounds(), drawn.bounds());
+    }
+}
+
+#[test]
+fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::layout::interior::{InteriorRoute, StandardCoordinate};
+    let routes = [
+        StandardCoordinate::Histogram,
+        StandardCoordinate::Density,
+        StandardCoordinate::Qq,
+        StandardCoordinate::Regression,
+    ];
+    for (family, source) in sources().into_iter().enumerate() {
+        let expected = match source.kind() {
+            PlotKind::Histogram => crate::plots::histogram::axis_ranges(&source, source.data()),
+            PlotKind::Density => crate::plots::density::axis_ranges(&source, source.data()),
+            PlotKind::Qq => Ok([
+                crate::layout::continuous_auto_range(
+                    (
+                        crate::stats::distribution::standard_normal_quantile(0.5 / 6.0).unwrap(),
+                        crate::stats::distribution::standard_normal_quantile(5.5 / 6.0).unwrap(),
+                    ),
+                    source.x_axis_spec(),
+                ),
+                crate::layout::continuous_auto_range((1.0, 8.0), source.y_axis_spec()),
+            ]),
+            PlotKind::Regression => crate::plots::regression::axis_ranges(&source, source.data()),
+            _ => unreachable!(),
+        }
+        .unwrap();
+        STAGES.with(|counts| counts.set([[0; 4]; 4]));
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        assert_eq!(
+            inputs.route,
+            InteriorRoute::StandardCoordinate(routes[family])
+        );
+        let plot = inputs.attach(source).unwrap();
+        assert_eq!(plot.prepared_axis_inputs().unwrap().ranges, expected);
+        let theme = crate::Theme::Publication.resolve();
+        let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
+        for panel in [
+            crate::layout::PanelBox::new(30.0, 610.0, 50.0, 440.0),
+            crate::layout::PanelBox::new(40.25, 340.75, 70.5, 280.25),
+        ] {
+            for ranges in [expected, [(-0.5, 0.5), (2.0, 6.0)]] {
+                let assigned = plot
+                    .clone()
+                    .with_planned_x_limits(ranges[0])
+                    .with_planned_y_limits(ranges[1]);
+                let selected = assigned
+                    .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                        assigned.data(),
+                        panel,
+                        &theme,
+                    ))
+                    .unwrap();
+                assert_eq!(selected.layout.projection.x_range(), ranges[0]);
+                assert_eq!(selected.layout.projection.y_range(), ranges[1]);
+                assert_eq!(plot.prepared_axis_inputs().unwrap().ranges, expected);
+                assert!(std::sync::Arc::ptr_eq(
+                    &plot.prepared_axes,
+                    &assigned.prepared_axes
+                ));
+                assert_eq!(STAGES.with(std::cell::Cell::get)[family][0], 1);
+                assert_eq!(
+                    crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                    reads
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn native_facets_and_shared_canvas_remeasure_actual_component_feedback_without_repreparation() {
+    use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
+    use crate::orchestrator::measurements::{self, Counter};
+    fn configured<K: crate::kind::ExactFamily + crate::kind::Facet>(
+        plot: Plot<K>,
+        faceted: bool,
+    ) -> (Plot, Option<crate::Canvas>) {
+        let plot = plot
+            .x_label("First axis line\nSecond axis line\nThird axis line")
+            .size(960, 640);
+        if faceted {
+            (
+                plot.facet(crate::FacetSpec::column(
+                    crate::CategoryValues::new("panel", ["a", "a", "a", "b", "b", "b"]).unwrap(),
+                ))
+                .erase(),
+                None,
+            )
+        } else {
+            let canvas = crate::Canvas::grid(1, 2)
+                .unwrap()
+                .panel(0, 0, plot.clone())
+                .unwrap()
+                .panel(0, 1, plot.clone())
+                .unwrap()
+                .x_range_group([(0, 0), (0, 1)])
+                .unwrap()
+                .size(960, 640);
+            (plot.erase(), Some(canvas))
+        }
+    }
+    for faceted in [false, true] {
+        let x = NumericValues::new("sample", [1.0, 2.0, 4.0, 5.0, 7.0, 8.0]);
+        let plots = [
+            configured(Plot::histogram(HistogramInput::samples(x.clone())), faceted),
+            configured(Plot::density(x.clone()), faceted),
+            configured(Plot::qq(x.clone()), faceted),
+            configured(
+                Plot::regression(
+                    x,
+                    NumericValues::new("response", [1.0, 4.0, 2.0, 8.0, 6.0, 9.0]),
+                ),
+                faceted,
+            ),
+        ];
+        for (family, (source, canvas)) in plots.into_iter().enumerate() {
+            let mut outputs = Vec::new();
+            for disabled in [false, true] {
+                STAGES.with(|counts| counts.set([[0; 4]; 4]));
+                DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
+                measurements::start();
+                let mut svg = crate::render::svg_backend::SvgBackend::in_memory(960, 640);
+                let result = if let Some(canvas) = &canvas {
+                    canvas.render_with_backend(&mut svg)
+                } else {
+                    source.render_with_backend(&mut svg)
+                };
+                let work = measurements::finish();
+                DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
+                result.unwrap();
+                assert!(work.gutters.iter().any(|change| {
+                    change.owner != crate::layout::ComponentAddress::root()
+                        && change.consumed.map(f64::to_bits) != change.requested.map(f64::to_bits)
+                }));
+                assert!(work.roots.len() >= 2);
+                assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
+                assert!(work.counters[Counter::StandardCoordinateMeasure as usize] > 0);
+                // Every changed assignment may be a miss; the retained-child
+                // trial test separately forces hits and rejected ancestors.
+                if disabled {
+                    assert_eq!(work.counters[Counter::ChildCacheHit as usize], 0);
+                    assert_eq!(work.counters[Counter::ChildFeedbackReplay as usize], 0);
+                }
+                let counts = STAGES.with(std::cell::Cell::get)[family];
+                assert_eq!(counts[0], 2);
+                assert_eq!(counts[1], counts[2]);
+                assert_eq!(counts[3], 2);
+                outputs.push(svg.into_bytes().unwrap());
+            }
+            assert_eq!(outputs[0], outputs[1]);
+        }
     }
 }
 
@@ -298,6 +492,7 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
     for (family, source) in sources().into_iter().enumerate() {
         STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|count| count.set(0));
         let theme = crate::Theme::Publication.resolve();
         let root = crate::layout::plan_exact_root(
             640,
@@ -395,6 +590,9 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
                 assert_eq!(&after[..3], &counts[family][..3]);
                 assert_eq!(after[3], counts[family][3] + 1);
                 for counter in [
+                    Counter::StandardPanelIntrinsic,
+                    Counter::StandardCoordinateMeasure,
+                    Counter::LegacyPanelConstructor,
                     Counter::AxisRangePreparation,
                     Counter::AxisSpecPreparation,
                     Counter::AxisSourcePreparation,
@@ -413,6 +611,10 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
         assert_eq!(counts[family], [1, 1, 1, 1]);
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(std::cell::Cell::get),
             0
         );
         crate::orchestrator::validate_text_replay_plan(

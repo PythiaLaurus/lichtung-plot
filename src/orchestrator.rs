@@ -250,14 +250,10 @@ impl Plot {
             R::CategoricalLegacy(C::HorizontalBar | C::StackedHorizontalBar) => {
                 crate::plots::horizontal_bar::measure(self, context)?
             }
-            R::Histogram => crate::plots::histogram::measure(self, context)?,
-            R::Density => crate::plots::density::measure(self, context)?,
-            R::Qq => crate::plots::qq::measure(self, context)?,
             R::CategoricalLegacy(C::Dumbbell) => crate::plots::dumbbell::measure(self, context)?,
             R::CategoricalLegacy(C::PointInterval | C::Coefficient | C::Forest) => {
                 crate::plots::interval_estimate::measure(self, context)?
             }
-            R::Regression => crate::plots::regression::measure(self, context)?,
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context

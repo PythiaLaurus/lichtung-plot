@@ -252,9 +252,9 @@ The approved theme and layout targets follow these rules:
 | T5a6a4e | Waterfall deferred interior | COMPLETE |
 | T5a6a5a | Facet parent adapter and outer title integration | COMPLETE |
 | T5a6a5b | Canvas parent adapter and outer title integration | COMPLETE |
-| T5a6b | Standard-coordinate ordinary Plot migration | IN PROGRESS |
+| T5a6b | Standard-coordinate ordinary Plot migration | COMPLETE |
 | T5a6b1 | Standard point and path families | COMPLETE |
-| T5a6b2 | Standard distribution and reference families | PENDING |
+| T5a6b2 | Standard distribution and reference families | COMPLETE |
 | T5a6c | One-categorical-axis ordinary Plot migration | PENDING |
 | T5a6c1 | Estimate-display families | PENDING |
 | T5a6c2 | Bar families | PENDING |
@@ -4612,8 +4612,9 @@ focused, primary integrated, and independent review evidence below. The T5a6a
 umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
-T5a6b1 is COMPLETE; T5a6b, T5a6, and T5a remain IN PROGRESS. T5a6b2, T5a6c,
-and T5a6d remain PENDING. T5b tracks and public T6 APIs/defaults remain deferred.
+T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
+routes are native. T5a6 and T5a remain IN PROGRESS. T5a6c and T5a6d remain PENDING;
+no stage C successor is started. T5b tracks and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4700,7 +4701,7 @@ previous session reported no actionable runtime or admission bugs.
   adapter contracts are closed. T5a6a5b and the T5a6a umbrella are COMPLETE.
   At that completion, T5a6b/c native ordinary axis/frame migrations and T5a6d
   closure were PENDING; T5a6 and T5a remained IN PROGRESS. Current native-route
-  progress is recorded under T5a6b1. T5b panel captions/heading tracks, T5e
+  progress is recorded under T5a6b1-T5a6b2. T5b panel captions/heading tracks, T5e
   specialized native producers, and public T6 APIs/defaults remain deferred.
 - This completion update changes only spec 91, reruns no tests, and makes no
   code, snapshot, or commit changes.
@@ -4937,7 +4938,7 @@ T5a6a3f completion evidence:
 - Final primary review reported no actionable bugs. At T5a6a3f completion, all
   twenty ordinary routes used retained dispatch under the legacy axis/frame
   policy; native migration was pending in T5a6b/c, including Interaction in
-  T5a6c4. Current native-route progress is recorded under T5a6b1.
+  T5a6c4. Current native-route progress is recorded under T5a6b1-T5a6b2.
 
 T5a6a1 declares the interfaces; each extraction step replaces its family's
 combined preparation/drawing use with those interfaces and deletes superseded
@@ -5294,12 +5295,18 @@ as measurement; feedback-producing hits replay their retained effects.
 
 #### T5a6b: Standard-Coordinate Ordinary Plot Migration
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: T5a6a.
 
 Objective: migrate the ordinary two-numeric-axis family in T5a6b1-T5a6b2. This
 umbrella has no separate commit and completes only after both clusters.
+
+Completion evidence (2026-09-14): both clusters are COMPLETE. Scatter, Line,
+Trajectory, LinePath, Histogram, Density, Qq, and Regression use the common native
+standard-coordinate producer; their eight legacy variants are removed. Final
+primary verification and independent review evidence are recorded below. T5a6c
+and its four clusters remain PENDING; T5a6 and T5a remain IN PROGRESS.
 
 Requirements shared by both clusters:
 
@@ -5344,7 +5351,8 @@ Evidence:
 - `just verify` passes.
 
 Completion evidence (from clean `ab1af58`, verified 2026-09-14): COMPLETE.
-T5a6b remains IN PROGRESS because T5a6b2 is PENDING; no successor is started.
+At that completion, T5a6b remained IN PROGRESS because T5a6b2 was PENDING;
+the subsequent T5a6b2 completion below closes the umbrella.
 This record includes the review corrections and final primary verification.
 
 - `InteriorRoute::StandardCoordinate` has exactly Scatter, Line, Trajectory, and
@@ -5476,7 +5484,7 @@ Commit: `refactor(layout): migrate point and path plans`.
 
 ##### T5a6b2: Standard Distribution And Reference Families
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6b1.
 
@@ -5497,6 +5505,72 @@ Evidence:
   deferred-consequence, frozen-plan, Null/concrete identity, pre-backend failure,
   and snapshot test per family; all eight standard routes are then native.
 - `just verify` passes.
+
+Completion evidence (from clean `13ebe09`, verified 2026-09-14): COMPLETE.
+Final primary `just verify` passed in `/tmp/opencode/t5a6b2-verify.log`.
+Independent review reported no actionable new bugs. T5a6b is also COMPLETE:
+all eight standard-coordinate routes are native. T5a6c and all four stage C
+clusters remain PENDING; no successor is started.
+
+- Added Histogram, Density, Qq, and Regression to `StandardCoordinate`, removed
+  their four legacy interior/dispatch variants, and made the legacy context
+  constructor reject all eight native kinds. The actual `standard.rs` producer
+  selects and freezes axes, then injects its `Layout` into each `measure_marks`.
+  There is no second producer, local range/tick retry, or public API change.
+- Reused T5a6b1's corrected intrinsic policy unchanged: hard title/category spans
+  plus `DeferredLegacyPanelMinimum`, selected numeric source cells at the assigned
+  span, absolute replaceable axis gutters, and independent root caption/title
+  reserves. No endpoint estimate became a hard reservation, no source policy was
+  bypassed, and no root alternative was added. Qq's default title can legitimately
+  exceed the named parity floor. Facet/Canvas tracks remain legacy parent adapters
+  independently of native child axes and frames.
+- T5a6a3b scientific preparation and mark algorithms are unchanged: histogram bins
+  (including zero height), KDE/rugs and anchored zero; collective density support;
+  sorted Qq observations and clipped references; OLS fit and confidence samples.
+  Equal assigned-panel tests compare native versus prior-constructor tick/source
+  identity, exact mark SVG bytes, and geometry bounds. Standalone root coordinates
+  intentionally follow the already active native frame policy instead.
+- Common tests now cover all eight routes at default/multiple exact dimensions,
+  changed ranges/projections, frozen axes/clips, multiline caption/title clearance,
+  narrow-root selected-label pressure, hard intrinsic boundaries, exact tick fit
+  failures, exact resource caps and pre-materialization refusal. GeometryBackend
+  construction is counted separately from begin. Poisoned selected capture repeats
+  no statistics, source reads, projection, axis selection, or shaping.
+- All four new routes exercise changed actual facet/shared-Canvas gutters and
+  cache-on/off SVG identity. The common retained-child test forces cache hits,
+  changed domains/assignments, rejected ancestor trials, retained feedback replay,
+  and cumulative resource charging. Separate preflight gates cover final SVG/Null
+  resource refusal and exactly one successful Null lifecycle per family.
+- Four inspected new snapshots in `tests/visual_regression/snapshots/` are
+  `visual_regression__native_histogram.snap`, `visual_regression__native_density.snap`,
+  `visual_regression__native_qq.snap`, and `visual_regression__native_regression.snap`.
+  Each uses an exact 481x401 root with a three-line axis title and independent
+  two-line caption. Their SVG clips are respectively `(100,51,360,194)`,
+  `(100,51,298.07421875,194)`, `(86,51,374,194)`, and `(95,51,365,194)`.
+  Histogram retains two zero-height bins and all six rugs; Density retains both
+  local curves and legend identities; Qq retains three visible observations and
+  the clipped reference; Regression retains six observations and its 80-vertex
+  confidence polygon. Root text placements agree across families. All 11 existing
+  snapshots are unchanged; the four new snapshots are retained, for 15 total.
+  The four PNG previews were also inspected and retain exact 481x401 dimensions.
+  Snapshot/source changes must be committed together.
+
+Final primary `just verify` in `/tmp/opencode/t5a6b2-verify.log` passed:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 937 passed, 0 failed, 17 ignored (954 total).
+- All 451 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 9. Those nine visual tests cover all 15 snapshots: four new retained
+  snapshots and 11 unchanged existing snapshots.
+- In total, 1,388 tests passed with no failures and 17 ignored (1,405 total).
+  Four example targets ran zero tests. Warning-denied API documentation and
+  offline package verification passed for 249 files (6.9 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate distribution reference plans`.
 

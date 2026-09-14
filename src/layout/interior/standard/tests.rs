@@ -3,15 +3,20 @@ use crate::font::canonical::OperationGenerationResources;
 use crate::orchestrator::measurements::{self, Counter};
 use crate::{CategoryValues, NumericValues};
 
-fn sources() -> [Plot; 4] {
+fn sources() -> [Plot; 8] {
     let x = NumericValues::new("x", [0.0, 1.0, 2.0]);
     let y = NumericValues::new("y", [2.0, 1.0, 3.0]);
     let group = CategoryValues::new("group", ["a", "a", "a"]).unwrap();
+    let [histogram, density, qq, regression] = crate::layout::interior::distributions::sources();
     [
         Plot::scatter(x.clone(), y.clone()).erase(),
         Plot::line(x.clone(), y.clone()).erase(),
         Plot::trajectory(x.clone(), y.clone(), group.clone()).erase(),
         Plot::line_path(x, y, group).erase(),
+        histogram,
+        density,
+        qq,
+        regression,
     ]
 }
 
@@ -324,7 +329,9 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         );
         crate::plots::scatter::STAGES.with(|counts| counts.set([0; 4]));
         crate::plots::line::STAGES.with(|counts| counts.set([[0; 4]; 3]));
+        crate::layout::interior::distributions::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
         let before = Projection::test_projection_calls();
         let error = plot
             .measure_selected_interior(PlotRenderContext::new(
@@ -344,7 +351,15 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
             [[0; 4]; 3]
         );
         assert_eq!(
+            crate::layout::interior::distributions::STAGES.with(std::cell::Cell::get),
+            [[0; 4]; 4]
+        );
+        assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(std::cell::Cell::get),
             0
         );
     }
@@ -386,6 +401,7 @@ fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_with
         let plots = [
             configured(Plot::scatter(x.clone(), y.clone()), faceted),
             configured(Plot::line(x.clone(), y.clone()), faceted),
+            configured(Plot::density(x.clone()), faceted),
             configured(
                 Plot::trajectory(x.clone(), y.clone(), group.clone()),
                 faceted,
@@ -509,6 +525,7 @@ fn every_native_route_uses_exact_assigned_projection_and_frozen_axes_without_leg
 fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_creation() {
     let theme = crate::Theme::Publication.resolve();
     for source in sources() {
+        let source = source.x_label("").y_label("");
         let inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -674,6 +691,7 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
             let (w, h) = size.unwrap_or((640, 480));
             assert_eq!((plot.width(), plot.height()), (w, h));
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+            crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
             measurements::start();
             let mut backend = crate::render::svg_backend::SvgBackend::in_memory(w, h);
             plot.render_with_backend(&mut backend).unwrap();
@@ -687,6 +705,10 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
                 0
             );
+            assert_eq!(
+                crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(std::cell::Cell::get),
+                0
+            );
         }
     }
 }
@@ -694,6 +716,9 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
 #[test]
 fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
     for source in sources() {
+        let source = source
+            .with_planned_x_limits((0.0, 2.0))
+            .with_planned_y_limits((0.0, 4.0));
         let mut inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -746,6 +771,9 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
 #[test]
 fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks() {
     for source in sources() {
+        let source = source
+            .with_planned_x_limits((0.0, 2.0))
+            .with_planned_y_limits((0.0, 4.0));
         let mut inputs =
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
@@ -799,7 +827,7 @@ fn native_exact_tick_misses_keep_axis_scope_and_never_coarsen_or_project_marks()
 fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_charge_work() {
     use crate::decorations::plan::children::{ChildPlans, DISABLE_CHILD_REUSE};
     use crate::decorations::plan::LegendRole;
-    use crate::layout::kernel::TrialOutcome;
+    use crate::layout::kernel::{FeedbackKind, TrialOutcome};
     use crate::layout::{AddressRole, ComponentAddress};
     for source in sources().into_iter().chain([categorical_source()]) {
         let mut outputs = Vec::new();
@@ -854,6 +882,9 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &owner,
                     ))
                     .map_err(PlanError::into_error)?;
+                    let requested = round
+                        .next_insets(&owner, FeedbackKind::AxisGutter)
+                        .map(f64::to_bits);
                     let cached = fit::measured(children.plan(
                         &plot,
                         LegendRole::Suppressed,
@@ -864,6 +895,12 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     ))
                     .map_err(PlanError::into_error)?;
                     assert_eq!(std::sync::Arc::ptr_eq(&first, &cached), !disabled);
+                    assert_eq!(
+                        round
+                            .next_insets(&owner, FeedbackKind::AxisGutter)
+                            .map(f64::to_bits),
+                        requested
+                    );
                     let resources = theme.prepared_font_environment()?.generation_resources();
                     let before = (
                         resources.usage().unwrap().1,
@@ -913,6 +950,12 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     );
                     assert_eq!(selected.panel_box, first.panel_box);
                     assert_eq!(
+                        round
+                            .next_insets(&owner, FeedbackKind::AxisGutter)
+                            .map(f64::to_bits),
+                        requested
+                    );
+                    assert_eq!(
                         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                         reads
                     );
@@ -946,6 +989,10 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
             assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
             assert_eq!(
                 work.counters[Counter::ChildCacheHit as usize] > 0,
+                !disabled
+            );
+            assert_eq!(
+                work.counters[Counter::ChildFeedbackReplay as usize] > 0,
                 !disabled
             );
             crate::orchestrator::validate_text_replay_plan(

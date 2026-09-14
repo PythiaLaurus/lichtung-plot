@@ -1,0 +1,51 @@
+---
+source: tests/visual_regression/suite.rs
+expression: normalize_embedded_font(&svg)
+---
+<svg xmlns="http://www.w3.org/2000/svg" width="481" height="401" viewBox="0 0 481 401" role="img">
+<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>
+<defs>
+<clipPath id="clip-0"><rect x="86" y="51" width="374" height="194"/></clipPath>
+</defs>
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<rect x="86" y="51" width="374" height="194" fill="#FFFFFF"/>
+<g id="grid">
+<polyline points="148.3330078125,245 148.3330078125,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="273,245 273,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="397.6669921875,245 397.6669921875,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="86,245 460,245" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="86,148 460,148" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="86,51 460,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+</g>
+<g clip-path="url(#clip-0)">
+<polyline points="98.9423828125,245 377.4345703125,51" fill="none" stroke="#000000" stroke-width="1.2001953125" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="104.8271484375" cy="245" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="220.533203125" cy="148" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="325.466796875" cy="99.5" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+</g>
+<g id="axes">
+<polyline points="86,245 460,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="460,245 460,51" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="460,51 86,51" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="86,51 86,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="148.3330078125,245.400390625 148.3330078125,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="133.0322265625" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">-0.5</text>
+<polyline points="273,245.400390625 273,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="267.9140625" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<polyline points="397.6669921875,245.400390625 397.6669921875,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="385.1162109375" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0.5</text>
+<text x="216.95703125" y="295.7158203125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">First axis line</text>
+<text x="203.837890625" y="316.1162109375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Second axis line</text>
+<text x="214.0234375" y="336.5166015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Third axis line</text>
+<polyline points="85.599609375,245 80.599609375,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="65.6220703125" y="239.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">2</text>
+<polyline points="85.599609375,148 80.599609375,148" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="64.9189453125" y="152.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">4</text>
+<polyline points="85.599609375,51 80.599609375,51" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="65.0283203125" y="65.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">6</text>
+<text x="9.220703125" y="152.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,41.2001953125,148)">Sample</text>
+</g>
+<text x="74.5869140625" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Native distribution and reference</text>
+<text x="14.5283203125" y="368.396484375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Independent caption</text>
+<text x="15.01171875" y="389.396484375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Second caption line</text>
+</svg>

@@ -24,6 +24,7 @@ const ANNOTATION_COLLISION_WEIGHT: f64 = 100.0;
 thread_local! {
     static GEOMETRY_RAW_TEXT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(crate) static GEOMETRY_BACKEND_BEGINS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static GEOMETRY_BACKEND_CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -228,6 +229,8 @@ impl GeometryBackend {
         font_environment: PreparedFontEnvironment,
         operation_default_stack: String,
     ) -> Self {
+        #[cfg(test)]
+        GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(calls.get() + 1));
         Self {
             snapshot: GeometrySnapshot {
                 bounds: Vec::new(),

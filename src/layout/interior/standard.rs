@@ -1,4 +1,4 @@
-//! Native point/path panel production. Parents allocate the frame; this producer
+//! Native standard-coordinate panels. Parents allocate the frame; this producer
 //! selects its axes once and hands the resulting projection to retained marks.
 
 use super::{DeferredLegacyPanelMinimum, InteriorRoute, StandardCoordinate};
@@ -207,6 +207,10 @@ impl StandardCoordinate {
             Self::Line | Self::Trajectory | Self::LinePath => {
                 crate::plots::line::measure_marks(plot, context, layout)?
             }
+            Self::Histogram => crate::plots::histogram::measure_marks(plot, context, layout)?,
+            Self::Density => crate::plots::density::measure_marks(plot, context, layout)?,
+            Self::Qq => crate::plots::qq::measure_marks(plot, context, layout)?,
+            Self::Regression => crate::plots::regression::measure_marks(plot, context, layout)?,
         };
         result.axes = Some(frozen);
         [result.x_tick_keys, result.y_tick_keys] = keys;
