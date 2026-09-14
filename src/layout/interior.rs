@@ -59,14 +59,11 @@ macro_rules! interior_routes {
 interior_routes! {
     native {
         StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
-        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar },
+        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud },
     }
     legacy {
         CategoricalLegacy {
             Interaction => crate::plots::interaction::reject_combined,
-            Boxplot => crate::plots::categorical_distribution::reject_combined,
-            Violin => crate::plots::categorical_distribution::reject_combined,
-            Raincloud => crate::plots::categorical_distribution::reject_combined,
         },
         SpecializedLegacy {
             Heatmap => crate::plots::heatmap::reject_combined,
@@ -338,3 +335,6 @@ pub(crate) mod estimates;
 
 #[cfg(test)]
 pub(crate) mod bars;
+
+#[cfg(test)]
+pub(crate) mod categorical_distributions;

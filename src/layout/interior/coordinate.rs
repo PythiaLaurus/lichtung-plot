@@ -121,7 +121,11 @@ impl InteriorRoute {
                 // The prepared source owns orientation and midpoint order. New
                 // categorical clusters reuse this boundary without rebuilding it.
                 let category_side = match family {
-                    OneCategoricalAxis::Bar | OneCategoricalAxis::StackedBar => 0,
+                    OneCategoricalAxis::Bar
+                    | OneCategoricalAxis::StackedBar
+                    | OneCategoricalAxis::Boxplot
+                    | OneCategoricalAxis::Violin
+                    | OneCategoricalAxis::Raincloud => 0,
                     OneCategoricalAxis::PointInterval
                     | OneCategoricalAxis::Coefficient
                     | OneCategoricalAxis::Forest
@@ -293,6 +297,12 @@ impl InteriorRoute {
             Self::OneCategoricalAxis(
                 OneCategoricalAxis::HorizontalBar | OneCategoricalAxis::StackedHorizontalBar,
             ) => crate::plots::horizontal_bar::measure_marks(plot, context, layout)?,
+            Self::OneCategoricalAxis(OneCategoricalAxis::Boxplot) => {
+                crate::plots::boxplot::measure_marks(plot, context, layout)?
+            }
+            Self::OneCategoricalAxis(
+                OneCategoricalAxis::Violin | OneCategoricalAxis::Raincloud,
+            ) => crate::plots::violin::measure_marks(plot, context, layout)?,
             Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => {
                 unreachable!("native route validated")
             }

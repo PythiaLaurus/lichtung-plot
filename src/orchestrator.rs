@@ -242,10 +242,6 @@ impl Plot {
             R::CategoricalLegacy(C::Interaction) => {
                 crate::plots::interaction::measure(self, context)?
             }
-            R::CategoricalLegacy(C::Boxplot) => crate::plots::boxplot::measure(self, context)?,
-            R::CategoricalLegacy(C::Violin | C::Raincloud) => {
-                crate::plots::violin::measure(self, context)?
-            }
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context

@@ -84,36 +84,16 @@ pub(crate) fn prepare(chart: &Plot, data: PlotData<'_>) -> Result<PreparedRaincl
     })
 }
 
-pub(super) fn measure(
+pub(super) fn measure_marks(
     chart: &Plot,
     input: &PreparedRaincloud,
     context: PlotRenderContext<'_>,
+    layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let hue_levels = &input.hues;
-    let panel = context.panel;
-    let display_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Err(Error::Render(
-            "raincloud requires root-prepared axes".into(),
-        ))
-    })?;
-    let layout = context.axis_layout(|| {
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
-        context.layout_with_ticks(
-            (0.0, input.groups.len() as f64),
-            display_range,
-            panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            Vec::new(),
-            chart.x_axis_spec(),
-            &y_axis_spec,
-            theme,
-        )
-    })?;
     let legend_entries =
         data.collect_source(hue_levels.iter().enumerate().map(|(index, hue)| {
             let color = chart.categorical_color(

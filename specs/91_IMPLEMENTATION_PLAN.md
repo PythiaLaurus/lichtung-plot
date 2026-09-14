@@ -258,7 +258,7 @@ The approved theme and layout targets follow these rules:
 | T5a6c | One-categorical-axis ordinary Plot migration | IN PROGRESS |
 | T5a6c1 | Estimate-display families | COMPLETE |
 | T5a6c2 | Bar families | COMPLETE |
-| T5a6c3 | Categorical distribution families | PENDING |
+| T5a6c3 | Categorical distribution families | COMPLETE |
 | T5a6c4 | Interaction family | PENDING |
 | T5a6d | Ordinary exact-root closure audit | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
@@ -4613,10 +4613,11 @@ umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
 T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
-routes are native. T5a6c1 and T5a6c2 are COMPLETE with eight native
-`OneCategoricalAxis` routes, for sixteen native ordinary routes in total. T5a6,
-T5a, and T5a6c remain IN PROGRESS. T5a6c3-c4 and T5a6d remain PENDING. T5b tracks
-and public T6 APIs/defaults remain deferred.
+routes are native. T5a6c1-T5a6c3 are COMPLETE with eleven native
+`OneCategoricalAxis` routes, for nineteen native ordinary routes in total.
+T5a6c3 has final primary verification and independent review evidence below.
+T5a6, T5a, and T5a6c remain IN PROGRESS. T5a6c4 and T5a6d remain PENDING.
+T5b tracks and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -5588,11 +5589,13 @@ Objective: migrate the ordinary categorical family through one orientation-aware
 producer in T5a6c1-T5a6c4. This umbrella has no separate commit and completes only
 after all four clusters.
 
-Progress evidence (2026-09-14): T5a6c1 and T5a6c2 are COMPLETE; PointInterval,
-Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, and
-StackedHorizontalBar are native `OneCategoricalAxis` routes. Sixteen ordinary
-routes are native in total. T5a6c remains IN PROGRESS because T5a6c3-c4 remain
-PENDING; neither successor cluster is started.
+Progress evidence (2026-09-14): T5a6c1-T5a6c3 are COMPLETE. Boxplot, Violin, and
+Raincloud now use the same `OneCategoricalAxis` producer, bringing that route to
+eleven families and the native ordinary total to nineteen. T5a6c3 has passed final
+primary verification and independent review with no actionable findings. T5a6c
+remains IN PROGRESS because T5a6c4 remains PENDING. Interaction is the sole
+remaining ordinary legacy route. No successor cluster or T5c style/packing work
+is started.
 
 Requirements shared by all four clusters:
 
@@ -5833,7 +5836,7 @@ Commit: `refactor(layout): migrate bar family plans`.
 
 ##### T5a6c3: Categorical Distribution Families
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6c2.
 
@@ -5851,6 +5854,97 @@ Evidence:
 
 - Per-family route, orientation, group/category order, exact-size, deferred mark
   extent, frozen-plan, lifecycle, and snapshot evidence; `just verify` passes.
+
+Completion evidence (from clean `8e3395a`, verified 2026-09-14): COMPLETE.
+Final primary `just verify` passed in `/tmp/opencode/t5a6c3-verify.log`.
+Independent review reported no actionable findings. T5a6c, T5a6, and T5a remain
+IN PROGRESS; T5a6c4 and T5a6d remain PENDING, and no later phase is started.
+
+- Exactly Boxplot, Violin, and Raincloud move from `CategoricalLegacy` to the
+  existing orientation-aware native `OneCategoricalAxis` route. Their combined
+  rejection stub, local `axis_layout`/tick construction, and legacy geometry-range
+  exception are deleted. Interaction is the only ordinary legacy variant left;
+  all five specialized variants remain unchanged.
+- The common producer freezes both axes before injecting the selected `Layout`
+  into the existing family mark measurement, including supplied Raincloud.
+  Categories stay on the bottom with canonical midpoint positions and independent
+  raw/display identities. Standalone roots consume actual selected absolute
+  gutters and independent title/caption reserves, not endpoint estimates. The
+  shared 175x300 no-estimate regression now includes all three new native routes.
+- Root-prepared groups, sparse cells, observations/source-row identities,
+  quartiles, whiskers, fliers, KDE support/densities, palettes, cloud offsets,
+  summary widths, and point-strip policy are retained. The sole numeric repair
+  sets `grid[63] = support_range.1` exactly; indices `0..=62` retain
+  `support_range.0 + (support_range.1 - support_range.0) * (k as f64) / 63.0`.
+  A fractional-data test with that upper support endpoint assigned as the display
+  limit exposed a one-rounding-error seam that otherwise failed canonical
+  adjacent-point admission. The zero endpoint density and scientific support
+  are unchanged.
+- Significance reads the selected projection's numeric range. Its retained range
+  consequence submits a conditional automatic-domain request through the existing
+  root feedback protocol, rather than replacing axes or reprojecting marks in a
+  local loop. Fixed limits remain fixed and insufficient bracket space returns a
+  typed miss. Supplied Raincloud retains its existing annotation restrictions.
+- Six new native-family tests cover three themes, fractional panel assignments,
+  authoritative category ranges, sparse groups, raw labels including spaces,
+  exact numeric labels including empty labels, fixed/automatic domains, every
+  raw-overlay mode, and oversized labels rejecting rather than disappearing.
+  Final direct measurement at the parent's assigned panel and retained limits
+  reproduces marks, annotations, axes, and complete SVG bytes. Final gutters equal
+  the final selected axis requirements. Fixed/free-X/free-Y/free facets and shared
+  Canvas roots preserve cache-on/off output and prepare each component once.
+- Two added extraction tests pin parent palette indices with absent series slots
+  and four complete pre-native mark SVG fingerprints, recorded before production
+  edits at `8e3395a`. Each fingerprint covers two assigned panels and Publication,
+  Nature, and Science themes. Boxplot, Violin, sample Raincloud, and supplied
+  Raincloud remain byte-identical for complete mark operands, styles, order, and
+  clips. Replaced axes and root-selected old frames are intentionally not part of
+  these same-assignment mark oracles.
+- Shared native tests now include all three families and supplied Raincloud for
+  exact intrinsic/resource caps, no work after resource refusal, source-free
+  measurement, exact root sizes, title/caption clearance, contracting gutters,
+  changed/rejected parent assignments, and cumulative charging with child reuse
+  disabled. Poisoned capture asserts no source reads, preparation, projection,
+  native measurement, intrinsic work, tick selection, or shaping. Final storage
+  refusal precedes the sole successful Null lifecycle for each added route.
+- Three new inspected SVG snapshots and PNG previews use exact 641x401 roots:
+  `visual_regression__native_boxplot.snap`,
+  `visual_regression__native_violin.snap`, and
+  `visual_regression__native_raincloud.snap`. They cover sparse grouped samples,
+  overlays, pairwise brackets, and supplied Raincloud shapes, with long display
+  categories, three-line x titles, and independent two-line captions. Boxplot and
+  supplied Raincloud clips are `(95,51,438.31640625,194)`; Violin's clip is
+  `(102,51,431.31640625,194)`. All 23 previous snapshots pass unchanged. Native
+  root/axis coordinates are intentional; no old-parent-frame parity is claimed.
+- Focused verification passed `just lint` (strict locked/offline all-target
+  Clippy, warnings denied), the complete library suite (955 passed, 17 ignored),
+  and 258 affected integration tests: annotations 27, categorical 44, composition
+  57, distributions 67, layout 20, rendering 31, visual regression 12. The twelve
+  visual tests check all 26 snapshots read-only after the three additions.
+  Initial library failures were test assumptions: the shared exact-tick fixture
+  now uses the supplied one-category range endpoint, and supplied Raincloud's
+  exhausted-budget assertion expects native intrinsic refusal before projection.
+- No public API, T5c style/mark-density policy, annotation packing policy, T5b/T5e
+  parent packing, assets, dependencies, network access, or later-phase work is
+  introduced. Keep all three snapshots with the eventual implementation commit.
+
+Final primary `just verify` in `/tmp/opencode/t5a6c3-verify.log` passed in full:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 955 passed, 0 failed, 17 ignored (972 total).
+- All 454 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 12. Those twelve visual tests cover all 26 snapshots read-only:
+  three new snapshots and 23 unchanged existing snapshots; no older snapshot
+  changes were needed.
+- In total, 1,409 tests passed with no failures and 17 ignored (1,426 total).
+  Four example targets ran zero tests. Warning-denied API documentation and
+  offline package verification passed for 263 files (7.1 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate categorical distribution plans`.
 

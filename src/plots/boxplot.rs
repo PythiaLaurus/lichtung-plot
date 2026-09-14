@@ -105,9 +105,10 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     categorical_distribution::count(chart.kind(), 1);
@@ -123,10 +124,7 @@ pub(crate) fn measure(
     let group_levels = &sample.group_levels;
     let hue_levels = &sample.hue_levels;
     let group_active = !group_levels.is_empty();
-    let n_boxes = x_levels.len() as f64;
-    let base_y_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Err(Error::Render("boxplot requires root-prepared axes".into()))
-    })?;
+    let base_y_range = layout.projection.y_range();
     let mut rendered_maxima =
         data.collect_source((0..x_levels.len()).map(|_| Ok(f64::NEG_INFINITY)))?;
     let mut grouped_maxima = data.collect_source((0..x_levels.len()).map(|_| {
@@ -177,22 +175,6 @@ pub(crate) fn measure(
             context.fit_scope(),
         )?
     };
-    let y_range = significance.y_range;
-    let layout = context.axis_layout(|| {
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), y_range);
-        context.layout_with_ticks(
-            (0.0, n_boxes),
-            y_range,
-            panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            Vec::new(),
-            chart.x_axis_spec(),
-            &y_axis_spec,
-            theme,
-        )
-    })?;
     let proj = &layout.projection;
     let box_w_data = if group_active {
         (0.72 / group_levels.len() as f64).min(0.32)

@@ -3,7 +3,7 @@ use crate::font::canonical::OperationGenerationResources;
 use crate::spec::PlotRenderContext;
 use crate::{CategoryValues, NumericValues, RaincloudInput};
 
-fn sources(facet: Option<crate::FacetScales>) -> [Plot; 3] {
+pub(crate) fn sources(facet: Option<crate::FacetScales>) -> [Plot; 3] {
     fn finish<K: crate::kind::ExactFamily + crate::kind::Facet>(
         mut plot: Plot<K>,
         facet: Option<crate::FacetScales>,
@@ -50,7 +50,7 @@ fn sources(facet: Option<crate::FacetScales>) -> [Plot; 3] {
     ]
 }
 
-fn supplied() -> Plot {
+pub(crate) fn supplied() -> Plot {
     Plot::raincloud(RaincloudInput::geometry(crate::RaincloudGeometry {
         dimensions: crate::RaincloudDimensions {
             category: "category".into(),
@@ -117,6 +117,52 @@ fn annotated() -> Plot {
         crate::AxisTick::new(15.0, "high"),
     ])
     .erase()
+}
+
+#[test]
+fn assigned_panel_marks_preserve_full_pre_native_fingerprints() {
+    use sha2::{Digest, Sha256};
+    // Recorded at 8e3395a: complete mark SVG operands, styles, order and clip,
+    // deliberately excluding the axes that this migration replaces.
+    let expected = [
+        "5f0b079da3bc344bb21b9937d2b6f460171f452cbdcd1f001a05dd7da035da61",
+        "ca6fc08c37c333caecbc10376266944bd18847440be4387be972b27eb0f52a6c",
+        "5d570309defa397541d5cdcb5fa45f45058e596dc0cc60ac7b6acffac8d02da3",
+        "090b57970de9e895110807340ea5116fc47e1b2ef95fac81cc61b03d6315da7d",
+    ];
+    for (source, expected) in sources(None).into_iter().chain([supplied()]).zip(expected) {
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let plot = inputs.attach(source).unwrap();
+        let mut fingerprint = Sha256::new();
+        for preset in [
+            crate::Theme::Publication,
+            crate::Theme::Nature,
+            crate::Theme::Science,
+        ] {
+            let theme = preset.resolve();
+            for panel in [
+                crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
+                crate::layout::PanelBox::new(30.0, 810.0, 50.0, 600.0),
+            ] {
+                let selected = plot
+                    .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+                    .unwrap();
+                let mut svg = crate::render::svg_backend::SvgBackend::in_memory(900, 700);
+                svg.begin(900, 700).unwrap();
+                selected.marks.as_ref().unwrap().draw(&mut svg).unwrap();
+                svg.end().unwrap();
+                fingerprint.update(svg.into_bytes().unwrap());
+            }
+        }
+        assert_eq!(
+            format!("{:x}", fingerprint.finalize()),
+            expected,
+            "{:?}",
+            plot.kind()
+        );
+    }
 }
 
 #[test]
@@ -269,6 +315,60 @@ fn standalone_facets_and_canvas_retain_component_statistics() {
 }
 
 #[test]
+fn parent_palette_and_absent_series_slots_are_retained_before_native_projection() {
+    for source in sources(None) {
+        let source = source
+            .with_global_group_levels(vec!["absent".into(), "two".into(), "one".into()])
+            .with_global_hue_levels(vec!["absent".into(), "two".into(), "one".into()]);
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let plot = inputs.attach(source).unwrap();
+        let sample = match retained(&plot).unwrap() {
+            PreparedDistribution::Boxplot(input) => &input.sample,
+            PreparedDistribution::Violin(input) => &input.sample,
+            PreparedDistribution::Supplied(_) => unreachable!(),
+        };
+        assert_eq!(
+            sample
+                .groups
+                .iter()
+                .map(|group| (group.group_index, group.hue_index))
+                .collect::<Vec<_>>(),
+            [(2, Some(2)), (1, Some(1))]
+        );
+        for preset in [
+            crate::Theme::Publication,
+            crate::Theme::Nature,
+            crate::Theme::Science,
+        ] {
+            let theme = preset.resolve();
+            let result = plot
+                .measure_selected_interior(PlotRenderContext::new(
+                    plot.data(),
+                    crate::layout::PanelBox::new(50.0, 850.0, 60.0, 600.0),
+                    &theme,
+                ))
+                .unwrap();
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                unreachable!()
+            };
+            let colors = payload
+                .marks
+                .iter()
+                .filter_map(|mark| match mark {
+                    Mark::Polygon(_, fill) if fill.color != (255, 255, 255) => Some(fill.color),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(colors, [theme.colors[2], theme.colors[1]]);
+        }
+    }
+}
+
+#[test]
 fn selected_mark_snapshot_matches_drawn_geometry() {
     for source in sources(None).into_iter().chain([supplied(), annotated()]) {
         let theme = crate::Theme::Publication.resolve();
@@ -404,6 +504,9 @@ fn poisoned_capture_repeats_no_sources_statistics_projection_axes_or_shaping() {
                     assert_eq!(&before[..3], &after[..3]);
                 }
                 for counter in [
+                    Counter::OneCategoricalAxisMeasure,
+                    Counter::StandardPanelIntrinsic,
+                    Counter::LegacyPanelConstructor,
                     Counter::AxisRangePreparation,
                     Counter::AxisSpecPreparation,
                     Counter::AxisSourcePreparation,

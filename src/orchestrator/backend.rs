@@ -2353,14 +2353,15 @@ mod tests {
     }
 
     #[test]
-    fn native_distribution_estimate_and_bar_preflight_gates_resources_before_the_only_null_lifecycle(
-    ) {
+    fn native_families_preflight_gate_resources_before_the_only_null_lifecycle() {
         use crate::layout::interior::distributions::{sources, STAGES};
         use crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS;
         for (family, source) in sources()
             .into_iter()
             .chain(crate::layout::interior::estimates::sources())
             .chain(crate::layout::interior::bars::sources())
+            .chain(crate::layout::interior::categorical_distributions::sources())
+            .chain([crate::plots::categorical_distribution::extraction::supplied()])
             .enumerate()
         {
             for payload in [
@@ -2383,6 +2384,8 @@ mod tests {
                 crate::plots::interval_estimate::STAGES.with(|counts| counts.set([[0; 4]; 3]));
                 crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
                 crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
+                crate::plots::categorical_distribution::STAGES
+                    .with(|counts| counts.set([[0; 4]; 3]));
                 NULL_BEGIN_CALLS.with(|calls| calls.set(0));
                 let plot = if small {
                     source.clone().size(100, 100)
@@ -2397,7 +2400,9 @@ mod tests {
                     4..=6 => crate::plots::interval_estimate::STAGES.with(std::cell::Cell::get)
                         [family - 4],
                     7 => crate::plots::dumbbell::STAGES.with(std::cell::Cell::get),
-                    _ => crate::plots::bar_data::STAGES.with(std::cell::Cell::get)[family - 8],
+                    8..=11 => crate::plots::bar_data::STAGES.with(std::cell::Cell::get)[family - 8],
+                    _ => crate::plots::categorical_distribution::STAGES.with(std::cell::Cell::get)
+                        [(family - 12).min(2)],
                 };
                 assert_eq!(counts[0], 1);
                 assert_eq!(counts[3], usize::from(!small));

@@ -974,10 +974,6 @@ impl<'a> PlotRenderContext<'a> {
                     .into_iter()
                     .enumerate()
                 {
-                    let geometry_expansion = matches!(
-                        self.prepared_kind,
-                        Some(PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud)
-                    );
                     if let Some(categories) = &axes.categories[side] {
                         *ticks = data.collect_source(categories.iter().map(|tick| {
                             Ok(crate::layout::AxisTick::new(
@@ -986,7 +982,7 @@ impl<'a> PlotRenderContext<'a> {
                             ))
                         }))?;
                         *range = axes.ranges[side];
-                    } else if !geometry_expansion {
+                    } else {
                         *range = self.prepared_limits[side].unwrap_or(axes.ranges[side]);
                     }
                     specs[side].limits = Some(*range);
@@ -1039,17 +1035,17 @@ impl<'a> PlotRenderContext<'a> {
                     | PlotKind::Bar
                     | PlotKind::StackedBar
                     | PlotKind::HorizontalBar
-                    | PlotKind::StackedHorizontalBar => {
+                    | PlotKind::StackedHorizontalBar
+                    | PlotKind::Boxplot
+                    | PlotKind::Violin
+                    | PlotKind::Raincloud => {
                         return Err(Error::Render(
                             "native axes require the coordinate producer".into(),
                         )
                         .into())
                     }
                     PlotKind::Interaction => true,
-                    PlotKind::Boxplot
-                    | PlotKind::Violin
-                    | PlotKind::Raincloud
-                    | PlotKind::Heatmap
+                    PlotKind::Heatmap
                     | PlotKind::Marginal
                     | PlotKind::Matrix
                     | PlotKind::Beeswarm

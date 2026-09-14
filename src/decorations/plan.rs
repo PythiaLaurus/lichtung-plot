@@ -785,23 +785,32 @@ fn plan_panel_attempt(
     let mut domain_request = None;
     let mut next_x = result.layout.projection.x_range();
     let mut next_y = result.layout.projection.y_range();
-    if let Some(crate::layout::interior::DeferredMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Bars(payload),
-        ..
-    }) = result.marks.as_deref()
-    {
-        if let Some(expansion) = payload.domain_expansion {
-            let request = expansion.submit(round, address, address)?;
-            round.miss(
-                address,
-                FitKind::OverlayCollision,
-                &[request],
-                "bar significance requires automatic domain clearance",
-            )?;
-            match expansion.axis {
-                ClearanceAxis::X => next_x = expansion.limits,
-                ClearanceAxis::Y => next_y = expansion.limits,
-            }
+    let mark_expansion = result
+        .marks
+        .as_deref()
+        .and_then(|marks| match &marks.payload {
+            crate::layout::interior::MarkPayload::Bars(payload) => payload.domain_expansion,
+            crate::layout::interior::MarkPayload::Distribution(_) => result
+                .significance
+                .as_ref()
+                .filter(|plan| plan.y_range != next_y)
+                .map(|plan| DomainExpansion {
+                    axis: ClearanceAxis::Y,
+                    limits: plan.y_range,
+                }),
+            _ => None,
+        });
+    if let Some(expansion) = mark_expansion {
+        let request = expansion.submit(round, address, address)?;
+        round.miss(
+            address,
+            FitKind::OverlayCollision,
+            &[request],
+            "mark significance requires automatic domain clearance",
+        )?;
+        match expansion.axis {
+            ClearanceAxis::X => next_x = expansion.limits,
+            ClearanceAxis::Y => next_y = expansion.limits,
         }
     }
     if let Some(legend) = &resolved {

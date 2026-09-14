@@ -123,8 +123,16 @@ fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
             assert_eq!(HUE_LOOKUP_VISITS.with(std::cell::Cell::get), lookup_visits);
         }
         resources.set_test_limits(resources.usage().unwrap().1, u64::MAX);
+        let projections = crate::layout::Projection::test_projection_calls();
         let error = measure().unwrap_err().into_error();
-        assert!(error.to_string().contains("admission"), "{error}");
+        assert!(
+            error.to_string().contains("root processing visits limit"),
+            "{error}"
+        );
+        assert_eq!(
+            crate::layout::Projection::test_projection_calls(),
+            projections
+        );
         assert_eq!(HUE_LOOKUP_VISITS.with(std::cell::Cell::get), lookup_visits);
     }
 }

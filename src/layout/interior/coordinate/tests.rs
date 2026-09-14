@@ -34,6 +34,8 @@ fn all_sources() -> impl Iterator<Item = Plot> {
         .into_iter()
         .chain(super::super::estimates::sources())
         .chain(super::super::bars::sources())
+        .chain(super::super::categorical_distributions::sources())
+        .chain([crate::plots::categorical_distribution::extraction::supplied()])
 }
 
 #[test]
@@ -121,7 +123,19 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
 #[test]
 fn native_narrow_exact_root_selects_actual_ticks_instead_of_rejecting_endpoint_estimates() {
     use crate::decorations::plan::{plan_panel_for_test, LegendRole};
-    for source in sources() {
+    for source in
+        sources()
+            .into_iter()
+            .chain(
+                super::super::categorical_distributions::sources().map(|source| {
+                    source.labels(
+                        crate::Labels::raw()
+                            .alias("after_visit", "a")
+                            .alias("before_visit", "b"),
+                    )
+                }),
+            )
+    {
         let source = source
             .with_planned_y_limits((0.001, 1.0))
             .x_label("")
@@ -340,6 +354,7 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         crate::plots::interval_estimate::STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
         crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
+        crate::plots::categorical_distribution::STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::layout::interior::distributions::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
@@ -376,6 +391,10 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         assert_eq!(
             crate::plots::bar_data::STAGES.with(std::cell::Cell::get),
             [[0; 4]; 4]
+        );
+        assert_eq!(
+            crate::plots::categorical_distribution::STAGES.with(std::cell::Cell::get),
+            [[0; 4]; 3]
         );
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
@@ -761,7 +780,14 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
         let axes = &mut std::sync::Arc::get_mut(&mut inputs.axes).unwrap()[0].1;
         axes.specs[0].exact_ticks = Some(vec![
             crate::layout::AxisTick::new(0.0, "first"),
-            crate::layout::AxisTick::new(2.0, "last"),
+            crate::layout::AxisTick::new(
+                if axes.categories[0].is_some() {
+                    axes.ranges[0].1
+                } else {
+                    2.0
+                },
+                "last",
+            ),
         ]);
         if axes.categories[1].is_none() {
             axes.specs[1].exact_ticks = Some(vec![crate::layout::AxisTick::new(2.0, "")]);

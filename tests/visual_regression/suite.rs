@@ -348,6 +348,131 @@ fn native_bar_family_snapshots() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "three complete family fixtures include caller-supplied Raincloud geometry"
+)]
+fn native_categorical_distribution_snapshots() {
+    use lichtung_plot::{
+        RaincloudDensityPoint, RaincloudPoint, RawOverlay, Significance, SignificanceMark,
+    };
+    let categories = CategoryValues::new(
+        "category",
+        [
+            "after_visit",
+            "after_visit",
+            "before_visit",
+            "before_visit",
+            "after_visit",
+            "after_visit",
+        ],
+    )
+    .unwrap();
+    let values = NumericValues::new("value", [1.25, 4.5, -2.5, 3.125, 2.25, 7.75]);
+    let series = CategoryValues::new(
+        "series",
+        ["first", "first", "first", "first", "second", "second"],
+    )
+    .unwrap();
+    let comparison = || {
+        [Significance::between(
+            "after_visit",
+            "before_visit",
+            SignificanceMark::PValue(0.0123),
+        )]
+    };
+    let plots = [
+        (
+            "boxplot",
+            Plot::boxplot(categories.clone(), values.clone())
+                .series(series.clone())
+                .raw_overlay(RawOverlay::Jittered)
+                .significance(comparison())
+                .erase(),
+        ),
+        (
+            "violin",
+            Plot::violin(categories, values)
+                .series(series)
+                .raw_overlay(RawOverlay::Points)
+                .significance(comparison())
+                .erase(),
+        ),
+        (
+            "raincloud",
+            Plot::raincloud(lichtung_plot::RaincloudInput::geometry(
+                lichtung_plot::RaincloudGeometry {
+                    dimensions: lichtung_plot::RaincloudDimensions {
+                        category: "category".into(),
+                        value: "value".into(),
+                        hue: Some("series".into()),
+                    },
+                    groups: ["after_visit", "before_visit"]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, category)| {
+                            let offset = f64::from(u32::try_from(index).unwrap()) * 2.0;
+                            lichtung_plot::RaincloudGroup {
+                                category: category.into(),
+                                hue: Some(if index == 0 { "first" } else { "second" }.into()),
+                                density: vec![
+                                    RaincloudDensityPoint {
+                                        y: offset,
+                                        normalized_width: 0.0,
+                                    },
+                                    RaincloudDensityPoint {
+                                        y: offset + 3.25,
+                                        normalized_width: 0.8,
+                                    },
+                                    RaincloudDensityPoint {
+                                        y: offset + 6.5,
+                                        normalized_width: 0.0,
+                                    },
+                                ],
+                                q1: offset + 1.25,
+                                median: offset + 3.25,
+                                q3: offset + 5.5,
+                                points: vec![
+                                    RaincloudPoint {
+                                        y: offset + 2.25,
+                                        normalized_strip: 0.25,
+                                    },
+                                    RaincloudPoint {
+                                        y: offset + 4.5,
+                                        normalized_strip: 0.75,
+                                    },
+                                ],
+                            }
+                        })
+                        .collect(),
+                },
+            ))
+            .erase(),
+        ),
+    ];
+    for (name, plot) in plots {
+        let out = tempdir().join(format!("native-{name}.svg"));
+        plot.size(641, 401)
+            .title("Native categorical distributions")
+            .labels(
+                lichtung_plot::Labels::humanized().alias("after_visit", "A longer follow-up visit"),
+            )
+            .x_label("First axis line\nSecond axis line\nThird axis line")
+            .caption("Independent caption\nSecond caption line")
+            .svg_preserve_text(&out)
+            .unwrap()
+            .png_preview(out.with_extension("png"))
+            .unwrap();
+        assert_eq!(
+            png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+            (641, 401)
+        );
+        let svg = std::fs::read_to_string(out).unwrap();
+        insta::assert_snapshot!(format!("native_{name}"), normalize_embedded_font(&svg));
+    }
+}
+
+#[test]
 fn beeswarm_clip_structure_snapshot() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);

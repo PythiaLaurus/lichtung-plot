@@ -140,10 +140,15 @@ pub(crate) fn prepare(
     }
     let support_range = kde_support_range(extent_groups.iter().map(Vec::as_slice), 2.0)
         .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
-    let grid = data
-        .collect_source((0..64).map(|k| {
-            Ok(support_range.0 + (support_range.1 - support_range.0) * (k as f64) / 63.0)
-        }))?;
+    let grid = data.collect_source((0..64).map(|k| {
+        // The zero-density seam must share the exact retained support end,
+        // including when the parent assigns that end as a display limit.
+        Ok(if k == 63 {
+            support_range.1
+        } else {
+            support_range.0 + (support_range.1 - support_range.0) * (k as f64) / 63.0
+        })
+    }))?;
     let densities = data.collect_source(extent_groups.iter().map(|values| {
         let summary = violin_summary_with_source(values, Some(data))?;
         let mut densities = kde_with_source(values, &grid, Some(data))?;
@@ -165,15 +170,16 @@ pub(crate) fn prepare(
     })
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     categorical_distribution::count(chart.kind(), 1);
     let retained = categorical_distribution::retained(chart)?;
     if let PreparedDistribution::Supplied(input) = retained {
-        return precomputed::measure(chart, input, context);
+        return precomputed::measure_marks(chart, input, context, layout);
     }
     let PreparedDistribution::Violin(prepared) = retained else {
         return Err(Error::Render("violin requires retained density samples".into()).into());
@@ -196,9 +202,7 @@ pub(crate) fn measure(
     let group_levels = &sample.group_levels;
     let hue_levels = &sample.hue_levels;
     let support_range = prepared.support_range;
-    let base_display_range = context.axis_range(crate::layout::AxisSide::Left, || {
-        Err(Error::Render("violin requires root-prepared axes".into()))
-    })?;
+    let base_display_range = layout.projection.y_range();
     let rendered_maxima = data.collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
@@ -252,25 +256,7 @@ pub(crate) fn measure(
             context.fit_scope(),
         )?
     };
-    let display_range = significance.y_range;
-
     let group_active = !group_levels.is_empty();
-    let n_groups = x_levels.len();
-    let layout = context.axis_layout(|| {
-        let y_axis_spec = crate::layout::display_axis_spec(chart.y_axis_spec(), display_range);
-        context.layout_with_ticks(
-            (0.0, n_groups as f64),
-            display_range,
-            panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            Vec::new(),
-            chart.x_axis_spec(),
-            &y_axis_spec,
-            theme,
-        )
-    })?;
     let proj = &layout.projection;
 
     let n_grid: usize = 64;

@@ -5,7 +5,7 @@ use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle}
 use crate::{Error, Plot, PlotKind};
 
 #[cfg(test)]
-mod extraction;
+pub(crate) mod extraction;
 
 #[derive(Debug)]
 pub(crate) enum PreparedDistribution {
@@ -181,18 +181,6 @@ impl DistributionPayload {
         })?);
         Ok(result)
     }
-}
-
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: crate::spec::PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(Error::Render(
-        "categorical distributions require prepared measurement or selected payload capture".into(),
-    )
-    .into())
 }
 
 #[cfg(test)]
