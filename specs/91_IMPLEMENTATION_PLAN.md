@@ -257,7 +257,7 @@ The approved theme and layout targets follow these rules:
 | T5a6b2 | Standard distribution and reference families | COMPLETE |
 | T5a6c | One-categorical-axis ordinary Plot migration | IN PROGRESS |
 | T5a6c1 | Estimate-display families | COMPLETE |
-| T5a6c2 | Bar families | PENDING |
+| T5a6c2 | Bar families | COMPLETE |
 | T5a6c3 | Categorical distribution families | PENDING |
 | T5a6c4 | Interaction family | PENDING |
 | T5a6d | Ordinary exact-root closure audit | PENDING |
@@ -4613,10 +4613,10 @@ umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
 T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
-routes are native. T5a6c1 is COMPLETE with four native `OneCategoricalAxis` routes,
-for twelve native ordinary routes in total. T5a6, T5a, and T5a6c remain IN PROGRESS.
-T5a6c2-c4 and T5a6d remain PENDING. T5b tracks and public T6 APIs/defaults remain
-deferred.
+routes are native. T5a6c1 and T5a6c2 are COMPLETE with eight native
+`OneCategoricalAxis` routes, for sixteen native ordinary routes in total. T5a6,
+T5a, and T5a6c remain IN PROGRESS. T5a6c3-c4 and T5a6d remain PENDING. T5b tracks
+and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -5588,9 +5588,11 @@ Objective: migrate the ordinary categorical family through one orientation-aware
 producer in T5a6c1-T5a6c4. This umbrella has no separate commit and completes only
 after all four clusters.
 
-Progress evidence (2026-09-14): T5a6c1 is COMPLETE; PointInterval, Coefficient,
-Forest, and Dumbbell are native `OneCategoricalAxis` routes. T5a6c remains
-IN PROGRESS because T5a6c2-c4 remain PENDING; no successor cluster is started.
+Progress evidence (2026-09-14): T5a6c1 and T5a6c2 are COMPLETE; PointInterval,
+Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, and
+StackedHorizontalBar are native `OneCategoricalAxis` routes. Sixteen ordinary
+routes are native in total. T5a6c remains IN PROGRESS because T5a6c3-c4 remain
+PENDING; neither successor cluster is started.
 
 Requirements shared by all four clusters:
 
@@ -5631,8 +5633,8 @@ Evidence:
 Completion evidence (from clean `2287bba`, verified 2026-09-14): COMPLETE.
 Final primary `just verify` passed in `/tmp/opencode/t5a6c1-verify.log` on the
 retry with a 300000 ms timeout. Independent review reported no actionable
-findings. T5a6c remains IN PROGRESS; T5a6c2-c4 remain PENDING and no successor
-cluster is started.
+findings. At that completion, T5a6c remained IN PROGRESS and T5a6c2-c4 were
+PENDING; current stage C progress is recorded above.
 
 - PointInterval, Coefficient, Forest, and Dumbbell now classify as native
   `OneCategoricalAxis`; exactly their four `CategoricalLegacy` variants are
@@ -5687,8 +5689,8 @@ cluster is started.
   status.
 - `DeferredLegacyPanelMinimum`, current mark/annotation consequences, and parent
   track adapters remain deferred to their existing T5c/T5b boundaries. No public
-  API, sizing mode, track policy, or post-T5a geometry policy is added. T5a6c2-c4,
-  T5a6d, and T5b onward are not started.
+  API, sizing mode, track policy, or post-T5a geometry policy is added. At that
+  completion, T5a6c2-c4, T5a6d, and T5b onward had not started.
 
 Final primary `just verify` in `/tmp/opencode/t5a6c1-verify.log` passed in full:
 
@@ -5711,7 +5713,7 @@ Commit: `refactor(layout): migrate estimate display plans`.
 
 ##### T5a6c2: Bar Families
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6c1.
 
@@ -5730,6 +5732,102 @@ Evidence:
 - Per-family route, orientation, sign/stack, exact-size, attached-annotation
   range/reserve consequence, frozen-plan, lifecycle, and snapshot evidence;
   `just verify` passes.
+
+Completion evidence (from clean `869c15b`, verified 2026-09-14): COMPLETE.
+Final primary `just verify` passed in `/tmp/opencode/t5a6c2-verify.log` after the
+rendering-label assertions were migrated to complete wrapped per-slot text.
+Independent review reported no actionable findings. T5a6c remains IN PROGRESS;
+T5a6c3-c4 and T5a6d remain PENDING, and no later phase is started.
+
+- Bar, HorizontalBar, StackedBar, and StackedHorizontalBar now use the existing
+  orientation-aware `coordinate.rs` producer as native `OneCategoricalAxis`
+  routes. Exactly their four categorical legacy variants and combined rejection
+  stub are removed. Sixteen ordinary routes are native; four categorical and
+  five specialized legacy routes remain.
+- The admitted bar preparation remains unchanged, including sample/bootstrap
+  statistics, interval endpoints, observed and explicit category/series orders,
+  independent positive/negative stacks, absent cells, and supplemental points.
+  The family mark producers receive the selected `Layout` after both common axes
+  freeze. Their `context.axis_layout` calls and local axis construction are gone;
+  the legacy context rejects all sixteen native kinds.
+- Native categories retain canonical raw/display identity and exact midpoints.
+  Horizontal bars remain bottom-first, unlike the top-first estimate displays.
+  Canvas category-label suppression is consumed before intrinsic and selected
+  axis measurement, retaining raw keys and positions without a stale label gutter.
+  The common measured absolute gutters and separate root title/caption reserves
+  apply unchanged; no category pitch, T5c style, public API, or track policy is added.
+- Retained bar payloads supply conditional automatic-domain consequences for
+  attached labels and pairwise significance. Fixed numeric limits do not expand.
+  The existing zero-anchored automatic padding is applied only when clearance
+  requires a change, avoiding asymptotic retries against the bracket planner's
+  exact minimum after attached labels are reprojected. Existing mark widths,
+  dodge offsets, sign colors, significance typography, and collision rules remain.
+  The parent rejects a no-legend discovery payload whose projection predates
+  consumed domain feedback, fixing the free-facet stale-domain discovery case.
+  Fixed/free-facet cache-on/off and final parent-domain parity tests below cover
+  this correction.
+- Six new per-family tests cover signed stacks, positive/negative/zero data,
+  multiple exact assignments and dimensions, authoritative categorical ranges,
+  raw/display labels, hidden category reserves, fixed limits, exact numeric ticks,
+  invalid sources before fonts, and conditional significance feedback. Final
+  family measurement consumes the parent's stored limit map at its assigned
+  panel and reproduces the parent's marks, annotations, axes, and SVG bytes;
+  final gutters match the final selected axes, not a prior domain.
+- Expanded shared tests cover exact intrinsic/resource caps, rejection before
+  projection or GeometryBackend construction, independent root captions,
+  contracting gutters, cache hits and feedback replay, changed frames/domains,
+  rejected ancestor trials, and cumulative charging. Real fixed/free facets and
+  shared Canvas roots have cache-on/off byte identity and prepare each component
+  once. Poisoned capture repeats no preparation, projection, native measurement,
+  intrinsic work, tick selection, or shaping. Final storage refusal precedes the
+  sole successful Null lifecycle for each of the four new routes.
+- Four inspected SVG snapshots and PNG previews use exact 641x401 roots, signed
+  grouped or stacked data, intervals/attached labels where supported, pairwise
+  significance, three-line x titles, and independent two-line captions:
+  `visual_regression__native_bar.snap`,
+  `visual_regression__native_horizontal_bar.snap`,
+  `visual_regression__native_stacked_bar.snap`, and
+  `visual_regression__native_stacked_horizontal_bar.snap`. Vertical clips are
+  `(102,51,431.31640625,194)`; horizontal clips are
+  `(147,51,386.31640625,194)`.
+- The existing horizontal structural snapshot intentionally changes its clip
+  from `(155.2001953125,46,174.7998046875,165.400390625)` to
+  `(171,51,168,162)` with the native absolute gutters and corresponding category
+  label positions; title content and placement are unchanged. The horizontal
+  long-tick test now expects the common intrinsic label column's wrapped raw
+  text, including its preserved trailing space. Eighteen other snapshots are
+  unchanged. Keep all five changed/new snapshots with the eventual implementation
+  commit.
+- Focused verification passed strict `just lint`, the full library suite, and
+  all 159 focused integration tests: annotations 27, categorical 44, composition
+  57, layout 20, and visual regression 11. The final full verification below
+  supersedes the initial verification-pending status.
+- An early library run exposed a stale hard-coded measurement count in the
+  attached-significance lifecycle test; it now checks one text-plan call per
+  actual bar measurement and no additional calls during final rendering. The
+  first primary verification also exposed two rendering-label tests that assumed
+  each category occupied one SVG text element. Their assertions now compare the
+  complete wrapped text within each bottom-first category slot, preserving exact
+  spaces and XML entities and checking axis titles and legends separately. This
+  is test migration for intentional native wrapping, not a production regression.
+
+Final primary `just verify` in `/tmp/opencode/t5a6c2-verify.log` passed in full:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 947 passed, 0 failed, 17 ignored (964 total).
+- All 453 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 11. Those eleven visual tests cover all 23 snapshots read-only:
+  four new snapshots, one intentionally changed horizontal structural snapshot,
+  and 18 unchanged existing snapshots.
+- In total, 1,400 tests passed with no failures and 17 ignored (1,417 total).
+  Four example targets ran zero tests. Warning-denied API documentation and
+  offline package verification passed for 259 files (7.0 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate bar family plans`.
 

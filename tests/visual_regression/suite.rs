@@ -251,6 +251,103 @@ fn native_estimate_display_snapshots() {
 }
 
 #[test]
+fn native_bar_family_snapshots() {
+    use lichtung_plot::{Bounds, Significance, SignificanceMark, SignificanceTarget};
+    let categories = CategoryValues::new(
+        "category",
+        [
+            "a long category",
+            "second visit",
+            "last visit",
+            "a long category",
+            "second visit",
+            "last visit",
+        ],
+    )
+    .unwrap();
+    let values = NumericValues::new("value", [-3.0, 5.0, 2.0, -2.0, 7.0, -4.0]);
+    let series = CategoryValues::new(
+        "series",
+        ["first", "first", "first", "second", "second", "second"],
+    )
+    .unwrap();
+    let input = BarInput::estimates_with_error_bars(
+        values.clone(),
+        Bounds::new(
+            NumericValues::new("lower", [-4.0, 4.0, 1.0, -3.0, 6.0, -5.0]),
+            NumericValues::new("upper", [-2.0, 6.0, 3.0, -1.0, 8.0, -3.0]),
+        ),
+    );
+    let attached = || {
+        [
+            Significance::at(
+                SignificanceTarget::category_series("a long category", "first"),
+                SignificanceMark::TwoStars,
+            ),
+            Significance::at("second visit", SignificanceMark::PValue(0.01)),
+        ]
+    };
+    let pairwise = || {
+        [Significance::between(
+            "second visit",
+            "last visit",
+            SignificanceMark::OneStar,
+        )]
+    };
+    let plots = [
+        (
+            "bar",
+            Plot::bar(categories.clone(), input.clone())
+                .series(series.clone())
+                .significance(attached())
+                .significance(pairwise())
+                .y_limits(-10.0, 20.0)
+                .erase(),
+        ),
+        (
+            "horizontal_bar",
+            Plot::horizontal_bar(categories.clone(), input)
+                .series(series.clone())
+                .significance(attached())
+                .significance(pairwise())
+                .color_by_sign()
+                .zero_line()
+                .x_limits(-10.0, 20.0)
+                .erase(),
+        ),
+        (
+            "stacked_bar",
+            Plot::stacked_bar(categories.clone(), values.clone(), series.clone())
+                .significance(pairwise())
+                .erase(),
+        ),
+        (
+            "stacked_horizontal_bar",
+            Plot::stacked_horizontal_bar(categories, values, series)
+                .significance(pairwise())
+                .erase(),
+        ),
+    ];
+    for (name, plot) in plots {
+        let out = tempdir().join(format!("native-{name}.svg"));
+        plot.size(641, 401)
+            .title("Native signed bar families")
+            .x_label("First axis line\nSecond axis line\nThird axis line")
+            .caption("Independent caption\nSecond caption line")
+            .svg_preserve_text(&out)
+            .unwrap()
+            .png_preview(out.with_extension("png"))
+            .unwrap();
+        assert_eq!(
+            png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+            (641, 401)
+        );
+        let svg = std::fs::read_to_string(out).unwrap();
+        insta::assert_snapshot!(format!("native_{name}"), normalize_embedded_font(&svg));
+    }
+}
+
+#[test]
 fn beeswarm_clip_structure_snapshot() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);

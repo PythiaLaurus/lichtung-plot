@@ -203,14 +203,23 @@ fn horizontal_bar_long_ticks_clear_y_axis_label() {
     );
     let text = parse_text_elements(&svg);
     let axis = text_element(&text, "Locus and genotype");
-    let tick = text_element(&text, "locus_0 AA");
+    // Native categorical axes use the common intrinsic label column, wrapping
+    // at spaces rather than retaining the old horizontal-bar-only allocation.
+    let tick = text_element(&text, "locus_0 ");
+    assert_eq!(
+        text.iter()
+            .filter(|entry| entry.content == "locus_0 ")
+            .count(),
+        3
+    );
     for genotype in ["aa", "Aa", "AA"] {
-        let label = format!("locus_0 {genotype}");
         assert_eq!(
-            text.iter().filter(|entry| entry.content == label).count(),
+            text.iter()
+                .filter(|entry| entry.content == genotype)
+                .count(),
             1
         );
-        assert!(text_element(&text, &label).x >= tick.x);
+        assert!(text_element(&text, genotype).x >= tick.x);
     }
     let axis_line = svg
         .lines()

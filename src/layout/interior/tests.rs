@@ -44,7 +44,7 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         };
         counts[index] += 1;
     }
-    assert_eq!(counts, [8, 5, 8, 4]);
+    assert_eq!(counts, [4, 5, 8, 8]);
     let parents = [
         ParentCompositionAdapter::Facet,
         ParentCompositionAdapter::Canvas,

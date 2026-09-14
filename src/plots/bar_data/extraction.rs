@@ -551,6 +551,9 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
                     Counter::TickMetricLookup,
                     Counter::TextProposalVisit,
                     Counter::TextExactTrial,
+                    Counter::OneCategoricalAxisMeasure,
+                    Counter::StandardPanelIntrinsic,
+                    Counter::LegacyPanelConstructor,
                     Counter::SignificanceBisection,
                     Counter::SignificanceRangeGrowth,
                 ] {

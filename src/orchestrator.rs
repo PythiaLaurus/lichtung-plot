@@ -246,12 +246,6 @@ impl Plot {
             R::CategoricalLegacy(C::Violin | C::Raincloud) => {
                 crate::plots::violin::measure(self, context)?
             }
-            R::CategoricalLegacy(C::Bar | C::StackedBar) => {
-                crate::plots::bar::measure(self, context)?
-            }
-            R::CategoricalLegacy(C::HorizontalBar | C::StackedHorizontalBar) => {
-                crate::plots::horizontal_bar::measure(self, context)?
-            }
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context
@@ -422,16 +416,6 @@ fn resolve_rendered_labels(
             tick.label = label;
         }
         result.y_tick_keys = Some(raw);
-    }
-    if matches!(
-        kind,
-        PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
-    ) && !plot.y_tick_labels_visible()
-    {
-        data.claim_source_visits(result.layout.y_axis.ticks.len())?;
-        for tick in &mut result.layout.y_axis.ticks {
-            tick.label.clear();
-        }
     }
     if !result.legend_entries.is_empty() {
         crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries, theme)?;

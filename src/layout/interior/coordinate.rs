@@ -40,6 +40,9 @@ impl Intrinsics {
                 }
             }
             if let Some(labels) = &axes.display_categories[side] {
+                if side == 1 && !plot.y_tick_labels_visible() {
+                    continue;
+                }
                 let mut category_pitch = 0.0_f64;
                 for label in labels {
                     if !label.is_empty() {
@@ -118,10 +121,13 @@ impl InteriorRoute {
                 // The prepared source owns orientation and midpoint order. New
                 // categorical clusters reuse this boundary without rebuilding it.
                 let category_side = match family {
+                    OneCategoricalAxis::Bar | OneCategoricalAxis::StackedBar => 0,
                     OneCategoricalAxis::PointInterval
                     | OneCategoricalAxis::Coefficient
                     | OneCategoricalAxis::Forest
-                    | OneCategoricalAxis::Dumbbell => 1,
+                    | OneCategoricalAxis::Dumbbell
+                    | OneCategoricalAxis::HorizontalBar
+                    | OneCategoricalAxis::StackedHorizontalBar => 1,
                 };
                 inputs.categories[category_side].is_some()
                     && inputs.categories[1 - category_side].is_none()
@@ -196,7 +202,11 @@ impl InteriorRoute {
                     data.collect_source(categories.iter().zip(display).map(|(tick, label)| {
                         Ok(crate::layout::AxisTick {
                             position: tick.position,
-                            label: data.copy_source_string(label)?,
+                            label: if side == 1 && !plot.y_tick_labels_visible() {
+                                String::new()
+                            } else {
+                                data.copy_source_string(label)?
+                            },
                         })
                     }))?
                 } else {
@@ -277,6 +287,12 @@ impl InteriorRoute {
             Self::OneCategoricalAxis(OneCategoricalAxis::Dumbbell) => {
                 crate::plots::dumbbell::measure_marks(plot, context, layout)?
             }
+            Self::OneCategoricalAxis(OneCategoricalAxis::Bar | OneCategoricalAxis::StackedBar) => {
+                crate::plots::bar::measure_marks(plot, context, layout)?
+            }
+            Self::OneCategoricalAxis(
+                OneCategoricalAxis::HorizontalBar | OneCategoricalAxis::StackedHorizontalBar,
+            ) => crate::plots::horizontal_bar::measure_marks(plot, context, layout)?,
             Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => {
                 unreachable!("native route validated")
             }

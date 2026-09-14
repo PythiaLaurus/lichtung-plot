@@ -16,9 +16,10 @@ use crate::render::backend::{FillStyle, LineStyle, PlacedText, Point2D, TextAnch
 use crate::spec::{BarSpacing, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     let theme = context.theme;
 
@@ -49,22 +50,14 @@ pub(crate) fn measure(
         "horizontal bar attached significance label",
         chart.significance_mark_style_override().is_some(),
     )?;
-    let base_x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        Err(Error::Render(
-            "bar measurement requires root-prepared axes".into(),
-        ))
-    })?;
-    let base_x_range = if context.retained_axes.is_none() {
-        range_for_bar_marks(
-            chart,
-            prepared,
-            panel_box,
-            base_x_range,
-            &attached_label_plans,
-        )
-    } else {
-        base_x_range
-    };
+    let base_x_range = layout.projection.x_range();
+    let mark_range = range_for_bar_marks(
+        chart,
+        prepared,
+        panel_box,
+        base_x_range,
+        &attached_label_plans,
+    );
     let anchor_count = prepared.series.len().max(1);
     let mut rendered_maxima = data.collect_source(
         (0..prepared.categories.len())
@@ -125,22 +118,12 @@ pub(crate) fn measure(
         theme,
         context.fit_scope(),
     )?;
-    let x_range = significance.y_range;
-    let layout = context.axis_layout(|| {
-        let x_axis_spec = crate::layout::display_axis_spec(chart.x_axis_spec(), x_range);
-        context.layout_with_ticks(
-            x_range,
-            (0.0, y_count),
-            panel_box,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            Vec::new(),
-            &x_axis_spec,
-            chart.y_axis_spec(),
-            theme,
-        )
-    })?;
+    let domain_expansion = bar_data::domain_expansion(
+        base_x_range,
+        mark_range,
+        significance.y_range,
+        crate::layout::interior::ClearanceAxis::X,
+    );
     validate_bar_significance_collisions(
         chart,
         prepared,
@@ -149,10 +132,12 @@ pub(crate) fn measure(
         &attached_label_plans,
         context.fit_scope(),
         data,
+        domain_expansion.is_some(),
     )?;
 
     let mut payload = bar_data::BarPayload {
         clip: layout.projection.panel_box(),
+        domain_expansion,
         zero: None,
         zero_style: LineStyle::solid(theme.foreground, 0.8),
         interval_style: LineStyle::solid(theme.foreground, theme.interval_width),
@@ -165,7 +150,7 @@ pub(crate) fn measure(
     data.reserve_source(&mut payload.bars, prepared.bars.len())?;
     data.reserve_source(&mut payload.text, prepared.significance.len())?;
     data.reserve_source(&mut payload.points, prepared.points.len())?;
-    if chart.zero_line_visible() && x_range.0 <= 0.0 && x_range.1 >= 0.0 {
+    if chart.zero_line_visible() && base_x_range.0 <= 0.0 && base_x_range.1 >= 0.0 {
         let (x, y0) = layout.projection.project(0.0, 0.0);
         let (_, y1) = layout.projection.project(0.0, y_count);
         payload.zero = Some([Point2D::new(x, y0), Point2D::new(x, y1)]);
@@ -204,7 +189,13 @@ pub(crate) fn measure(
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
         payload.text.push(place_bar_significance(
-            chart, mark, text_plan, prepared, mode, &layout,
+            chart,
+            mark,
+            text_plan,
+            prepared,
+            mode,
+            &layout,
+            domain_expansion.is_some(),
         )?);
     }
     for point in &prepared.points {
@@ -249,7 +240,10 @@ fn range_for_bar_marks(
             extent.0 = extent.0.min(mark.edge - clearance);
         }
     }
-    crate::layout::anchored_auto_range(extent, chart.x_axis_spec(), 0.0)
+    if extent.0 >= range.0 && extent.1 <= range.1 {
+        return range;
+    }
+    (range.0.min(extent.0), range.1.max(extent.1))
 }
 
 fn place_bar_significance(
@@ -259,6 +253,7 @@ fn place_bar_significance(
     prepared: &PreparedBars,
     mode: BarMode,
     layout: &Layout,
+    pending_domain: bool,
 ) -> Result<PlacedText, Error> {
     let style = chart.significance_mark_style_spec();
     let y = significance_center(mark.category_index, mark.series_index, prepared, mode);
@@ -272,7 +267,7 @@ fn place_bar_significance(
         let x = edge_x - style.gap_spec();
         (x, TextAnchor::End, x - width >= panel.x0)
     };
-    if !fits {
+    if !pending_domain && !fits {
         return Err(Error::Render(format!(
             "horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range",
             mark.label
@@ -286,6 +281,10 @@ fn place_bar_significance(
     ))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "selected geometry and its provisional domain consequence share collision validation"
+)]
 fn validate_bar_significance_collisions(
     chart: &Plot,
     prepared: &PreparedBars,
@@ -294,6 +293,7 @@ fn validate_bar_significance_collisions(
     text_plans: &[ResolvedTextPlan],
     scope: &crate::layout::fit::FitScope,
     data: crate::data::PlotData<'_>,
+    pending_domain: bool,
 ) -> Result<(), crate::layout::fit::PlanError> {
     let style = chart.significance_mark_style_spec();
     let mut bounds = Vec::new();
@@ -311,7 +311,7 @@ fn validate_bar_significance_collisions(
         };
         let candidate = (x0, x1, y - height / 2.0, y + height / 2.0);
         let panel = layout.projection.panel_box();
-        if x0 < panel.x0 || x1 > panel.x1 {
+        if !pending_domain && (x0 < panel.x0 || x1 > panel.x1) {
             return Err(scope.failure(crate::layout::fit::FitKind::OverlayCollision, format!("horizontal bar significance mark {:?} does not clear its confidence interval and panel boundary; widen the x-axis range", mark.label)).into());
         }
         data.claim_source_visits(bounds.len())?;

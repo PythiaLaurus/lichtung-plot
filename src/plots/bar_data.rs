@@ -107,6 +107,7 @@ pub(crate) struct BarShape {
 #[derive(Debug)]
 pub(crate) struct BarPayload {
     pub(crate) clip: crate::layout::PanelBox,
+    pub(crate) domain_expansion: Option<crate::layout::interior::DomainExpansion>,
     pub(crate) zero: Option<[crate::render::backend::Point2D; 2]>,
     pub(crate) zero_style: crate::render::backend::LineStyle,
     pub(crate) interval_style: crate::render::backend::LineStyle,
@@ -250,16 +251,25 @@ pub(crate) fn retained(chart: &Plot) -> Result<&PreparedBars, Error> {
         .ok_or_else(|| Error::Render("bar measurement requires root-prepared semantics".into()))
 }
 
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: crate::spec::PlotRenderContext<'_>,
-    _: &mut dyn crate::render::backend::Backend,
-) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(
-        Error::Render("bars require prepared measurement or selected payload capture".into())
-            .into(),
-    )
+pub(crate) fn domain_expansion(
+    range: (f64, f64),
+    marks: (f64, f64),
+    brackets: (f64, f64),
+    axis: crate::layout::interior::ClearanceAxis,
+) -> Option<crate::layout::interior::DomainExpansion> {
+    let limits = (marks.0.min(brackets.0), marks.1.max(brackets.1));
+    if limits == range {
+        return None;
+    }
+    // Bracket bisection gives the minimum for this projection's pixel clearances.
+    // Reuse the bar's anchored automatic padding so reprojected attached marks
+    // do not chase that boundary asymptotically across parent feedback rounds.
+    let expanded =
+        crate::layout::anchored_auto_range(limits, &crate::layout::AxisSpec::default(), 0.0);
+    Some(crate::layout::interior::DomainExpansion {
+        axis,
+        limits: (range.0.min(expanded.0), range.1.max(expanded.1)),
+    })
 }
 
 pub(crate) fn attached_significance_text_plans(

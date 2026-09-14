@@ -33,6 +33,7 @@ fn all_sources() -> impl Iterator<Item = Plot> {
     sources()
         .into_iter()
         .chain(super::super::estimates::sources())
+        .chain(super::super::bars::sources())
 }
 
 #[test]
@@ -269,7 +270,9 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
         let minimum = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
-        let is_category = plot.prepared_axis_inputs().unwrap().display_categories[0].is_some();
+        let is_category = plot.prepared_axis_inputs().unwrap().display_categories[0]
+            .as_ref()
+            .is_some_and(|labels| labels.iter().any(|label| label == &word));
         let hard = fit::intrinsic_widths(
             &theme,
             &word,
@@ -336,6 +339,7 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         crate::plots::line::STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::plots::interval_estimate::STAGES.with(|counts| counts.set([[0; 4]; 3]));
         crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
+        crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::layout::interior::distributions::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
@@ -368,6 +372,10 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         assert_eq!(
             crate::plots::dumbbell::STAGES.with(std::cell::Cell::get),
             [0; 4]
+        );
+        assert_eq!(
+            crate::plots::bar_data::STAGES.with(std::cell::Cell::get),
+            [[0; 4]; 4]
         );
         assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),

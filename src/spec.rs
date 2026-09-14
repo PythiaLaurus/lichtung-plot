@@ -976,15 +976,7 @@ impl<'a> PlotRenderContext<'a> {
                 {
                     let geometry_expansion = matches!(
                         self.prepared_kind,
-                        Some(
-                            PlotKind::Bar
-                                | PlotKind::StackedBar
-                                | PlotKind::HorizontalBar
-                                | PlotKind::StackedHorizontalBar
-                                | PlotKind::Boxplot
-                                | PlotKind::Violin
-                                | PlotKind::Raincloud
-                        )
+                        Some(PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud)
                     );
                     if let Some(categories) = &axes.categories[side] {
                         *ticks = data.collect_source(categories.iter().map(|tick| {
@@ -1043,18 +1035,18 @@ impl<'a> PlotRenderContext<'a> {
                     | PlotKind::PointInterval
                     | PlotKind::Coefficient
                     | PlotKind::Forest
-                    | PlotKind::Dumbbell => {
+                    | PlotKind::Dumbbell
+                    | PlotKind::Bar
+                    | PlotKind::StackedBar
+                    | PlotKind::HorizontalBar
+                    | PlotKind::StackedHorizontalBar => {
                         return Err(Error::Render(
                             "native axes require the coordinate producer".into(),
                         )
                         .into())
                     }
                     PlotKind::Interaction => true,
-                    PlotKind::Bar
-                    | PlotKind::StackedBar
-                    | PlotKind::HorizontalBar
-                    | PlotKind::StackedHorizontalBar
-                    | PlotKind::Boxplot
+                    PlotKind::Boxplot
                     | PlotKind::Violin
                     | PlotKind::Raincloud
                     | PlotKind::Heatmap

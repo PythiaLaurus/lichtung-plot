@@ -569,6 +569,14 @@ fn plan_panel_attempt(
     } else {
         cell
     };
+    // An empty guide can reuse discovery only at the consumed domain. Free
+    // facets otherwise keep replaying the pre-feedback provisional payload.
+    let initial = initial.filter(|(result, _)| {
+        (result.x_domain == crate::spec::AxisDomain::Categorical
+            || planned_x_limits.is_none_or(|range| range == result.layout.projection.x_range()))
+            && (result.y_domain == crate::spec::AxisDomain::Categorical
+                || planned_y_limits.is_none_or(|range| range == result.layout.projection.y_range()))
+    });
     let (mut discovered, discovery) = if let Some(initial) = initial {
         initial
     } else {
@@ -777,6 +785,25 @@ fn plan_panel_attempt(
     let mut domain_request = None;
     let mut next_x = result.layout.projection.x_range();
     let mut next_y = result.layout.projection.y_range();
+    if let Some(crate::layout::interior::DeferredMarkPlan {
+        payload: crate::layout::interior::MarkPayload::Bars(payload),
+        ..
+    }) = result.marks.as_deref()
+    {
+        if let Some(expansion) = payload.domain_expansion {
+            let request = expansion.submit(round, address, address)?;
+            round.miss(
+                address,
+                FitKind::OverlayCollision,
+                &[request],
+                "bar significance requires automatic domain clearance",
+            )?;
+            match expansion.axis {
+                ClearanceAxis::X => next_x = expansion.limits,
+                ClearanceAxis::Y => next_y = expansion.limits,
+            }
+        }
+    }
     if let Some(legend) = &resolved {
         let collision = overlap_score_within_panel(
             legend.bounds,
@@ -835,8 +862,8 @@ fn plan_panel_attempt(
                 domain_request =
                     DomainExpansion { axis, limits }.submit(round, address, address)?;
                 match axis {
-                    ClearanceAxis::X => next_x = limits,
-                    ClearanceAxis::Y => next_y = limits,
+                    ClearanceAxis::X => next_x = (next_x.0.min(limits.0), next_x.1.max(limits.1)),
+                    ClearanceAxis::Y => next_y = (next_y.0.min(limits.0), next_y.1.max(limits.1)),
                 }
             }
         }

@@ -1,0 +1,66 @@
+---
+source: tests/visual_regression/suite.rs
+expression: normalize_embedded_font(&svg)
+---
+<svg xmlns="http://www.w3.org/2000/svg" width="641" height="401" viewBox="0 0 641 401" role="img">
+<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>
+<defs>
+<clipPath id="clip-0"><rect x="102" y="51" width="431.31640625" height="194"/></clipPath>
+</defs>
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<rect x="102" y="51" width="431.31640625" height="194" fill="#FFFFFF"/>
+<g id="grid">
+<polyline points="173.8857421875,245 173.8857421875,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="317.658203125,245 317.658203125,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="461.4306640625,245 461.4306640625,51" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="102,236.181640625 533.31640625,236.181640625" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="102,177.3935546875 533.31640625,177.3935546875" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="102,118.6064453125 533.31640625,118.6064453125" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<polyline points="102,59.818359375 533.31640625,59.818359375" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+</g>
+<g clip-path="url(#clip-0)">
+<polygon points="130.7548828125,177.3935546875 130.7548828125,195.0302734375 217.017578125,195.0302734375 217.017578125,177.3935546875" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="274.5263671875,177.3935546875 274.5263671875,148 360.7900390625,148 360.7900390625,177.3935546875" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="418.298828125,177.3935546875 418.298828125,165.63671875 504.5615234375,165.63671875 504.5615234375,177.3935546875" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="130.7548828125,195.0302734375 130.7548828125,206.7880859375 217.017578125,206.7880859375 217.017578125,195.0302734375" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="274.5263671875,148 274.5263671875,106.8486328125 360.7900390625,106.8486328125 360.7900390625,148" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="418.298828125,177.3935546875 418.298828125,200.9091796875 504.5615234375,200.9091796875 504.5615234375,177.3935546875" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+</g>
+<path class="significance-bracket" d="M 317.658203125 93.8486328125 L 461.4306640625 93.8486328125 M 317.658203125 93.8486328125 L 317.658203125 100.8486328125 M 461.4306640625 93.8486328125 L 461.4306640625 100.8486328125" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round"/>
+<text x="385.5439453125" y="85.8486328125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">*</text>
+<g id="axes">
+<polyline points="102,245 533.31640625,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="533.31640625,245 533.31640625,51" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="533.31640625,51 102,51" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="102,51 102,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="173.8857421875,245.400390625 173.8857421875,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="110.8818359375" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">A long category</text>
+<polyline points="317.658203125,245.400390625 317.658203125,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="268.853515625" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Second visit</text>
+<polyline points="461.4306640625,245.400390625 461.4306640625,250.400390625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="425.1455078125" y="270.9560546875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Last visit</text>
+<text x="261.615234375" y="295.7158203125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">First axis line</text>
+<text x="248.49609375" y="316.1162109375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Second axis line</text>
+<text x="258.681640625" y="336.5166015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Third axis line</text>
+<polyline points="101.599609375,236.181640625 96.599609375,236.181640625" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="65.1298828125" y="239.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">-10</text>
+<polyline points="101.599609375,177.3935546875 96.599609375,177.3935546875" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="81.0830078125" y="181.5498046875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<polyline points="101.599609375,118.6064453125 96.599609375,118.6064453125" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="70.9033203125" y="122.7626953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">10</text>
+<polyline points="101.599609375,59.818359375 96.599609375,59.818359375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="70.9033203125" y="65.15625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">20</text>
+<text x="18.455078125" y="152.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,41.4111328125,148)">Value</text>
+</g>
+<g id="legend">
+<rect x="547.6162109375" y="114.072265625" width="76.8828125" height="67.8544921875" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.80" stroke="#C8C8C8" stroke-width="1"/>
+<text x="555.208984375" y="134" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Series</text>
+<polygon points="555.916015625,156.25 566.916015625,156.25 566.916015625,149.2099609375 555.916015625,149.2099609375" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<text x="574.9208984375" y="153" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">First</text>
+<polygon points="555.916015625,171.427734375 566.916015625,171.427734375 566.916015625,164.3876953125 555.916015625,164.3876953125" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<text x="575.275390625" y="168" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">Second</text>
+</g>
+<text x="189.2451171875" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Native signed bar families</text>
+<text x="14.5283203125" y="368.396484375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Independent caption</text>
+<text x="15.01171875" y="389.396484375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="15" xml:space="preserve" fill="#505050" text-anchor="start" direction="ltr">Second caption line</text>
+</svg>

@@ -2009,10 +2009,15 @@ fn attached_significance_plan_is_not_reshaped_during_final_render() {
     .significance([Significance::at("a", SignificanceMark::OneStar)])
     .erase();
     crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS.with(|calls| calls.set(0));
+    crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
     let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, PlotKind::Bar).unwrap();
     let planned_calls = crate::plots::bar_data::ATTACHED_SIGNIFICANCE_TEXT_PLANNING_CALLS
         .with(std::cell::Cell::get);
-    assert_eq!(planned_calls, 4);
+    assert!(planned_calls > 0);
+    assert_eq!(
+        planned_calls,
+        crate::plots::bar_data::STAGES.with(std::cell::Cell::get)[0][1]
+    );
 
     plan.render(&mut RecordingBackend::default()).unwrap();
 

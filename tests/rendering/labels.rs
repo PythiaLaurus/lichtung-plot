@@ -39,6 +39,37 @@ fn horizontal_bar(
     )
 }
 
+fn text_layer<'a>(svg: &'a str, name: &str) -> &'a str {
+    svg.split_once(&format!("<g id=\"{name}\">"))
+        .unwrap()
+        .1
+        .split_once("</g>")
+        .unwrap()
+        .0
+}
+
+fn horizontal_category_text(svg: &str, count: u32) -> Vec<String> {
+    let panel = super::parse_first_clip_rect(svg);
+    // Exclude the rotated title and other layers before joining wrapped text
+    // within each bottom-first category slot. Keep XML entities and spaces exact.
+    let axes = text_layer(svg, "axes")
+        .lines()
+        .filter(|line| !line.contains("transform="))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let text = super::parse_text_elements(&axes);
+    (0..count)
+        .map(|index| {
+            let top = panel.y + panel.height * (1.0 - f64::from(index + 1) / f64::from(count));
+            let bottom = panel.y + panel.height * (1.0 - f64::from(index) / f64::from(count));
+            text.iter()
+                .filter(|entry| entry.x < panel.x && entry.y >= top && entry.y < bottom)
+                .map(|entry| entry.content.as_str())
+                .collect()
+        })
+        .collect()
+}
+
 #[test]
 fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
     let treatment_group =
@@ -47,20 +78,24 @@ fn direct_plot_humanizes_axes_categories_legend_title_and_entries() {
     let study_arm = CategoryValues::new("study_arm", ["control_arm", "active_arm"]).unwrap();
     let svg = render(horizontal_bar(&treatment_group, &mean_score).series(study_arm));
 
-    for label in [
-        "Mean score",
-        "Treatment group",
-        "Control group",
-        "Active group",
-        "Study arm",
-        "Control arm",
-        "Active arm",
-    ] {
+    assert_eq!(
+        horizontal_category_text(&svg, 2),
+        ["Control group", "Active group"]
+    );
+    let axes = super::parse_text_elements(text_layer(&svg, "axes"));
+    for label in ["Mean score", "Treatment group"] {
         assert!(
-            svg.contains(&format!(">{label}</text>")),
+            axes.iter().any(|entry| entry.content == label),
             "missing {label:?}"
         );
     }
+    assert_eq!(
+        super::parse_text_elements(text_layer(&svg, "legend"))
+            .into_iter()
+            .map(|entry| entry.content)
+            .collect::<Vec<_>>(),
+        ["Study arm", "Control arm", "Active arm"]
+    );
 }
 
 #[test]
@@ -108,8 +143,17 @@ fn aliases_override_every_automatic_horizontal_bar_surface_and_escape_svg() {
     let svg =
         render(Plot::horizontal_bar(feature_name, BarInput::estimates(mean_score)).labels(labels));
 
-    assert!(svg.contains(">Score</text>") && svg.contains(">(points)</text>"));
-    assert!(svg.contains(">A &amp; B &lt;feature&gt;</text>"));
+    let axes = super::parse_text_elements(text_layer(&svg, "axes"));
+    for label in ["Score", "(points)", "Feature"] {
+        assert!(
+            axes.iter().any(|entry| entry.content == label),
+            "missing {label:?}"
+        );
+    }
+    assert_eq!(
+        horizontal_category_text(&svg, 1),
+        ["A &amp; B &lt;feature&gt;"]
+    );
     assert!(!svg.contains("Score\n(points)"));
 }
 
