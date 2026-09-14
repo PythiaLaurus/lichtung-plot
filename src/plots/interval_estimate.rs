@@ -36,6 +36,7 @@ impl PreparedEstimate {
         data: crate::data::PlotData<'_>,
         annotations: impl IntoIterator<Item = &'a crate::significance::SignificanceAnnotation>,
     ) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         count(chart.kind(), 0);
         if chart.kind() != crate::PlotKind::PointInterval {
@@ -50,6 +51,7 @@ impl PreparedEstimate {
             (_, Some(range)) => Some(crate::plots::point_interval::point_interval_display_range(
                 range,
                 chart.x_axis_spec(),
+                data.source_resources()?,
             )?),
             _ => None,
         };
@@ -164,6 +166,8 @@ pub(crate) struct EstimateTuple {
     pub(crate) estimate: f64,
     pub(crate) lower: Option<f64>,
     pub(crate) upper: Option<f64>,
+    /// Preserve raw bound distinction through correctly rounded scale transforms.
+    pub(crate) nonzero_interval: bool,
 }
 
 pub(crate) fn prepare_estimate_tuples(
@@ -209,6 +213,7 @@ pub(crate) fn prepare_estimate_tuples(
                 estimate,
                 lower,
                 upper,
+                nonzero_interval: lower.zip(upper).is_some_and(|(lower, upper)| lower < upper),
             }))
         }));
     };
@@ -236,6 +241,7 @@ pub(crate) fn prepare_estimate_tuples(
         .into_iter()
         .enumerate()
         .map(|(index, status)| {
+            data.claim_source_visits(1)?;
             let estimate = estimates[index];
             let (lower, upper) = intervals.as_ref().map_or((None, None), |(lower, upper)| {
                 (lower[index], upper[index])
@@ -258,6 +264,7 @@ pub(crate) fn prepare_estimate_tuples(
                         estimate,
                         lower,
                         upper,
+                        nonzero_interval: lower.zip(upper).is_some_and(|(lower, upper)| lower < upper),
                     }))
                 }
                 EstimateStatus::NotEstimable
@@ -394,7 +401,7 @@ pub(crate) fn shared_x_domain(
         }
         match chart.axis_scale_spec() {
             AxisScale::Linear => Ok(value),
-            AxisScale::Log10 if value > 0.0 => Ok(value.log10()),
+            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value, data.source_resources()?),
             AxisScale::Log10 => Err(Error::Data(format!("{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"))),
         }
     };
@@ -423,10 +430,11 @@ pub(crate) fn shared_x_domain(
             "{family}: all rows are not_estimable; set explicit x-axis limits"
         ))
     })?;
-    Ok(crate::layout::continuous_auto_range(
+    crate::layout::continuous_auto_range(
         (range.0.min(reference), range.1.max(reference)),
         &AxisSpec::default(),
-    ))
+        data.source_resources()?,
+    )
 }
 
 #[expect(
@@ -536,7 +544,7 @@ fn prepare_model<'a>(
     let transform = |value: f64| -> Result<f64, Error> {
         match scale {
             AxisScale::Linear => Ok(value),
-            AxisScale::Log10 if value > 0.0 => Ok(value.log10()),
+            AxisScale::Log10 if value > 0.0 => crate::numeric::log10(value, data.source_resources()?),
             AxisScale::Log10 => Err(Error::Data(format!(
                 "{family}: logarithmic scale requires strictly positive estimates, bounds, and reference values"
             ))),
@@ -549,6 +557,7 @@ fn prepare_model<'a>(
                     estimate: transform(tuple.estimate)?,
                     lower: tuple.lower.map(transform).transpose()?,
                     upper: tuple.upper.map(transform).transpose()?,
+                    nonzero_interval: tuple.nonzero_interval,
                 })
             })
             .transpose()
@@ -562,15 +571,18 @@ fn prepare_model<'a>(
         }
         Some(limits)
     } else {
-        estimate_data_range(&transformed_estimates).map(|(lower, upper)| {
-            crate::layout::continuous_auto_range(
-                (
-                    lower.min(transformed_reference),
-                    upper.max(transformed_reference),
-                ),
-                &AxisSpec::default(),
-            )
-        })
+        estimate_data_range(&transformed_estimates)
+            .map(|(lower, upper)| {
+                crate::layout::continuous_auto_range(
+                    (
+                        lower.min(transformed_reference),
+                        upper.max(transformed_reference),
+                    ),
+                    &AxisSpec::default(),
+                    data.source_resources()?,
+                )
+            })
+            .transpose()?
     };
     let adjacent = data.collect_source(estimates.iter().zip(coefficient_significance).map(
         |(estimate, mark)| {
@@ -790,6 +802,17 @@ fn project(
                 if visible_lower <= visible_upper {
                     let (left, py) = layout.projection.project(visible_lower, y);
                     let (right, _) = layout.projection.project(visible_upper, y);
+                    layout.projection.validate_span(
+                        crate::layout::AxisSide::Bottom,
+                        (visible_lower, visible_upper),
+                        (left, right),
+                        if prepared.point_interval {
+                            visible_lower < visible_upper
+                        } else {
+                            tuple.nonzero_interval
+                        },
+                        "estimate interval",
+                    )?;
                     row.interval = Some([Point2D::new(left, py), Point2D::new(right, py)]);
                 }
                 if prepared.point_interval {
@@ -966,7 +989,17 @@ mod tests {
     fn upper_extreme_log_ticks_have_unique_expression_labels() {
         let theme = tick_theme();
         let ticks = log_ticks(
-            (308.0, f64::MAX.log10()),
+            (
+                308.0,
+                crate::numeric::log10(
+                    f64::MAX,
+                    &theme
+                        .prepared_font_environment()
+                        .unwrap()
+                        .generation_resources(),
+                )
+                .unwrap(),
+            ),
             crate::layout::PanelBox::new(0.0, 2_000.0, 0.0, 100.0),
             &theme,
         )
@@ -985,7 +1018,11 @@ mod tests {
 
     #[test]
     fn lower_subnormal_log_ticks_omit_duplicate_rounded_values() {
-        let lower = f64::from_bits(1).log10();
+        let lower = crate::numeric::log10(
+            f64::from_bits(1),
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         let theme = tick_theme();
         let ticks = log_ticks(
             (lower, -323.0),

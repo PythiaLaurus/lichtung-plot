@@ -857,3 +857,305 @@ algorithm, cache, API, or font-policy change.
 
 These small deterministic workloads establish local costs and coverage, not a
 universal speedup, a maximum latency, or permission to begin an optimization.
+
+## T5a6d Closing Audit (2026-09-14)
+
+This is scoped benchmark/test closure on the dirty T5a6d checkout, not phase
+completion or a byte-equivalent historical performance baseline. All preceding
+tables and hashes are unchanged. No production code, existing fixture inputs,
+dimensions, label sources, counter definitions, or snapshots changed in this audit.
+No round-count expectation needed adjustment: the approved dirty legend count
+updates already matched the actual traces. No `just verify` or commit was run.
+
+Final commands:
+
+```sh
+cargo test --locked --offline --lib benchmarks -- --nocapture --test-threads=1
+cargo test --release --locked --offline --lib benchmarks -- --ignored --nocapture --test-threads=1
+cargo test --locked --offline --lib -- plots::categorical_distribution::extraction plots::interaction::extraction --nocapture --test-threads=1
+cargo clippy --locked --offline --all-targets -- -D warnings
+```
+
+Logs under `/tmp/opencode/`:
+
+- `t5a6d-benchmarks-normal.log`: **10 passed, 0 failed, 10 ignored, 999 filtered
+  out**, 52.39 seconds.
+- `t5a6d-benchmarks-release.log`: **all 10 ignored groups passed, 0 failed,
+  1009 filtered out**, 8.23 seconds.
+- `t5a6d-extraction-contracts.log`: **15 passed, 0 failed, 1004 filtered out**,
+  42.30 seconds, including both corrected fingerprint contracts and two new
+  odd-quantum scientific-coordinate contracts.
+- `t5a6d-benchmarks-clippy.log`: strict locked/offline all-target Clippy passed.
+  Scoped Rust formatting and diff checks also passed.
+
+The release run was not concurrent with another audit command. Toolchain, system
+fonts, three interleaved samples, timing boundaries, and uncontrolled host/cache
+conditions remain as described above. Durations are observations, not speedups.
+
+### Projection Correction
+
+The former projection always scaled its fraction and deferred spatial rounding
+until primitive construction. The approved current projection uses the direct
+finite-difference fraction (scaled only when necessary), exact projection keys,
+and canonical spatial coordinates shared by marks, ticks, and grids. Consequently,
+width/strip arithmetic and triangle construction now start from canonical points.
+Replacing the current goldens is a **coordinate correction**, not preservation of
+the pre-native byte baseline.
+
+A temporary test-only oracle reconstructed the former projected operands from
+the unchanged fixture values, quartiles, KDE, and deterministic strip inputs.
+Drawing those operands with the current styles/order/clip reproduced **all seven
+historical fingerprints exactly**. Its current-projection distribution recipe
+also matched every retained point before SVG serialization. Parsed comparisons
+covered **42 mark-only SVGs**: two original assignments, three themes, four
+distribution cases and three Interaction visibility modes. Only **135 x-coordinate
+operands** differed, each by exactly **1/1024 px**. All y-coordinates, density
+outlines, element counts/order, clip attributes, and paint/style attributes matched.
+These SVGs contain no label text; this is not a label-source change.
+
+Historical provenance, retained here rather than silently overwritten:
+
+| Fixture | Historical fingerprint | Current fingerprint prefix | Changed operands across six SVGs |
+| --- | --- | --- | ---: |
+| Boxplot, `8e3395a`, SHA-256 | `5f0b079da3bc344bb21b9937d2b6f460171f452cbdcd1f001a05dd7da035da61` | `d7a7ac878e71` | 48 |
+| Violin, `8e3395a`, SHA-256 | `ca6fc08c37c333caecbc10376266944bd18847440be4387be972b27eb0f52a6c` | `ccb910d69f5c` | 60 |
+| Sample Raincloud, `8e3395a`, SHA-256 | `5d570309defa397541d5cdcb5fa45f45058e596dc0cc60ac7b6acffac8d02da3` | `9adc9496e02d` | 12 |
+| Supplied Raincloud, `8e3395a`, SHA-256 | `090b57970de9e895110807340ea5116fc47e1b2ef95fac81cc61b03d6315da7d` | `f8051c52be375` | 3 |
+| Interaction markers/connectors, `a6f9091`, FNV-1a | `fac25eefcd84c63d` | `66849c3c47ba` | 6 |
+| Interaction markers only, `a6f9091`, FNV-1a | `3ef60d2fc29c86ec` | `178ec0a9046a` | 6 |
+| Interaction connectors only, `a6f9091`, FNV-1a | `bae40bd86df8a981` | `bae40bd86df8` | 0 |
+
+Examples at the original fractional assignment: a Boxplot box edge changes
+`117.8896484375 -> 117.890625`; a Violin inner cap/box edge changes
+`149.130859375 -> 149.1318359375`; a sample strip point changes
+`504.705078125 -> 504.7041015625`; an Interaction triangle vertex changes
+`155.2021484375 -> 155.203125`. The complete operand audit is
+`t5a6d-mark-svg-audit.log`. The temporary oracle was removed; there is no retained
+alternate projection implementation. Full current goldens remain in the two
+extraction tests. Added contracts check quartiles, medians, observations, density
+support, sparse intervals, and actual tick/grid alignment at odd quantum origins
+and spans, including exact preservation of raw category and caller tick labels.
+
+### Current Work
+
+`paired_resources` and `publication_resources` now record all six resource fields:
+records, processing visits, font/source/scratch bytes, measurement calls, cache
+entries, and topology slots. **40 paired case/policy profiles plus nine publication
+controls, three samples each (147 records)** assert resource stability, all 32
+counters, capture counters, lifecycle/producer/shape counts, and complete
+root/guide/gutter/intrinsic/child traces, excluding durations. Publication controls
+also retain their three-sample SVG/PNG/decoded hash checks. Capture counters are
+all zero in this run. Resource totals are admitted work, not live-memory peaks;
+measurement calls are not interchangeable with root rounds or shapes.
+
+| Fixture/policy | Rounds / trials / body checks | Proposals / exact trials (= shapes) | Measurement calls / cache entries / topology slots |
+| --- | ---: | ---: | ---: |
+| Small Auto/right | 2 / 2 / 2 | 0 / 27 | 256 / 69 / 10 |
+| Starvation Auto, top | 2 / 4 / 2 | 10 / 31 | 230 / 68 / 8 |
+| Starvation selected top | 2 / 2 / 2 | 0 / 25 | 218 / 65 / 8 |
+| Starvation right, expected refusal | 2 / 3 / 1 | 10 / 31 | 173 / 57 / 8 |
+| Historical reflow Auto/right | 3 / 3 / 3 | 0 / 111 | 480 / 151 / 40 |
+| Preferred-right control Auto/right | 2 / 2 / 2 | 10 / 31 | 212 / 62 / 8 |
+| Native compact Auto/right | 2 / 3 / 2 | 6 / 45 | 232 / 86 / 20 |
+| Adequate Canvas | 2 / 2 / 4 | 24 / 52 | 1353 / 120 / 19 |
+| Pressured Canvas, top | 3 / 7 / 6 | 72 / 133 | 1285 / 150 / 55 |
+| Adequate facets Auto/right | 2 / 2 / 4 | 0 / 29 | 1189 / 108 / 10 |
+| Pressured facets Auto/right | 3 / 4 / 6 | 148 / 178 | 999 / 150 / 28 |
+
+All **seven genuine Auto/selected-edge pairs** retain outlined SVG, preserved SVG,
+encoded PNG, and decoded metadata/pixel equality. Cache-disabled reflow/facet
+controls also pass. The original 520x240 compact fixture still rejects preferred
+right guide-only and accepts compact right in round 1, with eight complete labels,
+16 marks and two populated columns. No replacement fixture was needed. Its Auto
+root/end-to-end medians are **1.266100 / 23.499500 ms**, selected-right medians
+**1.252200 / 23.464300 ms**. Bottom controls and expected no-artifact refusals
+remain separate, not equivalent shortcuts.
+
+Native panel intrinsic counts are one per standalone panel, two per shared
+fixture; root-title intrinsic count is one. Standard coordinate measurements are
+4 for successful two-round outside cases, 3 for the right-side refusal, 6 for
+three-round historical reflow, 20 for adequate shared fixtures, 30 for pressured
+Canvas and 26 for pressured facets. These include actual probes, not an assumed
+one-measurement-per-round rule. End-to-end shared
+child hits/replays remain zero, with 16/24 adequate/pressured misses; controlled
+identical-input reuse remains 3 hits / 4 misses / 1 replay for both owners.
+
+| Publication control | Rounds / captures | Shapes | Measurement calls / cache entries / topology slots |
+| --- | ---: | ---: | ---: |
+| scatter100 | 2 / 1 | 13 | 218 / 92 / 103 |
+| long_label_bar | 2 / 1 | 54 | 134 / 44 / 6 |
+| caption200_1para | 2 / 1 | 257 | 383 / 109 / 104 |
+| caption200_3para | 2 / 1 | 259 | 383 / 113 / 104 |
+| facets2x2 | 2 / 1 | 17 | 1241 / 77 / 104 |
+| mixed_canvas | 2 / 1 | 63 | 442 / 123 / 108 |
+| matrix4 | 1 / 1 | 11 | 662 / 82 / 2 |
+| separate10 | 20 / 10 | 130 | 2180 / 920 / 1030 |
+| reuse10 | 2 / 1 | 13 | 218 / 92 / 103 |
+
+For scale, compact Auto records **4559 records / 132897 visits / 28639434 bytes**;
+pressured Canvas **22216 / 677677 / 39440402**; scatter100
+**5149 / 108349 / 33881255**. `separate10` charges ten operations, while
+`reuse10` retains one operation's resources despite ten SVG/PNG publication pairs.
+Increases as well as decreases in shape counts above are measured, not replaced
+with a blanket claim that retained intrinsics reduce every workload.
+
+Other groups retain their correctness gates: Heatmap long Elide is still 400
+prefixes (200 in each round), ambiguous Elide refuses at 96 without artifacts,
+and complete long/shared-prefix Wrap now measures 58/74 shapes. Heatmap intrinsic
+count is one; its specialized legacy-panel constructor counts are genuinely
+4 for success and 1 for ambiguous refusal, not asserted to be native zero.
+Matrix keeps one root round, 2 local passes (4 for tight long labels), 12 tick
+sources/lists and 72/36 adequate/tight metric lookups; tight long labels measure
+162 proposals / 132 shapes and 270 calls / 58 cache entries / 2 topology slots.
+Inside sparse/dense still has 28/2005 geometry scans and two annotation comparisons.
+Paragraph first/repeat counts remain 0/1/1 versus zero (short), 99/44/44 versus
+zero (multiline). Significance retains 1 growth, 64 bisections and 66/260/521
+level checks. Synthetic coverage counts and system 457-entry/nine-candidate
+discovery are unchanged; observer overhead remains noisy, not a speedup claim.
+
+**Remaining failures in the requested scope: none.** Broader repository
+verification, integration snapshots, phase completion, and commits remain outside
+this audit's acceptance claim.
+
+### Final Numerical Follow-Up (2026-09-14)
+
+This follow-up tests the final categorical-band projection, budgeted Log10,
+overflow-safe extrapolation, and revised source pricing. It supersedes the
+preceding current-checkout resource totals, not their historical evidence.
+Production code, existing scientific inputs/limits, label sources, and semantic
+coordinate expectations were not changed by this follow-up. No `just verify`,
+commit, or production test-helper change was needed.
+
+#### Parent SVG Audit
+
+The initial parent run reproduced four failing fingerprint tests. The existing
+historical worktree hooks then rendered the unchanged owned fixtures: all 20
+Beeswarm and eight Marginal fingerprints matched their historical goldens, as did
+all 18 Waterfall fingerprints. Interaction's four historical native-root SVGs
+were reproduced by restoring only the triangle x vertices calculated from the
+former unrounded centers; both full byte lengths and FNV-1a hashes matched.
+The worktrees' production sources were read-only. Temporary capture/comparison
+code was removed; no alternate renderer or golden-update switch remains.
+
+Parsed comparisons of **all 50 complete preserved SVGs** found **28 byte-identical
+cases and 22 intentionally changed cases**. Every element count/order, text value,
+style/color/opacity/font attribute, clip rectangle, and panel rectangle matched.
+There were **99 coordinate operands changing by exactly 1/1024 px**, plus **16
+larger endpoint-label x-anchor changes**. Thus **not every change is one quantum**:
+
+| Family | One-quantum operands | Larger endpoint-label anchors | Intentional geometry |
+| --- | ---: | ---: | --- |
+| Beeswarm | 50 | 4 | Zero-line/mark alignment; mixed Heatmap category tick/grid centers; endpoint anchors |
+| Waterfall | 29 | 8 | Exact band/mark coordinates and canonical title midpoint; endpoint anchors |
+| Marginal | 16 | 4 | Numeric mark/grid alignment and title midpoint; endpoint anchors |
+| Interaction | 4 | 0 | Triangle vertices constructed after canonical center projection |
+
+The 16 larger shifts are **0.83984375 through 1.6181640625 px**, exclusively on
+numeric endpoint labels in Beeswarm case 1, Waterfall cases 1/7, and Marginal
+case 3. They follow the already-approved actual-ink/quantized-anchor placement in
+`layout/panel/cells.rs`, replacing the former symmetric extent clamp, not changed
+tick positions, labels, font styles, or scientific cells. For example, Beeswarm
+Publication `-1` moves `87.5478515625 -> 86.4189453125`, while its zero mark/line
+moves `389.986328125 -> 389.9873046875` to match the existing zero tick. Tests of
+touching-ink containment and candidate/frozen placement agreement also pass.
+
+Only the 22 changed current goldens were replaced. Their complete historical
+provenance is retained below as **byte length / FNV-1a**; unchanged goldens remain
+in the tests. This records a geometry correction, not historical byte parity.
+
+| Historical fixture/case | Publication | Science |
+| --- | --- | --- |
+| Beeswarm `0a41f1c`, 1 | `10379 / 83d5eca486d917d1` | `10226 / 1144714c8a32166c` |
+| Beeswarm `0a41f1c`, 2 | `10951 / bea109825dc2c961` | `10796 / bd9e9735ded8a2e9` |
+| Beeswarm `0a41f1c`, 9 | `16222 / 9edbb760dcfa349d` | `15082 / 67a240d1a084097d` |
+| Waterfall `0e8c344`, 0 | `11635 / 39b89057ec91b04b` | `11459 / 70f36f878cd864b2` |
+| Waterfall `0e8c344`, 1 | `13598 / 8f329eda9944aa4b` | `13382 / 85837f290de55d6a` |
+| Waterfall `0e8c344`, 2 | `9303 / 268aaf9ae942bc06` | `9167 / 0e248ebbcbeacf4f` |
+| Waterfall `0e8c344`, 7 | `21510 / 349acc3e0230408e` | `19759 / 63688b079b6c7e4a` |
+| Waterfall `0e8c344`, 8 | `11882 / 7ec8c493f7437d22` | `11703 / e6fb3656ea16f6cc` |
+| Marginal `13ce394`, 0 | `21380 / 9bcc78574b22cb3d` | `20933 / 55db04f2b5752211` |
+| Marginal `13ce394`, 3 | `20234 / 47391d40cb3505d0` | `19913 / 2c3ac60f7bab067e` |
+| Native Interaction `31fb8a2`, styled | `11253 / ea4e8528961fec9a` | `10860 / 05f00aad0c71f249` |
+
+The prior seven extraction goldens still pass unchanged. The odd-quantum
+Interaction contract now independently pins all three categorical centers to
+`[162135, 322562, 482990]` CSS quanta and checks every center against actual tick
+and grid SVG. The middle is an exact-band nearest-even tie; treating it as a
+numeric u64 projection key would incorrectly produce `322563`.
+
+#### Final Measurements
+
+All 10 ignored release groups and all normal benchmark contracts pass with the
+existing full counter/trace/resource stability assertions. There are still 147
+resource records across 49 case/policy profiles, three samples each; all capture
+counters are zero. All seven Auto/actually-selected-edge SVG/PNG/pixel comparisons,
+cache-disabled reflow/facets, complete compact labels/two columns/16 marks, and
+expected no-artifact refusals remain intact. No round, proposal, or shape golden
+needed adjustment. The genuine compact path still takes two rounds, three guide
+trials, two body checks, six proposals and 45 shapes.
+
+Pricing is not an optimization baseline: copies/reservations now charge records
+and bytes rather than processing visits; searches charge examined entries and
+sorts charge their input visit pass, not every comparison/swap. Other newly
+admitted work can increase totals. The retained-line admission contract keeps
+**zero processing allowance**, tests **0/2/3/4 available records**, and independently
+tests **zero, exact-minus-one, exact, and exact-plus-one byte allowances**. It
+requires three records (two points and one mark), checks refusal before publishing
+any mark, and verifies exact retained operands/styles and resource usage on success.
+No meaningful refusal was weakened into a zero-work assumption.
+
+| Final fixture | Records / processing visits / bytes | Measurement calls / cache entries / topology slots |
+| --- | ---: | ---: |
+| Small Auto/right | 3487 / 115605 / 29286824 | 256 / 69 / 10 |
+| Historical reflow Auto/right | 12584 / 281444 / 35743585 | 480 / 151 / 40 |
+| Native compact Auto/right | 4615 / 133393 / 28798060 | 232 / 86 / 20 |
+| Pressured Canvas | 22528 / 679369 / 39765028 | 1285 / 150 / 55 |
+| Pressured facets Auto/right | 20520 / 584613 / 37565044 | 999 / 150 / 28 |
+| Heatmap long Elide | 10387 / 144214 / 29030455 | 546 / 134 / 4 |
+| Matrix tight long | 8643 / 126215 / 30321730 | 270 / 58 / 2 |
+| scatter100 / reuse10 | 5155 / 109066 / 34039047 | 218 / 92 / 103 |
+| separate10 | 51550 / 1090660 / 340390470 | 2180 / 920 / 1030 |
+
+Selected final **minimum / median milliseconds** below use the unchanged three
+interleaved samples, timing boundaries, system fonts and uncontrolled host/cache
+conditions. The release run was not concurrent with another audit command. These
+are local observations, **not optimization or comparable-baseline claims**.
+
+| Fixture/policy | Root time | End-to-end |
+| --- | ---: | ---: |
+| Small Auto | 0.927500 / 0.948000 | 28.458001 / 28.770801 |
+| Historical reflow Auto | 3.403800 / 3.590300 | 37.245201 / 37.706500 |
+| Historical reflow selected right | 3.444300 / 3.575800 | 37.612201 / 37.813301 |
+| Native compact Auto | 1.278600 / 1.284900 | 24.953701 / 25.169000 |
+| Native compact selected right | 1.285500 / 1.290800 | 24.944301 / 25.382600 |
+| Pressured Canvas | 6.651700 / 6.780900 | 34.978301 / 35.204801 |
+| Pressured facets Auto, paired with right | 7.944626 / 8.004099 | 40.182893 / 40.327626 |
+| Pressured facets selected right | 7.965534 / 8.095424 | 39.793542 / 39.999809 |
+| Heatmap long Elide | 3.350000 / 3.379001 | 37.099401 / 37.178801 |
+| Matrix tight long | 3.459500 / 3.499900 | 35.380901 / 35.846701 |
+| scatter100 | 0.754434 / 0.766242 | 39.767434 / 42.939326 |
+| separate10 | 7.515842 / 7.746917 | 451.934501 / 465.564242 |
+| reuse10 | 0.769816 / 0.843917 | 196.155488 / 196.171304 |
+
+Final evidence, all under `/tmp/opencode/`:
+
+- `t5a6d-final-benchmarks-release.log`: **10 passed, 0 failed, 1025 filtered out**,
+  8.79 seconds; complete min/median records and all counters/resources/traces.
+- `t5a6d-final-owned-contracts.log`: **26 passed, 0 failed, 10 ignored, 999 filtered
+  out**, 95.14 seconds: all 10 normal benchmarks and 16 owned extraction contracts.
+- `t5a6d-final-parent-contracts.log`: complete categorical **44**, interactions
+  **23**, and marginal-matrix **19** integration tests passed, **86 total, 0 failed**.
+- `t5a6d-final-numeric-boundaries.log`: **6 passed**, covering exact bands, native
+  band installation, overflow extrapolation, Log10 work/scratch refusal, and the
+  two actual-ink/candidate-placement boundaries. Strict all-target Clippy passed
+  in `t5a6d-final-clippy.log`; scoped formatting/diff checks passed.
+- `t5a6d-final-parent-svg-deltas.log` records every changed operand. Historical
+  reproduction logs are `t5a6d-final-beeswarm-marginal-historical.log` and
+  `t5a6d-final-waterfall-historical.log`; full SVG pairs remain in
+  `t5a6d-parent-historical/` and `t5a6d-parent-current/`. The initial failing run
+  and temporary capture log remain separate diagnostic evidence.
+
+**Remaining real failures in this scope: none.** The larger endpoint-anchor
+changes are explicitly accounted for above, not hidden as one-quantum deltas.
+Full-repository verification, other integration targets/snapshots, phase status,
+and commits remain outside this follow-up's acceptance claim.

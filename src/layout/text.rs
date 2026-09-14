@@ -270,6 +270,22 @@ impl ResolvedTextPlan {
         &self,
         preferred_lines: usize,
     ) -> Result<TextIntrinsicRequirements, TextPlanError> {
+        let environment = &self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?
+            .environment;
+        let call = environment
+            .claim_measurement_call()
+            .map_err(text_generation_error)?;
+        self.intrinsic_in_call(preferred_lines, &call)
+    }
+
+    pub(crate) fn intrinsic_in_call(
+        &self,
+        preferred_lines: usize,
+        _call: &canonical::MeasurementCall,
+    ) -> Result<TextIntrinsicRequirements, TextPlanError> {
         let analysis = self
             .1
             .as_ref()
@@ -334,6 +350,9 @@ impl ResolvedTextPlan {
                     };
                     hard = hard.max(width);
                 }
+                environment
+                    .claim_cache_entries(1)
+                    .map_err(text_generation_error)?;
                 let _ = paragraph.hard_width.set(hard);
             }
             result.hard_width_quanta = result.hard_width_quanta.max(
@@ -358,7 +377,23 @@ impl ResolvedTextPlan {
     }
 
     /// Re-select lines from this operation's immutable source/font analysis.
-    pub(crate) fn reflow(&self, mut input: TextPlanInput<'_>) -> Result<Self, TextPlanError> {
+    pub(crate) fn reflow(&self, input: TextPlanInput<'_>) -> Result<Self, TextPlanError> {
+        let environment = &self
+            .1
+            .as_ref()
+            .ok_or(TextPlanError::Arithmetic("missing text analysis"))?
+            .environment;
+        let call = environment
+            .claim_measurement_call()
+            .map_err(text_generation_error)?;
+        self.reflow_in_call(input, &call)
+    }
+
+    pub(crate) fn reflow_in_call(
+        &self,
+        mut input: TextPlanInput<'_>,
+        _call: &canonical::MeasurementCall,
+    ) -> Result<Self, TextPlanError> {
         let analysis = self
             .1
             .as_ref()
@@ -633,6 +668,9 @@ impl AnalyzedParagraph {
             })?;
             boundaries.insert(0, 0);
             let prefixes = proposal_prefixes(environment, whole, &boundaries, font_size)?;
+            environment
+                .claim_cache_entries(1)
+                .map_err(text_generation_error)?;
             let _ = self.wrapping.set(ParagraphWrapping {
                 boundaries,
                 prefixes,
@@ -752,7 +790,24 @@ impl PreparedFontEnvironment {
         &self,
         input: TextPlanInput<'_>,
     ) -> Result<ResolvedTextPlan, TextPlanError> {
-        match measure_text(self, input, false, None)? {
+        let call = self
+            .claim_measurement_call()
+            .map_err(text_generation_error)?;
+        self.plan_text_in_call(input, false, &call)
+    }
+
+    pub(crate) fn plan_text_in_call(
+        &self,
+        input: TextPlanInput<'_>,
+        prepared_only: bool,
+        _call: &canonical::MeasurementCall,
+    ) -> Result<ResolvedTextPlan, TextPlanError> {
+        match measure_text(
+            self,
+            input,
+            prepared_only && self.prepared_pairs_are_sealed()?,
+            None,
+        )? {
             TextMeasurement::Assigned(plan) => Ok(plan),
             TextMeasurement::Intrinsic(_) => unreachable!("assigned text request"),
         }
@@ -762,10 +817,10 @@ impl PreparedFontEnvironment {
         &self,
         input: TextPlanInput<'_>,
     ) -> Result<ResolvedTextPlan, TextPlanError> {
-        match measure_text(self, input, self.prepared_pairs_are_sealed()?, None)? {
-            TextMeasurement::Assigned(plan) => Ok(plan),
-            TextMeasurement::Intrinsic(_) => unreachable!("assigned text request"),
-        }
+        let call = self
+            .claim_measurement_call()
+            .map_err(text_generation_error)?;
+        self.plan_text_in_call(input, true, &call)
     }
 
     pub(crate) fn text_intrinsic_requirements(
@@ -773,6 +828,8 @@ impl PreparedFontEnvironment {
         input: TextPlanInput<'_>,
         preferred_lines: usize,
     ) -> Result<TextIntrinsicRequirements, TextPlanError> {
+        self.claim_measurement_call()
+            .map_err(text_generation_error)?;
         match measure_text(
             self,
             input,
@@ -1060,6 +1117,9 @@ fn measure_text(
                 retain_line(environment, &mut built_lines, selected)?;
                 start = end;
             }
+            environment
+                .claim_cache_entries(1)
+                .map_err(text_generation_error)?;
             retain_paragraph(
                 environment,
                 &mut analyzed_paragraphs,
@@ -1371,20 +1431,23 @@ fn checked_multiply(
 fn claim_text_generation(
     claim: Result<(), canonical::TextGenerationClaimError>,
 ) -> Result<(), TextPlanError> {
-    match claim {
-        Ok(()) => Ok(()),
-        Err(canonical::TextGenerationClaimError::Arithmetic(resource)) => {
-            Err(TextPlanError::Arithmetic(resource))
+    claim.map_err(text_generation_error)
+}
+
+fn text_generation_error(error: canonical::TextGenerationClaimError) -> TextPlanError {
+    match error {
+        canonical::TextGenerationClaimError::Arithmetic(resource) => {
+            TextPlanError::Arithmetic(resource)
         }
-        Err(canonical::TextGenerationClaimError::Limit {
+        canonical::TextGenerationClaimError::Limit {
             resource,
             limit,
             cumulative_claim,
-        }) => Err(TextPlanError::Limit {
+        } => TextPlanError::Limit {
             resource,
             limit,
             cumulative_claim,
-        }),
+        },
     }
 }
 
@@ -2738,6 +2801,89 @@ mod tests {
             .iter()
             .map(|line| &plan.source[line.source_span.range()])
             .collect()
+    }
+
+    #[test]
+    fn resource_audit_direct_text_calls_include_reflow_and_intrinsics_without_double_charging() {
+        for route in 0..5 {
+            let environment = PreparedFontEnvironment::synthetic();
+            let request = input("A A A", i64::MAX, PhysicalTextAlignment::Start);
+            let plan = environment.plan_text(request.clone()).unwrap();
+            let resources = environment.generation_resources();
+            assert_eq!(resources.call_cache_usage().0, 1);
+            resources
+                .claim_calls(999_999 - resources.call_cache_usage().0)
+                .unwrap();
+            let query = || match route {
+                0 => environment.plan_text(request.clone()).map(|_| ()),
+                1 => environment.plan_prepared_text(request.clone()).map(|_| ()),
+                2 => plan.reflow(request.clone()).map(|_| ()),
+                3 => plan.intrinsic_from_analysis(1).map(|_| ()),
+                _ => environment
+                    .text_intrinsic_requirements(request.clone(), 1)
+                    .map(|_| ()),
+            };
+            query().unwrap();
+            assert_eq!(resources.call_cache_usage().0, 1_000_000);
+            let before = (
+                resources.usage().unwrap(),
+                resources.byte_usage().unwrap(),
+                resources.call_cache_usage(),
+            );
+            canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+            assert!(matches!(
+                query(),
+                Err(TextPlanError::Limit {
+                    resource: "measurement/intrinsic call attempts",
+                    ..
+                })
+            ));
+            assert_eq!(
+                (
+                    resources.usage().unwrap(),
+                    resources.byte_usage().unwrap(),
+                    resources.call_cache_usage()
+                ),
+                before
+            );
+            canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        }
+    }
+
+    #[test]
+    fn resource_audit_lazy_text_cache_refusal_is_fatal_and_hits_do_not_insert() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let request = input("A A A", i64::MAX, PhysicalTextAlignment::Start);
+        let plan = environment.plan_text(request).unwrap();
+        let resources = environment.generation_resources();
+        resources
+            .claim_cache_entries(999_999 - resources.call_cache_usage().1)
+            .unwrap();
+        assert!(matches!(
+            plan.intrinsic_from_analysis(1),
+            Err(TextPlanError::Limit {
+                resource: "root-local cache entries",
+                ..
+            })
+        ));
+        let paragraph = &plan.1.as_ref().unwrap().paragraphs[0];
+        assert!(paragraph.wrapping.get().is_some());
+        assert!(paragraph.hard_width.get().is_none());
+        assert_eq!(resources.call_cache_usage().1, 1_000_000);
+
+        let environment = PreparedFontEnvironment::synthetic();
+        let plan = environment
+            .plan_text(input("A A A", i64::MAX, PhysicalTextAlignment::Start))
+            .unwrap();
+        let expected = plan.intrinsic_from_analysis(1).unwrap();
+        let resources = environment.generation_resources();
+        resources
+            .claim_cache_entries(1_000_000 - resources.call_cache_usage().1)
+            .unwrap();
+        let calls = resources.call_cache_usage().0;
+        let repeated = plan.intrinsic_from_analysis(1).unwrap();
+        assert_eq!(repeated.hard_width_quanta, expected.hard_width_quanta);
+        assert_eq!(resources.call_cache_usage(), (calls + 1, 1_000_000));
     }
 
     #[test]

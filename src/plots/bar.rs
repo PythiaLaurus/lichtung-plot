@@ -131,7 +131,8 @@ pub(crate) fn measure_marks(
         mark_range,
         significance.y_range,
         crate::layout::interior::ClearanceAxis::Y,
-    );
+        data.source_resources()?,
+    )?;
     validate_bar_significance_collisions(
         chart,
         prepared,
@@ -167,7 +168,7 @@ pub(crate) fn measure_marks(
                 bar.category_index
             }
         });
-        let polygon = project_bar(&layout.projection, x_center, width, bar.start, bar.end);
+        let polygon = project_bar(&layout.projection, x_center, width, bar)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
             fill: FillStyle {
@@ -176,9 +177,12 @@ pub(crate) fn measure_marks(
                 stroke_width: 1.0,
                 opacity: 1.0,
             },
-            interval: bar.interval.map(|(lower, upper)| {
-                project_error_bar(&layout.projection, x_center, width, lower, upper)
-            }),
+            interval: bar
+                .interval
+                .map(|(lower, upper)| {
+                    project_error_bar(&layout.projection, x_center, width, lower, upper)
+                })
+                .transpose()?,
         });
     }
     for (mark, text_plan) in prepared.significance.iter().zip(&attached_label_plans) {
@@ -375,15 +379,35 @@ fn bar_geometry(
     }
 }
 
-fn project_bar(proj: &Projection, x_center: f64, width: f64, y0: f64, y1: f64) -> [Point2D; 4] {
-    let (left, bottom) = proj.project(x_center - width / 2.0, y0);
-    let (right, top) = proj.project(x_center + width / 2.0, y1);
-    [
+fn project_bar(
+    proj: &Projection,
+    x_center: f64,
+    width: f64,
+    bar: &PreparedBar,
+) -> Result<[Point2D; 4], Error> {
+    let x = (x_center - width / 2.0, x_center + width / 2.0);
+    let (left, bottom) = proj.project(x.0, bar.start);
+    let (right, top) = proj.project(x.1, bar.end);
+    proj.validate_span(
+        crate::layout::AxisSide::Bottom,
+        x,
+        (left, right),
+        width > 0.0,
+        "bar polygon width",
+    )?;
+    proj.validate_span(
+        crate::layout::AxisSide::Left,
+        (bar.start, bar.end),
+        (bottom, top),
+        bar.nonzero,
+        "bar polygon height",
+    )?;
+    Ok([
         Point2D::new(left, bottom),
         Point2D::new(left, top),
         Point2D::new(right, top),
         Point2D::new(right, bottom),
-    ]
+    ])
 }
 
 fn project_error_bar(
@@ -392,11 +416,18 @@ fn project_error_bar(
     width: f64,
     lower: f64,
     upper: f64,
-) -> [[Point2D; 2]; 3] {
+) -> Result<[[Point2D; 2]; 3], Error> {
     let (x_px, y_top_px) = proj.project(x_center, upper);
     let (_, y_bot_px) = proj.project(x_center, lower);
+    proj.validate_span(
+        crate::layout::AxisSide::Left,
+        (lower, upper),
+        (y_bot_px, y_top_px),
+        lower < upper,
+        "bar interval",
+    )?;
     let cap_px = (proj.project(width, 0.0).0 - proj.project(0.0, 0.0).0).abs() * 0.2;
-    [
+    Ok([
         [Point2D::new(x_px, y_top_px), Point2D::new(x_px, y_bot_px)],
         [
             Point2D::new(x_px - cap_px, y_top_px),
@@ -406,5 +437,5 @@ fn project_error_bar(
             Point2D::new(x_px - cap_px, y_bot_px),
             Point2D::new(x_px + cap_px, y_bot_px),
         ],
-    ]
+    ])
 }

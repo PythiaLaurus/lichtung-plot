@@ -50,6 +50,8 @@ pub(crate) struct PreparedBar {
     pub(crate) start: f64,
     /// End value on the numeric axis.
     pub(crate) end: f64,
+    /// Whether the aggregate is nonzero before cumulative stack addition.
+    pub(crate) nonzero: bool,
     /// Optional explicit lower and upper interval endpoints around `end`.
     pub(crate) interval: Option<(f64, f64)>,
 }
@@ -256,20 +258,25 @@ pub(crate) fn domain_expansion(
     marks: (f64, f64),
     brackets: (f64, f64),
     axis: crate::layout::interior::ClearanceAxis,
-) -> Option<crate::layout::interior::DomainExpansion> {
+    resources: &crate::font::canonical::OperationGenerationResources,
+) -> Result<Option<crate::layout::interior::DomainExpansion>, Error> {
     let limits = (marks.0.min(brackets.0), marks.1.max(brackets.1));
     if limits == range {
-        return None;
+        return Ok(None);
     }
     // Bracket bisection gives the minimum for this projection's pixel clearances.
     // Reuse the bar's anchored automatic padding so reprojected attached marks
     // do not chase that boundary asymptotically across parent feedback rounds.
-    let expanded =
-        crate::layout::anchored_auto_range(limits, &crate::layout::AxisSpec::default(), 0.0);
-    Some(crate::layout::interior::DomainExpansion {
+    let expanded = crate::layout::anchored_auto_range(
+        limits,
+        &crate::layout::AxisSpec::default(),
+        0.0,
+        resources,
+    )?;
+    Ok(Some(crate::layout::interior::DomainExpansion {
         axis,
         limits: (range.0.min(expanded.0), range.1.max(expanded.1)),
-    })
+    }))
 }
 
 pub(crate) fn attached_significance_text_plans(
@@ -361,6 +368,7 @@ fn prepare_core(
     mode: BarMode,
     facet: Option<crate::data::FacetAxisSources<'_>>,
 ) -> Result<PreparedBars, Error> {
+    data.claim_mark_rows()?;
     let x_col = chart
         .x_col()
         .ok_or_else(|| Error::Data("bar: x column not set".into()))?;
@@ -663,20 +671,23 @@ fn prepare_point_layers(
             )));
         }
         let category_values = |values: &crate::CategoryValues| {
-            data.collect_source((0..values.len()).map(|row| match values.get(row) {
-                Some(Some(value)) => data.copy_source_string(value),
-                _ => Err(Error::Data(format!(
-                    "{context}: value {:?} contains null at source row {row}",
-                    values.name()
-                ))),
+            data.collect_source((0..values.len()).map(|row| {
+                data.claim_source_visits(1)?;
+                match values.get(row) {
+                    Some(Some(value)) => data.copy_source_string(value),
+                    _ => Err(Error::Data(format!(
+                        "{context}: value {:?} contains null at source row {row}",
+                        values.name()
+                    ))),
+                }
             }))
         };
         let categories = category_values(layer.category_values())?;
         let series = layer.series_values().map(category_values).transpose()?;
-        let values = data.collect_source(
-            (0..layer.values().len())
-                .map(|row| crate::data::strict_numeric_value(layer.values(), row, &context)),
-        )?;
+        let values = data.collect_source((0..layer.values().len()).map(|row| {
+            data.claim_source_visits(1)?;
+            crate::data::strict_numeric_value(layer.values(), row, &context)
+        }))?;
         if categories.is_empty() || categories.len() != values.len() {
             return Err(Error::Data(format!(
                 "{context}: category and value columns must have equal non-zero lengths"
@@ -965,11 +976,10 @@ fn prepare_single(
         let hue_index = hues
             .map(|hues| level_index(&mut hue_levels, data.copy_source_string(&hues[row])?, data))
             .transpose()?;
-        data.claim_source_visits(groups.len())?;
-        if let Some(cell) = groups
-            .iter_mut()
-            .find(|cell| cell.category_index == category_index)
+        if let Some(index) =
+            data.source_position(&groups, |cell| cell.category_index == category_index)?
         {
+            let cell = &mut groups[index];
             data.reserve_source(&mut cell.values, 1)?;
             cell.values.push(value);
             if let Some(units) = summary.units {
@@ -1016,6 +1026,7 @@ fn prepare_single(
             hue_index: cell.hue_index,
             start: 0.0,
             end: value,
+            nonzero: value != 0.0,
             interval,
         });
     }
@@ -1061,11 +1072,10 @@ fn prepare_grouped(
             .as_ref()
             .map(|hues| level_index(&mut hue_levels, data.copy_source_string(&hues[row])?, data))
             .transpose()?;
-        data.claim_source_visits(groups.len())?;
-        if let Some(cell) = groups
-            .iter_mut()
-            .find(|cell| cell.category_index == category_index && cell.series_index == series_index)
-        {
+        if let Some(index) = data.source_position(&groups, |cell| {
+            cell.category_index == category_index && cell.series_index == series_index
+        })? {
+            let cell = &mut groups[index];
             data.reserve_source(&mut cell.values, 1)?;
             cell.values.push(value);
             if let Some(units) = summary.units {
@@ -1118,6 +1128,7 @@ fn prepare_grouped(
             hue_index: cell.hue_index,
             start: 0.0,
             end: value,
+            nonzero: value != 0.0,
             interval,
         });
     }
@@ -1167,11 +1178,10 @@ fn prepare_stacked(
             .as_ref()
             .map(|hues| level_index(&mut hue_levels, data.copy_source_string(&hues[row])?, data))
             .transpose()?;
-        data.claim_source_visits(groups.len())?;
-        if let Some((_, _, _, values)) = groups
-            .iter_mut()
-            .find(|(c, s, _, _)| *c == category_index && *s == series_index)
-        {
+        if let Some(index) = data.source_position(&groups, |(c, s, _, _)| {
+            *c == category_index && *s == series_index
+        })? {
+            let (_, _, _, values) = &mut groups[index];
             data.reserve_source(values, 1)?;
             values.push(value);
         } else {
@@ -1210,13 +1220,13 @@ fn prepare_stacked(
     data.reserve_source(&mut bars, sums.len())?;
     for series_index in 0..series_levels.len() {
         for category_index in 0..category_levels.len() {
-            data.claim_source_visits(sums.len())?;
-            let Some((_, _, hue_index, value)) = sums
-                .iter()
-                .find(|(c, s, _, _)| *c == category_index && *s == series_index)
+            let Some(index) = data.source_position(&sums, |(c, s, _, _)| {
+                *c == category_index && *s == series_index
+            })?
             else {
                 continue;
             };
+            let (_, _, hue_index, value) = &sums[index];
             let (start, end) = if *value >= 0.0 {
                 let start = positive_offsets[category_index];
                 positive_offsets[category_index] += value;
@@ -1244,6 +1254,7 @@ fn prepare_stacked(
                 hue_index: *hue_index,
                 start,
                 end,
+                nonzero: *value != 0.0,
                 interval: None,
             });
         }
@@ -1267,8 +1278,7 @@ fn level_index(
     label: String,
     data: PlotData<'_>,
 ) -> Result<usize, Error> {
-    data.claim_source_visits(levels.len())?;
-    if let Some(index) = levels.iter().position(|existing| existing == &label) {
+    if let Some(index) = data.source_position(levels, |existing| existing == &label)? {
         Ok(index)
     } else {
         let index = levels.len();

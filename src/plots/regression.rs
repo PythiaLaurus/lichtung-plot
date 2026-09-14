@@ -71,8 +71,8 @@ pub(crate) fn axis_ranges(
         }
     }
     Ok([
-        crate::layout::continuous_auto_range(xr, chart.x_axis_spec()),
-        crate::layout::continuous_auto_range(yr, chart.y_axis_spec()),
+        crate::layout::continuous_auto_range(xr, chart.x_axis_spec(), data.source_resources()?)?,
+        crate::layout::continuous_auto_range(yr, chart.y_axis_spec(), data.source_resources()?)?,
     ])
 }
 
@@ -85,7 +85,12 @@ fn regression_axis_channel_and_fit_work_is_admitted_before_preparation() {
         crate::NumericValues::new("y", [1.0, 4.0, 2.0]),
     )
     .erase();
-    let expected = axis_ranges(&chart, chart.data()).unwrap();
+    let baseline_resources = OperationGenerationResources::new();
+    let expected = axis_ranges(
+        &chart,
+        chart.data().with_axis_resources(&baseline_resources),
+    )
+    .unwrap();
     let resources = OperationGenerationResources::new();
     let data = chart.data().with_axis_resources(&resources);
     let points =
@@ -129,6 +134,7 @@ pub(crate) struct PreparedRegression {
 
 impl PreparedRegression {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(3, 0);
         let x_col = chart
@@ -189,8 +195,16 @@ impl PreparedRegression {
             }
         }
 
-        let x_range = crate::layout::continuous_auto_range((x_min, x_max), chart.x_axis_spec());
-        let y_range = crate::layout::continuous_auto_range((y_min, y_max), chart.y_axis_spec());
+        let x_range = crate::layout::continuous_auto_range(
+            (x_min, x_max),
+            chart.x_axis_spec(),
+            data.source_resources()?,
+        )?;
+        let y_range = crate::layout::continuous_auto_range(
+            (y_min, y_max),
+            chart.y_axis_spec(),
+            data.source_resources()?,
+        )?;
         Ok(Self {
             ranges: [x_range, y_range],
             points,
@@ -264,6 +278,7 @@ pub(crate) fn project(
     let point_style = chart.point_style(theme.colors[0], 3);
     let scatter_points =
         data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
+            data.claim_source_visits(1)?;
             let (x, y) = projection.project(*x_value, *y_value);
             Ok(Point2D::new(x, y))
         }))?;
@@ -281,11 +296,29 @@ pub(crate) fn project(
             data.reserve_source(&mut upper, BAND_POINTS * 2)?;
             data.reserve_source(&mut lower, BAND_POINTS)?;
             data.claim_source_visits(values.len())?;
+            let mut has_area = false;
             for (x_value, lower_value, upper_value) in values {
+                has_area |= lower_value < upper_value;
                 let (upper_x, upper_y) = projection.project(*x_value, *upper_value);
                 let (lower_x, lower_y) = projection.project(*x_value, *lower_value);
+                projection.validate_span(
+                    crate::layout::AxisSide::Left,
+                    (*lower_value, *upper_value),
+                    (lower_y, upper_y),
+                    lower_value < upper_value,
+                    "regression band polygon",
+                )?;
                 upper.push(Point2D::new(upper_x, upper_y));
                 lower.push(Point2D::new(lower_x, lower_y));
+            }
+            if let Some((first, last)) = values.first().zip(values.last()) {
+                projection.validate_span(
+                    crate::layout::AxisSide::Bottom,
+                    (first.0, last.0),
+                    (upper[0].x, upper[upper.len() - 1].x),
+                    has_area && first.0 < last.0,
+                    "regression band polygon width",
+                )?;
             }
             data.claim_source_visits(lower.len())?;
             lower.reverse();

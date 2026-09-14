@@ -21,6 +21,17 @@ Broad public constraints remain deferred to DF6 review at T7 closure; remaining
 broader text controls remain deferred to DF5 review at T6 entry. Neither checkpoint
 is a promise to implement those extensions.
 
+Current exact-root T5a6d implementation evidence is in `docs/t5a-closure.md` and
+spec 91. T5a6d, T5a6, and parent T5a are COMPLETE after final review corrections
+and the full gate in `/tmp/opencode/t5a6d-verify.log`: 1,024 library and 467
+integration tests passed, 17 ignored, with strict Clippy, API docs, and package
+verification passing. All ten release benchmark groups separately passed. The
+20 native ordinary kinds, five specialized and two parent adapters, and deferred
+Mark/Annotation consequences do not make this document's complete target current:
+automatic sizing, native composition tracks, final specialized packing, and public
+APIs remain in their later phases. T5b onward remain PENDING. Existing public
+defaults remain exact 640x480 Plot and 960x640 Canvas until the atomic T6 switch.
+
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
 (PF1-PF7). The amendments below approve external conformance data, effective-
 feedback fixed-point completion with dirty reuse, single producer capture, and
@@ -167,10 +178,24 @@ Strings compare by UTF-8 bytes; integers numerically; `None` precedes `Some`;
 sequences compare elementwise then by length. No pointer or hash iteration order
 participates in a layout decision.
 
-Layout `log10` uses the correctly rounded ties-to-even safe Rust port of
-CORE-MATH `cr_log10`, revision `e0a3599597503f2af90311c82e2ca92dc06c789a`, with
-its tables, operation order, exceptional cases, and hard-to-round evidence.
-Platform libm and approximate fallbacks are not admitted. `decimal_power(e)` is
+Layout `log10` uses the correctly rounded ties-to-even exact-integer interval
+algorithm in `src/numeric.rs`, with pinned `num-bigint 0.4.8`. It bounds the
+atanh series with outward fixed-point arithmetic, starting at 128 fractional
+bits and doubling precision until both rational bounds round identically.
+The current root's operation ledger is mandatory: each input, exact-power
+comparison, refinement, series setup/iteration, and final conversion is admitted
+before work. Checked upper bounds on first-party BigUint temporaries are charged
+before their algebra, including limb rounding and capacity growth. The existing
+shared 1,000,000-visit and 512 MiB cumulative-byte limits bound this work and
+scratch; there is no separate precision cap or unbudgeted production entry point.
+Refusal and precision/scratch arithmetic failure are fatal and propagate through
+Forest values, references, ticks, limits, and nice-range consumers.
+Exactly representable powers `10^0..10^22` and exceptional inputs are handled
+explicitly; rationality proves termination for all remaining binary64 inputs.
+This replaces the previously prescribed CORE-MATH port, not its correctly
+rounded result contract. Evidence includes MPFR 4.2.1 rounding vectors, platform
+libm misses, every binary exponent, and near-one cancellation. Platform libm and
+approximate fallbacks are not admitted. `decimal_power(e)` is
 the correctly rounded binary64 mathematical `10^e`, using exact integer/rational
 arithmetic for the pinned exponent table `-323..=308`, not `powf`.
 
@@ -681,11 +706,22 @@ uses lowercase `e`, no positive sign, shortest exponent without leading zeros.
 Normalize negative zero. If a complete list is not unique, retry the whole list
 at scientific precisions `2..=17`, retaining first unique; otherwise source miss.
 
-Projection uses endpoints 0/1 and `(v-lo)/(hi-lo)` when the difference is finite,
-otherwise `((v/scale)-(lo/scale))/((hi/scale)-(lo/scale))`. Require finite `[0,1]`;
-with `D=2^64-1`, key is nearest-even exact `p*D`, and center nearest-even exact
-`S*key/D`. Keys must strictly ascend. Actual outward label intervals, clearance,
-tick geometry, and endpoint containment determine fit, not width transitions.
+Numeric projection uses endpoints 0/1 and `(v-lo)/(hi-lo)` when both direct
+subtractions are finite; otherwise it uses
+`((v/scale)-(lo/scale))/((hi/scale)-(lo/scale))`, with
+`scale=max(abs(v),abs(lo),abs(hi))`. In-domain fractions must be finite `[0,1]`.
+With `D=2^64-1`, key is nearest-even exact `p*D`, and center nearest-even exact
+`origin+S*key/D`, using normalized panel edges and exact integer ratio arithmetic
+including origin parity. Marks, ticks, and grid lines share that projection;
+out-of-domain clipped marks retain explicit extrapolation.
+Categorical projections retain their semantic band count;
+exact band edges/midpoints use integer ratios `i/n` and `(2*i+1)/(2*n)` including
+the origin, rather than numeric keys. Off-center/jittered positions retain their
+continuous projection and are never snapped to a category center. Cell midpoints
+round nearest-even too. Keys must strictly ascend. Candidate and final axis label
+placement share one `CssQuantum` anchor and actual-ink containment predicate.
+Actual outward label intervals, clearance, tick geometry, and endpoint containment
+determine fit, not width transitions.
 Record source kind/ordinal, positions, label bytes, and retained glyph geometry.
 
 Top/left axis order from outside is title, labels, ticks, stroke; bottom/right

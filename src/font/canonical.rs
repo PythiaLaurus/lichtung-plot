@@ -329,7 +329,10 @@ impl OperationFontResources {
             generation: OperationGenerationResources {
                 counters: Arc::new(Mutex::new(GenerationResourceCounters {
                     slots: 0,
+                    topology_slots: 0,
                     visits: 0,
+                    calls: 0,
+                    cache_entries: 0,
                     visit_limit: u128::from(limits.processing_visits),
                     bytes: 0,
                     byte_limit: limits.font_bytes,
@@ -985,7 +988,10 @@ pub(crate) enum TextGenerationClaimError {
 #[derive(Debug)]
 struct GenerationResourceCounters {
     slots: u128,
+    topology_slots: u128,
     visits: u128,
+    calls: u128,
+    cache_entries: u128,
     visit_limit: u128,
     bytes: u64,
     byte_limit: u64,
@@ -996,7 +1002,14 @@ pub(crate) struct OperationGenerationResources {
     counters: Arc<Mutex<GenerationResourceCounters>>,
 }
 
+/// Proof that the logical owner admitted a call before consulting its cache.
+pub(crate) struct MeasurementCall(());
+
 impl OperationGenerationResources {
+    pub(crate) fn same_operation(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.counters, &other.counters)
+    }
+
     #[cfg(test)]
     pub(crate) fn set_test_limits(&self, visits: u128, bytes: u64) {
         let mut counters = self.counters.lock().unwrap();
@@ -1009,7 +1022,10 @@ impl OperationGenerationResources {
         Self {
             counters: Arc::new(Mutex::new(GenerationResourceCounters {
                 slots: 0,
+                topology_slots: 0,
                 visits: 0,
+                calls: 0,
+                cache_entries: 0,
                 visit_limit: visits,
                 bytes: 0,
                 byte_limit: bytes,
@@ -1021,7 +1037,10 @@ impl OperationGenerationResources {
         Self {
             counters: Arc::new(Mutex::new(GenerationResourceCounters {
                 slots: 0,
+                topology_slots: 0,
                 visits: 0,
+                calls: 0,
+                cache_entries: 0,
                 visit_limit: u128::from(PROCESSING_VISIT_LIMIT),
                 bytes: 0,
                 byte_limit: FONT_BYTE_LIMIT,
@@ -1035,6 +1054,55 @@ impl OperationGenerationResources {
             .lock()
             .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
         claim_text_generation_resource(&mut counters.slots, amount, "retained planning records")
+    }
+
+    pub(crate) fn claim_calls(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
+        let mut counters = self
+            .counters
+            .lock()
+            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
+        claim_text_generation_resource(
+            &mut counters.calls,
+            amount,
+            "measurement/intrinsic call attempts",
+        )
+    }
+
+    pub(crate) fn claim_topology_slots(
+        &self,
+        amount: u128,
+    ) -> Result<(), TextGenerationClaimError> {
+        let mut counters = self.counters.lock().map_err(|_| {
+            TextGenerationClaimError::Arithmetic("topology resource synchronization")
+        })?;
+        claim_text_generation_resource(
+            &mut counters.topology_slots,
+            amount,
+            "prepared topology slots",
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn topology_usage(&self) -> u128 {
+        self.counters.lock().unwrap().topology_slots
+    }
+
+    pub(crate) fn claim_cache_entries(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
+        let mut counters = self
+            .counters
+            .lock()
+            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?;
+        claim_text_generation_resource(
+            &mut counters.cache_entries,
+            amount,
+            "root-local cache entries",
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn call_cache_usage(&self) -> (u128, u128) {
+        let counters = self.counters.lock().unwrap();
+        (counters.calls, counters.cache_entries)
     }
 
     pub(crate) fn claim_bytes(&self, amount: u64) -> Result<(), FontError> {
@@ -1116,6 +1184,11 @@ impl PreparedFontEnvironment {
             budget,
             ..
         } = &mut *core;
+        budget
+            .resources
+            .generation
+            .claim_cache_entries(1)
+            .map_err(FontError::ShapeAdmission)?;
         reserve_cached(parsed_stacks, 1, &budget.resources)?;
         parsed_stacks.push((key, retained));
         Ok(parsed)
@@ -1228,6 +1301,25 @@ impl PreparedFontEnvironment {
             .generation_resources
             .clone();
         resources.claim_visits(amount)
+    }
+
+    pub(crate) fn claim_measurement_call(
+        &self,
+    ) -> Result<MeasurementCall, TextGenerationClaimError> {
+        self.core
+            .read()
+            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
+            .generation_resources
+            .claim_calls(1)?;
+        Ok(MeasurementCall(()))
+    }
+
+    pub(crate) fn claim_cache_entries(&self, amount: u128) -> Result<(), TextGenerationClaimError> {
+        self.core
+            .read()
+            .map_err(|_| TextGenerationClaimError::Arithmetic("text resource synchronization"))?
+            .generation_resources
+            .claim_cache_entries(amount)
     }
 
     pub(crate) fn share_generation_resources(
@@ -1933,6 +2025,9 @@ impl CanonicalFontCore {
                 &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
+            self.generation_resources
+                .claim_cache_entries(1)
+                .map_err(FontError::ShapeAdmission)?;
             reserve_cached_with_stage(
                 &mut self.incremental_pairs,
                 1,
@@ -2012,6 +2107,9 @@ impl CanonicalFontCore {
                 &self.budget.resources,
                 prepared_stage.as_deref_mut(),
             )?;
+            self.generation_resources
+                .claim_cache_entries(selected.len() as u128)
+                .map_err(FontError::ShapeAdmission)?;
             cached.selected_scalars.extend(selected);
         }
         // Return the operation's accumulated coverage. Copies are admitted;
@@ -2468,6 +2566,11 @@ fn resolve_stack_names_into(
             *generic,
         ));
     }
+    budget
+        .resources
+        .generation
+        .claim_cache_entries(1)
+        .map_err(FontError::ShapeAdmission)?;
     reserve_cached_with_stage(
         &mut budget.normalized_stacks,
         1,
@@ -4471,6 +4574,85 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn generation_limits_are_independent_inclusive_and_shared() {
+        for resource in 0..5 {
+            let font = OperationFontResources::new();
+            let generation = font.generation_resources();
+            let claim = |amount| match resource {
+                0 => generation.claim_slots(amount),
+                1 => generation.claim_visits(amount),
+                2 => generation.claim_calls(amount),
+                3 => generation.claim_cache_entries(amount),
+                _ => generation.claim_topology_slots(amount),
+            };
+            claim(999_999).unwrap();
+            claim(1).unwrap();
+            assert!(matches!(
+                claim(1),
+                Err(TextGenerationClaimError::Limit {
+                    limit: 1_000_000,
+                    cumulative_claim: 1_000_001,
+                    ..
+                })
+            ));
+            assert!(matches!(
+                claim(u128::MAX),
+                Err(TextGenerationClaimError::Arithmetic(_))
+            ));
+            let (records, visits) = generation.usage().unwrap();
+            let (calls, entries) = generation.clone().call_cache_usage();
+            for (index, used) in [records, visits, calls, entries, generation.topology_usage()]
+                .into_iter()
+                .enumerate()
+            {
+                assert_eq!(used, if index == resource { 1_000_000 } else { 0 });
+            }
+            font.claim_discovery(1_000_000).unwrap();
+            assert!(font.claim_discovery(1).is_err());
+            font.claim_bytes(FONT_BYTE_LIMIT).unwrap();
+            assert!(font.claim_bytes(1).is_err());
+            assert_eq!(generation.usage().unwrap(), (records, visits));
+            assert_eq!(generation.call_cache_usage(), (calls, entries));
+        }
+        for resource in 0..3 {
+            let resources = OperationGenerationResources::new();
+            let claim = |amount| match resource {
+                0 => resources.clone().claim_calls(amount),
+                1 => resources.clone().claim_cache_entries(amount),
+                _ => resources.clone().claim_topology_slots(amount),
+            };
+            claim(100_000).unwrap();
+            let successes = std::thread::scope(|scope| {
+                let a = scope.spawn(|| claim(600_000).is_ok());
+                let b = scope.spawn(|| claim(600_000).is_ok());
+                usize::from(a.join().unwrap()) + usize::from(b.join().unwrap())
+            });
+            assert_eq!(successes, 1);
+            claim(300_000).unwrap();
+            assert!(claim(1).is_err());
+        }
+    }
+
+    #[test]
+    fn font_cache_refusal_does_not_insert_or_prevent_existing_entry_reuse() {
+        let environment = PreparedFontEnvironment::synthetic();
+        let parsed = environment.parse_family_stack("Test Sans").unwrap();
+        let resources = environment.generation_resources();
+        assert_eq!(resources.call_cache_usage().1, 1);
+        resources.claim_cache_entries(999_999).unwrap();
+        assert_eq!(environment.parse_family_stack("Test Sans").unwrap(), parsed);
+        assert!(matches!(
+            environment.parse_family_stack("Test Serif"),
+            Err(FontError::ShapeAdmission(TextGenerationClaimError::Limit {
+                resource: "root-local cache entries",
+                ..
+            }))
+        ));
+        assert_eq!(environment.core.read().unwrap().parsed_stacks.len(), 1);
+        assert_eq!(resources.call_cache_usage().1, 1_000_000);
     }
 
     #[test]

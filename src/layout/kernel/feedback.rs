@@ -615,7 +615,7 @@ impl FeedbackRound {
 
     pub(crate) fn observe_canvas(
         &mut self,
-        canvas: &crate::layout::CanvasLayout,
+        canvas: &crate::layout::RootFramePlan,
     ) -> Result<(), Error> {
         self.observe_box(canvas.panel_box)?;
         for inset in [
@@ -626,20 +626,7 @@ impl FeedbackRound {
         ] {
             self.observe_number(inset)?;
         }
-        for baseline in [canvas.title_y, canvas.subtitle_y, canvas.caption_y] {
-            self.observe_count(usize::from(baseline.is_some()))?;
-            if let Some(baseline) = baseline {
-                self.observe_number(baseline)?;
-            }
-        }
-        match &canvas.root_text {
-            crate::layout::canvas::CanvasRootText::Planned(plan) => {
-                self.observe_count(0)?;
-                return plan.observe(self);
-            }
-            crate::layout::canvas::CanvasRootText::Unmeasured => self.observe_count(1)?,
-        }
-        Ok(())
+        canvas.root_text.observe(self)
     }
 
     pub(crate) fn observe_layout(&mut self, layout: &Layout) -> Result<(), Error> {

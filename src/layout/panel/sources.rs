@@ -484,96 +484,122 @@ pub(crate) fn numeric_tick_plan(
     legacy: bool,
     scope: &crate::layout::fit::FitScope,
 ) -> Result<NumericTickPlan, crate::layout::fit::PlanError> {
-    // Validate semantic inputs before asking for the metric probe or environment.
     Sources::new(range, log, interval, 1)?;
-    let probe = if legacy {
-        theme.measure_legacy_appearance_text(
-            "0",
-            &theme.typography.tick_label,
-            PhysicalTextAlignment::Center,
-            "numeric tick pitch",
-            false,
-        )
-    } else {
-        theme.measure_text(
-            "0",
-            &theme.typography.tick_label,
-            PhysicalTextAlignment::Center,
-            "numeric tick pitch",
-            false,
-        )
-    }?;
-    let (x0, x1, y0, y1) = projection.pixel_box();
-    let span = match side {
-        AxisSide::Bottom => x1 - x0,
-        AxisSide::Left => y1 - y0,
-    };
-    let upper = upper_seed_count(span, probe.lines[0].logical_advance_quanta)?;
-    let environment = theme.prepared_font_environment()?;
-    let mut sources = Sources::new(range, log, interval, upper)?;
-    loop {
-        let (source, positions) = sources.next(environment)?;
-        if let Some(positions) = positions {
-            // Each formatting attempt is admitted before strings or record storage.
-            let mut ticks = Vec::new();
-            reserve(&mut ticks, positions.len(), Some(environment))?;
-            let mut unique = false;
-            for precision in 0..=17 {
-                if precision == 1 {
-                    continue;
+    let admission = theme
+        .prepared_font_environment()?
+        .claim_measurement_call()
+        .map_err(|error| Error::Render(format!("numeric axis call admission: {error:?}")))?;
+    NumericTickPlan::measure_in_call(
+        range, interval, log, projection, side, theme, legacy, scope, &admission,
+    )
+}
+
+impl NumericTickPlan {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn measure_in_call(
+        range: (f64, f64),
+        interval: Option<TickInterval>,
+        log: bool,
+        projection: &Projection,
+        side: AxisSide,
+        theme: &ResolvedTheme,
+        legacy: bool,
+        scope: &crate::layout::fit::FitScope,
+        _admission: &crate::font::canonical::MeasurementCall,
+    ) -> Result<Self, crate::layout::fit::PlanError> {
+        // Validate semantic inputs before asking for the metric probe or environment.
+        Sources::new(range, log, interval, 1)?;
+        let probe = if legacy {
+            theme.measure_legacy_appearance_text(
+                "0",
+                &theme.typography.tick_label,
+                PhysicalTextAlignment::Center,
+                "numeric tick pitch",
+                false,
+            )
+        } else {
+            theme.measure_text(
+                "0",
+                &theme.typography.tick_label,
+                PhysicalTextAlignment::Center,
+                "numeric tick pitch",
+                false,
+            )
+        }?;
+        let (x0, x1, y0, y1) = projection.pixel_box();
+        let (_, span) = match side {
+            AxisSide::Bottom => super::projection::axis_quanta(x0, x1)?,
+            AxisSide::Left => super::projection::axis_quanta(y0, y1)?,
+        };
+        let upper = upper_seed_count(span as f64 / 1024.0, probe.lines[0].logical_advance_quanta)?;
+        let environment = theme.prepared_font_environment()?;
+        let mut sources = Sources::new(range, log, interval, upper)?;
+        loop {
+            let (source, positions) = sources.next(environment)?;
+            if let Some(positions) = positions {
+                // Each formatting attempt is admitted before strings or record storage.
+                let mut ticks = Vec::new();
+                reserve(&mut ticks, positions.len(), Some(environment))?;
+                let mut unique = false;
+                for precision in 0..=17 {
+                    if precision == 1 {
+                        continue;
+                    }
+                    ticks.clear();
+                    environment
+                        .claim_processing_visits(positions.len() as u128)
+                        .map_err(|error| {
+                            Error::Render(format!("tick label admission: {error:?}"))
+                        })?;
+                    for &position in &positions {
+                        let integral = log
+                            && matches!(
+                                source.kind,
+                                SourceKind::LogIntegral
+                                    | SourceKind::LogSubset(_)
+                                    | SourceKind::LogInterval(_)
+                            );
+                        let label =
+                            format_label(position, log, integral, precision, Some(environment))?;
+                        ticks.push(AxisTick::new(position, label));
+                    }
+                    // Formatting of an ordered numeric source is monotone. Only
+                    // adjacent labels can coincide, including SI boundary rounding.
+                    unique = ticks.windows(2).all(|pair| pair[0].label != pair[1].label);
+                    if unique {
+                        break;
+                    }
                 }
-                ticks.clear();
+                #[cfg(test)]
+                crate::orchestrator::measurements::count(
+                    crate::orchestrator::measurements::Counter::TickDistinctList,
+                );
                 environment
-                    .claim_processing_visits(positions.len() as u128)
-                    .map_err(|error| Error::Render(format!("tick label admission: {error:?}")))?;
-                for &position in &positions {
-                    let integral = log
-                        && matches!(
-                            source.kind,
-                            SourceKind::LogIntegral
-                                | SourceKind::LogSubset(_)
-                                | SourceKind::LogInterval(_)
-                        );
-                    let label =
-                        format_label(position, log, integral, precision, Some(environment))?;
-                    ticks.push(AxisTick::new(position, label));
-                }
-                // Formatting of an ordered numeric source is monotone. Only
-                // adjacent labels can coincide, including SI boundary rounding.
-                unique = ticks.windows(2).all(|pair| pair[0].label != pair[1].label);
-                if unique {
-                    break;
+                    .claim_processing_visits(1)
+                    .map_err(|error| Error::Render(format!("axis fit admission: {error:?}")))?;
+                if unique && labels_fit(&ticks, projection, side, theme)? {
+                    return Ok(NumericTickPlan { ticks, source });
                 }
             }
-            #[cfg(test)]
-            crate::orchestrator::measurements::count(
-                crate::orchestrator::measurements::Counter::TickDistinctList,
-            );
-            environment
-                .claim_processing_visits(1)
-                .map_err(|error| Error::Render(format!("axis fit admission: {error:?}")))?;
-            if unique && labels_fit(&ticks, projection, side, theme, legacy)? {
-                return Ok(NumericTickPlan { ticks, source });
+            if source.kind == SourceKind::Midpoint {
+                #[cfg(test)]
+                crate::orchestrator::measurements::count(
+                    crate::orchestrator::measurements::Counter::TickFitMiss,
+                );
+                return Err(scope
+                    .child(
+                        match side {
+                            AxisSide::Bottom => crate::layout::AddressRole::AxisBottom,
+                            AxisSide::Left => crate::layout::AddressRole::AxisLeft,
+                        },
+                        0,
+                    )?
+                    .failure(
+                        crate::layout::fit::FitKind::Tick,
+                        "numeric axis terminal midpoint label does not fit assigned span",
+                    )
+                    .into());
             }
-        }
-        if source.kind == SourceKind::Midpoint {
-            #[cfg(test)]
-            crate::orchestrator::measurements::count(
-                crate::orchestrator::measurements::Counter::TickFitMiss,
-            );
-            return Err(scope
-                .child(
-                    match side {
-                        AxisSide::Bottom => crate::layout::AddressRole::AxisBottom,
-                        AxisSide::Left => crate::layout::AddressRole::AxisLeft,
-                    },
-                    0,
-                )?
-                .failure(
-                    crate::layout::fit::FitKind::Tick,
-                    "numeric axis terminal midpoint label does not fit assigned span",
-                )
-                .into());
         }
     }
 }
@@ -669,70 +695,11 @@ pub(super) fn format_label(
     Ok(label)
 }
 
-#[allow(
-    clippy::float_cmp,
-    reason = "axis endpoint identity is exact, not a tolerance test"
-)]
-pub(super) fn projection_key(value: f64, range: (f64, f64)) -> Option<u64> {
-    let fraction = if value == range.0 {
-        0.0
-    } else if value == range.1 {
-        1.0
-    } else {
-        let difference = range.1 - range.0;
-        if difference.is_finite() {
-            (value - range.0) / difference
-        } else {
-            let scale = range.0.abs().max(range.1.abs());
-            ((value / scale) - (range.0 / scale)) / ((range.1 / scale) - (range.0 / scale))
-        }
-    };
-    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
-        return None;
-    }
-    if fraction == 1.0 {
-        return Some(u64::MAX);
-    }
-    let bits = fraction.to_bits();
-    let exponent = ((bits >> 52) & 0x7ff) as i32;
-    let mantissa = (bits & ((1_u64 << 52) - 1)) | if exponent == 0 { 0 } else { 1_u64 << 52 };
-    let shift = (1075 - exponent.max(1)) as u32;
-    let numerator = u128::from(mantissa) * u128::from(u64::MAX);
-    if shift >= 128 {
-        return Some(0);
-    }
-    let quotient = numerator >> shift;
-    let remainder = numerator & ((1_u128 << shift) - 1);
-    let halfway = 1_u128 << (shift - 1);
-    u64::try_from(
-        quotient
-            + u128::from(
-                remainder > halfway || (remainder == halfway && !quotient.is_multiple_of(2)),
-            ),
-    )
-    .ok()
-}
-
-pub(super) fn projected_center(key: u64, span: i64) -> Option<i64> {
-    let numerator = u128::try_from(span).ok()? * u128::from(key);
-    let denominator = u128::from(u64::MAX);
-    let quotient = numerator / denominator;
-    let remainder = numerator % denominator;
-    i64::try_from(
-        quotient
-            + u128::from(
-                2 * remainder > denominator || (2 * remainder == denominator && quotient % 2 != 0),
-            ),
-    )
-    .ok()
-}
-
 pub(super) fn labels_fit(
     ticks: &[AxisTick],
     projection: &Projection,
     side: AxisSide,
     theme: &ResolvedTheme,
-    legacy: bool,
 ) -> Result<bool, Error> {
     let cells = match super::cells::assign(
         ticks,
@@ -747,32 +714,37 @@ pub(super) fn labels_fit(
         Err(crate::layout::fit::PlanError::Fatal(error)) => return Err(error),
     };
     for (tick, cell) in ticks.iter().zip(cells) {
+        if tick.label.is_empty() {
+            continue;
+        }
         #[cfg(test)]
         crate::orchestrator::measurements::count(
             crate::orchestrator::measurements::Counter::TickMetricLookup,
         );
-        let plan = if legacy {
-            theme.measure_legacy_appearance_text(
-                &tick.label,
-                &theme.typography.tick_label,
+        let (width, alignment, role) = match side {
+            AxisSide::Bottom => (
+                crate::layout::maximum_width_quanta(cell.capacity())
+                    .map_err(|error| Error::Render(error.to_string()))?,
                 PhysicalTextAlignment::Center,
-                "automatic tick label",
-                false,
-            )
-        } else {
-            theme.measure_text(
-                &tick.label,
-                &theme.typography.tick_label,
-                PhysicalTextAlignment::Center,
-                "automatic tick label",
-                false,
-            )
-        }?;
-        let extent = match side {
-            AxisSide::Bottom => plan.width().max(plan.fit_width()),
-            AxisSide::Left => plan.height(),
+                "x-axis tick label",
+            ),
+            AxisSide::Left => (i64::MAX, PhysicalTextAlignment::End, "y-axis tick label"),
         };
-        if extent > cell.capacity() {
+        let plan = match theme.plan_text_quanta_with_policy(
+            &tick.label,
+            &theme.typography.tick_label,
+            width,
+            alignment,
+            role,
+            false,
+            true,
+            &crate::layout::fit::ROOT_SCOPE,
+        ) {
+            Ok(plan) => plan,
+            Err(crate::layout::fit::PlanError::Fit(_)) => return Ok(false),
+            Err(crate::layout::fit::PlanError::Fatal(error)) => return Err(error),
+        };
+        if cell.placement(&plan, side, 0.0)?.is_none() {
             return Ok(false);
         }
     }

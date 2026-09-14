@@ -209,6 +209,7 @@ fn native_bars_preserve_signed_stacks_midpoints_raw_labels_and_assigned_projecti
                 }
                 assert!(PlotRenderContext::new(plot.data(), panel, &theme)
                     .with_prepared_axes(&plot)
+                    .unwrap()
                     .axis_layout(|| panic!("removed fallback"))
                     .is_err());
             }
@@ -231,9 +232,15 @@ fn native_hidden_horizontal_categories_preserve_identity_without_intrinsic_or_gu
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication.resolve();
-        let visible = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
+        let visible = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let hidden = plot.clone().with_y_tick_labels_visible(false);
-        assert!(visible.1 > Intrinsics::new(&hidden, &theme).unwrap().minimum_body.1);
+        assert!(
+            visible.1
+                > Intrinsics::prepared(&hidden, &theme)
+                    .unwrap()
+                    .minimum(&hidden)
+                    .1
+        );
         let panel = PanelBox::new(80.0, 600.0, 70.0, 450.0);
         let selected = |plot: &Plot| {
             plot.measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
@@ -300,7 +307,7 @@ fn native_bar_domain_feedback_is_conditional_and_final_axes_match_marks_at_the_p
             };
             assert!(payload.domain_expansion.is_none());
             let projection = &plan.result.layout.projection;
-            let final_plot = plan.plot_with_planned_limits(&plot);
+            let final_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
             let selected = final_plot
                 .measure_selected_interior(PlotRenderContext::new(
                     final_plot.data(),

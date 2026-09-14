@@ -141,6 +141,7 @@ pub(crate) fn prepare(
     let support_range = kde_support_range(extent_groups.iter().map(Vec::as_slice), 2.0)
         .ok_or_else(|| Error::Data(format!("{family}: no finite KDE support")))?;
     let grid = data.collect_source((0..64).map(|k| {
+        data.claim_source_visits(1)?;
         // The zero-density seam must share the exact retained support end,
         // including when the parent assigns that end as a display limit.
         Ok(if k == 63 {
@@ -293,6 +294,13 @@ pub(crate) fn measure_marks(
                     let (px, py) = proj.project(center_x_data + x_off, *gy);
                     pts.push(Point2D::new(px, py));
                 }
+                proj.validate_span(
+                    crate::layout::AxisSide::Left,
+                    (support_low, support_high),
+                    (pts[0].y, pts[pts.len() - 1].y),
+                    support_low < support_high,
+                    "violin polygon support",
+                )?;
                 for (gy, d) in grid.iter().zip(densities.iter()).rev() {
                     let x_off = (*d / max_d) * (violin_w_data / 2.0);
                     let (px, py) = proj.project(center_x_data - x_off, *gy);
@@ -310,6 +318,26 @@ pub(crate) fn measure_marks(
                 let (_, q3_px) = proj.project(center_x_data, summary.q3);
                 let (_, hi_whisker_px) = proj.project(center_x_data, summary.hi_whisker);
                 let (_, median_px) = proj.project(center_x_data, summary.median);
+                for (source, projected, context) in [
+                    (
+                        (summary.q1, summary.q3),
+                        (q1_px, q3_px),
+                        "violin box polygon",
+                    ),
+                    (
+                        (summary.lo_whisker, summary.hi_whisker),
+                        (lo_whisker_px, hi_whisker_px),
+                        "violin whisker",
+                    ),
+                ] {
+                    proj.validate_span(
+                        crate::layout::AxisSide::Left,
+                        source,
+                        projected,
+                        source.0 < source.1,
+                        context,
+                    )?;
+                }
                 let whisker_line = LineStyle::solid(theme.foreground, theme.interval_width);
                 payload.line(
                     &[
@@ -374,6 +402,13 @@ pub(crate) fn measure_marks(
                 }
                 let (baseline_high_x, baseline_high_y) = proj.project(baseline, support_high);
                 let (baseline_low_x, baseline_low_y) = proj.project(baseline, support_low);
+                proj.validate_span(
+                    crate::layout::AxisSide::Left,
+                    (support_low, support_high),
+                    (baseline_low_y, baseline_high_y),
+                    support_low < support_high,
+                    "raincloud polygon support",
+                )?;
                 cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
                 cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
                 payload.polygon(cloud, fill, data)?;
@@ -385,6 +420,13 @@ pub(crate) fn measure_marks(
                 let (_, q1) = proj.project(box_center, summary.q1);
                 let (_, q3) = proj.project(box_center, summary.q3);
                 let (_, median) = proj.project(box_center, summary.median);
+                proj.validate_span(
+                    crate::layout::AxisSide::Left,
+                    (summary.q1, summary.q3),
+                    (q1, q3),
+                    summary.q1 < summary.q3,
+                    "raincloud box polygon",
+                )?;
                 payload.polygon(
                     data.collect_source(
                         [
@@ -436,6 +478,7 @@ pub(crate) fn measure_marks(
             }
             let color = group_color(chart, group, index, group_active, family, theme)?;
             let points = data.collect_source(group.observations.iter().map(|observation| {
+                data.claim_source_visits(1)?;
                 let unit =
                     crate::plots::distribution_sample::source_row_unit(observation.source_row);
                 let x = strip_min + unit * (strip_max - strip_min);
@@ -459,6 +502,7 @@ pub(crate) fn measure_marks(
             let center = crate::plots::distribution_sample::center(group, group_levels.len());
             let color = group_color(chart, group, index, group_active, family, theme)?;
             let points = data.collect_source(group.observations.iter().map(|observation| {
+                data.claim_source_visits(1)?;
                 let x = crate::plots::distribution_sample::overlay_x(
                     overlay,
                     center,

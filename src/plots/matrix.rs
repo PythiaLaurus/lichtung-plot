@@ -24,14 +24,16 @@
 use crate::decorations::legend::{Legend, LegendEntry};
 use crate::layout::{self, Layout, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
-    points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle,
-    PlacedText, Point2D, TextAnchor,
+    points_share_canonical_position, with_clip, with_layer, Backend, FillStyle, LineStyle, Point2D,
 };
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{gaussian_kde_with_source, strict_scott_bandwidth};
 use crate::theme::ResolvedTheme;
 use crate::Error;
 use crate::{LegendPosition, Plot};
+
+#[cfg(test)]
+mod axis_tests;
 
 /// One graphical group for the matrix plot.
 #[derive(Debug)]
@@ -55,6 +57,7 @@ pub(crate) struct PreparedMatrixAxes {
 
 #[derive(Debug)]
 struct MatrixDensity {
+    positions: Vec<f64>,
     densities: Vec<Vec<f64>>,
     maximum: f64,
 }
@@ -63,44 +66,26 @@ const KDE_POINTS: usize = 60;
 
 #[derive(Debug)]
 enum MatrixPrimitive {
-    Line([Point2D; 2]),
     Scatter(Vec<Point2D>, crate::render::backend::PointStyle),
     Polygon(Vec<Point2D>, FillStyle),
-    Text(PlacedText),
 }
 
 impl MatrixPrimitive {
-    fn draw(&self, backend: &mut dyn Backend, tick: Option<&LineStyle>) -> Result<(), Error> {
+    fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         match self {
-            Self::Line(points) => backend.draw_line(
-                points,
-                tick.ok_or_else(|| Error::Render("matrix tick style missing".into()))?,
-            ),
             Self::Scatter(points, style) => backend.draw_scatter(points, style),
             Self::Polygon(points, style) => backend.draw_polygon(points, style),
-            Self::Text(text) => text.draw(backend),
         }
     }
 
     fn geometry(
         &self,
         geometry: &mut crate::render::geometry::GeometrySnapshot,
-        clip: Option<PanelBox>,
-        tick: Option<&LineStyle>,
+        clip: PanelBox,
     ) -> Result<(), Error> {
         match self {
-            Self::Line(points) => geometry.line(
-                points,
-                tick.ok_or_else(|| Error::Render("matrix tick style missing".into()))?,
-                clip,
-            ),
-            Self::Scatter(points, style) => geometry.scatter(
-                points,
-                style,
-                clip.ok_or_else(|| Error::Render("matrix scatter clip missing".into()))?,
-            ),
-            Self::Polygon(points, style) => geometry.polygon(points, style, clip),
-            Self::Text(text) => geometry.text(text.placement, &text.plan, clip),
+            Self::Scatter(points, style) => geometry.scatter(points, style, clip),
+            Self::Polygon(points, style) => geometry.polygon(points, style, Some(clip)),
         }
     }
 }
@@ -110,14 +95,13 @@ struct MatrixCellPayload {
     clip: PanelBox,
     frame: [[Point2D; 2]; 2],
     marks: Vec<MatrixPrimitive>,
-    guides: Vec<MatrixPrimitive>,
+    axes: layout::PanelAxisPlan,
 }
 
 #[derive(Debug)]
 pub(crate) struct MatrixPayload {
     cells: Vec<MatrixCellPayload>,
     frame_style: Option<LineStyle>,
-    tick_style: Option<LineStyle>,
     legend: Option<crate::decorations::legend::LegendDrawPlan>,
 }
 
@@ -131,13 +115,11 @@ impl MatrixPayload {
             }
             with_clip(backend, cell.clip, |backend| {
                 for mark in &cell.marks {
-                    mark.draw(backend, None)?;
+                    mark.draw(backend)?;
                 }
                 Ok(())
             })?;
-            for guide in &cell.guides {
-                guide.draw(backend, self.tick_style.as_ref())?;
-            }
+            cell.axes.draw(backend)?;
         }
         if let Some(legend) = &self.legend {
             with_layer(backend, "legend", |backend| legend.draw(backend))?;
@@ -158,11 +140,9 @@ impl MatrixPayload {
             }
             let clip = crate::render::backend::validate_clip_region(cell.clip)?.panel();
             for mark in &cell.marks {
-                mark.geometry(&mut geometry, Some(clip), None)?;
+                mark.geometry(&mut geometry, clip)?;
             }
-            for guide in &cell.guides {
-                guide.geometry(&mut geometry, None, self.tick_style.as_ref())?;
-            }
+            geometry.append(&cell.axes.geometry_snapshot(theme)?)?;
         }
         if let Some(legend) = &self.legend {
             legend.geometry(&mut geometry)?;
@@ -331,7 +311,6 @@ pub(crate) fn measure(
     #[cfg(test)]
     SELECTIONS.with(|count| count.set(count.get() + 1));
     let theme = context.theme;
-    let text = context.producer_text()?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let prepared = chart
@@ -348,10 +327,10 @@ pub(crate) fn measure(
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
-    let canvas = chart.base_canvas_layout(theme);
+    let insets = chart.legacy_root_axes().insets(theme, true);
     let outer = context.panel;
     let legend_reserve = legend.as_ref().map_or(0.0, |legend| {
-        (legend_total_width(legend) + 32.0 - canvas.insets.right).max(0.0)
+        (legend_total_width(legend) + 32.0 - insets.right).max(0.0)
     });
     let gap = 8.0;
     let provisional_grid_width =
@@ -367,30 +346,28 @@ pub(crate) fn measure(
             crate::orchestrator::measurements::Counter::MatrixLayoutPass,
         );
         let column_blocks = data.collect_source(display_cols.iter().map(|label| {
-            text.plan(label, "matrix column label", || {
-                Ok(theme.plan_legacy_appearance_text(
-                    label,
-                    &theme.typography.axis_title,
-                    candidate_cell_width.max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "matrix column label",
-                    false,
-                )?)
-            })
+            layout::fit::measured(layout::fit::text(
+                theme,
+                label,
+                &theme.typography.axis_title,
+                candidate_cell_width.max(1.0),
+                PhysicalTextAlignment::Center,
+                "matrix column label",
+                context.fit_scope(),
+            ))
             .map(TextBlock::from_resolved)
             .map_err(crate::layout::fit::PlanError::into_error)
         }))?;
         let row_blocks = data.collect_source(display_cols.iter().map(|label| {
-            text.plan(label, "matrix row label", || {
-                Ok(theme.plan_legacy_appearance_text(
-                    label,
-                    &theme.typography.axis_title,
-                    candidate_cell_height.max(1.0),
-                    PhysicalTextAlignment::Center,
-                    "matrix row label",
-                    false,
-                )?)
-            })
+            layout::fit::measured(layout::fit::text(
+                theme,
+                label,
+                &theme.typography.axis_title,
+                candidate_cell_height.max(1.0),
+                PhysicalTextAlignment::Center,
+                "matrix row label",
+                context.fit_scope(),
+            ))
             .map(TextBlock::from_resolved)
             .map_err(crate::layout::fit::PlanError::into_error)
         }))?;
@@ -418,23 +395,13 @@ pub(crate) fn measure(
         if (cell_w - candidate_cell_width).abs() <= f64::EPSILON
             && (cell_h - candidate_cell_height).abs() <= f64::EPSILON
         {
-            resolved_layout = Some((
-                column_blocks,
-                row_blocks,
-                grid_left,
-                grid_bottom,
-                grid_top,
-                cell_w,
-                cell_h,
-            ));
+            resolved_layout = Some((grid_left, grid_bottom, grid_top, cell_w, cell_h));
             break;
         }
         candidate_cell_width = cell_w;
         candidate_cell_height = cell_h;
     }
-    let Some((column_blocks, row_blocks, grid_left, grid_bottom, grid_top, cell_w, cell_h)) =
-        resolved_layout
-    else {
+    let Some((grid_left, grid_bottom, grid_top, cell_w, cell_h)) = resolved_layout else {
         return Err(Error::Render(
             "matrix label layout did not stabilize; increase chart size or shorten variable labels"
                 .into(),
@@ -455,16 +422,11 @@ pub(crate) fn measure(
         .frame
         .as_ref()
         .map(|appearance| appearance.stroke.backend_style());
-    let tick_style = theme
-        .axes
-        .ticks
-        .as_ref()
-        .map(|appearance| appearance.stroke.backend_style());
-    let tick_len = theme
-        .axes
-        .ticks
-        .as_ref()
-        .map_or(0.0, |appearance| f64::from(appearance.length));
+    // Matrix owns its two-spine cell topology until T5e. Common plans own
+    // ticks and outer text, without introducing a four-sided frame or grid.
+    let mut axis_theme = theme.clone();
+    axis_theme.axes.frame = None;
+    axis_theme.axes.grid = None;
 
     // X selection depends only on a column's range and X coordinates; Y
     // selection depends only on a row's range and Y coordinates. Retain the
@@ -520,6 +482,59 @@ pub(crate) fn measure(
             let y0 = grid_bottom + (n - 1 - row) as f64 * (cell_h + gap);
             let y1 = y0 + cell_h;
             let cell_panel = PanelBox::new(x0, x1, y0, y1);
+            let projection = layout::Projection::new(
+                variable_ranges[col],
+                variable_ranges[row],
+                cell_panel.as_tuple(),
+            );
+            let scope = context
+                .fit_scope()
+                .child(layout::AddressRole::MatrixCell, row * n + col)?;
+            let axis = |ticks: &layout::NumericTickPlan, label: Option<&str>| {
+                Ok::<_, Error>(layout::Axis {
+                    source: ticks.source,
+                    ticks: data.collect_source(ticks.ticks.iter().map(|tick| {
+                        Ok(layout::AxisTick {
+                            position: tick.position,
+                            label: if label.is_some() {
+                                data.copy_source_string(&tick.label)?
+                            } else {
+                                String::new()
+                            },
+                        })
+                    }))?,
+                    label: data.copy_source_string(label.unwrap_or_default())?,
+                    explicit_ticks: false,
+                    assigned_tick_width: None,
+                })
+            };
+            let x_axis = axis(
+                matrix_ticks(
+                    &mut axes.x_ticks[col],
+                    variable_ranges[col],
+                    &projection,
+                    layout::AxisSide::Bottom,
+                    &axis_theme,
+                    &scope,
+                )?,
+                (row == n - 1).then_some(display_cols[col].as_str()),
+            )?;
+            let y_axis = axis(
+                matrix_ticks(
+                    &mut axes.y_ticks[row],
+                    variable_ranges[row],
+                    &projection,
+                    layout::AxisSide::Left,
+                    &axis_theme,
+                    &scope,
+                )?,
+                (col == 0).then_some(display_cols[row].as_str()),
+            )?;
+            let cell_layout = Layout {
+                projection,
+                x_axis,
+                y_axis,
+            };
             let mut cell = MatrixCellPayload {
                 clip: cell_panel,
                 frame: [
@@ -527,7 +542,11 @@ pub(crate) fn measure(
                     [Point2D::new(x0, y0), Point2D::new(x0, y1)],
                 ],
                 marks: Vec::new(),
-                guides: Vec::new(),
+                axes: cell_layout.measure_axes(
+                    &axis_theme,
+                    &scope,
+                    chart.axis_semantic_inputs([crate::spec::AxisDomain::Continuous; 2]),
+                )?,
             };
             data.reserve_source(&mut cell.marks, groups.len())?;
 
@@ -537,186 +556,24 @@ pub(crate) fn measure(
                     &mut cell.marks,
                     groups,
                     &prepared.diagonals[row],
-                    x0,
-                    x1,
-                    y0,
-                    cell_h,
+                    &cell_layout.projection,
                     data,
                 )?;
             } else {
-                let (x_lo, x_hi) = variable_ranges[col];
-                let (y_lo, y_hi) = variable_ranges[row];
                 for group in groups {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
                     let ps =
                         chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2);
                     let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
-                        let px = x0 + ((xi - x_lo) / (x_hi - x_lo)) * cell_w;
-                        let py = y0 + ((yi - y_lo) / (y_hi - y_lo)) * cell_h;
+                        data.claim_source_visits(1)?;
+                        let (px, py) = cell_layout.projection.project(xi, yi);
                         Ok(Point2D::new(px, py))
                     }))?;
                     cell.marks.push(MatrixPrimitive::Scatter(pts, ps));
                 }
             }
 
-            // --- X-axis ticks ---
-            {
-                let (x_lo, x_hi) = variable_ranges[col];
-                let projection = crate::layout::Projection::new(
-                    (x_lo, x_hi),
-                    variable_ranges[row],
-                    (x0, x1, y0, y1),
-                );
-                let ticks = matrix_ticks(
-                    &mut axes.x_ticks[col],
-                    (x_lo, x_hi),
-                    &projection,
-                    crate::layout::AxisSide::Bottom,
-                    theme,
-                    &context
-                        .fit_scope()
-                        .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
-                )?;
-                data.reserve_source(
-                    &mut cell.guides,
-                    ticks
-                        .len()
-                        .checked_mul(2)
-                        .and_then(|n| n.checked_add(1))
-                        .ok_or_else(|| Error::Render("matrix guide count overflow".into()))?,
-                )?;
-                for tick in ticks {
-                    let tv = tick.position;
-                    let t = ((tv - x_lo) / (x_hi - x_lo)).clamp(0.0, 1.0);
-                    let px = x0 + t * cell_w;
-                    // Tick mark on every cell
-                    if tick_style.is_some() {
-                        cell.guides.push(MatrixPrimitive::Line([
-                            Point2D::new(px, y0),
-                            Point2D::new(px, y0 - tick_len),
-                        ]));
-                    }
-                    // Tick label only on bottom row
-                    if row == n - 1 {
-                        let plan = text.plan(&tick.label, "matrix x tick", || {
-                            Ok(theme.measure_legacy_appearance_text(
-                                &tick.label,
-                                &theme.typography.tick_label,
-                                PhysicalTextAlignment::Center,
-                                "matrix x tick",
-                                false,
-                            )?)
-                        })?;
-                        let label_x = px
-                            .max(x0 + plan.fit_width() / 2.0)
-                            .min(x1 - plan.fit_width() / 2.0);
-                        cell.guides.push(MatrixPrimitive::Text(
-                            PlacedText::from_deferred_first_line(
-                                plan,
-                                Point2D::new(label_x.round(), (y0 - tick_len - 8.0).round()),
-                                TextAnchor::Middle,
-                                0.0,
-                            ),
-                        ));
-                    }
-                }
-                // Column label below ticks (bottom row only)
-                if row == n - 1 {
-                    let cx = f64::midpoint(x0, x1);
-                    let first_y = y0 - tick_len - 28.0;
-                    cell.guides
-                        .push(MatrixPrimitive::Text(PlacedText::from_deferred_first_line(
-                            column_blocks[col].plan().clone(),
-                            Point2D::new(cx.round(), first_y.round()),
-                            TextAnchor::Middle,
-                            0.0,
-                        )));
-                }
-            }
-            // --- Y-axis ticks ---
-            {
-                let (y_lo, y_hi) = variable_ranges[row];
-                let projection = crate::layout::Projection::new(
-                    variable_ranges[col],
-                    (y_lo, y_hi),
-                    (x0, x1, y0, y1),
-                );
-                let ticks = matrix_ticks(
-                    &mut axes.y_ticks[row],
-                    (y_lo, y_hi),
-                    &projection,
-                    crate::layout::AxisSide::Left,
-                    theme,
-                    &context
-                        .fit_scope()
-                        .child(crate::layout::AddressRole::MatrixCell, row * n + col)?,
-                )?;
-                data.reserve_source(
-                    &mut cell.guides,
-                    ticks
-                        .len()
-                        .checked_mul(2)
-                        .and_then(|n| n.checked_add(1))
-                        .ok_or_else(|| Error::Render("matrix guide count overflow".into()))?,
-                )?;
-                for tick in ticks {
-                    let tv = tick.position;
-                    let t = ((tv - y_lo) / (y_hi - y_lo)).clamp(0.0, 1.0);
-                    let py = y0 + t * cell_h;
-                    // Tick mark on every cell
-                    if tick_style.is_some() {
-                        cell.guides.push(MatrixPrimitive::Line([
-                            Point2D::new(x0, py),
-                            Point2D::new(x0 - tick_len, py),
-                        ]));
-                    }
-                    // Tick label only on left column
-                    if col == 0 {
-                        let plan = text.plan(&tick.label, "matrix y tick", || {
-                            Ok(theme.measure_legacy_appearance_text(
-                                &tick.label,
-                                &theme.typography.tick_label,
-                                PhysicalTextAlignment::End,
-                                "matrix y tick",
-                                false,
-                            )?)
-                        })?;
-                        let label_y = py
-                            .max(y0 + plan.height() / 2.0)
-                            .min(y1 - plan.height() / 2.0);
-                        cell.guides.push(MatrixPrimitive::Text(
-                            PlacedText::from_deferred_first_line(
-                                plan,
-                                Point2D::new(
-                                    (x0 - tick_len - 4.0).max(0.0).round(),
-                                    label_y.round(),
-                                ),
-                                TextAnchor::End,
-                                0.0,
-                            ),
-                        ));
-                    }
-                }
-                // Row label to the left of ticks (left column only)
-                if col == 0 {
-                    let cy = f64::midpoint(y0, y1);
-                    let first_x = (x0 - tick_len - 40.0).max(4.0);
-                    let first_x = (first_x
-                        - row_blocks[row].plan().lines.len().saturating_sub(1) as f64
-                            * row_blocks[row].line_height())
-                    .max(4.0);
-                    cell.guides.push(MatrixPrimitive::Text(
-                        PlacedText::from_deferred_first_line(
-                            row_blocks[row].plan().clone(),
-                            Point2D::new(first_x.round(), cy.round()),
-                            TextAnchor::Middle,
-                            -90.0,
-                        )
-                        .with_reversed_lines(),
-                    ));
-                }
-            }
             cells.push(cell);
         }
     }
@@ -747,17 +604,8 @@ pub(crate) fn measure(
     let payload = MatrixPayload {
         cells,
         frame_style,
-        tick_style,
         legend: legend_payload,
     };
-    for cell in &payload.cells {
-        for guide in &cell.guides {
-            if let MatrixPrimitive::Text(text) = guide {
-                data.reserve_source(&mut result.producer_text, 1)?;
-                result.producer_text.push(text.clone());
-            }
-        }
-    }
     let geometry = payload.geometry(theme)?;
     result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
         payload: crate::layout::interior::MarkPayload::Matrix(payload),
@@ -783,19 +631,25 @@ fn matrix_ticks<'a>(
     side: layout::AxisSide,
     theme: &ResolvedTheme,
     scope: &crate::layout::fit::FitScope,
-) -> Result<&'a [layout::AxisTick], crate::layout::fit::PlanError> {
+) -> Result<&'a layout::NumericTickPlan, crate::layout::fit::PlanError> {
     let environment = theme.prepared_font_environment()?;
+    let admission = environment
+        .claim_measurement_call()
+        .map_err(|error| Error::Render(format!("matrix tick call admission: {error:?}")))?;
     environment
         .claim_processing_visits(1)
         .map_err(|error| Error::Render(format!("matrix tick lookup: {error:?}")))?;
     if cached.is_none() {
-        *cached = Some(layout::numeric_tick_plan(
-            range, None, false, projection, side, theme, true, scope,
-        )?);
+        let plan = layout::NumericTickPlan::measure_in_call(
+            range, None, false, projection, side, theme, false, scope, &admission,
+        )?;
+        environment
+            .claim_cache_entries(1)
+            .map_err(|error| Error::Render(format!("matrix tick cache admission: {error:?}")))?;
+        *cached = Some(plan);
     }
     cached
         .as_ref()
-        .map(|plan| plan.ticks.as_slice())
         .ok_or_else(|| Error::Render("matrix tick selection is missing".into()).into())
 }
 
@@ -834,12 +688,12 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
             &translated,
             side,
             &theme,
-            true,
+            false,
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap()
         .ticks;
-        assert_eq!(first, expected);
+        assert_eq!(first.ticks, expected);
         let before = resources.usage().unwrap();
         let bytes = environment.resource_usage().unwrap().font_bytes;
         let reused = matrix_ticks(
@@ -851,7 +705,7 @@ fn matrix_tick_selection_is_shared_only_along_the_orthogonal_axis() {
             &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
-        assert_eq!(reused, expected);
+        assert_eq!(reused.ticks, expected);
         assert_eq!(resources.usage().unwrap(), (before.0, before.1 + 1));
         assert_eq!(environment.resource_usage().unwrap().font_bytes, bytes);
         assert!(cached.as_ref().unwrap().source.cap > 1);
@@ -940,9 +794,10 @@ fn prepare_density(
         counts.set([groups, densities + 1]);
     });
     let (d_lo, d_hi) = range;
-    let grid_pts = data.collect_source(
-        (0..KDE_POINTS).map(|i| Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))),
-    )?;
+    let grid_pts = data.collect_source((0..KDE_POINTS).map(|i| {
+        data.claim_source_visits(1)?;
+        Ok(d_lo + (d_hi - d_lo) * (i as f64 / (KDE_POINTS - 1) as f64))
+    }))?;
 
     // Total sample count across all groups for common_norm scaling
     // (matches seaborn pairplot default: area proportional to group size).
@@ -992,35 +847,42 @@ fn prepare_density(
     }
 
     Ok(MatrixDensity {
+        positions: grid_pts,
         densities: densities_per_group,
         maximum: d_max,
     })
 }
 
 /// Project root-prepared KDE curves into admitted cell operands.
-#[allow(clippy::too_many_arguments)]
 fn select_diagonal_kde(
     theme: &ResolvedTheme,
     marks: &mut Vec<MatrixPrimitive>,
     groups: &[HueGroup],
     density: &MatrixDensity,
-    x0: f64,
-    x1: f64,
-    y0: f64,
-    cell_h: f64,
+    projection: &layout::Projection,
     data: crate::data::PlotData<'_>,
 ) -> Result<(), Error> {
-    let cell_w = x1 - x0;
-    let usable_h = cell_h * 0.85;
+    let panel = projection.panel_box();
+    let projection = layout::Projection::new(
+        projection.x_range(),
+        (0.0, density.maximum),
+        (
+            panel.x0,
+            panel.x1,
+            panel.y0,
+            panel.y0 + panel.height() * 0.85,
+        ),
+    );
+    let (x0, y0) = projection.project(projection.x_range().0, 0.0);
+    let (x1, _) = projection.project(projection.x_range().1, 0.0);
 
     for (gi, densities) in density.densities.iter().enumerate() {
         let color = theme.colors[groups[gi].color_index % theme.colors.len()];
         let mut poly = Vec::new();
         data.reserve_source(&mut poly, KDE_POINTS + 2)?;
         poly.push(Point2D::new(x0, y0));
-        for (i, &d) in densities.iter().enumerate() {
-            let px = x0 + (i as f64 / (KDE_POINTS - 1) as f64) * cell_w;
-            let py = y0 + (d / density.maximum) * usable_h;
+        for (i, (&x, &d)) in density.positions.iter().zip(densities).enumerate() {
+            let (px, py) = projection.project(x, d);
             let point = Point2D::new(px, py);
             let closure = if i == 0 {
                 Some(Point2D::new(x0, y0))
@@ -1530,7 +1392,7 @@ mod semantic_tests {
                         PanelBox::new(-10.0, -1.0, -10.0, -1.0),
                         &theme,
                     )
-                    .with_retained_body(selected.retained_payload()),
+                    .with_retained_body(&selected),
                     &mut captured,
                 )
                 .unwrap();

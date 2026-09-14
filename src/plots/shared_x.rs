@@ -29,9 +29,6 @@ pub(super) fn domain_with_data(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
 ) -> Result<(f64, f64), Error> {
-    data.claim_source_visits(data.height())?;
-    // One scalar range result and at most five private nice-range candidates.
-    data.claim_source_visits(6)?;
     let range = match chart.kind() {
         PlotKind::Scatter | PlotKind::Regression => {
             let points = crate::data::aligned_finite_f64(
@@ -44,10 +41,12 @@ pub(super) fn domain_with_data(
                     .ok_or_else(|| Error::Data("shared x: y column not set".into()))?,
                 "shared x",
             )?;
+            data.claim_source_visits(points.len())?;
             crate::layout::continuous_auto_range(
                 crate::data::min_max(points.iter().map(|point| point.0), "shared x")?,
                 chart.x_axis_spec(),
-            )
+                data.source_resources()?,
+            )?
         }
         PlotKind::Histogram => super::histogram::shared_x_domain(chart, data)?,
         PlotKind::Density => super::density::shared_x_domain(chart, data)?,
@@ -69,7 +68,12 @@ pub(super) fn domain_with_data(
                 super::bar_data::BarMode::Single
             };
             let range = super::bar_data::prepare(chart, data, mode)?.value_range;
-            crate::layout::anchored_auto_range(range, chart.x_axis_spec(), 0.0)
+            crate::layout::anchored_auto_range(
+                range,
+                chart.x_axis_spec(),
+                0.0,
+                data.source_resources()?,
+            )?
         }
         PlotKind::Marginal => super::marginal::shared_x_domain(chart, data)?,
         PlotKind::Beeswarm => {
@@ -80,14 +84,20 @@ pub(super) fn domain_with_data(
                     .ok_or_else(|| Error::Data("beeswarm: x column not set".into()))?,
                 "beeswarm",
             )?;
+            data.claim_source_visits(values.len())?;
             crate::layout::continuous_auto_range(
                 crate::data::min_max(values.iter().copied(), "beeswarm")?,
                 chart.x_axis_spec(),
-            )
+                data.source_resources()?,
+            )?
         }
         PlotKind::Waterfall => {
             let marks = super::waterfall::prepare(chart, data)?;
-            crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec())
+            crate::layout::continuous_auto_range(
+                marks.range,
+                chart.x_axis_spec(),
+                data.source_resources()?,
+            )?
         }
         PlotKind::Interaction
         | PlotKind::Heatmap
@@ -149,7 +159,12 @@ mod tests {
         .erase();
         assert_eq!(
             domain(&forest).unwrap(),
-            crate::layout::continuous_auto_range((-1.0, 3.0), &crate::layout::AxisSpec::default())
+            crate::layout::continuous_auto_range(
+                (-1.0, 3.0),
+                &crate::layout::AxisSpec::default(),
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap()
         );
         let waterfall = Plot::waterfall(
             CategoryValues::new("step", ["a", "b"]).unwrap(),
@@ -161,8 +176,10 @@ mod tests {
             domain(&waterfall).unwrap(),
             crate::layout::continuous_auto_range(
                 (-10.0, 30.0),
-                &crate::layout::AxisSpec::default()
+                &crate::layout::AxisSpec::default(),
+                &crate::font::canonical::OperationGenerationResources::new(),
             )
+            .unwrap()
         );
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
@@ -226,6 +243,9 @@ mod tests {
             error.to_string().contains("axis source storage admission"),
             "{error}"
         );
-        assert_eq!(resources.usage().unwrap().1, 26);
+        // Three numeric validations, three collective rows, and two identity
+        // comparisons. Refused sample storage and unvisited range work cost none.
+        assert_eq!(resources.usage().unwrap(), (15, 3 + 3 + 2));
+        assert_eq!(resources.byte_usage().unwrap(), before_samples as u64);
     }
 }

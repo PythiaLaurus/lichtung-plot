@@ -184,7 +184,7 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
                 PanelBox::new(1.0, 2.0, 3.0, 4.0),
                 &poisoned_theme,
             )
-            .with_retained_body(selected.retained_payload()),
+            .with_retained_body(&selected),
             &mut backend,
         )
         .unwrap();

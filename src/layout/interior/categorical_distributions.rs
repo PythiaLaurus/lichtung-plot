@@ -97,6 +97,10 @@ fn draw(result: &PlotRenderResult, plot: &Plot, theme: &crate::theme::ResolvedTh
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one native contract covers prepared semantics and repeated assignments for each theme owner"
+)]
 fn native_categorical_distributions_keep_bottom_identity_sparse_groups_and_support() {
     for (source, family) in configured(false, true, None).into_iter().zip([
         OneCategoricalAxis::Boxplot,
@@ -131,13 +135,18 @@ fn native_categorical_distributions_keep_bottom_identity_sparse_groups_and_suppo
         } else {
             assert!(prepared.range().0 < -2.5 && prepared.range().1 > 9.75);
         }
-        let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for preset in [
             crate::Theme::Publication,
             crate::Theme::Nature,
             crate::Theme::Science,
         ] {
             let theme = preset.resolve();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                    .unwrap()
+                    .attach(plot.clone())
+                    .unwrap();
+            let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
             for panel in [
                 PanelBox::new(80.25, 550.75, 70.5, 410.25),
                 PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -214,6 +223,13 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
                 crate::Theme::Science,
             ] {
                 let theme = preset.resolve();
+                let plot = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &OperationGenerationResources::new(),
+                )
+                .unwrap()
+                .attach(plot.clone())
+                .unwrap();
                 for cell in [
                     PanelBox::new(16.0, 625.0, 8.0, 390.0),
                     PanelBox::new(30.25, 800.5, 40.75, 610.0),
@@ -241,7 +257,7 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
                     let work = measurements::finish();
                     assert!(work.roots.len() >= 2);
                     assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
-                    let final_plot = plan.plot_with_planned_limits(&plot);
+                    let final_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
                     let selected = final_plot
                         .measure_selected_interior(PlotRenderContext::new(
                             final_plot.data(),
@@ -275,6 +291,65 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
                 }
             }
         }
+    }
+}
+
+#[test]
+fn native_root_annotation_growth_is_monotonic_and_freezes_the_final_domain() {
+    use crate::decorations::plan::{plan_panel, LegendRole};
+    use crate::layout::kernel::FeedbackKind;
+    use crate::layout::{AddressRole, ComponentAddress};
+    for source in configured(true, false, None) {
+        let source = source
+            .with_suppressed_legend()
+            .size(900, 700)
+            .title("Measured root title")
+            .caption("Independent annotation caption");
+        let theme = crate::Theme::Publication.resolve();
+        let owner = ComponentAddress::root()
+            .child(AddressRole::PlotBody, 0)
+            .unwrap();
+        let mut ranges = Vec::new();
+        let root = crate::layout::plan_exact_root(
+            900,
+            700,
+            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
+            |inputs, assigned, round| {
+                let plot = inputs.attach(source.clone())?;
+                let baseline = retained(&plot)?.range();
+                let plot = plot.with_planned_y_limits(baseline);
+                let consumed = round
+                    .domain(&owner, FeedbackKind::AutomaticDomainY)
+                    .unwrap_or(baseline);
+                let canvas = plot.measured_canvas_layout(&theme)?;
+                round.observe_canvas(&canvas)?;
+                let plan = crate::layout::fit::measured(plan_panel(
+                    &plot,
+                    plot.kind(),
+                    canvas.panel_box,
+                    LegendRole::Suppressed,
+                    &theme,
+                    round,
+                    &owner,
+                ))
+                .map_err(crate::layout::fit::PlanError::into_error)?;
+                let requested = plan.result.significance.as_ref().unwrap().y_range;
+                assert!(requested.0 <= consumed.0 && requested.1 >= consumed.1);
+                ranges.push((consumed, requested));
+                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
+            },
+            |_, _, plan, _| Ok(plan),
+        )
+        .unwrap();
+        assert!(ranges.len() >= 2);
+        assert!(ranges[0].1 .1 > ranges[0].0 .1);
+        assert!(ranges.windows(2).all(|pair| pair[1].0 == pair[0].1));
+        let selected = &root.plan().result;
+        assert_eq!(
+            selected.layout.projection.y_range(),
+            selected.significance.as_ref().unwrap().y_range
+        );
+        assert_eq!(ranges.last().unwrap().0, ranges.last().unwrap().1);
     }
 }
 

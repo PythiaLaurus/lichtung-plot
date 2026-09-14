@@ -51,6 +51,42 @@ pub(crate) struct RootTitleBlockPlan {
     pub(crate) bottom_reserve: f64,
 }
 
+/// Alignment- and allocation-independent role requirements, retained by the root.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RootTitleBlockIntrinsics {
+    roles: [(f64, f64); 3],
+}
+
+impl RootTitleBlockIntrinsics {
+    pub(crate) fn widths(self) -> (f64, f64) {
+        self.roles
+            .into_iter()
+            .fold((0.0_f64, 0.0_f64), |a, b| (a.0.max(b.0), a.1.max(b.1)))
+    }
+
+    pub(crate) fn check_width(self, width: f64, scope: &FitScope) -> Result<(), PlanError> {
+        if width >= self.widths().0 {
+            return Ok(());
+        }
+        for ((hard, _), role) in self.roles.into_iter().zip([
+            AddressRole::RootTitle,
+            AddressRole::RootSubtitle,
+            AddressRole::RootCaption,
+        ]) {
+            if hard > 0.0 && hard > width {
+                return Err(scope
+                    .child(role, 0)?
+                    .failure(
+                        fit::FitKind::Text,
+                        "root title block is narrower than its hard text intrinsic",
+                    )
+                    .into());
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RootTitleBlockPlan {
     pub(crate) fn draw_retained(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         for role in self.roles.iter().flatten() {
@@ -60,25 +96,36 @@ impl RootTitleBlockPlan {
     }
 
     /// Intrinsics do not depend on alignment or on an allocated height.
-    #[allow(dead_code, reason = "parent intrinsic adapters arrive in T5a6a")]
     pub(crate) fn intrinsic_widths(
         theme: &ResolvedTheme,
         sources: [Option<&str>; 3],
-    ) -> Result<(f64, f64), Error> {
-        let mut widths = (0.0_f64, 0.0_f64);
-        for (source, appearance) in sources.into_iter().zip([
-            &theme.typography.title,
-            &theme.typography.subtitle,
-            &theme.typography.caption,
-        ]) {
+    ) -> Result<RootTitleBlockIntrinsics, Error> {
+        theme
+            .prepared_font_environment()?
+            .claim_measurement_call()
+            .map_err(|error| {
+                Error::Render(format!("root title intrinsic call admission: {error:?}"))
+            })?;
+        #[cfg(test)]
+        crate::orchestrator::measurements::intrinsic(
+            crate::orchestrator::measurements::Counter::RootTitleIntrinsic,
+            None,
+        );
+        let mut roles = [(0.0_f64, 0.0_f64); 3];
+        for ((source, appearance), widths) in sources
+            .into_iter()
+            .zip([
+                &theme.typography.title,
+                &theme.typography.subtitle,
+                &theme.typography.caption,
+            ])
+            .zip(&mut roles)
+        {
             if let Some(source) = source.filter(|source| !source.is_empty()) {
-                let measured =
-                    fit::intrinsic_widths(theme, source, appearance, "root title block")?;
-                widths.0 = widths.0.max(measured.0);
-                widths.1 = widths.1.max(measured.1);
+                *widths = fit::intrinsic_widths(theme, source, appearance, "root title block")?;
             }
         }
-        Ok(widths)
+        Ok(RootTitleBlockIntrinsics { roles })
     }
 
     #[expect(
@@ -94,6 +141,12 @@ impl RootTitleBlockPlan {
         minimum_body_height: f64,
         scope: &FitScope,
     ) -> Result<Self, PlanError> {
+        theme
+            .prepared_font_environment()?
+            .claim_measurement_call()
+            .map_err(|error| {
+                Error::Render(format!("root title measurement admission: {error:?}"))
+            })?;
         if [span.x0, span.x1, span.y0, span.y1, minimum_body_height]
             .into_iter()
             .any(|value| !value.is_finite())

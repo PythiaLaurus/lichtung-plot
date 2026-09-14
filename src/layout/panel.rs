@@ -108,6 +108,7 @@ pub struct Projection {
     /// Math-style canvas bounding box `(x0, x1, y0, y1)`: `x0 < x1`,
     /// `y0 < y1`, with `y0` at the panel bottom and `y1` at the top.
     pixel_box: (f64, f64, f64, f64),
+    category_counts: [Option<usize>; 2],
 }
 
 /// A complete plot layout: scales, projection, frame, grid, axes.

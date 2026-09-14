@@ -8730,3 +8730,17 @@ Existing groups remain unchanged; the override partition is now:
 T7 reconciles only that 1883-key materialized target. The historical 1836-record
 pre-T2h count and completed 1860-record T2 count remain provenance, not
 post-adjudication acceptance thresholds.
+
+### T5a6d Closure Evidence
+
+The current source-to-plan audit is `docs/t5a-closure.md` (baseline `31fb8a2`).
+T5a6d is COMPLETE after primary review, integrated verification, and release
+benchmark checks recorded in that audit and `91_IMPLEMENTATION_PLAN.md`.
+It adds no keys and changes none of the count arithmetic above. The former
+`CanvasLayout`/unmeasured root carrier is removed; `RootFramePlan` contains the
+measured title block, and `LegacyRootAxes` retains only the named deferred
+specialized/composition axis estimate. This note does not rewrite the historical
+source tables or make T6 APIs current. In particular,
+`composition.root-caption.horizontal-alignment` closes only its T5a private
+alignment and standalone/outer-root replay portion here; embedded Plot caption
+allocation, exactly-once composition rendering, and fit refusal remain T5b work.

@@ -236,7 +236,7 @@ pub struct NumericLabelFormat {
 impl NumericLabelFormat {
     pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), crate::Error> {
         if let Some(suffix) = &self.suffix {
-            data.admit_clone_slice(suffix.as_bytes())?;
+            data.admit_clone_str(suffix)?;
         }
         Ok(())
     }
@@ -844,17 +844,8 @@ impl<'a> PlotRenderContext<'a> {
         })
     }
 
-    pub(crate) fn with_retained_body(
-        mut self,
-        payload: crate::layout::interior::RetainedInteriorPayload<'a>,
-    ) -> Self {
-        let result = match payload {
-            crate::layout::interior::RetainedInteriorPayload::LegacyCombined(result) => result,
-            crate::layout::interior::RetainedInteriorPayload::Selected(result) => {
-                self.selected_interior = Some(result);
-                result
-            }
-        };
+    pub(crate) fn with_retained_body(mut self, result: &'a PlotRenderResult) -> Self {
+        self.selected_interior = Some(result);
         self.retained_axes = result.axes.as_ref();
         self.retained_layout = Some(&result.layout);
         self.producer_text = Some(&result.producer_text);
@@ -878,21 +869,29 @@ impl<'a> PlotRenderContext<'a> {
         })
     }
 
-    pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Self {
+    pub(crate) fn with_prepared_axes(mut self, plot: &'a crate::Plot) -> Result<Self, Error> {
         if self.retained_layout.is_some() {
-            return self;
+            return Ok(self);
         }
         self.prepared_axes = plot.prepared_axis_inputs();
         self.prepared_kind = Some(plot.kind());
         self.prepared_limits = [plot.x_axis_spec().limits, plot.y_axis_spec().limits];
         if plot.kind() == PlotKind::Forest && plot.axis_scale_spec() == AxisScale::Log10 {
-            self.prepared_limits[0] =
-                self.prepared_limits[0].map(|(lo, hi)| (lo.log10(), hi.log10()));
+            if let Some((lo, hi)) = self.prepared_limits[0] {
+                let resources = self
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources();
+                self.prepared_limits[0] = Some((
+                    crate::numeric::log10(lo, &resources)?,
+                    crate::numeric::log10(hi, &resources)?,
+                ));
+            }
         }
         if let Some(shared) = plot.resolved_facet_x_range() {
             self.prepared_limits[0] = Some(shared);
         }
-        self
+        Ok(self)
     }
 
     #[expect(
@@ -1206,14 +1205,6 @@ pub(crate) enum DecorationMode {
 }
 
 impl PlotRenderResult {
-    pub(crate) fn retained_payload(&self) -> crate::layout::interior::RetainedInteriorPayload<'_> {
-        if self.marks.is_some() {
-            crate::layout::interior::RetainedInteriorPayload::Selected(self)
-        } else {
-            crate::layout::interior::RetainedInteriorPayload::LegacyCombined(self)
-        }
-    }
-
     pub(crate) fn new(layout: Layout, legend_entries: Vec<LegendEntry>) -> Self {
         Self {
             layout,

@@ -242,6 +242,7 @@ fn native_estimates_retain_orientation_raw_display_midpoints_and_selected_projec
                 assert!(selected.marks.is_some());
                 assert!(PlotRenderContext::new(plot.data(), panel, &theme)
                     .with_prepared_axes(&plot)
+                    .unwrap()
                     .axis_layout(|| panic!("removed fallback"))
                     .is_err());
             }
@@ -260,7 +261,7 @@ fn native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope() 
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication.resolve();
-        let minimum = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
+        let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let label = theme
             .measure_text(
                 "First line\nSecond line\nThird line",

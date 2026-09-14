@@ -1,20 +1,24 @@
-//! Validating backend that records conservative bounds for every primitive.
+//! Retained primitive ink and collision geometry. The validating backend is a test oracle only.
 
 use std::collections::HashMap;
 
 use crate::Error;
 
 use crate::font::canonical::PreparedFontEnvironment;
-use crate::layout::{
-    PanelBox, PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput,
-    TextPlanProvenance, CSS_PIXEL_QUANTA,
-};
+use crate::layout::{PanelBox, ResolvedTextPlan, CSS_PIXEL_QUANTA};
+#[cfg(test)]
+use crate::layout::{PhysicalTextAlignment, TextLineHeight, TextPlanInput, TextPlanProvenance};
 use crate::render::backend::{
-    self, Backend, BracketOrientation, BracketStyle, FillStyle, GradientStop, LineStyle,
-    PlannedSignificanceCall, PlannedTextOrigin, PlannedTextPlacement, Point2D, PointStyle, Rgba,
-    SignificanceBracket, SurfaceRole, TextAnchor, TextStyle, POLYGON_MITER_LIMIT,
+    self, FillStyle, GradientStop, LineStyle, PlannedSignificanceCall, PlannedTextOrigin,
+    PlannedTextPlacement, Point2D, PointStyle, TextAnchor, POLYGON_MITER_LIMIT,
 };
-use crate::render::coordinates::{CanonicalBracket, CanonicalPoint};
+#[cfg(test)]
+use crate::render::backend::{
+    Backend, BracketOrientation, BracketStyle, Rgba, SignificanceBracket, SurfaceRole, TextStyle,
+};
+#[cfg(test)]
+use crate::render::coordinates::CanonicalBracket;
+use crate::render::coordinates::CanonicalPoint;
 use crate::PointShape;
 
 // Labels and annotation glyphs are less tolerable legend targets than translucent marks.
@@ -166,6 +170,7 @@ impl GeometryBox {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct GeometryBackend {
     snapshot: GeometrySnapshot,
     clips: Vec<PanelBox>,
@@ -190,6 +195,7 @@ struct PositionedText {
     bounds_index: Option<usize>,
 }
 
+#[cfg(test)]
 impl std::ops::Deref for GeometryBackend {
     type Target = GeometrySnapshot;
     fn deref(&self) -> &Self::Target {
@@ -197,6 +203,7 @@ impl std::ops::Deref for GeometryBackend {
     }
 }
 
+#[cfg(test)]
 impl std::ops::DerefMut for GeometryBackend {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.snapshot
@@ -204,12 +211,14 @@ impl std::ops::DerefMut for GeometryBackend {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
 enum GeometryScope {
     Layer,
     Clip,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg(test)]
 enum GeometryCanvasState {
     #[default]
     Fresh,
@@ -217,6 +226,7 @@ enum GeometryCanvasState {
     Closed,
 }
 
+#[cfg(test)]
 impl GeometryBackend {
     pub(crate) fn new(theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
         Ok(Self::with_environment(
@@ -710,6 +720,7 @@ impl GeometrySnapshot {
     }
 }
 
+#[cfg(test)]
 impl GeometryBackend {
     fn record_text(
         &mut self,
@@ -874,6 +885,7 @@ fn feedback_coordinate(
     }
 }
 
+#[cfg(test)]
 fn physical_alignment(anchor: TextAnchor) -> PhysicalTextAlignment {
     match anchor {
         TextAnchor::Start => PhysicalTextAlignment::Start,
@@ -1355,6 +1367,7 @@ fn polygon_stroke_bounds(
     Ok(bounds)
 }
 
+#[cfg(test)]
 impl Backend for GeometryBackend {
     fn begin(&mut self, width: u32, height: u32) -> Result<(), Error> {
         #[cfg(test)]

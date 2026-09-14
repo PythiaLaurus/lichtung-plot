@@ -53,6 +53,7 @@ pub mod kind;
 mod labels;
 mod layers;
 mod layout;
+mod numeric;
 mod orchestrator;
 mod output;
 mod plots;

@@ -263,10 +263,11 @@ fn waterfall_rejects_terminal_geometry_below_coordinate_precision() {
         10_000_000_000_000_000.0,
     );
 
-    let error = plot.preflight().unwrap_err().to_string();
+    let error = plot.preflight().unwrap_err();
 
-    assert!(error.contains("polygon"));
-    assert!(error.contains("collapse"));
+    assert!(matches!(error, lichtung_plot::Error::Render(_)), "{error}");
+    assert!(error.to_string().contains("polygon"), "{error}");
+    assert!(error.to_string().contains("collapse"), "{error}");
 }
 
 #[test]

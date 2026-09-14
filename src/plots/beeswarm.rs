@@ -276,6 +276,7 @@ pub(crate) fn measure(
         None
     };
     let points = data.collect_source(prepared.points.iter().map(|&(x, y, color)| {
+        data.claim_source_visits(1)?;
         let (x, y) = layout.projection.project(x, y);
         Ok((Point2D::new(x, y), chart.point_style(color, 3)))
     }))?;

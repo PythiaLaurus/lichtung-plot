@@ -316,6 +316,53 @@ fn projected_limits_and_geometry_match_selected_draw_order() {
 }
 
 #[test]
+fn raw_interval_intent_survives_correctly_rounded_logarithms() {
+    for (upper, nonzero) in [(1e16, false), (1e16 + 2.0, true)] {
+        let source = Plot::forest(
+            crate::CategoryValues::new("term", ["a"]).unwrap(),
+            crate::NumericValues::new("estimate", [1e16]),
+            crate::Bounds::new(
+                crate::NumericValues::new("lower", [1e16]),
+                crate::NumericValues::new("upper", [upper]),
+            ),
+            1e16,
+        )
+        .scale(crate::AxisScale::Log10)
+        .x_limits(1e15, 1e17)
+        .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let tuple = inputs.estimate.as_ref().unwrap().panels[0].1.estimates[0].unwrap();
+        assert_eq!(tuple.lower.unwrap().to_bits(), 16.0_f64.to_bits());
+        assert_eq!(tuple.upper.unwrap().to_bits(), 16.0_f64.to_bits());
+        assert_eq!(tuple.nonzero_interval, nonzero);
+        let source = inputs.attach(source).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let result = source.measure_selected_interior(PlotRenderContext::new(
+            source.data(),
+            crate::layout::PanelBox::new(80.0, 600.0, 60.0, 400.0),
+            &theme,
+        ));
+        if nonzero {
+            assert!(matches!(
+                result,
+                Err(crate::layout::fit::PlanError::Fatal(Error::Render(_)))
+            ));
+        } else {
+            let selected = result.unwrap();
+            let crate::layout::interior::MarkPayload::Estimate(payload) =
+                &selected.marks.as_ref().unwrap().payload
+            else {
+                panic!("wrong payload")
+            };
+            let interval = payload.rows[0].interval.unwrap();
+            assert_eq!(interval[0], interval[1]);
+        }
+    }
+}
+
+#[test]
 fn facet_owned_significance_is_retained_only_by_its_selected_panel() {
     let source = Plot::coefficient(
         CategoryValues::new("term", ["same", "same"]).unwrap(),
@@ -603,7 +650,7 @@ fn poisoned_capture_repeats_no_source_projection_axis_or_shaping_work() {
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(source.kind(), context, backend)?;
                         selected.axes.as_ref().unwrap().draw(backend)
                     },

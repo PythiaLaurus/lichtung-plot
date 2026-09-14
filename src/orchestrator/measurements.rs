@@ -31,6 +31,9 @@ pub(crate) enum Counter {
     AxisSpecPreparation,
     AxisSourcePreparation,
     StandardPanelIntrinsic,
+    RootTitleIntrinsic,
+    HeatmapIntrinsic,
+    LegendSelection,
     StandardCoordinateMeasure,
     LegacyPanelConstructor,
     OneCategoricalAxisMeasure,
@@ -38,7 +41,7 @@ pub(crate) enum Counter {
 }
 
 impl Counter {
-    pub(crate) const ALL: [Self; 29] = [
+    pub(crate) const ALL: [Self; 32] = [
         Self::GuideTrial,
         Self::GuideBodyCheck,
         Self::InsideLegendCandidate,
@@ -64,6 +67,9 @@ impl Counter {
         Self::AxisSpecPreparation,
         Self::AxisSourcePreparation,
         Self::StandardPanelIntrinsic,
+        Self::RootTitleIntrinsic,
+        Self::HeatmapIntrinsic,
+        Self::LegendSelection,
         Self::StandardCoordinateMeasure,
         Self::LegacyPanelConstructor,
         Self::OneCategoricalAxisMeasure,
@@ -97,6 +103,9 @@ impl Counter {
             Self::AxisSpecPreparation => "AxisSpecPreparation",
             Self::AxisSourcePreparation => "AxisSourcePreparation",
             Self::StandardPanelIntrinsic => "StandardPanelIntrinsic",
+            Self::RootTitleIntrinsic => "RootTitleIntrinsic",
+            Self::HeatmapIntrinsic => "HeatmapIntrinsic",
+            Self::LegendSelection => "LegendSelection",
             Self::StandardCoordinateMeasure => "StandardCoordinateMeasure",
             Self::LegacyPanelConstructor => "LegacyPanelConstructor",
             Self::OneCategoricalAxisMeasure => "OneCategoricalAxisMeasure",
@@ -149,6 +158,26 @@ pub(crate) struct ChildCacheEvent {
     pub phase: &'static str,
     pub root_round: usize,
     pub counter: Counter,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct IntrinsicEvent {
+    pub scope: Option<String>,
+    pub counter: Counter,
+    pub root_round: Option<usize>,
+}
+
+pub(crate) fn intrinsic(counter: Counter, scope: Option<&str>) {
+    ACTIVE.with(|active| {
+        if let Some(observation) = active.borrow_mut().as_mut() {
+            observation.counters[counter as usize] += 1;
+            observation.intrinsics.push(IntrinsicEvent {
+                scope: scope.map(str::to_owned),
+                counter,
+                root_round: observation.roots.last().map(|root| root.ordinal),
+            });
+        }
+    });
 }
 
 #[derive(Clone, Debug)]
@@ -211,11 +240,15 @@ pub(crate) struct Observations {
     pub records: u128,
     pub visits: u128,
     pub bytes: u128,
+    pub measurement_calls: u128,
+    pub cache_entries: u128,
+    pub topology_slots: u128,
     pub counters: [u64; Counter::ALL.len()],
     pub capture_counters: [u64; Counter::ALL.len()],
     pub guides: Vec<GuideAttempt>,
     pub roots: Vec<RootRound>,
     pub children: Vec<ChildCacheEvent>,
+    pub intrinsics: Vec<IntrinsicEvent>,
     pub gutters: Vec<GutterChange>,
     session: Rc<()>,
     resources: Vec<crate::font::canonical::OperationFontResources>,
@@ -362,6 +395,11 @@ pub(crate) fn finish() -> Observations {
         observation.records += resources.generation_resources().usage().unwrap().0;
         observation.visits += usage.processing_visits;
         observation.bytes += usage.font_bytes;
+        let generation = resources.generation_resources();
+        let (calls, entries) = generation.call_cache_usage();
+        observation.measurement_calls += calls;
+        observation.cache_entries += entries;
+        observation.topology_slots += generation.topology_usage();
     }
     observation
 }
@@ -459,6 +497,30 @@ fn counters_are_opt_in_reset_and_thread_local() {
     assert!(observation.roots.is_empty());
     count(Counter::GuideTrial);
     assert!(ACTIVE.with(|active| active.borrow().is_none()));
+}
+
+#[test]
+fn resource_audit_observations_report_independent_call_cache_and_topology_totals() {
+    start();
+    let font = crate::font::canonical::OperationFontResources::new();
+    resources(font.clone());
+    let generation = font.generation_resources();
+    generation.claim_calls(3).unwrap();
+    generation.claim_cache_entries(5).unwrap();
+    generation.claim_topology_slots(7).unwrap();
+    let observation = finish();
+    assert_eq!(
+        (
+            observation.measurement_calls,
+            observation.cache_entries,
+            observation.topology_slots
+        ),
+        (3, 5, 7)
+    );
+    assert_eq!(
+        (observation.records, observation.visits, observation.bytes),
+        (0, 0, 0)
+    );
 }
 
 #[test]

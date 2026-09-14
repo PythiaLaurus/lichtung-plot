@@ -78,8 +78,8 @@ fn preflight_panels(
             crate::layout::AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
-        let result = children.measure(&panel_plot, context, &owner, phase, round, || {
-            crate::layout::fit::outcome(panel_plot.measure_panel(kind, context))
+        let result = children.measure(&panel_plot, context, &owner, phase, round, |call| {
+            crate::layout::fit::outcome(panel_plot.measure_panel_in_call(kind, context, call))
         })?;
         preflight.push(crate::layout::fit::measured(Ok(result))?);
     }

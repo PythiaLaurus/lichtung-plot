@@ -8,5 +8,6 @@ mod support;
 use support::*;
 
 mod contract;
+mod degeneracy;
 mod labels;
 mod public_contracts;

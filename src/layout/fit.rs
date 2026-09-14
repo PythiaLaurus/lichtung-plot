@@ -1,9 +1,7 @@
 //! Typed local fit outcomes. Fatal producer errors never select another layout.
 
 use crate::layout::{AddressRole, ComponentAddress};
-use crate::layout::{
-    PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
-};
+use crate::layout::{PhysicalTextAlignment, ResolvedTextPlan};
 use crate::theme::{ResolvedTheme, TextAppearance};
 use crate::Error;
 
@@ -229,27 +227,15 @@ pub(crate) fn intrinsic_widths(
     appearance: &TextAppearance,
     owner: &str,
 ) -> Result<(f64, f64), Error> {
-    theme.prepare_font_environment()?;
     let requirements = theme
-        .prepared_font_environment()?
-        .text_intrinsic_requirements(
-            TextPlanInput {
-                source,
-                stack: &appearance.stack,
-                weight: appearance.weight,
-                font_size: appearance.font_size,
-                line_height: TextLineHeight::Multiplier(appearance.line_height_multiplier),
-                maximum_width_quanta: i64::MAX,
-                alignment: PhysicalTextAlignment::Start,
-                paint: appearance.paint,
-                provenance: TextPlanProvenance {
-                    pair_ordinal: 0,
-                    owner: owner.into(),
-                },
-                exact_override: false,
-            },
-            1,
-        )
+        .measure_text(
+            source,
+            appearance,
+            PhysicalTextAlignment::Start,
+            owner,
+            false,
+        )?
+        .intrinsic_from_analysis(1)
         .map_err(|error| Error::Render(format!("{owner}: {error}")))?;
     Ok((
         requirements.hard_width_quanta as f64 / 1024.0,

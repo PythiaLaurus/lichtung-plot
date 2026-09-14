@@ -15,12 +15,15 @@ pub(crate) fn source() -> Plot<crate::kind::Interaction> {
 }
 
 #[test]
-fn same_assignment_mark_operands_styles_order_and_clips_match_pre_native_output() {
+fn same_assignment_marks_match_canonical_projection_fingerprints() {
     use crate::layout::PanelBox;
-    // Complete mark-only SVG fingerprints recorded at a6f9091, before native axes.
+    // 2026-09-14 T5a6d: canonical projected centers precede marker construction.
+    // Historical a6f9091 hashes were fac25eefcd84c63d / 3ef60d2fc29c86ec /
+    // bae40bd86df8a981. Only triangle x vertices changed, by one CSS quantum;
+    // see docs/local-search-benchmarks.md, "T5a6d Closing Audit".
     for (markers, connectors, expected) in [
-        (true, true, 0xfac2_5eef_cd84_c63d),
-        (true, false, 0x3ef6_0d2f_c29c_86ec),
+        (true, true, 0x6684_9c3c_47ba_c743),
+        (true, false, 0x178e_c0a9_046a_6eb6),
         (false, true, 0xbae4_0bd8_6df8_a981),
     ] {
         let source = source()
@@ -35,10 +38,6 @@ fn same_assignment_mark_operands_styles_order_and_clips_match_pre_native_output(
             .connectors(connectors)
             .y_limits(-2.0, 10.0)
             .erase();
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
-        let plot = inputs.attach(source).unwrap();
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
         for preset in [
             crate::Theme::Publication,
@@ -46,6 +45,11 @@ fn same_assignment_mark_operands_styles_order_and_clips_match_pre_native_output(
             crate::Theme::Science,
         ] {
             let theme = preset.resolve();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                    .unwrap()
+                    .attach(source.clone())
+                    .unwrap();
             for panel in [
                 PanelBox::new(80.25, 550.75, 70.5, 410.25),
                 PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -63,6 +67,134 @@ fn same_assignment_mark_operands_styles_order_and_clips_match_pre_native_output(
             }
         }
         assert_eq!(hash, expected, "markers={markers}, connectors={connectors}");
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one sparse fixture compares marks, axes, grid and unchanged caller labels"
+)]
+fn sparse_marks_ticks_and_grid_share_odd_quantum_coordinates() {
+    let source = source()
+        .y_limits(-2.0, 10.0)
+        .y_ticks(vec![crate::AxisTick::new(2.0, " raw_estimate ")])
+        .labels(crate::Labels::raw().alias("b", " raw_b "))
+        .erase();
+    let plot = crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+        .unwrap()
+        .attach(source)
+        .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let panel = crate::layout::PanelBox::new(
+        80.0 + 1.0 / 1024.0,
+        550.0 + 4.0 / 1024.0,
+        70.0 + 1.0 / 1024.0,
+        410.0 + 4.0 / 1024.0,
+    );
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+        .unwrap();
+    assert_eq!(selected.x_tick_keys.as_ref().unwrap(), &["b", "a", "c"]);
+    assert_eq!(
+        selected
+            .layout
+            .x_axis
+            .ticks
+            .iter()
+            .map(|tick| tick.label.as_str())
+            .collect::<Vec<_>>(),
+        [" raw_b ", "a", "c"]
+    );
+    assert_eq!(selected.layout.y_axis.ticks[0].label, " raw_estimate ");
+    let crate::layout::interior::MarkPayload::Interaction(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        unreachable!()
+    };
+    assert_eq!(payload.clip, panel);
+    let point = |condition: u32, value| {
+        let (x, y) = selected
+            .layout
+            .projection
+            .project(f64::from(condition) + 0.5, value);
+        Point2D::new(x, y)
+    };
+    for (trace, cells) in payload.traces.iter().zip([
+        &[(0, 2.0), (1, 3.0), (2, 4.0)][..],
+        &[(0, 5.0), (2, 6.0)][..],
+    ]) {
+        assert_eq!(
+            trace.points,
+            cells
+                .iter()
+                .map(|&(condition, value)| point(condition, value))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            trace.intervals,
+            cells
+                .iter()
+                .map(|&(condition, value)| [
+                    point(condition, value - 1.0),
+                    point(condition, value + 1.0)
+                ])
+                .collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(payload.traces.len(), 2);
+    // Exact (2*i+1)/(2*3) category centers. The middle is a whole-position
+    // nearest-even tie; a numeric u64 key would incorrectly put it one quantum higher.
+    assert_eq!(
+        payload.traces[0]
+            .points
+            .iter()
+            .map(|point| point.x.to_bits())
+            .collect::<Vec<_>>(),
+        [162_135, 322_562, 482_990].map(|quanta| (f64::from(quanta) / 1024.0).to_bits())
+    );
+    let mark = payload.traces[0].points[0];
+    for grid in [false, true] {
+        let mut svg = crate::render::svg_backend::SvgBackend::in_memory(900, 700);
+        svg.begin(900, 700).unwrap();
+        let axes = selected.axes.as_ref().unwrap();
+        if grid {
+            axes.draw_grid(&mut svg).unwrap();
+        } else {
+            axes.draw(&mut svg).unwrap();
+        }
+        svg.end().unwrap();
+        let svg = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+        let document = roxmltree::Document::parse(&svg).unwrap();
+        let lines = document
+            .descendants()
+            .filter(|node| node.has_tag_name("polyline"))
+            .map(|node| {
+                node.attribute("points")
+                    .unwrap()
+                    .split([',', ' '])
+                    .filter(|word| !word.is_empty())
+                    .map(|word| word.parse::<f64>().unwrap())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        for mark in &payload.traces[0].points {
+            assert!(lines
+                .iter()
+                .any(|line| line[0].to_bits() == mark.x.to_bits()
+                    && line[2].to_bits() == mark.x.to_bits()));
+        }
+        let svg_y = 700.0 - mark.y;
+        assert!(lines.iter().any(
+            |line| line[1].to_bits() == svg_y.to_bits() && line[3].to_bits() == svg_y.to_bits()
+        ));
+        if !grid {
+            for label in [" raw_b ", " raw_estimate "] {
+                assert!(document
+                    .descendants()
+                    .any(|node| node.has_tag_name("text") && node.text() == Some(label)));
+            }
+        }
     }
 }
 
@@ -108,6 +240,57 @@ fn admitted_semantics_preserve_sparse_cells_and_prefont_refusal() {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
         0
     );
+}
+
+#[test]
+fn trace_style_completeness_admits_processing_before_missing_style() {
+    let source = source().styles([]).erase();
+    let levels = ["one", "two", "three"].map(String::from);
+    for available in [0, 1, 2] {
+        let resources = OperationGenerationResources::with_test_limits(available, 1024);
+        let error = resolve_trace_styles(
+            &source,
+            &levels,
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap_err();
+        if available == 0 {
+            assert!(matches!(error, Error::Render(message)
+                if message.contains("axis source work admission")
+                    && message.contains("root processing visits")));
+        } else {
+            assert!(matches!(error, Error::Data(message)
+                if message == "interaction: graphical group \"one\" has no configured style"));
+        }
+        assert_eq!(resources.usage().unwrap().1, available.min(1));
+    }
+}
+
+#[test]
+fn trace_style_processing_stops_at_first_match_and_first_missing_style() {
+    let source = source()
+        .styles([crate::InteractionStyle::new("one")])
+        .erase();
+    let levels = ["one", "two", "three"].map(String::from);
+    // One lookup comparison plus two completeness checks; neither scans the tail.
+    for available in [0, 1, 2, 3, 4] {
+        let resources = OperationGenerationResources::with_test_limits(available, 1024);
+        let error = resolve_trace_styles(
+            &source,
+            &levels,
+            source.data().with_axis_resources(&resources),
+        )
+        .unwrap_err();
+        if available < 3 {
+            assert!(matches!(error, Error::Render(message)
+                if message.contains("axis source work admission")
+                    && message.contains("root processing visits")));
+        } else {
+            assert!(matches!(error, Error::Data(message)
+                if message == "interaction: graphical group \"two\" has no configured style"));
+        }
+        assert_eq!(resources.usage().unwrap().1, available.min(3));
+    }
 }
 
 #[test]
@@ -221,7 +404,7 @@ fn selected_geometry_and_capture_are_immutable() {
                 selected.layout.projection.panel_box(),
                 &theme,
             )
-            .with_retained_body(selected.retained_payload()),
+            .with_retained_body(&selected),
             &mut backend,
         )
         .unwrap();

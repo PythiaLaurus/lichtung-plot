@@ -148,9 +148,20 @@ fn borrowed_canvas_category_policy_keeps_raw_keys_and_exact_admission() {
 
 #[test]
 fn root_prepares_standalone_facet_and_canvas_components_once() {
+    crate::orchestrator::measurements::start();
     STAGES.with(|counts| counts.set([0; 3]));
     crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|count| count.set(0));
     source().preflight().unwrap();
+    let work = crate::orchestrator::measurements::finish();
+    let intrinsic = work
+        .intrinsics
+        .iter()
+        .filter(|event| {
+            event.counter == crate::orchestrator::measurements::Counter::HeatmapIntrinsic
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(intrinsic.len(), 1);
+    assert!(intrinsic[0].root_round.is_none());
     assert_eq!(
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
         0
@@ -193,6 +204,60 @@ fn root_prepares_standalone_facet_and_canvas_components_once() {
         .unwrap();
     assert_eq!(STAGES.with(std::cell::Cell::get)[0], 2);
     assert_eq!(STAGES.with(std::cell::Cell::get)[2], 2);
+}
+
+#[test]
+fn cell_label_minimum_precedes_constrained_heatmap_discovery_and_is_retained() {
+    let source = source()
+        .annotations(HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default()
+                .suffix(" long unit label")
+                .unwrap(),
+        ))
+        .erase();
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    inputs.prepare_intrinsics(&source, &theme).unwrap();
+    let source = inputs.attach(source).unwrap();
+    let minimum = intrinsic_body_minimum(&source, &theme).unwrap();
+    assert!(minimum.0 > 80.0);
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let before = (
+        resources.usage().unwrap(),
+        resources.byte_usage().unwrap(),
+        resources.call_cache_usage().0,
+    );
+    assert_eq!(intrinsic_body_minimum(&source, &theme).unwrap(), minimum);
+    assert_eq!(resources.usage().unwrap(), before.0);
+    assert_eq!(resources.byte_usage().unwrap(), before.1);
+    assert_eq!(resources.call_cache_usage().0, before.2 + 1);
+    STAGES.with(|counts| counts.set([0; 3]));
+    let root = crate::layout::plan_exact_root(
+        800,
+        600,
+        |_| Ok(()),
+        |(), assigned, round| {
+            let outcome = crate::decorations::plan::plan_panel(
+                &source,
+                source.kind(),
+                PanelBox::new(0.0, minimum.0 - 1.0 / 1024.0, 0.0, 400.0),
+                crate::decorations::plan::LegendRole::Suppressed,
+                &theme,
+                round,
+                &crate::layout::ComponentAddress::root(),
+            )?;
+            assert!(matches!(outcome, crate::layout::fit::FitOutcome::Miss(_)));
+            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+        },
+        |(), _, (), _| Ok(()),
+    );
+    root.unwrap();
+    assert_eq!(STAGES.with(std::cell::Cell::get), [0; 3]);
 }
 
 #[test]
@@ -256,7 +321,7 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
             .render_panel(
                 crate::PlotKind::Heatmap,
                 PlotRenderContext::new(poison.data(), payload.clip, &theme)
-                    .with_retained_body(selected.retained_payload()),
+                    .with_retained_body(&selected),
                 &mut backend,
             )
             .unwrap();
@@ -364,18 +429,25 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
         };
         let resources = OperationGenerationResources::new();
         run(&resources).unwrap();
+        let records = resources.usage().unwrap().0;
         let visits = resources.usage().unwrap().1;
         let bytes = resources.byte_usage().unwrap();
-        for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-            assert!(run(&OperationGenerationResources::with_test_limits(
-                visits, bytes
-            ))
-            .is_err());
+        if component == 1 {
+            // Three rows; the merged last row does not examine individual cells.
+            assert_eq!(visits, 3 + 2 * 2);
         }
-        run(&OperationGenerationResources::with_test_limits(
-            visits, bytes,
-        ))
-        .unwrap();
+        for (records, visits, bytes) in [(records - 1, visits, bytes), (records, visits, bytes - 1)]
+            .into_iter()
+            .chain(visits.checked_sub(1).map(|visits| (records, visits, bytes)))
+        {
+            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+            limited.claim_slots(1_000_000 - records).unwrap();
+            assert!(run(&limited).is_err());
+        }
+        let exact = OperationGenerationResources::with_test_limits(visits, bytes);
+        exact.claim_slots(1_000_000 - records).unwrap();
+        run(&exact).unwrap();
+        assert_eq!(exact.usage().unwrap(), (1_000_000, visits));
     }
 }
 

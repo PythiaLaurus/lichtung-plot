@@ -50,7 +50,7 @@ impl CategoricalColors {
     pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), Error> {
         data.admit_clone_slice(&self.entries)?;
         for (label, _) in &self.entries {
-            data.admit_clone_slice(label.as_bytes())?;
+            data.admit_clone_str(label)?;
         }
         Ok(())
     }

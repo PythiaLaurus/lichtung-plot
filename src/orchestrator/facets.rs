@@ -128,7 +128,7 @@ pub(super) struct FacetPlan {
     outside_legend: Option<ResolvedLegend>,
     horizontal_axis_label: Option<String>,
     vertical_axis_label: Option<String>,
-    canvas_layout: crate::layout::CanvasLayout,
+    canvas_layout: crate::layout::RootFramePlan,
     outer: crate::layout::PanelBox,
     shared_axis_origin: (f64, f64),
     strip_text: Vec<crate::render::backend::PlacedText>,
@@ -544,35 +544,31 @@ impl FacetPlan {
                 let mut legends = Vec::new();
                 let mut strip_layers = Vec::new();
                 let mut panel_layers = Vec::new();
-                source
-                    .data()
-                    .reserve_source(&mut panel_layers, panels.len())?;
-                source
-                    .data()
-                    .reserve_source(&mut panel_plots, panels.len())?;
-                source.data().reserve_source(&mut legends, panels.len())?;
-                source
-                    .data()
-                    .reserve_source(&mut strip_layers, panels.len())?;
+                let resources = theme.prepared_font_environment()?.generation_resources();
+                let data = source.data().with_axis_resources(&resources);
+                data.reserve_source(&mut panel_layers, panels.len())?;
+                data.reserve_source(&mut panel_plots, panels.len())?;
+                data.reserve_source(&mut legends, panels.len())?;
+                data.reserve_source(&mut strip_layers, panels.len())?;
                 for (index, (facet, panel)) in panels.iter().zip(&panel_plans).enumerate() {
-                    let scope = facet.render_scope(source.data())?;
+                    let scope = facet.render_scope(data)?;
                     let mut layers = [String::new(), String::new(), String::new()];
                     for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend"]) {
                         let length = scope
                             .len()
                             .checked_add(suffix.len() + 1)
                             .ok_or_else(|| Error::Render("facet layer length overflow".into()))?;
-                        source.data().reserve_source_string(layer, length)?;
+                        data.reserve_source_string(layer, length)?;
                         layer.push_str(&scope);
                         layer.push('-');
                         layer.push_str(suffix);
                     }
                     panel_layers.push(layers);
-                    let plot = planned_plot
-                        .clone()
+                    let plot = panel
+                        .plot_with_planned_limits(&planned_plot, data)?
                         .with_render_scope(scope)
                         .with_significance_subset(facet.significance_selectors());
-                    panel_plots.push(panel.plot_with_planned_limits(&plot));
+                    panel_plots.push(plot);
                     let legend = if index == 0 {
                         outside_legend.as_ref().or(panel.legend.as_ref())
                     } else {

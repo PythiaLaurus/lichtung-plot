@@ -20,6 +20,7 @@ impl PreparedDistribution {
         data: PlotData<'_>,
         facet: Option<crate::data::FacetAxisSources<'_>>,
     ) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         count(chart.kind(), 0);
         match chart.kind() {

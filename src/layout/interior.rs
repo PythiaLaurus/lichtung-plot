@@ -4,7 +4,7 @@
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
-use crate::spec::{PlotKind, PlotRenderResult};
+use crate::spec::PlotKind;
 use crate::{Error, Plot};
 
 pub(crate) mod coordinate;
@@ -127,6 +127,37 @@ pub(crate) struct PreparedInteriorInputs {
 }
 
 impl PreparedInteriorInputs {
+    /// Semantic attachment does not discover fonts. Each attached panel obtains
+    /// its post-font summary before the parent starts width allocation.
+    pub(crate) fn prepare_intrinsics(
+        &self,
+        plot: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<(), Error> {
+        self.route.validate(plot)?;
+        for (index, (scope, axes)) in self.axes.iter().enumerate() {
+            if self.route.is_native() {
+                coordinate::Intrinsics::prepare(axes, theme, scope.as_deref())?;
+            } else if let Some(heatmap) = &self.heatmap {
+                let prepared = heatmap
+                    .panels
+                    .get(index)
+                    .filter(|(owner, _)| owner == scope)
+                    .ok_or_else(|| {
+                        Error::Render("prepared heatmap intrinsic scope missing".into())
+                    })?;
+                crate::plots::heatmap::prepare_intrinsics(
+                    &prepared.1,
+                    axes,
+                    plot.data(),
+                    theme,
+                    scope.as_deref(),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn attach(&self, mut plot: Plot) -> Result<Plot, Error> {
         self.route.validate(&plot)?;
         plot.prepared_axes = self.axes.clone();
@@ -147,6 +178,24 @@ impl PreparedInteriorInputs {
         plot.prepared_distributions.clone_from(&self.distributions);
         plot.prepared_regression.clone_from(&self.regression);
         Ok(plot)
+    }
+}
+
+impl Plot {
+    pub(crate) fn intrinsic_body_minimum(
+        &self,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<(f64, f64), Error> {
+        if InteriorRoute::classify(self.kind()).is_native() {
+            return Ok(coordinate::Intrinsics::prepared(self, theme)?.minimum(self));
+        }
+        let mut minimum = DeferredLegacyPanelMinimum::SIZE;
+        if self.kind() == PlotKind::Heatmap {
+            let heatmap = crate::plots::heatmap::intrinsic_body_minimum(self, theme)?;
+            minimum.0 = minimum.0.max(heatmap.0);
+            minimum.1 = minimum.1.max(heatmap.1);
+        }
+        Ok(minimum)
     }
 }
 
@@ -206,14 +255,6 @@ impl InteriorReserveRequest {
         };
         round.request_insets(source, target, kind, insets)
     }
-}
-
-/// Capture consumes selected mark and annotation plans without
-/// reconstruction. LegacyCombined retains only axes/text for unextracted families.
-#[derive(Clone, Copy)]
-pub(crate) enum RetainedInteriorPayload<'a> {
-    LegacyCombined(&'a PlotRenderResult),
-    Selected(&'a PlotRenderResult),
 }
 
 /// Selected mark consequences remain deferred to T5c, independently of axes.

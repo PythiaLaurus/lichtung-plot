@@ -1805,7 +1805,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             }
             let theme = crate::Theme::Publication.resolve();
             let preparations = crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get);
-            let panel = plot.base_canvas_layout(&theme).panel_box;
+            let panel = prepared.measured_canvas_layout(&theme).unwrap().panel_box;
             // Extracted families have no unprepared combined route.
             let expected_source = if matches!(
                 kind,
@@ -1869,10 +1869,27 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             );
         }
         let mut backend = RecordingBackend::default();
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
+        crate::orchestrator::TEXT_PLAN_CAPTURE_SESSIONS.with(|calls| calls.set(0));
         crate::orchestrator::measurements::start();
-        plot.render_kind(kind, &mut backend)
+        let plan = crate::orchestrator::lifecycle::PlotPlan::new(&plot, kind)
             .unwrap_or_else(|error| panic!("{kind:?} failed: {error}"));
+        plan.render(&mut backend).unwrap();
         let work = crate::orchestrator::measurements::finish();
+        assert_eq!(work.calls[2], 1, "{kind:?}: selected capture");
+        assert_eq!(work.calls[3], 1, "{kind:?}: final Null validation");
+        assert_eq!(
+            work.capture_counters,
+            [0; crate::orchestrator::measurements::Counter::ALL.len()],
+            "{kind:?}: no foundational or deferred work in capture"
+        );
+        crate::orchestrator::TEXT_PLAN_CAPTURE_SESSIONS
+            .with(|calls| assert_eq!(calls.get(), 1, "{kind:?}"));
+        crate::render::geometry::GEOMETRY_BACKEND_BEGINS
+            .with(|calls| assert_eq!(calls.get(), 0, "{kind:?}"));
+        crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS
+            .with(|calls| assert_eq!(calls.get(), 0, "{kind:?}"));
         for (total, counter) in preparation_work.iter_mut().zip([
             crate::orchestrator::measurements::Counter::AxisRangePreparation,
             crate::orchestrator::measurements::Counter::AxisSpecPreparation,
@@ -1894,6 +1911,48 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
             );
         }
         assert_eq!((backend.begins, backend.ends), (1, 1), "{kind:?}");
+        assert_eq!(plan.dimensions(), (640, 480));
+        // Dropping the source before every concrete output makes a source-size
+        // or source-data reread impossible after exact-root promotion.
+        drop(plot);
+        let frozen_work = || {
+            [
+                crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
+                crate::layout::Projection::test_projection_calls(),
+                crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+                crate::plots::shared_x::AXIS_PREPARATIONS.with(std::cell::Cell::get),
+                crate::orchestrator::SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get),
+            ]
+        };
+        let before = frozen_work();
+        crate::orchestrator::measurements::start();
+        let mut svg = plan.take_svg_backend().unwrap();
+        plan.render(&mut svg).unwrap();
+        let scene = crate::scene::RenderedScene::new(640, 480, svg.into_output()).unwrap();
+        let preserve = scene.svg_bytes().to_vec();
+        assert!(std::str::from_utf8(&preserve)
+            .unwrap()
+            .contains("viewBox=\"0 0 640 480\""));
+        let outlined = scene.svg_with_text_as_paths().unwrap();
+        assert!(!std::str::from_utf8(&outlined).unwrap().contains("<text"));
+        let png = scene
+            .png_bytes(&crate::PngOptions {
+                sizing: crate::PngSizing::Scale(1.0),
+                ..crate::PngOptions::default()
+            })
+            .unwrap();
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 640);
+        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), 480);
+        assert_eq!(scene.svg_bytes(), preserve);
+        assert_eq!(scene.svg_with_text_as_paths().unwrap(), outlined);
+        let work = crate::orchestrator::measurements::finish();
+        assert_eq!(
+            work.counters,
+            [0; crate::orchestrator::measurements::Counter::ALL.len()],
+            "{kind:?}: frozen output work"
+        );
+        assert_eq!(frozen_work(), before, "{kind:?}: post-freeze work");
     }
     assert!(preparation_work.into_iter().all(|count| count > 0));
 }

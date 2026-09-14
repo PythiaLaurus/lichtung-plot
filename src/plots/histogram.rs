@@ -35,6 +35,7 @@ pub(crate) struct HistogramSemantics {
 
 impl HistogramSemantics {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(0, 0);
         let (range, bins, curve, rugs) = if let Some(input) =
@@ -107,7 +108,12 @@ impl HistogramSemantics {
         Ok(Self {
             ranges: [
                 chart.x_axis_spec().limits.unwrap_or(range),
-                crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+                crate::layout::anchored_auto_range(
+                    (0.0, maximum),
+                    chart.y_axis_spec(),
+                    0.0,
+                    data.source_resources()?,
+                )?,
             ],
             bins,
             curve,
@@ -187,8 +193,23 @@ pub(crate) fn project(
     let payload = HistogramPayload {
         clip: layout.projection.panel_box(),
         bins: data.collect_source(prepared.bins.iter().map(|bin| {
+            data.claim_source_visits(1)?;
             let left = project(bin.lower, 0.0);
             let right = project(bin.upper, bin.density);
+            layout.projection.validate_span(
+                crate::layout::AxisSide::Bottom,
+                (bin.lower, bin.upper),
+                (left.x, right.x),
+                bin.lower < bin.upper,
+                "histogram polygon width",
+            )?;
+            layout.projection.validate_span(
+                crate::layout::AxisSide::Left,
+                (0.0, bin.density),
+                (left.y, right.y),
+                bin.density != 0.0,
+                "histogram polygon height",
+            )?;
             Ok([
                 left,
                 Point2D::new(right.x, left.y),
@@ -199,14 +220,25 @@ pub(crate) fn project(
         curve: prepared
             .curve
             .as_ref()
-            .map(|curve| data.collect_source(curve.iter().map(|p| Ok(project(p.x, p.y)))))
+            .map(|curve| {
+                data.collect_source(curve.iter().map(|p| {
+                    data.claim_source_visits(1)?;
+                    Ok(project(p.x, p.y))
+                }))
+            })
             .transpose()?,
-        rugs: data.collect_source(
-            prepared
-                .rugs
-                .iter()
-                .map(|r| Ok([project(r.x, r.baseline), project(r.x, r.top)])),
-        )?,
+        rugs: data.collect_source(prepared.rugs.iter().map(|r| {
+            data.claim_source_visits(1)?;
+            let points = [project(r.x, r.baseline), project(r.x, r.top)];
+            layout.projection.validate_span(
+                crate::layout::AxisSide::Left,
+                (r.baseline, r.top),
+                (points[0].y, points[1].y),
+                r.baseline < r.top,
+                "histogram rug interval",
+            )?;
+            Ok(points)
+        }))?,
         fill: FillStyle {
             color: theme.colors[0],
             stroke: theme.foreground,
@@ -281,7 +313,12 @@ pub(crate) fn axis_ranges(
     };
     Ok([
         chart.x_axis_spec().limits.unwrap_or(range),
-        crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+        crate::layout::anchored_auto_range(
+            (0.0, maximum),
+            chart.y_axis_spec(),
+            0.0,
+            data.source_resources()?,
+        )?,
     ])
 }
 

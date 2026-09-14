@@ -1,9 +1,74 @@
 use super::*;
+use crate::font::canonical::OperationGenerationResources;
 use crate::render::backend::Backend;
 
 #[test]
+fn projected_span_validation_preserves_source_intent_without_reprojection_or_requantization() {
+    let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
+    for axis in [AxisSide::Bottom, AxisSide::Left] {
+        for (source, nonzero, collapse) in [
+            ((0.0, 1e-9), true, true),
+            ((1e-9, 0.0), true, true),
+            ((0.5, 0.5), true, true),
+            ((0.0, -0.0), false, false),
+            ((0.5, 0.5), false, false),
+            ((0.0, 1.0 / (100.0 * 1024.0)), true, false),
+            ((0.5, 1.5), true, false),
+            ((2.0, 3.0), true, false),
+            ((2.0, 2.0 + 1e-9), true, false),
+            ((2.0, 2.0), true, false),
+        ] {
+            let project = |value| match axis {
+                AxisSide::Bottom => projection.project(value, 0.0).0,
+                AxisSide::Left => projection.project(0.0, value).1,
+            };
+            let projected = (project(source.0), project(source.1));
+            let calls = Projection::test_projection_calls();
+            let conversions =
+                crate::render::coordinates::SPATIAL_CONVERSIONS.with(std::cell::Cell::get);
+            let result = projection.validate_span(axis, source, projected, nonzero, "test polygon");
+            assert_eq!(result.is_err(), collapse, "{source:?}: {result:?}");
+            if let Err(error) = result {
+                assert!(matches!(error, crate::Error::Render(_)), "{error}");
+                assert!(error.to_string().contains("test polygon"), "{error}");
+            }
+            assert_eq!(calls, Projection::test_projection_calls());
+            assert_eq!(
+                conversions,
+                crate::render::coordinates::SPATIAL_CONVERSIONS.with(std::cell::Cell::get)
+            );
+        }
+    }
+    let outside = (2.0, 2.0 + 1e-9);
+    let projected = (
+        projection.project(outside.0, 0.5).0,
+        projection.project(outside.1, 0.5).0,
+    );
+    projection
+        .validate_span(
+            AxisSide::Bottom,
+            outside,
+            projected,
+            true,
+            "outside interval",
+        )
+        .unwrap();
+    let error = crate::render::backend::validate_line_points(&[
+        crate::render::backend::Point2D::new(projected.0, 50.0),
+        crate::render::backend::Point2D::new(projected.1, 50.0),
+    ])
+    .unwrap_err();
+    assert!(error.to_string().contains("collapse"), "{error}");
+}
+
+#[test]
 fn continuous_auto_range_pads_when_data_hits_nice_bounds() {
-    let range = continuous_auto_range((0.0, 10.0), &AxisSpec::default());
+    let range = continuous_auto_range(
+        (0.0, 10.0),
+        &AxisSpec::default(),
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
 
     assert!(
         range.0 < 0.0 && range.1 > 10.0,
@@ -13,7 +78,12 @@ fn continuous_auto_range_pads_when_data_hits_nice_bounds() {
 
 #[test]
 fn continuous_auto_range_preserves_finite_extreme_endpoints_when_padding_overflows() {
-    let range = continuous_auto_range((-f64::MAX, f64::MAX), &AxisSpec::default());
+    let range = continuous_auto_range(
+        (-f64::MAX, f64::MAX),
+        &AxisSpec::default(),
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
 
     assert_eq!(range, (-f64::MAX, f64::MAX));
     let projection = Projection::new(range, range, (0.0, 100.0, 0.0, 100.0));
@@ -22,7 +92,13 @@ fn continuous_auto_range_preserves_finite_extreme_endpoints_when_padding_overflo
 
 #[test]
 fn anchored_auto_range_keeps_zero_side_exact_for_positive_data() {
-    let range = anchored_auto_range((0.0, 10.0), &AxisSpec::default(), 0.0);
+    let range = anchored_auto_range(
+        (0.0, 10.0),
+        &AxisSpec::default(),
+        0.0,
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
 
     assert_eq!(range, (0.0, 10.5));
 }
@@ -31,7 +107,13 @@ fn anchored_auto_range_keeps_zero_side_exact_for_positive_data() {
 fn anchored_auto_range_uses_relative_padding_for_tiny_positive_density() {
     let maximum = 2.4e-294;
 
-    let range = anchored_auto_range((0.0, maximum), &AxisSpec::default(), 0.0);
+    let range = anchored_auto_range(
+        (0.0, maximum),
+        &AxisSpec::default(),
+        0.0,
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
 
     assert!(range.0.total_cmp(&0.0).is_eq());
     assert!(range.1 > maximum && range.1 < 1e-292, "{range:?}");
@@ -41,14 +123,25 @@ fn anchored_auto_range_uses_relative_padding_for_tiny_positive_density() {
 fn anchored_auto_range_advances_adjacent_subnormal_density_endpoint() {
     let maximum = f64::from_bits(1);
 
-    let range = anchored_auto_range((0.0, maximum), &AxisSpec::default(), 0.0);
+    let range = anchored_auto_range(
+        (0.0, maximum),
+        &AxisSpec::default(),
+        0.0,
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
 
     assert_eq!(range, (0.0, maximum.next_up()));
 }
 
 #[test]
 fn continuous_auto_range_keeps_nice_ticks_inside_limits() {
-    let range = continuous_auto_range((0.0, 10.0), &AxisSpec::default());
+    let range = continuous_auto_range(
+        (0.0, 10.0),
+        &AxisSpec::default(),
+        &OperationGenerationResources::new(),
+    )
+    .unwrap();
     let ticks = nice_ticks(range.0, range.1, 5);
 
     assert!(
@@ -604,10 +697,8 @@ fn complete_sources_fit_endpoint_labels_inward_instead_of_filtering_positions() 
     ];
 
     let narrow = Projection::new((0.0, 100.0), (0.0, 1.0), (0.0, 100.0, 0.0, 100.0));
-    assert!(!super::sources::labels_fit(&ticks, &narrow, AxisSide::Bottom, &theme, false).unwrap());
-    assert!(
-        super::sources::labels_fit(&ticks, &projection, AxisSide::Bottom, &theme, false).unwrap()
-    );
+    assert!(!super::sources::labels_fit(&ticks, &narrow, AxisSide::Bottom, &theme).unwrap());
+    assert!(super::sources::labels_fit(&ticks, &projection, AxisSide::Bottom, &theme).unwrap());
     assert_eq!(
         ticks.iter().map(|tick| tick.position).collect::<Vec<_>>(),
         [0.0, 50.0, 100.0]
@@ -683,6 +774,30 @@ fn projection_preserves_out_of_range_canvas_coordinates() {
 }
 
 #[test]
+fn overflowing_extrapolation_numerator_keeps_a_finite_clipped_mark() {
+    let projection = Projection::new((-1e308, -5e307), (0.0, 1.0), (100.0, 500.0, 100.0, 300.0));
+    assert_eq!(projection.project(1e308, 0.5), (1700.0, 200.0));
+    let source = crate::Plot::line(
+        crate::NumericValues::new("x", [-1e308, 1e308]),
+        crate::NumericValues::new("y", [0.25, 0.75]),
+    )
+    .x_limits(-1e308, -5e307)
+    .y_limits(0.0, 1.0)
+    .erase();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("clipped.svg");
+    source.svg_preserve_text(&path).unwrap();
+    let svg = std::fs::read_to_string(path).unwrap();
+    assert!(svg.contains("clip-path="));
+    assert!(svg
+        .lines()
+        .filter(|line| line.starts_with("<polyline "))
+        .all(|line| {
+            !line.contains("NaN") && !line.contains("\"inf") && !line.contains(",inf")
+        }));
+}
+
+#[test]
 fn projection_scales_opposite_sign_extreme_axis_boundaries_without_overflow() {
     let projection = Projection::new(
         (-f64::MAX, f64::MAX),
@@ -699,7 +814,10 @@ fn nice_ticks_return_adjacent_subnormal_endpoints_without_zero_step() {
     let upper = f64::from_bits(1);
 
     assert_eq!(nice_ticks(0.0, upper, 5), [0.0, upper]);
-    assert_eq!(nice_range(0.0, upper, 5), (0.0, upper));
+    assert_eq!(
+        nice_range(0.0, upper, 5, &OperationGenerationResources::new()).unwrap(),
+        (0.0, upper)
+    );
     assert!(labels_are_unique(&distinct_tick_labels(&[0.0, upper])));
 }
 

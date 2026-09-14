@@ -1,7 +1,6 @@
 ---
 source: tests/visual_regression/suite.rs
-assertion_line: 35
-expression: "specialized_svg_structure(&svg, &[\"Matrix structural title\", \"Group\"])"
+expression: "specialized_svg_structure(&svg,\n&[\"Matrix structural title\", \"Group\", \"X\", \"Y\", \"0\", \"5\"])"
 ---
 <clipPath id="clip-0"><rect x="79.2001953125" y="46" width="93.998046875" height="78.7001953125"/></clipPath>
 <clipPath id="clip-1"><rect x="181.1982421875" y="46" width="93.998046875" height="78.7001953125"/></clipPath>
@@ -10,15 +9,27 @@ expression: "specialized_svg_structure(&svg, &[\"Matrix structural title\", \"Gr
 <g clip-path="url(#clip-0)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
+<text x="58.6826171875" y="116.228515625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="59.0185546875" y="62.7841796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="29.4267578125" y="89.765625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,35.2373046875,85.349609375)">X</text>
 <g clip-path="url(#clip-1)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
 <g clip-path="url(#clip-2)">
 MARKS circle=4 line=0 polygon=0 polyline=0 text=0
 END MARKS
+<text x="89.1962890625" y="236.95703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="153.1083984375" y="236.95703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="120.388671875" y="261.716796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">X</text>
+<text x="58.6826171875" y="202.9287109375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="59.0185546875" y="149.484375" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="30.044921875" y="176.466796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,35.2373046875,172.05078125)">Y</text>
 <g clip-path="url(#clip-3)">
 MARKS circle=0 line=0 polygon=2 polyline=0 text=0
 END MARKS
+<text x="191.1953125" y="236.95703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">0</text>
+<text x="255.1064453125" y="236.95703125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">5</text>
+<text x="223.0048828125" y="261.716796875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr">Y</text>
 <g id="legend">
 <text x="299.326171875" y="71.1171875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Group</text>
 <text x="73.8037109375" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Matrix structural title</text>

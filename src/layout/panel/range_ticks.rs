@@ -1,63 +1,81 @@
 use super::AxisSpec;
 #[cfg(test)]
 use super::{AxisSide, AxisTick, Projection};
+use crate::font::canonical::OperationGenerationResources;
 #[cfg(test)]
 use crate::theme::ResolvedTheme;
-#[cfg(test)]
 use crate::Error;
 
 const DEFAULT_RANGE_MARGIN_FRACTION: f64 = 0.05;
 const NICE_RANGE_SEED_COUNT: usize = 5;
 const NICE_STEPS: [f64; 5] = [10.0, 5.0, 2.5, 2.0, 1.0];
 
-pub(super) fn resolve_range(range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
-    continuous_auto_range(range, spec)
+pub(super) fn resolve_range(
+    range: (f64, f64),
+    spec: &AxisSpec,
+    resources: &OperationGenerationResources,
+) -> Result<(f64, f64), Error> {
+    continuous_auto_range(range, spec, resources)
 }
 
-pub(crate) fn continuous_auto_range(range: (f64, f64), spec: &AxisSpec) -> (f64, f64) {
+pub(crate) fn continuous_auto_range(
+    range: (f64, f64),
+    spec: &AxisSpec,
+    resources: &OperationGenerationResources,
+) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
     if let Some(limits) = spec.limits {
-        limits
+        Ok(limits)
     } else {
-        broaden_nice_range(range, NICE_RANGE_SEED_COUNT, DEFAULT_RANGE_MARGIN_FRACTION)
+        broaden_nice_range(
+            range,
+            NICE_RANGE_SEED_COUNT,
+            DEFAULT_RANGE_MARGIN_FRACTION,
+            resources,
+        )
     }
 }
 
-pub(crate) fn anchored_auto_range(range: (f64, f64), spec: &AxisSpec, anchor: f64) -> (f64, f64) {
+pub(crate) fn anchored_auto_range(
+    range: (f64, f64),
+    spec: &AxisSpec,
+    anchor: f64,
+    resources: &OperationGenerationResources,
+) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
     if let Some(limits) = spec.limits {
-        return limits;
+        return Ok(limits);
     }
     if !(range.0.is_finite() && range.1.is_finite() && anchor.is_finite()) {
-        return range;
+        return Ok(range);
     }
     let lo = range.0.min(range.1);
     let hi = range.0.max(range.1);
     if lo.total_cmp(&hi).is_eq() {
         if hi.total_cmp(&anchor).is_eq() {
-            return if anchor == 0.0 {
+            return Ok(if anchor == 0.0 {
                 (0.0, 1.0)
             } else if hi >= anchor {
                 (anchor, pad_up(hi, relative_padding(anchor, hi)))
             } else {
                 (pad_down(lo, relative_padding(lo, anchor)), anchor)
-            };
+            });
         }
-        return if hi >= anchor {
+        return Ok(if hi >= anchor {
             (anchor, pad_up(hi, relative_padding(anchor, hi)))
         } else {
             (pad_down(lo, relative_padding(lo, anchor)), anchor)
-        };
+        });
     }
-    let (nice_min, nice_max) = nice_range(lo, hi, NICE_RANGE_SEED_COUNT);
+    let (nice_min, nice_max) = nice_range(lo, hi, NICE_RANGE_SEED_COUNT, resources)?;
     let pad = relative_padding(nice_min, nice_max);
-    if lo >= anchor {
+    Ok(if lo >= anchor {
         (anchor, pad_up(nice_max.max(hi), pad))
     } else if hi <= anchor {
         (pad_down(nice_min.min(lo), pad), anchor)
@@ -66,7 +84,7 @@ pub(crate) fn anchored_auto_range(range: (f64, f64), spec: &AxisSpec, anchor: f6
             pad_down(nice_min.min(lo), pad),
             pad_up(nice_max.max(hi), pad),
         )
-    }
+    })
 }
 
 fn relative_padding(minimum: f64, maximum: f64) -> f64 {
@@ -120,13 +138,18 @@ pub(crate) fn display_axis_spec(spec: &AxisSpec, range: (f64, f64)) -> AxisSpec 
     }
 }
 
-fn broaden_nice_range(range: (f64, f64), target_ticks: usize, margin_fraction: f64) -> (f64, f64) {
+fn broaden_nice_range(
+    range: (f64, f64),
+    target_ticks: usize,
+    margin_fraction: f64,
+    resources: &OperationGenerationResources,
+) -> Result<(f64, f64), Error> {
     if !(range.0.is_finite() && range.1.is_finite()) {
-        return range;
+        return Ok(range);
     }
     let lo = range.0.min(range.1);
     let hi = range.0.max(range.1);
-    let (nice_min, nice_max) = nice_range(lo, hi, target_ticks);
+    let (nice_min, nice_max) = nice_range(lo, hi, target_ticks, resources)?;
     let broadened = if lo.total_cmp(&hi).is_eq() {
         let pad = (nice_max - nice_min).abs() * margin_fraction;
         (nice_min - pad, nice_max + pad)
@@ -136,9 +159,9 @@ fn broaden_nice_range(range: (f64, f64), target_ticks: usize, margin_fraction: f
         (nice_min - margin, nice_max + margin)
     };
     if broadened.0.is_finite() && broadened.1.is_finite() && broadened.0 < broadened.1 {
-        broadened
+        Ok(broadened)
     } else {
-        (lo, hi)
+        Ok((lo, hi))
     }
 }
 
@@ -194,20 +217,25 @@ pub(super) fn labels_are_unique(labels: &[String]) -> bool {
 }
 
 /// The range owner's snapping grammar is deliberately independent of tick sources.
-pub(crate) fn nice_range(lo: f64, hi: f64, target_ticks: usize) -> (f64, f64) {
+pub(crate) fn nice_range(
+    lo: f64,
+    hi: f64,
+    target_ticks: usize,
+    resources: &OperationGenerationResources,
+) -> Result<(f64, f64), Error> {
     if !(lo.is_finite() && hi.is_finite()) || lo > hi || target_ticks == 0 {
-        return (lo, hi);
+        return Ok((lo, hi));
     }
     if lo.total_cmp(&hi).is_eq() {
         let broad = (lo - 1.0, hi + 1.0);
         if broad.0.is_finite() && broad.1.is_finite() && broad.0 < broad.1 {
-            return broad;
+            return Ok(broad);
         }
-        return finite_adjacent_range(lo);
+        return Ok(finite_adjacent_range(lo));
     }
-    let step = best_tick_step(lo, hi, target_ticks);
+    let step = best_tick_step(lo, hi, target_ticks, resources)?;
     if !step.is_finite() || step <= 0.0 {
-        return (lo, hi);
+        return Ok((lo, hi));
     }
     let nice_lo = (lo / step).floor() * step;
     let nice_hi = (hi / step).ceil() * step;
@@ -217,9 +245,9 @@ pub(crate) fn nice_range(lo: f64, hi: f64, target_ticks: usize) -> (f64, f64) {
         && nice_hi >= hi
         && nice_lo < nice_hi
     {
-        (nice_lo, nice_hi)
+        Ok((nice_lo, nice_hi))
     } else {
-        (lo, hi)
+        Ok((lo, hi))
     }
 }
 
@@ -239,18 +267,24 @@ fn finite_adjacent_range(value: f64) -> (f64, f64) {
     }
 }
 
-fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
+fn best_tick_step(
+    lo: f64,
+    hi: f64,
+    target_ticks: usize,
+    resources: &OperationGenerationResources,
+) -> Result<f64, Error> {
     let range = finite_span(lo, hi);
     if !range.is_finite() || range <= 0.0 || target_ticks == 0 {
-        return f64::NAN;
+        return Ok(f64::NAN);
     }
     let raw_step = range / target_ticks as f64;
     if !raw_step.is_finite() || raw_step <= 0.0 {
-        return f64::NAN;
+        return Ok(f64::NAN);
     }
-    let mag = 10f64.powf(raw_step.log10().floor());
+    let mag =
+        super::sources::decimal_power(crate::numeric::log10(raw_step, resources)?.floor() as i32);
     if !mag.is_finite() || mag <= 0.0 {
-        return raw_step;
+        return Ok(raw_step);
     }
     let target_n = target_ticks.saturating_add(1);
     let mut best_step = raw_step;
@@ -266,7 +300,7 @@ fn best_tick_step(lo: f64, hi: f64, target_ticks: usize) -> f64 {
             best_step = step;
         }
     }
-    best_step
+    Ok(best_step)
 }
 
 #[cfg(test)]

@@ -2,7 +2,74 @@
     clippy::float_cmp,
     reason = "source-policy fixtures assert prescribed binary64 identities"
 )]
+use super::super::projection::{projection_key, ratio_position};
 use super::*;
+
+#[test]
+fn resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarsens() {
+    let theme = crate::Theme::Publication.resolve();
+    let environment = theme.prepared_font_environment().unwrap();
+    let resources = environment.generation_resources();
+    let projection = Projection::new((0.0, 1.0), (0.0, 1.0), (0.0, 1000.0, 0.0, 1000.0));
+    let scope = crate::layout::fit::FitScope::root();
+    let first = numeric_tick_plan(
+        (0.0, 1.0),
+        None,
+        false,
+        &projection,
+        AxisSide::Bottom,
+        &theme,
+        false,
+        &scope,
+    )
+    .unwrap();
+    let calls = resources.call_cache_usage().0;
+    let admission = environment.claim_measurement_call().unwrap();
+    let second = NumericTickPlan::measure_in_call(
+        (0.0, 1.0),
+        None,
+        false,
+        &projection,
+        AxisSide::Bottom,
+        &theme,
+        false,
+        &scope,
+        &admission,
+    )
+    .unwrap();
+    assert_eq!(first.ticks, second.ticks);
+    assert_eq!(resources.call_cache_usage().0, 2 * calls);
+    resources.claim_calls(1_000_000 - 2 * calls).unwrap();
+    let before = (
+        resources.usage().unwrap(),
+        resources.byte_usage().unwrap(),
+        resources.call_cache_usage(),
+    );
+    crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
+    let result = numeric_tick_plan(
+        (0.0, 1.0),
+        None,
+        false,
+        &projection,
+        AxisSide::Bottom,
+        &theme,
+        false,
+        &scope,
+    );
+    assert!(matches!(
+        result,
+        Err(crate::layout::fit::PlanError::Fatal(_))
+    ));
+    assert_eq!(
+        (
+            resources.usage().unwrap(),
+            resources.byte_usage().unwrap(),
+            resources.call_cache_usage()
+        ),
+        before
+    );
+    crate::font::canonical::FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
+}
 
 #[test]
 fn six_ch_seed_has_quantized_boundaries_and_a_ten_thousand_bound() {
@@ -345,9 +412,26 @@ fn projection_keys_are_exact_at_endpoints_midpoints_and_subnormal_fractions() {
     assert_eq!(projection_key(f64::from_bits(1), (0.0, 1.0)), Some(0));
     assert_eq!(projection_key(0.0, (-f64::MAX, f64::MAX)), Some(1 << 63));
     assert_eq!(projection_key(2.0, (0.0, 1.0)), None);
-    assert_eq!(projected_center(0, 1024), Some(0));
-    assert_eq!(projected_center(u64::MAX, 1024), Some(1024));
-    assert_eq!(projected_center(1 << 63, 1024), Some(512));
+    assert_eq!(projection_key(1.0, (1.0, 1.0)), None);
+    assert_eq!(projection_key(1.0, (f64::NAN, 1.0)), None);
+    assert_eq!(projection_key(f64::INFINITY, (0.0, f64::INFINITY)), None);
+    assert_eq!(ratio_position(0, 1024, 0, u128::from(u64::MAX)), Some(0));
+    assert_eq!(
+        ratio_position(0, 1024, u128::from(u64::MAX), u128::from(u64::MAX)),
+        Some(1024)
+    );
+    assert_eq!(
+        ratio_position(0, 1024, 1 << 63, u128::from(u64::MAX)),
+        Some(512)
+    );
+    assert_eq!(ratio_position(1, 1, 1, 2), Some(2));
+    assert_eq!(ratio_position(-1, 1, 1, 2), Some(0));
+    assert_eq!(ratio_position(0, 1, 1, 2), Some(0));
+    assert_eq!(ratio_position(i64::MAX, 1, 1, 1), None);
+    assert_eq!(ratio_position(i64::MIN, i64::MAX, 1, 1), Some(-1));
+    assert_eq!(ratio_position(0, -1, 1, 1), None);
+    assert_eq!(ratio_position(0, 1, 1, 0), None);
+    assert_eq!(ratio_position(0, i64::MAX, u128::MAX, 1), None);
 }
 
 #[test]

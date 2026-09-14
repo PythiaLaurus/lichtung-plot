@@ -138,13 +138,11 @@ pub(crate) fn measure(
     let base = prepared.totals[0].0;
     let terminal = prepared.totals[1].0;
     let x_range = context.axis_range(crate::layout::AxisSide::Bottom, || {
-        Ok(crate::layout::continuous_auto_range(
-            range,
-            chart.x_axis_spec(),
-        ))
+        crate::layout::continuous_auto_range(range, chart.x_axis_spec(), data.source_resources()?)
     })?;
     let y_ticks = || {
         data.collect_source(labels.iter().enumerate().map(|(index, label)| {
+            data.claim_source_visits(1)?;
             Ok(AxisTick::new(
                 index as f64 + 0.5,
                 data.copy_source_string(label)?,
@@ -158,7 +156,8 @@ pub(crate) fn measure(
             .limits
             .unwrap_or((0.0, labels.len() as f64)))
     })?;
-    let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple());
+    let annotation_projection = crate::layout::Projection::new(x_range, y_range, panel.as_tuple())
+        .with_categories([None, Some(labels.len())]);
     let annotations = plan_annotations(
         &annotation_projection,
         panel,
@@ -201,6 +200,20 @@ pub(crate) fn measure(
         let y1 = index as f64 + 0.8;
         let (left, bottom) = layout.projection.project(*start, y0);
         let (right, top) = layout.projection.project(*end, y1);
+        layout.projection.validate_span(
+            crate::layout::AxisSide::Bottom,
+            (*start, *end),
+            (left, right),
+            *delta != 0.0,
+            "waterfall polygon width",
+        )?;
+        layout.projection.validate_span(
+            crate::layout::AxisSide::Left,
+            (y0, y1),
+            (bottom, top),
+            true,
+            "waterfall polygon height",
+        )?;
         let color = if *delta >= 0.0 {
             theme.colors[0]
         } else {
@@ -335,9 +348,11 @@ pub(crate) fn text_census_annotations(
         if chart.axis_scope().is_some() && scope.as_deref() != chart.axis_scope() {
             continue;
         }
-        let range = crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec());
+        // Automatic domains contain all totals; only explicit limits can hide one.
+        let range = chart.x_axis_spec().limits;
         for (value, label) in &marks.totals {
-            if !filter_to_range || (*value >= range.0 && *value <= range.1) {
+            if !filter_to_range || range.is_none_or(|range| *value >= range.0 && *value <= range.1)
+            {
                 visit(label.as_str().into())?;
             }
         }
@@ -469,4 +484,73 @@ fn plan_annotations(
         height,
         row_height,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+    use crate::layout::fit::PlanError;
+    use crate::layout::kernel::nearest_spatial_quanta;
+    use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn projected_spans_reject_nonzero_collapse_but_retain_signed_zero_deltas() {
+        let range = (-10_000_000_000_000_000.0, 20_000_000_000_000_000.0);
+        let panel = PanelBox::new(80.0, 700.0, 60.0, 500.0);
+        for base in [0.0, 10_000_000_000_000_000.0] {
+            for delta in [0.0, -0.0, 1.0, -1.0] {
+                let plot = Plot::waterfall(
+                    CategoryValues::new("step", ["change"]).unwrap(),
+                    NumericValues::new("delta", [delta]),
+                    base,
+                )
+                .x_limits(range.0, range.1)
+                .erase();
+                let inputs = crate::plots::shared_x::prepare_plot(
+                    &plot,
+                    &OperationGenerationResources::new(),
+                )
+                .unwrap();
+                let (start, end, source_delta) =
+                    inputs.waterfall.as_ref().unwrap().panels[0].1.spans[0];
+                assert_eq!(source_delta.to_bits(), delta.to_bits());
+                let projection =
+                    crate::layout::Projection::new(range, (0.0, 1.0), panel.as_tuple());
+                assert_eq!(
+                    nearest_spatial_quanta(projection.project(start, 0.2).0).unwrap(),
+                    nearest_spatial_quanta(projection.project(end, 0.8).0).unwrap()
+                );
+                let plot = inputs.attach(plot).unwrap();
+                let theme = crate::Theme::Publication.resolve();
+                let result = plot.measure_selected_interior(PlotRenderContext::new(
+                    plot.data(),
+                    panel,
+                    &theme,
+                ));
+                if delta == 0.0 {
+                    let selected = result.unwrap();
+                    let crate::layout::interior::MarkPayload::Waterfall(payload) =
+                        &selected.marks.as_ref().unwrap().payload
+                    else {
+                        panic!("wrong payload")
+                    };
+                    assert_eq!(payload.bars.len(), 1);
+                    let points = &payload.bars[0].0;
+                    assert!(points
+                        .iter()
+                        .all(|point| point.x.to_bits() == points[0].x.to_bits()));
+                    assert!(points[0].y < points[3].y);
+                } else {
+                    let Err(PlanError::Fatal(Error::Render(message))) = result else {
+                        panic!("nonzero span must fail fatally before retaining marks: {base} + {delta}")
+                    };
+                    assert!(
+                        message.contains("polygon") && message.contains("collapse"),
+                        "{message}"
+                    );
+                }
+            }
+        }
+    }
 }

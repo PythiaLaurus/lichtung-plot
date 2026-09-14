@@ -2,24 +2,26 @@ use super::*;
 
 #[test]
 fn marginal_full_svg_fingerprints() {
-    // Full preserve-text SVG baselines from clean 13ce394, not normalized geometry.
+    // 2026-09-14 T5a6d: canonical projection/title midpoints and ink-aware
+    // endpoint anchors. Historical 13ce394 fingerprints and inspected deltas are
+    // in docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (21380, 0x9bcc_7857_4b22_cb3d),
+                (21377, 0x23ab_035b_b387_3cd5),
                 (22526, 0x1db2_ae0c_f480_f34f),
                 (22698, 0x09fa_0b62_35a6_4714),
-                (20234, 0x4739_1d40_cb35_05d0),
+                (20238, 0x3f3b_8cdf_fa3c_fdc4),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (20933, 0x55db_04f2_b575_2211),
+                (20930, 0x0be9_5cd7_ce39_53a1),
                 (22222, 0x7ad7_81ba_0fb2_bde2),
                 (22234, 0x7ab1_17b8_ed15_922c),
-                (19913, 0x2c3a_c60f_7bab_067e),
+                (19917, 0xac55_91db_9566_f8f8),
             ],
         ),
     ] {

@@ -43,12 +43,260 @@ fn all_sources() -> impl Iterator<Item = Plot> {
 }
 
 #[test]
+fn resource_audit_ordinary_topology_precedes_every_prepared_row_materialization() {
+    for source in ordinary_sources().chain([categorical_source()]) {
+        let rows = source.data().height() as u128;
+        assert!(rows > 0);
+        for available in [rows - 1, rows, rows + 1] {
+            let resources = OperationGenerationResources::new();
+            resources
+                .claim_topology_slots(1_000_000 - available)
+                .unwrap();
+            crate::data::SOURCE_COLUMN_READS.with(|count| count.set(0));
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+            let result = crate::plots::shared_x::prepare_plot(&source, &resources);
+            if available < rows {
+                let error = result.err().expect("source-row topology must refuse first");
+                assert!(
+                    error.to_string().contains("prepared topology slots"),
+                    "{:?}: {error}",
+                    source.kind()
+                );
+                assert_eq!(resources.topology_usage(), 1_000_000 - available);
+                assert_eq!(resources.usage().unwrap(), (0, 0));
+                assert_eq!(resources.byte_usage().unwrap(), 0);
+                crate::data::SOURCE_COLUMN_READS.with(|count| assert_eq!(count.get(), 0));
+            } else {
+                let inputs = result.unwrap();
+                inputs.attach(source.clone()).unwrap();
+                inputs.attach(source.clone()).unwrap();
+                assert_eq!(
+                    resources.topology_usage(),
+                    1_000_000 - available + rows,
+                    "{:?}",
+                    source.kind()
+                );
+            }
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| assert_eq!(count.get(), 0));
+        }
+    }
+    let source = Plot::scatter(
+        NumericValues::nullable("x", [Some(1.0), None, Some(3.0)]),
+        NumericValues::new("y", [1.0, 2.0, 3.0]),
+    )
+    .erase();
+    let resources = OperationGenerationResources::new();
+    crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    assert_eq!(
+        resources.topology_usage(),
+        3,
+        "dropped source rows keep structural slots"
+    );
+}
+
+#[test]
 fn ordinary_test_sources_cover_every_native_route_exactly_once() {
     let kinds: Vec<_> = ordinary_sources().map(|source| source.kind()).collect();
     assert_eq!(kinds.len(), 20);
     for (index, kind) in kinds.iter().enumerate() {
         assert!(!kinds[..index].contains(kind));
         assert!(InteriorRoute::classify(*kind).is_native());
+    }
+}
+
+#[test]
+fn prepared_intrinsic_hits_are_admitted_without_analysis_or_storage() {
+    let source = categorical_source();
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    let inputs =
+        crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+            .unwrap();
+    assert!(inputs.axes[0].1.intrinsics.get().is_none());
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+    let theme = crate::Theme::Publication.resolve();
+    inputs.prepare_intrinsics(&source, &theme).unwrap();
+    let plot = inputs.attach(source).unwrap();
+    let summary = Intrinsics::prepared(&plot, &theme).unwrap();
+    measurements::start();
+    for width in [400.0, 580.0] {
+        let changed = plot
+            .clone()
+            .with_canvas_size(800, 600)
+            .with_planned_y_limits((-1.0, 5.0));
+        assert!(std::ptr::eq(
+            summary,
+            Intrinsics::prepared(&changed, &theme).unwrap()
+        ));
+        changed
+            .measure_selected_interior(PlotRenderContext::new(
+                changed.data(),
+                PanelBox::new(30.0, 30.0 + width, 50.0, 440.0),
+                &theme,
+            ))
+            .unwrap();
+    }
+    let work = measurements::finish();
+    assert_eq!(work.counters[Counter::StandardPanelIntrinsic as usize], 0);
+    assert_eq!(
+        work.counters[Counter::StandardCoordinateMeasure as usize],
+        2
+    );
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let used = (
+        resources.usage().unwrap(),
+        resources.byte_usage().unwrap(),
+        resources.call_cache_usage(),
+    );
+    Intrinsics::prepared(&plot, &theme).unwrap();
+    assert_eq!(resources.usage().unwrap(), used.0);
+    assert_eq!(resources.byte_usage().unwrap(), used.1);
+    assert_eq!(resources.call_cache_usage().0, used.2 .0 + 1);
+    resources
+        .claim_calls(999_999 - resources.call_cache_usage().0)
+        .unwrap();
+    Intrinsics::prepared(&plot, &theme).unwrap();
+    assert!(Intrinsics::prepared(&plot, &theme)
+        .unwrap_err()
+        .to_string()
+        .contains("intrinsic call admission"));
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one native root harness pins both terminal policies and the selected eighth-round payload"
+)]
+fn native_root_producers_obey_eighth_round_and_cycle_limits_under_parent_feedback() {
+    use crate::decorations::plan::{plan_panel, LegendRole};
+    use crate::layout::kernel::{FeedbackKind, FrameRequirements};
+    use crate::layout::{AddressRole, ComponentAddress};
+    // Controlled deferred parent consequences exercise the production native
+    // axis/title/body path, not a claim that this is a new packing policy.
+    for source in [sources()[0].clone(), categorical_source()] {
+        let source = source
+            .title("Root title\nSecond line")
+            .caption("Independent caption")
+            .with_suppressed_legend();
+        for policy in 0..3 {
+            let theme = crate::Theme::Publication.resolve();
+            let parent = ComponentAddress::root()
+                .child(AddressRole::RootBody, 0)
+                .unwrap();
+            let owner = parent.child(AddressRole::PlotBody, 0).unwrap();
+            let mut assignments = Vec::new();
+            let mut captures = 0;
+            let root = crate::layout::plan_exact_root(
+                640,
+                480,
+                |stage| {
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())
+                },
+                |inputs, assigned, round| {
+                    let (width, height) = assigned.dimensions();
+                    let plot = inputs
+                        .attach(source.clone())?
+                        .with_canvas_size(width, height);
+                    let canvas = canvas_layout(&plot, &theme).map_err(PlanError::into_error)?;
+                    round.observe_canvas(&canvas)?;
+                    let consumed = round.insets(&parent, FeedbackKind::AxisGutter);
+                    let cell = fit::measured(
+                        FrameRequirements {
+                            minimum_body: super::super::DeferredLegacyPanelMinimum::SIZE,
+                            natural_insets: [0.0; 4],
+                        }
+                        .assign_fit(
+                            canvas.panel_box,
+                            consumed,
+                            &fit::FitScope::root(),
+                        ),
+                    )
+                    .map_err(PlanError::into_error)?;
+                    let plan = fit::measured(plan_panel(
+                        &plot,
+                        plot.kind(),
+                        cell,
+                        LegendRole::Suppressed,
+                        &theme,
+                        round,
+                        &owner,
+                    ))
+                    .map_err(PlanError::into_error)?;
+                    assignments.push(plan.panel_box);
+                    assert_eq!(plan.result.layout.projection.panel_box(), plan.panel_box);
+                    let next = match policy {
+                        0 => (consumed[1] + 1.0).min(7.0),
+                        1 => consumed[1] + 1.0,
+                        _ => 1.0 - consumed[1],
+                    };
+                    let request =
+                        super::super::InteriorReserveRequest::AxisGutter([0.0, next, 0.0, 0.0])
+                            .submit(round, &parent, &parent)?;
+                    if request.is_some() {
+                        round.miss(
+                            &parent,
+                            FitKind::TrackOrResidual,
+                            &[request],
+                            "deferred containing frame requires its next assigned reserve",
+                        )?;
+                    }
+                    Ok(crate::layout::MeasuredLayout::new(assigned, (plan, canvas)))
+                },
+                |_, assigned, (plan, canvas), stage| {
+                    captures += 1;
+                    assert_eq!(policy, 0, "unstable native roots cannot capture");
+                    let (width, height) = assigned.dimensions();
+                    crate::orchestrator::capture_text_replay_plan(
+                        width,
+                        height,
+                        "native eighth-round closure",
+                        &theme,
+                        stage,
+                        |backend| {
+                            canvas.root_text.draw_retained(backend)?;
+                            let axes = plan.result.axes.as_ref().unwrap();
+                            axes.draw_grid(backend)?;
+                            plan.result.marks.as_ref().unwrap().draw(backend)?;
+                            plan.result.annotations.as_ref().unwrap().draw(backend)?;
+                            axes.draw(backend)
+                        },
+                    )
+                },
+            );
+            if policy == 0 {
+                assert_eq!(assignments.len(), 8);
+                assert_eq!(captures, 1);
+                assert!(assignments.windows(2).all(|pair| pair[1].x1 < pair[0].x1));
+                let root = root.unwrap();
+                crate::orchestrator::validate_text_replay_plan(
+                    640,
+                    480,
+                    root.plan(),
+                    "native eighth-round Null",
+                )
+                .unwrap();
+                let mut svg = root.plan().take_svg_backend().unwrap();
+                root.plan()
+                    .replay(640, 480, &mut svg, "native eighth-round SVG")
+                    .unwrap();
+                assert!(!svg.into_bytes().unwrap().is_empty());
+            } else {
+                assert_eq!(captures, 0);
+                let error = root.err().unwrap().to_string();
+                if policy == 1 {
+                    assert_eq!(assignments.len(), 8);
+                    assert!(error.contains("eight rounds"), "{error}");
+                } else {
+                    assert!(assignments.len() < 8);
+                    assert!(error.contains("cycle"), "{error}");
+                }
+            }
+        }
     }
 }
 
@@ -83,9 +331,7 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
             (plan.panel_box.y0 - canvas.panel_box.y0).to_bits(),
             (required.bottom + 4.0).ceil().to_bits()
         );
-        let crate::layout::canvas::CanvasRootText::Planned(text) = &canvas.root_text else {
-            panic!("planned root text")
-        };
+        let text = &canvas.root_text;
         let mut roots = GeometryBackend::new(&theme).unwrap();
         roots.begin(plot.width(), plot.height()).unwrap();
         text.draw_retained(&mut roots).unwrap();
@@ -297,7 +543,7 @@ fn native_hard_title_spans_and_category_slots_exceed_the_named_parity_floor() {
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
-        let minimum = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
+        let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         let is_category = plot.prepared_axis_inputs().unwrap().display_categories[0]
             .as_ref()
             .is_some_and(|labels| labels.iter().any(|label| label == &word));
@@ -354,7 +600,7 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
         let theme = crate::Theme::Publication.resolve();
-        Intrinsics::new(&plot, &theme).unwrap();
+        Intrinsics::prepared(&plot, &theme).unwrap();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
@@ -621,7 +867,7 @@ fn every_native_route_reports_intrinsic_fit_before_mark_projection_or_backend_cr
             crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
                 .unwrap();
         let plot = inputs.attach(source).unwrap();
-        let minimum = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
+        let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
         assert_eq!(minimum, DeferredLegacyPanelMinimum::SIZE);
         let scope = fit::FitScope::new(
             &crate::layout::ComponentAddress::root()
@@ -714,25 +960,29 @@ fn categorical_trajectory_retains_bottom_slots_raw_and_display_identity() {
 #[test]
 fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resource_caps() {
     for source in all_sources() {
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
-        let plot = inputs.attach(source).unwrap();
+        let prepare = || {
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                    .unwrap();
+            inputs.attach(source.clone()).unwrap()
+        };
         for intrinsic_only in [true, false] {
-            let consume = |theme: &crate::theme::ResolvedTheme| -> Result<(), PlanError> {
-                if intrinsic_only {
-                    Intrinsics::new(&plot, theme)?;
-                } else {
-                    plot.measure_selected_interior(PlotRenderContext::new(
-                        plot.data(),
-                        PanelBox::new(30.0, 610.0, 50.0, 440.0),
-                        theme,
-                    ))?;
-                }
-                Ok(())
-            };
+            let consume =
+                |plot: &Plot, theme: &crate::theme::ResolvedTheme| -> Result<(), PlanError> {
+                    if intrinsic_only {
+                        Intrinsics::prepared(plot, theme)?;
+                    } else {
+                        plot.measure_selected_interior(PlotRenderContext::new(
+                            plot.data(),
+                            PanelBox::new(30.0, 610.0, 50.0, 440.0),
+                            theme,
+                        ))?;
+                    }
+                    Ok(())
+                };
+            let plot = prepare();
             let theme = crate::Theme::Publication.resolve();
-            consume(&theme).unwrap();
+            consume(&plot, &theme).unwrap();
             let resources = theme
                 .prepared_font_environment()
                 .unwrap()
@@ -740,19 +990,22 @@ fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resourc
             let before = (
                 resources.usage().unwrap().1,
                 resources.byte_usage().unwrap(),
+                resources.call_cache_usage().0,
             );
-            consume(&theme).unwrap();
-            let (visits, bytes) = (
+            consume(&plot, &theme).unwrap();
+            let (visits, bytes, calls) = (
                 resources.usage().unwrap().1 - before.0,
                 resources.byte_usage().unwrap() - before.1,
+                resources.call_cache_usage().0 - before.2,
             );
-            for (visits, bytes, succeeds) in [
-                (visits, bytes, true),
-                (visits - 1, bytes, false),
-                (visits, bytes - 1, false),
-            ] {
+            let trials = std::iter::once((visits, bytes, calls, true))
+                .chain(visits.checked_sub(1).map(|v| (v, bytes, calls, false)))
+                .chain(bytes.checked_sub(1).map(|b| (visits, b, calls, false)))
+                .chain(calls.checked_sub(1).map(|c| (visits, bytes, c, false)));
+            for (visits, bytes, calls, succeeds) in trials {
+                let plot = prepare();
                 let theme = crate::Theme::Publication.resolve();
-                consume(&theme).unwrap();
+                consume(&plot, &theme).unwrap();
                 let resources = theme
                     .prepared_font_environment()
                     .unwrap()
@@ -763,11 +1016,18 @@ fn every_native_route_admits_intrinsics_and_selected_candidates_at_exact_resourc
                 resources
                     .claim_bytes(536_870_912 - resources.byte_usage().unwrap() - bytes)
                     .unwrap();
-                let result = consume(&theme);
+                resources
+                    .claim_calls(1_000_000 - resources.call_cache_usage().0 - calls)
+                    .unwrap();
+                let result = consume(&plot, &theme);
                 if succeeds {
                     result.unwrap();
                 } else {
-                    assert!(matches!(result, Err(PlanError::Fatal(Error::Render(_)))));
+                    assert!(
+                        matches!(result, Err(PlanError::Fatal(Error::Render(_)))),
+                        "{:?}, intrinsic={intrinsic_only}, allowance={visits}/{bytes}/{calls}",
+                        source.kind()
+                    );
                 }
             }
         }
@@ -780,7 +1040,8 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
         let source = source.labels(
             crate::Labels::humanized().alias("after_visit", "A deliberately long category label"),
         );
-        for size in [None, Some((400, 300)), Some((801, 601))] {
+        let mut default_svg = None;
+        for size in [None, Some((640, 480)), Some((400, 300)), Some((801, 601))] {
             let plot = size.map_or_else(|| source.clone(), |(w, h)| source.clone().size(w, h));
             let (w, h) = size.unwrap_or((640, 480));
             assert_eq!((plot.width(), plot.height()), (w, h));
@@ -791,13 +1052,35 @@ fn every_native_root_preserves_default_and_explicit_dimensions_and_avoids_layout
             plot.render_with_backend(&mut backend).unwrap();
             let work = measurements::finish();
             let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+            if size.is_none() {
+                default_svg = Some(svg.clone());
+            } else if size == Some((640, 480)) {
+                assert_eq!(default_svg.as_ref(), Some(&svg));
+            }
             assert!(svg.contains(&format!("viewBox=\"0 0 {w} {h}\"")));
             let counter = match InteriorRoute::classify(plot.kind()) {
                 InteriorRoute::OneCategoricalAxis(_) => Counter::OneCategoricalAxisMeasure,
                 _ => Counter::StandardCoordinateMeasure,
             };
             assert!(work.counters[counter as usize] > 0);
-            assert!(work.counters[Counter::StandardPanelIntrinsic as usize] > 0);
+            assert_eq!(work.counters[Counter::StandardPanelIntrinsic as usize], 1);
+            assert_eq!(work.counters[Counter::RootTitleIntrinsic as usize], 1);
+            assert_eq!(work.intrinsics.len(), 2);
+            assert!(work.intrinsics.iter().all(|event| event.scope.is_none()
+                && event.root_round.is_none()
+                && matches!(
+                    event.counter,
+                    Counter::StandardPanelIntrinsic | Counter::RootTitleIntrinsic
+                )));
+            assert_eq!(
+                work.capture_counters[Counter::StandardPanelIntrinsic as usize],
+                0
+            );
+            assert_eq!(
+                work.capture_counters[Counter::RootTitleIntrinsic as usize],
+                0
+            );
+            assert_eq!(work.capture_counters[Counter::LegendSelection as usize], 0);
             assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
             assert_eq!(
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
@@ -864,6 +1147,7 @@ fn native_exact_sources_are_indivisible_and_missing_axes_never_fall_back() {
         }
         assert!(context
             .with_prepared_axes(&plot)
+            .unwrap()
             .axis_layout(|| panic!("legacy fallback"))
             .is_err());
         let mut invalid = plot.clone();
@@ -951,6 +1235,9 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
     use crate::layout::kernel::{FeedbackKind, TrialOutcome};
     use crate::layout::{AddressRole, ComponentAddress};
     for source in all_sources().chain([categorical_source()]) {
+        let source = source
+            .title("Measured root title")
+            .caption("Independent caption");
         let mut outputs = Vec::new();
         for disabled in [false, true] {
             DISABLE_CHILD_REUSE.with(|flag| flag.set(disabled));
@@ -958,7 +1245,11 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
             let owner = ComponentAddress::root()
                 .child(AddressRole::FacetCell, 0)
                 .unwrap();
+            let sibling = ComponentAddress::root()
+                .child(AddressRole::FacetCell, 1)
+                .unwrap();
             let mut children = ChildPlans::facets(&source);
+            let mut previous_selected = None;
             measurements::start();
             let root = crate::layout::plan_exact_root(
                 640,
@@ -991,6 +1282,8 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                 },
                 |inputs, assigned, round| {
                     let plot = inputs.attach(source.clone())?.with_parent_axis_gutters();
+                    let canvas = canvas_layout(&plot, &theme).map_err(PlanError::into_error)?;
+                    round.observe_canvas(&canvas)?;
                     let panel = PanelBox::new(80.0, 600.0, 80.0, 440.0);
                     let context = PlotRenderContext::new(plot.data(), panel, &theme);
                     let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
@@ -1003,6 +1296,13 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &owner,
                     ))
                     .map_err(PlanError::into_error)?;
+                    if let Some(previous) = &previous_selected {
+                        assert_eq!(
+                            std::sync::Arc::ptr_eq(previous, &first),
+                            !disabled,
+                            "first child call must reuse the previous round, not just this round"
+                        );
+                    }
                     let requested = round
                         .next_insets(&owner, FeedbackKind::AxisGutter)
                         .map(f64::to_bits);
@@ -1096,10 +1396,46 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get),
                         reads
                     );
+                    // A controlled deferred sibling reserve keeps this root active
+                    // without changing the native child's keyed allocation. Unlike
+                    // guide reflow, this proves reuse from a previous root round.
+                    let consumed = round.insets(&sibling, FeedbackKind::OwnedInk);
+                    let sibling_box = fit::measured(
+                        crate::layout::kernel::FrameRequirements {
+                            minimum_body: (1.0, 1.0),
+                            natural_insets: [0.0; 4],
+                        }
+                        .assign_fit(
+                            PanelBox::new(16.0, 60.0, 80.0, 440.0),
+                            consumed,
+                            &fit::FitScope::root(),
+                        ),
+                    )
+                    .map_err(PlanError::into_error)?;
+                    round.observe_box(sibling_box)?;
+                    let request = super::super::InteriorReserveRequest::OwnedInk([
+                        (consumed[0] + 1.0).min(2.0),
+                        0.0,
+                        0.0,
+                        0.0,
+                    ])
+                    .submit(round, &sibling, &sibling)?;
+                    if request.is_some() {
+                        round.miss(
+                            &sibling,
+                            FitKind::OverlayCollision,
+                            &[request],
+                            "deferred sibling requires a changed owned-ink reserve",
+                        )?;
+                    }
                     children.finish_round(round);
-                    Ok(crate::layout::MeasuredLayout::new(assigned, selected))
+                    previous_selected = Some(std::sync::Arc::clone(&selected));
+                    Ok(crate::layout::MeasuredLayout::new(
+                        assigned,
+                        (selected, canvas),
+                    ))
                 },
-                |_, _, selected, stage| {
+                |_, _, (selected, canvas), stage| {
                     crate::orchestrator::capture_text_replay_plan(
                         640,
                         480,
@@ -1107,12 +1443,13 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &theme,
                         stage,
                         |backend| {
+                            canvas.root_text.draw_retained(backend)?;
                             let axes = selected.result.axes.as_ref().unwrap();
                             axes.draw_grid(backend)?;
                             source.render_panel(
                                 source.kind(),
                                 PlotRenderContext::new(source.data(), selected.panel_box, &theme)
-                                    .with_retained_body(selected.result.retained_payload()),
+                                    .with_retained_body(&selected.result),
                                 backend,
                             )?;
                             axes.draw(backend)
@@ -1124,6 +1461,14 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
             let work = measurements::finish();
             DISABLE_CHILD_REUSE.with(|flag| flag.set(false));
             assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
+            assert_eq!(work.roots.len(), 3);
+            assert_eq!(
+                work.children
+                    .iter()
+                    .any(|event| event.root_round > 0
+                        && event.counter == Counter::ChildFeedbackReplay),
+                !disabled
+            );
             assert_eq!(
                 work.counters[Counter::ChildCacheHit as usize] > 0,
                 !disabled

@@ -411,6 +411,9 @@ impl ResolvedTheme {
     ) -> Result<f64, crate::Error> {
         self.prepare_font_environment()?;
         let environment = self.prepared_font_environment()?;
+        environment
+            .claim_measurement_call()
+            .map_err(|error| Error::Render(format!("axis intrinsic call admission: {error:?}")))?;
         let appearance = &self.typography.tick_label;
         let height = crate::layout::maximum_width_quanta(available_height)
             .map_err(|error| crate::Error::Render(format!("axis row height: {error}")))?;
@@ -444,7 +447,10 @@ impl ResolvedTheme {
                 },
                 exact_override: false,
             };
-            let cached = self.cached_text_query(&input, Some(preferred_lines), true)?;
+            let call = environment.claim_measurement_call().map_err(|error| {
+                Error::Render(format!("text intrinsic call admission: {error:?}"))
+            })?;
+            let cached = self.cached_text_query(&input, Some(preferred_lines), true, &call)?;
             let preferred_width = if let Some(CachedTextResult::PreferredWidth(width)) = cached {
                 width
             } else {
@@ -452,7 +458,7 @@ impl ResolvedTheme {
                     plan
                 } else {
                     let plan = environment
-                        .plan_prepared_text(input.clone())
+                        .plan_text_in_call(input.clone(), true, &call)
                         .map_err(|error| {
                             crate::Error::Render(format!("axis intrinsic text analysis: {error}"))
                         })?;
@@ -467,7 +473,7 @@ impl ResolvedTheme {
                 };
                 let requirements =
                     analysis
-                        .intrinsic_from_analysis(preferred_lines)
+                        .intrinsic_in_call(preferred_lines, &call)
                         .map_err(|error| {
                             crate::Error::Render(format!(
                                 "axis intrinsic text requirements: {error}"
@@ -660,11 +666,13 @@ impl ResolvedTheme {
             exact_override,
         };
         let environment = self.prepared_font_environment()?;
-        let result = match self.cached_text_query(&input, None, prepared_only)? {
+        let call = environment
+            .claim_measurement_call()
+            .map_err(|error| Error::Render(format!("text query call admission: {error:?}")))?;
+        let result = match self.cached_text_query(&input, None, prepared_only, &call)? {
             Some(CachedTextResult::Plan(plan)) => return Ok(plan),
-            Some(CachedTextResult::Reflow(plan)) => plan.reflow(input.clone()),
-            _ if prepared_only => environment.plan_prepared_text(input.clone()),
-            _ => environment.plan_text(input.clone()),
+            Some(CachedTextResult::Reflow(plan)) => plan.reflow_in_call(input.clone(), &call),
+            _ => environment.plan_text_in_call(input.clone(), prepared_only, &call),
         };
         let plan = result.map_err(|error| match error {
             crate::layout::TextPlanError::Fit(miss) => scope
@@ -692,12 +700,13 @@ impl ResolvedTheme {
         input: &TextPlanInput<'_>,
         preferred_lines: Option<usize>,
         prepared_only: bool,
+        _call: &crate::font::canonical::MeasurementCall,
     ) -> Result<Option<CachedTextResult>, Error> {
+        let environment = self.prepared_font_environment()?;
         let cache = self
             .text_queries
             .lock()
             .map_err(|_| Error::Render("text query cache lock poisoned".into()))?;
-        let environment = self.prepared_font_environment()?;
         let (shaping_fingerprint, fingerprint) =
             CachedTextQuery::fingerprints(input, preferred_lines, prepared_only);
         let key = (input, preferred_lines, prepared_only);
@@ -759,6 +768,9 @@ impl ResolvedTheme {
             && cache
                 .find(&cache.shaping, shaping_fingerprint, key, false, environment)?
                 .is_none();
+        environment
+            .claim_cache_entries(1)
+            .map_err(|error| Error::Render(format!("text query cache admission: {error:?}")))?;
         environment
             .claim_text_generation_slots(2 + u128::from(new_shaping))
             .map_err(|error| Error::Render(format!("text query cache: {error:?}")))?;
@@ -2149,6 +2161,133 @@ mod tests {
             CachedTextQuery::fingerprints(&input, None, false).0,
             fingerprints.0
         );
+    }
+
+    #[test]
+    fn text_and_intrinsic_cache_hits_admit_calls_before_lookup() {
+        for intrinsic in [false, true] {
+            let mut root = Theme::Publication.resolve();
+            root.font_environment
+                .set(Ok(PreparedFontEnvironment::synthetic()))
+                .unwrap();
+            root.typography.tick_label.stack = "Test Sans".into();
+            let query = || {
+                if intrinsic {
+                    root.intrinsic_tick_label_width(["A"].into_iter(), 100.0)
+                        .map(|_| ())
+                } else {
+                    root.measure_text(
+                        "A",
+                        &root.typography.tick_label,
+                        PhysicalTextAlignment::Start,
+                        "call boundary",
+                        false,
+                    )
+                    .map(|_| ())
+                }
+            };
+            query().unwrap();
+            let resources = root
+                .prepared_font_environment()
+                .unwrap()
+                .generation_resources();
+            assert_eq!(resources.call_cache_usage().0, 1 + u128::from(intrinsic));
+            let calls = 1 + u128::from(intrinsic);
+            resources
+                .claim_calls(1_000_000 - calls - resources.call_cache_usage().0)
+                .unwrap();
+            let entries = resources.call_cache_usage().1;
+            let records = resources.usage().unwrap().0;
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+            query().unwrap();
+            assert_eq!(resources.call_cache_usage(), (1_000_000, entries));
+            assert_eq!(resources.usage().unwrap().0, records);
+            let usage = resources.usage().unwrap();
+            let bytes = resources.byte_usage().unwrap();
+            let error = query().unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("measurement/intrinsic call attempts"));
+            assert_eq!(resources.usage().unwrap(), usage);
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+            crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| assert_eq!(calls.get(), 0));
+        }
+    }
+
+    #[test]
+    fn text_cache_insertion_limit_is_independent_and_refusal_remains_fatal() {
+        let root = Theme::Publication.resolve();
+        root.font_environment
+            .set(Ok(PreparedFontEnvironment::synthetic()))
+            .unwrap();
+        let mut appearance = root.typography.caption.clone();
+        appearance.stack = "Test Sans".into();
+        let first = root
+            .measure_text(
+                "A",
+                &appearance,
+                PhysicalTextAlignment::Start,
+                "first",
+                false,
+            )
+            .unwrap();
+        let resources = root
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        resources
+            .claim_cache_entries(999_999 - resources.call_cache_usage().1)
+            .unwrap();
+        let input = indexed_query_input("A", &appearance, "last admitted");
+        root.cache_text_query(
+            &input,
+            &appearance,
+            None,
+            true,
+            CachedTextResult::Plan(first.clone()),
+        )
+        .unwrap();
+        assert_eq!(resources.call_cache_usage().1, 1_000_000);
+        let usage = resources.usage().unwrap().0;
+        let bytes = resources.byte_usage().unwrap();
+        let input = indexed_query_input("A", &appearance, "refused");
+        let error = root
+            .cache_text_query(
+                &input,
+                &appearance,
+                None,
+                true,
+                CachedTextResult::Plan(first.clone()),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("root-local cache entries"));
+        assert_eq!(resources.usage().unwrap().0, usage);
+        assert_eq!(resources.byte_usage().unwrap(), bytes);
+        assert_eq!(root.text_queries.lock().unwrap().entries.len(), 2);
+        let error = root
+            .plan_text_quanta_with_policy(
+                "A",
+                &appearance,
+                i64::MAX,
+                PhysicalTextAlignment::Start,
+                "refused",
+                false,
+                true,
+                &crate::layout::fit::ROOT_SCOPE,
+            )
+            .unwrap_err();
+        assert!(matches!(error, crate::layout::fit::PlanError::Fatal(_)));
+        let hit = root
+            .measure_text(
+                "A",
+                &appearance,
+                PhysicalTextAlignment::Start,
+                "first",
+                false,
+            )
+            .unwrap();
+        assert!(first.shares_payload(&hit));
+        assert_eq!(resources.call_cache_usage().1, 1_000_000);
     }
 
     #[test]

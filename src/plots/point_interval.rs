@@ -30,7 +30,7 @@ pub(crate) fn shared_x_domain(
                     "point_interval: all rows are not_estimable; set explicit x-axis limits".into(),
                 )
             })?;
-    point_interval_display_range(range, chart.x_axis_spec())
+    point_interval_display_range(range, chart.x_axis_spec(), data.source_resources()?)
 }
 
 pub(crate) fn prepare<'a>(
@@ -213,6 +213,7 @@ fn sort_rows(
 pub(crate) fn point_interval_display_range(
     data_range: (f64, f64),
     spec: &AxisSpec,
+    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
@@ -221,7 +222,7 @@ pub(crate) fn point_interval_display_range(
     if let Some(limits) = spec.limits {
         return Ok(limits);
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec);
+    let display = crate::layout::continuous_auto_range(data_range, spec, resources)?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         return Ok(display);
     }
@@ -319,6 +320,7 @@ mod tests {
                         estimate,
                         lower: Some(0.0),
                         upper: Some(4.0),
+                        nonzero_interval: true,
                     }),
                 })
                 .collect::<Vec<_>>()
@@ -511,14 +513,29 @@ mod tests {
         let spec = AxisSpec::default();
 
         assert_eq!(
-            point_interval_display_range((-f64::MAX, f64::MAX), &spec).unwrap(),
+            point_interval_display_range(
+                (-f64::MAX, f64::MAX),
+                &spec,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (-f64::MAX, f64::MAX)
         );
         assert_eq!(
-            point_interval_display_range((f64::MAX, f64::MAX), &spec).unwrap(),
+            point_interval_display_range(
+                (f64::MAX, f64::MAX),
+                &spec,
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (f64::MAX.next_down(), f64::MAX)
         );
-        let signed_zero = point_interval_display_range((-0.0, 0.0), &spec).unwrap();
+        let signed_zero = point_interval_display_range(
+            (-0.0, 0.0),
+            &spec,
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
         assert!(signed_zero.0.is_finite() && signed_zero.0 < 0.0);
         assert!(signed_zero.1.is_finite() && signed_zero.1 > 0.0);
     }

@@ -193,7 +193,7 @@ fn independent_physical_alignment_does_not_change_wrapping_or_fit() {
         "Latin \u{5e9}\u{5dc}\u{5d5}\u{5dd}\nsmall",
     ] {
         let sources = [Some(source); 3];
-        let widths = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap();
+        let widths = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap().widths();
         assert!(widths.1 >= widths.0 && widths.0 > 0.0);
         let base = measure(
             &theme,
@@ -261,7 +261,9 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
     let theme = crate::Theme::Publication.resolve();
     let sources = [None, Some("Unbreakable"), None];
     let align = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
-    let (hard, _) = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap();
+    let (hard, _) = RootTitleBlockPlan::intrinsic_widths(&theme, sources)
+        .unwrap()
+        .widths();
     let failure = RootTitleBlockPlan::measure(
         &theme,
         sources,
@@ -300,6 +302,66 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
         .into_error()
         .to_string()
         .contains("root title block"));
+}
+
+#[test]
+fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
+    let theme = crate::Theme::Publication.resolve();
+    let sources = [
+        Some("Retained glyph analysis"),
+        Some("Subtitle"),
+        Some("Caption"),
+    ];
+    let intrinsics = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap();
+    let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let alignments = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
+    for width in [640.0, 800.0] {
+        let calls = resources.call_cache_usage().0;
+        intrinsics.check_width(width, &FitScope::root()).unwrap();
+        let plan = RootTitleBlockPlan::measure(
+            &theme,
+            sources,
+            PanelBox::new(0.0, width, 0.0, 480.0),
+            alignments,
+            60.0,
+            &FitScope::root(),
+        )
+        .unwrap();
+        assert!(plan
+            .roles
+            .iter()
+            .flatten()
+            .all(|role| role.text.lines.len() == 1));
+        // One title-block measurement plus the three role queries, even when
+        // the source glyph analysis is already retained in this operation.
+        assert_eq!(resources.call_cache_usage().0 - calls, 4);
+        assert_eq!(
+            shapes,
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
+        );
+    }
+    resources
+        .claim_calls(1_000_000 - resources.call_cache_usage().0)
+        .unwrap();
+    let error = RootTitleBlockPlan::measure(
+        &theme,
+        sources,
+        PanelBox::new(0.0, 800.0, 0.0, 480.0),
+        alignments,
+        60.0,
+        &FitScope::root(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, PlanError::Fatal(Error::Render(message))
+        if message.contains("root title measurement admission")));
+    assert_eq!(
+        shapes,
+        crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get)
+    );
 }
 
 #[test]

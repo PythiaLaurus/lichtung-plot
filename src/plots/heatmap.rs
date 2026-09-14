@@ -97,6 +97,92 @@ impl DeferredHeatmapMinimum {
     }
 }
 
+/// Hard consequences of the current cell-label algorithm, before a colorbar,
+/// frame, or cell is assigned. Category packing and elision remain T5e.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let axes = chart
+        .prepared_axis_inputs()
+        .ok_or_else(|| Error::Render("heatmap intrinsics require root-prepared axes".into()))?;
+    prepare_intrinsics(
+        retained(chart)?,
+        axes,
+        chart.data(),
+        theme,
+        chart.axis_scope(),
+    )
+}
+
+pub(crate) fn prepare_intrinsics(
+    prepared: &HeatmapData,
+    axes: &crate::plots::shared_x::PreparedAxes,
+    data: crate::data::PlotData<'_>,
+    theme: &ResolvedTheme,
+    scope: Option<&str>,
+) -> Result<(f64, f64), Error> {
+    let environment = theme.prepared_font_environment()?;
+    environment.claim_measurement_call().map_err(|error| {
+        Error::Render(format!(
+            "heatmap intrinsic call admission {scope:?}: {error:?}"
+        ))
+    })?;
+    if let Some(minimum) = axes.heatmap_intrinsics.get() {
+        return Ok(*minimum);
+    }
+    #[cfg(test)]
+    crate::orchestrator::measurements::intrinsic(
+        crate::orchestrator::measurements::Counter::HeatmapIntrinsic,
+        scope,
+    );
+    let mut minimum = prepared.minimum.body();
+    let resources = environment.generation_resources();
+    let data = data.with_axis_resources(&resources);
+    data.claim_source_visits(prepared.value_labels.len() + prepared.null_row_annotations.len())?;
+    let appearance = theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal);
+    for source in prepared.value_labels.iter().flatten() {
+        let plan = theme.measure_legacy_appearance_text(
+            source,
+            &appearance,
+            PhysicalTextAlignment::Center,
+            "heatmap value intrinsic",
+            false,
+        )?;
+        minimum.0 = minimum
+            .0
+            .max((plan.width() + 6.0) * prepared.x_levels.len() as f64);
+        minimum.1 = minimum
+            .1
+            .max((f64::from(ANNOTATION_FONT_SIZE) + 5.0) * prepared.y_levels.len() as f64);
+    }
+    for source in prepared.null_row_annotations.iter().flatten() {
+        let hard = crate::layout::fit::intrinsic_widths(
+            theme,
+            source,
+            &appearance,
+            "heatmap fully-null row annotation",
+        )?
+        .0;
+        let unwrapped = theme.measure_legacy_appearance_text(
+            source,
+            &appearance,
+            PhysicalTextAlignment::Center,
+            "heatmap fully-null row annotation",
+            false,
+        )?;
+        minimum.0 = minimum.0.max(hard + 12.0);
+        minimum.1 = minimum
+            .1
+            .max((unwrapped.height() + 4.0) * prepared.y_levels.len() as f64);
+    }
+    environment
+        .claim_cache_entries(1)
+        .map_err(|error| Error::Render(format!("heatmap intrinsic cache admission: {error:?}")))?;
+    let _ = axes.heatmap_intrinsics.set(minimum);
+    Ok(minimum)
+}
+
 pub(crate) fn text_census(
     prepared: &HeatmapData,
     mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
@@ -188,7 +274,7 @@ pub(crate) fn measure(
         theme.typography.axis_title.font_size,
         &theme.axes.spacing,
     );
-    let base_left = chart.base_canvas_layout(theme).panel_box.x0.min(body.x0);
+    let base_left = chart.legacy_root_axes().insets(theme, true).left.min(body.x0);
     let available = body.width() - minimum.body().0 + base_left - chrome;
     if available <= 0.0 {
         return Err(context
@@ -234,7 +320,7 @@ pub(crate) fn measure(
         .x_levels
         .iter()
         .enumerate()
-        .map(|(index, _)| Ok(AxisTick::new(index as f64 + 0.5, ""))))?;
+        .map(|(index, _)| { data.claim_source_visits(1)?; Ok(AxisTick::new(index as f64 + 0.5, "")) }))?;
     let y_labels = if wrap_labels {
         y_labels
     } else {
@@ -252,7 +338,7 @@ pub(crate) fn measure(
     let y_ticks = data.collect_source(y_labels
         .into_iter()
         .enumerate()
-        .map(|(index, label)| Ok(AxisTick::new(row_y(index, y_count), label))))?;
+        .map(|(index, label)| { data.claim_source_visits(1)?; Ok(AxisTick::new(row_y(index, y_count), label)) }))?;
     let x_spec = AxisSpec::default().limits(0.0, x_count as f64);
     let y_spec = AxisSpec::default().limits(0.0, y_count as f64);
         let mut layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
@@ -301,7 +387,6 @@ pub(crate) fn measure(
     )?;
 
     let payload = HeatmapPayload {
-        minimum,
         clip: panel,
         cross_style: LineStyle::solid(MISSING_STROKE, 1.0),
         cells: select_cells(prepared, &layout, theme, &annotations, data)?,
@@ -864,7 +949,6 @@ fn color_domain(
 
 #[derive(Debug)]
 pub(crate) struct HeatmapPayload {
-    pub(crate) minimum: DeferredHeatmapMinimum,
     clip: PanelBox,
     cross_style: LineStyle,
     cells: Vec<CellPayload>,
@@ -976,6 +1060,7 @@ fn select_cells(
     let mut cells = Vec::new();
     data.reserve_source(&mut cells, prepared.cells.len())?;
     for y_index in 0..y_count {
+        data.claim_source_visits(1)?;
         let y0 = y_count as f64 - y_index as f64 - 1.0;
         let y1 = y0 + 1.0;
         if let Some(annotation) = &annotations.rows[y_index] {
@@ -1010,6 +1095,7 @@ fn select_cells(
             continue;
         }
         for x_index in 0..x_count {
+            data.claim_source_visits(1)?;
             if !active_cell(prepared.layout, x_index, y_index) {
                 continue;
             }

@@ -69,6 +69,7 @@ pub(crate) fn prepare(
     data: PlotData<'_>,
     parent: Option<&ObservedCollectives>,
 ) -> Result<PreparedInteraction, Error> {
+    data.claim_mark_rows()?;
     #[cfg(test)]
     count(0);
     let x_col = chart
@@ -235,6 +236,10 @@ impl InteractionPayload {
     clippy::cast_precision_loss,
     reason = "selected bounded category projection and frozen trace styles"
 )]
+#[expect(
+    clippy::too_many_lines,
+    reason = "validate scientific spans while retaining each trace's geometry and legend"
+)]
 pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
@@ -297,6 +302,13 @@ pub(crate) fn measure_marks(
             let (px, py) = layout.projection.project(x, cell.estimate);
             let (_, low) = layout.projection.project(x, cell.lower);
             let (_, high) = layout.projection.project(x, cell.upper);
+            layout.projection.validate_span(
+                crate::layout::AxisSide::Left,
+                (cell.lower, cell.upper),
+                (low, high),
+                cell.lower < cell.upper,
+                "interaction interval",
+            )?;
             let interval = [Point2D::new(px, low), Point2D::new(px, high)];
             geometry.line(&interval, &selected.interval, Some(clip))?;
             selected.intervals.push(interval);
@@ -348,10 +360,8 @@ fn resolve_trace_styles(
     };
     let mut styles = data.collect_source(levels.iter().map(|_| Ok(None)))?;
     for configured in configured {
-        data.claim_source_visits(levels.len())?;
-        let index = levels
-            .iter()
-            .position(|level| level == configured.group())
+        let index = data
+            .source_position(levels, |level| level == configured.group())?
             .ok_or_else(|| {
                 Error::Data(format!(
                     "interaction: style references unknown graphical group {:?}",
@@ -370,6 +380,7 @@ fn resolve_trace_styles(
         });
     }
     data.collect_source(styles.into_iter().zip(levels).map(|(style, trace)| {
+        data.claim_source_visits(1)?;
         style.ok_or_else(|| {
             Error::Data(format!(
                 "interaction: graphical group {trace:?} has no configured style"

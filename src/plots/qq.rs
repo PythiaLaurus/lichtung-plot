@@ -42,6 +42,7 @@ impl PreparedQq {
     }
 
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(2, 0);
         if let Some(hue) = chart.hue_col() {
@@ -70,11 +71,13 @@ impl PreparedQq {
                 ),
                 chart.x_axis_spec(),
                 "x-axis",
+                data.source_resources()?,
             )?,
             qq_display_range(
                 (self.observed[0], self.observed[self.observed.len() - 1]),
                 chart.y_axis_spec(),
                 "y-axis",
+                data.source_resources()?,
             )?,
         ])
     }
@@ -219,6 +222,7 @@ pub(crate) fn shared_x_domain(
         ),
         chart.x_axis_spec(),
         "x-axis",
+        data.source_resources()?,
     )
 }
 
@@ -226,6 +230,7 @@ pub(super) fn qq_display_range(
     data_range: (f64, f64),
     spec: &crate::layout::AxisSpec,
     axis: &str,
+    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<(f64, f64), Error> {
     #[cfg(test)]
     crate::orchestrator::measurements::count(
@@ -252,7 +257,7 @@ pub(super) fn qq_display_range(
             data_range.0
         )));
     }
-    let display = crate::layout::continuous_auto_range(data_range, spec);
+    let display = crate::layout::continuous_auto_range(data_range, spec, resources)?;
     if display.0.is_finite() && display.1.is_finite() && display.0 < display.1 {
         Ok(display)
     } else if data_range.0.is_finite() && data_range.1.is_finite() && data_range.0 < data_range.1 {
@@ -524,15 +529,33 @@ mod tests {
         let spec = crate::layout::AxisSpec::default();
 
         assert_eq!(
-            qq_display_range((0.0, 0.0), &spec, "y-axis").unwrap(),
+            qq_display_range(
+                (0.0, 0.0),
+                &spec,
+                "y-axis",
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (0.0_f64.next_down(), 0.0_f64.next_up())
         );
         assert_eq!(
-            qq_display_range((f64::MAX, f64::MAX), &spec, "y-axis").unwrap(),
+            qq_display_range(
+                (f64::MAX, f64::MAX),
+                &spec,
+                "y-axis",
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (f64::MAX.next_down(), f64::MAX)
         );
         assert_eq!(
-            qq_display_range((-f64::MAX, -f64::MAX), &spec, "y-axis").unwrap(),
+            qq_display_range(
+                (-f64::MAX, -f64::MAX),
+                &spec,
+                "y-axis",
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (-f64::MAX, (-f64::MAX).next_up())
         );
     }
@@ -543,7 +566,13 @@ mod tests {
         let spec = crate::layout::AxisSpec::default().limits(0.0, upper);
 
         assert_eq!(
-            qq_display_range((-10.0, 10.0), &spec, "y-axis").unwrap(),
+            qq_display_range(
+                (-10.0, 10.0),
+                &spec,
+                "y-axis",
+                &crate::font::canonical::OperationGenerationResources::new()
+            )
+            .unwrap(),
             (0.0, upper)
         );
     }
@@ -552,7 +581,13 @@ mod tests {
     fn qq_opposite_extreme_auto_range_retains_endpoints_with_scaled_ticks() {
         let spec = crate::layout::AxisSpec::default();
 
-        let range = qq_display_range((-f64::MAX, f64::MAX), &spec, "y-axis").unwrap();
+        let range = qq_display_range(
+            (-f64::MAX, f64::MAX),
+            &spec,
+            "y-axis",
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap();
 
         assert_eq!(range, (-f64::MAX, f64::MAX));
         assert_eq!(

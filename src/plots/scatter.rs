@@ -48,6 +48,7 @@ pub(crate) struct ScatterPayload {
 
 impl PreparedScatter {
     pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         STAGES.with(|stages| {
             let mut counts = stages.get();
@@ -146,6 +147,7 @@ impl PreparedScatter {
             );
             let style = chart.point_style(color, 3);
             let points = data.collect_source(group.points.iter().map(|(x, y)| {
+                data.claim_source_visits(1)?;
                 let (x, y) = projection.project(*x, *y);
                 Ok(Point2D::new(x, y))
             }))?;
@@ -408,7 +410,7 @@ mod tests {
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(crate::PlotKind::Scatter, context, backend)?;
                         selected.axes.as_ref().unwrap().draw(backend)
                     },
@@ -653,7 +655,18 @@ mod tests {
             }
             let visits = resources.usage().unwrap().1;
             let bytes = resources.byte_usage().unwrap();
-            usage.push((visits, bytes));
+            let records = resources.usage().unwrap().0;
+            usage.push((visits, bytes, records));
+            let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+            limited.claim_slots(1_000_000 - records + 1).unwrap();
+            assert!(prepared
+                .project(
+                    plot,
+                    &projection,
+                    &theme,
+                    plot.data().with_axis_resources(&limited)
+                )
+                .is_err());
             for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
                 let limited = OperationGenerationResources::with_test_limits(visits, bytes);
                 assert!(prepared
@@ -688,7 +701,14 @@ mod tests {
                 .is_err());
         }
         let extra = 2 * (field.len() - "hue".len());
-        assert_eq!(usage[1].0 - usage[0].0, extra as u128);
+        assert_eq!(
+            usage[1].0, usage[0].0,
+            "identity byte copying is not processing"
+        );
+        assert_eq!(
+            usage[1].2, usage[0].2,
+            "string payload bytes are not records"
+        );
         assert_eq!(usage[1].1 - usage[0].1, u64::try_from(extra).unwrap());
         let short_budget = OperationGenerationResources::with_test_limits(usage[0].0, usage[0].1);
         assert!(prepared

@@ -11,8 +11,9 @@ use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequireme
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
 use crate::layout::PanelBox;
-use crate::render::backend::{self, Backend};
-use crate::render::geometry::{GeometryBackend, GeometrySnapshot};
+#[cfg(test)]
+use crate::render::geometry::GeometryBackend;
+use crate::render::geometry::GeometrySnapshot;
 use crate::spec::{
     LegendClearance, LegendDefault, LegendPolicy, LegendPosition, PlotKind, PlotRenderContext,
     PlotRenderResult,
@@ -108,14 +109,19 @@ const fn is_inside(position: LegendPosition) -> bool {
 }
 
 impl PanelPlan {
-    pub(crate) fn plot_with_planned_limits<K: crate::kind::Marker>(&self, plot: &Plot<K>) -> Plot {
-        let plot = crate::kind::into_erased(plot.clone());
-        let plot = self.planned_x_limits.map_or_else(
-            || plot.clone(),
-            |limits| plot.clone().with_planned_x_limits(limits),
-        );
-        self.planned_y_limits
-            .map_or(plot.clone(), |limits| plot.with_planned_y_limits(limits))
+    pub(crate) fn plot_with_planned_limits(
+        &self,
+        plot: &Plot,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Plot, Error> {
+        let mut plot = plot.admitted_clone(data)?;
+        if let Some(limits) = self.planned_x_limits {
+            plot = plot.with_planned_x_limits(limits);
+        }
+        if let Some(limits) = self.planned_y_limits {
+            plot = plot.with_planned_y_limits(limits);
+        }
+        Ok(plot)
     }
 
     #[cfg(test)]
@@ -129,8 +135,8 @@ impl PanelPlan {
     }
 }
 
-pub(crate) fn plan_panel<K: crate::kind::Marker>(
-    plot: &Plot<K>,
+pub(crate) fn plan_panel(
+    plot: &Plot,
     kind: PlotKind,
     cell: PanelBox,
     role: LegendRole,
@@ -138,17 +144,21 @@ pub(crate) fn plan_panel<K: crate::kind::Marker>(
     round: &mut FeedbackRound,
     address: &ComponentAddress,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
-    let plot = crate::kind::into_erased(plot.clone());
+    let admission = theme
+        .prepared_font_environment()?
+        .claim_measurement_call()
+        .map_err(|error| Error::Render(format!("panel frame call admission: {error:?}")))?;
     let source_rows = plot.configured_source_rows()?;
     let context = source_rows.map_or_else(
         || PlotRenderContext::new(plot.data(), cell, theme),
         |rows| PlotRenderContext::with_source_rows(plot.data(), rows, cell, theme),
     );
-    plan_panel_with_context(&plot, kind, role, context, None, round, address)
+    plan_panel_with_context(plot, kind, role, context, None, round, address, &admission)
 }
 
 #[expect(
     clippy::too_many_lines,
+    clippy::too_many_arguments,
     reason = "the two-pass panel lifecycle keeps discovery, reservation, collision resolution, and frozen output together"
 )]
 pub(crate) fn plan_panel_with_context(
@@ -159,14 +169,24 @@ pub(crate) fn plan_panel_with_context(
     legend_entries: Option<&[crate::decorations::legend::LegendEntry]>,
     round: &mut FeedbackRound,
     address: &ComponentAddress,
+    _call: &crate::font::canonical::MeasurementCall,
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
-    let minimum = if crate::layout::interior::InteriorRoute::classify(kind).is_native() {
-        crate::layout::interior::coordinate::Intrinsics::new(plot, context.theme)?.minimum_body
-    } else {
-        DeferredLegacyPanelMinimum::SIZE
-    };
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let minimum = plot.intrinsic_body_minimum(context.theme)?;
+    if let FitOutcome::Miss(failure) = (FrameRequirements {
+        minimum_body: minimum,
+        natural_insets: [0.0; 4],
+    })
+    .assign_fit(context.panel, [0.0; 4], &FitScope::new(address, 0))?
+    {
+        return Ok(FitOutcome::Miss(failure));
+    }
     let position = plot.legend_position_spec();
     if role == LegendRole::Suppressed
         || plot.legend_policy_spec() == LegendPolicy::Hidden
@@ -191,7 +211,8 @@ pub(crate) fn plan_panel_with_context(
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         };
     if let Some(entries) = legend_entries {
-        discovered.legend_entries = entries.to_vec();
+        discovered.legend_entries =
+            data.collect_source(entries.iter().map(|entry| entry.admitted_clone(data)))?;
     }
     if discovered.legend_entries.is_empty()
         || discovered.decoration_mode == crate::spec::DecorationMode::SelfManaged
@@ -333,7 +354,13 @@ pub(crate) fn plan_panel_with_context(
             let checkpoint = round.begin_trial()?;
             round.observe_count(edge as usize)?;
             round.observe_count(usize::from(compact))?;
-            let trial_plot = plot.clone().with_legend_position(edge);
+            let resources = context
+                .theme
+                .prepared_font_environment()?
+                .generation_resources();
+            let trial_plot = plot
+                .admitted_clone(context.data.with_axis_resources(&resources))?
+                .with_legend_position(edge);
             let outcome = plan_panel_attempt(
                 &trial_plot,
                 kind,
@@ -415,12 +442,22 @@ pub(crate) fn check_assigned_body(
         )));
     }
     let mut miss = None;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = plot.data().with_axis_resources(&resources);
+    for axis in [&discovered.layout.x_axis, &discovered.layout.y_axis] {
+        data.admit_clone_str(&axis.label)?;
+        data.admit_clone_slice(&axis.ticks)?;
+        for tick in &axis.ticks {
+            data.admit_clone_str(&tick.label)?;
+        }
+    }
     let mut layout = discovered.layout.clone();
     layout.projection = crate::layout::Projection::new(
         layout.projection.x_range(),
         layout.projection.y_range(),
         (old.x0, old.x0 + width, old.y0, old.y0 + height),
-    );
+    )
+    .with_categories(layout.projection.category_counts());
     // This partial check covers indivisible sources and titles only. Automatic
     // numeric sources are regenerated by the complete frame trial below.
     if discovered.x_domain == crate::spec::AxisDomain::Continuous
@@ -518,19 +555,20 @@ fn plan_panel_attempt(
     let scope = FitScope::new(address, round.attempt_ordinal(address)?);
     let context = context.with_fit_scope(&scope);
     let native = crate::layout::interior::InteriorRoute::classify(kind).is_native();
-    let minimum = if native {
-        crate::layout::interior::coordinate::Intrinsics::new(plot, context.theme)?.minimum_body
-    } else {
-        DeferredLegacyPanelMinimum::SIZE
-    };
+    let minimum = plot.intrinsic_body_minimum(context.theme)?;
     let cell = context.panel;
     round.begin_owner(address)?;
     round.observe_box(cell)?;
     let legend_default = kind.legend_default(plot.user_y_limits().is_some());
-    let mut planning_plot = match role {
-        LegendRole::Panel => plot.clone(),
-        LegendRole::Suppressed => plot.clone().with_suppressed_legend(),
-    };
+    let resources = context
+        .theme
+        .prepared_font_environment()?
+        .generation_resources();
+    let data = context.data.with_axis_resources(&resources);
+    let mut planning_plot = plot.admitted_clone(data)?;
+    if role == LegendRole::Suppressed {
+        planning_plot = planning_plot.with_suppressed_legend();
+    }
     let planned_x_limits = round
         .domain(address, FeedbackKind::AutomaticDomainX)
         .map(|range| {
@@ -600,7 +638,8 @@ fn plan_panel_attempt(
         }
     };
     if let Some(entries) = legend_entries {
-        discovered.legend_entries = entries.to_vec();
+        discovered.legend_entries =
+            data.collect_source(entries.iter().map(|entry| entry.admitted_clone(data)))?;
     }
     let visible = role == LegendRole::Panel
         && planning_plot.legend_policy_spec() != LegendPolicy::Hidden
@@ -610,7 +649,12 @@ fn plan_panel_attempt(
     } else if visible {
         Some(Legend::new(
             &crate::decorations::legend::resolved_title(&discovered.legend_entries, context.theme)?,
-            discovered.legend_entries.clone(),
+            data.collect_source(
+                discovered
+                    .legend_entries
+                    .iter()
+                    .map(|entry| entry.admitted_clone(data)),
+            )?,
             f64::from(planning_plot.width()),
             f64::from(planning_plot.height()),
             context.theme,
@@ -621,15 +665,6 @@ fn plan_panel_attempt(
     let mut requirements =
         frame_requirements(legend.as_ref(), planning_plot.legend_position_spec());
     requirements.minimum_body = minimum;
-    if let Some(crate::layout::interior::DeferredMarkPlan {
-        payload: crate::layout::interior::MarkPayload::Heatmap(payload),
-        ..
-    }) = discovered.marks.as_deref()
-    {
-        let minimum = payload.minimum.body();
-        requirements.minimum_body.0 = requirements.minimum_body.0.max(minimum.0);
-        requirements.minimum_body.1 = requirements.minimum_body.1.max(minimum.1);
-    }
     let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter);
     let owned_ink = round.insets(address, FeedbackKind::OwnedInk);
     for (gutter, ink) in assigned_gutters.iter_mut().zip(owned_ink) {
@@ -658,15 +693,7 @@ fn plan_panel_attempt(
     let position = planning_plot.legend_position_spec();
     let panel_axes = &result.axes;
     let chrome = if let Some(axes) = &panel_axes {
-        if result.marks.is_some() {
-            Some(axes.geometry_snapshot(context.theme)?)
-        } else {
-            let mut chrome = GeometryBackend::new(context.theme)?;
-            chrome.begin(plot.width(), plot.height())?;
-            let drawn = axes.draw(&mut chrome);
-            backend::finish_scope(drawn, chrome.end(), "assigned axis ink measurement")?;
-            Some(chrome.into_snapshot())
-        }
+        Some(axes.geometry_snapshot(context.theme)?)
     } else {
         None
     };
@@ -681,18 +708,18 @@ fn plan_panel_attempt(
             gutters = [required.left, required.right, required.bottom, required.top]
                 .map(|value| (value + 4.0).ceil());
         } else if !planning_plot.parent_owns_axis_gutters() {
-            let base = planning_plot.base_canvas_layout(context.theme);
+            let base = planning_plot.legacy_root_axes().insets(context.theme, true);
             gutters = [
-                (required.left + 4.0 - base.insets.left - (drawn_panel.x0 - panel_box.x0))
+                (required.left + 4.0 - base.left - (drawn_panel.x0 - panel_box.x0))
                     .max(0.0)
                     .ceil(),
-                (required.right + 4.0 - base.insets.right - (panel_box.x1 - drawn_panel.x1))
+                (required.right + 4.0 - base.right - (panel_box.x1 - drawn_panel.x1))
                     .max(0.0)
                     .ceil(),
-                (required.bottom + 4.0 - base.insets.bottom - (drawn_panel.y0 - panel_box.y0))
+                (required.bottom + 4.0 - base.bottom - (drawn_panel.y0 - panel_box.y0))
                     .max(0.0)
                     .ceil(),
-                (required.top + 4.0 - base.insets.top - (panel_box.y1 - drawn_panel.y1))
+                (required.top + 4.0 - base.top - (panel_box.y1 - drawn_panel.y1))
                     .max(0.0)
                     .ceil(),
             ];
@@ -960,7 +987,8 @@ fn plan_panel_attempt(
         axes.y0 + next_frame.y0 - panel_box.y0,
         axes.y1 + next_frame.y1 - panel_box.y1,
     );
-    let next_projection = crate::layout::Projection::new(next_x, next_y, next_axes.as_tuple());
+    let next_projection = crate::layout::Projection::new(next_x, next_y, next_axes.as_tuple())
+        .with_categories(result.layout.projection.category_counts());
     if let Some(legend) = &resolved {
         let mut resolving_auto_bounds = None;
         if auto_annotation_miss && (gutter_request.is_some() || ink_request.is_some()) {

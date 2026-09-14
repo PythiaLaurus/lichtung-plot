@@ -258,6 +258,7 @@ pub(crate) fn measure(
         let color = theme.colors[color_index % theme.colors.len()];
         let point_style = chart.point_style(color, 3);
         let pts = data.collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
+            data.claim_source_visits(1)?;
             let (x, y) = proj.project(x, y);
             Ok(Point2D::new(x, y))
         }))?;
@@ -377,12 +378,14 @@ fn render_curves(
     let [(x_low, x_high), (y_low, y_high)] = ranges;
     // --- KDE grid (shared across groups) ---
     let n_grid = 80;
-    let x_grid = data.collect_source(
-        (0..n_grid).map(|i| Ok(x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))),
-    )?;
-    let y_grid = data.collect_source(
-        (0..n_grid).map(|i| Ok(y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))),
-    )?;
+    let x_grid = data.collect_source((0..n_grid).map(|i| {
+        data.claim_source_visits(1)?;
+        Ok(x_low + (x_high - x_low) * (i as f64 / (n_grid - 1) as f64))
+    }))?;
+    let y_grid = data.collect_source((0..n_grid).map(|i| {
+        data.claim_source_visits(1)?;
+        Ok(y_low + (y_high - y_low) * (i as f64 / (n_grid - 1) as f64))
+    }))?;
 
     // Compute per-group KDE densities to find the shared max.
     let mut x_densities = data.collect_source(groups.iter().map(|group| {
@@ -643,8 +646,8 @@ fn marginal_data_display_range(data_range: (f64, f64), spec: &AxisSpec) -> (f64,
     crate::orchestrator::measurements::count(
         crate::orchestrator::measurements::Counter::AxisRangePreparation,
     );
-    if spec.limits.is_some() {
-        return layout::continuous_auto_range(data_range, spec);
+    if let Some(limits) = spec.limits {
+        return limits;
     }
     let lo = data_range.0.min(data_range.1);
     let hi = data_range.0.max(data_range.1);

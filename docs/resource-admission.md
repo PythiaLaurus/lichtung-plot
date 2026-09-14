@@ -2,25 +2,82 @@
 
 ## Current Contract
 
-PF4 uses one cumulative processing-visits ledger for the root's font preparation,
-text planning, candidate/list traversal, and collision tests. The root creates
-the shared handles before preparation; environment and resource clones retain
-the same ledger. `share_generation_resources` accepts the existing ledger and
+The completed T5a exact-root implementation retains PF4's independent inclusive
+caps and one cumulative processing-visits ledger for source preparation, fonts,
+text, numerical work, candidate/list traversal, and collision tests. The root
+creates shared handles before preparation; environment and resource clones retain
+the same operation. `share_generation_resources` accepts the existing ledger and
 refuses a different ledger without changing either owner's consumption. It does
 not reset a started operation. Separate publications from one `Output` reuse the
-scene; independent Plot operations still prepare their own fonts.
+scene; independent Plot operations still prepare their own fonts. T5b onward and
+the complete future-mode producer census remain later-phase work.
 
 | Resource | Inclusive Limit |
 | --- | ---: |
-| Actual processing visits, shared across font and text | 1,000,000 |
+| Actual processing visits, shared across source/font/text/numerical work | 1,000,000 |
 | Cumulative retained planning records | 1,000,000 |
 | Prepared structural topology slots | 1,000,000 |
-| Measurement/intrinsic call attempts and root cache entries | 1,000,000 each |
+| Measurement/intrinsic call attempts, including cache hits | 1,000,000 |
+| Root-local cache entries admitted before insertion | 1,000,000 |
 | Font discovery entries | 1,000,000 |
 | Cumulative font/source/scratch byte admission | 536,870,912 |
-| Root feedback rounds and guide placement trials | 8 each |
+| Root feedback rounds / guide placement trials per owner per round | 8 / 8 |
 | Optional exact text-cache insertion stop | 256 entries |
 | PNG axis / pixels / parser-input bytes | 32,768 / 100,000,000 / 67,108,864 |
+
+Records, processing visits, call attempts, cache entries, topology slots, discovery
+entries, and bytes are separate counters, not interchangeable allowances. Equal
+limits are accepted; the next unit is refused before the guarded operation.
+Earlier admitted work/storage remains charged across rejected trials, root rounds,
+cache invalidation, and released payloads. These are logical cumulative admissions,
+not CPU, elapsed-time, allocator, peak-live-memory, or RSS measurements.
+
+### Calls And Caches
+
+`OperationGenerationResources` owns independent `calls` and `cache_entries`
+counters. Each logical measurement/intrinsic attempt admits its call before cache
+lookup, including a hit. A `MeasurementCall` ticket lets an internal implementation
+consume the owner's admission without charging that owner twice. Independent child
+or text calls still admit their own attempts. Direct text/reflow/intrinsic queries,
+axis plans and numeric source selection, Matrix tick reuse, child measurement, and
+later root rounds use the same operation cap.
+
+New root-local cache entries are admitted before insertion independently of calls
+and retained records/bytes. Hits insert nothing and remain usable at the cache-entry
+limit if call/processing allowances suffice. A required attempted insertion that
+exceeds the limit is fatal, not permission to discard content or retry uncached.
+The existing optional exact-text-cache stop at 256 entries is a separate cache
+policy, not a replacement root quota. Font/text caches, lazy analysis, prepared
+native intrinsics, Matrix ticks, and retained child results have boundary tests.
+Observations report `measurement_calls`, `cache_entries`, and `topology_slots`
+separately from records, visits, and bytes.
+
+### Source And Topology
+
+Native row slots are admitted before prepared-row materialization. Facets admit
+original source rows before partitioning; `RowTopologyAdmission` is bound to both
+the source and shared operation so child preparation reuses that admission without
+double-counting rows or accepting another root's ticket. Structural census and
+record storage remain distinct: topology admission is not storage reservation.
+Canvas/facet declarations and staged text-requirement addresses retain their own
+checked canonical census, including shared addresses counted once.
+
+`reserve_source`, `collect_source`, string/configuration/key copies, and retained
+metadata admit actual records and checked bytes before storage without a processing
+surcharge. Growing storage admits complete replacement capacity; immutable sharing
+does not recopy the shared vector. `source_arc` admits its header and wrapped value
+without charging the vector's allocation again. This does not promise recoverable
+failure for every allocation inside the standard library or a dependency.
+
+`source_levels` charges one visit per input and one per existing level actually
+examined, stopping at the match. `source_position` and composed-identity/list
+comparisons likewise charge only examined entries and stop at the first decisive
+match/mismatch. Sort helpers admit their input visit pass once before mutation,
+not a made-up price for each comparison or swap. Semantic normalization, numeric
+validation/statistics, source selection, and other actual processing still require
+their own admission before work. Storage-only copying is not a second such pass.
+
+### Processing And Storage
 
 Processing visits count actual scalar inputs to variable passes, normalization
 input/decomposition nodes, each actual preceding comparison in quadratic mark
@@ -55,12 +112,75 @@ the existing exact range-bit checks, remains the fallback. Independent nested
 capture/replay reservations retain their own record admission; text processing
 continues through the owning environment.
 
+Native intrinsic summaries are retained on prepared axes after fonts and before
+allocation for standalone, facet, and Canvas roots. A hit admits a call but does
+not repeat label analysis or insert storage. New roots prepare new summaries;
+mandatory vertical category lines contribute their actual measured height.
+Standalone legend capture consumes retained selected draw calls and operands,
+not another selection or style/position reconstruction.
+
+Correctly rounded Log10 in `src/numeric.rs` uses the same processing and byte
+limits. Inputs, exact-power comparisons, refinement, series setup/iterations, and
+final rational rounding are admitted before work; checked upper bounds on
+first-party BigUint temporaries are admitted before algebra. Scratch accounting
+includes limb rounding and capacity growth, not a price for dependency-internal
+limb operations. Precision refines until certified bounds round identically or
+the existing root limits refuse; there is no separate precision allowance or
+approximate fallback. The direct `num-bigint = "=0.4.8"` dependency was already
+locked/cached. This exact-integer interval implementation is not a CORE-MATH port;
+spec 05 was updated without changing the approved correctly rounded result.
+
 Refusals remain typed and terminal. Quota exhaustion does not omit content, alter
 font selection, shorten a line, or trigger a smaller fallback representation.
 Physically inadequate boxes still produce fit failures. PNG gates remain local
 to PNG output. No global cache, network access, or font provisioning was added.
 
-## Verification
+## T5a6d Closure Evidence
+
+Final primary `/tmp/opencode/t5a6d-verify.log` passed formatting, strict locked/offline
+all-target Clippy, **1,024 library tests and 467 integration tests**, warning-denied
+API documentation, and package verification (**270 files, 7.4 MiB uncompressed,
+1.6 MiB compressed**). Total: **1,491 passed, 0 failed, 17 ignored**. Four example
+targets ran zero tests. All 27 snapshots are covered by thirteen visual tests;
+the nine inspected updates and eighteen unchanged baselines are accounted for in
+`docs/t5a-closure.md`, not described as historical byte parity.
+
+The final gate includes these exact boundary regressions (paths relative to `src/`):
+
+| Boundary | Evidence |
+| --- | --- |
+| Independent inclusive counters and shared handles | `font/canonical.rs`: `generation_limits_are_independent_inclusive_and_shared`, `resource_limits_accept_equal_and_reject_plus_one` |
+| Source storage versus actual traversal/sort work | `data/source.rs`: `source_storage_uses_records_and_bytes_without_processing_visits`, `source_levels_charge_only_examined_entries_and_sort_charges_input_once` |
+| Row topology before preparation | `layout/interior/coordinate/tests.rs`: `resource_audit_ordinary_topology_precedes_every_prepared_row_materialization`; `data/source.rs`: `p2_row_topology_ticket_is_bound_to_its_source_and_shared_operation` |
+| Direct text attempts and lazy insertion | `layout/text.rs`: `resource_audit_direct_text_calls_include_reflow_and_intrinsics_without_double_charging`, `resource_audit_lazy_text_cache_refusal_is_fatal_and_hits_do_not_insert` |
+| Axis call ownership and fatal refusal | `layout/panel/axis_frame_grid/tests.rs`: `resource_audit_axis_calls_refuse_before_text_or_geometry_and_admit_the_last_call`; `layout/panel/sources/tests.rs`: `resource_audit_numeric_axis_ticket_charges_one_owner_and_refusal_never_coarsens` |
+| Matrix cache hit/miss independence | `plots/matrix/axis_tests.rs`: `cache_hit_admits_the_last_call_even_with_no_cache_entries_left`, `cache_miss_reuses_its_call_ticket_and_admits_insertion_independently` |
+| Child hits and later root rounds | `decorations/plan/children.rs`: `child_measurement_hits_and_insertions_use_independent_cumulative_limits`; `layout/kernel/tests.rs`: `later_root_round_call_refusal_is_fatal_before_measurement_or_finalization` |
+| Scoped preallocation intrinsics and mandatory lines | `canvas/admission_tests.rs`: `post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for_new_roots`; `layout/interior/estimates.rs`: `native_vertical_category_intrinsics_use_mandatory_lines_and_keep_fit_scope` |
+| Numerical work and scratch refusal | `numeric/tests.rs`: `scratch_and_work_limits_refuse_before_the_guarded_series_iteration`, `nice_ranges_and_prepared_forest_limits_propagate_root_refusal` |
+| Observation units | `orchestrator/measurements.rs`: `resource_audit_observations_report_independent_call_cache_and_topology_totals` |
+
+`/tmp/opencode/t5a6d-final-benchmarks.log` separately passes **all ten release
+measurement groups**, 0 failed, 0 ignored, 1,031 filtered out, in 8.74 seconds.
+Their passing counter/trace/resource and output-equality assertions are workload
+evidence, not proof of a general speedup. Correct rounding and admission add real
+work/scratch/locking overhead; fewer charged copy visits do not imply less CPU
+work. Benchmark conditions and the separate 50-parent-SVG numerical audit are in
+`docs/local-search-benchmarks.md`; its earlier measured tables/fingerprints remain
+unaltered stage evidence.
+
+The full gate's 17 ignored tests comprise ten opt-in release groups, six official
+Unicode 16 conformance tests, and one regeneration test. The latter seven remain
+optional local-UCD invocations and were not run for this closure. Focused Unicode
+and version-boundary tests passed, but this is not a fresh official conformance
+rerun or a Unicode 17 conformance claim. This documentation update reads the final
+logs without running builds/tests or making a commit.
+
+## PF4/PF5 Verification
+
+The remaining sections preserve historical PF4/PF5 test totals, dependencies,
+resource counts, timings, and fingerprints. They are not measurements of the final
+T5a6d source or its added direct numerical dependency.
 
 Evidence was collected on the existing Linux workspace after committed PF2/PF3
 `5c0acdf` and PF6 `23db99f`, with the same locked dependencies and installed fonts.

@@ -292,6 +292,7 @@ dependencies = [
  "fontconfig-parser",
  "fontdb",
  "insta",
+ "num-bigint",
  "png",
  "resvg",
  "roxmltree 0.20.0",

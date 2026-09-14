@@ -12,7 +12,7 @@ fn plot() -> Plot<crate::kind::Scatter> {
 
 #[test]
 fn interval_copy_and_composed_identity_include_both_axes() {
-    let mut plot = plot();
+    let mut plot = plot().erase();
     plot.x_axis_spec.interval = Some(TickInterval::Additive(2.0));
     plot.y_axis_spec.interval = Some(TickInterval::Additive(1.0));
     let theme = crate::Theme::Publication.resolve();
@@ -21,12 +21,12 @@ fn interval_copy_and_composed_identity_include_both_axes() {
         .unwrap();
     assert_eq!(retained.x_axis_spec.interval, plot.x_axis_spec.interval);
     assert_eq!(retained.y_axis_spec.interval, plot.y_axis_spec.interval);
-    assert!(plot.same_composed_inputs(&retained));
+    assert!(plot.same_composed_inputs(&retained, plot.data()).unwrap());
     plot.x_axis_spec.interval = Some(TickInterval::Additive(3.0));
-    assert!(!plot.same_composed_inputs(&retained));
+    assert!(!plot.same_composed_inputs(&retained, plot.data()).unwrap());
     plot.x_axis_spec.interval = retained.x_axis_spec.interval;
     plot.y_axis_spec.interval = None;
-    assert!(!plot.same_composed_inputs(&retained));
+    assert!(!plot.same_composed_inputs(&retained, plot.data()).unwrap());
 }
 
 #[test]
@@ -50,17 +50,59 @@ fn equal_composed_endpoints_do_not_erase_range_provenance() {
         .unwrap();
     assert_eq!(automatic.x_axis_spec.limits, configured.x_axis_spec.limits);
     assert_eq!(automatic.x_axis_spec.limits, shared.x_axis_spec.limits);
-    assert!(automatic.same_composed_inputs(&retained));
-    assert!(!configured.same_composed_inputs(&retained));
-    assert!(!shared.same_composed_inputs(&retained));
+    assert!(automatic
+        .same_composed_inputs(&retained, automatic.data())
+        .unwrap());
+    assert!(!configured
+        .same_composed_inputs(&retained, configured.data())
+        .unwrap());
+    assert!(!shared
+        .same_composed_inputs(&retained, shared.data())
+        .unwrap());
     let shared_retained = shared
         .retain_composed_inputs(theme.prepared_font_environment().unwrap())
         .unwrap();
-    assert!(shared.same_composed_inputs(&shared_retained));
+    assert!(shared
+        .same_composed_inputs(&shared_retained, shared.data())
+        .unwrap());
     assert_eq!(
         shared_retained.x_axis_spec.provenance,
         crate::layout::RangeProvenance::Shared
     );
+}
+
+#[test]
+fn composed_key_copy_has_no_processing_price_and_comparison_stops_at_mismatch() {
+    let plot = plot()
+        .erase()
+        .with_global_hue_levels(vec!["a".repeat(1024), "b".into(), "c".into()])
+        .with_global_group_levels(vec!["later".into(), "tail".into()]);
+    let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
+    let resources = environment.generation_resources();
+    let before = resources.usage().unwrap().1;
+    resources.set_test_limits(before, u64::MAX);
+    for mismatch in 0..=3 {
+        let mut retained = plot.retain_composed_inputs(&environment).unwrap();
+        assert_eq!(resources.usage().unwrap().1, before);
+        if mismatch < 3 {
+            retained.global_hue_levels.as_mut().unwrap()[mismatch] = "different".into();
+        }
+        let examined = if mismatch < 3 { mismatch + 1 } else { 5 };
+        for allowance in [examined - 1, examined, examined + 1] {
+            let resources = crate::font::canonical::OperationGenerationResources::with_test_limits(
+                allowance as u128,
+                0,
+            );
+            let result =
+                plot.same_composed_inputs(&retained, plot.data().with_axis_resources(&resources));
+            if allowance < examined {
+                assert!(result.unwrap_err().to_string().contains("work admission"));
+            } else {
+                assert_eq!(result.unwrap(), mismatch == 3);
+                assert_eq!(resources.usage().unwrap(), (0, examined as u128));
+            }
+        }
+    }
 }
 
 #[test]

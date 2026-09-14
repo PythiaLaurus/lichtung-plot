@@ -38,6 +38,7 @@ pub(crate) struct PreparedDensityInputs {
 
 impl PreparedDensity {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         crate::layout::interior::distributions::count(1, 0);
         let column = chart
@@ -62,7 +63,12 @@ impl PreparedDensity {
             .fold(0.0_f64, f64::max);
         Ok([
             chart.x_axis_spec().limits.unwrap_or(self.x_range),
-            crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+            crate::layout::anchored_auto_range(
+                (0.0, maximum),
+                chart.y_axis_spec(),
+                0.0,
+                data.source_resources()?,
+            )?,
         ])
     }
 }
@@ -119,7 +125,12 @@ pub(crate) fn axis_ranges(
         .fold(0.0_f64, f64::max);
     Ok([
         chart.x_axis_spec().limits.unwrap_or(prepared.x_range),
-        crate::layout::anchored_auto_range((0.0, maximum), chart.y_axis_spec(), 0.0),
+        crate::layout::anchored_auto_range(
+            (0.0, maximum),
+            chart.y_axis_spec(),
+            0.0,
+            data.source_resources()?,
+        )?,
     ])
 }
 
@@ -195,7 +206,7 @@ pub(crate) fn project(
         let fill = clip_polygon_y(fill, layout.projection.y_range(), data)?;
         let mut projected = DensityCurvePayload {
             fill: if fill.len() >= 3 {
-                project_points(&fill, &layout, data)?
+                project_points(&fill, &layout, data, true)?
             } else {
                 Vec::new()
             },
@@ -213,7 +224,7 @@ pub(crate) fn project(
             if let Some(segment) = clip_line_y(pair[0], pair[1], layout.projection.y_range()) {
                 projected
                     .segments
-                    .push(project_points(&segment, &layout, data)?);
+                    .push(project_points(&segment, &layout, data, false)?);
             }
         }
         payload.curves.push(projected);
@@ -606,9 +617,19 @@ fn project_points(
     points: &[(f64, f64)],
     layout: &Layout,
     data: PlotData<'_>,
+    polygon: bool,
 ) -> Result<Vec<Point2D>, Error> {
-    data.collect_source(points.iter().map(|(x, y)| {
-        let (x, y) = layout.projection.project(*x, *y);
+    let mut source_extents = [(f64::INFINITY, f64::NEG_INFINITY); 2];
+    let mut projected_extents = source_extents;
+    let points = data.collect_source(points.iter().map(|&(source_x, source_y)| {
+        data.claim_source_visits(1)?;
+        let (x, y) = layout.projection.project(source_x, source_y);
+        for (index, (source, projected)) in [(source_x, x), (source_y, y)].into_iter().enumerate() {
+            source_extents[index].0 = source_extents[index].0.min(source);
+            source_extents[index].1 = source_extents[index].1.max(source);
+            projected_extents[index].0 = projected_extents[index].0.min(projected);
+            projected_extents[index].1 = projected_extents[index].1.max(projected);
+        }
         if x.is_finite() && y.is_finite() {
             Ok(Point2D::new(x, y))
         } else {
@@ -616,7 +637,31 @@ fn project_points(
                 "density: visible curve cannot be projected at this numeric scale".into(),
             ))
         }
-    }))
+    }))?;
+    // A filled density needs both extents. A line only requires distinct points,
+    // not a positive extent on each axis (horizontal/vertical lines are valid).
+    if polygon || points.first() == points.last() {
+        for (index, axis) in [
+            crate::layout::AxisSide::Bottom,
+            crate::layout::AxisSide::Left,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            layout.projection.validate_span(
+                axis,
+                source_extents[index],
+                projected_extents[index],
+                source_extents[index].0 < source_extents[index].1,
+                if polygon {
+                    "density polygon"
+                } else {
+                    "density line"
+                },
+            )?;
+        }
+    }
+    Ok(points)
 }
 
 fn scaled_fraction(value: f64, first: f64, second: f64) -> f64 {

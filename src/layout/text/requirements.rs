@@ -1273,9 +1273,11 @@ fn push_deferred_plot_requirements(
                 Error::Render("waterfall census requires root-prepared semantics".into())
             })?;
         for (_, marks) in &waterfall.panels {
-            let range = crate::layout::continuous_auto_range(marks.range, plot.x_axis_spec());
+            let range = plot.x_axis_spec().limits;
             for (value, label) in &marks.totals {
-                if filter_point_label_x_to_limits && (*value < range.0 || *value > range.1) {
+                if filter_point_label_x_to_limits
+                    && range.is_some_and(|range| *value < range.0 || *value > range.1)
+                {
                     continue;
                 }
                 push_deferred_body(
@@ -2072,7 +2074,8 @@ mod tests {
                     Some(stage),
                 )
                 .unwrap_err();
-                assert!(error.to_string().contains("topology slots limit"));
+                assert!(error.to_string().contains("prepared topology slots"));
+                assert_eq!(stage.generation_resources().topology_usage(), 1_000_000);
                 assert_eq!(requirements.len(), 2);
                 assert_eq!(requirements.capacity(), capacity);
                 Ok(())

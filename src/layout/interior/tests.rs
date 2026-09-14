@@ -59,7 +59,7 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
 }
 
 #[test]
-fn invalid_route_rejects_before_fonts_or_combined_dispatch_without_fallback() {
+fn invalid_route_rejects_before_fonts_or_selected_dispatch_without_fallback() {
     let plot = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 2.0]),

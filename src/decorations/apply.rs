@@ -3,8 +3,8 @@
 use crate::Error;
 
 use crate::builder::Plot;
-use crate::decorations::plan::{PanelPlan, ResolvedLegend as PlannedLegend};
-use crate::layout::CanvasLayout;
+use crate::decorations::plan::PanelPlan;
+use crate::layout::RootFramePlan;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
 
 /// Draw one panel's grid before its marks.
@@ -46,29 +46,11 @@ pub(crate) fn apply_axes(
 
 pub(crate) fn apply_canvas_text(
     plot: &Plot,
-    canvas: &CanvasLayout,
+    canvas: &RootFramePlan,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
-    if let crate::layout::canvas::CanvasRootText::Planned(plan) = &canvas.root_text {
-        return plan.draw(
-            [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
-            backend,
-        );
-    }
-    Err(Error::Render("root title block was not measured".into()))
-}
-
-/// Draw a legend whose dimensions and position were frozen during preflight.
-pub(crate) fn apply_planned_legend(
-    plot: &Plot,
-    legend: Option<&PlannedLegend>,
-    backend: &mut dyn Backend,
-) -> Result<(), Error> {
-    let Some(resolved) = legend else {
-        return Ok(());
-    };
-    let (x, y) = resolved.bounds.anchor();
-    with_layer(backend, &plot.layer_name("legend"), |backend| {
-        resolved.legend.draw(backend, x, y)
-    })
+    canvas.root_text.draw(
+        [plot.title_text(), plot.subtitle_text(), plot.caption_text()],
+        backend,
+    )
 }

@@ -68,13 +68,18 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
             .collect::<Vec<_>>(),
         [0, 2]
     );
-    let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
     for preset in [
         crate::Theme::Publication,
         crate::Theme::Nature,
         crate::Theme::Science,
     ] {
         let theme = preset.resolve();
+        let plot =
+            crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                .unwrap()
+                .attach(plot.clone())
+                .unwrap();
+        let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         for panel in [
             PanelBox::new(80.25, 550.75, 70.5, 410.25),
             PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -206,7 +211,7 @@ fn native_condition_hard_intrinsics_and_exact_numeric_labels_reject_before_marks
             .unwrap();
     let plot = inputs.attach(source).unwrap();
     let theme = crate::Theme::Publication.resolve();
-    let minimum = Intrinsics::new(&plot, &theme).unwrap().minimum_body;
+    let minimum = Intrinsics::prepared(&plot, &theme).unwrap().minimum(&plot);
     let hard = crate::layout::fit::intrinsic_widths(
         &theme,
         &word,
@@ -285,6 +290,11 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
             crate::Theme::Science,
         ] {
             let theme = preset.resolve();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                    .unwrap()
+                    .attach(plot.clone())
+                    .unwrap();
             for cell in [
                 PanelBox::new(16.0, 625.0, 8.0, 390.0),
                 PanelBox::new(30.25, 800.5, 40.75, 610.0),
@@ -296,7 +306,7 @@ fn native_parent_feedback_freezes_actual_marks_axes_and_gutters_at_the_assigned_
                 let work = measurements::finish();
                 assert!(work.roots.len() >= 2);
                 assert_eq!(work.counters[Counter::LegacyPanelConstructor as usize], 0);
-                let final_plot = plan.plot_with_planned_limits(&plot);
+                let final_plot = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
                 let selected = final_plot
                     .measure_selected_interior(PlotRenderContext::new(
                         final_plot.data(),

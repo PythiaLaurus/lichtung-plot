@@ -2,6 +2,98 @@ use super::*;
 use crate::font::canonical::OperationGenerationResources;
 use crate::{CategoryValues, NumericValues};
 
+#[test]
+fn source_point_collapse_matches_canonical_line_distinctions() {
+    for (x, y) in [
+        (vec![0.0, 0.000_001], vec![0.0, 0.0]),
+        (vec![0.0, 0.000_001, 0.5], vec![0.0, 0.0, 0.0]),
+        (vec![0.0, 0.5, 0.000_001], vec![0.0, 0.0, 0.0]),
+        (vec![0.0, -0.0, 0.5], vec![0.0, -0.0, 0.0]),
+        (vec![0.0, 0.5, -0.0], vec![0.0, 0.0, -0.0]),
+        (vec![0.0, 0.000_001], vec![-0.5, 0.5]),
+    ] {
+        let raw = x
+            .iter()
+            .zip(&y)
+            .map(|(&x, &y)| Point2D::new(x * 100.0, y * 100.0 + 100.0))
+            .collect::<Vec<_>>();
+        let expected = crate::render::backend::validate_line_points(&raw).is_err();
+        let source = Plot::line_path(
+            NumericValues::new("x", x),
+            NumericValues::new("y", y.clone()),
+            CategoryValues::new("group", std::iter::repeat_n("a", y.len())).unwrap(),
+        )
+        .x_limits(0.0, 1.0)
+        .y_limits(-1.0, 1.0)
+        .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let source = inputs.attach(source).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        let result = source.measure_selected_interior(PlotRenderContext::new(
+            source.data(),
+            crate::layout::PanelBox::new(0.0, 100.0, 0.0, 200.0),
+            &theme,
+        ));
+        assert_eq!(result.is_err(), expected);
+        if expected {
+            assert!(matches!(
+                result,
+                Err(crate::layout::fit::PlanError::Fatal(Error::Render(_)))
+            ));
+        }
+    }
+}
+
+#[test]
+fn p2_trajectory_condition_search_does_not_charge_an_unused_global_tail() {
+    let source = Plot::trajectory(
+        CategoryValues::new("condition", ["first", "second"]).unwrap(),
+        NumericValues::new("y", [1.0, 2.0]),
+        CategoryValues::new("group", ["one"; 2]).unwrap(),
+    )
+    .erase();
+    let mut prices = Vec::new();
+    for conditions in [
+        vec!["first".to_owned(), "second".to_owned()],
+        vec![
+            "first".to_owned(),
+            "second".to_owned(),
+            "unused".to_owned(),
+            "tail".to_owned(),
+        ],
+    ] {
+        let resources = OperationGenerationResources::new();
+        let prepared = PreparedLine::new(
+            &source,
+            source.data().with_axis_resources(&resources),
+            Some(&conditions),
+        )
+        .unwrap();
+        assert_eq!(
+            prepared.groups[0]
+                .points
+                .iter()
+                .map(|point| point.x.to_bits())
+                .collect::<Vec<_>>(),
+            [0.5_f64.to_bits(), 1.5_f64.to_bits()]
+        );
+        prices.push((
+            resources.usage().unwrap().1,
+            resources.byte_usage().unwrap(),
+        ));
+    }
+    assert_eq!(
+        prices[0].0, prices[1].0,
+        "unexamined condition records are not processing"
+    );
+    assert!(
+        prices[1].1 > prices[0].1,
+        "copied condition storage remains admitted"
+    );
+}
+
 fn configured<
     K: crate::kind::Marker
         + crate::kind::Facet
@@ -280,7 +372,7 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
                                 selected.layout.projection.panel_box(),
                                 &theme,
                             )
-                            .with_retained_body(selected.retained_payload()),
+                            .with_retained_body(&selected),
                             backend,
                         )?;
                         selected.axes.as_ref().unwrap().draw(backend)

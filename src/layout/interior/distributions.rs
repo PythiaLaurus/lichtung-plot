@@ -268,9 +268,11 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
         StandardCoordinate::Regression,
     ];
     for (family, source) in sources().into_iter().enumerate() {
+        let resources = OperationGenerationResources::new();
+        let data = source.data().with_axis_resources(&resources);
         let expected = match source.kind() {
-            PlotKind::Histogram => crate::plots::histogram::axis_ranges(&source, source.data()),
-            PlotKind::Density => crate::plots::density::axis_ranges(&source, source.data()),
+            PlotKind::Histogram => crate::plots::histogram::axis_ranges(&source, data),
+            PlotKind::Density => crate::plots::density::axis_ranges(&source, data),
             PlotKind::Qq => Ok([
                 crate::layout::continuous_auto_range(
                     (
@@ -278,10 +280,13 @@ fn native_scientific_ranges_retain_full_sample_statistics_across_assignments() {
                         crate::stats::distribution::standard_normal_quantile(5.5 / 6.0).unwrap(),
                     ),
                     source.x_axis_spec(),
-                ),
-                crate::layout::continuous_auto_range((1.0, 8.0), source.y_axis_spec()),
+                    &resources,
+                )
+                .unwrap(),
+                crate::layout::continuous_auto_range((1.0, 8.0), source.y_axis_spec(), &resources)
+                    .unwrap(),
             ]),
-            PlotKind::Regression => crate::plots::regression::axis_ranges(&source, source.data()),
+            PlotKind::Regression => crate::plots::regression::axis_ranges(&source, data),
             _ => unreachable!(),
         }
         .unwrap();
@@ -570,7 +575,7 @@ fn selected_capture_and_replay_do_no_source_projection_statistics_axis_or_shapin
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(source.kind(), context, backend)?;
                         selected.axes.as_ref().unwrap().draw(backend)
                     },

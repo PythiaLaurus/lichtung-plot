@@ -307,7 +307,7 @@ impl LegendEntry {
             .flatten()
             .chain([&self.title, &self.label])
         {
-            data.admit_clone_slice(text.as_bytes())?;
+            data.admit_clone_str(text)?;
         }
         Ok(self.clone())
     }
@@ -732,7 +732,7 @@ pub(crate) struct LegendBox {
 }
 
 impl LegendBox {
-    /// Return the anchor expected by [`Legend::draw`].
+    /// Return the anchor used to select immutable legend draw operands.
     #[must_use]
     pub fn anchor(self) -> (f64, f64) {
         (self.anchor_x, self.anchor_y)
@@ -1303,20 +1303,16 @@ impl Legend {
         }
     }
 
-    /// Draw the legend with the **top-left corner** at `(x, y)` in math coords.
-    ///
-    /// The legend extends *downward* (decreasing y in math coords) from this
-    /// anchor point. The SVG backend's y-flip ensures correct visual output.
-    pub fn draw(&self, backend: &mut dyn Backend, x: f64, y: f64) -> Result<(), Error> {
-        self.visit_calls(x, y, |call| call.draw(backend))
-    }
-
     pub(crate) fn select(
         &self,
         x: f64,
         y: f64,
         data: crate::data::PlotData<'_>,
     ) -> Result<LegendDrawPlan, Error> {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::LegendSelection,
+        );
         data.claim_source_visits(self.entries.len())?;
         let count = self.entries.iter().try_fold(2_usize, |count, entry| {
             count

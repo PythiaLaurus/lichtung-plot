@@ -2,6 +2,82 @@ use super::plan_panel_for_test as plan_panel;
 use super::*;
 
 #[test]
+fn p2_panel_call_refusal_precedes_metadata_retention_and_body_work() {
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [1.0]),
+        crate::NumericValues::new("y", [2.0]),
+    )
+    .title("metadata ".repeat(8192))
+    .erase();
+    let theme = theme();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    resources.claim_calls(1_000_000).unwrap();
+    let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+    crate::layout::plan_exact_root(
+        800,
+        600,
+        |_| Ok(()),
+        |(), assigned, round| {
+            let result = super::plan_panel(
+                &plot,
+                plot.kind(),
+                PanelBox::new(0.0, 800.0, 0.0, 600.0),
+                LegendRole::Panel,
+                &theme,
+                round,
+                &ComponentAddress::root(),
+            );
+            let error = result
+                .err()
+                .expect("call refusal before unprepared body or clone");
+            assert!(error.to_string().contains("panel frame call admission"));
+            assert_eq!(
+                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
+                before
+            );
+            Ok(crate::layout::MeasuredLayout::new(assigned, ()))
+        },
+        |(), _, (), _| Ok(()),
+    )
+    .unwrap();
+}
+
+#[test]
+fn p2_planned_limit_metadata_is_admitted_for_every_copy_without_processing() {
+    let title = "metadata ".repeat(64);
+    let caption = "retained caption";
+    let plot = Plot::scatter(
+        crate::NumericValues::new("x", [1.0]),
+        crate::NumericValues::new("y", [2.0]),
+    )
+    .title(&title)
+    .caption(caption)
+    .erase();
+    let plan = PanelPlan {
+        panel_box: PanelBox::new(0.0, 800.0, 0.0, 600.0),
+        result: PlotRenderResult::new(crate::layout::Layout::self_managed(800, 600), Vec::new()),
+        legend: None,
+        planned_x_limits: Some((0.0, 3.0)),
+        planned_y_limits: Some((0.0, 4.0)),
+    };
+    let bytes = (title.len() + caption.len()) as u64;
+    let resources =
+        crate::font::canonical::OperationGenerationResources::with_test_limits(0, 2 * bytes);
+    let data = plot.data().with_axis_resources(&resources);
+    for count in 1..=2 {
+        let retained = plan.plot_with_planned_limits(&plot, data).unwrap();
+        assert_eq!(retained.title_text(), Some(title.as_str()));
+        assert_eq!(retained.caption_text(), Some(caption));
+        assert_eq!(resources.usage().unwrap(), (3 * u128::from(count), 0));
+        assert_eq!(resources.byte_usage().unwrap(), count * bytes);
+    }
+    assert!(plan.plot_with_planned_limits(&plot, data).is_err());
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one real frame fixture checks Auto recovery, fixed scoped refusal, and Top source work"
@@ -342,7 +418,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                     result.marks.is_some() || !result.producer_text.is_empty(),
                     "{kind:?}"
                 );
-                if kind != PlotKind::Line {
+                if !matches!(kind, PlotKind::Line | PlotKind::Matrix) {
                     assert!(
                         result
                             .producer_text
@@ -372,7 +448,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                         plot.render_panel(
                             kind,
                             PlotRenderContext::new(plot.data(), panel, &theme)
-                                .with_retained_body(result.retained_payload()),
+                                .with_retained_body(&result),
                             backend,
                         )
                         .map(|_| ())
@@ -394,6 +470,15 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
                 });
                 let captured = replay.retained_text();
                 if kind == PlotKind::Matrix {
+                    // Matrix now retains its text inside the common axis plans.
+                    assert!(result.producer_text.is_empty());
+                    assert!(captured
+                        .iter()
+                        .any(|(_, text)| text.source.contains('\u{2029}')));
+                    assert!(captured.iter().any(|(_, text)| text
+                        .lines
+                        .iter()
+                        .any(|line| line.selected_soft_hyphen.is_some())));
                     for text in result.self_managed_legend.as_ref().unwrap().text_plans() {
                         assert!(captured
                             .iter()
@@ -1042,7 +1127,8 @@ fn auto_legend_avoids_recorded_line_and_ribbon_geometry() {
 
     let plan = plan_panel(&plot, PlotKind::Line, cell, LegendRole::Panel, &theme()).unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot);
+    let plot = plot.erase();
+    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
     let resources = crate::font::canonical::OperationGenerationResources::new();
     let plot_with_planned_limits =
         crate::plots::shared_x::prepare_plot(&plot_with_planned_limits, &resources)
@@ -1448,7 +1534,7 @@ fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
     )
     .unwrap();
     let legend = plan.legend.as_ref().unwrap();
-    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot);
+    let plot_with_planned_limits = plan.plot_with_planned_limits(&plot, plot.data()).unwrap();
     let (final_result, final_geometry) = discover_geometry(
         &plot_with_planned_limits,
         PlotKind::HorizontalBar,

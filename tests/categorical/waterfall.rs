@@ -2,34 +2,36 @@ use super::*;
 
 #[test]
 fn waterfall_full_svg_fingerprints() {
-    // Complete preserve-text output from the combined renderer at clean 0e8c344.
+    // 2026-09-14 T5a6d: exact category bands, canonical title midpoints and
+    // ink-aware endpoint anchors. Historical 0e8c344 fingerprints are preserved
+    // in docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (11635, 0x39b8_9057_ec91_b04b),
-                (13598, 0x8f32_9eda_9944_aa4b),
-                (9303, 0x268a_af9a_e942_bc06),
+                (11631, 0xca35_95c4_f274_732f),
+                (13591, 0x0a70_69bb_87d3_3258),
+                (9308, 0x9c74_f6fa_6420_1727),
                 (19169, 0x0bfb_fd11_7fae_60f4),
                 (20319, 0xeb2a_3dac_0d7b_b178),
                 (19169, 0x0bfb_fd11_7fae_60f4),
                 (20319, 0xeb2a_3dac_0d7b_b178),
-                (21510, 0x349a_cc3e_0230_408e),
-                (11882, 0x7ec8_c493_f743_7d22),
+                (21510, 0xaa46_5388_a0fc_596f),
+                (11878, 0xa930_324a_5cd7_c27e),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (11459, 0x70f3_6f87_8cd8_64b2),
-                (13382, 0x8583_7f29_0de5_5d6a),
-                (9167, 0x0e24_8ebb_cbea_cf4f),
+                (11455, 0xe980_0eea_d1f7_ecf6),
+                (13375, 0x0c7b_4ce2_57fa_f4a3),
+                (9172, 0x683a_31ed_45db_1dbe),
                 (18567, 0xa130_fea7_c8fe_99c2),
                 (19739, 0x38e4_d759_cc83_e1ba),
                 (18567, 0xa130_fea7_c8fe_99c2),
                 (19739, 0x38e4_d759_cc83_e1ba),
-                (19759, 0x6368_8b07_9b6c_7e4a),
-                (11703, 0xe6fb_3656_ea16_f6cc),
+                (19753, 0x34d4_4d64_988d_d71b),
+                (11708, 0xf23a_b507_5d3a_2591),
             ],
         ),
     ] {

@@ -20,27 +20,81 @@ mod validation;
 #[cfg(test)]
 #[test]
 fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
-    let plot = Plot::scatter(
+    let source = Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [1.0, 2.0]),
     )
     .erase();
-    let theme = crate::Theme::Publication.resolve();
-    let context = PlotRenderContext::new(
-        plot.data(),
-        crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
-        &theme,
-    );
-    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let error = plot.measure_panel(PlotKind::Line, context).err().unwrap();
-    assert!(matches!(
-        error,
-        crate::layout::fit::PlanError::Fatal(Error::Data(_))
-    ));
-    assert_eq!(
-        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
-        0
-    );
+    for prepared in [false, true] {
+        let plot = if prepared {
+            crate::plots::shared_x::prepare_plot(
+                &source,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .unwrap()
+            .attach(source.clone())
+            .unwrap()
+        } else {
+            source.clone()
+        };
+        let theme = crate::Theme::Publication.resolve();
+        let context = PlotRenderContext::new(
+            plot.data(),
+            crate::layout::PanelBox::new(0.0, 400.0, 0.0, 300.0),
+            &theme,
+        );
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        RENDER_PANEL_CALLS.with(|calls| calls.set(0));
+        SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(0));
+        measurements::start();
+        let error = plot.measure_panel(PlotKind::Line, context).unwrap_err();
+        assert!(matches!(
+            error,
+            crate::layout::fit::PlanError::Fatal(Error::Data(_))
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        assert_eq!(
+            measurements::finish().counters,
+            [0; measurements::Counter::ALL.len()]
+        );
+
+        let environment = theme.prepared_font_environment().unwrap();
+        let call = environment.claim_measurement_call().unwrap();
+        let resources = environment.generation_resources();
+        resources
+            .claim_calls(1_000_000 - resources.call_cache_usage().0)
+            .unwrap();
+        measurements::start();
+        for error in [
+            plot.measure_panel(PlotKind::Line, context).unwrap_err(),
+            plot.measure_panel_in_call(PlotKind::Line, context, &call)
+                .unwrap_err(),
+        ] {
+            assert!(matches!(
+                error,
+                crate::layout::fit::PlanError::Fatal(Error::Data(_))
+            ));
+        }
+        assert!(matches!(
+            plot.preflight_measurement(
+                PlotKind::Line,
+                context.panel,
+                &theme,
+                &crate::layout::fit::FitScope::root(),
+            ),
+            Err(Error::Data(_))
+        ));
+        assert_eq!(resources.call_cache_usage().0, 1_000_000);
+        assert_eq!(
+            measurements::finish().counters,
+            [0; measurements::Counter::ALL.len()]
+        );
+        assert_eq!(RENDER_PANEL_CALLS.with(std::cell::Cell::get), 0);
+        assert_eq!(SELECTED_INTERIOR_MEASUREMENTS.with(std::cell::Cell::get), 0);
+    }
 }
 
 pub(crate) use artifacts::write_atomic;
@@ -162,11 +216,24 @@ impl Plot {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn measure_panel(
         &self,
         kind: PlotKind,
         context: PlotRenderContext<'_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+        let call = self.admit_interior_call(context.theme)?;
+        self.measure_panel_in_call(kind, context, &call)
+    }
+
+    pub(crate) fn measure_panel_in_call(
+        &self,
+        kind: PlotKind,
+        context: PlotRenderContext<'_>,
+        call: &crate::font::canonical::MeasurementCall,
+    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
         #[cfg(test)]
         {
             RENDER_PANEL_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -176,8 +243,7 @@ impl Plot {
                     .push(std::ptr::from_ref(context.theme).addr());
             });
         }
-        let context = context.with_prepared_axes(self);
-        crate::layout::interior::InteriorRoute::classify(kind).validate(self)?;
+        let context = context.with_prepared_axes(self)?;
         match kind {
             PlotKind::Scatter
             | PlotKind::Line
@@ -203,13 +269,39 @@ impl Plot {
             | PlotKind::Beeswarm
             | PlotKind::Waterfall
             | PlotKind::Marginal
-            | PlotKind::Matrix => self.measure_selected_interior(context),
+            | PlotKind::Matrix => self.measure_selected_interior_in_call(context, call),
         }
     }
 
     pub(crate) fn measure_selected_interior(
         &self,
         context: PlotRenderContext<'_>,
+    ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        let call = self.admit_interior_call(context.theme)?;
+        self.measure_selected_interior_in_call(context, &call)
+    }
+
+    fn admit_interior_call(
+        &self,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<crate::font::canonical::MeasurementCall, Error> {
+        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_native()
+            && self.prepared_axes.is_empty()
+        {
+            return Err(Error::Render(
+                "native coordinate panel requires root-prepared axes".into(),
+            ));
+        }
+        theme
+            .prepared_font_environment()?
+            .claim_measurement_call()
+            .map_err(|error| Error::Render(format!("interior call admission: {error:?}")))
+    }
+
+    fn measure_selected_interior_in_call(
+        &self,
+        context: PlotRenderContext<'_>,
+        _call: &crate::font::canonical::MeasurementCall,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
         use crate::layout::interior::{InteriorRoute as R, SpecializedLegacy as S};
         #[cfg(test)]
@@ -220,7 +312,7 @@ impl Plot {
                 .borrow_mut()
                 .push(std::ptr::from_ref(context.theme).addr());
         });
-        let context = context.with_prepared_axes(self);
+        let context = context.with_prepared_axes(self)?;
         let mut result = match R::classify(self.kind()) {
             route @ (R::StandardCoordinate(_) | R::OneCategoricalAxis(_)) => {
                 route.measure(self, context)?
@@ -496,7 +588,7 @@ fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
             &plot,
             plot.kind(),
             &mut result,
-            PlotRenderContext::new(plot.data(), panel, theme).with_prepared_axes(&plot),
+            PlotRenderContext::new(plot.data(), panel, theme).with_prepared_axes(&plot)?,
         )?;
         Ok::<_, PlanError>(result)
     };
@@ -519,7 +611,9 @@ fn rendered_axis_labels_refuse_at_measured_consumption_limits() {
             &plot,
             plot.kind(),
             &mut result,
-            PlotRenderContext::new(plot.data(), panel, &theme).with_prepared_axes(&plot),
+            PlotRenderContext::new(plot.data(), panel, &theme)
+                .with_prepared_axes(&plot)
+                .unwrap(),
         )
         .unwrap_err();
         let PlanError::Fatal(Error::Render(message)) = error else {

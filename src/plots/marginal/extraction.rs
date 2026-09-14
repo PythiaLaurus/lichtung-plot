@@ -105,7 +105,7 @@ fn marginal_selected_geometry_and_poisoned_capture_share_operands() {
         .render_panel(
             crate::PlotKind::Marginal,
             PlotRenderContext::new(poison.data(), payload.clips[0], &theme)
-                .with_retained_body(selected.retained_payload()),
+                .with_retained_body(&selected),
             &mut backend,
         )
         .unwrap();

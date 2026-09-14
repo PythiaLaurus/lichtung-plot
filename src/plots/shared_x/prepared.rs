@@ -4,9 +4,12 @@ use crate::layout::{AxisSpec, AxisTick};
 use crate::spec::{AxisScale, FacetScales, PlotKind};
 use crate::{Error, Plot};
 
-/// Scientific coordinates and raw category sources, never pixel or font state.
+/// Scientific coordinates and raw category sources. Post-font summaries are
+/// initialized by the owning root before allocating its panel, never by preparation.
 #[derive(Debug)]
 pub(crate) struct PreparedAxes {
+    pub(crate) intrinsics: std::sync::OnceLock<crate::layout::interior::coordinate::Intrinsics>,
+    pub(crate) heatmap_intrinsics: std::sync::OnceLock<(f64, f64)>,
     pub(crate) ranges: [(f64, f64); 2],
     pub(crate) categories: [Option<Vec<AxisTick>>; 2],
     pub(crate) display_categories: [Option<Vec<String>>; 2],
@@ -100,12 +103,16 @@ impl PreparedReference {
     )]
     pub(crate) fn x_range(&self, source: &Plot, data: PlotData<'_>) -> Result<(f64, f64), Error> {
         Ok(match self {
-            Self::Waterfall(marks) => {
-                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())
-            }
-            Self::Beeswarm(marks) => {
-                crate::layout::continuous_auto_range(marks.x_data, source.x_axis_spec())
-            }
+            Self::Waterfall(marks) => crate::layout::continuous_auto_range(
+                marks.range,
+                source.x_axis_spec(),
+                data.source_resources()?,
+            )?,
+            Self::Beeswarm(marks) => crate::layout::continuous_auto_range(
+                marks.x_data,
+                source.x_axis_spec(),
+                data.source_resources()?,
+            )?,
             Self::Marginal(marks) => marks.ranges[0],
             Self::Heatmap(marks) => (0.0, marks.x_levels.len() as f64),
             Self::Interaction(marks) => (0.0, marks.conditions.len() as f64),
@@ -115,15 +122,22 @@ impl PreparedReference {
                     kind,
                     PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar
                 ) {
-                    crate::layout::anchored_auto_range(marks.value_range, source.x_axis_spec(), 0.0)
+                    crate::layout::anchored_auto_range(
+                        marks.value_range,
+                        source.x_axis_spec(),
+                        0.0,
+                        data.source_resources()?,
+                    )?
                 } else {
                     (0.0, marks.categories.len() as f64)
                 }
             }
             Self::Estimate(marks) => marks.x_range()?,
-            Self::Dumbbell(marks) => {
-                crate::layout::continuous_auto_range(marks.range, source.x_axis_spec())
-            }
+            Self::Dumbbell(marks) => crate::layout::continuous_auto_range(
+                marks.range,
+                source.x_axis_spec(),
+                data.source_resources()?,
+            )?,
             Self::Histogram(marks) => marks.ranges[0],
             Self::Density(marks) => marks.ranges(source, data)?[0],
             Self::Qq(marks) => marks.ranges(source, data)?[0],
@@ -464,6 +478,10 @@ pub(crate) fn prepare_plot(
         );
     }
     if source.has_facets() {
+        let row_topology = InteriorRoute::classify(source.kind())
+            .is_native()
+            .then(|| source_data.admit_row_topology())
+            .transpose()?;
         let panels = crate::orchestrator::text_census_panels(source, source_data)?;
         let interaction_parent = (source.kind() == PlotKind::Interaction)
             .then(|| {
@@ -485,7 +503,10 @@ pub(crate) fn prepare_plot(
             source_data.collect_source(panels.iter().map(|panel| {
                 crate::plots::interval_estimate::PreparedEstimate::new(
                     source,
-                    panel.data().with_axis_resources(resources),
+                    panel
+                        .data()
+                        .with_axis_resources(resources)
+                        .with_row_topology(row_topology.as_ref()),
                     panel.significance_annotations(source_data)?,
                 )
                 .map(Some)
@@ -576,7 +597,10 @@ pub(crate) fn prepare_plot(
             .transpose()?;
         source_data.reserve_source(&mut retained, panels.len())?;
         for (index, panel) in panels.into_iter().enumerate() {
-            let data = panel.data().with_axis_resources(resources);
+            let data = panel
+                .data()
+                .with_axis_resources(resources)
+                .with_row_topology(row_topology.as_ref());
             let facet = crate::data::FacetAxisSources {
                 hues: hues.as_deref(),
                 groups: groups.as_deref(),
@@ -1151,8 +1175,16 @@ fn prepare(
                 })?
                 .ranges;
             [
-                crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec()),
-                crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    ranges[0],
+                    chart.x_axis_spec(),
+                    data.source_resources()?,
+                )?,
+                crate::layout::continuous_auto_range(
+                    ranges[1],
+                    chart.y_axis_spec(),
+                    data.source_resources()?,
+                )?,
             ]
         }
         PlotKind::Histogram => {
@@ -1222,7 +1254,8 @@ fn prepare(
                     chart.y_axis_spec()
                 },
                 0.0,
-            );
+                data.source_resources()?,
+            )?;
             if horizontal {
                 [values, slots]
             } else {
@@ -1247,7 +1280,11 @@ fn prepare(
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(values, chart.y_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    values,
+                    chart.y_axis_spec(),
+                    data.source_resources()?,
+                )?,
             ]
         }
         PlotKind::Dumbbell => {
@@ -1264,7 +1301,11 @@ fn prepare(
                 )?,
             );
             [
-                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    marks.range,
+                    chart.x_axis_spec(),
+                    data.source_resources()?,
+                )?,
                 (0.0, marks.categories.len() as f64),
             ]
         }
@@ -1306,7 +1347,11 @@ fn prepare(
             categories[0] = Some(levels);
             [
                 slots,
-                crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    marks.range,
+                    chart.y_axis_spec(),
+                    data.source_resources()?,
+                )?,
             ]
         }
         PlotKind::Beeswarm => {
@@ -1326,7 +1371,11 @@ fn prepare(
                 .unwrap_or((0.0, levels.len() as f64));
             categories[1] = Some(levels);
             [
-                crate::layout::continuous_auto_range(marks.x_data, chart.x_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    marks.x_data,
+                    chart.x_axis_spec(),
+                    data.source_resources()?,
+                )?,
                 slots,
             ]
         }
@@ -1347,7 +1396,11 @@ fn prepare(
                 .unwrap_or((0.0, levels.len() as f64));
             categories[1] = Some(levels);
             [
-                crate::layout::continuous_auto_range(marks.range, chart.x_axis_spec()),
+                crate::layout::continuous_auto_range(
+                    marks.range,
+                    chart.x_axis_spec(),
+                    data.source_resources()?,
+                )?,
                 slots,
             ]
         }
@@ -1483,6 +1536,8 @@ fn prepare(
         chart.prepare_axis_labels(data, labels)?
     };
     Ok(PreparedAxes {
+        intrinsics: std::sync::OnceLock::new(),
+        heatmap_intrinsics: std::sync::OnceLock::new(),
         ranges,
         categories: ticks,
         display_categories,
@@ -1639,11 +1694,19 @@ mod tests {
         let prepared = prepare_plot(&plot, &resources).unwrap();
         assert_eq!(prepared.axes[0].1.ranges[0], (-100.0, 100.0));
         assert_eq!(
-            crate::plots::density::axis_ranges(&natural, natural.data()).unwrap()[1],
+            crate::plots::density::axis_ranges(
+                &natural,
+                natural.data().with_axis_resources(&resources)
+            )
+            .unwrap()[1],
             prepared.axes[0].1.ranges[1]
         );
         assert_ne!(
-            crate::plots::density::axis_ranges(&natural, natural.data()).unwrap()[0],
+            crate::plots::density::axis_ranges(
+                &natural,
+                natural.data().with_axis_resources(&resources)
+            )
+            .unwrap()[0],
             prepared.axes[0].1.ranges[0]
         );
         plot.preflight().unwrap();
@@ -1717,6 +1780,8 @@ mod tests {
         )
         .erase();
         let axes = |range, label: Option<&str>| PreparedAxes {
+            intrinsics: std::sync::OnceLock::new(),
+            heatmap_intrinsics: std::sync::OnceLock::new(),
             ranges: [range, (0.0, 1.0)],
             categories: [label.map(|label| vec![AxisTick::new(0.5, label)]), None],
             display_categories: [None, None],
@@ -1774,6 +1839,77 @@ mod tests {
     }
 
     #[test]
+    fn p2_facets_admit_original_mark_rows_before_selectors_and_preserve_source_ids() {
+        let facet = crate::FacetSpec::column(
+            CategoryValues::new("panel", ["left", "right", "left", "right"]).unwrap(),
+        )
+        .scales(FacetScales::Free);
+        let rows = crate::SourceRows::new([100, 200, 300, 400]).unwrap();
+        let sources = [
+            Plot::scatter(
+                NumericValues::nullable("x", [Some(1.0), None, Some(3.0), Some(4.0)]),
+                NumericValues::new("y", [1.0, 2.0, 3.0, 4.0]),
+            )
+            .facet(facet.clone())
+            .source_rows(rows.clone())
+            .erase(),
+            Plot::point_interval(
+                CategoryValues::new("term", ["a", "b", "c", "d"]).unwrap(),
+                NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+                crate::Bounds::new(
+                    NumericValues::new("lower", [0.0, 1.0, 2.0, 3.0]),
+                    NumericValues::new("upper", [2.0, 3.0, 4.0, 5.0]),
+                ),
+            )
+            .facet(facet)
+            .source_rows(rows)
+            .erase(),
+        ];
+        for source in sources {
+            for available in [3, 4, 5] {
+                let resources = crate::font::canonical::OperationGenerationResources::new();
+                resources
+                    .claim_topology_slots(1_000_000 - available)
+                    .unwrap();
+                crate::data::SOURCE_COLUMN_READS.with(|count| count.set(0));
+                crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
+                let result = prepare_plot(&source, &resources);
+                if available < 4 {
+                    let error = result
+                        .err()
+                        .expect("topology refusal before selector preparation");
+                    assert!(error.to_string().contains("prepared topology slots"));
+                    assert_eq!(resources.usage().unwrap(), (0, 0));
+                    assert_eq!(resources.byte_usage().unwrap(), 0);
+                    assert_eq!(resources.topology_usage(), 999_997);
+                    crate::data::SOURCE_COLUMN_READS.with(|count| assert_eq!(count.get(), 0));
+                } else {
+                    let prepared = result.unwrap();
+                    assert_eq!(prepared.axes.len(), 2);
+                    assert_eq!(resources.topology_usage(), 1_000_000 - available + 4);
+                    let panels = crate::orchestrator::text_census_panels(
+                        &source,
+                        source.data().with_axis_resources(&resources),
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        panels
+                            .iter()
+                            .map(|panel| (0..panel.data().height())
+                                .map(|row| panel.data().source_row(row))
+                                .collect::<Vec<_>>())
+                            .collect::<Vec<_>>(),
+                        [vec![100, 300], vec![200, 400]]
+                    );
+                    assert_eq!(resources.topology_usage(), 1_000_000 - available + 4);
+                }
+                crate::font::canonical::FONT_DISCOVERY_CALLS
+                    .with(|count| assert_eq!(count.get(), 0));
+            }
+        }
+    }
+
+    #[test]
     fn borrowed_facet_panels_and_scope_sources_refuse_before_materialization() {
         use crate::font::canonical::OperationGenerationResources;
         let source = Plot::bar(
@@ -1812,8 +1948,17 @@ mod tests {
                 rows
             );
             assert_eq!(panel.scope(source.data()).unwrap(), scope);
-            for (visits, bytes) in [(0, u64::MAX), (u128::MAX, 0)] {
-                let resources = OperationGenerationResources::with_test_limits(visits, bytes);
+            let copied = OperationGenerationResources::with_test_limits(0, u64::MAX);
+            assert_eq!(
+                panel
+                    .scope(source.data().with_axis_resources(&copied))
+                    .unwrap(),
+                scope
+            );
+            assert_eq!(copied.usage().unwrap(), (1, 0));
+            for (records, bytes) in [(0, u64::MAX), (1, 0)] {
+                let resources = OperationGenerationResources::with_test_limits(0, bytes);
+                resources.claim_slots(1_000_000 - records).unwrap();
                 assert!(panel
                     .scope(source.data().with_axis_resources(&resources))
                     .is_err());
@@ -1867,7 +2012,13 @@ mod tests {
             );
             assert_eq!(
                 axes.ranges[1],
-                crate::layout::anchored_auto_range(expected.value_range, child.y_axis_spec(), 0.0)
+                crate::layout::anchored_auto_range(
+                    expected.value_range,
+                    child.y_axis_spec(),
+                    0.0,
+                    &crate::font::canonical::OperationGenerationResources::new()
+                )
+                .unwrap()
             );
             assert_eq!(
                 axes.categories[0]
@@ -2040,7 +2191,13 @@ mod tests {
         let panels = crate::orchestrator::text_census_panels(&source, source.data()).unwrap();
         let local = panels
             .iter()
-            .map(|panel| crate::plots::histogram::axis_ranges(panel.plot(), panel.data()).unwrap())
+            .map(|panel| {
+                crate::plots::histogram::axis_ranges(
+                    panel.plot(),
+                    panel.data().with_axis_resources(&resources),
+                )
+                .unwrap()
+            })
             .collect::<Vec<_>>();
         let x = (
             local[0][0].0.min(local[1][0].0),

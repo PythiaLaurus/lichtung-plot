@@ -202,7 +202,7 @@ The approved theme and layout targets follow these rules:
 | T4b | Owner selection and resolved provenance | COMPLETE |
 | T4c | Composition theme routing | COMPLETE |
 | T4d | Public attachment and current contract | COMPLETE |
-| T5a | Layout foundation, surfaces, typography, titles, axes, and grid | IN PROGRESS |
+| T5a | Layout foundation, surfaces, typography, titles, axes, and grid | COMPLETE |
 | T5a0 | T5a contract adjudication and execution partition | COMPLETE |
 | T5a0r | Parent-constraint documentation adjudication | COMPLETE |
 | T5a0s | User-visible behavior approval and bounded recovery | COMPLETE |
@@ -235,7 +235,7 @@ The approved theme and layout targets follow these rules:
 | T5a3q | Local-search benchmark coverage and placement comparisons | COMPLETE |
 | T5a4 | Root title-block plans | COMPLETE |
 | T5a5 | Axis, range, tick, frame, and grid plans | COMPLETE |
-| T5a6 | Ordinary Plot exact-root migration and closure | IN PROGRESS |
+| T5a6 | Ordinary Plot exact-root migration and closure | COMPLETE |
 | T5a6a | Ordinary interior carriers and deferred-family adapters | COMPLETE |
 | T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
 | T5a6a2 | Retained canonical primitive geometry | COMPLETE |
@@ -260,7 +260,7 @@ The approved theme and layout targets follow these rules:
 | T5a6c2 | Bar families | COMPLETE |
 | T5a6c3 | Categorical distribution families | COMPLETE |
 | T5a6c4 | Interaction family | COMPLETE |
-| T5a6d | Ordinary exact-root closure audit | PENDING |
+| T5a6d | Ordinary exact-root closure audit | COMPLETE |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
 | T5d | Categorical and continuous data scales | PENDING |
@@ -2335,9 +2335,17 @@ Acceptance:
 
 ## Phase T5a: Layout Foundation, Surfaces, Typography, Titles, Axes, And Grid
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: T4.
+
+Completion (2026-09-14): every current T5a entry, including the revised-target
+repairs and T5a6d closure, is COMPLETE. The final full gate in
+`/tmp/opencode/t5a6d-verify.log` passed before this status update; see T5a6d and
+`docs/t5a-closure.md` for the final source, review, snapshot, and resource evidence.
+Earlier stage reports retain their then-current statuses and measured evidence.
+T5b onward remain PENDING; the complete target and public API switch remain T6.
+No build, test, staging, or commit is performed by this docs-only update.
 
 Establish the private layout kernel while moving foundational non-data
 appearance into the resolved theme. T5a is complete only through T5a0r, T5a0s,
@@ -4524,9 +4532,14 @@ Commit: `feat(axes): freeze axis and grid plans`.
 
 ### T5a6: Ordinary Plot Exact-Root Migration And Closure
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: T5a5.
+
+Completion (2026-09-14): T5a6a-T5a6d are COMPLETE, including all twenty native
+ordinary routes and the final integrated closure gate. The five specialized
+interiors, two parent adapters, and shared Mark/Annotation consequences retain
+their named later-phase boundaries; they do not make T5b-T6 current.
 
 Objective: complete the native ordinary standalone Plot path and close every
 T5a-owned source without absorbing later component phases. This umbrella is
@@ -4615,11 +4628,11 @@ combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
 T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
 routes are native. T5a6c1-T5a6c4 and the T5a6c umbrella are COMPLETE with twelve
 native `OneCategoricalAxis` routes, for twenty native ordinary routes in total.
-T5a6c4 has final primary `just verify` evidence below. Five `SpecializedDeferred`
-interiors and two `ParentAdapter` composition routes remain; no source-level
-combined-dispatch route remains. T5a6 and T5a remain IN PROGRESS because T5a6d
-closure remains PENDING.
-T5b tracks and public T6 APIs/defaults remain deferred.
+T5a6c4 has final primary `just verify` evidence below. Five `SpecializedLegacy`
+interiors and two `ParentCompositionAdapter` routes remain; no source-level
+combined-dispatch route remains. T5a6d, T5a6, and T5a are COMPLETE after the final
+review corrections and full integrated verification recorded under T5a6d.
+T5b onward remain PENDING, including tracks and public T6 APIs/defaults.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -6056,9 +6069,79 @@ Commit: `refactor(layout): migrate interaction plans`.
 
 #### T5a6d: Ordinary Exact-Root Closure Audit
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6c4.
+
+Completion evidence from clean baseline `31fb8a2` (2026-09-14) is recorded in
+`docs/t5a-closure.md`: all 27 routes (20 native ordinary, five `SpecializedLegacy`,
+two `ParentCompositionAdapter`), the shared Mark/Annotation consequence boundary,
+T5a ledger source mapping, removed unchecked root/combined-payload paths, and the
+compile-time test-only measurement-backend boundary. All reported review findings
+are closed, including the final mandatory-newline intrinsic and Forest source
+regressions passing in the full gate. The private `RootFramePlan` requires measured
+root text; `LegacyRootAxes` retains only named specialized/composition axis
+estimates. Embedded Plot caption tracks remain T5b, not completed by outer-root
+replay. No public API or ledger key was added.
+
+Final corrections and evidence:
+
+- Independent cumulative calls and cache-entry counters enforce their existing
+  inclusive caps before lookup/insertion, including hits, direct text and numeric
+  axes, Matrix caches, child reuse, and later root rounds. Records, processing,
+  topology, discovery, and bytes remain independent; no cap is pooled or raised.
+- Copies/reservations admit actual records and checked bytes without a processing
+  price. `source_levels` and variable list searches charge examined entries;
+  sorts admit their input once. Native row topology and original facet rows are
+  admitted before materialization, with source/operation-bound reuse tickets.
+- Native intrinsics are retained after font preparation and before allocation for
+  standalone, facet, and Canvas roots. Mandatory vertical category lines use actual
+  text height; hits admit calls without repeating analysis. Standalone legends
+  capture retained selected calls, not reconstructed styles or positions.
+- Marks, ticks, and grid share canonical projection, including direct finite
+  arithmetic, overflow-safe extrapolation, exact categorical band ratios, and
+  origin-aware nearest-even rounding. Numeric source fit and frozen axes share
+  canonical ink placement; Matrix retains the same selected source and final axes.
+- `src/numeric.rs` implements budgeted, correctly rounded ties-to-even Log10 by
+  exact-integer outward intervals. Direct `num-bigint = "=0.4.8"` was added; that
+  version was already locked and cached. This is not a CORE-MATH implementation;
+  spec 05 now prescribes this algorithm with the same approved result contract.
+  Work/scratch refusal is fatal. Correct rounding and admission have real overhead;
+  benchmark observations are not a general causal speedup claim.
+- Source-aware degeneracy rejects collapsed nonzero scientific geometry while
+  preserving genuine zeros, legal repeats, and explicit clipping touches. Raw
+  Forest interval intent survives equal rounded logarithms; global line-point
+  identity survives ordering and projection. No epsilon widening or fit retry is
+  used to hide lost geometry.
+- All 27 snapshots are accounted for: nine inspected updates and eighteen unchanged
+  baselines, including additional Matrix axis-text coverage. The separate final
+  numerical benchmark follow-up in `docs/local-search-benchmarks.md` audits 50
+  complete parent SVGs: 28 identical, 22 intentionally changed, 99 one-quantum
+  operands and 16 larger endpoint-label anchors. Historical tables/fingerprints
+  remain provenance, not claims of final byte parity.
+
+Final primary `just verify` in `/tmp/opencode/t5a6d-verify.log` passed in full:
+
+- Formatting and strict `cargo clippy --locked --offline --all-targets --
+  -D warnings` passed. Library: **1,024 passed, 0 failed, 17 ignored** (1,041 total).
+- All **467 integration tests** passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 43, statistics 10, and visual
+  regression 13. In total: **1,491 passed, 0 failed, 17 ignored** (1,508 total).
+  Four example targets ran zero tests.
+- Warning-denied API documentation and offline package verification passed:
+  **270 files, 7.4 MiB uncompressed, 1.6 MiB compressed**.
+- `/tmp/opencode/t5a6d-final-benchmarks.log` separately passes all **10 release
+  measurement groups**, 0 failed, 0 ignored, 1,031 filtered out, in 8.74 seconds.
+  The full gate's 17 ignored tests comprise those ten opt-in groups, six official
+  Unicode 16 conformance tests, and one regeneration test. The official UCD tests
+  and regeneration were not rerun for this closure; focused Unicode/version tests
+  passed normally. Earlier official conformance results remain historical evidence.
+
+All current T5a entries are now COMPLETE. T5b onward remain PENDING with no later
+implementation admitted. This completion update reads existing final logs and
+changes only documentation; it runs no build/tests and makes no staging, commit,
+or push. The intended commit below is not a claim that a commit was made.
 
 Objective: close all T5a materialization and prove that later phases can only
 extend the active route.

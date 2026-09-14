@@ -1,6 +1,42 @@
 use super::*;
 
 #[test]
+fn resource_audit_axis_calls_refuse_before_text_or_geometry_and_admit_the_last_call() {
+    for available in [0, 1, 2] {
+        let theme = crate::Theme::Publication.resolve();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        resources.claim_calls(1_000_000 - available).unwrap();
+        let layout = Layout::self_managed(800, 600);
+        let standard = super::super::StandardPanelInputs::new(&theme).unwrap();
+        let before = (resources.usage().unwrap(), resources.byte_usage().unwrap());
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|count| count.set(0));
+        let result = layout.x_axis.measure(
+            &layout.projection,
+            AxisSide::Bottom,
+            &theme,
+            &standard,
+            &FitScope::root(),
+        );
+        assert_eq!(result.is_ok(), available > 0);
+        if let Err(error) = result {
+            assert!(matches!(error, PlanError::Fatal(_)));
+            assert_eq!(
+                (resources.usage().unwrap(), resources.byte_usage().unwrap()),
+                before
+            );
+        }
+        assert_eq!(
+            resources.call_cache_usage().0,
+            1_000_000 - available + u128::from(available > 0)
+        );
+        crate::font::canonical::FONT_SHAPE_CALLS.with(|count| assert_eq!(count.get(), 0));
+    }
+}
+
+#[test]
 fn selected_axis_plan_retains_semantics_beside_projection_and_sources() {
     let theme = crate::Theme::Publication.resolve();
     let layout = layout(
@@ -32,12 +68,101 @@ use crate::layout::PanelBox;
 
 fn layout(panel: PanelBox, x: Vec<AxisTick>, y: Vec<AxisTick>, source: TickSource) -> Layout {
     let mut layout = Layout::self_managed(800, 600);
-    layout.projection = Projection::new((0.0, 3.0), (0.0, 3.0), panel.as_tuple());
+    layout.projection = Projection::new((0.0, 3.0), (0.0, 3.0), panel.as_tuple()).with_categories(
+        [x.len(), y.len()]
+            .map(|count| (source == TickSource::SUPPLIED && count > 0).then_some(count)),
+    );
     layout.x_axis.ticks = x;
     layout.y_axis.ticks = y;
     layout.x_axis.source = source;
     layout.y_axis.source = source;
     layout
+}
+
+#[test]
+fn categorical_marks_ticks_and_grid_use_exact_band_ratios_at_odd_origins() {
+    let theme = crate::Theme::Publication.resolve();
+    for origin in [80.0, 80.0 + 1.0 / 1024.0, 80.1, 80.2] {
+        let end = origin + 300.0 + 1.0 / 1024.0;
+        let ticks = || {
+            [0.5, 1.5, 2.5]
+                .map(|value| AxisTick::new(value, ""))
+                .to_vec()
+        };
+        let layout = Layout::new_with_ticks_and_axis_specs_in_panel_box(
+            (0.0, 3.0),
+            (0.0, 3.0),
+            PanelBox::new(origin, end, origin, end),
+            String::new(),
+            String::new(),
+            ticks(),
+            ticks(),
+            &AxisSpec::default(),
+            &AxisSpec::default(),
+            &theme,
+            &FitScope::root(),
+        )
+        .unwrap();
+        assert_eq!(layout.projection.category_counts(), [Some(3); 2]);
+        let plan = layout.plan_axes(&theme).unwrap();
+        let grid = plan.grid.as_ref().unwrap();
+        for (index, value) in [0.5, 1.5, 2.5].into_iter().enumerate() {
+            let (x, y) = layout.projection.project(value, value);
+            assert_eq!(x.to_bits(), plan.x_axis.ticks[index].segment[0].x.to_bits());
+            assert_eq!(y.to_bits(), plan.y_axis.ticks[index].segment[0].y.to_bits());
+            assert_eq!(x.to_bits(), grid.lines[index][0].x.to_bits());
+            assert_eq!(y.to_bits(), grid.lines[index + 3][0].y.to_bits());
+            assert!(layout.projection.project(value + 0.1, value - 0.1).0 > x);
+        }
+        if origin.to_bits() == 80.0_f64.to_bits() {
+            assert_eq!(
+                layout.projection.project(1.5, 1.5),
+                (235_520.0 / 1024.0, 235_520.0 / 1024.0)
+            );
+        }
+    }
+}
+
+#[test]
+fn native_categorical_trajectory_installs_band_projection_before_mark_capture() {
+    let source = crate::Plot::trajectory(
+        crate::CategoryValues::new("condition", ["a", "b", "c"]).unwrap(),
+        crate::NumericValues::new("y", [1.0, 2.0, 3.0]),
+        crate::CategoryValues::new("group", ["g", "g", "g"]).unwrap(),
+    )
+    .erase();
+    let plot = crate::plots::shared_x::prepare_plot(
+        &source,
+        &crate::font::canonical::OperationGenerationResources::new(),
+    )
+    .unwrap()
+    .attach(source)
+    .unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let selected = plot
+        .measure_selected_interior(crate::spec::PlotRenderContext::new(
+            plot.data(),
+            PanelBox::new(80.0, 380.0 + 1.0 / 1024.0, 80.0, 380.0),
+            &theme,
+        ))
+        .unwrap();
+    assert_eq!(
+        selected.layout.projection.category_counts(),
+        [Some(3), None]
+    );
+    let axes = selected.axes.as_ref().unwrap();
+    let x = axes.x_axis.ticks[1].segment[0].x;
+    assert_eq!(x.to_bits(), 230.0_f64.to_bits());
+    let mut svg = crate::render::svg_backend::SvgBackend::in_memory(500, 500);
+    svg.begin(500, 500).unwrap();
+    selected.marks.as_ref().unwrap().draw(&mut svg).unwrap();
+    svg.end().unwrap();
+    let svg = String::from_utf8(svg.into_bytes().unwrap()).unwrap();
+    assert!(
+        svg.lines()
+            .any(|line| line.contains("<circle ") && line.contains("cx=\"230\"")),
+        "{svg}"
+    );
 }
 
 #[test]
@@ -320,5 +445,210 @@ fn measured_gutters_are_translation_invariant_at_fractional_parent_origins() {
             (origin, origin + 400.0, 80.0, 480.0),
         );
         assert_eq!(layout.plan_axes(&theme).unwrap().requirements(), required);
+    }
+}
+
+#[test]
+fn numeric_marks_ticks_and_grid_share_odd_quantum_spans_and_fractional_origins() {
+    let theme = crate::Theme::Publication.resolve();
+    for origin in [0.0, 1.0 / 1024.0, 0.1, -0.1] {
+        let end = origin + 81_923.0 / 1024.0;
+        let mut layout = layout(
+            PanelBox::new(origin, end, origin, end),
+            [1.0, 2.0, 3.0].map(|value| AxisTick::new(value, "")).into(),
+            [1.0, 2.0, 3.0].map(|value| AxisTick::new(value, "")).into(),
+            TickSource::EXACT,
+        );
+        layout.projection = Projection::new((1.0, 3.0), (1.0, 3.0), (origin, end, origin, end));
+        let plan = layout.plan_axes(&theme).unwrap();
+        let origin = crate::layout::kernel::nearest_spatial_quanta(origin).unwrap();
+        for (index, offset) in [0, 40_962, 81_923].into_iter().enumerate() {
+            let expected = (origin + offset) as f64 / 1024.0;
+            let value = index as f64 + 1.0;
+            let mark = layout.projection.project(value, value);
+            assert_eq!(mark, (expected, expected));
+            assert_eq!(
+                plan.x_axis.ticks[index].segment[0].x.to_bits(),
+                expected.to_bits()
+            );
+            assert_eq!(
+                plan.y_axis.ticks[index].segment[0].y.to_bits(),
+                expected.to_bits()
+            );
+            let grid = plan.grid.as_ref().unwrap();
+            assert_eq!(grid.lines[index][0].x.to_bits(), expected.to_bits());
+            assert_eq!(grid.lines[index + 3][0].y.to_bits(), expected.to_bits());
+        }
+    }
+}
+
+#[test]
+fn canonical_label_fit_accepts_touching_ink_and_rejects_one_quantum_beyond() {
+    let theme = crate::Theme::Publication.resolve();
+    for side in [AxisSide::Bottom, AxisSide::Left] {
+        let text = theme
+            .measure_text(
+                "1",
+                &theme.typography.tick_label,
+                PhysicalTextAlignment::Center,
+                "boundary label",
+                false,
+            )
+            .unwrap();
+        let generous = cells::LabelCell {
+            center: 0.0,
+            start: -100.0,
+            end: 100.0,
+            inward: false,
+        };
+        let placement = generous.placement(&text, side, 0.1).unwrap().unwrap();
+        let ink = crate::render::geometry::planned_text_ink_bounds(
+            &text,
+            placement.position,
+            placement.anchor,
+            placement.rotation,
+            placement.origin,
+            placement.reverse_lines,
+        )
+        .unwrap();
+        // A taller/wider ink edge exercises the actual ink predicate independently
+        // of logical width and line height.
+        let mut text = text;
+        let line_ink = text.edit_for_test().lines[0].ink_quanta.as_mut().unwrap();
+        match side {
+            AxisSide::Bottom => line_ink.right += 102_400,
+            AxisSide::Left => line_ink.top += 102_400,
+        }
+        let edge = match side {
+            AxisSide::Bottom => ink.right,
+            AxisSide::Left => ink.top,
+        } + 100.0;
+        let cell = cells::LabelCell {
+            end: edge,
+            ..generous
+        };
+        assert!(cell.placement(&text, side, 0.1).unwrap().is_some());
+        assert!(cells::LabelCell {
+            end: edge - 1.0 / 1024.0,
+            ..cell
+        }
+        .placement(&text, side, 0.1)
+        .unwrap()
+        .is_none());
+        let inward = cells::LabelCell {
+            inward: true,
+            ..cell
+        };
+        assert!(cells::LabelCell {
+            end: edge - 1.0 / 1024.0,
+            ..inward
+        }
+        .placement(&text, side, 0.1)
+        .unwrap()
+        .is_some());
+    }
+}
+
+#[test]
+fn automatic_selection_and_frozen_axis_agree_at_quantum_fit_boundary() {
+    use super::super::sources::{labels_fit, numeric_tick_plan, TickInterval};
+    let theme = crate::Theme::Publication.resolve();
+    let ticks = [
+        AxisTick::new(0.0, "0"),
+        AxisTick::new(1.0, "1"),
+        AxisTick::new(2.0, "2"),
+    ];
+    for side in [AxisSide::Bottom, AxisSide::Left] {
+        let projection = |span: i64| {
+            let origin = 0.1;
+            let end = origin + span as f64 / 1024.0;
+            match side {
+                AxisSide::Bottom => {
+                    Projection::new((0.0, 2.0), (0.0, 2.0), (origin, end, 80.0, 480.0))
+                }
+                AxisSide::Left => {
+                    Projection::new((0.0, 2.0), (0.0, 2.0), (80.0, 480.0, origin, end))
+                }
+            }
+        };
+        let mut low = 1;
+        let mut high = 200 * 1024;
+        while low < high {
+            let middle = i64::midpoint(low, high);
+            if labels_fit(&ticks, &projection(middle), side, &theme).unwrap() {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        for span in [low - 1, low, low + 1] {
+            let projection = projection(span);
+            let selected = numeric_tick_plan(
+                (0.0, 2.0),
+                Some(TickInterval::Additive(1.0)),
+                false,
+                &projection,
+                side,
+                &theme,
+                false,
+                &FitScope::root(),
+            )
+            .unwrap();
+            assert_eq!(selected.source.ordinal == 0, span >= low);
+            let mut layout = Layout::self_managed(800, 600);
+            layout.projection = projection;
+            let axis = match side {
+                AxisSide::Bottom => &mut layout.x_axis,
+                AxisSide::Left => &mut layout.y_axis,
+            };
+            axis.source = selected.source;
+            axis.ticks = selected.ticks;
+            let plan = layout.plan_axes(&theme).unwrap();
+            let axis = match side {
+                AxisSide::Bottom => &plan.x_axis,
+                AxisSide::Left => &plan.y_axis,
+            };
+            for tick in &axis.ticks {
+                let (text, placement) = tick.label.as_ref().unwrap();
+                let candidate = theme
+                    .measure_text(
+                        &text.source,
+                        &theme.typography.tick_label,
+                        match side {
+                            AxisSide::Bottom => PhysicalTextAlignment::Center,
+                            AxisSide::Left => PhysicalTextAlignment::End,
+                        },
+                        "automatic tick label",
+                        false,
+                    )
+                    .unwrap();
+                assert_eq!(text.lines, candidate.lines);
+                let perpendicular = match side {
+                    AxisSide::Bottom => placement.position.y,
+                    AxisSide::Left => placement.position.x,
+                };
+                assert_eq!(
+                    tick.cell
+                        .placement(&candidate, side, perpendicular)
+                        .unwrap()
+                        .unwrap(),
+                    *placement
+                );
+                let ink = crate::render::geometry::planned_text_ink_bounds(
+                    text,
+                    placement.position,
+                    placement.anchor,
+                    placement.rotation,
+                    placement.origin,
+                    placement.reverse_lines,
+                )
+                .unwrap();
+                let (start, end) = match side {
+                    AxisSide::Bottom => (ink.left, ink.right),
+                    AxisSide::Left => (ink.bottom, ink.top),
+                };
+                assert!(start >= tick.cell.start && end <= tick.cell.end);
+            }
+        }
     }
 }

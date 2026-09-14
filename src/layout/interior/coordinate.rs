@@ -9,22 +9,75 @@ use crate::{Error, Plot};
 
 /// Only foundational text contributes new hard requirements here. Mark density
 /// and exact mark/annotation intrinsics remain T5c, including the named floor.
+#[derive(Debug)]
 pub(crate) struct Intrinsics {
     standard: StandardPanelInputs,
-    pub(crate) minimum_body: (f64, f64),
+    minimum_body: (f64, f64),
+    without_y_categories: f64,
 }
 
 impl Intrinsics {
-    pub(crate) fn new(plot: &Plot, theme: &crate::theme::ResolvedTheme) -> Result<Self, Error> {
-        #[cfg(test)]
-        crate::orchestrator::measurements::count(
-            crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
-        );
+    /// The prepared axis scope is the owner identity. Parent widths, domain
+    /// feedback, and hidden shared-axis labels cannot invalidate its analysis.
+    pub(crate) fn prepared<'a>(
+        plot: &'a Plot,
+        theme: &crate::theme::ResolvedTheme,
+    ) -> Result<&'a Self, Error> {
         let axes = plot.prepared_axis_inputs().ok_or_else(|| {
             Error::Render("native coordinate panel requires root-prepared axes".into())
         })?;
+        Self::prepare(axes, theme, plot.axis_scope())
+    }
+
+    pub(crate) fn prepare<'a>(
+        axes: &'a crate::plots::shared_x::PreparedAxes,
+        theme: &crate::theme::ResolvedTheme,
+        scope: Option<&str>,
+    ) -> Result<&'a Self, Error> {
+        let environment = theme.prepared_font_environment()?;
+        environment.claim_measurement_call().map_err(|error| {
+            Error::Render(format!("coordinate intrinsic call admission: {error:?}"))
+        })?;
+        if axes.intrinsics.get().is_none() {
+            let summary = Self::analyze(axes, theme, scope)?;
+            environment.claim_cache_entries(1).map_err(|error| {
+                Error::Render(format!("coordinate intrinsic cache admission: {error:?}"))
+            })?;
+            let _ = axes.intrinsics.set(summary);
+        }
+        let summary = axes.intrinsics.get().expect("initialized panel intrinsics");
+        if !summary.standard.matches(theme) {
+            return Err(Error::Render(
+                "prepared panel intrinsic typography changed".into(),
+            ));
+        }
+        Ok(summary)
+    }
+
+    pub(crate) fn minimum(&self, plot: &Plot) -> (f64, f64) {
+        (
+            self.minimum_body.0,
+            if plot.y_tick_labels_visible() {
+                self.minimum_body.1
+            } else {
+                self.without_y_categories
+            },
+        )
+    }
+
+    fn analyze(
+        axes: &crate::plots::shared_x::PreparedAxes,
+        theme: &crate::theme::ResolvedTheme,
+        scope: Option<&str>,
+    ) -> Result<Self, Error> {
+        #[cfg(test)]
+        crate::orchestrator::measurements::intrinsic(
+            crate::orchestrator::measurements::Counter::StandardPanelIntrinsic,
+            scope,
+        );
         let standard = StandardPanelInputs::new(theme)?;
         let mut minimum_body = DeferredLegacyPanelMinimum::SIZE;
+        let mut without_y_categories = minimum_body.1;
         for side in 0..2 {
             if !axes.labels[side].is_empty() {
                 let (hard, _) = fit::intrinsic_widths(
@@ -37,12 +90,16 @@ impl Intrinsics {
                     minimum_body.0 = minimum_body.0.max(hard);
                 } else {
                     minimum_body.1 = minimum_body.1.max(hard);
+                    without_y_categories = minimum_body.1;
                 }
             }
             if let Some(labels) = &axes.display_categories[side] {
-                if side == 1 && !plot.y_tick_labels_visible() {
-                    continue;
-                }
+                theme
+                    .prepared_font_environment()?
+                    .claim_processing_visits(labels.len() as u128)
+                    .map_err(|error| {
+                        Error::Render(format!("coordinate intrinsic labels {scope:?}: {error:?}"))
+                    })?;
                 let mut category_pitch = 0.0_f64;
                 for label in labels {
                     if !label.is_empty() {
@@ -86,6 +143,7 @@ impl Intrinsics {
         Ok(Self {
             standard,
             minimum_body,
+            without_y_categories,
         })
     }
 }
@@ -144,7 +202,8 @@ impl InteriorRoute {
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
         }
-        let intrinsics = Intrinsics::new(plot, context.theme)?;
+        let intrinsics = Intrinsics::prepared(plot, context.theme)?;
+        let minimum = intrinsics.minimum(plot);
         let panel = context.panel;
         if ![panel.x0, panel.x1, panel.y0, panel.y1]
             .into_iter()
@@ -152,7 +211,7 @@ impl InteriorRoute {
         {
             return Err(Error::Render("native panel assignment must be finite".into()).into());
         }
-        if panel.width() < intrinsics.minimum_body.0 || panel.height() < intrinsics.minimum_body.1 {
+        if panel.width() < minimum.0 || panel.height() < minimum.1 {
             return Err(context
                 .fit_scope()
                 .failure(
@@ -169,7 +228,12 @@ impl InteriorRoute {
                 context.axis_range(side, || unreachable!("prepared native axes"))
             }
         });
-        let projection = Projection::new(x_range?, y_range?, panel.as_tuple());
+        let projection = Projection::new(x_range?, y_range?, panel.as_tuple()).with_categories(
+            inputs
+                .categories
+                .each_ref()
+                .map(|ticks| ticks.as_ref().map(Vec::len)),
+        );
         let resources = context
             .theme
             .prepared_font_environment()?
@@ -261,7 +325,7 @@ impl InteriorRoute {
             context.theme,
             context.fit_scope(),
             plot.axis_semantic_inputs(domains),
-            || Ok(intrinsics.standard),
+            || StandardPanelInputs::new(context.theme),
         )?;
         let mut result = match self {
             Self::StandardCoordinate(StandardCoordinate::Scatter) => {
@@ -324,10 +388,10 @@ impl InteriorRoute {
 pub(crate) fn canvas_layout(
     plot: &Plot,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<crate::layout::CanvasLayout, PlanError> {
+) -> Result<crate::layout::RootFramePlan, PlanError> {
     use crate::decorations::title_block::plan::{RootAlignments, RootTitleBlockPlan};
-    use crate::layout::canvas::{CanvasInsets, CanvasRootText};
-    let intrinsics = Intrinsics::new(plot, theme)?;
+    use crate::layout::canvas::CanvasInsets;
+    let minimum = Intrinsics::prepared(plot, theme)?.minimum(plot);
     // Only root-owned padding and text are hard reservations. Axis gutters are
     // measured from selected sources at the assigned span by the root round;
     // endpoint estimates must not reject a body before tick selection.
@@ -347,7 +411,7 @@ pub(crate) fn canvas_layout(
             [plot.title_alignment, plot.subtitle_alignment],
             [None; 2],
         ),
-        intrinsics.minimum_body.1,
+        minimum.1,
         &fit::FitScope::root(),
     )?;
     insets.top += text.top_reserve;
@@ -360,18 +424,15 @@ pub(crate) fn canvas_layout(
     );
     fit::measured(
         crate::layout::kernel::FrameRequirements {
-            minimum_body: intrinsics.minimum_body,
+            minimum_body: minimum,
             natural_insets: [0.0; 4],
         }
         .assign_fit(panel_box, [0.0; 4], &fit::FitScope::root()),
     )?;
-    Ok(crate::layout::CanvasLayout {
+    Ok(crate::layout::RootFramePlan {
         panel_box,
         insets,
-        title_y: None,
-        subtitle_y: None,
-        caption_y: None,
-        root_text: CanvasRootText::Planned(text),
+        root_text: text,
     })
 }
 

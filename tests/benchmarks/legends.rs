@@ -246,17 +246,18 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     } else {
         expected.push((1, first_edge, false, Body, Accepted));
     }
-    // Exact 2026-09-14 profiles of unchanged inputs, including failed terminals.
+    // Exact profiles after retained intrinsics reuse the operation's glyph analysis.
+    // Inputs, chosen frames and failed terminals are unchanged.
     let (rounds, trials, checks, proposals, exact) = match (fixture, edge) {
-        ("small", _) => (2, 2, 2, 0, 59),
-        ("starvation", Auto) => (2, 4, 2, 10, 83),
-        ("starvation", OutsideRight) => (2, 3, 1, 10, 69),
-        ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 57),
-        ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 63),
-        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 339),
-        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 236),
-        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 125),
-        ("native_compact_right", LegendPosition::OutsideBottom) => (2, 2, 2, 0, 97),
+        ("small", _) => (2, 2, 2, 0, 27),
+        ("starvation", Auto) => (2, 4, 2, 10, 31),
+        ("starvation", OutsideRight) => (2, 3, 1, 10, 31),
+        ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 25),
+        ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 31),
+        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 111),
+        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 108),
+        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 45),
+        ("native_compact_right", LegendPosition::OutsideBottom) => (2, 2, 2, 0, 43),
         _ => unreachable!(),
     };
     let observed = &sample.observations;
@@ -410,12 +411,18 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     assert_child_reuse(&sample, facet, pressure);
     let (rounds, trials, checks, proposals, exact) = if pressure {
         if facet {
-            (3, 4, 6, 148, 370)
+            (3, 4, 6, 148, 178)
         } else {
-            (3, 7, 6, 72, 589)
+            (3, 7, 6, 72, 133)
         }
     } else {
-        (2, 2, 4, 0, if facet { 41 } else { 97 })
+        (
+            2,
+            2,
+            4,
+            if facet { 0 } else { 24 },
+            if facet { 29 } else { 52 },
+        )
     };
     assert_eq!(sample.observations.roots.len(), rounds);
     assert_eq!(
@@ -636,12 +643,13 @@ fn shared_legend_child_cache_replay_contract() {
                     &owner,
                     MeasurementPhase::Legend,
                     round,
-                    || {
-                        plot.preflight_measurement(
+                    |call| {
+                        plot.preflight_measurement_in_call(
                             plot.kind(),
                             panel,
                             &theme,
                             &crate::layout::fit::ROOT_SCOPE,
+                            call,
                         )
                     },
                 )?;
@@ -652,7 +660,7 @@ fn shared_legend_child_cache_replay_contract() {
                     &owner,
                     MeasurementPhase::Legend,
                     round,
-                    || panic!("identical shared legend probe must hit the actual cache"),
+                    |_| panic!("identical shared legend probe must hit the actual cache"),
                 )?;
                 let (
                     crate::layout::fit::FitOutcome::Measured(first),

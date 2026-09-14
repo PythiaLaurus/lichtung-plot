@@ -1,4 +1,88 @@
 use super::*;
+
+#[test]
+fn p2_retained_line_copy_admits_records_and_bytes_without_processing() {
+    let source = crate::Plot::scatter(
+        crate::NumericValues::new("x", [1.0]),
+        crate::NumericValues::new("y", [1.0]),
+    )
+    .erase();
+    let points = [Point2D::new(0.0, 0.0), Point2D::new(1.0, 1.0)];
+    let style = LineStyle::solid((0, 0, 0), 1.0);
+    let bytes = (std::mem::size_of_val(&points) + std::mem::size_of::<Mark>()) as u64;
+    for records in [0, 2, 3, 4] {
+        let resources =
+            crate::font::canonical::OperationGenerationResources::with_test_limits(0, bytes);
+        resources.claim_slots(1_000_000 - records).unwrap();
+        let mut payload = DistributionPayload::new(
+            crate::layout::PanelBox::new(0.0, 2.0, 0.0, 2.0),
+            crate::PlotKind::Boxplot,
+        );
+        assert_eq!(
+            payload
+                .line(
+                    &points,
+                    &style,
+                    source.data().with_axis_resources(&resources)
+                )
+                .is_ok(),
+            records >= 3
+        );
+        assert_eq!(resources.usage().unwrap().1, 0);
+        if records >= 3 {
+            assert_eq!(payload.marks.len(), 1);
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+        } else {
+            assert!(payload.marks.is_empty());
+            assert_eq!(payload.marks.capacity(), 0);
+            assert_eq!(
+                resources.byte_usage().unwrap(),
+                if records == 0 {
+                    0
+                } else {
+                    std::mem::size_of_val(&points) as u64
+                }
+            );
+        }
+    }
+    for available in [0, bytes - 1, bytes, bytes + 1] {
+        let resources = OperationGenerationResources::with_test_limits(0, available);
+        let mut payload = DistributionPayload::new(
+            crate::layout::PanelBox::new(0.0, 2.0, 0.0, 2.0),
+            crate::PlotKind::Boxplot,
+        );
+        let result = payload.line(
+            &points,
+            &style,
+            source.data().with_axis_resources(&resources),
+        );
+        assert_eq!(result.is_ok(), available >= bytes);
+        assert_eq!(
+            resources.usage().unwrap(),
+            (if available == 0 { 2 } else { 3 }, 0)
+        );
+        if available >= bytes {
+            let Mark::Line(retained, retained_style) = &payload.marks[0] else {
+                unreachable!()
+            };
+            assert_eq!(retained, &points);
+            assert_eq!(retained_style, &style);
+            assert_eq!(resources.byte_usage().unwrap(), bytes);
+        } else {
+            assert!(payload.marks.is_empty());
+            assert_eq!(payload.marks.capacity(), 0);
+            assert!(matches!(result, Err(crate::Error::Render(_))));
+            assert_eq!(
+                resources.byte_usage().unwrap(),
+                if available == 0 {
+                    0
+                } else {
+                    std::mem::size_of_val(&points) as u64
+                }
+            );
+        }
+    }
+}
 use crate::font::canonical::OperationGenerationResources;
 use crate::spec::PlotRenderContext;
 use crate::{CategoryValues, NumericValues, RaincloudInput};
@@ -120,21 +204,18 @@ fn annotated() -> Plot {
 }
 
 #[test]
-fn assigned_panel_marks_preserve_full_pre_native_fingerprints() {
+fn assigned_panel_marks_match_canonical_projection_fingerprints() {
     use sha2::{Digest, Sha256};
-    // Recorded at 8e3395a: complete mark SVG operands, styles, order and clip,
-    // deliberately excluding the axes that this migration replaces.
+    // 2026-09-14 T5a6d correction, not pre-native byte parity. The 8e3395a
+    // fingerprints and inspected coordinate deltas are preserved in
+    // docs/local-search-benchmarks.md, "T5a6d Closing Audit".
     let expected = [
-        "5f0b079da3bc344bb21b9937d2b6f460171f452cbdcd1f001a05dd7da035da61",
-        "ca6fc08c37c333caecbc10376266944bd18847440be4387be972b27eb0f52a6c",
-        "5d570309defa397541d5cdcb5fa45f45058e596dc0cc60ac7b6acffac8d02da3",
-        "090b57970de9e895110807340ea5116fc47e1b2ef95fac81cc61b03d6315da7d",
+        "d7a7ac878e714b16ae1b225498177c2375d963c336ae9a1f44c70b1746ccb4a7",
+        "ccb910d69f5cf9cb8188cedbc0a20df3a38dbc43503a5102c7e2a4b003d18d8f",
+        "9adc9496e02d1fe3123420af951ab3fd1f1523fbd27dd53fc291577ea185edad",
+        "f8051c52be3754137e03e68cc0699b40705a3815bb4a60dff84e8a1a483dc21b",
     ];
     for (source, expected) in sources(None).into_iter().chain([supplied()]).zip(expected) {
-        let inputs =
-            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
-                .unwrap();
-        let plot = inputs.attach(source).unwrap();
         let mut fingerprint = Sha256::new();
         for preset in [
             crate::Theme::Publication,
@@ -142,6 +223,11 @@ fn assigned_panel_marks_preserve_full_pre_native_fingerprints() {
             crate::Theme::Science,
         ] {
             let theme = preset.resolve();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                    .unwrap()
+                    .attach(source.clone())
+                    .unwrap();
             for panel in [
                 crate::layout::PanelBox::new(80.25, 550.75, 70.5, 410.25),
                 crate::layout::PanelBox::new(30.0, 810.0, 50.0, 600.0),
@@ -160,8 +246,149 @@ fn assigned_panel_marks_preserve_full_pre_native_fingerprints() {
             format!("{:x}", fingerprint.finalize()),
             expected,
             "{:?}",
-            plot.kind()
+            source.kind()
         );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one odd-quantum assignment checks every distribution's scientific coordinates"
+)]
+fn canonical_distribution_coordinates_preserve_quartiles_and_observations() {
+    for source in sources(None).into_iter().chain([supplied()]) {
+        let source = source.labels(crate::Labels::raw());
+        let plot =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap()
+                .attach(source)
+                .unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        // Odd quantum spans and origins exercise projection before width/strip arithmetic.
+        let panel = crate::layout::PanelBox::new(
+            80.0 + 1.0 / 1024.0,
+            550.0 + 4.0 / 1024.0,
+            70.0 + 1.0 / 1024.0,
+            410.0 + 4.0 / 1024.0,
+        );
+        let selected = plot
+            .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+            .unwrap();
+        let prepared = retained(&plot).unwrap();
+        assert_eq!(
+            selected.x_tick_keys.as_deref().unwrap(),
+            prepared.categories()
+        );
+        assert_eq!(
+            selected
+                .layout
+                .x_axis
+                .ticks
+                .iter()
+                .map(|tick| tick.label.as_str())
+                .collect::<Vec<_>>(),
+            prepared.categories()
+        );
+        let crate::layout::interior::MarkPayload::Distribution(payload) =
+            &selected.marks.as_ref().unwrap().payload
+        else {
+            unreachable!()
+        };
+        assert_eq!(payload.clip, panel);
+        let supplied = plot.raincloud_geometry_input().is_some();
+        let summaries: &[_] = if supplied {
+            &[(1.0, 3.0, 5.0)]
+        } else {
+            &[(2.5, 3.5, 4.5), (3.5, 5.5, 7.5)]
+        };
+        let (stride, box_index, median_index) = match plot.kind() {
+            PlotKind::Boxplot => (6, 0, 1),
+            PlotKind::Violin => (6, 4, 5),
+            PlotKind::Raincloud => (3, 1, 2),
+            _ => unreachable!(),
+        };
+        let project_y = |value| selected.layout.projection.project(0.0, value).1;
+        for (index, &(q1, median, q3)) in summaries.iter().enumerate() {
+            let Mark::Polygon(points, _) = &payload.marks[index * stride + box_index] else {
+                unreachable!()
+            };
+            assert_eq!(points.len(), 4);
+            assert_eq!(
+                points
+                    .iter()
+                    .filter(|point| point.y.to_bits() == project_y(q1).to_bits())
+                    .count(),
+                2
+            );
+            assert_eq!(
+                points
+                    .iter()
+                    .filter(|point| point.y.to_bits() == project_y(q3).to_bits())
+                    .count(),
+                2
+            );
+            let Mark::Line(points, _) = &payload.marks[index * stride + median_index] else {
+                unreachable!()
+            };
+            assert_eq!(points.len(), 2);
+            assert!(points
+                .iter()
+                .all(|point| point.y.to_bits() == project_y(median).to_bits()));
+        }
+        let observations = payload
+            .marks
+            .iter()
+            .filter_map(|mark| {
+                if let Mark::Scatter(points, _) = mark {
+                    Some(points)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .map(|point| point.y.to_bits())
+            .collect::<Vec<_>>();
+        let values: &[_] = if supplied {
+            &[2.0, 4.0]
+        } else if plot.kind() == PlotKind::Violin {
+            &[]
+        } else {
+            &[1.0, 4.0, 3.0, 6.0, 2.0, 7.0, 4.0, 9.0]
+        };
+        assert_eq!(
+            observations,
+            values
+                .iter()
+                .map(|&value| project_y(value).to_bits())
+                .collect::<Vec<_>>()
+        );
+        if plot.kind() != PlotKind::Boxplot {
+            for index in 0..summaries.len() {
+                let Mark::Polygon(points, _) = &payload.marks[index * stride] else {
+                    unreachable!()
+                };
+                let (lo, hi) = prepared.range();
+                assert_eq!(
+                    points
+                        .iter()
+                        .map(|point| point.y)
+                        .min_by(f64::total_cmp)
+                        .unwrap()
+                        .to_bits(),
+                    project_y(lo).to_bits()
+                );
+                assert_eq!(
+                    points
+                        .iter()
+                        .map(|point| point.y)
+                        .max_by(f64::total_cmp)
+                        .unwrap()
+                        .to_bits(),
+                    project_y(hi).to_bits()
+                );
+            }
+        }
     }
 }
 
@@ -343,6 +570,11 @@ fn parent_palette_and_absent_series_slots_are_retained_before_native_projection(
             crate::Theme::Science,
         ] {
             let theme = preset.resolve();
+            let plot =
+                crate::plots::shared_x::prepare_plot(&plot, &OperationGenerationResources::new())
+                    .unwrap()
+                    .attach(plot.clone())
+                    .unwrap();
             let result = plot
                 .measure_selected_interior(PlotRenderContext::new(
                     plot.data(),
@@ -481,7 +713,7 @@ fn poisoned_capture_repeats_no_sources_statistics_projection_axes_or_shaping() {
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(source.kind(), context, backend)?;
                         crate::significance::render_selected(&poison, &selected, &theme, backend)?;
                         selected.axes.as_ref().unwrap().draw(backend)

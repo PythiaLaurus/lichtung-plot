@@ -1,5 +1,4 @@
 use super::*;
-use crate::layout::canvas::CanvasRootText;
 use crate::render::backend::TextAnchor;
 use crate::theme::TitleAlignment::{Center, End, Start};
 
@@ -59,10 +58,6 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
                     .map_err(fit::PlanError::into_error)?;
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS
                     .with(|calls| assert_eq!(calls.get(), 0));
-                assert!(matches!(
-                    plan.canvas_layout.root_text,
-                    CanvasRootText::Planned(_)
-                ));
                 assert_eq!(
                     plan.canvas_layout.root_text,
                     source.measured_canvas_layout(&theme)?.root_text

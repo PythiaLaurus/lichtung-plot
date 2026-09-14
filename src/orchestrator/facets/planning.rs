@@ -10,7 +10,7 @@ use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
-use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, PhysicalTextAlignment};
+use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan};
 use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
@@ -20,15 +20,12 @@ pub(super) fn canvas_layout(
     horizontal_axis_label: Option<&str>,
     vertical_axis_label: Option<&str>,
     round: &mut FeedbackRound,
-) -> Result<CanvasLayout, crate::layout::fit::PlanError> {
-    let mut canvas = CanvasLayout::measured_plot_root(
+) -> Result<RootFramePlan, crate::layout::fit::PlanError> {
+    let mut canvas = RootFramePlan::measured_plot_root(
         plot.width(),
         plot.height(),
         theme,
-        CanvasLayoutSpec {
-            has_title: plot.title_text().is_some_and(|value| !value.is_empty()),
-            has_subtitle: plot.subtitle_text().is_some_and(|value| !value.is_empty()),
-            has_caption: plot.caption_text().is_some_and(|value| !value.is_empty()),
+        LegacyRootAxes {
             has_x_label: horizontal_axis_label.is_some(),
             has_y_label: vertical_axis_label.is_some(),
         },
@@ -292,9 +289,9 @@ pub(super) fn legacy_parent_adapter(
             &domain_address,
             MeasurementPhase::Layout,
             round,
-            || {
+            |call| {
                 fit::outcome(
-                    panel_plot.measure_panel(
+                    panel_plot.measure_panel_in_call(
                         kind,
                         PlotRenderContext::new(
                             crate::data::PlotData::with_rows(
@@ -307,6 +304,7 @@ pub(super) fn legacy_parent_adapter(
                         )
                         .with_facet_scales(facet_scales)
                         .with_fit_scope(&cell_scope),
+                        call,
                     ),
                 )
             },

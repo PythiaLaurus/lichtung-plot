@@ -25,11 +25,11 @@ impl Layout {
                 assigned_tick_width: None,
                 source: TickSource::SUPPLIED,
             },
-            projection: Projection {
-                x_range: (0.0, 1.0),
-                y_range: (0.0, 1.0),
-                pixel_box: default_panel_box(canvas_width, canvas_height).as_tuple(),
-            },
+            projection: Projection::new(
+                (0.0, 1.0),
+                (0.0, 1.0),
+                default_panel_box(canvas_width, canvas_height).as_tuple(),
+            ),
         }
     }
 
@@ -104,28 +104,25 @@ impl Layout {
             crate::orchestrator::measurements::Counter::LegacyPanelConstructor,
         );
         let pixel_box = panel_box.as_tuple();
+        let resources = theme.prepared_font_environment()?.generation_resources();
 
         // Don't expand categorical x ranges — the user picked
         // them deliberately.
         let x_range = if x_ticks.is_empty() || x_spec.exact_ticks.is_some() {
-            resolve_range(x_range, x_spec)
+            resolve_range(x_range, x_spec, &resources)?
         } else if let Some(limits) = x_spec.limits {
             limits
         } else {
             x_range
         };
         let y_range = if y_ticks.is_empty() || y_spec.exact_ticks.is_some() {
-            resolve_range(y_range, y_spec)
+            resolve_range(y_range, y_spec, &resources)?
         } else if let Some(limits) = y_spec.limits {
             limits
         } else {
             y_range
         };
-        let projection = Projection {
-            x_range,
-            y_range,
-            pixel_box,
-        };
+        let projection = Projection::new(x_range, y_range, pixel_box);
 
         let x_ticks = x_spec.layout_ticks(x_ticks, &projection, AxisSide::Bottom, theme, scope);
         let y_ticks = y_spec.layout_ticks(y_ticks, &projection, AxisSide::Left, theme, scope);
@@ -141,8 +138,10 @@ impl Layout {
             (Ok(x), Ok(y)) => (x, y),
         };
 
+        let categories = [&x_ticks, &y_ticks]
+            .map(|ticks| (ticks.source == TickSource::SUPPLIED).then_some(ticks.ticks.len()));
         Ok(Self {
-            projection,
+            projection: projection.with_categories(categories),
             x_axis: Axis {
                 label: x_label,
                 ticks: x_ticks.ticks,

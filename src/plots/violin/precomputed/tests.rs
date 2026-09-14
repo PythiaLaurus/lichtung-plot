@@ -109,6 +109,7 @@ fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
             .prepared_font_environment()
             .unwrap()
             .generation_resources();
+        inputs.prepare_intrinsics(&source, &theme).unwrap();
         let measure = || {
             source.measure_selected_interior(PlotRenderContext::new(
                 source.data(),
@@ -116,18 +117,47 @@ fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
                 &theme,
             ))
         };
+        let mut candidate_visits = 0;
         for _ in 0..2 {
             let before = resources.usage().unwrap().1;
+            crate::orchestrator::measurements::start();
             measure().unwrap();
-            assert!(resources.usage().unwrap().1 > before);
+            let work = crate::orchestrator::measurements::finish();
+            assert_eq!(
+                work.counters
+                    [crate::orchestrator::measurements::Counter::StandardPanelIntrinsic as usize],
+                0
+            );
+            candidate_visits = resources.usage().unwrap().1 - before;
+            assert!(candidate_visits > 0);
             assert_eq!(HUE_LOOKUP_VISITS.with(std::cell::Cell::get), lookup_visits);
         }
-        resources.set_test_limits(resources.usage().unwrap().1, u64::MAX);
+        let limit = resources.usage().unwrap().1 + candidate_visits;
+        resources.set_test_limits(limit, u64::MAX);
+        measure().unwrap();
+        assert_eq!(resources.usage().unwrap().1, limit);
+        assert_eq!(HUE_LOOKUP_VISITS.with(std::cell::Cell::get), lookup_visits);
         let projections = crate::layout::Projection::test_projection_calls();
+        let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
+        let calls = resources.call_cache_usage().0;
         let error = measure().unwrap_err().into_error();
+        // Intrinsic reuse and category copies do no processing. The numeric
+        // tick-pitch cache lookup admits one visit before each examined entry.
+        let expected = crate::font::canonical::TextGenerationClaimError::Limit {
+            resource: "root processing visits",
+            limit,
+            cumulative_claim: limit + 1,
+        };
         assert!(
-            error.to_string().contains("root processing visits limit"),
-            "{error}"
+            matches!(&error, Error::Render(message) if message == &format!("text query lookup: {expected:?}")),
+            "{error}; with_hues={with_hues}"
+        );
+        assert_eq!(resources.usage().unwrap().1, limit);
+        // Interior, cached intrinsics, numeric axis, and cached text query.
+        assert_eq!(resources.call_cache_usage().0 - calls, 4);
+        assert_eq!(
+            crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
+            shapes
         );
         assert_eq!(
             crate::layout::Projection::test_projection_calls(),

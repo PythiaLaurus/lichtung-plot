@@ -8,43 +8,6 @@ use crate::data::PlotData;
 use crate::Error;
 
 impl Plot {
-    pub(crate) fn admit_composed_comparison(&self, data: PlotData<'_>) -> Result<(), Error> {
-        data.claim_source_visits(std::mem::size_of::<super::ComposedInputs>())?;
-        for axis in [&self.x_axis_spec, &self.y_axis_spec] {
-            if let Some(ticks) = &axis.exact_ticks {
-                data.claim_source_visits(ticks.len())?;
-                for tick in ticks {
-                    data.claim_source_visits(tick.label.len())?;
-                }
-            }
-        }
-        for levels in [
-            &self.global_hue_levels,
-            &self.global_group_levels,
-            &self.global_line_condition_levels,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            data.claim_source_visits(levels.len())?;
-            for level in levels {
-                data.claim_source_visits(level.len())?;
-            }
-        }
-        if let Some(pairs) = &self.global_collective_pairs {
-            data.claim_source_visits(pairs.len())?;
-            for pair in pairs {
-                for text in [&pair.group, &pair.hue].into_iter().flatten() {
-                    data.claim_source_visits(text.len())?;
-                }
-            }
-        }
-        if let Some(scope) = &self.render_scope {
-            data.claim_source_visits(scope.len())?;
-        }
-        Ok(())
-    }
-
     #[expect(
         clippy::too_many_lines,
         reason = "one boundary inventories every heap-owning Plot configuration field"
@@ -142,7 +105,7 @@ impl Plot {
             kind: _,
             marker: _,
         } = self;
-        data.claim_source_visits(1)?;
+        data.claim_source_records(1)?;
         for value in [
             &self.title,
             &self.subtitle,
@@ -155,13 +118,13 @@ impl Plot {
         .into_iter()
         .flatten()
         {
-            data.admit_clone_slice(value.as_bytes())?;
+            data.admit_clone_str(value)?;
         }
         for axis in [&self.x_axis_spec, &self.y_axis_spec] {
             if let Some(ticks) = &axis.exact_ticks {
                 data.admit_clone_slice(ticks)?;
                 for tick in ticks {
-                    data.admit_clone_slice(tick.label.as_bytes())?;
+                    data.admit_clone_str(&tick.label)?;
                 }
             }
         }
@@ -176,7 +139,7 @@ impl Plot {
         {
             data.admit_clone_slice(values)?;
             for value in values {
-                data.admit_clone_slice(value.as_bytes())?;
+                data.admit_clone_str(value)?;
             }
         }
         for order in [
@@ -187,7 +150,7 @@ impl Plot {
             if let crate::CategoryOrder::Explicit(values) = order {
                 data.admit_clone_slice(values)?;
                 for value in values {
-                    data.admit_clone_slice(value.as_bytes())?;
+                    data.admit_clone_str(value)?;
                 }
             }
         }
@@ -195,7 +158,7 @@ impl Plot {
             data.admit_clone_slice(pairs)?;
             for pair in pairs {
                 for text in [&pair.group, &pair.hue].into_iter().flatten() {
-                    data.admit_clone_slice(text.as_bytes())?;
+                    data.admit_clone_str(text)?;
                 }
             }
         }
@@ -213,9 +176,9 @@ impl Plot {
                 } => (endpoint_a, Some(endpoint_b), facet),
             };
             for target in [Some(a), b].into_iter().flatten() {
-                data.admit_clone_slice(target.category_name().as_bytes())?;
+                data.admit_clone_str(target.category_name())?;
                 if let Some(series) = target.series_name() {
-                    data.admit_clone_slice(series.as_bytes())?;
+                    data.admit_clone_str(series)?;
                 }
             }
             if let Some(facet) = facet {
@@ -230,33 +193,33 @@ impl Plot {
         }
         data.admit_clone_slice(&self.heatmap_null_row_annotations)?;
         for annotation in &self.heatmap_null_row_annotations {
-            data.admit_clone_slice(annotation.row_label().as_bytes())?;
-            data.admit_clone_slice(annotation.text().as_bytes())?;
+            data.admit_clone_str(annotation.row_label())?;
+            data.admit_clone_str(annotation.text())?;
         }
         if let Some(styles) = &self.interaction_styles {
             data.admit_clone_slice(styles)?;
             for style in styles {
-                data.admit_clone_slice(style.group().as_bytes())?;
+                data.admit_clone_str(style.group())?;
             }
         }
         if let Some(colors) = &self.categorical_colors {
             colors.admit_clone(data)?;
         }
         if let Some(labels) = &self.waterfall_labels {
-            data.admit_clone_slice(labels.base().as_bytes())?;
-            data.admit_clone_slice(labels.terminal().as_bytes())?;
+            data.admit_clone_str(labels.base())?;
+            data.admit_clone_str(labels.terminal())?;
         }
         data.admit_clone_slice(&self.guides)?;
         data.admit_clone_slice(&self.bar_point_layers)?;
         data.admit_clone_slice(&self.point_layers)?;
         for layer in &self.point_layers {
             if let Some(label) = layer.legend_label_text() {
-                data.admit_clone_slice(label.as_bytes())?;
+                data.admit_clone_str(label)?;
             }
         }
         data.admit_clone_slice(&self.panel_text_annotations)?;
         for annotation in &self.panel_text_annotations {
-            data.admit_clone_slice(annotation.text().as_bytes())?;
+            data.admit_clone_str(annotation.text())?;
         }
         Ok(self.clone())
     }
@@ -285,8 +248,9 @@ mod tests {
         };
         let run = |plot: &Plot, limits: Option<(u128, u64)>| {
             let resources = OperationGenerationResources::new();
-            if let Some((work, bytes)) = limits {
-                resources.set_test_limits(work, bytes);
+            resources.set_test_limits(0, limits.map_or(u64::MAX, |(_, bytes)| bytes));
+            if let Some((records, _)) = limits {
+                resources.claim_slots(1_000_000 - records).unwrap();
             }
             let retained = plot.admitted_clone(plot.data().with_axis_resources(&resources))?;
             assert!(std::sync::Arc::ptr_eq(&plot.input, &retained.input));
@@ -297,8 +261,9 @@ mod tests {
             assert_eq!(plot.labels, retained.labels);
             assert_eq!(plot.x_axis_spec, retained.x_axis_spec);
             assert_eq!(plot.title, retained.title);
+            assert_eq!(resources.usage().unwrap().1, 0);
             Ok::<_, Error>((
-                resources.usage().unwrap().1,
+                resources.usage().unwrap().0 - limits.map_or(0, |(records, _)| 1_000_000 - records),
                 resources.byte_usage().unwrap(),
             ))
         };

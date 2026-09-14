@@ -111,6 +111,60 @@ fn annotated() -> [Plot; 2] {
 }
 
 #[test]
+fn p2_bar_levels_and_groups_stop_charging_at_the_first_match() {
+    let source = Plot::bar(
+        CategoryValues::new("category", ["a"]).unwrap(),
+        BarInput::estimates(NumericValues::new("value", [1.0])),
+    )
+    .erase();
+    let resources = OperationGenerationResources::with_test_limits(1, 0);
+    let mut levels = ["a", "b", "c"].map(str::to_owned).to_vec();
+    assert_eq!(
+        level_index(
+            &mut levels,
+            "a".into(),
+            source.data().with_axis_resources(&resources)
+        )
+        .unwrap(),
+        0
+    );
+    assert_eq!(resources.usage().unwrap(), (0, 1));
+    assert_eq!(levels, ["a", "b", "c"]);
+    for grouped in [false, true] {
+        let mut visits = Vec::new();
+        for last in ["a", "c"] {
+            let source = Plot::bar(
+                CategoryValues::new("category", ["a", "b", "c", last]).unwrap(),
+                BarInput::samples(NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
+                    .error_bar(crate::ErrorBar::hidden()),
+            );
+            let source = if grouped {
+                source.series(CategoryValues::new("series", ["s"; 4]).unwrap())
+            } else {
+                source
+            }
+            .erase();
+            let resources = OperationGenerationResources::new();
+            prepare(
+                &source,
+                source.data().with_axis_resources(&resources),
+                if grouped {
+                    BarMode::Grouped
+                } else {
+                    BarMode::Single
+                },
+            )
+            .unwrap();
+            visits.push(resources.usage().unwrap().1);
+        }
+        // The last row examines one rather than three existing category levels
+        // and one rather than three existing group cells. Unified series also
+        // checks the category/group-to-hue table; other passes are equal.
+        assert_eq!(visits[1] - visits[0], if grouped { 6 } else { 4 });
+    }
+}
+
+#[test]
 fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
     let dimension = "caller-controlled-series-dimension".repeat(1024);
     let source = Plot::bar(
@@ -134,30 +188,41 @@ fn bar_legend_identity_admits_long_dimensions_once_per_candidate() {
         .iter()
         .map(|value| dimension.len() + value.len())
         .sum::<usize>();
-    let visits = (prepared.hues.len() + string_bytes) as u128;
+    let visits = 0;
+    let records = 3 * prepared.hues.len() as u128;
     let bytes =
         u64::try_from(prepared.hues.len() * std::mem::size_of::<LegendEntry>() + string_bytes)
             .unwrap();
     let exact = OperationGenerationResources::with_test_limits(visits, bytes);
     let entries = candidate(&exact).unwrap();
     assert_eq!(exact.usage().unwrap().1, visits);
+    assert_eq!(exact.usage().unwrap().0, records);
     assert_eq!(exact.byte_usage().unwrap(), bytes);
     for (entry, value) in entries.iter().zip(&prepared.hues) {
         assert_eq!(entry.identity(), &source.legend_identity(value));
     }
-    for (work_limit, byte_limit, diagnostic) in [
-        (visits - 1, bytes, "work admission"),
-        (visits, bytes - 1, "storage admission"),
-    ] {
-        let resources = OperationGenerationResources::with_test_limits(work_limit, byte_limit);
+    for byte_limit in [0, bytes - 1] {
+        let resources = OperationGenerationResources::with_test_limits(visits, byte_limit);
         let error = candidate(&resources).unwrap_err();
-        assert!(error.to_string().contains(diagnostic), "{error}");
-        assert!(resources.usage().unwrap().1 > 0);
-        assert!(resources.byte_usage().unwrap() > 0);
-        // Rejected candidates keep their admitted work and storage charges.
-        resources.set_test_limits(visits, bytes);
-        assert!(candidate(&resources).is_err());
+        assert!(error.to_string().contains("storage admission"), "{error}");
+        assert!(resources.usage().unwrap().0 > 0);
+        assert_eq!(resources.usage().unwrap().1, 0);
+        if byte_limit > 0 {
+            // Rejected candidates keep their admitted storage charges.
+            resources.set_test_limits(visits, bytes);
+            assert!(candidate(&resources).is_err());
+        }
     }
+    let limited = OperationGenerationResources::with_test_limits(visits, bytes);
+    limited.claim_slots(1_000_000 - records + 1).unwrap();
+    assert!(candidate(&limited)
+        .unwrap_err()
+        .to_string()
+        .contains("record admission"));
+    assert_eq!(
+        limited.byte_usage().unwrap(),
+        bytes - dimension.len() as u64
+    );
     let cumulative = OperationGenerationResources::with_test_limits(2 * visits, 2 * bytes);
     candidate(&cumulative).unwrap();
     candidate(&cumulative).unwrap();
@@ -516,7 +581,7 @@ fn bar_poisoned_capture_repeats_no_preparation_projection_axis_or_shaping() {
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(source.kind(), context, backend)?;
                         crate::significance::render(
                             &source,

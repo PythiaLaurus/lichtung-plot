@@ -203,6 +203,27 @@ pub(crate) fn measure_marks(
         let (_, y_med) = proj.project(x_center_data, stat.median);
         let (_, y_q3) = proj.project(x_center_data, stat.q3);
         let (_, y_hi) = proj.project(x_center_data, stat.hi_whisker);
+        for (source, projected, context) in [
+            ((stat.q1, stat.q3), (y_q1, y_q3), "boxplot polygon"),
+            (
+                (stat.lo_whisker, stat.q1),
+                (y_lo, y_q1),
+                "boxplot lower whisker",
+            ),
+            (
+                (stat.q3, stat.hi_whisker),
+                (y_q3, y_hi),
+                "boxplot upper whisker",
+            ),
+        ] {
+            proj.validate_span(
+                crate::layout::AxisSide::Left,
+                source,
+                projected,
+                source.0 < source.1,
+                context,
+            )?;
+        }
 
         // Box.
         let pts = data.collect_source(
@@ -253,6 +274,7 @@ pub(crate) fn measure_marks(
         if overlay == RawOverlay::Hidden {
             let flier_style = chart.point_style(theme.foreground, 2);
             let flier_points = data.collect_source(stat.fliers.iter().map(|y| {
+                data.claim_source_visits(1)?;
                 let (x_px, y_px) = proj.project(x_center_data, *y);
                 Ok(Point2D::new(x_px, y_px))
             }))?;
@@ -268,6 +290,7 @@ pub(crate) fn measure_marks(
                 .hue_index
                 .unwrap_or(if group_active { 0 } else { index });
             let points = data.collect_source(group.observations.iter().map(|observation| {
+                data.claim_source_visits(1)?;
                 let x = crate::plots::distribution_sample::overlay_x(
                     overlay,
                     center,

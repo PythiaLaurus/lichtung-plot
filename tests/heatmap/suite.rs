@@ -771,14 +771,43 @@ fn heatmap_annotations_error_when_cells_cannot_fit_values() {
         CategoryValues::new("row", rows).unwrap(),
         NumericValues::new("value", values),
     );
-    let error = render(&data, |chart| {
-        chart.size(360, 220).annotations(HeatmapAnnotations::Values(
+    let plot = chart(&data)
+        .size(360, 220)
+        .annotations(HeatmapAnnotations::Values(
             NumericLabelFormat::default().precision(4).unwrap(),
-        ))
-    })
-    .unwrap_err();
+        ));
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("plot.svg");
+    let preflight_error = plot.preflight().unwrap_err();
+    let error = plot.svg_preserve_text(&output).map(|_| ()).unwrap_err();
 
-    assert!(error.contains("cells are too small"));
+    assert!(!output.exists());
+    assert_eq!(preflight_error.to_string(), error.to_string());
+    let lichtung_plot::Error::Render(message) = error else {
+        panic!("expected a layout fit error, got {error:?}");
+    };
+    // The complete formatted labels impose a hard width before cells are allocated.
+    assert_eq!(
+        message,
+        concat!(
+            "layout fit FitReason { kind: TrackOrResidual, ",
+            "address: ComponentAddress { root: AddressSegment { role: Root, slot_index: 0 }, ",
+            "descendants: [AddressSegment { role: PlotBody, slot_index: 0 }] }, ordinal: 0 }: ",
+            "assigned frame leaves insufficient body after measured gutters"
+        )
+    );
+
+    let fitting = render(&data, |chart| {
+        chart
+            .size(3000, 220)
+            .annotations(HeatmapAnnotations::Values(
+                NumericLabelFormat::default().precision(4).unwrap(),
+            ))
+    })
+    .unwrap();
+    let marks = clipped_marks(&fitting);
+    assert_eq!(marks.matches("<polygon ").count(), 30);
+    assert_eq!(marks.matches(">12345.6789</text>").count(), 30);
 }
 
 #[test]

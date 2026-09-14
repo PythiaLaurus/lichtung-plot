@@ -221,12 +221,14 @@ fn preparation_retains_shared_font_and_generation_resources_and_topology_limit()
         .claim_topology_slots(1)
         .unwrap_err()
         .to_string()
-        .contains("limit of 1000000"));
+        .contains("prepared topology slots"));
     let environment = crate::font::canonical::PreparedFontEnvironment::synthetic();
     assert!(environment
         .share_generation_resources(&stage.generation_resources())
         .is_err());
     let shared = stage.generation_resources();
+    assert_eq!(shared.topology_usage(), TOPOLOGY_SLOT_LIMIT);
+    assert!(shared.claim_topology_slots(1).is_err());
     let font = stage.font_resources();
     let clone = font.generation_resources();
     clone.claim_slots(TOPOLOGY_SLOT_LIMIT - 1).unwrap();
@@ -236,6 +238,47 @@ fn preparation_retains_shared_font_and_generation_resources_and_topology_limit()
         .unwrap();
     shared.claim_visits(1).unwrap();
     assert!(font.claim_visits(1).is_err());
+}
+
+#[test]
+fn later_root_round_call_refusal_is_fatal_before_measurement_or_finalization() {
+    for allowance in [1, 2, 3] {
+        let mut calls = 0;
+        let mut finalized = false;
+        let result = plan_exact_root(
+            100,
+            100,
+            |stage| {
+                stage
+                    .generation_resources()
+                    .claim_calls(1_000_000 - allowance)
+                    .map_err(|error| Error::Render(format!("test call admission: {error:?}")))?;
+                Ok(())
+            },
+            |(), assigned, round| {
+                calls += 1;
+                round.request_insets(
+                    &ComponentAddress::root(),
+                    &ComponentAddress::root(),
+                    FeedbackKind::AxisGutter,
+                    [1.0; 4],
+                )?;
+                Ok(MeasuredLayout::new(assigned, ()))
+            },
+            |(), _, (), _| {
+                finalized = true;
+                Ok(())
+            },
+        );
+        assert_eq!(result.is_ok(), allowance >= 2);
+        assert_eq!(calls, if allowance >= 2 { 2 } else { 1 });
+        assert_eq!(finalized, allowance >= 2);
+        if let Err(error) = result {
+            assert!(error
+                .to_string()
+                .contains("measurement/intrinsic call attempts"));
+        }
+    }
 }
 
 #[test]

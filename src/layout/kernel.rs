@@ -9,6 +9,7 @@ const QUANTA_PER_CSS_PIXEL: i64 = 1024;
 pub(crate) fn nearest_spatial_quanta(value: f64) -> Result<i64, Error> {
     LayoutScalar::from_css_pixels(value, SpatialRounding::NearestEven).map(|value| value.0)
 }
+#[cfg(test)]
 const TOPOLOGY_SLOT_LIMIT: u128 = 1_000_000;
 
 #[cfg(test)]
@@ -415,7 +416,6 @@ impl AddressRole {
 }
 
 struct ResourceState {
-    topology_slots: u128,
     generation_resources: crate::font::canonical::OperationGenerationResources,
     font_resources: crate::font::canonical::OperationFontResources,
 }
@@ -426,7 +426,6 @@ impl ResourceState {
         #[cfg(test)]
         crate::orchestrator::measurements::resources(font_resources.clone());
         Self {
-            topology_slots: 0,
             generation_resources: font_resources.generation_resources(),
             font_resources,
         }
@@ -440,18 +439,10 @@ pub(crate) struct PreparedStage<'a> {
 
 impl PreparedStage<'_> {
     pub(crate) fn claim_topology_slots(&mut self, amount: u128) -> Result<(), Error> {
-        let next = self
-            .resources
-            .topology_slots
-            .checked_add(amount)
-            .ok_or_else(|| {
-                Error::Render("layout prepared topology slots counter overflowed".into())
-            })?;
-        if next > TOPOLOGY_SLOT_LIMIT {
-            return Err(Error::Render(format!("layout prepared topology slots limit of {TOPOLOGY_SLOT_LIMIT} exceeded by cumulative claim {next}")));
-        }
-        self.resources.topology_slots = next;
-        Ok(())
+        self.resources
+            .generation_resources
+            .claim_topology_slots(amount)
+            .map_err(|error| Error::Render(format!("layout topology admission: {error:?}")))
     }
 
     pub(crate) fn reserve_scalar_presence_map(&mut self) -> Result<Vec<u64>, Error> {
@@ -735,6 +726,10 @@ pub(crate) fn required_length(value: f64) -> Result<f64, Error> {
 }
 
 /// Prepare once, coordinate at most eight complete rounds, then freeze once.
+#[expect(
+    clippy::too_many_lines,
+    reason = "preparation, cumulative round admission, convergence, and finalization stay ordered"
+)]
 pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
     width: u32,
     height: u32,
@@ -772,6 +767,12 @@ pub(crate) fn plan_exact_root<Plan, FinalPlan, Prepared>(
         "measured exact-root plan",
     )?;
     let measured = loop {
+        resources
+            .generation_resources
+            .claim_calls(1)
+            .map_err(|error| {
+                Error::Render(format!("root measurement call admission: {error:?}"))
+            })?;
         #[cfg(test)]
         let _measurement_timer = crate::orchestrator::measurements::root_round(history.len());
         #[cfg(test)]

@@ -44,7 +44,7 @@ pub(super) fn render_scene(
     panel_layers: &[[String; 3]],
     strip_text: &[PlacedText],
     shared_axis_text: &[PlacedText],
-    canvas_layout: &crate::layout::CanvasLayout,
+    canvas_layout: &crate::layout::RootFramePlan,
     theme: &ResolvedTheme,
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
@@ -81,7 +81,7 @@ pub(super) fn render_scene(
             theme,
         )
         .with_facet_scales(source.facet_scales_spec())
-        .with_retained_body(panel_plan.result.retained_payload());
+        .with_retained_body(&panel_plan.result);
         panel_plot.render_panel(kind, context, backend)?;
         crate::significance::render_selected(panel_plot, &panel_plan.result, theme, backend)?;
         crate::render::backend::with_layer(backend, &panel_layers[index][1], |backend| {

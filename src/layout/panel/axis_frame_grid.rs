@@ -476,6 +476,10 @@ impl Axis {
         standard: &super::StandardPanelInputs,
         scope: &FitScope,
     ) -> Result<FrozenAxisPlan, PlanError> {
+        theme
+            .prepared_font_environment()?
+            .claim_measurement_call()
+            .map_err(|error| Error::Render(format!("axis call admission: {error:?}")))?;
         let categorical = self.source == TickSource::SUPPLIED;
         let cells = cells::assign(&self.ticks, categorical, projection, side, theme, scope)?;
         let panel = projection.panel_box();
@@ -541,53 +545,18 @@ impl Axis {
                     tick_role,
                     scope,
                 ))?;
-                let extent = match side {
-                    AxisSide::Bottom => plan.width().max(plan.fit_width()),
-                    AxisSide::Left => plan.height(),
+                let perpendicular = match side {
+                    AxisSide::Bottom => panel.y0 - outward - gap - plan.height() / 2.0,
+                    AxisSide::Left => panel.x0 - outward - gap,
                 };
-                if extent > cell.capacity() {
-                    return Err(scope.failure(FitKind::Tick, format!("{tick_role} exceeds its assigned cell; increase chart size or shorten labels")).into());
-                }
-                let center = cell.label_center(extent);
-                let mut placement = match side {
-                    AxisSide::Bottom => PlannedTextPlacement::middle(
-                        Point2D::new(center, panel.y0 - outward - gap - plan.height() / 2.0),
-                        TextAnchor::Middle,
-                        0.0,
-                    ),
-                    AxisSide::Left => PlannedTextPlacement::middle(
-                        Point2D::new(panel.x0 - outward - gap, center),
-                        TextAnchor::End,
-                        0.0,
-                    ),
-                };
-                let canonical = crate::render::coordinates::canonical_text(
-                    placement.position,
-                    placement.rotation,
-                    crate::render::coordinates::CoordinatePrecision::Millionths,
-                )?;
-                placement.position = canonical.position.value();
-                if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
-                    &plan,
-                    placement.position,
-                    placement.anchor,
-                    placement.rotation,
-                    placement.origin,
-                    placement.reverse_lines,
-                ) {
-                    let (start, end) = match side {
-                        AxisSide::Bottom => (ink.left, ink.right),
-                        AxisSide::Left => (ink.bottom, ink.top),
-                    };
-                    if start < cell.start || end > cell.end {
-                        return Err(scope
-                            .failure(
-                                FitKind::Tick,
-                                format!("{tick_role} ink exceeds its assigned cell clearance"),
-                            )
-                            .into());
-                    }
-                }
+                let placement = cell.placement(&plan, side, perpendicular)?.ok_or_else(|| {
+                    scope.failure(
+                        FitKind::Tick,
+                        format!(
+                            "{tick_role} ink or logical extent exceeds its assigned cell clearance"
+                        ),
+                    )
+                })?;
                 // Gutter extents are translation invariant. Subtracting large
                 // absolute anchors can otherwise alternate a feedback quantum.
                 if let Some(ink) = crate::render::geometry::planned_text_ink_bounds(
@@ -661,7 +630,7 @@ impl Axis {
             let canonical = crate::render::coordinates::canonical_text(
                 placement.position,
                 placement.rotation,
-                crate::render::coordinates::CoordinatePrecision::Millionths,
+                crate::render::coordinates::CoordinatePrecision::CssQuantum,
             )?;
             placement.position = canonical.position.value();
             let mut thickness = plan.height();

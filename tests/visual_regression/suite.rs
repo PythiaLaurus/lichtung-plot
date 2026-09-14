@@ -161,7 +161,7 @@ fn matrix_clip_structure_snapshot() {
 
     insta::assert_snapshot!(specialized_svg_structure(
         &svg,
-        &["Matrix structural title", "Group"]
+        &["Matrix structural title", "Group", "X", "Y", "0", "5"]
     ));
 }
 

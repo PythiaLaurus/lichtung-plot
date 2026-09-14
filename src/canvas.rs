@@ -11,7 +11,7 @@ use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::{PanelRequirements, PANEL_HEADER_GAP};
 use crate::layout::fit::{FitFailure, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
-use crate::layout::{CanvasLayout, CanvasLayoutSpec, PanelBox, PhysicalTextAlignment, TextBlock};
+use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan, TextBlock};
 use crate::render::backend::{with_layer, Backend, Point2D, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
@@ -71,7 +71,7 @@ struct CanvasPlan {
     panel_heading_inputs: DeferredT5bPanelHeadingInputs,
     themes: Arc<ResolvedCanvasThemes>,
     plots: Vec<Option<Plot>>,
-    canvas_layout: CanvasLayout,
+    canvas_layout: RootFramePlan,
     #[cfg(test)]
     shared_legend: Option<crate::decorations::plan::ResolvedLegend>,
     shared_legend_draw: Option<crate::decorations::legend::LegendDrawPlan>,
@@ -84,13 +84,14 @@ struct CanvasPlan {
 struct PreparedCanvasInputs {
     themes: Arc<ResolvedCanvasThemes>,
     text_census: crate::layout::PreparedTextCensus,
+    root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
 }
 
 struct PreparedCanvasRound<'a> {
     themes: Arc<ResolvedCanvasThemes>,
-    canvas_layout: CanvasLayout,
+    canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
     shared_legend: Option<(String, Arc<[LegendEntry]>)>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
@@ -339,10 +340,14 @@ mod d1_tests {
         let root = canvas.preflight_plan().unwrap();
         assert_eq!(
             root.prepared().shared_x[0],
-            Some(crate::layout::continuous_auto_range(
-                (-1.0, 1.0),
-                &crate::layout::AxisSpec::default()
-            ))
+            Some(
+                crate::layout::continuous_auto_range(
+                    (-1.0, 1.0),
+                    &crate::layout::AxisSpec::default(),
+                    &crate::font::canonical::OperationGenerationResources::new(),
+                )
+                .unwrap()
+            )
         );
     }
 
@@ -1517,7 +1522,8 @@ impl Canvas {
                             })?
                             .ranges[0],
                         plot.x_axis_spec(),
-                    )
+                        &stage.generation_resources(),
+                    )?
                 } else if matches!(
                     plot.kind(),
                     PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
@@ -1548,7 +1554,7 @@ impl Canvas {
                         let position = if plot.kind() == PlotKind::Forest
                             && plot.axis_scale_spec() == crate::AxisScale::Log10
                         {
-                            tick.position.log10()
+                            crate::numeric::log10(tick.position, &stage.generation_resources())?
                         } else {
                             tick.position
                         };
@@ -1821,6 +1827,10 @@ impl Canvas {
         Ok((interiors, shared_x))
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one ordered semantic, font, intrinsic, allocation, and capture lifecycle"
+    )]
     fn preflight_plan(
         &self,
     ) -> Result<
@@ -1867,14 +1877,20 @@ impl Canvas {
                 let (mut census, scalar_presence) =
                     self.foundational_text_census(&themes, &interiors, prepared_stage)?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
+                let root_text = self.prepare_intrinsics(&themes, &interiors)?;
                 Ok(PreparedCanvasInputs {
                     themes,
                     text_census: census,
+                    root_text,
                     shared_x,
                     interiors,
                 })
             },
             |prepared, assigned, round| {
+                prepared
+                    .root_text
+                    .check_width(f64::from(assigned.dimensions().0) - 32.0, &FitScope::root())
+                    .map_err(crate::layout::fit::PlanError::into_error)?;
                 #[cfg(test)]
                 let backend_begins =
                     crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
@@ -1924,6 +1940,31 @@ impl Canvas {
             "prepared canvas Null replay",
         )?;
         Ok(root)
+    }
+
+    fn prepare_intrinsics(
+        &self,
+        themes: &ResolvedCanvasThemes,
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+    ) -> Result<crate::decorations::title_block::plan::RootTitleBlockIntrinsics, Error> {
+        // All summaries use the prepared labels and the actual owner theme,
+        // after the font census and before any parent allocation or child probe.
+        for (index, inputs) in interiors.iter().enumerate() {
+            if let Some(inputs) = inputs {
+                inputs.prepare_intrinsics(
+                    self.panels[index].as_ref().expect("prepared Canvas panel"),
+                    themes.plot(index).expect("prepared Canvas panel theme"),
+                )?;
+            }
+        }
+        crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
+            themes.root(),
+            [
+                self.title.as_deref(),
+                self.subtitle.as_deref(),
+                self.caption.as_deref(),
+            ],
+        )
     }
 
     #[expect(
@@ -2256,17 +2297,11 @@ impl Canvas {
                 .prepared_font_environment()?
                 .generation_resources(),
         )?;
-        let canvas_layout = CanvasLayout::measured_plot_root(
+        let canvas_layout = RootFramePlan::measured_plot_root(
             width,
             height,
             themes.root(),
-            CanvasLayoutSpec {
-                has_title: self.title.as_ref().is_some_and(|value| !value.is_empty()),
-                has_subtitle: self
-                    .subtitle
-                    .as_ref()
-                    .is_some_and(|value| !value.is_empty()),
-                has_caption: self.caption.as_ref().is_some_and(|value| !value.is_empty()),
+            LegacyRootAxes {
                 has_x_label: false,
                 has_y_label: false,
             },
@@ -2763,7 +2798,15 @@ impl Canvas {
                 &owner,
                 MeasurementPhase::Layout,
                 round,
-                || plot.preflight_measurement(kind, cells[index], theme, &child_scope),
+                |call| {
+                    plot.preflight_measurement_in_call(
+                        kind,
+                        cells[index],
+                        theme,
+                        &child_scope,
+                        call,
+                    )
+                },
             )? {
                 FitOutcome::Measured(result) => result,
                 FitOutcome::Miss(failure) => {
@@ -3358,7 +3401,7 @@ impl Canvas {
                         )
                     },
                 )
-                .with_retained_body(panel.panel_plan.result.retained_payload());
+                .with_retained_body(&panel.panel_plan.result);
             plot.render_panel(panel.kind, context, backend)?;
             crate::significance::render_selected(plot, &panel.panel_plan.result, theme, backend)?;
             with_layer(backend, &panel.layers[1], |backend| {
@@ -3395,13 +3438,7 @@ impl Canvas {
                 legend.draw(backend)
             })?;
         }
-        let crate::layout::canvas::CanvasRootText::Planned(titles) = &plan.canvas_layout.root_text
-        else {
-            return Err(Error::Render(
-                "Canvas root title block was not measured".into(),
-            ));
-        };
-        titles.draw_retained(backend)
+        plan.canvas_layout.root_text.draw_retained(backend)
     }
 
     fn canvas_hue_groups(

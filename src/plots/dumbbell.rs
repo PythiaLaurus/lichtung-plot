@@ -115,6 +115,13 @@ fn project(
         );
         let (left_x, left_y) = layout.projection.project(row.left, y);
         let (right_x, right_y) = layout.projection.project(row.right, y);
+        layout.projection.validate_span(
+            crate::layout::AxisSide::Bottom,
+            (row.left, row.right),
+            (left_x, right_x),
+            row.left.min(row.right) < row.left.max(row.right),
+            "dumbbell interval",
+        )?;
         payload
             .pairs
             .push([Point2D::new(left_x, left_y), Point2D::new(right_x, right_y)]);
@@ -168,10 +175,11 @@ pub(crate) fn shared_x_domain(
     )?;
     data.claim_source_visits(left.len())?;
     data.claim_source_visits(right.len())?;
-    Ok(crate::layout::continuous_auto_range(
+    crate::layout::continuous_auto_range(
         crate::data::min_max(left.into_iter().chain(right), "dumbbell")?,
         chart.x_axis_spec(),
-    ))
+        data.source_resources()?,
+    )
 }
 
 pub(crate) fn prepare<'a>(
@@ -179,6 +187,7 @@ pub(crate) fn prepare<'a>(
     data: impl Into<crate::data::PlotData<'a>>,
 ) -> Result<DumbbellData, Error> {
     let data = data.into();
+    data.claim_mark_rows()?;
     #[cfg(test)]
     count(0);
     if chart.y_axis_spec() != &AxisSpec::default() {
@@ -593,7 +602,7 @@ mod tests {
                             selected.layout.projection.panel_box(),
                             &theme,
                         )
-                        .with_retained_body(selected.retained_payload());
+                        .with_retained_body(&selected);
                         poison.render_panel(source.kind(), context, backend)?;
                         selected.axes.as_ref().unwrap().draw(backend)
                     },

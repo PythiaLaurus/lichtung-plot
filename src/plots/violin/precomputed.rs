@@ -162,16 +162,34 @@ fn project_cloud_and_summary(
     let width = 0.8;
     let baseline = center - width * 0.10;
     let mut cloud = Vec::new();
+    let mut left = baseline;
+    let mut projected_left = f64::INFINITY;
     data.reserve_source(&mut cloud, group.density.len() + 2)?;
     for point in &group.density {
         let offset = point.normalized_width * width * 0.40;
         let (x, y) = layout.projection.project(baseline - offset, point.y);
+        left = left.min(baseline - offset);
+        projected_left = projected_left.min(x);
         cloud.push(Point2D::new(x, y));
     }
     let support_low = group.density[0].y;
     let support_high = group.density[group.density.len() - 1].y;
     let (baseline_high_x, baseline_high_y) = layout.projection.project(baseline, support_high);
     let (baseline_low_x, baseline_low_y) = layout.projection.project(baseline, support_low);
+    layout.projection.validate_span(
+        crate::layout::AxisSide::Bottom,
+        (left, baseline),
+        (projected_left, baseline_low_x),
+        true,
+        "raincloud polygon width",
+    )?;
+    layout.projection.validate_span(
+        crate::layout::AxisSide::Left,
+        (support_low, support_high),
+        (baseline_low_y, baseline_high_y),
+        support_low < support_high,
+        "raincloud polygon support",
+    )?;
     cloud.push(Point2D::new(baseline_high_x, baseline_high_y));
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
     payload.polygon(
@@ -192,6 +210,13 @@ fn project_cloud_and_summary(
     let (_, q1) = layout.projection.project(box_center, group.q1);
     let (_, q3) = layout.projection.project(box_center, group.q3);
     let (_, median) = layout.projection.project(box_center, group.median);
+    layout.projection.validate_span(
+        crate::layout::AxisSide::Left,
+        (group.q1, group.q3),
+        (q1, q3),
+        group.q1 < group.q3,
+        "raincloud box polygon",
+    )?;
     payload.polygon(
         data.collect_source(
             [
@@ -250,6 +275,7 @@ fn project_strip(
         ));
     }
     let points = data.collect_source(group.points.iter().map(|point| {
+        data.claim_source_visits(1)?;
         let x = strip_min + point.normalized_strip * (strip_max - strip_min);
         let (_, y) = layout.projection.project(center, point.y);
         Ok(Point2D::new(x, y))

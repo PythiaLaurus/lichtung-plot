@@ -92,6 +92,7 @@ impl PreparedLine {
         data: PlotData<'_>,
         conditions: Option<&[String]>,
     ) -> Result<Self, Error> {
+        data.claim_mark_rows()?;
         #[cfg(test)]
         stage(chart.kind(), 0);
         let kind = chart.kind();
@@ -144,10 +145,8 @@ impl PreparedLine {
                     data.source_levels(&labels)?
                 };
             let positions = data.collect_source(labels.iter().map(|label| {
-                data.claim_source_visits(levels.len())?;
-                let index = levels
-                    .iter()
-                    .position(|level| level == label)
+                let index = data
+                    .source_position(&levels, |level| level == label)?
                     .ok_or_else(|| {
                         Error::Data(format!(
                             "trajectory: condition {label:?} is absent from global order"
@@ -263,11 +262,12 @@ impl PreparedLine {
                     hue: None,
                 }
             });
-            data.claim_source_visits(hues.len())?;
             let hue_index = identity
                 .as_ref()
                 .and_then(|identity| identity.hue.as_ref())
-                .and_then(|hue| hues.iter().position(|level| level == hue));
+                .map(|hue| data.source_position(&hues, |level| level == hue))
+                .transpose()?
+                .flatten();
             if hue_paths && hue_index.is_none() {
                 return Err(Error::Data(
                     "line path: hue is absent from the resolved hue order".into(),
@@ -276,6 +276,7 @@ impl PreparedLine {
             let mut points = data.collect_source(rows.iter().map(|row| {
                 let row = *row;
                 let interval = if let Some((lower, upper)) = &bounds {
+                    data.claim_source_visits(1)?;
                     let (lower, upper) = (lower[row], upper[row]);
                     if lower > y[row] || y[row] > upper {
                         return Err(Error::Data(format!(
@@ -287,7 +288,6 @@ impl PreparedLine {
                 } else {
                     None
                 };
-                data.claim_source_visits(hues.len())?;
                 Ok(LinePoint {
                     x: x[row],
                     y: y[row],
@@ -295,7 +295,9 @@ impl PreparedLine {
                     hue_index: channels.rows[row]
                         .hue
                         .as_ref()
-                        .and_then(|hue| hues.iter().position(|level| level == hue)),
+                        .map(|hue| data.source_position(&hues, |level| level == hue))
+                        .transpose()?
+                        .flatten(),
                 })
             }))?;
             if kind != PlotKind::LinePath {
@@ -333,6 +335,7 @@ impl PreparedLine {
                 ));
             }
             let points = data.collect_source((0..x.len()).map(|row| {
+                data.claim_source_visits(1)?;
                 Ok((
                     crate::data::strict_numeric_value(x, row, context)?,
                     crate::data::strict_numeric_value(y, row, context)?,
@@ -341,11 +344,14 @@ impl PreparedLine {
             let labels = layer
                 .label_values()
                 .map(|values| {
-                    data.collect_source((0..values.len()).map(|row| match values.get(row) {
-                        Some(Some(label)) => data.copy_source_string(label),
-                        _ => Err(Error::Data(format!(
-                            "{context}: label contains null at source row {row}"
-                        ))),
+                    data.collect_source((0..values.len()).map(|row| {
+                        data.claim_source_visits(1)?;
+                        match values.get(row) {
+                            Some(Some(label)) => data.copy_source_string(label),
+                            _ => Err(Error::Data(format!(
+                                "{context}: label contains null at source row {row}"
+                            ))),
+                        }
                     }))
                 })
                 .transpose()?;
@@ -385,9 +391,17 @@ impl PreparedLine {
         ranges[0] = if let Some(levels) = &conditions {
             (0.0, categorical_index(levels.len())?)
         } else {
-            crate::layout::continuous_auto_range(ranges[0], chart.x_axis_spec())
+            crate::layout::continuous_auto_range(
+                ranges[0],
+                chart.x_axis_spec(),
+                data.source_resources()?,
+            )?
         };
-        ranges[1] = crate::layout::continuous_auto_range(ranges[1], chart.y_axis_spec());
+        ranges[1] = crate::layout::continuous_auto_range(
+            ranges[1],
+            chart.y_axis_spec(),
+            data.source_resources()?,
+        )?;
         let primary_color_slots = if chart.hue_col().is_some() {
             hues.len()
         } else {
@@ -542,28 +556,81 @@ fn project(
                 .checked_mul(2)
                 .ok_or_else(|| Error::Render("line ribbon point count overflow".into()))?;
             data.reserve_source(&mut polygon, count)?;
-            polygon.extend(
-                group
-                    .points
-                    .iter()
-                    .map(|point| project(point.x, point.interval.expect("complete ribbon").1)),
-            );
-            polygon.extend(
-                group
-                    .points
-                    .iter()
-                    .rev()
-                    .map(|point| project(point.x, point.interval.expect("complete ribbon").0)),
-            );
+            let mut has_area = false;
+            for point in &group.points {
+                let (lower, upper) = point.interval.expect("complete ribbon");
+                has_area |= lower < upper;
+                polygon.push(project(point.x, upper));
+            }
+            if let Some((first, last)) = group.points.first().zip(group.points.last()) {
+                layout.projection.validate_span(
+                    crate::layout::AxisSide::Bottom,
+                    (first.x, last.x),
+                    (polygon[0].x, polygon[polygon.len() - 1].x),
+                    has_area && first.x < last.x,
+                    "line ribbon polygon width",
+                )?;
+            }
+            for (index, point) in group.points.iter().enumerate().rev() {
+                let (lower, upper) = point.interval.expect("complete ribbon");
+                let projected = project(point.x, lower);
+                layout.projection.validate_span(
+                    crate::layout::AxisSide::Left,
+                    (lower, upper),
+                    (projected.y, polygon[index].y),
+                    lower < upper,
+                    "line ribbon polygon",
+                )?;
+                polygon.push(projected);
+            }
             data.reserve_source(&mut payload.marks, 1)?;
             payload.marks.push(LineMark::Ribbon(polygon, fill.clone()));
         }
-        let points = data.collect_source(
-            group
-                .points
-                .iter()
-                .map(|point| Ok(project(point.x, point.y))),
-        )?;
+        let points = data.collect_source(group.points.iter().map(|point| {
+            data.claim_source_visits(1)?;
+            Ok(project(point.x, point.y))
+        }))?;
+        if points.len() >= 2 {
+            // Match canonical_line_points' global distinction rule, not just
+            // adjacent segments. Keep source order and normalize signed zeros.
+            let mut indices = data.collect_source((0..points.len()).map(Ok))?;
+            crate::data::source::sort_source_by(&mut indices, Some(data), |a, b| {
+                let key = |index: usize| {
+                    let point = points[index];
+                    let bits = |value: f64| if value == 0.0 { 0 } else { value.to_bits() };
+                    (bits(point.x), bits(point.y), index)
+                };
+                key(*a).cmp(&key(*b))
+            })?;
+            data.claim_source_visits(indices.len() - 1)?;
+            for pair in indices.windows(2) {
+                let (a, b) = (pair[0], pair[1]);
+                if points[a] != points[b] {
+                    continue;
+                }
+                let (first, second) = (&group.points[a], &group.points[b]);
+                for (axis, source, projected) in [
+                    (
+                        crate::layout::AxisSide::Bottom,
+                        (first.x, second.x),
+                        (points[a].x, points[b].x),
+                    ),
+                    (
+                        crate::layout::AxisSide::Left,
+                        (first.y, second.y),
+                        (points[a].y, points[b].y),
+                    ),
+                ] {
+                    layout.projection.validate_span(
+                        axis,
+                        source,
+                        projected,
+                        source.0.min(source.1) < source.0.max(source.1),
+                        "line distinct source points",
+                    )?;
+                }
+            }
+        }
         let line = LineStyle::solid(
             color,
             if chart.kind() == PlotKind::Line {
@@ -605,6 +672,7 @@ fn project(
         for &index in &order {
             let group = &prepared.groups[index];
             for point in &group.points {
+                data.claim_source_visits(1)?;
                 let color = if hue_paths {
                     let index = group
                         .hue_index
@@ -650,7 +718,10 @@ fn project(
         };
         let style = chart.point_layers()[index]
             .point_style(theme.colors[(slots + index) % theme.colors.len()]);
-        let points = data.collect_source(layer.points.iter().map(|&(x, y)| Ok(project(x, y))))?;
+        let points = data.collect_source(layer.points.iter().map(|&(x, y)| {
+            data.claim_source_visits(1)?;
+            Ok(project(x, y))
+        }))?;
         let mut text = Vec::new();
         if let Some(labels) = &layer.labels {
             data.reserve_source(&mut text, labels.len())?;

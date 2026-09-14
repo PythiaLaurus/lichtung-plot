@@ -101,22 +101,77 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Compare the computed inputs that Canvas/facet coordination can replace.
     /// All other source configuration is immutable for a root-local child owner.
-    pub(crate) fn same_composed_inputs(&self, other: &ComposedInputs) -> bool {
+    pub(crate) fn same_composed_inputs(
+        &self,
+        other: &ComposedInputs,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<bool, crate::Error> {
+        fn same_values<T: PartialEq>(
+            a: Option<&[T]>,
+            b: Option<&[T]>,
+            data: crate::data::PlotData<'_>,
+        ) -> Result<bool, crate::Error> {
+            match (a, b) {
+                (None, None) => Ok(true),
+                (Some(a), Some(b)) if a.len() == b.len() => {
+                    for (a, b) in a.iter().zip(b) {
+                        data.claim_source_visits(1)?;
+                        if a != b {
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
+                }
+                _ => Ok(false),
+            }
+        }
+        for (axis, other) in [
+            (&self.x_axis_spec, &other.x_axis_spec),
+            (&self.y_axis_spec, &other.y_axis_spec),
+        ] {
+            if axis.limits != other.limits
+                || axis.provenance != other.provenance
+                || axis.interval != other.interval
+                || !same_values(
+                    axis.exact_ticks.as_deref(),
+                    other.exact_ticks.as_deref(),
+                    data,
+                )?
+            {
+                return Ok(false);
+            }
+        }
         let range = |value: Option<(f64, f64)>| value.map(|(a, b)| (a.to_bits(), b.to_bits()));
-        self.x_axis_spec == other.x_axis_spec
-            && self.y_axis_spec == other.y_axis_spec
-            && range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
-            && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
-            && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
-            && self.global_hue_levels == other.global_hue_levels
-            && self.global_group_levels == other.global_group_levels
-            && self.global_collective_pairs == other.global_collective_pairs
-            && self.global_line_condition_levels == other.global_line_condition_levels
-            && self.axis_gutter_owner == other.axis_gutter_owner
-            && self.y_tick_labels_visible == other.y_tick_labels_visible
-            && self.render_scope == other.render_scope
-            && self.legend_policy == other.legend_policy
-            && (self.width, self.height) == (other.width, other.height)
+        Ok(
+            range(self.x_axis_spec.limits) == range(other.x_axis_spec.limits)
+                && range(self.y_axis_spec.limits) == range(other.y_axis_spec.limits)
+                && range(self.resolved_facet_x_range) == range(other.resolved_facet_x_range)
+                && same_values(
+                    self.global_hue_levels.as_deref(),
+                    other.global_hue_levels.as_deref(),
+                    data,
+                )?
+                && same_values(
+                    self.global_group_levels.as_deref(),
+                    other.global_group_levels.as_deref(),
+                    data,
+                )?
+                && same_values(
+                    self.global_collective_pairs.as_deref(),
+                    other.global_collective_pairs.as_deref(),
+                    data,
+                )?
+                && same_values(
+                    self.global_line_condition_levels.as_deref(),
+                    other.global_line_condition_levels.as_deref(),
+                    data,
+                )?
+                && self.axis_gutter_owner == other.axis_gutter_owner
+                && self.y_tick_labels_visible == other.y_tick_labels_visible
+                && self.render_scope == other.render_scope
+                && self.legend_policy == other.legend_policy
+                && (self.width, self.height) == (other.width, other.height),
+        )
     }
 
     pub(crate) fn retain_composed_inputs(
@@ -124,11 +179,6 @@ impl<K: crate::kind::Marker> Plot<K> {
         environment: &crate::font::canonical::PreparedFontEnvironment,
     ) -> Result<ComposedInputs, crate::Error> {
         let copy = |source: &str| -> Result<String, crate::Error> {
-            environment
-                .claim_processing_visits(source.len() as u128)
-                .map_err(|error| {
-                    crate::Error::Render(format!("child input copy work: {error:?}"))
-                })?;
             environment
                 .claim_unicode_bytes(
                     u64::try_from(source.len())

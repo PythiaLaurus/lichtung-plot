@@ -270,16 +270,9 @@ pub struct CanvasInsets {
     pub top: f64,
 }
 
-/// Caller-provided canvas content flags.
-#[allow(clippy::struct_excessive_bools)]
+/// Axis reservations retained by the specialized and composition adapters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CanvasLayoutSpec {
-    /// Reserve space for a title.
-    pub has_title: bool,
-    /// Reserve space for a subtitle.
-    pub has_subtitle: bool,
-    /// Reserve space for a caption.
-    pub has_caption: bool,
+pub(crate) struct LegacyRootAxes {
     /// Reserve space for the x-axis label.
     pub has_x_label: bool,
     /// Reserve space for the y-axis label.
@@ -288,52 +281,25 @@ pub struct CanvasLayoutSpec {
 
 /// A resolved canvas layout for one chart canvas.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CanvasLayout {
-    pub(crate) root_text: CanvasRootText,
+pub(crate) struct RootFramePlan {
+    pub(crate) root_text: crate::decorations::title_block::plan::RootTitleBlockPlan,
     /// Plot panel available for data marks, axes, grid, and frame.
     pub panel_box: PanelBox,
     /// Resolved reserved margins.
     pub insets: CanvasInsets,
-    /// Title baseline in math-style pixel coordinates.
-    pub title_y: Option<f64>,
-    /// Subtitle baseline in math-style pixel coordinates.
-    pub subtitle_y: Option<f64>,
-    /// Caption baseline in math-style pixel coordinates.
-    pub caption_y: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "unmeasured geometry must not allocate a dummy text plan"
-)]
-pub(crate) enum CanvasRootText {
-    Planned(crate::decorations::title_block::plan::RootTitleBlockPlan),
-    Unmeasured,
-}
-
-impl CanvasLayout {
+impl RootFramePlan {
     pub(crate) fn measured_plot_root(
         canvas_width: u32,
         canvas_height: u32,
         theme: &ResolvedTheme,
-        mut spec: CanvasLayoutSpec,
+        spec: LegacyRootAxes,
         text: (Option<&str>, Option<&str>, Option<&str>),
         alignments: crate::decorations::title_block::plan::RootAlignments,
         reserve_axes: bool,
     ) -> Result<Self, crate::layout::fit::PlanError> {
-        spec.has_title = false;
-        spec.has_subtitle = false;
-        spec.has_caption = false;
-        let mut canvas = Self::resolve(
-            canvas_width,
-            canvas_height,
-            theme,
-            spec,
-            (0, 0, 0),
-            false,
-            reserve_axes,
-        )?;
+        let mut insets = spec.insets(theme, reserve_axes);
         let span = PanelBox::new(
             16.0,
             f64::from(canvas_width) - 16.0,
@@ -345,20 +311,18 @@ impl CanvasLayout {
             [text.0, text.1, text.2],
             span,
             alignments,
-            MIN_PANEL_HEIGHT + canvas.insets.bottom - 8.0,
+            MIN_PANEL_HEIGHT + insets.bottom - 8.0,
             &crate::layout::fit::FitScope::root(),
         )?;
-        canvas.insets.top = (12.0 + plan.top_reserve).max(30.0);
-        canvas.insets.bottom += plan.bottom_reserve;
-        canvas.panel_box = PanelBox::new(
-            canvas.insets.left,
-            f64::from(canvas_width) - canvas.insets.right,
-            canvas.insets.bottom,
-            f64::from(canvas_height) - canvas.insets.top,
+        insets.top = (12.0 + plan.top_reserve).max(30.0);
+        insets.bottom += plan.bottom_reserve;
+        let panel_box = PanelBox::new(
+            insets.left,
+            f64::from(canvas_width) - insets.right,
+            insets.bottom,
+            f64::from(canvas_height) - insets.top,
         );
-        if canvas.panel_box.width() < MIN_PANEL_WIDTH
-            || canvas.panel_box.height() < MIN_PANEL_HEIGHT
-        {
+        if panel_box.width() < MIN_PANEL_WIDTH || panel_box.height() < MIN_PANEL_HEIGHT {
             return Err(crate::layout::fit::FitScope::root()
                 .failure(
                     crate::layout::fit::FitKind::TrackOrResidual,
@@ -366,28 +330,11 @@ impl CanvasLayout {
                 )
                 .into());
         }
-        canvas.root_text = CanvasRootText::Planned(plan);
-        Ok(canvas)
-    }
-
-    /// Resolve a single-panel chart layout from canvas size, theme, and text flags.
-    #[must_use]
-    pub(crate) fn single_panel(
-        canvas_width: u32,
-        canvas_height: u32,
-        theme: &ResolvedTheme,
-        spec: CanvasLayoutSpec,
-    ) -> Self {
-        Self::resolve(
-            canvas_width,
-            canvas_height,
-            theme,
-            spec,
-            (1, 1, 1),
-            false,
-            true,
-        )
-        .expect("unchecked canvas layout always clamps to the minimum panel")
+        Ok(Self {
+            panel_box,
+            insets,
+            root_text: plan,
+        })
     }
 
     #[cfg(test)]
@@ -395,7 +342,7 @@ impl CanvasLayout {
         canvas_width: u32,
         canvas_height: u32,
         theme: &ResolvedTheme,
-        spec: CanvasLayoutSpec,
+        spec: LegacyRootAxes,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
         Self::measured_plot_root(
@@ -411,60 +358,12 @@ impl CanvasLayout {
         )
         .map_err(crate::layout::fit::PlanError::into_error)
     }
+}
 
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::too_many_lines,
-        reason = "measured line counts are bounded by the finite canvas dimensions"
-    )]
-    fn resolve(
-        canvas_width: u32,
-        canvas_height: u32,
-        theme: &ResolvedTheme,
-        spec: CanvasLayoutSpec,
-        line_counts: (usize, usize, usize),
-        checked: bool,
-        reserve_axes: bool,
-    ) -> Result<Self, Error> {
-        let w = f64::from(canvas_width);
-        let h = f64::from(canvas_height);
-
-        let title_gap = if spec.has_title || spec.has_subtitle {
-            theme
-                .composition
-                .root_title_block
-                .title_block_to_content_clearance
-        } else {
-            0.0
-        };
-        let title_line_h = theme.typography.title.line_height();
-        let subtitle_line_h = theme.typography.subtitle.line_height();
-        let caption_line_h = theme.typography.caption.line_height();
-        let title_h = if spec.has_title {
-            title_line_h * line_counts.0.max(1) as f64
-        } else {
-            0.0
-        };
-        let subtitle_h = if spec.has_subtitle {
-            subtitle_line_h * line_counts.1.max(1) as f64
-        } else {
-            0.0
-        };
-        let title_subtitle_gap = if spec.has_title && spec.has_subtitle {
-            theme.composition.root_title_block.title_subtitle_gap
-        } else {
-            0.0
-        };
-        let caption_h = if spec.has_caption {
-            caption_line_h * line_counts.2.max(1) as f64
-                + theme
-                    .composition
-                    .root_title_block
-                    .caption_to_content_clearance
-        } else {
-            0.0
-        };
-
+impl LegacyRootAxes {
+    // T5b/T5e retain this axis/packing estimate, not an alternate root layout.
+    // Root text is always measured separately and never estimated here.
+    pub(crate) fn insets(self, theme: &ResolvedTheme, reserve_axes: bool) -> CanvasInsets {
         let tick_length = theme
             .axes
             .ticks
@@ -477,7 +376,7 @@ impl CanvasLayout {
         } else {
             0.0
         };
-        let x_label_h = if spec.has_x_label {
+        let x_label_h = if self.has_x_label {
             let gap = if reserve_axes {
                 theme.axes.spacing.x_title_tick_label_gap
             } else {
@@ -494,59 +393,23 @@ impl CanvasLayout {
         } else {
             0.0
         };
-        let y_label_w = if spec.has_y_label {
+        let y_label_w = if self.has_y_label {
             f64::from(theme.typography.axis_title.font_size)
                 + theme.axes.spacing.y_title_edge_padding
         } else {
             0.0
         };
 
-        let insets = CanvasInsets {
+        CanvasInsets {
             left: if reserve_axes {
                 (y_tick_w + y_label_w + 4.0).max(62.0)
             } else {
                 16.0 + y_label_w
             },
             right: if reserve_axes { 30.0 } else { 16.0 },
-            bottom: tick_h + x_label_h + caption_h + 8.0,
-            top: (title_gap + title_h + title_subtitle_gap + subtitle_h + 12.0).max(30.0),
-        };
-
-        if checked
-            && (w - insets.left - insets.right < MIN_PANEL_WIDTH
-                || h - insets.bottom - insets.top < MIN_PANEL_HEIGHT)
-        {
-            return Err(Error::Render(format!(
-                "measured canvas text does not fit on {canvas_width}x{canvas_height} canvas while preserving the minimum 80x60 plot panel"
-            )));
+            bottom: tick_h + x_label_h + 8.0,
+            top: 30.0,
         }
-        let x0 = insets.left.min((w - MIN_PANEL_WIDTH).max(0.0));
-        let x1 = (w - insets.right).max(x0 + MIN_PANEL_WIDTH).min(w);
-        let y0 = insets.bottom.min((h - MIN_PANEL_HEIGHT).max(0.0));
-        let y1 = (h - insets.top).max(y0 + MIN_PANEL_HEIGHT).min(h);
-        let panel_box = PanelBox::new(x0, x1, y0, y1);
-
-        let title_y = spec.has_title.then_some(h - 20.0);
-        let subtitle_y = spec.has_subtitle.then_some(
-            h - 20.0
-                - if spec.has_title {
-                    title_h + title_subtitle_gap
-                } else {
-                    0.0
-                },
-        );
-        let caption_y = spec
-            .has_caption
-            .then_some(theme.typography.caption.line_height());
-
-        Ok(Self {
-            panel_box,
-            insets,
-            root_text: CanvasRootText::Unmeasured,
-            title_y,
-            subtitle_y,
-            caption_y,
-        })
     }
 }
 
@@ -591,18 +454,54 @@ mod tests {
     use crate::theme::Theme;
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "positive built-in insets plus the named floor fit u32 exactly after ceiling"
+    )]
+    fn deferred_root_frame_rejects_residual_fit_without_clamping_or_text_fallback() {
+        let theme = Theme::Publication.resolve();
+        let spec = LegacyRootAxes {
+            has_x_label: true,
+            has_y_label: true,
+        };
+        let insets = spec.insets(&theme, true);
+        let width = (insets.left + insets.right + MIN_PANEL_WIDTH).ceil() as u32;
+        let height = (insets.bottom + insets.top + MIN_PANEL_HEIGHT).ceil() as u32;
+        let measure = |width, height| {
+            RootFramePlan::measured_plot_root(
+                width,
+                height,
+                &theme,
+                spec,
+                (None, None, None),
+                crate::decorations::title_block::plan::RootAlignments::resolve(
+                    &theme, [None; 2], [None; 2],
+                ),
+                true,
+            )
+        };
+        let frame = measure(width, height).unwrap();
+        assert_eq!(frame.panel_box.x0.to_bits(), insets.left.to_bits());
+        assert_eq!(
+            frame.panel_box.x1.to_bits(),
+            (f64::from(width) - insets.right).to_bits()
+        );
+        for result in [measure(width - 1, height), measure(width, height - 1)] {
+            assert!(matches!(result, Err(crate::layout::fit::PlanError::Fit(_))));
+        }
+    }
+
+    #[test]
     fn measured_caption_wraps_without_shortening_and_rejects_impossible_fit() {
         let theme = Theme::Publication.resolve();
         let caption =
             "diagnostic provenance with a deliberately long model and adjustment description";
-        let spec = CanvasLayoutSpec {
-            has_title: false,
-            has_subtitle: false,
-            has_caption: true,
+        let spec = LegacyRootAxes {
             has_x_label: true,
             has_y_label: true,
         };
-        let layout = CanvasLayout::measured_composed_canvas(
+        let layout = RootFramePlan::measured_composed_canvas(
             360,
             240,
             &theme,
@@ -614,11 +513,9 @@ mod tests {
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
-        let CanvasRootText::Planned(plan) = &layout.root_text else {
-            panic!("common composition layout");
-        };
+        let plan = &layout.root_text;
         assert!(plan.bottom_reserve > theme.typography.caption.line_height());
-        assert!(CanvasLayout::measured_composed_canvas(
+        assert!(RootFramePlan::measured_composed_canvas(
             160,
             120,
             &theme,
@@ -651,18 +548,15 @@ mod tests {
         let base = Theme::Publication.resolve();
         let mut spaced = base.clone();
         spaced.composition.root_title_block.title_subtitle_gap = 9.0;
-        let spec = CanvasLayoutSpec {
-            has_title: true,
-            has_subtitle: true,
-            has_caption: false,
+        let spec = LegacyRootAxes {
             has_x_label: false,
             has_y_label: false,
         };
         let content = (Some("title"), Some("subtitle"), None);
-        let base_layout = CanvasLayout::measured_composed_canvas(640, 480, &base, spec, content)
+        let base_layout = RootFramePlan::measured_composed_canvas(640, 480, &base, spec, content)
             .expect("base title block fits");
         let spaced_layout =
-            CanvasLayout::measured_composed_canvas(640, 480, &spaced, spec, content)
+            RootFramePlan::measured_composed_canvas(640, 480, &spaced, spec, content)
                 .expect("spaced title block fits");
 
         assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);

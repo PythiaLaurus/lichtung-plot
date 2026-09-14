@@ -6,36 +6,38 @@ use super::*;
     reason = "parent fingerprints cover the complete supported composition and color matrix"
 )]
 fn beeswarm_parent_svg_fingerprints() {
-    // Complete preserve-text SVGs from clean 0a41f1c, including guide colors and text baselines.
+    // 2026-09-14 T5a6d: canonical projection and ink-aware endpoint anchors.
+    // Historical 0a41f1c fingerprints and inspected deltas are preserved in
+    // docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
                 (10946, 0x00cc_ae03_cf55_3497),
-                (10379, 0x83d5_eca4_86d9_17d1),
-                (10951, 0xbea1_0982_5dc2_c961),
+                (10386, 0x9bd2_3e7b_85fa_aaa7),
+                (10961, 0x7fea_882a_8ad4_45d5),
                 (10678, 0xbc27_3f88_bd85_46e3),
                 (20932, 0x0908_10e0_78b4_41ab),
                 (20944, 0x354e_1563_114b_c064),
                 (20932, 0x0908_10e0_78b4_41ab),
                 (20944, 0x354e_1563_114b_c064),
                 (23546, 0x56ed_98f3_4890_4a0c),
-                (16222, 0x9edb_b760_dcfa_349d),
+                (16217, 0x20c4_1435_dc3f_1d2a),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
                 (10808, 0xebba_8167_47ab_02d5),
-                (10226, 0x1144_714c_8a32_166c),
-                (10796, 0xbd9e_9735_ded8_a2e9),
+                (10233, 0x1f7b_dc87_2e63_4a50),
+                (10806, 0x54c0_2423_3ca0_aa1f),
                 (10737, 0x0678_c536_f028_b9eb),
                 (20462, 0x4d76_0b94_93f9_2a03),
                 (20470, 0x105d_9e0c_e068_2c2d),
                 (20462, 0x4d76_0b94_93f9_2a03),
                 (20470, 0x105d_9e0c_e068_2c2d),
                 (21838, 0x359c_a0e8_129d_5367),
-                (15082, 0x67a2_40d1_a084_097d),
+                (15087, 0x6e84_deb3_6277_5888),
             ],
         ),
     ] {
