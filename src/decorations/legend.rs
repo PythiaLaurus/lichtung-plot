@@ -286,6 +286,32 @@ pub(crate) struct LegendEntry {
 }
 
 impl LegendEntry {
+    pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
+        let identity = match &self.identity {
+            LegendIdentity::Single { field, value } => [Some(field), Some(value), None, None],
+            LegendIdentity::Literal { title, value } => [Some(title), Some(value), None, None],
+            LegendIdentity::Pair {
+                group_field,
+                group_value,
+                hue_field,
+                hue_value,
+            } => [
+                Some(group_field),
+                Some(group_value),
+                Some(hue_field),
+                Some(hue_value),
+            ],
+        };
+        for text in identity
+            .into_iter()
+            .flatten()
+            .chain([&self.title, &self.label])
+        {
+            data.admit_clone_slice(text.as_bytes())?;
+        }
+        Ok(self.clone())
+    }
+
     pub(crate) fn same_child_input(&self, other: &Self) -> bool {
         self.exact_eq(other) && self.contributes_hue_level == other.contributes_hue_level
     }

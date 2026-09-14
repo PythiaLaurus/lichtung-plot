@@ -78,6 +78,12 @@ fn sift<T>(
 }
 
 impl PlotData<'_> {
+    /// Admit an infallible standard-library clone before it copies any storage.
+    pub(crate) fn admit_clone_slice<T>(self, values: &[T]) -> Result<(), Error> {
+        self.claim_source_visits(values.len())?;
+        self.claim_source_bytes(std::mem::size_of_val(values))
+    }
+
     pub(crate) fn reserve_source_string(
         self,
         value: &mut String,

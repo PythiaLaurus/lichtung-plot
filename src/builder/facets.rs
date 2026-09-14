@@ -125,6 +125,11 @@ impl<K: crate::kind::Marker> Plot<K> {
     ) -> Result<ComposedInputs, crate::Error> {
         let copy = |source: &str| -> Result<String, crate::Error> {
             environment
+                .claim_processing_visits(source.len() as u128)
+                .map_err(|error| {
+                    crate::Error::Render(format!("child input copy work: {error:?}"))
+                })?;
+            environment
                 .claim_unicode_bytes(
                     u64::try_from(source.len())
                         .map_err(|_| crate::Error::Render("child input bytes overflow".into()))?,

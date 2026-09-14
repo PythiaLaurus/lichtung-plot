@@ -1,5 +1,6 @@
 //! Heterogeneous plot composition on one canvas.
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -7,7 +8,6 @@ use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendEntry};
 use crate::decorations::plan::children::MeasurementPhase;
-use crate::decorations::title_block::TitleBlock;
 use crate::layout::canvas::{PanelRequirements, PANEL_HEADER_GAP};
 use crate::layout::fit::{FitFailure, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
@@ -17,6 +17,9 @@ use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
 use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
+
+#[cfg(test)]
+pub(crate) mod admission_tests;
 
 #[cfg(test)]
 thread_local! {
@@ -52,13 +55,26 @@ struct PlannedCanvasPanel {
     canvas_cell: PanelBox,
     panel_plan: Arc<crate::decorations::plan::PanelPlan>,
     header: Vec<crate::render::backend::PlacedText>,
+    header_layer: String,
+    legend: Option<crate::decorations::legend::LegendDrawPlan>,
+    layers: [String; 3],
+}
+
+/// T5b consumes these as actual panel-heading semantics, not outer-root fallbacks.
+/// Until then the legacy panel headers keep their current placement.
+struct DeferredT5bPanelHeadingInputs {
+    title: Option<crate::theme::TitleAlignment>,
+    subtitle: Option<crate::theme::TitleAlignment>,
 }
 
 struct CanvasPlan {
+    panel_heading_inputs: DeferredT5bPanelHeadingInputs,
     themes: Arc<ResolvedCanvasThemes>,
     plots: Vec<Option<Plot>>,
     canvas_layout: CanvasLayout,
+    #[cfg(test)]
     shared_legend: Option<crate::decorations::plan::ResolvedLegend>,
+    shared_legend_draw: Option<crate::decorations::legend::LegendDrawPlan>,
     panels: Vec<PlannedCanvasPanel>,
     text_panels: Vec<TextPanelPlan>,
     headers: Vec<CanvasHeaderPlan>,
@@ -84,6 +100,69 @@ struct PreparedCanvasRound<'a> {
 #[cfg(test)]
 mod d1_tests {
     use super::*;
+
+    #[test]
+    fn odd_canvas_root_policy_is_independent_of_deferred_panel_headings() {
+        let mut canvas = Canvas::grid(2, 3)
+            .unwrap()
+            .panel(
+                1,
+                2,
+                Plot::scatter(
+                    crate::NumericValues::new("x", [0.0, 1.0]),
+                    crate::NumericValues::new("y", [1.0, 2.0]),
+                )
+                .title("private panel title")
+                .subtitle("private panel subtitle"),
+            )
+            .unwrap()
+            .column_header(0, 3, "spanning sparse columns")
+            .unwrap()
+            .title("outer title\nsecond title line")
+            .subtitle("outer subtitle")
+            .caption("outer caption")
+            .size(1201, 901);
+        let initial = canvas.render_scene().unwrap();
+        canvas.panel_title_alignment = Some(crate::theme::TitleAlignment::End);
+        canvas.panel_subtitle_alignment = Some(crate::theme::TitleAlignment::Start);
+        assert_eq!(
+            initial.svg_bytes(),
+            canvas.render_scene().unwrap().svg_bytes()
+        );
+        canvas.title_alignment = Some(crate::theme::TitleAlignment::Start);
+        canvas.subtitle_alignment = Some(crate::theme::TitleAlignment::End);
+        let root = canvas.preflight_plan().unwrap();
+        let text = root.plan().retained_text();
+        for (source, anchor) in [
+            (
+                "outer title\nsecond title line",
+                crate::render::backend::TextAnchor::Start,
+            ),
+            ("outer subtitle", crate::render::backend::TextAnchor::End),
+            ("outer caption", crate::render::backend::TextAnchor::Start),
+            (
+                "private panel title",
+                crate::render::backend::TextAnchor::Start,
+            ),
+            (
+                "private panel subtitle",
+                crate::render::backend::TextAnchor::Start,
+            ),
+        ] {
+            let (placement, _) = text
+                .iter()
+                .find(|(_, plan)| plan.source == source)
+                .expect(source);
+            assert_eq!(placement.anchor, anchor, "{source}");
+        }
+        let aligned = canvas.render_scene().unwrap();
+        assert_ne!(initial.svg_bytes(), aligned.svg_bytes());
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE.with(|disabled| disabled.set(true));
+        let uncached = canvas.render_scene();
+        crate::decorations::plan::children::DISABLE_CHILD_REUSE
+            .with(|disabled| disabled.set(false));
+        assert_eq!(aligned.svg_bytes(), uncached.unwrap().svg_bytes());
+    }
 
     #[test]
     fn shared_x_member_rejections_precede_font_discovery() {
@@ -384,7 +463,7 @@ mod d1_tests {
                         "child reuse test",
                         themes.root(),
                         stage,
-                        |backend| canvas.render_planned_canvas(&plan, width, height, backend),
+                        |backend| Canvas::render_planned_canvas(&plan, width, height, backend),
                     )?;
                     crate::orchestrator::validate_text_replay_plan(
                         width,
@@ -464,7 +543,10 @@ mod d1_tests {
                 .unwrap()
                 .text_panel(0, 0, TextPanel::new(&source, &source).unwrap())
                 .unwrap()
-                .size(800, 1000)
+                .size(801, 1001)
+                .title("Outer root title")
+                .subtitle("Outer root subtitle")
+                .caption("Outer root caption")
                 .row_header(0, 1, "A\u{301} shared row")
                 .unwrap();
             if row_title {
@@ -521,6 +603,7 @@ mod d1_tests {
                             .iter()
                             .any(|line| line.runs.iter().any(|run| run.bidi_level % 2 == 1))));
                     crate::font::canonical::FONT_SHAPE_CALLS.with(|calls| calls.set(0));
+                    crate::plots::scatter::STAGES.with(|stages| stages.set([0; 4]));
                     let (width, height) = assigned.dimensions();
                     let replay = crate::orchestrator::capture_text_replay_plan(
                         width,
@@ -528,10 +611,14 @@ mod d1_tests {
                         "Canvas producer closure",
                         themes.root(),
                         stage,
-                        |backend| canvas.render_planned_canvas(&plan, width, height, backend),
+                        |backend| Canvas::render_planned_canvas(&plan, width, height, backend),
                     )?;
                     crate::font::canonical::FONT_SHAPE_CALLS
                         .with(|calls| assert_eq!(calls.get(), 0, "first capture must not shape"));
+                    assert_eq!(
+                        crate::plots::scatter::STAGES.with(std::cell::Cell::get),
+                        [0, 0, 0, 1]
+                    );
                     let captured = replay.retained_text();
                     for (placement, text) in expected {
                         assert!(captured.iter().any(
@@ -810,7 +897,7 @@ struct CanvasHeader {
 }
 
 struct TextPanelPlan {
-    index: usize,
+    layer: String,
     cell: PanelBox,
     title: crate::layout::TextBlock,
     body: crate::layout::TextBlock,
@@ -916,10 +1003,10 @@ pub struct Canvas {
     height: u32,
     title: Option<String>,
     subtitle: Option<String>,
+    pub(crate) title_alignment: Option<crate::theme::TitleAlignment>,
+    pub(crate) subtitle_alignment: Option<crate::theme::TitleAlignment>,
     // Stored independently of root headings; composition consumes these at T5b.
-    #[allow(dead_code)]
     pub(crate) panel_title_alignment: Option<crate::theme::TitleAlignment>,
-    #[allow(dead_code)]
     pub(crate) panel_subtitle_alignment: Option<crate::theme::TitleAlignment>,
     caption: Option<String>,
     labels: Option<Labels>,
@@ -953,6 +1040,73 @@ fn push_text_requirement(
 }
 
 impl Canvas {
+    /// Bound parent-only scope copies, diagnostic framing, equal-track scratch,
+    /// and topology scans. Producer-owned text/geometry retains its own charges.
+    fn admit_parent_metadata(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(), Error> {
+        let tracks = self
+            .rows
+            .checked_add(self.columns)
+            .ok_or_else(|| Error::Render("Canvas track count overflow".into()))?;
+        let headers = self
+            .column_headers
+            .len()
+            .checked_add(self.row_headers.len())
+            .and_then(|n| n.checked_add(self.row_titles.len()))
+            .ok_or_else(|| Error::Render("Canvas header count overflow".into()))?;
+        let owners = self
+            .panels
+            .len()
+            .checked_add(headers)
+            .and_then(|n| n.checked_add(1))
+            .ok_or_else(|| Error::Render("Canvas owner count overflow".into()))?;
+        let segments = owners
+            .checked_mul(256)
+            .ok_or_else(|| Error::Render("Canvas scope graph overflow".into()))?;
+        let grid_bytes = self
+            .panels
+            .len()
+            .checked_mul(2 * std::mem::size_of::<PanelBox>())
+            .and_then(|n| {
+                tracks
+                    .checked_mul(6 * std::mem::size_of::<f64>())
+                    .and_then(|extra| n.checked_add(extra))
+            })
+            .ok_or_else(|| Error::Render("Canvas grid scratch overflow".into()))?;
+        let bytes = segments
+            .checked_mul(std::mem::size_of::<crate::layout::kernel::AddressSegment>() + 64)
+            .and_then(|n| n.checked_add(grid_bytes))
+            .ok_or_else(|| Error::Render("Canvas metadata storage overflow".into()))?;
+        resources
+            .claim_visits(segments as u128)
+            .map_err(|error| Error::Render(format!("Canvas metadata work admission: {error:?}")))?;
+        resources
+            .claim_bytes(
+                u64::try_from(bytes)
+                    .map_err(|_| Error::Render("Canvas metadata bytes overflow".into()))?,
+            )
+            .map_err(|error| {
+                Error::Render(format!("Canvas metadata storage admission: {error}"))
+            })?;
+        resources
+            .claim_slots(owners as u128)
+            .map_err(|error| Error::Render(format!("Canvas scope graph admission: {error:?}")))?;
+        for group in &self.x_range_groups {
+            resources
+                .claim_visits(
+                    (group.len() as u128)
+                        .checked_mul(self.panels.len() as u128)
+                        .ok_or_else(|| Error::Render("Canvas range scan overflow".into()))?,
+                )
+                .map_err(|error| {
+                    Error::Render(format!("Canvas range scan admission: {error:?}"))
+                })?;
+        }
+        Ok(())
+    }
+
     /// Construct a non-empty panel grid.
     pub fn grid(rows: usize, columns: usize) -> Result<Self, Error> {
         if rows == 0 || columns == 0 {
@@ -975,6 +1129,8 @@ impl Canvas {
             height: 640,
             title: None,
             subtitle: None,
+            title_alignment: None,
+            subtitle_alignment: None,
             panel_title_alignment: None,
             panel_subtitle_alignment: None,
             caption: None,
@@ -1632,11 +1788,15 @@ impl Canvas {
                         )?)
                     }
                     Some(plot) => {
-                        let plot = self.labels.as_ref().map_or_else(
-                            || plot.clone(),
-                            |labels| plot.clone().labels(labels.clone()),
-                        );
-                        let mut plot = plot.with_render_scope(format!("panel-{index}"));
+                        let data = plot.data().with_axis_resources(&resources);
+                        let mut scope = String::new();
+                        data.reserve_source_string(&mut scope, 32)?;
+                        write!(scope, "panel-{index}").expect("admitted scope");
+                        let mut plot = plot.admitted_clone(data)?;
+                        if let Some(labels) = &self.labels {
+                            plot = plot.labels(labels.clone());
+                        }
+                        let mut plot = plot.with_render_scope(scope);
                         if let Some(Some(range)) = shared_x.get(index) {
                             plot = plot.with_planned_x_limits(*range);
                         }
@@ -1672,6 +1832,26 @@ impl Canvas {
             self.width,
             self.height,
             |prepared_stage| {
+                let resources = prepared_stage.generation_resources();
+                self.admit_parent_metadata(&resources)?;
+                let theme_bytes = self
+                    .panels
+                    .len()
+                    .checked_add(1)
+                    .and_then(|n| {
+                        n.checked_mul(
+                            std::mem::size_of::<ResolvedTheme>()
+                                + std::mem::size_of::<Option<ResolvedPlotTheme>>()
+                                + 4096,
+                        )
+                    })
+                    .ok_or_else(|| Error::Render("Canvas theme storage overflow".into()))?;
+                resources
+                    .claim_bytes(
+                        u64::try_from(theme_bytes)
+                            .map_err(|_| Error::Render("Canvas theme storage overflow".into()))?,
+                    )
+                    .map_err(|error| Error::Render(format!("Canvas theme admission: {error}")))?;
                 let themes = Arc::new(ResolvedCanvasThemes::new(self.theme, &self.panels));
                 #[cfg(test)]
                 {
@@ -1695,6 +1875,9 @@ impl Canvas {
                 })
             },
             |prepared, assigned, round| {
+                #[cfg(test)]
+                let backend_begins =
+                    crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get);
                 let plan = self.build_canvas_plan(
                     Arc::clone(&prepared.themes),
                     assigned,
@@ -1703,19 +1886,34 @@ impl Canvas {
                     &prepared.shared_x,
                     &prepared.interiors,
                 )?;
+                #[cfg(test)]
+                assert_eq!(
+                    crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
+                    backend_begins,
+                    "Canvas measurement must not open a backend"
+                );
                 children.finish_round(round);
-                Ok(crate::layout::MeasuredLayout::new(assigned, Box::new(plan)))
+                Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
             |_, assigned, plan, final_stage| {
                 let (width, height) = assigned.dimensions();
-                crate::orchestrator::capture_text_replay_plan(
+                #[cfg(test)]
+                let before = admission_tests::capture_counters();
+                let replay = crate::orchestrator::capture_text_replay_plan(
                     width,
                     height,
                     "prepared canvas scene capture",
                     plan.themes.root(),
                     final_stage,
-                    |backend| self.render_planned_canvas(&plan, width, height, backend),
-                )
+                    |backend| Self::render_planned_canvas(&plan, width, height, backend),
+                )?;
+                #[cfg(test)]
+                assert_eq!(
+                    admission_tests::capture_counters(),
+                    before,
+                    "Canvas first capture must not read, prepare, project, shape, or measure"
+                );
+                Ok(replay)
             },
         )?;
         let (width, height) = root.dimensions();
@@ -1872,10 +2070,11 @@ impl Canvas {
 
         for (index, plot) in self.panels.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let plot = self.labels.as_ref().map_or_else(
-                || plot.clone(),
-                |labels| plot.clone().labels(labels.clone()),
-            );
+            let resources = prepared_stage.generation_resources();
+            let mut plot = plot.admitted_clone(plot.data().with_axis_resources(&resources))?;
+            if let Some(labels) = &self.labels {
+                plot = plot.labels(labels.clone());
+            }
             let plot = if self.legend_policy == CanvasLegendPolicy::Hidden {
                 plot.with_suppressed_legend()
             } else {
@@ -2035,6 +2234,10 @@ impl Canvas {
             .into_error())
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "admitted scoped configuration and shared-guide preparation form one parent round"
+    )]
     fn prepare_canvas_round<'a>(
         &self,
         themes: Arc<ResolvedCanvasThemes>,
@@ -2047,7 +2250,13 @@ impl Canvas {
         let (width, height) = assigned.dimensions();
         #[cfg(test)]
         record_canvas_theme(usize::MAX, "layout", themes.root());
-        let canvas_layout = CanvasLayout::measured_composed_canvas(
+        self.admit_parent_metadata(
+            &themes
+                .root()
+                .prepared_font_environment()?
+                .generation_resources(),
+        )?;
+        let canvas_layout = CanvasLayout::measured_plot_root(
             width,
             height,
             themes.root(),
@@ -2066,57 +2275,98 @@ impl Canvas {
                 self.subtitle.as_deref(),
                 self.caption.as_deref(),
             ),
-        )?;
+            crate::decorations::title_block::plan::RootAlignments::resolve(
+                themes.root(),
+                [self.title_alignment, self.subtitle_alignment],
+                [None; 2],
+            ),
+            false,
+        )
+        .map_err(crate::layout::fit::PlanError::into_error)?;
         let full_outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let mut plots = self
-            .panels
-            .iter()
-            .enumerate()
-            .map(|(index, plot)| {
-                plot.as_ref()
-                    .map(|plot| {
-                        let plot = self.labels.as_ref().map_or_else(
-                            || plot.clone(),
-                            |labels| plot.clone().labels(labels.clone()),
-                        );
-                        let plot = plot.with_render_scope(format!("panel-{index}"));
-                        match interiors.get(index).and_then(Option::as_ref) {
-                            Some(inputs) => inputs.attach(plot),
-                            None => Ok(plot),
-                        }
-                    })
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let resources = themes
+            .root()
+            .prepared_font_environment()?
+            .generation_resources();
+        let mut plots = Vec::new();
+        crate::layout::fit::reserve(
+            themes.root(),
+            &mut plots,
+            self.panels.len(),
+            "Canvas scoped configurations",
+        )?;
+        for (index, source) in self.panels.iter().enumerate() {
+            let Some(source) = source else {
+                plots.push(None);
+                continue;
+            };
+            let data = source.data().with_axis_resources(&resources);
+            let mut scope = String::new();
+            data.reserve_source_string(&mut scope, 32)?;
+            write!(scope, "panel-{index}").expect("admitted scope");
+            let mut plot = source.admitted_clone(data)?;
+            if let Some(labels) = &self.labels {
+                plot = plot.labels(labels.clone());
+            }
+            plot = plot.with_render_scope(scope);
+            if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
+                plot = inputs.attach(plot)?;
+            }
+            plots.push(Some(plot));
+        }
         let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            self.canvas_hue_groups(&plots, full_outer, &themes, children, round)?
+            Self::canvas_hue_groups(&plots, full_outer, &themes, children, round)?
         } else {
             Vec::new()
         };
-        plots = plots
-            .into_iter()
-            .enumerate()
-            .map(|(index, plot)| {
-                plot.map(|plot| {
-                    let plot = hue_groups
-                        .iter()
-                        .find(|(dimension, _)| Some(dimension.as_str()) == plot.hue_dimension_key())
-                        .map_or_else(
-                            || plot.clone(),
-                            |(_, levels)| plot.clone().with_global_hue_levels(levels.clone()),
-                        );
+        for slot in &mut plots {
+            if let Some(plot) = slot.take() {
+                let lookup = hue_groups
+                    .len()
+                    .checked_mul(plot.hue_dimension_key().map_or(1, |key| key.len().max(1)))
+                    .ok_or_else(|| {
+                        Error::Render("Canvas coordinated hue lookup overflow".into())
+                    })?;
+                resources.claim_visits(lookup as u128).map_err(|error| {
+                    Error::Render(format!(
+                        "Canvas coordinated hue lookup admission: {error:?}"
+                    ))
+                })?;
+                let levels = hue_groups
+                    .iter()
+                    .find(|(dimension, _)| Some(dimension.as_str()) == plot.hue_dimension_key());
+                let plot = if let Some((_, levels)) = levels {
+                    let data = plot.data().with_axis_resources(&resources);
+                    let levels = data.collect_source(
+                        levels.iter().map(|level| data.copy_source_string(level)),
+                    )?;
+                    plot.with_global_hue_levels(levels)
+                } else {
+                    plot
+                };
+                *slot = Some(
                     plot.with_canvas_size(width, height)
-                        .with_parent_axis_gutters()
-                        .with_render_scope(format!("panel-{index}"))
-                })
-            })
-            .collect::<Vec<_>>();
+                        .with_parent_axis_gutters(),
+                );
+            }
+        }
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
             Self::preflight_shared_legend(&plots, &themes, full_outer, children, round)?
         } else {
             (None, Vec::new())
         };
+        if let Some((_, entries)) = &shared_legend {
+            resources
+                .claim_bytes(
+                    u64::try_from(
+                        std::mem::size_of_val(entries.as_slice())
+                            + 2 * std::mem::size_of::<usize>(),
+                    )
+                    .map_err(|_| Error::Render("Canvas legend Arc overflow".into()))?,
+                )
+                .map_err(|error| Error::Render(format!("Canvas legend Arc admission: {error}")))?;
+        }
         Ok(PreparedCanvasRound {
             themes,
             canvas_layout,
@@ -2150,7 +2400,25 @@ impl Canvas {
         let themes = Arc::clone(&prepared.themes);
         let canvas_layout = prepared.canvas_layout.clone();
         let full_outer = canvas_layout.panel_box;
-        let mut plots = prepared.plots.clone();
+        let resources = themes
+            .root()
+            .prepared_font_environment()?
+            .generation_resources();
+        self.admit_parent_metadata(&resources)?;
+        let mut plots = Vec::new();
+        fit::reserve(
+            themes.root(),
+            &mut plots,
+            prepared.plots.len(),
+            "Canvas candidate configurations",
+        )?;
+        for plot in &prepared.plots {
+            plots.push(
+                plot.as_ref()
+                    .map(|plot| plot.admitted_clone(plot.data().with_axis_resources(&resources)))
+                    .transpose()?,
+            );
+        }
         let mut outer = full_outer;
         let shared_legend = if let Some((title, entries)) = &prepared.shared_legend {
             let (edge, compact) = guide_trial.expect("shared guide has an owned trial");
@@ -2237,27 +2505,24 @@ impl Canvas {
         } else {
             f64::from(header_theme.composition_title_font_size) + 18.0
         };
-        let row_header_width = self
-            .row_headers
-            .iter()
-            .map(|header| {
+        let mut row_header_width = 0.0_f64;
+        for header in &self.row_headers {
+            row_header_width = row_header_width.max(
                 header_theme
                     .measure_legacy_text(
                         &header.text,
                         header_theme.composition_title_font_size,
                         PhysicalTextAlignment::Center,
                         "canvas row header",
-                    )
-                    .map(|plan| plan.width())
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .fold(0.0_f64, f64::max)
-            + if self.row_headers.is_empty() {
-                0.0
-            } else {
-                20.0
-            };
+                    )?
+                    .width(),
+            );
+        }
+        row_header_width += if self.row_headers.is_empty() {
+            0.0
+        } else {
+            20.0
+        };
         outer.y1 -= column_header_height;
         outer.x0 += row_header_width;
         if outer.width() < 80.0 || outer.height() < 60.0 {
@@ -2327,7 +2592,9 @@ impl Canvas {
                             "canvas row {row} category domains differ across panels"
                         )));
                     }
-                    plots[index] = Some(plot.clone().with_y_tick_labels_visible(false));
+                    plots[index] = plots[index]
+                        .take()
+                        .map(|plot| plot.with_y_tick_labels_visible(false));
                 }
             }
         }
@@ -2355,17 +2622,16 @@ impl Canvas {
                     ));
                 }
                 for &index in group {
-                    let plot = plots[index].as_ref().expect("validated grouped panel");
-                    plots[index] = Some(plot.clone().with_resolved_facet_ranges(
-                        plot.kind(),
-                        Some(shared),
-                        None,
-                    ));
+                    let plot = plots[index].take().expect("validated grouped panel");
+                    let kind = plot.kind();
+                    plots[index] = Some(plot.with_resolved_facet_ranges(kind, Some(shared), None));
                 }
             }
         }
-        for (index, plot) in plots.iter_mut().enumerate() {
-            let Some(plot) = plot else { continue };
+        for (index, slot) in plots.iter_mut().enumerate() {
+            let Some(mut plot) = slot.take() else {
+                continue;
+            };
             let address = crate::layout::ComponentAddress::root().child(
                 crate::layout::AddressRole::CanvasCell,
                 u32::try_from(index)
@@ -2377,18 +2643,25 @@ impl Canvas {
                 .any(|group| group.contains(&index))
             {
                 if let Some(range) = round.domain(&address, FeedbackKind::AutomaticDomainX) {
-                    *plot = plot.clone().with_planned_x_limits(range);
+                    plot = plot.with_planned_x_limits(range);
                 }
             }
             if let Some(range) = round.domain(&address, FeedbackKind::AutomaticDomainY) {
-                *plot = plot.clone().with_planned_y_limits(range);
+                plot = plot.with_planned_y_limits(range);
             }
+            *slot = Some(plot);
         }
         let grid_address = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::CanvasGrid, 0)?;
         round.begin_owner(&grid_address)?;
         round.observe_box(outer)?;
         let mut requirements = Vec::new();
+        fit::reserve(
+            themes.root(),
+            &mut requirements,
+            self.panels.len(),
+            "Canvas gutter requirements",
+        )?;
         for index in 0..self.panels.len() {
             let address = grid_address.child(
                 crate::layout::AddressRole::CanvasCell,
@@ -2434,6 +2707,18 @@ impl Canvas {
         };
         let mut measured = Vec::new();
         let mut requirements = Vec::new();
+        fit::reserve(
+            themes.root(),
+            &mut measured,
+            plots.len(),
+            "Canvas measured children",
+        )?;
+        fit::reserve(
+            themes.root(),
+            &mut requirements,
+            plots.len(),
+            "Canvas measured requirements",
+        )?;
         let mut child_miss = None;
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
@@ -2549,6 +2834,15 @@ impl Canvas {
             }
         }
         let mut row_title_requirements = Vec::new();
+        fit::reserve(
+            themes.root(),
+            &mut row_title_requirements,
+            self.row_titles
+                .len()
+                .checked_mul(self.columns)
+                .ok_or_else(|| Error::Render("Canvas row title topology overflow".into()))?,
+            "Canvas row title requirements",
+        )?;
         for (title_index, title) in self.row_titles.iter().enumerate() {
             let first = title.start * self.columns;
             let last = first + self.columns - 1;
@@ -2673,17 +2967,8 @@ impl Canvas {
             });
         }
         for header in &self.row_headers {
-            let indices = (header.start..header.start + header.span)
-                .map(|row| row * self.columns)
-                .collect::<Vec<_>>();
-            let bottom = indices
-                .iter()
-                .map(|index| cells[*index].y0)
-                .fold(f64::INFINITY, f64::min);
-            let top = indices
-                .iter()
-                .map(|index| cells[*index].y1)
-                .fold(f64::NEG_INFINITY, f64::max);
+            let bottom = cells[(header.start + header.span - 1) * self.columns].y0;
+            let top = cells[header.start * self.columns].y1;
             headers.push(CanvasHeaderPlan {
                 text: crate::render::backend::PlacedText::middle(
                     header_theme.measure_legacy_text(
@@ -2769,8 +3054,13 @@ impl Canvas {
                     (cell.height() - 32.0).max(0.0)
                 ))));
             }
+            themes
+                .root()
+                .prepared_font_environment()?
+                .claim_unicode_bytes(40)
+                .map_err(|error| Error::Render(error.to_string()))?;
             text_panels.push(TextPanelPlan {
-                index,
+                layer: format!("canvas-text-panel-{index}"),
                 cell,
                 title_placement: crate::render::backend::PlacedText::from_deferred_first_line(
                     title.plan().clone(),
@@ -2818,7 +3108,13 @@ impl Canvas {
             legend.observe_feedback(round)?;
         }
 
-        let mut panels = Vec::with_capacity(measured.len());
+        let mut panels = Vec::new();
+        fit::reserve(
+            themes.root(),
+            &mut panels,
+            measured.len(),
+            "Canvas selected panels",
+        )?;
         let mut child_miss = None;
         for (index, kind) in measured {
             let plot = plots[index]
@@ -2859,62 +3155,117 @@ impl Canvas {
                     "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
                 )));
             }
+            let header = match fit::outcome(plan_panel_header(
+                plot,
+                cell,
+                theme,
+                &FitScope::new(&address, scope.ordinal),
+            ))? {
+                FitOutcome::Measured(header) => header,
+                FitOutcome::Miss(failure) => {
+                    FitFailure::retain_least(&mut child_miss, failure);
+                    continue;
+                }
+            };
+            let mut layers = [String::new(), String::new(), String::new(), String::new()];
+            for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
+                plot.data()
+                    .with_axis_resources(&resources)
+                    .reserve_source_string(layer, 40)?;
+                write!(layer, "panel-{index}-{suffix}").expect("admitted Canvas layer name");
+            }
+            let [grid, axes, legend, header_layer] = layers;
             panels.push(PlannedCanvasPanel {
                 index,
                 kind,
                 canvas_cell: cell,
+                legend: panel_plan
+                    .legend
+                    .as_ref()
+                    .map(|legend| {
+                        let (x, y) = legend.bounds.anchor();
+                        legend
+                            .legend
+                            .select(x, y, plot.data().with_axis_resources(&resources))
+                    })
+                    .transpose()?,
                 panel_plan,
-                header: plan_panel_header(plot, cell, theme)?,
+                header,
+                header_layer,
+                layers: [grid, axes, legend],
             });
         }
         if let Some(failure) = child_miss {
             return Ok(FitOutcome::Miss(failure));
         }
         let plan = CanvasPlan {
+            panel_heading_inputs: DeferredT5bPanelHeadingInputs {
+                title: self.panel_title_alignment,
+                subtitle: self.panel_subtitle_alignment,
+            },
             themes,
-            plots,
             canvas_layout,
+            shared_legend_draw: shared_legend
+                .as_ref()
+                .map(|legend| {
+                    let (x, y) = legend.bounds.anchor();
+                    legend.legend.select(
+                        x,
+                        y,
+                        plots
+                            .iter()
+                            .flatten()
+                            .next()
+                            .expect("shared legend has a source")
+                            .data()
+                            .with_axis_resources(&resources),
+                    )
+                })
+                .transpose()?,
+            plots,
+            #[cfg(test)]
             shared_legend,
             panels,
             text_panels,
             headers,
             row_titles,
         };
-        self.observe_arranged(&plan, round)?;
+        Self::observe_arranged(&plan, round)?;
         Ok(FitOutcome::Measured(plan))
     }
 
     fn observe_arranged(
-        &self,
         plan: &CanvasPlan,
         round: &mut crate::layout::kernel::FeedbackRound,
     ) -> Result<(), Error> {
-        let mut geometry = crate::render::geometry::GeometryBackend::new(plan.themes.root())?;
-        geometry.begin(self.width, self.height)?;
-        let result = (|| {
-            for panel in &plan.text_panels {
-                draw_text_panel(panel, &mut geometry)?;
-            }
-            draw_canvas_row_titles(&plan.row_titles, &mut geometry)?;
-            draw_canvas_headers(&plan.headers, &mut geometry)?;
-            Ok(())
-        })();
-        crate::render::backend::finish_scope(result, geometry.end(), "arranged Canvas chrome")?;
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(plan.themes.root())?;
+        for alignment in [
+            plan.panel_heading_inputs.title,
+            plan.panel_heading_inputs.subtitle,
+        ] {
+            round.observe_count(alignment.map_or(0, |value| value as usize + 1))?;
+        }
+        for panel in &plan.text_panels {
+            geometry.text(panel.title_placement, panel.title.plan(), None)?;
+            geometry.text(panel.body_placement, panel.body.plan(), None)?;
+        }
+        for header in plan.row_titles.iter().chain(&plan.headers) {
+            geometry.text(header.text.placement, &header.text.plan, None)?;
+        }
+        if let Some(legend) = &plan.shared_legend_draw {
+            legend.geometry(&mut geometry)?;
+        }
         geometry.observe_feedback(round)?;
         for panel in &plan.panels {
             round.observe_box(panel.canvas_cell)?;
             let theme = plan.themes.plot(panel.index).expect("arranged panel theme");
-            let plot = plan.plots[panel.index]
-                .as_ref()
-                .expect("arranged panel source");
-            let mut geometry = crate::render::geometry::GeometryBackend::new(theme)?;
-            geometry.begin(self.width, self.height)?;
-            let result = draw_panel_header(plot, &panel.header, &mut geometry);
-            crate::render::backend::finish_scope(
-                result,
-                geometry.end(),
-                "arranged Canvas panel header",
-            )?;
+            let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
+            for text in &panel.header {
+                geometry.text(text.placement, &text.plan, None)?;
+            }
+            if let Some(legend) = &panel.legend {
+                legend.geometry(&mut geometry)?;
+            }
             geometry.observe_feedback(round)?;
         }
         Ok(())
@@ -2925,7 +3276,6 @@ impl Canvas {
         reason = "the immutable Canvas plan keeps theme ownership and final draw ordering explicit"
     )]
     fn render_planned_canvas(
-        &self,
         plan: &CanvasPlan,
         width: u32,
         height: u32,
@@ -2951,9 +3301,6 @@ impl Canvas {
             )?;
         }
         for panel in &plan.panels {
-            let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
-                Error::Render("composed canvas panel disappeared during preflight".into())
-            })?;
             #[cfg(test)]
             let theme = plan
                 .themes
@@ -2961,7 +3308,22 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(panel.index, "grid-render", theme);
-            crate::decorations::apply::apply_grid(plot, &panel.panel_plan, backend)?;
+            crate::render::backend::with_layer_role(
+                backend,
+                &panel.layers[0],
+                crate::render::backend::LayerRole::Grid,
+                |backend| {
+                    panel
+                        .panel_plan
+                        .result
+                        .axes
+                        .as_ref()
+                        .ok_or_else(|| {
+                            Error::Render("Canvas plan is missing immutable axes".into())
+                        })?
+                        .draw_grid(backend)
+                },
+            )?;
         }
         for panel in &plan.panels {
             let plot = plan.plots[panel.index].as_ref().ok_or_else(|| {
@@ -2974,19 +3336,18 @@ impl Canvas {
             #[cfg(test)]
             record_canvas_theme(panel.index, "panel-render", theme);
             let source_rows = plot.configured_source_rows()?;
-            let plot_with_planned_limits = panel.panel_plan.plot_with_planned_limits(plot);
             let context = source_rows
                 .map_or_else(
                     || {
                         crate::spec::PlotRenderContext::new(
-                            plot_with_planned_limits.data(),
+                            plot.data(),
                             panel.panel_plan.panel_box,
                             theme,
                         )
                     },
                     |rows| {
                         crate::spec::PlotRenderContext::with_source_rows(
-                            plot_with_planned_limits.data(),
+                            plot.data(),
                             rows,
                             panel.panel_plan.panel_box,
                             theme,
@@ -2994,15 +3355,21 @@ impl Canvas {
                     },
                 )
                 .with_retained_body(panel.panel_plan.result.retained_payload());
-            plot_with_planned_limits.render_panel(panel.kind, context, backend)?;
+            plot.render_panel(panel.kind, context, backend)?;
             crate::significance::render_selected(plot, &panel.panel_plan.result, theme, backend)?;
-            crate::decorations::apply::apply_axes(plot, &panel.panel_plan, backend)?;
-            crate::decorations::apply::apply_planned_legend(
-                plot,
-                panel.panel_plan.legend.as_ref(),
-                backend,
-            )?;
-            draw_panel_header(plot, &panel.header, backend)?;
+            with_layer(backend, &panel.layers[1], |backend| {
+                panel
+                    .panel_plan
+                    .result
+                    .axes
+                    .as_ref()
+                    .ok_or_else(|| Error::Render("Canvas plan is missing immutable axes".into()))?
+                    .draw(backend)
+            })?;
+            if let Some(legend) = &panel.legend {
+                with_layer(backend, &panel.layers[2], |backend| legend.draw(backend))?;
+            }
+            draw_panel_header(&panel.header_layer, &panel.header, backend)?;
         }
         for panel in &plan.text_panels {
             #[cfg(test)]
@@ -3019,40 +3386,36 @@ impl Canvas {
             record_canvas_theme(usize::MAX, "shared-header-render", theme);
             draw_canvas_headers(&plan.headers, backend)?;
         }
-        if let Some(legend) = &plan.shared_legend {
-            let (x, y) = legend.bounds.anchor();
+        if let Some(legend) = &plan.shared_legend_draw {
             with_layer(backend, "canvas-shared-legend", |backend| {
-                legend.legend.draw(backend, x, y)
+                legend.draw(backend)
             })?;
         }
-        let mut titles = TitleBlock::new();
-        if let Some(title) = &self.title {
-            titles = titles.title(title.clone());
-        }
-        if let Some(subtitle) = &self.subtitle {
-            titles = titles.subtitle(subtitle.clone());
-        }
-        if let Some(caption) = &self.caption {
-            titles = titles.caption(caption.clone());
-        }
-        titles.draw(backend, width, &plan.canvas_layout)
+        let crate::layout::canvas::CanvasRootText::Planned(titles) = &plan.canvas_layout.root_text
+        else {
+            return Err(Error::Render(
+                "Canvas root title block was not measured".into(),
+            ));
+        };
+        titles.draw_retained(backend)
     }
 
     fn canvas_hue_groups(
-        &self,
         plots: &[Option<Plot>],
         panel: PanelBox,
         themes: &ResolvedCanvasThemes,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
     ) -> Result<Vec<(String, Vec<String>)>, Error> {
+        let resources = themes
+            .root()
+            .prepared_font_environment()?
+            .generation_resources();
         let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+        crate::layout::fit::reserve(themes.root(), &mut groups, plots.len(), "Canvas hue groups")?;
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
-            let plot = self.labels.as_ref().map_or_else(
-                || plot.clone(),
-                |labels| plot.clone().labels(labels.clone()),
-            );
+            let data = plot.data().with_axis_resources(&resources);
             if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
                 continue;
             }
@@ -3065,19 +3428,34 @@ impl Canvas {
             #[cfg(test)]
             record_canvas_theme(index, "shared-hue-discovery", theme);
             let observed =
-                children.canvas_probe(&plot, panel, theme, index, MeasurementPhase::Hue, round)?;
+                children.canvas_probe(plot, panel, theme, index, MeasurementPhase::Hue, round)?;
+            data.claim_source_visits(
+                groups
+                    .len()
+                    .checked_mul(dimension.len().max(1))
+                    .ok_or_else(|| Error::Render("Canvas hue lookup overflow".into()))?,
+            )?;
             let levels =
                 if let Some((_, levels)) = groups.iter_mut().find(|(name, _)| name == dimension) {
                     levels
                 } else {
                     let index = groups.len();
-                    groups.push((dimension.to_owned(), Vec::new()));
+                    groups.push((data.copy_source_string(dimension)?, Vec::new()));
                     &mut groups[index].1
                 };
             for entry in &observed.legend_entries {
                 if let Some(level) = entry.coordinated_hue_value_for(dimension) {
+                    data.claim_source_visits(
+                        levels
+                            .len()
+                            .checked_mul(level.len().max(1))
+                            .ok_or_else(|| {
+                                Error::Render("Canvas hue level lookup overflow".into())
+                            })?,
+                    )?;
                     if !levels.iter().any(|value| value == level) {
-                        levels.push(level.to_owned());
+                        data.reserve_source(levels, 1)?;
+                        levels.push(data.copy_source_string(level)?);
                     }
                 }
             }
@@ -3104,6 +3482,10 @@ impl Canvas {
     > {
         let mut entries = Vec::new();
         let mut probes = Vec::new();
+        let resources = themes
+            .root()
+            .prepared_font_environment()?
+            .generation_resources();
         crate::layout::fit::reserve(
             themes.root(),
             &mut probes,
@@ -3136,7 +3518,11 @@ impl Canvas {
                 round,
             )?;
             if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
-                entries.extend(result.legend_entries.iter().cloned());
+                let data = plot.data().with_axis_resources(&resources);
+                data.reserve_source(&mut entries, result.legend_entries.len())?;
+                for entry in &result.legend_entries {
+                    entries.push(entry.admitted_clone(data)?);
+                }
             }
             probes[index] = Some(result);
         }
@@ -3183,15 +3569,19 @@ fn plot_category_domain(
             "shared category labels require a categorical y-axis".into(),
         ));
     }
-    Ok(result.y_tick_keys.clone().unwrap_or_else(|| {
-        result
-            .layout
-            .y_axis
-            .ticks
-            .iter()
-            .map(|tick| tick.label.clone())
-            .collect()
-    }))
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = plot.data().with_axis_resources(&resources);
+    match &result.y_tick_keys {
+        Some(keys) => data.collect_source(keys.iter().map(|key| data.copy_source_string(key))),
+        None => data.collect_source(
+            result
+                .layout
+                .y_axis
+                .ticks
+                .iter()
+                .map(|tick| data.copy_source_string(&tick.label)),
+        ),
+    }
 }
 
 fn draw_canvas_headers(
@@ -3225,14 +3615,10 @@ fn draw_canvas_row_titles(
 }
 
 fn draw_text_panel(panel: &TextPanelPlan, backend: &mut dyn Backend) -> Result<(), Error> {
-    with_layer(
-        backend,
-        &format!("canvas-text-panel-{}", panel.index),
-        |backend| {
-            backend.draw_planned_text(panel.title_placement, panel.title.plan())?;
-            backend.draw_planned_text(panel.body_placement, panel.body.plan())
-        },
-    )
+    with_layer(backend, &panel.layer, |backend| {
+        backend.draw_planned_text(panel.title_placement, panel.title.plan())?;
+        backend.draw_planned_text(panel.body_placement, panel.body.plan())
+    })
 }
 
 #[expect(
@@ -3243,7 +3629,8 @@ fn plan_panel_header(
     plot: &Plot,
     cell: PanelBox,
     theme: &crate::theme::ResolvedTheme,
-) -> Result<Vec<crate::render::backend::PlacedText>, Error> {
+    scope: &FitScope,
+) -> Result<Vec<crate::render::backend::PlacedText>, crate::layout::fit::PlanError> {
     let title = plot.title_text().filter(|title| !title.is_empty());
     let subtitle = plot.subtitle_text().filter(|subtitle| !subtitle.is_empty());
     if title.is_none() && subtitle.is_none() {
@@ -3252,26 +3639,28 @@ fn plan_panel_header(
     let maximum_width = (cell.width() - 16.0).max(1.0);
     let title_plan = title
         .map(|text| {
-            theme.plan_text(
+            crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
                 text,
                 &theme.typography.title,
                 maximum_width,
                 PhysicalTextAlignment::Start,
                 "panel title",
-                false,
-            )
+                &scope.child(crate::layout::AddressRole::RootTitle, 0)?,
+            ))
         })
         .transpose()?;
     let subtitle_plan = subtitle
         .map(|text| {
-            theme.plan_text(
+            crate::layout::fit::measured(crate::layout::fit::text(
+                theme,
                 text,
                 &theme.typography.subtitle,
                 maximum_width,
                 PhysicalTextAlignment::Start,
                 "panel subtitle",
-                false,
-            )
+                &scope.child(crate::layout::AddressRole::RootSubtitle, 0)?,
+            ))
         })
         .transpose()?;
     let subtitle_line_height = theme.typography.subtitle.line_height();
@@ -3314,14 +3703,14 @@ fn plan_panel_header(
 }
 
 fn draw_panel_header(
-    plot: &Plot,
+    layer: &str,
     plans: &[crate::render::backend::PlacedText],
     backend: &mut dyn Backend,
 ) -> Result<(), Error> {
     if plans.is_empty() {
         return Ok(());
     }
-    with_layer(backend, &plot.layer_name("title"), |backend| {
+    with_layer(backend, layer, |backend| {
         for text in plans {
             text.draw(backend)?;
         }

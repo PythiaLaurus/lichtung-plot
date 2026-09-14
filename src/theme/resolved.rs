@@ -372,6 +372,7 @@ impl ResolvedTheme {
     }
 
     /// Plan one foundational appearance within an exact finite pixel width.
+    #[cfg(test)]
     pub(crate) fn plan_text(
         &self,
         source: &str,

@@ -4,7 +4,6 @@ use crate::Error;
 
 use crate::builder::Plot;
 use crate::decorations::plan::{PanelPlan, ResolvedLegend as PlannedLegend};
-use crate::decorations::title_block::TitleBlock;
 use crate::layout::CanvasLayout;
 use crate::render::backend::{with_layer, with_layer_role, Backend, LayerRole};
 
@@ -56,20 +55,7 @@ pub(crate) fn apply_canvas_text(
             backend,
         );
     }
-    let mut title_block = TitleBlock::new();
-    if let Some(title) = plot.title_text() {
-        title_block = title_block.title(title.to_owned());
-    }
-    if let Some(subtitle) = plot.subtitle_text() {
-        title_block = title_block.subtitle(subtitle.to_owned());
-    }
-    if let Some(caption) = plot.caption_text() {
-        title_block = title_block.caption(caption.to_owned());
-    }
-    if title_block.has_content() {
-        title_block.draw(backend, plot.width(), canvas)?;
-    }
-    Ok(())
+    Err(Error::Render("root title block was not measured".into()))
 }
 
 /// Draw a legend whose dimensions and position were frozen during preflight.

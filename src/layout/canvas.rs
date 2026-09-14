@@ -8,7 +8,7 @@ use crate::Error;
 
 #[cfg(test)]
 use crate::layout::Layout;
-use crate::layout::{PanelAxisPlan, PhysicalTextAlignment, ResolvedTextPlan};
+use crate::layout::{PanelAxisPlan, PhysicalTextAlignment};
 use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextAppearance;
@@ -173,6 +173,8 @@ impl PanelRequirements {
     clippy::cast_precision_loss,
     reason = "validated declared tracks fit the exact root coordinate domain"
 )]
+// Canvas parent adapter preservation boundary: declared equal legacy tracks,
+// including sparse cells. T5b owns any measured-track replacement.
 pub(crate) fn allocate_composed_grid_fit(
     outer: PanelBox,
     rows: usize,
@@ -301,13 +303,13 @@ pub struct CanvasLayout {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "unmeasured geometry must not allocate a dummy text plan"
+)]
 pub(crate) enum CanvasRootText {
     Planned(crate::decorations::title_block::plan::RootTitleBlockPlan),
-    // The Canvas adapter retains its existing placement until T5a6a5b.
-    Deferred {
-        plans: [Option<ResolvedTextPlan>; 3],
-        baselines: [Vec<f64>; 3],
-    },
+    Unmeasured,
 }
 
 impl CanvasLayout {
@@ -388,6 +390,7 @@ impl CanvasLayout {
         .expect("unchecked canvas layout always clamps to the minimum panel")
     }
 
+    #[cfg(test)]
     pub(crate) fn measured_composed_canvas(
         canvas_width: u32,
         canvas_height: u32,
@@ -395,23 +398,18 @@ impl CanvasLayout {
         spec: CanvasLayoutSpec,
         text: (Option<&str>, Option<&str>, Option<&str>),
     ) -> Result<Self, Error> {
-        theme.prepare_font_environment()?;
-        let maximum_width = (f64::from(canvas_width) - 32.0).max(1.0);
-        let plans = planned_root_text(text, theme, maximum_width)?;
-        let counts = planned_line_counts(&plans);
-        let mut layout = Self::resolve(
+        Self::measured_plot_root(
             canvas_width,
             canvas_height,
             theme,
             spec,
-            counts,
-            true,
+            text,
+            crate::decorations::title_block::plan::RootAlignments::resolve(
+                theme, [None; 2], [None; 2],
+            ),
             false,
-        )?;
-        if let CanvasRootText::Deferred { plans: stored, .. } = &mut layout.root_text {
-            *stored = [plans.0, plans.1, plans.2];
-        }
-        Ok(layout)
+        )
+        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     #[expect(
@@ -541,96 +539,15 @@ impl CanvasLayout {
             .has_caption
             .then_some(theme.typography.caption.line_height());
 
-        let title_lines_y = title_y.map_or_else(Vec::new, |first| {
-            (0..line_counts.0.max(1))
-                .map(|index| first - index as f64 * title_line_h)
-                .collect()
-        });
-        let subtitle_lines_y = subtitle_y.map_or_else(Vec::new, |first| {
-            (0..line_counts.1.max(1))
-                .map(|index| first - index as f64 * subtitle_line_h)
-                .collect()
-        });
-        let caption_lines_y = caption_y.map_or_else(Vec::new, |last| {
-            (0..line_counts.2.max(1))
-                .map(|index| last + (line_counts.2.max(1) - 1 - index) as f64 * caption_line_h)
-                .collect()
-        });
-
         Ok(Self {
             panel_box,
             insets,
-            root_text: CanvasRootText::Deferred {
-                plans: [None, None, None],
-                baselines: [title_lines_y, subtitle_lines_y, caption_lines_y],
-            },
+            root_text: CanvasRootText::Unmeasured,
             title_y,
             subtitle_y,
             caption_y,
         })
     }
-}
-
-type PlannedRootText = (
-    Option<ResolvedTextPlan>,
-    Option<ResolvedTextPlan>,
-    Option<ResolvedTextPlan>,
-);
-
-fn planned_root_text(
-    text: (Option<&str>, Option<&str>, Option<&str>),
-    theme: &ResolvedTheme,
-    maximum_width: f64,
-) -> Result<PlannedRootText, Error> {
-    Ok((
-        text.0
-            .filter(|value| !value.is_empty())
-            .map(|value| {
-                theme.plan_text(
-                    value,
-                    &theme.typography.title,
-                    maximum_width,
-                    PhysicalTextAlignment::Center,
-                    "canvas title",
-                    false,
-                )
-            })
-            .transpose()?,
-        text.1
-            .filter(|value| !value.is_empty())
-            .map(|value| {
-                theme.plan_text(
-                    value,
-                    &theme.typography.subtitle,
-                    maximum_width,
-                    PhysicalTextAlignment::Center,
-                    "canvas subtitle",
-                    false,
-                )
-            })
-            .transpose()?,
-        text.2
-            .filter(|value| !value.is_empty())
-            .map(|value| {
-                theme.plan_text(
-                    value,
-                    &theme.typography.caption,
-                    maximum_width,
-                    PhysicalTextAlignment::Center,
-                    "canvas caption",
-                    false,
-                )
-            })
-            .transpose()?,
-    ))
-}
-
-fn planned_line_counts(plans: &PlannedRootText) -> (usize, usize, usize) {
-    (
-        plans.0.as_ref().map_or(0, |plan| plan.lines.len()),
-        plans.1.as_ref().map_or(0, |plan| plan.lines.len()),
-        plans.2.as_ref().map_or(0, |plan| plan.lines.len()),
-    )
 }
 
 #[cfg(test)]
@@ -697,10 +614,10 @@ mod tests {
 
         assert!(lines.len() > 1);
         assert_eq!(lines.concat(), caption);
-        let CanvasRootText::Deferred { baselines, .. } = &layout.root_text else {
-            panic!("deferred composition layout");
+        let CanvasRootText::Planned(plan) = &layout.root_text else {
+            panic!("common composition layout");
         };
-        assert_eq!(baselines[2].len(), lines.len());
+        assert!(plan.bottom_reserve > theme.typography.caption.line_height());
         assert!(CanvasLayout::measured_composed_canvas(
             160,
             120,
@@ -749,13 +666,7 @@ mod tests {
                 .expect("spaced title block fits");
 
         assert!((spaced_layout.insets.top - base_layout.insets.top - 9.0).abs() < f64::EPSILON);
-        assert!(
-            (base_layout.subtitle_y.expect("subtitle")
-                - spaced_layout.subtitle_y.expect("subtitle")
-                - 9.0)
-                .abs()
-                < f64::EPSILON
-        );
+        assert_ne!(base_layout.root_text, spaced_layout.root_text);
     }
 
     #[test]

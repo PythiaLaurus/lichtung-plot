@@ -1,6 +1,7 @@
 //! Presentation policy for automatically sourced plot labels.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::data::{source::SourceAdmission, PlotData};
 use crate::Error;
@@ -19,7 +20,7 @@ enum LabelMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Labels {
     mode: LabelMode,
-    aliases: BTreeMap<String, String>,
+    aliases: Option<Arc<BTreeMap<String, String>>>,
 }
 
 impl Default for Labels {
@@ -34,7 +35,7 @@ impl Labels {
     pub const fn humanized() -> Self {
         Self {
             mode: LabelMode::Humanized,
-            aliases: BTreeMap::new(),
+            aliases: None,
         }
     }
 
@@ -43,14 +44,18 @@ impl Labels {
     pub const fn raw() -> Self {
         Self {
             mode: LabelMode::Raw,
-            aliases: BTreeMap::new(),
+            aliases: None,
         }
     }
 
     /// Add one exact raw-identity to display-label mapping.
     #[must_use]
     pub fn alias(mut self, raw: impl Into<String>, display: impl Into<String>) -> Self {
-        self.aliases.insert(raw.into(), display.into());
+        Arc::make_mut(
+            self.aliases
+                .get_or_insert_with(|| Arc::new(BTreeMap::new())),
+        )
+        .insert(raw.into(), display.into());
         self
     }
 
@@ -62,11 +67,9 @@ impl Labels {
         R: Into<String>,
         D: Into<String>,
     {
-        self.aliases.extend(
-            aliases
-                .into_iter()
-                .map(|(raw, display)| (raw.into(), display.into())),
-        );
+        for (raw, display) in aliases {
+            self = self.alias(raw, display);
+        }
         self
     }
 
@@ -85,10 +88,15 @@ impl Labels {
         data.source_visits(
             raw.len()
                 .checked_add(1)
-                .and_then(|length| self.aliases.len().checked_mul(length))
+                .and_then(|length| {
+                    self.aliases
+                        .as_ref()
+                        .map_or(0, |aliases| aliases.len())
+                        .checked_mul(length)
+                })
                 .ok_or_else(|| Error::Render("label alias lookup work overflow".into()))?,
         )?;
-        if let Some(alias) = self.aliases.get(raw) {
+        if let Some(alias) = self.aliases.as_ref().and_then(|aliases| aliases.get(raw)) {
             copy_label(alias, data)
         } else if self.mode == LabelMode::Humanized {
             humanize(raw, data)
@@ -132,9 +140,9 @@ impl Labels {
                 }
             }
             if let Some(previous) = collision {
-                let alias_guidance = if self.aliases.contains_key(previous)
-                    || self.aliases.contains_key(raw)
-                {
+                let alias_guidance = if self.aliases.as_ref().is_some_and(|aliases| {
+                    aliases.contains_key(previous) || aliases.contains_key(raw)
+                }) {
                     "change or remove the colliding aliases; Labels::raw() does not override explicit aliases"
                 } else {
                     "configure an explicit alias or use Labels::raw()"

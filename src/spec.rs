@@ -234,6 +234,13 @@ pub struct NumericLabelFormat {
 }
 
 impl NumericLabelFormat {
+    pub(crate) fn admit_clone(&self, data: crate::data::PlotData<'_>) -> Result<(), crate::Error> {
+        if let Some(suffix) = &self.suffix {
+            data.admit_clone_slice(suffix.as_bytes())?;
+        }
+        Ok(())
+    }
+
     /// Construct fixed decimal formatting without a suffix.
     pub fn new(precision: usize) -> Result<Self, crate::Error> {
         Self::default().precision(precision)

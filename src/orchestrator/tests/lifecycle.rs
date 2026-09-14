@@ -1733,6 +1733,7 @@ fn every_canonical_plot_kind_renders_through_one_lifecycle() {
         ),
     ];
     let mut preparation_work = [0_u64; 3];
+    crate::canvas::admission_tests::mixed_family_parent_audit(&plots);
     for (kind, plot) in plots {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
         let domain = crate::plots::shared_x::domain(

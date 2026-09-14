@@ -88,6 +88,9 @@ pub(crate) enum ParentCompositionAdapter {
 impl ParentCompositionAdapter {
     pub(crate) fn validate_child(self, plot: &Plot) -> Result<(), Error> {
         match self {
+            Self::Canvas if plot.kind() == PlotKind::Matrix => Err(Error::Render(
+                "Matrix manages its own canvas and cannot be nested in a composed canvas".into(),
+            )),
             Self::Canvas if plot.has_facets() => Err(Error::Render(
                 "a faceted chart cannot be nested inside a composed canvas".into(),
             )),

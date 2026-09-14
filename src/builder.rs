@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 mod accessors;
+mod admission;
 mod configuration;
 mod facets;
 mod layout;
@@ -434,7 +435,7 @@ use crate::{
     reason = "independent chart visibility and rendering switches are typed builder options"
 )]
 pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
-    input: PlotInput,
+    input: Arc<PlotInput>,
     source_rows: Option<SourceRows>,
     series: Option<CategoryValues>,
     hue: Option<CategoryValues>,
@@ -460,7 +461,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     bar_spacing: BarSpacing,
     histogram_bins: HistogramBins,
     histogram_stat: HistogramStat,
-    histogram_composite: HistogramComposite,
+    histogram_composite: Arc<HistogramComposite>,
     qq_line: QqLine,
     point_outline: Option<PointOutline>,
     legend_policy: LegendPolicy,
@@ -573,7 +574,7 @@ pub(crate) struct ComposedInputs {
 impl Plot<crate::kind::Any> {
     fn new<K: crate::kind::Marker>(input: PlotInput, kind: PlotKind) -> Plot<K> {
         Plot {
-            input,
+            input: Arc::new(input),
             source_rows: None,
             series: None,
             hue: None,
@@ -598,7 +599,7 @@ impl Plot<crate::kind::Any> {
             bar_spacing: BarSpacing::default(),
             histogram_bins: HistogramBins::default(),
             histogram_stat: HistogramStat::default(),
-            histogram_composite: HistogramComposite::default(),
+            histogram_composite: Arc::new(HistogramComposite::default()),
             qq_line: QqLine::default(),
             point_outline: Some(PointOutline::default()),
             legend_policy: LegendPolicy::Automatic,

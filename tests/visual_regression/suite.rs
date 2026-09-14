@@ -5,6 +5,30 @@ mod support;
 use support::*;
 
 #[test]
+fn canvas_root_title_block_odd_size_snapshot() {
+    let (x, y) = fixture_values();
+    let out = tempdir().join("canvas-root-title-block.svg");
+    lichtung_plot::Canvas::grid(1, 1)
+        .unwrap()
+        .panel(
+            0,
+            0,
+            Plot::scatter(x, y)
+                .title("Panel title")
+                .subtitle("Panel subtitle"),
+        )
+        .unwrap()
+        .title("Canvas title\nShort")
+        .subtitle("Independent subtitle\n\nFinal line")
+        .caption("Start caption\nSecond line")
+        .size(433, 501)
+        .svg_preserve_text(&out)
+        .unwrap();
+    let svg = std::fs::read_to_string(out).unwrap();
+    insta::assert_snapshot!(normalize_embedded_font(&svg));
+}
+
+#[test]
 fn root_title_block_explicit_odd_size_snapshot() {
     let (x, y) = fixture_values();
     let out = tempdir().join("root-title-block.svg");

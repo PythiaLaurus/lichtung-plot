@@ -58,6 +58,7 @@ pub(crate) use facets::text_census_panels as facet_text_census_panels;
 
 #[cfg(test)]
 thread_local! {
+    pub(crate) static SELECTED_INTERIOR_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static RENDER_PANEL_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static RENDER_THEME_ADDRESSES: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
     static PLOT_PLAN_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -218,6 +219,8 @@ impl Plot {
         &self,
         context: PlotRenderContext<'_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        #[cfg(test)]
+        SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         #[cfg(test)]
         RENDER_THEME_ADDRESSES.with(|addresses| {
             addresses

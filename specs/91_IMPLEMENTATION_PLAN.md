@@ -235,8 +235,8 @@ The approved theme and layout targets follow these rules:
 | T5a3q | Local-search benchmark coverage and placement comparisons | COMPLETE |
 | T5a4 | Root title-block plans | COMPLETE |
 | T5a5 | Axis, range, tick, frame, and grid plans | COMPLETE |
-| T5a6 | Ordinary Plot exact-root migration and closure | PENDING |
-| T5a6a | Ordinary interior carriers and deferred-family adapters | PENDING |
+| T5a6 | Ordinary Plot exact-root migration and closure | IN PROGRESS |
+| T5a6a | Ordinary interior carriers and deferred-family adapters | COMPLETE |
 | T5a6a1 | Prepared interior contracts and exhaustive classification | COMPLETE |
 | T5a6a2 | Retained canonical primitive geometry | COMPLETE |
 | T5a6a3a | Point/path semantic and payload extraction | COMPLETE |
@@ -251,7 +251,7 @@ The approved theme and layout targets follow these rules:
 | T5a6a4d | Beeswarm deferred interior | COMPLETE |
 | T5a6a4e | Waterfall deferred interior | COMPLETE |
 | T5a6a5a | Facet parent adapter and outer title integration | COMPLETE |
-| T5a6a5b | Canvas parent adapter and outer title integration | PENDING |
+| T5a6a5b | Canvas parent adapter and outer title integration | COMPLETE |
 | T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
 | T5a6b1 | Standard point and path families | PENDING |
 | T5a6b2 | Standard distribution and reference families | PENDING |
@@ -4524,7 +4524,7 @@ Commit: `feat(axes): freeze axis and grid plans`.
 
 ### T5a6: Ordinary Plot Exact-Root Migration And Closure
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: T5a5.
 
@@ -4544,7 +4544,7 @@ the root-coordinated feedback protocol specified in `05_LAYOUT_SYSTEM.md`.
 
 #### T5a6a: Ordinary Interior Carriers And Deferred-Family Adapters
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a5.
 
@@ -4606,12 +4606,14 @@ Evidence:
 
 #### T5a6a Execution Partition
 
-T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, and all five specialized
-extraction steps T5a6a4a-e are COMPLETE with focused and primary integrated
-evidence below. All 25 family interiors use selected measurement/capture without
-backend discovery or a production family combined-dispatch branch. Parent
-adapter T5a6a5a is COMPLETE; next is the T5a6a5b Canvas parent adapter, which
-remains PENDING along with later native-route migrations. No T5b tracks start early.
+T5a6a1, T5a6a2, all ordinary extraction steps T5a6a3a-f, all five specialized
+extraction steps T5a6a4a-e, and both parent adapters T5a6a5a-b are COMPLETE with
+focused, primary integrated, and independent review evidence below. The T5a6a
+umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
+use selected measurement/capture without backend discovery or a production family
+combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
+T5a6b/c native ordinary migrations and T5a6d closure remain PENDING; T5a6 and T5a
+remain IN PROGRESS. T5b tracks and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4634,6 +4636,73 @@ the later native axis/frame migrations; they must not duplicate those migrations
 | T5a6a4e | T5a6a4d | Waterfall typed deferred interior | `refactor(layout): prepare waterfall adapter` |
 | T5a6a5a | T5a6a4e | Facet parent adapter, shared-owner consequences, retained child plans, and T5a4 outer title producer | `refactor(layout): prepare facet adapter` |
 | T5a6a5b | T5a6a5a | Canvas parent adapter, independent root/panel title inputs, T5a4 outer title producer; exhaustive adapter and lifecycle audit | `refactor(layout): prepare canvas adapter` |
+
+T5a6a5b completion and integration evidence: COMPLETE. Independent review from the
+previous session reported no actionable runtime or admission bugs.
+
+- Canvas outer roots now use the common T5a4 producer with independent private
+  root alignment instructions and Center/None/Start theme defaults. The deferred
+  outer title producer and its parallel text/baseline vectors are removed.
+- `DeferredT5bPanelHeadingInputs` retains private panel alignment policy without
+  treating it as outer-root fallback. Current panel title/subtitle placement is
+  unchanged; no public policy API, panel captions, tracks, or nesting expansion.
+- `CanvasPlan` retains selected legend calls and child layer names. Parent chrome
+  uses `GeometrySnapshot`, not a measurement backend; capture consumes retained
+  outer text and no longer reconstructs title sources or planned-limit Plots.
+- Odd-size sparse/span tests cover independent root roles, private panel policy
+  exclusion, complete retained content, and cache equivalence. First capture
+  performs no Scatter preparation, measurement, projection, or shaping.
+- The new Canvas SVG snapshot was inspected: both panel headings, all root lines
+  (including the blank subtitle line), centered outer headings, start-aligned
+  caption, and a single child clip are retained. Six earlier snapshots unchanged.
+- Parent admission is now closed over the bounded equal-track/scope/diagnostic
+  scratch, gutter and row-title vectors, child configuration copies, header and
+  TextPanel layer strings, category-domain copies, shared-hue lookup/storage,
+  shared-legend identities and calls, Arc carriers, and child-cache configuration.
+  Resource-bearing PlotData is installed explicitly at these boundaries. Every
+  refusal propagates fatally through the shared-guide search without another trial.
+- Plot inputs and histogram supplemental source geometry are immutable Arc
+  carriers. Labels share immutable alias maps. `Plot::admitted_clone` inventories
+  every field exhaustively and admits all remaining heap-owned configuration
+  (including exact ticks, annotations, styles, explicit category orders and
+  coordinated domains) before the one configuration copy. Parent transformations
+  then consume that copy instead of cloning it again. No source-data clone or
+  configuration reconstruction occurs during Canvas capture.
+- Exact work/storage tests exercise rich configuration cloning independently of
+  source row count, pre-font parent scope graph refusal, and the complete sparse
+  parent with title/subtitle/caption, panel headings, labels, exact ticks, spanned
+  row/column headers, row title, TextPanel and shared legend. Exact limits succeed;
+  one-less limits refuse with zero measurement-backend sessions.
+- Exhaustive adapter/lifecycle audit: the closed `InteriorRoute` and selected
+  measurement dispatch cover all 20 ordinary and all five specialized families;
+  production measurement has no backend parameter or combined-dispatch fallback.
+  Both Facet and Canvas parents measure via retained child plans and
+  `GeometrySnapshot`. Their legacy equal-track boundaries, domain feedback,
+  eight-candidate shared-guide first-fit policy and local fit identities remain.
+- The existing 25-family lifecycle fixture now additionally renders all 24
+  supported Canvas child families in six mixed four-child roots, with cache reuse
+  both enabled and disabled. Matrix remains root-only and is rejected before
+  Canvas fonts/backend work. The grouping respects the existing operation cap;
+  it does not enlarge budgets to accommodate one giant fixture. Every production
+  Canvas test checks zero source reads, projections, shaping, axis preparation,
+  selected-interior measurement and geometry-backend begins at first capture.
+- Final focused verification passes: strict locked/offline all-target Clippy,
+  all 920 active library tests (17 ignored), all 57 composition integrations,
+  and all seven visual snapshots. The Canvas snapshot is the sole new snapshot;
+  the prior six are unchanged. Formatting and `git diff --check` also pass.
+- Final primary `just verify` in `/tmp/opencode/t5a6a5b-verify.log` passed:
+  formatting, strict locked/offline all-target Clippy, 920 library tests passed
+  with 17 ignored, and 449 integration tests passed, including 57 composition
+  tests and all seven visual snapshots. Four example targets ran zero tests;
+  warning-denied rustdoc and offline package verification passed for 239 files
+  (6.7 MiB; 1.4 MiB compressed). No tests failed.
+- All T5a6a1/2, T5a6a3a-f and T5a6a4a-e extraction contracts and both parent
+  adapter contracts are closed. T5a6a5b and the T5a6a umbrella are COMPLETE.
+  T5a6b/c native ordinary axis/frame migrations and T5a6d closure remain PENDING;
+  T5a6 and T5a remain IN PROGRESS. T5b panel captions/heading tracks, T5e
+  specialized native producers, and public T6 APIs/defaults remain deferred.
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, or commit changes.
 
 T5a6a5a completion and integration evidence (from clean `5357472`): COMPLETE.
 Independent review reported no actionable findings, including the root title

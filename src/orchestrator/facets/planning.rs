@@ -175,7 +175,7 @@ fn adjusted_shared_axis_panel(
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
-    reason = "facet measurement keeps the immutable grid, scale, theme, and backend inputs explicit"
+    reason = "facet measurement keeps immutable grid, scale, theme, and child-plan inputs explicit"
 )]
 pub(super) fn legacy_parent_adapter(
     plot: &Plot,

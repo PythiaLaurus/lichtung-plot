@@ -470,7 +470,7 @@ impl Plot<crate::kind::Histogram> {
     /// Add a KDE density curve and complete source-observation rug.
     #[must_use]
     pub fn composite(mut self, composite: HistogramComposite) -> Self {
-        self.histogram_composite = composite;
+        self.histogram_composite = std::sync::Arc::new(composite);
         self
     }
 }

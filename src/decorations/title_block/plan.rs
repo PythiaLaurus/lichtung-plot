@@ -52,6 +52,13 @@ pub(crate) struct RootTitleBlockPlan {
 }
 
 impl RootTitleBlockPlan {
+    pub(crate) fn draw_retained(&self, backend: &mut dyn Backend) -> Result<(), Error> {
+        for role in self.roles.iter().flatten() {
+            backend.draw_planned_text(role.placement, &role.text)?;
+        }
+        Ok(())
+    }
+
     /// Intrinsics do not depend on alignment or on an allocated height.
     #[allow(dead_code, reason = "parent intrinsic adapters arrive in T5a6a")]
     pub(crate) fn intrinsic_widths(

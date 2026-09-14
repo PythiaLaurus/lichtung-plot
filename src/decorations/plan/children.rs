@@ -41,6 +41,20 @@ impl Inputs {
         round: &FeedbackRound,
     ) -> Result<Self, Error> {
         let environment = context.theme.prepared_font_environment()?;
+        let resources = environment.generation_resources();
+        let data = context.data.with_axis_resources(&resources);
+        data.admit_clone_slice(&context.theme.colors)?;
+        data.admit_clone_slice(context.theme.font_family.as_bytes())?;
+        for appearance in [
+            &context.theme.typography.title,
+            &context.theme.typography.subtitle,
+            &context.theme.typography.caption,
+            &context.theme.typography.axis_title,
+            &context.theme.typography.tick_label,
+            &context.theme.typography.significance_label,
+        ] {
+            data.admit_clone_slice(appearance.stack.as_bytes())?;
+        }
         // under_grid requires one cell segment: its intermediate/final addresses
         // use one/two segments, and the copied cell address uses one more.
         environment
@@ -218,6 +232,11 @@ impl<'a> ChildPlans<'a> {
         self.validate_owner(owner)?;
         if reuse_enabled() {
             for entry in &self.measurements {
+                let resources = context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources();
+                plot.admit_composed_comparison(context.data.with_axis_resources(&resources))?;
                 context
                     .theme
                     .prepared_font_environment()?
@@ -235,7 +254,16 @@ impl<'a> ChildPlans<'a> {
         #[cfg(test)]
         CHILD_MEASUREMENTS.with(|events| events.borrow_mut().push((owner.clone(), phase.label())));
         let result = match measure()? {
-            FitOutcome::Measured(result) => Arc::new(result),
+            FitOutcome::Measured(result) => {
+                let resources = context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources();
+                context
+                    .data
+                    .with_axis_resources(&resources)
+                    .source_arc(result)?
+            }
             FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
         };
         if !reuse_enabled() {
@@ -268,6 +296,11 @@ impl<'a> ChildPlans<'a> {
         self.validate_owner(owner)?;
         if reuse_enabled() {
             for entry in &self.panels {
+                let resources = context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources();
+                plot.admit_composed_comparison(context.data.with_axis_resources(&resources))?;
                 context
                     .theme
                     .prepared_font_environment()?
@@ -310,7 +343,16 @@ impl<'a> ChildPlans<'a> {
             round,
             owner,
         )? {
-            FitOutcome::Measured(result) => Arc::new(result),
+            FitOutcome::Measured(result) => {
+                let resources = context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources();
+                context
+                    .data
+                    .with_axis_resources(&resources)
+                    .source_arc(result)?
+            }
             FitOutcome::Miss(miss) => return Ok(FitOutcome::Miss(miss)),
         };
         if !reuse_enabled() {

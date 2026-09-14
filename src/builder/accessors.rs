@@ -142,7 +142,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                     | ErrorBarKind::PercentileInterval(_)
                     | ErrorBarKind::StandardError(_) => None,
                 }),
-            DUMBBELL_RIGHT => match &self.input {
+            DUMBBELL_RIGHT => match self.input.as_ref() {
                 PlotInput::Dumbbell { right, .. } => Some(DataColumn::Numeric(right)),
                 _ => None,
             },
@@ -166,7 +166,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 .as_ref()
                 .and_then(|facet| facet.values().find(|values| values.name() == key))
                 .map(DataColumn::Category)
-                .or_else(|| match &self.input {
+                .or_else(|| match self.input.as_ref() {
                     PlotInput::Matrix { variables } => self
                         .matrix_variables
                         .iter()
@@ -179,7 +179,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn x_data_column(&self) -> Option<DataColumn<'_>> {
-        match &self.input {
+        match self.input.as_ref() {
             PlotInput::Scatter { x, .. }
             | PlotInput::Regression { x, .. }
             | PlotInput::Marginal { x, .. }
@@ -238,7 +238,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn y_data_column(&self) -> Option<DataColumn<'_>> {
-        match &self.input {
+        match self.input.as_ref() {
             PlotInput::Scatter { y, .. }
             | PlotInput::Line { y, .. }
             | PlotInput::Trajectory { y, .. }
@@ -324,7 +324,7 @@ impl<K: crate::kind::Marker> Plot<K> {
         reason = "one exhaustive closed-input match keeps every family's aligned channels auditable"
     )]
     pub(crate) fn aligned_columns(&self) -> Vec<DataColumn<'_>> {
-        let mut columns = match &self.input {
+        let mut columns = match self.input.as_ref() {
             PlotInput::Scatter { x, y }
             | PlotInput::Regression { x, y }
             | PlotInput::Marginal { x, y } => {
@@ -556,12 +556,12 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Requested optional histogram density-and-rug composition.
     #[must_use]
-    pub(crate) const fn histogram_composite_spec(&self) -> &HistogramComposite {
+    pub(crate) fn histogram_composite_spec(&self) -> &HistogramComposite {
         &self.histogram_composite
     }
 
     pub(crate) fn histogram_composite_geometry_input(&self) -> Option<&HistogramGeometry> {
-        match &self.input {
+        match self.input.as_ref() {
             PlotInput::Histogram { input } => input.geometry_input(),
             _ => None,
         }
@@ -591,7 +591,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     fn drawable_bounds(&self) -> Option<&crate::Bounds> {
-        match &self.input {
+        match self.input.as_ref() {
             PlotInput::PointInterval { bounds, .. }
             | PlotInput::Interaction { bounds, .. }
             | PlotInput::Forest { bounds, .. } => Some(bounds),
@@ -604,8 +604,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         self.line_band.is_some()
     }
 
-    pub(crate) const fn bar_input(&self) -> Option<&BarInput> {
-        match &self.input {
+    pub(crate) fn bar_input(&self) -> Option<&BarInput> {
+        match self.input.as_ref() {
             PlotInput::Bar { input, .. } | PlotInput::HorizontalBar { input, .. } => Some(input),
             _ => None,
         }
@@ -648,7 +648,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn raincloud_geometry_input(&self) -> Option<&RaincloudGeometry> {
-        match &self.input {
+        match self.input.as_ref() {
             PlotInput::Raincloud { input } => input.geometry_input(),
             _ => None,
         }
@@ -709,8 +709,8 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
-    pub(crate) const fn waterfall_base(&self) -> Option<f64> {
-        match &self.input {
+    pub(crate) fn waterfall_base(&self) -> Option<f64> {
+        match self.input.as_ref() {
             PlotInput::Waterfall { base, .. } => Some(*base),
             _ => None,
         }
@@ -723,13 +723,13 @@ impl<K: crate::kind::Marker> Plot<K> {
     }
 
     pub(crate) fn dumbbell_right_col(&self) -> Option<&'static str> {
-        matches!(&self.input, PlotInput::Dumbbell { .. }).then_some(DUMBBELL_RIGHT)
+        matches!(self.input.as_ref(), PlotInput::Dumbbell { .. }).then_some(DUMBBELL_RIGHT)
     }
 
     /// Required endpoint labels and colors for a dumbbell plot.
     #[must_use]
-    pub(crate) const fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
-        match &self.input {
+    pub(crate) fn dumbbell_endpoints_spec(&self) -> Option<&DumbbellEndpoints> {
+        match self.input.as_ref() {
             PlotInput::Dumbbell { endpoints, .. } => Some(endpoints),
             _ => None,
         }
