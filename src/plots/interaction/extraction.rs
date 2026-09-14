@@ -2,7 +2,7 @@ use super::*;
 use crate::font::canonical::OperationGenerationResources;
 use crate::{Bounds, CategoryValues, NumericValues};
 
-fn source() -> Plot<crate::kind::Interaction> {
+pub(crate) fn source() -> Plot<crate::kind::Interaction> {
     Plot::interaction(
         CategoryValues::new("condition", ["b", "a", "c", "b", "c"]).unwrap(),
         NumericValues::new("estimate", [2.0, 3.0, 4.0, 5.0, 6.0]),
@@ -12,6 +12,58 @@ fn source() -> Plot<crate::kind::Interaction> {
             NumericValues::new("upper", [3.0, 4.0, 5.0, 6.0, 7.0]),
         ),
     )
+}
+
+#[test]
+fn same_assignment_mark_operands_styles_order_and_clips_match_pre_native_output() {
+    use crate::layout::PanelBox;
+    // Complete mark-only SVG fingerprints recorded at a6f9091, before native axes.
+    for (markers, connectors, expected) in [
+        (true, true, 0xfac2_5eef_cd84_c63d),
+        (true, false, 0x3ef6_0d2f_c29c_86ec),
+        (false, true, 0xbae4_0bd8_6df8_a981),
+    ] {
+        let source = source()
+            .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
+            .styles([
+                crate::InteractionStyle::new("two")
+                    .shape(PointShape::TriangleUp)
+                    .pattern(LinePattern::Dashed),
+                crate::InteractionStyle::new("one"),
+            ])
+            .markers(markers)
+            .connectors(connectors)
+            .y_limits(-2.0, 10.0)
+            .erase();
+        let inputs =
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new())
+                .unwrap();
+        let plot = inputs.attach(source).unwrap();
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for preset in [
+            crate::Theme::Publication,
+            crate::Theme::Nature,
+            crate::Theme::Science,
+        ] {
+            let theme = preset.resolve();
+            for panel in [
+                PanelBox::new(80.25, 550.75, 70.5, 410.25),
+                PanelBox::new(30.0, 810.0, 50.0, 600.0),
+            ] {
+                let result = plot
+                    .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+                    .unwrap();
+                let mut svg = crate::render::svg_backend::SvgBackend::in_memory(900, 700);
+                svg.begin(900, 700).unwrap();
+                result.marks.as_ref().unwrap().draw(&mut svg).unwrap();
+                svg.end().unwrap();
+                for byte in svg.into_bytes().unwrap() {
+                    hash = (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+                }
+            }
+        }
+        assert_eq!(hash, expected, "markers={markers}, connectors={connectors}");
+    }
 }
 
 #[test]
@@ -34,11 +86,13 @@ fn admitted_semantics_preserve_sparse_cells_and_prefont_refusal() {
     let visits = resources.usage().unwrap().1;
     let bytes = resources.byte_usage().unwrap();
     for (visits, bytes) in [(visits - 1, bytes), (visits, bytes - 1)] {
-        assert!(crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::with_test_limits(visits, bytes)
-        )
-        .is_err());
+        assert!(matches!(
+            crate::plots::shared_x::prepare_plot(
+                &source,
+                &OperationGenerationResources::with_test_limits(visits, bytes)
+            ),
+            Err(Error::Render(_))
+        ));
     }
     crate::plots::shared_x::prepare_plot(
         &source,
@@ -109,6 +163,7 @@ fn root_prepares_each_component_once() {
 
 #[test]
 fn selected_geometry_and_capture_are_immutable() {
+    use crate::orchestrator::measurements::{self, Counter};
     let source = source()
         .hue(CategoryValues::new("color", ["red", "red", "red", "blue", "blue"]).unwrap())
         .erase();
@@ -157,6 +212,7 @@ fn selected_geometry_and_capture_are_immutable() {
     .erase();
     let mut backend = crate::render::geometry::GeometryBackend::new(&theme).unwrap();
     backend.begin(640, 480).unwrap();
+    measurements::start();
     poison
         .render_panel(
             crate::PlotKind::Interaction,
@@ -170,6 +226,21 @@ fn selected_geometry_and_capture_are_immutable() {
         )
         .unwrap();
     backend.end().unwrap();
+    let work = measurements::finish();
+    for counter in [
+        Counter::OneCategoricalAxisMeasure,
+        Counter::StandardPanelIntrinsic,
+        Counter::LegacyPanelConstructor,
+        Counter::AxisRangePreparation,
+        Counter::AxisSpecPreparation,
+        Counter::AxisSourcePreparation,
+        Counter::TickSource,
+        Counter::TickMetricLookup,
+        Counter::TextProposalVisit,
+        Counter::TextExactTrial,
+    ] {
+        assert_eq!(work.counters[counter as usize], 0, "{counter:?}");
+    }
     assert_eq!(
         reads,
         crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get)
@@ -187,6 +258,7 @@ fn selected_geometry_and_capture_are_immutable() {
 
 #[test]
 fn invalid_intervals_and_final_ranges_fail_before_fonts() {
+    use crate::orchestrator::measurements::{self, Counter};
     let invalid = Plot::interaction(
         CategoryValues::new("condition", ["a"]).unwrap(),
         NumericValues::new("estimate", [2.0]),
@@ -210,11 +282,19 @@ fn invalid_intervals_and_final_ranges_fail_before_fonts() {
             .erase(),
     ] {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|count| count.set(0));
-        assert!(crate::plots::shared_x::prepare_plot(
-            &source,
-            &OperationGenerationResources::new()
-        )
-        .is_err());
+        measurements::start();
+        assert!(matches!(
+            crate::plots::shared_x::prepare_plot(&source, &OperationGenerationResources::new()),
+            Err(Error::Data(_))
+        ));
+        let work = measurements::finish();
+        for counter in [
+            Counter::OneCategoricalAxisMeasure,
+            Counter::StandardPanelIntrinsic,
+            Counter::LegacyPanelConstructor,
+        ] {
+            assert_eq!(work.counters[counter as usize], 0);
+        }
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0

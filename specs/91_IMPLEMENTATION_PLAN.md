@@ -255,11 +255,11 @@ The approved theme and layout targets follow these rules:
 | T5a6b | Standard-coordinate ordinary Plot migration | COMPLETE |
 | T5a6b1 | Standard point and path families | COMPLETE |
 | T5a6b2 | Standard distribution and reference families | COMPLETE |
-| T5a6c | One-categorical-axis ordinary Plot migration | IN PROGRESS |
+| T5a6c | One-categorical-axis ordinary Plot migration | COMPLETE |
 | T5a6c1 | Estimate-display families | COMPLETE |
 | T5a6c2 | Bar families | COMPLETE |
 | T5a6c3 | Categorical distribution families | COMPLETE |
-| T5a6c4 | Interaction family | PENDING |
+| T5a6c4 | Interaction family | COMPLETE |
 | T5a6d | Ordinary exact-root closure audit | PENDING |
 | T5b | Legends, facets, and Canvas composition chrome | PENDING |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
@@ -4613,10 +4613,12 @@ umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
 T5a6b1, T5a6b2, and the T5a6b umbrella are COMPLETE; all eight standard-coordinate
-routes are native. T5a6c1-T5a6c3 are COMPLETE with eleven native
-`OneCategoricalAxis` routes, for nineteen native ordinary routes in total.
-T5a6c3 has final primary verification and independent review evidence below.
-T5a6, T5a, and T5a6c remain IN PROGRESS. T5a6c4 and T5a6d remain PENDING.
+routes are native. T5a6c1-T5a6c4 and the T5a6c umbrella are COMPLETE with twelve
+native `OneCategoricalAxis` routes, for twenty native ordinary routes in total.
+T5a6c4 has final primary `just verify` evidence below. Five `SpecializedDeferred`
+interiors and two `ParentAdapter` composition routes remain; no source-level
+combined-dispatch route remains. T5a6 and T5a remain IN PROGRESS because T5a6d
+closure remains PENDING.
 T5b tracks and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
@@ -5581,7 +5583,7 @@ Commit: `refactor(layout): migrate distribution reference plans`.
 
 #### T5a6c: One-Categorical-Axis Ordinary Plot Migration
 
-**Status**: IN PROGRESS
+**Status**: COMPLETE
 
 Dependencies: T5a6b2.
 
@@ -5589,13 +5591,14 @@ Objective: migrate the ordinary categorical family through one orientation-aware
 producer in T5a6c1-T5a6c4. This umbrella has no separate commit and completes only
 after all four clusters.
 
-Progress evidence (2026-09-14): T5a6c1-T5a6c3 are COMPLETE. Boxplot, Violin, and
-Raincloud now use the same `OneCategoricalAxis` producer, bringing that route to
-eleven families and the native ordinary total to nineteen. T5a6c3 has passed final
-primary verification and independent review with no actionable findings. T5a6c
-remains IN PROGRESS because T5a6c4 remains PENDING. Interaction is the sole
-remaining ordinary legacy route. No successor cluster or T5c style/packing work
-is started.
+Completion evidence (2026-09-14): T5a6c1-T5a6c4 are COMPLETE. Interaction closes
+the twelve native `OneCategoricalAxis` routes; with eight `StandardCoordinate`
+routes, all twenty ordinary routes are native. Final primary `just verify` passed
+in full in `/tmp/opencode/t5a6c4-verify.log`, as detailed below. Five
+`SpecializedDeferred` interiors and two `ParentAdapter` composition routes remain;
+no source-level combined-dispatch route remains. T5a6d closure remains PENDING,
+so T5a6 and T5a remain IN PROGRESS. T5b/T5c/T5e boundaries and public T6
+APIs/defaults remain deferred; no later phase is started.
 
 Requirements shared by all four clusters:
 
@@ -5950,7 +5953,7 @@ Commit: `refactor(layout): migrate categorical distribution plans`.
 
 ##### T5a6c4: Interaction Family
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6c3.
 
@@ -5968,6 +5971,86 @@ Evidence:
 - Condition order, sparse connector, interval, exact-size, deferred consequence,
   frozen-plan, lifecycle, route-exhaustiveness, and snapshot evidence proves all
   12 categorical and all 20 ordinary routes are native; `just verify` passes.
+
+Completion evidence (from clean `a6f9091`, verified 2026-09-14): COMPLETE.
+Final primary `just verify` passed in full in `/tmp/opencode/t5a6c4-verify.log`.
+T5a6c is also COMPLETE: all twelve categorical and all twenty ordinary routes are
+native. T5a6 and T5a remain IN PROGRESS; T5a6d closure and later phases remain
+PENDING. No commit is made, as requested.
+
+- Interaction now uses the common `OneCategoricalAxis` producer with conditions
+  on the bottom. Both axes freeze before the selected `Layout` is injected into
+  `interaction::measure_marks`. The family-local `axis_layout` construction and
+  the last ordinary layout-construction branch in `PlotRenderContext` are deleted.
+  The latter rejects all native routes through the exhaustive classification;
+  its retained specialized-layout copy test still checks exact byte admission.
+- The empty `CategoricalLegacy` enum is removed. The audit-only `combined`
+  dispatcher and its six rejection stubs are deleted rather than retained as
+  aliases. Wrong-route rejection is tested through actual `measure_panel`
+  dispatch. The five specialized measurement implementations are unchanged.
+- An independent exhaustive census pins exactly eight standard-coordinate,
+  twelve one-categorical-axis, five `SpecializedDeferred` interiors, and two
+  `ParentAdapter` composition routes. The shared ordinary test-source census
+  contains all twenty native kinds exactly once. No source-level combined-dispatch
+  route remains. Source searches find no `CategoricalLegacy`, `reject_combined`,
+  old Interaction measurement alias, or `GenericFloor`/`generic_floor` symbol.
+  The only ordinary parity floor remains the named `DeferredLegacyPanelMinimum`
+  adapter; no new local floor or parent packing policy is introduced.
+- Preparation, statistics, trace extraction, and retained payload representation
+  are unchanged. Tests pin first-observed condition order, independent raw/display
+  labels including spaces, global group/collective order with an absent slot,
+  global hue indices, every projected interval endpoint, sparse connector points,
+  complete marker/line styles, clips, categorical ranges, and assigned numeric
+  limits across three themes and two fractional panels.
+- Three complete mark-only SVG fingerprints were recorded before production edits
+  at `a6f9091`. They remain identical after migration across three themes, two
+  assigned panels, and marker/connector visibility combinations. Four existing
+  full-root fingerprints in `tests/interactions/styles.rs` are intentionally
+  rebased and renamed for native root output; old-parent-frame parity is not
+  claimed. This does not replace or weaken the pre-native same-assignment oracle.
+- Parent-selected marks, annotations, axes, and complete replay bytes equal a
+  fresh direct measurement at the parent's final assigned panel. Selected numeric
+  ranges and final absolute gutters remain exact. Existing connector-collision
+  tests continue to prove that hidden connectors do not affect legend-driven
+  range planning. Fixed/free-X/free-Y/free facets and shared Canvas roots preserve
+  cache-on/off output and prepare each component once.
+- Shared native tests now include Interaction for hard axis-title requirements,
+  exact intrinsic and candidate resource caps, pre-projection refusal, default
+  and explicit root sizes, narrow no-endpoint-estimate selection, independent
+  multiline title/caption gutters, contracting root feedback, changed/rejected
+  parent assignments, and cumulative work without child reuse. Real compositions
+  exercise rejected guide trials and the per-owner/per-round eight-trial cap.
+  Dedicated condition-intrinsic misses retain typed address/ordinal identity.
+- Poisoned retained capture performs no source reads, preparation, projection,
+  native measurement, intrinsic work, axis/tick selection, or shaping. Invalid
+  intervals, guides, and exact ticks fail before fonts/native measurement, and
+  source work/storage caps remain exact. Final canonical storage refusal precedes
+  Null; a successful Interaction preflight has only one Null lifecycle.
+- `visual_regression__native_interaction.snap` and its PNG preview were inspected.
+  The exact 641x401 root has clip `(85,51,420.6982421875,175)`, three ordered
+  conditions, a sparse dashed triangular trace, solid circular trace, intervals,
+  outside composite legend, multiline category label, three-line x title, and
+  independent two-line caption. Region assertions pin the exact panel and keep
+  axis-title baselines below the panel and above the caption. All 26 earlier
+  snapshots are unchanged; this one new snapshot brings the total to 27.
+
+Final primary `just verify` in `/tmp/opencode/t5a6c4-verify.log` passed in full:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 961 passed, 0 failed, 17 ignored (978 total).
+- All 455 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 13. Those thirteen visual tests cover all 27 snapshots read-only:
+  one new snapshot and 26 unchanged existing snapshots; no older snapshot changes
+  were needed.
+- In total, 1,416 tests passed with no failures and 17 ignored (1,433 total).
+  Four example targets ran zero tests. Warning-denied API documentation and
+  offline package verification passed for 265 files (7.2 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate interaction plans`.
 

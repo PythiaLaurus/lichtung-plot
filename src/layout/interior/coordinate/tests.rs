@@ -29,13 +29,27 @@ fn categorical_source() -> Plot {
     .erase()
 }
 
-fn all_sources() -> impl Iterator<Item = Plot> {
+fn ordinary_sources() -> impl Iterator<Item = Plot> {
     sources()
         .into_iter()
         .chain(super::super::estimates::sources())
         .chain(super::super::bars::sources())
         .chain(super::super::categorical_distributions::sources())
-        .chain([crate::plots::categorical_distribution::extraction::supplied()])
+        .chain([crate::plots::interaction::extraction::source().erase()])
+}
+
+fn all_sources() -> impl Iterator<Item = Plot> {
+    ordinary_sources().chain([crate::plots::categorical_distribution::extraction::supplied()])
+}
+
+#[test]
+fn ordinary_test_sources_cover_every_native_route_exactly_once() {
+    let kinds: Vec<_> = ordinary_sources().map(|source| source.kind()).collect();
+    assert_eq!(kinds.len(), 20);
+    for (index, kind) in kinds.iter().enumerate() {
+        assert!(!kinds[..index].contains(kind));
+        assert!(InteriorRoute::classify(*kind).is_native());
+    }
 }
 
 #[test]
@@ -123,18 +137,18 @@ fn native_multiline_axis_gutters_cannot_consume_root_caption_or_title_reserves()
 #[test]
 fn native_narrow_exact_root_selects_actual_ticks_instead_of_rejecting_endpoint_estimates() {
     use crate::decorations::plan::{plan_panel_for_test, LegendRole};
-    for source in
-        sources()
-            .into_iter()
-            .chain(
-                super::super::categorical_distributions::sources().map(|source| {
-                    source.labels(
-                        crate::Labels::raw()
-                            .alias("after_visit", "a")
-                            .alias("before_visit", "b"),
-                    )
-                }),
-            )
+    for source in sources()
+        .into_iter()
+        .chain(
+            super::super::categorical_distributions::sources().map(|source| {
+                source.labels(
+                    crate::Labels::raw()
+                        .alias("after_visit", "a")
+                        .alias("before_visit", "b"),
+                )
+            }),
+        )
+        .chain([crate::plots::interaction::extraction::source().erase()])
     {
         let source = source
             .with_planned_y_limits((0.001, 1.0))
@@ -355,6 +369,7 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
         crate::plots::dumbbell::STAGES.with(|counts| counts.set([0; 4]));
         crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::plots::categorical_distribution::STAGES.with(|counts| counts.set([[0; 4]; 3]));
+        crate::plots::interaction::STAGES.with(|counts| counts.set([0; 3]));
         crate::layout::interior::distributions::STAGES.with(|counts| counts.set([[0; 4]; 4]));
         crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
         crate::render::geometry::GEOMETRY_BACKEND_CONSTRUCTIONS.with(|calls| calls.set(0));
@@ -397,6 +412,10 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
             [[0; 4]; 3]
         );
         assert_eq!(
+            crate::plots::interaction::STAGES.with(std::cell::Cell::get),
+            [0; 3]
+        );
+        assert_eq!(
             crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(std::cell::Cell::get),
             0
         );
@@ -408,6 +427,10 @@ fn native_resource_refusal_precedes_mark_materialization_and_backend_creation() 
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "real native compositions compare rejected guides, bounded trials and gutter feedback with both cache modes"
+)]
 fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_without_cache() {
     use crate::decorations::plan::children::DISABLE_CHILD_REUSE;
     use crate::orchestrator::measurements::GuideOutcome;
@@ -449,6 +472,22 @@ fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_with
                 faceted,
             ),
             configured(Plot::line_path(x, y.clone(), group.clone()), faceted),
+            configured(
+                Plot::interaction(
+                    CategoryValues::new(
+                        "condition",
+                        ["before", "during", "after", "before", "during", "after"],
+                    )
+                    .unwrap(),
+                    y.clone(),
+                    group.clone(),
+                    crate::Bounds::new(
+                        NumericValues::new("lo", [1.0, 0.0, 2.0, 1.0, 0.0, 2.0]),
+                        NumericValues::new("hi", [3.0, 2.0, 4.0, 3.0, 2.0, 4.0]),
+                    ),
+                ),
+                faceted,
+            ),
             configured(
                 Plot::trajectory(
                     CategoryValues::new(
@@ -500,6 +539,16 @@ fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_with
                     plot.kind(),
                     work.guides
                 );
+                for guide in &work.guides {
+                    assert!(
+                        work.guides
+                            .iter()
+                            .filter(|attempt| attempt.owner == guide.owner
+                                && attempt.root_round == guide.root_round)
+                            .count()
+                            <= 8
+                    );
+                }
                 if disabled {
                     assert_eq!(work.counters[Counter::ChildCacheHit as usize], 0);
                 }

@@ -1008,71 +1008,17 @@ impl<'a> PlotRenderContext<'a> {
         self.prepared_axes?.display_categories[side].as_deref()
     }
 
-    /// Capture consumes the selected layout; only measurement may select sources.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "closed native preparation consumption and admitted retained-layout replay"
-    )]
+    /// Deferred specialized consumers may retain layouts or measure their own axes.
     pub(crate) fn axis_layout(
         self,
         measure: impl FnOnce() -> Result<Layout, crate::layout::fit::PlanError>,
     ) -> Result<Layout, crate::layout::fit::PlanError> {
-        if self.retained_layout.is_none() {
-            if let (Some(axes), Some(kind)) = (self.prepared_axes, self.prepared_kind) {
-                let standard = match kind {
-                    PlotKind::Scatter
-                    | PlotKind::Line
-                    | PlotKind::Trajectory
-                    | PlotKind::LinePath
-                    | PlotKind::Histogram
-                    | PlotKind::Density
-                    | PlotKind::Qq
-                    | PlotKind::Regression
-                    | PlotKind::PointInterval
-                    | PlotKind::Coefficient
-                    | PlotKind::Forest
-                    | PlotKind::Dumbbell
-                    | PlotKind::Bar
-                    | PlotKind::StackedBar
-                    | PlotKind::HorizontalBar
-                    | PlotKind::StackedHorizontalBar
-                    | PlotKind::Boxplot
-                    | PlotKind::Violin
-                    | PlotKind::Raincloud => {
-                        return Err(Error::Render(
-                            "native axes require the coordinate producer".into(),
-                        )
-                        .into())
-                    }
-                    PlotKind::Interaction => true,
-                    PlotKind::Heatmap
-                    | PlotKind::Marginal
-                    | PlotKind::Matrix
-                    | PlotKind::Beeswarm
-                    | PlotKind::Waterfall => false,
-                };
-                if standard {
-                    let resources = self
-                        .theme
-                        .prepared_font_environment()?
-                        .generation_resources();
-                    let data = self.data.with_axis_resources(&resources);
-                    let x_spec = &axes.specs[0];
-                    let layout = self.layout_with_ticks(
-                        axes.ranges[0],
-                        axes.ranges[1],
-                        self.panel,
-                        data.copy_source_string(&axes.labels[0])?,
-                        data.copy_source_string(&axes.labels[1])?,
-                        Vec::new(),
-                        Vec::new(),
-                        x_spec,
-                        &axes.specs[1],
-                        self.theme,
-                    )?;
-                    return Ok(layout);
-                }
-            }
+        if self.retained_layout.is_none()
+            && self.prepared_kind.is_some_and(|kind| {
+                crate::layout::interior::InteriorRoute::classify(kind).is_native()
+            })
+        {
+            return Err(Error::Render("native axes require the coordinate producer".into()).into());
         }
         match self.retained_layout {
             Some(layout) => {
@@ -1123,39 +1069,35 @@ impl<'a> PlotRenderContext<'a> {
 
 #[cfg(test)]
 #[test]
-fn deferred_axis_consumption_admits_every_owned_source_copy() {
-    use crate::layout::{AxisSpec, AxisTick};
+fn deferred_retained_axis_consumption_admits_every_owned_source_copy() {
+    use crate::layout::{Axis, AxisTick, Projection, TickSource};
     let plot = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
         crate::NumericValues::new("y", [0.0, 1.0]),
     )
     .erase();
-    let axes = crate::plots::shared_x::PreparedAxes {
-        ranges: [(0.0, 2.0), (0.0, 1.0)],
-        categories: [
-            Some(vec![
-                AxisTick::new(0.5, "first"),
-                AxisTick::new(1.5, "second"),
-            ]),
-            None,
-        ],
-        display_categories: [None, None],
-        labels: ["x title".into(), "y title".into()],
-        specs: [
-            AxisSpec::default(),
-            AxisSpec {
-                exact_ticks: Some(vec![AxisTick::new(0.5, "exact")]),
-                ..AxisSpec::default()
-            },
-        ],
-        logarithmic: false,
+    let retained = Layout {
+        projection: Projection::new((0.0, 2.0), (0.0, 1.0), (0.0, 400.0, 0.0, 300.0)),
+        x_axis: Axis {
+            label: "x title".into(),
+            ticks: vec![AxisTick::new(0.5, "first"), AxisTick::new(1.5, "second")],
+            explicit_ticks: false,
+            assigned_tick_width: None,
+            source: TickSource::SUPPLIED,
+        },
+        y_axis: Axis {
+            label: "y title".into(),
+            ticks: vec![AxisTick::new(0.5, "exact")],
+            explicit_ticks: true,
+            assigned_tick_width: None,
+            source: TickSource::EXACT,
+        },
     };
     let consume = |theme: &crate::theme::ResolvedTheme| {
         let mut context =
             PlotRenderContext::new(plot.data(), PanelBox::new(0.0, 400.0, 0.0, 300.0), theme);
-        context.prepared_axes = Some(&axes);
-        context.prepared_kind = Some(PlotKind::Interaction);
-        context.axis_layout(|| panic!("prepared axes must be consumed"))
+        context.retained_layout = Some(&retained);
+        context.axis_layout(|| panic!("retained axes must be consumed"))
     };
     let theme = crate::Theme::Publication.resolve();
     let resources = theme
@@ -1167,34 +1109,22 @@ fn deferred_axis_consumption_admits_every_owned_source_copy() {
         resources.byte_usage().unwrap(),
     );
     let layout = consume(&theme).unwrap();
-    assert_eq!(layout.x_axis.ticks, *axes.categories[0].as_ref().unwrap());
-    assert_eq!(
-        layout.y_axis.ticks,
-        *axes.specs[1].exact_ticks.as_ref().unwrap()
-    );
+    assert_eq!(layout.x_axis.ticks, retained.x_axis.ticks);
+    assert_eq!(layout.y_axis.ticks, retained.y_axis.ticks);
     let visits = resources.usage().unwrap().1 - before.0;
     let bytes = resources.byte_usage().unwrap() - before.1;
-    // Two titles, two category records/strings, and two copies of the exact source
-    // (temporary spec and final axis, whose reserve has a four-record minimum).
-    // No font or final text-plan storage is involved.
+    // Two titles and three tick strings; each axis reserves the four-record minimum.
     assert_eq!(
         bytes,
-        (7 * std::mem::size_of::<AxisTick>() + 14 + 11 + 10) as u64
+        (8 * std::mem::size_of::<AxisTick>() + 14 + 11 + 5) as u64
     );
-    assert!(visits >= 14 + 2 + 11 + 1 + 5);
-    for (remaining_visits, remaining_bytes, succeeds) in [
-        (visits, bytes, true),
-        (visits - 1, bytes, false),
-        (visits, bytes - 1, false),
-    ] {
+    assert_eq!(visits, 0);
+    for (remaining_bytes, succeeds) in [(bytes, true), (bytes - 1, false)] {
         let theme = crate::Theme::Publication.resolve();
         let resources = theme
             .prepared_font_environment()
             .unwrap()
             .generation_resources();
-        resources
-            .claim_visits(1_000_000 - resources.usage().unwrap().1 - remaining_visits)
-            .unwrap();
         resources
             .claim_bytes(536_870_912 - resources.byte_usage().unwrap() - remaining_bytes)
             .unwrap();

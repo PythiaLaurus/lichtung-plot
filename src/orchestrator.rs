@@ -32,11 +32,7 @@ fn classified_interior_rejects_wrong_route_before_backend_or_font_work() {
         &theme,
     );
     crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
-    let mut backend = backend::NullBackend::default();
-    let error = crate::layout::interior::InteriorRoute::classify(PlotKind::Line)
-        .combined(&plot, context, &mut backend)
-        .err()
-        .unwrap();
+    let error = plot.measure_panel(PlotKind::Line, context).err().unwrap();
     assert!(matches!(
         error,
         crate::layout::fit::PlanError::Fatal(Error::Data(_))
@@ -211,17 +207,11 @@ impl Plot {
         }
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "selected marks and common annotation snapshot share one measurement boundary"
-    )]
     pub(crate) fn measure_selected_interior(
         &self,
         context: PlotRenderContext<'_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-        use crate::layout::interior::{
-            CategoricalLegacy as C, InteriorRoute as R, SpecializedLegacy as S,
-        };
+        use crate::layout::interior::{InteriorRoute as R, SpecializedLegacy as S};
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         #[cfg(test)]
@@ -239,9 +229,6 @@ impl Plot {
             R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
             R::SpecializedLegacy(S::Heatmap) => crate::plots::heatmap::measure(self, context)?,
             R::SpecializedLegacy(S::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
-            R::CategoricalLegacy(C::Interaction) => {
-                crate::plots::interaction::measure(self, context)?
-            }
             R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context

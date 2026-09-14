@@ -30,21 +30,27 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
         Beeswarm,
         Waterfall,
     ];
-    let mut counts = [0; 4];
+    let mut counts = [0; 3];
     for kind in kinds {
         let route = InteriorRoute::classify(kind);
         assert_eq!(route.kind(), kind);
-        // Both classification and actual dispatch are exhaustive in the macro;
-        // a new PlotKind cannot compile without choosing a concrete renderer.
-        let index = match route {
-            InteriorRoute::StandardCoordinate(_) => 2,
-            InteriorRoute::OneCategoricalAxis(_) => 3,
-            InteriorRoute::CategoricalLegacy(_) => 0,
-            InteriorRoute::SpecializedLegacy(_) => 1,
+        // Both this independent census and production dispatch are exhaustive.
+        let expected = match kind {
+            Scatter | Line | Trajectory | LinePath | Histogram | Density | Qq | Regression => 0,
+            PointInterval | Coefficient | Forest | Dumbbell | Bar | HorizontalBar | StackedBar
+            | StackedHorizontalBar | Boxplot | Violin | Raincloud | Interaction => 1,
+            Heatmap | Marginal | Matrix | Beeswarm | Waterfall => 2,
         };
+        let index = match route {
+            InteriorRoute::StandardCoordinate(_) => 0,
+            InteriorRoute::OneCategoricalAxis(_) => 1,
+            InteriorRoute::SpecializedLegacy(_) => 2,
+        };
+        assert_eq!(index, expected);
+        assert_eq!(route.is_native(), index < 2);
         counts[index] += 1;
     }
-    assert_eq!(counts, [1, 5, 8, 11]);
+    assert_eq!(counts, [8, 12, 5]);
     let parents = [
         ParentCompositionAdapter::Facet,
         ParentCompositionAdapter::Canvas,

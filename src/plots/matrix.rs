@@ -324,19 +324,6 @@ fn tick_planner_failure_is_not_reported_as_small_matrix_cells() {
     assert!(!error.to_string().contains("within their cells"));
 }
 
-/// Render a scatter matrix (pairplot).
-///
-/// Returns a dummy `Layout` (the matrix is self-decorated) and
-/// legend entries (empty — legend is drawn internally).
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(Error::Render("matrix requires selected payload capture".into()).into())
-}
-
 pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,

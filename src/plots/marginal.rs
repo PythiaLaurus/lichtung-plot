@@ -114,25 +114,6 @@ impl MarginalPayload {
     }
 }
 
-/// Render a marginal plot: central scatter with
-/// top-and-right marginal KDE curves.
-///
-/// Returns the `Layout` covering the **central** scatter panel
-/// so the orchestrator can apply decorations (frame / grid /
-/// axes / legend) to it.
-///
-/// Explicit graphical groups are rendered separately; hue supplies their color
-/// and legend entries.
-#[allow(clippy::if_not_else)]
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(Error::Render("marginal requires selected payload capture".into()).into())
-}
-
 pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,

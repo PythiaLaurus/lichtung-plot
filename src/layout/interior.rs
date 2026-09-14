@@ -4,8 +4,6 @@
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
-#[cfg(test)]
-use crate::spec::PlotRenderContext;
 use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{Error, Plot};
 
@@ -13,7 +11,7 @@ pub(crate) mod coordinate;
 
 macro_rules! interior_routes {
     (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }
-     legacy { $($class:ident { $($kind:ident => $renderer:path),+ $(,)? }),+ $(,)? }) => {
+     legacy { $($class:ident { $($kind:ident),+ $(,)? }),+ $(,)? }) => {
         $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub(crate) enum $native { $($native_kind),+ })+
 
@@ -37,21 +35,6 @@ macro_rules! interior_routes {
                     $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+
                 }
             }
-
-            /// Audit-only rejection of the removed combined execution route.
-            #[cfg(test)]
-            pub(crate) fn combined(
-                self,
-                plot: &Plot,
-                context: PlotRenderContext<'_>,
-                backend: &mut dyn crate::render::backend::Backend,
-            ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-                self.validate(plot)?;
-                match self {
-                    $(Self::$native(_) => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()),)+
-                    $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+
-                }
-            }
         }
     };
 }
@@ -59,18 +42,11 @@ macro_rules! interior_routes {
 interior_routes! {
     native {
         StandardCoordinate { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression },
-        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud },
+        OneCategoricalAxis { PointInterval, Coefficient, Forest, Dumbbell, Bar, HorizontalBar, StackedBar, StackedHorizontalBar, Boxplot, Violin, Raincloud, Interaction },
     }
     legacy {
-        CategoricalLegacy {
-            Interaction => crate::plots::interaction::reject_combined,
-        },
         SpecializedLegacy {
-            Heatmap => crate::plots::heatmap::reject_combined,
-            Marginal => crate::plots::marginal::reject_combined,
-            Matrix => crate::plots::matrix::reject_combined,
-            Beeswarm => crate::plots::beeswarm::reject_combined,
-            Waterfall => crate::plots::waterfall::reject_combined,
+            Heatmap, Marginal, Matrix, Beeswarm, Waterfall,
         },
     }
 }
@@ -79,7 +55,7 @@ impl InteriorRoute {
     pub(crate) const fn is_native(self) -> bool {
         match self {
             Self::StandardCoordinate(_) | Self::OneCategoricalAxis(_) => true,
-            Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => false,
+            Self::SpecializedLegacy(_) => false,
         }
     }
 

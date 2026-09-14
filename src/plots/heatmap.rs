@@ -112,18 +112,6 @@ pub(crate) fn text_census(
     Ok(())
 }
 
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(
-        Error::Render("heatmap requires prepared measurement or selected payload capture".into())
-            .into(),
-    )
-}
-
 pub(crate) fn measure(
     chart: &Plot,
     context: PlotRenderContext<'_>,

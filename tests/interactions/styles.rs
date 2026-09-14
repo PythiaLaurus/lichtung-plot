@@ -73,21 +73,22 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
 }
 
 #[test]
-fn extracted_interaction_preserves_original_svg_bytes() {
-    // Full-output fingerprints captured from the original combined renderer at ae5591f.
+fn native_interaction_preserves_exact_root_svg_bytes() {
+    // Native root frames replace the ae5591f combined-layout fingerprints.
+    // The internal same-assignment oracle separately pins pre-native mark bytes.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (11174, 0x27e8_e930_2ede_82fd_u64),
-                (11518, 0x6bd5_2e5c_dd5b_0609),
+                (10909, 0x2a73_b002_705b_088f_u64),
+                (11253, 0xea4e_8528_961f_ec9a),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (11021, 0x3ec0_90f9_5970_8127),
-                (11365, 0xd835_28b0_4c40_759f),
+                (10516, 0x7e2e_76a6_f80f_fdd4),
+                (10860, 0x05f0_0aad_0c71_f249),
             ],
         ),
     ] {

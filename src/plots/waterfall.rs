@@ -43,18 +43,6 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) totals: [(f64, String); 2],
 }
 
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(
-        Error::Render("waterfall requires prepared measurement or selected payload capture".into())
-            .into(),
-    )
-}
-
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,

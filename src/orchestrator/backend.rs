@@ -2362,6 +2362,7 @@ mod tests {
             .chain(crate::layout::interior::bars::sources())
             .chain(crate::layout::interior::categorical_distributions::sources())
             .chain([crate::plots::categorical_distribution::extraction::supplied()])
+            .chain([crate::plots::interaction::extraction::source().erase()])
             .enumerate()
         {
             for payload in [
@@ -2386,6 +2387,7 @@ mod tests {
                 crate::plots::bar_data::STAGES.with(|counts| counts.set([[0; 4]; 4]));
                 crate::plots::categorical_distribution::STAGES
                     .with(|counts| counts.set([[0; 4]; 3]));
+                crate::plots::interaction::STAGES.with(|counts| counts.set([0; 3]));
                 NULL_BEGIN_CALLS.with(|calls| calls.set(0));
                 let plot = if small {
                     source.clone().size(100, 100)
@@ -2401,8 +2403,14 @@ mod tests {
                         [family - 4],
                     7 => crate::plots::dumbbell::STAGES.with(std::cell::Cell::get),
                     8..=11 => crate::plots::bar_data::STAGES.with(std::cell::Cell::get)[family - 8],
-                    _ => crate::plots::categorical_distribution::STAGES.with(std::cell::Cell::get)
-                        [(family - 12).min(2)],
+                    12..=15 => crate::plots::categorical_distribution::STAGES
+                        .with(std::cell::Cell::get)[(family - 12).min(2)],
+                    16 => {
+                        let [prepared, measured, drawn] =
+                            crate::plots::interaction::STAGES.with(std::cell::Cell::get);
+                        [prepared, measured, measured, drawn]
+                    }
+                    _ => unreachable!(),
                 };
                 assert_eq!(counts[0], 1);
                 assert_eq!(counts[3], usize::from(!small));

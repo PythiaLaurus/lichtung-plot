@@ -125,7 +125,8 @@ impl InteriorRoute {
                     | OneCategoricalAxis::StackedBar
                     | OneCategoricalAxis::Boxplot
                     | OneCategoricalAxis::Violin
-                    | OneCategoricalAxis::Raincloud => 0,
+                    | OneCategoricalAxis::Raincloud
+                    | OneCategoricalAxis::Interaction => 0,
                     OneCategoricalAxis::PointInterval
                     | OneCategoricalAxis::Coefficient
                     | OneCategoricalAxis::Forest
@@ -138,7 +139,7 @@ impl InteriorRoute {
                     && (!inputs.logarithmic
                         || (family == OneCategoricalAxis::Forest && inputs.categories[0].is_none()))
             }
-            Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => false,
+            Self::SpecializedLegacy(_) => false,
         };
         if !valid {
             return Err(Error::Render("invalid native coordinate axis orientation".into()).into());
@@ -303,7 +304,10 @@ impl InteriorRoute {
             Self::OneCategoricalAxis(
                 OneCategoricalAxis::Violin | OneCategoricalAxis::Raincloud,
             ) => crate::plots::violin::measure_marks(plot, context, layout)?,
-            Self::CategoricalLegacy(_) | Self::SpecializedLegacy(_) => {
+            Self::OneCategoricalAxis(OneCategoricalAxis::Interaction) => {
+                crate::plots::interaction::measure_marks(plot, context, layout)?
+            }
+            Self::SpecializedLegacy(_) => {
                 unreachable!("native route validated")
             }
         };

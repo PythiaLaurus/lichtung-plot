@@ -473,6 +473,72 @@ fn native_categorical_distribution_snapshots() {
 }
 
 #[test]
+fn native_interaction_snapshot() {
+    use lichtung_plot::{Bounds, InteractionStyle, Labels, LinePattern, PointShape};
+    let out = tempdir().join("native-interaction.svg");
+    Plot::interaction(
+        CategoryValues::new(
+            "condition",
+            [
+                "after_visit",
+                "before_visit",
+                "last_visit",
+                "after_visit",
+                "last_visit",
+            ],
+        )
+        .unwrap(),
+        NumericValues::new("estimate", [2.0, 3.0, 4.0, 5.0, 6.0]),
+        CategoryValues::new("group", ["one", "one", "one", "two", "two"]).unwrap(),
+        Bounds::new(
+            NumericValues::new("lower", [1.0, 2.0, 3.0, 4.0, 5.0]),
+            NumericValues::new("upper", [3.0, 4.0, 5.0, 6.0, 7.0]),
+        ),
+    )
+    .hue(CategoryValues::new("hue", ["first", "first", "first", "second", "second"]).unwrap())
+    .styles([
+        InteractionStyle::new("two")
+            .shape(PointShape::TriangleUp)
+            .pattern(LinePattern::Dashed),
+        InteractionStyle::new("one"),
+    ])
+    .labels(Labels::humanized().alias("after_visit", "A longer follow-up visit"))
+    .size(641, 401)
+    .title("Native interaction profiles")
+    .x_label("First axis line\nSecond axis line\nThird axis line")
+    .caption("Independent caption\nSecond caption line")
+    .svg_preserve_text(&out)
+    .unwrap()
+    .png_preview(out.with_extension("png"))
+    .unwrap();
+    assert_eq!(
+        png_dimensions(&std::fs::read(out.with_extension("png")).unwrap()),
+        (641, 401)
+    );
+    let svg = std::fs::read_to_string(&out).unwrap();
+    let panel = parse_first_clip_rect(&svg);
+    assert_eq!(
+        [panel.x, panel.y, panel.width, panel.height].map(f64::to_bits),
+        [85.0, 51.0, 420.698_242_187_5, 175.0].map(f64::to_bits)
+    );
+    assert!(SvgRect {
+        x: 0.0,
+        y: 0.0,
+        width: 641.0,
+        height: 401.0
+    }
+    .contains(panel));
+    let text = parse_text_elements(&svg);
+    assert!(text_y(&text, "Native interaction profiles") < panel.y);
+    let caption = text_y(&text, "Independent caption");
+    for label in ["First axis line", "Second axis line", "Third axis line"] {
+        let y = text_y(&text, label);
+        assert!(y > panel.y + panel.height && y < caption);
+    }
+    insta::assert_snapshot!("native_interaction", normalize_embedded_font(&svg));
+}
+
+#[test]
 fn beeswarm_clip_structure_snapshot() {
     let category = CategoryValues::new("category", ["first", "first", "second", "second"]).unwrap();
     let value = NumericValues::new("value", [-2.0, -1.0, 1.0, 2.0]);

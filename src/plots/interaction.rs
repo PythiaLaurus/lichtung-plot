@@ -7,7 +7,10 @@ use crate::spec::{LinePattern, PlotRenderContext, PlotRenderResult, PointShape};
 use crate::{Error, Plot};
 
 #[cfg(test)]
-mod extraction;
+pub(crate) mod extraction;
+
+#[cfg(test)]
+mod native;
 
 #[cfg(test)]
 thread_local! {
@@ -229,13 +232,13 @@ impl InteractionPayload {
 }
 
 #[expect(
-    clippy::too_many_lines,
     clippy::cast_precision_loss,
     reason = "selected bounded category projection and frozen trace styles"
 )]
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     count(1);
@@ -257,22 +260,6 @@ pub(crate) fn measure(
         .prepared_font_environment()?
         .generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let layout = context.axis_layout(|| {
-        let range = crate::layout::continuous_auto_range(marks.range, chart.y_axis_spec());
-        let axis = crate::layout::display_axis_spec(chart.y_axis_spec(), range);
-        context.layout_with_ticks(
-            (0.0, marks.conditions.len() as f64),
-            range,
-            context.panel,
-            data.copy_source_string(chart.x_label_text().unwrap_or(""))?,
-            data.copy_source_string(chart.y_label_text().unwrap_or(""))?,
-            Vec::new(),
-            Vec::new(),
-            chart.x_axis_spec(),
-            &axis,
-            context.theme,
-        )
-    })?;
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),
         traces: Vec::new(),
@@ -349,18 +336,6 @@ pub(crate) fn measure(
         geometry,
     })?);
     Ok(result)
-}
-
-#[cfg(test)]
-pub(crate) fn reject_combined(
-    _: &Plot,
-    _: PlotRenderContext<'_>,
-    _: &mut dyn Backend,
-) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
-    Err(Error::Render(
-        "interaction requires prepared measurement or selected payload capture".into(),
-    )
-    .into())
 }
 
 fn resolve_trace_styles(
