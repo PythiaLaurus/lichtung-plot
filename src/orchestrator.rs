@@ -219,6 +219,9 @@ impl Plot {
         &self,
         context: PlotRenderContext<'_>,
     ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
+        use crate::layout::interior::{
+            CategoricalLegacy as C, InteriorRoute as R, SpecializedLegacy as S,
+        };
         #[cfg(test)]
         SELECTED_INTERIOR_MEASUREMENTS.with(|calls| calls.set(calls.get() + 1));
         #[cfg(test)]
@@ -228,31 +231,34 @@ impl Plot {
                 .push(std::ptr::from_ref(context.theme).addr());
         });
         let context = context.with_prepared_axes(self);
-        let mut result = match self.kind() {
-            PlotKind::Matrix => crate::plots::matrix::measure(self, context)?,
-            PlotKind::Marginal => crate::plots::marginal::measure(self, context)?,
-            PlotKind::Heatmap => crate::plots::heatmap::measure(self, context)?,
-            PlotKind::Beeswarm => crate::plots::beeswarm::measure(self, context)?,
-            PlotKind::Interaction => crate::plots::interaction::measure(self, context)?,
-            PlotKind::Boxplot => crate::plots::boxplot::measure(self, context)?,
-            PlotKind::Violin | PlotKind::Raincloud => crate::plots::violin::measure(self, context)?,
-            PlotKind::Bar | PlotKind::StackedBar => crate::plots::bar::measure(self, context)?,
-            PlotKind::HorizontalBar | PlotKind::StackedHorizontalBar => {
+        let mut result = match R::classify(self.kind()) {
+            R::StandardCoordinate(family) => family.measure(self, context)?,
+            R::SpecializedLegacy(S::Matrix) => crate::plots::matrix::measure(self, context)?,
+            R::SpecializedLegacy(S::Marginal) => crate::plots::marginal::measure(self, context)?,
+            R::SpecializedLegacy(S::Heatmap) => crate::plots::heatmap::measure(self, context)?,
+            R::SpecializedLegacy(S::Beeswarm) => crate::plots::beeswarm::measure(self, context)?,
+            R::CategoricalLegacy(C::Interaction) => {
+                crate::plots::interaction::measure(self, context)?
+            }
+            R::CategoricalLegacy(C::Boxplot) => crate::plots::boxplot::measure(self, context)?,
+            R::CategoricalLegacy(C::Violin | C::Raincloud) => {
+                crate::plots::violin::measure(self, context)?
+            }
+            R::CategoricalLegacy(C::Bar | C::StackedBar) => {
+                crate::plots::bar::measure(self, context)?
+            }
+            R::CategoricalLegacy(C::HorizontalBar | C::StackedHorizontalBar) => {
                 crate::plots::horizontal_bar::measure(self, context)?
             }
-            PlotKind::Scatter => crate::plots::scatter::measure(self, context)?,
-            PlotKind::Histogram => crate::plots::histogram::measure(self, context)?,
-            PlotKind::Density => crate::plots::density::measure(self, context)?,
-            PlotKind::Qq => crate::plots::qq::measure(self, context)?,
-            PlotKind::Dumbbell => crate::plots::dumbbell::measure(self, context)?,
-            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            R::Histogram => crate::plots::histogram::measure(self, context)?,
+            R::Density => crate::plots::density::measure(self, context)?,
+            R::Qq => crate::plots::qq::measure(self, context)?,
+            R::CategoricalLegacy(C::Dumbbell) => crate::plots::dumbbell::measure(self, context)?,
+            R::CategoricalLegacy(C::PointInterval | C::Coefficient | C::Forest) => {
                 crate::plots::interval_estimate::measure(self, context)?
             }
-            PlotKind::Regression => crate::plots::regression::measure(self, context)?,
-            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                crate::plots::line::measure(self, context)?
-            }
-            PlotKind::Waterfall => crate::plots::waterfall::measure(self, context)?,
+            R::Regression => crate::plots::regression::measure(self, context)?,
+            R::SpecializedLegacy(S::Waterfall) => crate::plots::waterfall::measure(self, context)?,
         };
         let resources = context
             .theme
@@ -355,6 +361,17 @@ fn resolve_rendered_labels(
     let scope = context.fit_scope();
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
+    if crate::layout::interior::InteriorRoute::classify(kind).is_native() {
+        if result.axes.is_none() {
+            return Err(
+                Error::Render("native standard panel is missing its frozen axes".into()).into(),
+            );
+        }
+        if !result.legend_entries.is_empty() {
+            crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries, theme)?;
+        }
+        return Ok(());
+    }
     let (x_label, y_label) = match plot.prepared_axis_inputs() {
         Some(axes) => (
             data.copy_source_string(&axes.labels[0])?,

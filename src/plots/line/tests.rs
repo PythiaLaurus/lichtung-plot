@@ -308,6 +308,9 @@ fn selected_capture_never_prepares_projects_reads_sources_or_shapes_and_replays_
                     shapes
                 );
                 for counter in [
+                    Counter::StandardPanelIntrinsic,
+                    Counter::StandardCoordinateMeasure,
+                    Counter::LegacyPanelConstructor,
                     Counter::AxisRangePreparation,
                     Counter::AxisSpecPreparation,
                     Counter::AxisSourcePreparation,

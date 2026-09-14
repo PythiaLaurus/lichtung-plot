@@ -177,7 +177,7 @@ fn automatic_guide_recovers_from_terminal_numeric_tick_miss() {
         observed.guides
     );
     assert!(observed.counters[Counter::TickSource as usize] > 0);
-    assert_eq!(observed.counters[Counter::TickFitMiss as usize], 1);
+    assert_eq!(observed.counters[Counter::TickFitMiss as usize], 3);
     assert!(resources.usage().unwrap().1 > before.1);
     assert!(observed
         .guides
@@ -424,7 +424,7 @@ fn specialized_producer_plans_survive_first_capture_without_shaping() {
 }
 
 #[test]
-fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
+fn automatic_outside_guide_respects_native_body_intrinsics_before_allocation() {
     let source = Plot::scatter(
         NumericValues::new("x", [0.0, 1.0, 2.0, 3.0]),
         NumericValues::new("y", [1.0, 2.0, 1.5, 2.5]),
@@ -512,7 +512,8 @@ fn automatic_outside_guide_rejects_right_when_only_the_body_fails() {
                 "MMMMMMMMMMMMMMMMMMMMMMMMMMMM"
             );
         } else {
-            assert!(root.err().unwrap().to_string().contains("x-axis title"));
+            let error = root.err().unwrap();
+            assert!(error.to_string().contains("layout fit"), "{error}");
         }
     }
 }
@@ -701,10 +702,6 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "prepared Scatter fixture exercises both resolving and nonresolving annotation assignments"
-)]
 fn annotation_conflict_links_only_to_a_resolving_assignment() {
     let theme = theme();
     let note = "Caller annotation";
@@ -749,15 +746,8 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
         )
         .unwrap()
         .width();
-    let axis_extra = (initial.axes.as_ref().unwrap().requirements().left + 4.0
-        - source
-            .clone()
-            .erase()
-            .base_canvas_layout(&theme)
-            .insets
-            .left)
-        .max(0.0)
-        .ceil();
+    let required = initial.axes.as_ref().unwrap().requirements();
+    let axis_extra = (required.left + 4.0).ceil() + (required.right + 4.0).ceil();
     let width = note_width + legend.compute_box_width() + 36.0 + axis_extra;
     let cell = PanelBox::new(100.0, 100.0 + width, 80.0, 400.0);
     let source = source.panel_text_annotation(
@@ -778,7 +768,7 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
             let source = inputs.attach(source.clone().erase())?;
             calls += 1;
             if calls == 1 {
-                round.seed_insets_for_test(&address, [40.0, 0.0, 0.0, 0.0])?;
+                round.seed_insets_for_test(&address, [axis_extra + 40.0, 0.0, 0.0, 0.0])?;
             }
             let plan = crate::layout::fit::measured(super::plan_panel(
                 &source,
@@ -894,6 +884,8 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                         "panel text annotation",
                     )?
                     .width();
+                let required = initial.axes.as_ref().unwrap().requirements();
+                let axis_width = (required.left + 4.0).ceil() + (required.right + 4.0).ceil();
                 let cell = PanelBox::new(
                     100.0,
                     100.0 + note_width + legend.compute_box_width() + 36.0,
@@ -913,7 +905,9 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                         .iter()
                         .any(|plan| !plan.avoids_legend_in(narrow, bounds)));
                 }
-                Ok((if resolves { cell } else { narrow }, annotations, inputs))
+                let mut containing = if resolves { cell } else { narrow };
+                containing.x1 += axis_width;
+                Ok((containing, annotations, inputs))
             },
             |(cell, _, inputs), assigned, round| {
                 let source = inputs.attach(source.clone())?;
@@ -1258,7 +1252,7 @@ fn standalone_plan_reserves_wrapped_explicit_x_tick_height() {
         crate::layout::AxisTick::new(1.0, "red blue"),
         crate::layout::AxisTick::new(2.0, "six ten"),
     ]);
-    let cell = PanelBox::new(60.0, 240.0, 30.0, 180.0);
+    let cell = PanelBox::new(16.0, 290.0, 8.0, 220.0);
 
     let plan = plan_panel(&plot, PlotKind::Scatter, cell, LegendRole::Panel, &theme()).unwrap();
 

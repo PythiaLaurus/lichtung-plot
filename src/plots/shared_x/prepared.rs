@@ -956,7 +956,7 @@ pub(crate) fn prepare_scatter_plot(
     resources: &crate::font::canonical::OperationGenerationResources,
     marks: crate::plots::scatter::PreparedScatter,
 ) -> Result<PreparedInteriorInputs, Error> {
-    InteriorRoute::Scatter.validate(source)?;
+    InteriorRoute::classify(PlotKind::Scatter).validate(source)?;
     let data = source
         .configured_source_rows()?
         .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
@@ -987,7 +987,7 @@ pub(crate) fn prepare_scatter_plot(
     data.reserve_source(&mut panels, 1)?;
     panels.push((scope()?, marks));
     Ok(PreparedInteriorInputs {
-        route: InteriorRoute::Scatter,
+        route: InteriorRoute::classify(PlotKind::Scatter),
         beeswarm: None,
         waterfall: None,
         marginal: None,

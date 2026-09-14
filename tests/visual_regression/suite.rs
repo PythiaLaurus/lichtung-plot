@@ -57,6 +57,39 @@ fn scatter_smoke_snapshot() {
 }
 
 #[test]
+fn native_path_snapshots() {
+    let x = NumericValues::new("x", [0.0, 1.0, 2.0]);
+    let y = NumericValues::new("y", [2.0, 1.0, 3.0]);
+    let group = CategoryValues::new("group", ["a", "a", "a"]).unwrap();
+    let paths = [
+        ("line", Plot::line(x.clone(), y.clone()).erase()),
+        (
+            "trajectory",
+            Plot::trajectory(x.clone(), y.clone(), group.clone()).erase(),
+        ),
+        (
+            "line_path",
+            Plot::line_path(x, y.clone(), group.clone()).erase(),
+        ),
+        (
+            "categorical_trajectory",
+            Plot::trajectory(
+                CategoryValues::new("condition", ["before", "during", "after"]).unwrap(),
+                y,
+                group,
+            )
+            .erase(),
+        ),
+    ];
+    for (name, plot) in paths {
+        let out = tempdir().join(format!("native-{name}.svg"));
+        plot.size(400, 300).svg_preserve_text(&out).unwrap();
+        let svg = std::fs::read_to_string(out).unwrap();
+        insta::assert_snapshot!(format!("native_{name}"), normalize_embedded_font(&svg));
+    }
+}
+
+#[test]
 fn matrix_clip_structure_snapshot() {
     let x = NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]);
     let y = NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]);

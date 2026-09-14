@@ -2431,10 +2431,12 @@ impl Canvas {
                 f64::from(height),
             );
             let gap = self.shared_legend_gap.unwrap_or(metrics.pad * 2.0);
-            let minimum_width =
-                self.columns as f64 * 80.0 + self.columns.saturating_sub(1) as f64 * 12.0;
-            let minimum_height =
-                self.rows as f64 * 60.0 + self.rows.saturating_sub(1) as f64 * 12.0;
+            let minimum_width = self.columns as f64
+                * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
+                + self.columns.saturating_sub(1) as f64 * 12.0;
+            let minimum_height = self.rows as f64
+                * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
+                + self.rows.saturating_sub(1) as f64 * 12.0;
             let available = (
                 full_outer.width() - if horizontal { 0.0 } else { minimum_width + gap },
                 full_outer.height()
@@ -2525,7 +2527,9 @@ impl Canvas {
         };
         outer.y1 -= column_header_height;
         outer.x0 += row_header_width;
-        if outer.width() < 80.0 || outer.height() < 60.0 {
+        if outer.width() < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
+            || outer.height() < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
+        {
             return Ok(FitOutcome::Miss(scope.failure(
                 FitKind::TrackOrResidual,
                 "canvas shared headers leave insufficient panel space; enlarge the canvas",

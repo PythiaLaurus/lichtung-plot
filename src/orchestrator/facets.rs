@@ -235,8 +235,10 @@ impl FacetPlan {
         let owner = crate::layout::ComponentAddress::root()
             .child(crate::decorations::legend::address_role(position), 0)?;
         let mut minimum = (
-            selectors.columns as f64 * 80.0 + selectors.columns.saturating_sub(1) as f64 * 12.0,
-            selectors.rows as f64 * 60.0 + selectors.rows.saturating_sub(1) as f64 * 12.0,
+            selectors.columns as f64 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
+                + selectors.columns.saturating_sub(1) as f64 * 12.0,
+            selectors.rows as f64 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
+                + selectors.rows.saturating_sub(1) as f64 * 12.0,
         );
         // The guide and grid share one containing frame. Reserve the consumed
         // column/row gutters before measuring flow, not after fixing its width.

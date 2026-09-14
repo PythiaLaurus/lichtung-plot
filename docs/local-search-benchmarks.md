@@ -8,6 +8,316 @@ The final aggregate release run in
 tests including five unchanged snapshots, API documentation, and package
 verification (207 files). The verification log is `/tmp/opencode/t5a3q-verify.log`.
 
+## T5a6b1 Native-Gutter Audit (2026-09-14)
+
+This benchmark-only audit supersedes earlier current-checkout claims, not their
+historical evidence. All T5a3q/T5a5 tables, timings, hashes, and run reports below
+are unchanged. Inputs, dimensions, label sources, counter definitions, and
+publication/equality gates are preserved. Only `tests/benchmarks/legends.rs`,
+`tests/benchmarks/suite.rs`, and this document were edited; no production code,
+snapshots, `just verify`, or commit are part of this audit.
+
+The compact-right coverage follow-up below adds a separate genuine compact-flow
+fixture. References use the renamed `preferred_right_control` identifier for the
+unchanged 630x480 control; historical measured values remain unchanged.
+
+The initial normal run reproduced four stale contracts: native intrinsic gutter
+control, public reflow/cache-off equivalence, populated legends, and controlled
+child replay (**6 passed, 4 failed, 10 ignored**). The initial ignored release
+run passed nine groups and stopped the outside group at its one-round assertion.
+Those results are in `/tmp/opencode/t5a6b1-benchmarks-initial-normal.log` and
+`/tmp/opencode/t5a6b1-benchmarks-initial-release.log`. The diagnostic run in
+`/tmp/opencode/t5a6b1-benchmarks-probe.log` captured every unchanged outside
+fixture/policy plus the natural gutter and controlled-child traces. Its temporary
+probe was removed; it is not acceptance evidence.
+
+Final commands and logs:
+
+```sh
+cargo test --locked --offline --lib benchmarks -- --nocapture --test-threads=1
+cargo test --release --locked --offline --lib benchmarks -- --ignored --nocapture --test-threads=1
+cargo clippy --locked --offline --all-targets -- -D warnings
+```
+
+- `/tmp/opencode/t5a6b1-benchmarks-normal.log`: **10 passed, 0 failed, 10 ignored,
+  931 filtered out**, 50.84 seconds.
+- `/tmp/opencode/t5a6b1-benchmarks-release.log`: **all 10 ignored groups passed,
+  0 failed, 0 ignored, 941 filtered out**, 8.07 seconds.
+- `/tmp/opencode/t5a6b1-benchmarks-clippy.log`: strict locked/offline all-target
+  Clippy passed with warnings denied. Scoped Rust formatting and diff checks pass.
+
+The final release run was not run concurrently with another audit command.
+Toolchain remains Rust 1.96.0, LLVM 22.1.2, `x86_64-unknown-linux-gnu`.
+Publication/system fonts, three interleaved paired samples, timing boundaries,
+and uncontrolled host/cache conditions remain as described below. Every paired
+case now asserts equality of the **entire counter vector and shape count across
+all three samples**, in addition to fixture-specific exact goldens. Raw
+`outside_counts`, `outside_trace`, `shared_trace`, `paired_counter`, `paired_root`,
+`paired_guide`, and new `paired_gutter` records retain measured work and ownership.
+Times in this section are **minimum / median milliseconds**, not speedup claims.
+
+### Actual Gutter And Guide Paths
+
+The native root's **16 px left inset is root padding**, not an intrinsic axis
+reservation. Root title/caption space is independent of axis feedback. The common
+panel planner submits absolute selected-axis requirements, including the existing
+4 px clearance and outward rounding, starting from zero. The former assertion
+`required.left + 4 <= canvas.insets.left` therefore tested the wrong owner.
+
+`historical_reflow_native_measured_gutter_control` now checks the actual three
+rounds, including consumption of each preceding request and final stability:
+
+| Round | Consumed [left, right, bottom, top] | Requested | Body width (px) | Guide |
+| --- | --- | --- | ---: | --- |
+| 0 | [0, 0, 0, 0] | [79, 5, 59, 5] | 367.7890625 | Preferred right, provisional |
+| 1 | [79, 5, 59, 5] | [94, 5, 59, 5] | 283.7890625 | Preferred right, provisional |
+| 2 | [94, 5, 59, 5] | [94, 5, 59, 5] | 268.7890625 | Preferred right, accepted |
+
+The unchanged public 640x400, 18-entry/36-mark fixture has the same gutter changes
+and preferred-right path. It no longer reaches compact flow or an 80 px body.
+This is changed measured-frame allocation, not an optimization of the old reflow
+profile. Auto, explicit right, and child-reuse-disabled explicit right retain
+identical outlined SVG, preserved SVG, PNG, and decoded pixels; complete guide
+frames, body minima, containment, and all marks remain checked.
+
+The caller-title fixtures are also unchanged: `starvation` is 640x480 with 28
+`M`s, and `preferred_right_control` is 630x480 with 20 `M`s; both retain two long guide
+entries/four marks. The preserved-text contract checks their complete titles.
+Under actual native allocation, `preferred_right_control` fits **preferred right**
+in two rounds, including explicit right. It is not a compact-flow coverage claim.
+Starvation first obtains provisional preferred right, then
+rejects preferred and compact right **guide-only** in round 1 before accepting
+top. Explicit right fails at the guide entry's hard unbroken requirement and
+publishes no artifacts, rather than reaching the former x-axis-title failure.
+
+| Outside fixture/policy | Rounds | Guide trials / body checks | Proposals / exact trials (= shapes) |
+| --- | ---: | ---: | ---: |
+| Small Auto/right/bottom | 2 | 2 / 2 | 0 / 59 |
+| Starvation Auto, selected top | 2 | 4 / 2 | 10 / 83 |
+| Starvation explicit top/bottom | 2 | 2 / 2 | 0 / 57 |
+| Starvation explicit right, failure | 2 | 3 / 1 | 10 / 69 |
+| Historical reflow Auto/right | 3 | 3 / 3 | 0 / 339 |
+| Historical reflow bottom | 2 | 2 / 2 | 0 / 236 |
+| `preferred_right_control` Auto/right | 2 | 2 / 2 | 10 / 63 |
+| `preferred_right_control` bottom | 2 | 2 / 2 | 0 / 57 |
+
+These are exact per-case expectations, not inferred from phase names or relaxed
+round bounds. Normal contracts now also reach every measured right/bottom
+control. Shared traces explicitly retain the remaining edge/flow coverage:
+adequate roots use provisional then accepted preferred right; pressured Canvas
+uses provisional right, then rejects both right flows at the Body phase before
+provisional top, repeating both rejections before accepted top in round 2.
+Pressured facets use provisional preferred right, guide-only rejected preferred
+right then provisional compact right, and accepted preferred right in round 2.
+Thus compact provisional and rejected work is still exercised, but none of these
+unchanged fixtures now claims a final accepted compact-right arrangement.
+
+| Shared fixture | Rounds | Trials / checks | Proposals / exact (= shapes) | Child hits / misses / replays |
+| --- | ---: | ---: | ---: | ---: |
+| Adequate Canvas | 2 | 2 / 4 | 0 / 97 | 0 / 16 / 0 |
+| Pressured Canvas, top | 3 | 7 / 6 | 72 / 589 | 0 / 24 / 0 |
+| Adequate facets, Auto/right | 2 | 2 / 4 | 0 / 41 | 0 / 16 / 0 |
+| Pressured facets, Auto/right | 3 | 4 / 6 | 148 / 370 | 0 / 24 / 0 |
+
+The independent controlled child fixture now takes **two rounds, 3 hits / 4
+misses / 1 replay** for both Canvas and facet owners. Each round has a legend
+probe miss followed by an identical-input hit and a panel miss; only the stable
+second round has a panel hit and feedback replay. The contract asserts this
+complete event sequence and payload identity. It does not establish reuse in
+the end-to-end shared fixtures, which still have zero hits/replays.
+
+### Current Legend Timings
+
+| Fixture/policy | Root time, min / median | End-to-end, min / median |
+| --- | ---: | ---: |
+| Small Auto | 1.374 / 1.390 | 27.160 / 27.431 |
+| Small selected right | 1.388 / 1.457 | 27.214 / 27.226 |
+| Starvation Auto | 2.207 / 2.245 | 27.072 / 27.224 |
+| Starvation selected top | 1.648 / 1.682 | 26.482 / 26.491 |
+| Historical reflow Auto | 7.784 / 7.857 | 39.632 / 39.710 |
+| Historical reflow selected right | 7.780 / 7.826 | 39.827 / 40.072 |
+| `preferred_right_control` Auto | 1.731 / 1.779 | 25.796 / 25.944 |
+| `preferred_right_control` selected right | 1.717 / 1.739 | 25.937 / 25.979 |
+| Small bottom | 1.411 / 1.428 | 27.005 / 27.161 |
+| Starvation bottom | 1.612 / 1.685 | 26.524 / 26.680 |
+| Historical reflow bottom | 5.538 / 5.549 | 36.667 / 36.796 |
+| `preferred_right_control` bottom | 1.607 / 1.623 | 26.406 / 26.419 |
+| Starvation right, failure | 1.796 / 1.798 | 19.941 / 20.087 |
+| Adequate Canvas | 3.476 / 3.491 | 37.048 / 38.574 |
+| Pressured Canvas | 14.839 / 14.857 | 41.679 / 41.752 |
+| Adequate facets Auto, paired with right | 2.339 / 2.343 | 32.800 / 32.837 |
+| Adequate facets selected right | 2.325 / 2.368 | 32.776 / 32.842 |
+| Pressured facets Auto, paired with right | 11.707 / 11.757 | 41.953 / 42.113 |
+| Pressured facets selected right | 11.758 / 11.916 | 42.126 / 42.396 |
+| Inside sparse | 1.195 / 1.281 | 32.421 / 32.805 |
+| Inside dense | 1.391 / 1.409 | 40.132 / 40.291 |
+
+All six Auto/selected-edge pairs pass full outlined/preserved SVG, encoded PNG,
+and decoded-image equality, including pressured facets with child reuse disabled.
+Bottom is a different output, not an equivalent shortcut. Inside placement still
+has two rounds, zero automatic corner candidates, 28/2005 sparse/dense geometry
+scans, and two caller-annotation comparisons. The final sparse/dense panel boxes
+are `[131,17,648,516]` / `[95,17,684,516]` in SVG x/y/width/height coordinates;
+both legends are `[641.388671875,38.1396484375,116.4716796875,104.400390625]`.
+Requested corner, containment, caller note, mark counts, and mark clearance pass.
+
+### Other Release Groups
+
+Heatmap prefixes remain 400 for long Elide, exactly 200 in each of two rounds
+with only the second successful. Ambiguous Elide fails at 96 without artifacts;
+Wrap retains complete labels and successful Elide retains six distinct strings.
+Matrix already has two retained measurement passes, four for tight long labels,
+not the T5a5 historical three/six; capture does not repack. All Matrix cases have
+one root round, 12 tick sources/lists, and 72/36 adequate/tight metric lookups.
+
+| Text fixture | Prefix trials / Matrix passes | Exact trials (= shapes) | Root min / median | End-to-end min / median |
+| --- | ---: | ---: | ---: | ---: |
+| Heatmap short Wrap | 0 / 0 | 14 | 0.641 / 0.664 | 33.004 / 33.229 |
+| Heatmap short Elide | 0 / 0 | 14 | 0.673 / 0.682 | 32.857 / 33.187 |
+| Heatmap long Wrap | 0 / 0 | 67 | 2.057 / 2.076 | 37.904 / 37.998 |
+| Heatmap long Elide | 400 / 0 | 115 | 3.431 / 3.483 | 37.256 / 37.544 |
+| Heatmap shared-prefix Wrap | 0 / 0 | 89 | 2.442 / 2.449 | 37.763 / 37.775 |
+| Heatmap shared-prefix Elide, failure | 96 / 0 | 29 | 0.946 / 0.960 | 20.737 / 20.754 |
+| Matrix adequate short | 0 / 2 | 9 | 0.943 / 0.943 | 43.397 / 43.729 |
+| Matrix adequate long | 0 / 2 | 9 | 1.053 / 1.068 | 48.276 / 48.312 |
+| Matrix tight short | 0 / 2 | 6 | 0.808 / 0.816 | 28.524 / 28.821 |
+| Matrix tight long | 0 / 4 | 90 | 2.529 / 2.561 | 34.220 / 34.438 |
+
+Paragraph first-call proposals/exact/shapes remain 0/1/1 short and 99/44/44
+multiline; cached repeats are all zero with shared retained payloads. Significance
+still performs one growth and 64 bisections, with 66/260/521 level checks for
+1/4/8 brackets, on both first and repeated calls. First calls shape one label,
+repeats zero; final ranges remain equal.
+
+| Local fixture | First min / median | Cached-repeat min / median |
+| --- | ---: | ---: |
+| Short paragraph | 0.175066 / 0.198142 | 0.000434 / 0.000434 |
+| Multiline paragraph | 2.401425 / 2.440209 | 0.000975 / 0.000975 |
+| Significance, 1 bracket | 0.136825 / 0.139859 | 0.002600 / 0.002600 |
+| Significance, 4 brackets | 0.145167 / 0.153292 | 0.004767 / 0.004983 |
+| Significance, 8 brackets | 0.175391 / 0.178100 | 0.008233 / 0.009750 |
+
+Synthetic font counts are unchanged for whole/split coverage: for candidate/base
+pairs 2/2, 2/16, 8/2, 8/16, first and new scalar probes are respectively
+2, 16, 8, 64; batch probes are 6, 34, 24, 136; first unit probes are 6, 48, 18,
+144. Cached scalar/unit probes are zero. These are measured probe counts, not
+layout work. Total synthetic times sum setup and the separately measured phases.
+
+| Font fixture | Whole-coverage min / median | Split-coverage min / median |
+| --- | ---: | ---: |
+| 2 candidates / 2 bases | 0.149300 / 0.157200 | 0.147000 / 0.148100 |
+| 2 candidates / 16 bases | 0.166200 / 0.170700 | 0.165200 / 0.169800 |
+| 8 candidates / 2 bases | 0.176800 / 0.178800 | 0.175700 / 0.175700 |
+| 8 candidates / 16 bases | 0.246100 / 0.254600 | 0.247400 / 0.261300 |
+
+System preparation records 457 discovery entries, nine candidates, and first/new/
+repeat scalar probes of 99/36/0, with zero unit probes. Discovery min/median is
+17.856001/17.880300 ms; scalar first is 0.079100/0.079200, new 0.044800/0.044800,
+and cached repeat 0.000800/0.000800 ms. The six observer-overhead pairs each execute
+32 operations: active counts are 8,704 scalar plus 4,608 unit probes, and both
+modes execute 13,312 legacy-observed probes with equal results. Inactive work is
+6.187600/6.218101 ms, active 6.165600/6.246650 ms, and paired active-minus-inactive
+is -0.441836/0.011750 ms. The negative minimum is host/timing noise, not evidence
+that observation accelerates work or a production-overhead measurement.
+
+Publication controls retain all three samples' byte-hash stability. Current
+native geometry is not asserted equal to historical T5a3q hashes. `calls` records
+give these actual root/capture counts; the repeated-publication rows represent
+ten SVG/PNG publication pairs, not ten operations when reusing `Output`.
+
+| Publication control | Root rounds / captures | Shapes | Root min / median | End-to-end min / median |
+| --- | ---: | ---: | ---: | ---: |
+| scatter100 | 2 / 1 | 31 | 1.177 / 1.197 | 37.897 / 40.593 |
+| long_label_bar | 2 / 1 | 22 | 0.867 / 0.928 | 33.613 / 33.788 |
+| caption200_1para | 2 / 1 | 69 | 5.919 / 5.922 | 90.474 / 90.639 |
+| caption200_3para | 2 / 1 | 71 | 5.982 / 6.020 | 91.230 / 91.953 |
+| facets2x2 | 2 / 1 | 17 | 2.505 / 2.579 | 52.334 / 52.413 |
+| mixed_canvas | 2 / 1 | 79 | 2.677 / 2.755 | 52.974 / 53.581 |
+| matrix4 | 1 / 1 | 11 | 1.893 / 1.913 | 75.667 / 76.414 |
+| separate10 | 20 / 10 | 310 | 12.620 / 12.672 | 440.046 / 440.795 |
+| reuse10 | 2 / 1 | 31 | 1.214 / 1.258 | 184.137 / 184.363 |
+
+No new production bug was found in these benchmark paths. This is benchmark
+closure for the tested dirty T5a6b1 checkout, not full-repository verification or
+phase completion; it leaves those gates and all historical comparisons separate.
+
+### Compact-Right Coverage Follow-Up (2026-09-14)
+
+This follow-up closes the final-accepted-compact coverage gap identified above.
+The former `compact_right` case is now **`preferred_right_control`** in every
+repository caller and fixture reference. It still uses 630x480, two long entries,
+four marks, and the 20-character `M` x-axis title, with exactly the same expected
+paths and counts. Older raw logs retain the former identifier. The historical
+640x400 reflow, starvation, small, shared, inside, and cache controls are not
+changed or weakened; historical numeric tables and hashes are not rewritten.
+
+The new **`native_compact_right`** public Scatter fixture is **520x240, eight
+entries, 16 marks**. For `i` in 0..16, x is `i`, y is `(i * 7) % 13`, and hue
+is `Complete explanatory condition 0` for the first pair, then `Condition 1`
+through `Condition 7` for the remaining pairs. Its one long label and seven short
+labels make compact two-column packing useful without changing any old fixture.
+There is no custom title, seeded gutter, forced compact policy, or planner bypass.
+
+Discovery used a temporary ignored Rust test calling public `preflight`, with
+no probe files or published artifacts; the probe was removed. Auto and explicit
+right both selected compact at all six nearby combinations of widths 510/520/530
+and heights 230/240. At height 250 they selected preferred right, confirming the
+height pressure being exercised rather than treating the name as evidence.
+The fixed 520x240 fixture is now reached by both the normal populated-legend
+contract and the ignored outside-legend measurement group.
+
+Both Auto and explicit right assert this exact complete guide trace:
+
+| Root round | Edge | Compact | Phase | Outcome |
+| --- | --- | --- | --- | --- |
+| 0 | Right | false | Body | Provisional |
+| 1 | Right | false | GuideOnly | Rejected |
+| 1 | Right | true | Body | Accepted |
+
+Round 0 requests absolute gutters `[79,5,59,5]` from zero; round 1 is successful.
+Preferred uniform-width columns no longer fit the reduced-height assignment;
+compact flow wraps the long label and retains two populated columns. Assertions
+retain all eight complete labels and 16 marks, and check the two column positions
+in the published preserved SVG. The Auto/actually-selected-right pair asserts
+identical outlined SVG, preserved SVG, encoded PNG, and decoded PNG metadata and
+pixels. No equality with a different fixture or the bottom arrangement is claimed.
+
+| New fixture policy | Rounds | Guide trials / body checks | Proposals / exact trials (= shapes) |
+| --- | ---: | ---: | ---: |
+| Auto, final compact right | 2 | 3 / 2 | 6 / 125 |
+| Explicit right, final compact | 2 | 3 / 2 | 6 / 125 |
+| Explicit bottom, preferred | 2 | 2 / 2 | 0 / 97 |
+
+All three release samples assert these exact counts and the full counter-vector
+and shape-count stability checks. Raw `outside_counts`, `paired_counter`,
+`paired_root`, `paired_guide`, `paired_gutter`, and `paired_summary` records use
+`native_compact_right`, `native_compact_right_selected_OutsideRight`, and
+`native_compact_right_bottom` (plus the separate right control).
+Release timings are **minimum / median milliseconds** over three interleaved
+samples, with the existing font/host/timing conditions and no speedup claim:
+
+| New fixture policy | Root time | End-to-end |
+| --- | ---: | ---: |
+| Auto | 2.731192 / 2.773116 | 27.193943 / 27.272158 |
+| Selected explicit right | 2.734658 / 2.760008 | 27.111934 / 27.254609 |
+| Explicit bottom | 2.207617 / 2.234916 | 26.632126 / 26.810659 |
+
+Follow-up verification commands:
+
+```sh
+cargo test --locked --offline --lib benchmarks::legends -- --nocapture --test-threads=1
+cargo test --release --locked --offline --lib benchmarks::legends -- --ignored --nocapture --test-threads=1
+cargo clippy --locked --offline --all-targets -- -D warnings
+```
+
+Normal legends: **5 passed, 0 failed, 3 ignored, 943 filtered out**, 38.75 seconds.
+Ignored release legends: **all 3 groups passed, 0 failed, 0 ignored, 948 filtered
+out**, 3.62 seconds, including all existing controls and the new compact pair.
+Strict all-target Clippy and scoped formatting/diff checks pass. Only
+`tests/benchmarks/legends.rs` and this document changed in the follow-up. No new
+production bug was found, no production code was edited, and no `just verify`
+or commit was run.
+
 ## T5a5 Audit (2026-09-11)
 
 ### Final Benchmark Closure (2026-09-11)
@@ -76,7 +386,7 @@ preferred right is rejected guide-only in each round; compact right is first
 provisional, then accepted. It records 4 guide trials, 2 body checks, and 180
 text proposals. Auto and explicit right now have identical outlined SVG,
 preserved SVG, encoded PNG, and decoded pixels. The separate 630x480
-`compact_right` control still has 1 round, 2 trials, 2 checks, and 11 proposals;
+`preferred_right_control` control still has 1 round, 2 trials, 2 checks, and 11 proposals;
 it is not substituted for or compared for equality with the historical fixture.
 
 Pressured facets now select right without a provisional top detour, and explicit
@@ -156,7 +466,7 @@ accepted with an 80 px body and the same measured gutter requirement. This
 demonstrates a self-consistent fitting plan, not public output equality or a
 measurement of the natural public lifecycle. Production was not changed here.
 
-A separate public `compact_right` control uses **630x480, two long entries/four
+A separate public `preferred_right_control` uses **630x480, two long entries/four
 marks, and a 20-character `M` x-axis title**. Preferred right fails the body check;
 compact right succeeds in one root round (2 trials, 2 checks, 11 text proposals).
 The height accommodates wrapped entries and the width puts the complete title

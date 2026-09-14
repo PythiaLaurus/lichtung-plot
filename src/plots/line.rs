@@ -422,9 +422,10 @@ fn categorical_index(index: usize) -> Result<f64, Error> {
     })
 }
 
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     stage(chart.kind(), 1);
@@ -443,8 +444,6 @@ pub(crate) fn measure(
                 "line measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let layout = context
-        .axis_layout(|| Err(Error::Render("line requires root-prepared axes".into()).into()))?;
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);

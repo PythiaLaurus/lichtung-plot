@@ -252,8 +252,8 @@ The approved theme and layout targets follow these rules:
 | T5a6a4e | Waterfall deferred interior | COMPLETE |
 | T5a6a5a | Facet parent adapter and outer title integration | COMPLETE |
 | T5a6a5b | Canvas parent adapter and outer title integration | COMPLETE |
-| T5a6b | Standard-coordinate ordinary Plot migration | PENDING |
-| T5a6b1 | Standard point and path families | PENDING |
+| T5a6b | Standard-coordinate ordinary Plot migration | IN PROGRESS |
+| T5a6b1 | Standard point and path families | COMPLETE |
 | T5a6b2 | Standard distribution and reference families | PENDING |
 | T5a6c | One-categorical-axis ordinary Plot migration | PENDING |
 | T5a6c1 | Estimate-display families | PENDING |
@@ -4612,8 +4612,8 @@ focused, primary integrated, and independent review evidence below. The T5a6a
 umbrella is COMPLETE: all 25 family interiors (20 ordinary and five specialized)
 use selected measurement/capture without backend discovery or a production family
 combined-dispatch branch; Facet and Canvas close both parent adapter contracts.
-T5a6b/c native ordinary migrations and T5a6d closure remain PENDING; T5a6 and T5a
-remain IN PROGRESS. T5b tracks and public T6 APIs/defaults remain deferred.
+T5a6b1 is COMPLETE; T5a6b, T5a6, and T5a remain IN PROGRESS. T5a6b2, T5a6c,
+and T5a6d remain PENDING. T5b tracks and public T6 APIs/defaults remain deferred.
 Each is one logical commit with focused evidence and `just verify`;
 complete each before its successor. The umbrella has no commit.
 The numbered extraction clusters retain the existing family behavior and feed
@@ -4698,8 +4698,9 @@ previous session reported no actionable runtime or admission bugs.
   (6.7 MiB; 1.4 MiB compressed). No tests failed.
 - All T5a6a1/2, T5a6a3a-f and T5a6a4a-e extraction contracts and both parent
   adapter contracts are closed. T5a6a5b and the T5a6a umbrella are COMPLETE.
-  T5a6b/c native ordinary axis/frame migrations and T5a6d closure remain PENDING;
-  T5a6 and T5a remain IN PROGRESS. T5b panel captions/heading tracks, T5e
+  At that completion, T5a6b/c native ordinary axis/frame migrations and T5a6d
+  closure were PENDING; T5a6 and T5a remained IN PROGRESS. Current native-route
+  progress is recorded under T5a6b1. T5b panel captions/heading tracks, T5e
   specialized native producers, and public T6 APIs/defaults remain deferred.
 - This completion update changes only spec 91, reruns no tests, and makes no
   code, snapshot, or commit changes.
@@ -4933,9 +4934,10 @@ T5a6a3f completion evidence:
   17 ignored, 443 integration tests passed (including 23 Interaction tests),
   four example targets with zero tests, warning-denied rustdoc, and offline
   package verification of 228 files (6.5 MiB; 1.4 MiB compressed). No tests failed.
-- Final primary review reported no actionable bugs. All twenty ordinary routes
-  now use retained dispatch under the current legacy axis/frame policy; native
-  migration remains pending in T5a6b/c, including Interaction in T5a6c4.
+- Final primary review reported no actionable bugs. At T5a6a3f completion, all
+  twenty ordinary routes used retained dispatch under the legacy axis/frame
+  policy; native migration was pending in T5a6b/c, including Interaction in
+  T5a6c4. Current native-route progress is recorded under T5a6b1.
 
 T5a6a1 declares the interfaces; each extraction step replaces its family's
 combined preparation/drawing use with those interfaces and deletes superseded
@@ -5292,7 +5294,7 @@ as measurement; feedback-producing hits replay their retained effects.
 
 #### T5a6b: Standard-Coordinate Ordinary Plot Migration
 
-**Status**: PENDING
+**Status**: IN PROGRESS
 
 Dependencies: T5a6a.
 
@@ -5319,7 +5321,7 @@ Requirements shared by both clusters:
 
 ##### T5a6b1: Standard Point And Path Families
 
-**Status**: PENDING
+**Status**: COMPLETE
 
 Dependencies: T5a6a.
 
@@ -5340,6 +5342,135 @@ Evidence:
   consequence, frozen-plan, Null/concrete identity, pre-backend failure, and
   snapshot test per family.
 - `just verify` passes.
+
+Completion evidence (from clean `ab1af58`, verified 2026-09-14): COMPLETE.
+T5a6b remains IN PROGRESS because T5a6b2 is PENDING; no successor is started.
+This record includes the review corrections and final primary verification.
+
+- `InteriorRoute::StandardCoordinate` has exactly Scatter, Line, Trajectory, and
+  LinePath. The closed route drives both native flags and exhaustive measurement
+  dispatch. These four no longer enter the legacy context/layout constructors.
+- The active common producer consumes the root-prepared scientific axes and the
+  `StandardPanelInputs` typography/aspect carrier. It reports axis-title and
+  category-label hard spans before Plot frame allocation. Root-owned padding,
+  title, and caption reserves are independent of axis gutters. Numeric endpoint
+  estimates are not hard reservations: the assigned-span producer reports the
+  absolute selected axis requirements through existing scoped gutter feedback,
+  which can contract as well as grow. The parent allocates within the exact root
+  and retains scoped domain/ink feedback. T5a5 selects and freezes both axes,
+  frame, and grid before the existing retained mark payloads are projected.
+- Conditional categorical Trajectory retains its bottom-axis condition order,
+  category midpoint positions, raw/display keys, and categorical domain. Numeric
+  Trajectory uses the same producer without a fabricated category source.
+- The remaining generic parity minima reference only
+  `DeferredLegacyPanelMinimum`; exact mark/density/annotation intrinsics remain
+  T5c. Facet/Canvas tracks, the other 21 interior classifications, current exact
+  defaults and `.size`, public API, T5b, and T6 remain unchanged.
+- Focused evidence covers all four native routes at multiple exact root/panel
+  sizes and changed ranges, projection endpoints, frozen axes and clips, exact
+  sources and typed fit scope, intrinsic/selected resource caps, legacy-constructor
+  and GeometryBackend zeros, and cache-enabled/disabled selected SVG identity
+  after changed constraints/domains and rejected ancestor trials. Rejected work
+  remains charged. Existing per-family poisoned-capture tests now also assert
+  zero native intrinsic/measurement and legacy-constructor calls during capture;
+  their independent semantic/payload, source-read, projection, shaping, Null,
+  and concrete replay assertions remain active. No new statistics are computed.
+- Inspected output changes are native measured-frame changes, not restyling or
+  mark/statistical changes. The 320x240 Scatter snapshot's SVG clip changes from
+  `(79.2001953125,30,210.7998046875,141.400390625)` to
+  `(95,17,204,156)`:
+  absolute selected-axis gutters replace fixed left/right/top estimates and
+  include axis clearance; root padding stays independent. The odd 333x401 root-title
+  snapshot changes only panel/axis/projected geometry; root text placements are
+  unchanged. Existing Canvas and specialized snapshots are unchanged. Four new
+  snapshots cover Line, numeric Trajectory, LinePath, and categorical Trajectory.
+  Historical guide fixtures now reject some allocations at the traced intrinsic
+  minimum before body measurement. Native root feedback now starts without a
+  perpendicular estimate, so the standalone lifecycle fixture takes three root
+  rounds while still resolving one theme and capturing/replaying one final plan.
+
+Review corrections included in completion:
+
+- Removed the endpoint-gutter estimate from the hard intrinsic carrier and root
+  allocation. Native root cells reserve only root padding/title/caption; the
+  common panel producer submits full measured axis gutters, never an excess
+  obtained by subtracting caption/title space. Axis requests replace prior
+  values, including contraction; owned-ink feedback remains independently
+  monotonic. No local retry loop or tick-source policy bypass was added.
+- Added final ink-bound and clearance evidence for three-line x titles with
+  multiline captions/root titles across all four families and categorical
+  Trajectory. A 175x300 exact root with y domain 0.001..1 rejects the old
+  scientific-notation endpoint estimate but fits the supported selected labels
+  `0.25`, `0.5`, `0.75`, `1`, retaining the same tick-source identity when measured
+  directly at the final assigned span.
+- Strengthened hard title-span/category-slot tests above the named parity floor,
+  oversized-gutter contraction independent of caption reserves, and resource
+  refusal before mark materialization/projection/backend creation. Real Canvas
+  and facet roots cover every native route (including categorical Trajectory),
+  observed changed gutters, actual rejected guide trials, and cache-on/off SVG
+  identity. The retained-child/rejected-ancestor charging test now also covers
+  categorical Trajectory.
+- Reinspected all six affected native snapshots after replacing provisional
+  estimates: two existing snapshots changed and four are new.
+  The 400x300 path clips are `(85,17,294,216)`; the 320x240 Scatter clip is
+  `(95,17,204,156)`. Root text placements, scientific/category sources, mark
+  styles, and existing Canvas/specialized snapshots are unchanged.
+
+Benchmark closure is recorded in `docs/local-search-benchmarks.md`:
+
+- Existing inputs and publication/equality gates are preserved; current exact
+  gutter, guide, root-round, and child-cache expectations replace stale legacy
+  assertions. The unchanged 640x400 historical reflow control now reaches
+  preferred right in three rounds, not compact flow or an 80 px body. The
+  unchanged 630x480 control is named `preferred_right_control` and reaches
+  preferred right in two rounds. Historical numeric tables/hashes remain evidence
+  of their original checkouts, not current output or performance claims.
+- The separate `native_compact_right` Scatter fixture is 520x240 with eight
+  complete labels and 16 marks. Auto and explicit right both observe provisional
+  preferred right, guide-only preferred-right rejection, then accepted compact
+  right in round 1: two root rounds, three guide trials, two body checks, six
+  proposals, and 125 exact trials/shapes. Both populated columns and complete
+  content are checked; outlined/preserved SVG, encoded PNG, and decoded pixels
+  are identical for the Auto/selected-right pair. No old control was resized or
+  weakened to manufacture compact coverage.
+- The benchmark audit passed 10 normal tests (10 ignored) and all 10 ignored
+  release groups in `/tmp/opencode/t5a6b1-benchmarks-normal.log` and
+  `/tmp/opencode/t5a6b1-benchmarks-release.log`. The subsequent compact-fixture
+  follow-up passed five normal legend tests (three ignored) and all three ignored
+  release legend groups. Paired samples assert complete counter-vector and shape
+  stability. Timings retain their host/cache caveats; changed measured-frame
+  allocation and the new fixture establish no speedup or historical equivalence.
+
+Snapshot files to stage with the implementation, all inspected (paths relative
+to `tests/visual_regression/snapshots/`):
+
+| File | Change |
+| --- | --- |
+| `visual_regression__scatter_smoke_snapshot.snap` | Changed |
+| `visual_regression__root_title_block_explicit_odd_size_snapshot.snap` | Changed |
+| `visual_regression__native_line.snap` | New |
+| `visual_regression__native_trajectory.snap` | New |
+| `visual_regression__native_line_path.snap` | New |
+| `visual_regression__native_categorical_trajectory.snap` | New |
+
+Final primary `just verify` in `/tmp/opencode/t5a6b1-verify.log` passed after the
+review corrections and benchmark updates:
+
+- Formatting and strict locked/offline all-target Clippy passed with warnings
+  denied. Library tests: 934 passed, 0 failed, 17 ignored (951 total).
+- All 450 integration tests passed: annotations 27, categorical 44, composition
+  57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
+  lines 41, marginal/matrix 19, output 28, rendering 31, statistics 10, and visual
+  regression 8. Those eight visual tests cover 11 snapshots: the six inspected
+  files above and five unchanged snapshots. Snapshots had also been rerun
+  read-only after inspection.
+- In total, 1,384 tests passed with no failures and 17 ignored. Four example
+  targets ran zero tests. Warning-denied API documentation and offline package
+  verification passed for 245 files (6.8 MiB; 1.5 MiB compressed).
+- This completion update changes only spec 91, reruns no tests, and makes no
+  code, snapshot, staging, or commit changes. Normative scopes, dependencies,
+  deletion targets, and later-phase boundaries are unchanged; the commit title
+  below remains the intended implementation commit, not a claim it was made here.
 
 Commit: `refactor(layout): migrate point and path plans`.
 

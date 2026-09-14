@@ -6,7 +6,7 @@ use crate::theme::ResolvedTheme;
 use crate::Error;
 
 // Split the existing 4px label separation across the two neighboring cells.
-pub(super) const LABEL_CLEARANCE: f64 = 2.0;
+pub(crate) const LABEL_CLEARANCE: f64 = 2.0;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct LabelCell {

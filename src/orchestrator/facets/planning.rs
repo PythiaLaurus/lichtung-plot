@@ -137,7 +137,7 @@ fn adjusted_shared_axis_panel(
     let consumed = round.insets(address, FeedbackKind::AxisGutter);
     let panel = crate::layout::fit::measured(
         FrameRequirements {
-            minimum_body: (80.0, 60.0),
+            minimum_body: crate::layout::interior::DeferredLegacyPanelMinimum::SIZE,
             natural_insets: [0.0; 4],
         }
         .assign_fit(
@@ -149,7 +149,10 @@ fn adjusted_shared_axis_panel(
     let lines = shared_axis_line_counts(horizontal_axis_label, vertical_axis_label, theme, panel)?;
     let extra_bottom = lines.0.saturating_sub(baseline.0) as f64 * line_height;
     let extra_left = lines.1.saturating_sub(baseline.1) as f64 * line_height;
-    if candidate.width() - extra_left < 80.0 || candidate.height() - extra_bottom < 60.0 {
+    if candidate.width() - extra_left < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
+        || candidate.height() - extra_bottom
+            < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
+    {
         return Err(crate::layout::fit::FitScope::new(address, 0).failure(FitKind::TrackOrResidual,
                 "multiline shared facet axis titles do not fit while preserving the minimum 80x60 plot region; increase chart size"
             ).into());

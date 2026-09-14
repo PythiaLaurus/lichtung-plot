@@ -249,6 +249,18 @@ impl Layout {
         scope: &FitScope,
         semantics: [super::AxisSemanticInputs; 2],
     ) -> Result<PanelAxisPlan, PlanError> {
+        self.measure_axes_with_inputs(theme, scope, semantics, || {
+            super::StandardPanelInputs::new(theme)
+        })
+    }
+
+    pub(crate) fn measure_axes_with_inputs(
+        &self,
+        theme: &ResolvedTheme,
+        scope: &FitScope,
+        semantics: [super::AxisSemanticInputs; 2],
+        standard: impl FnOnce() -> Result<super::StandardPanelInputs, Error>,
+    ) -> Result<PanelAxisPlan, PlanError> {
         theme
             .prepared_font_environment()?
             .claim_unicode_bytes(
@@ -256,7 +268,7 @@ impl Layout {
                     .map_err(|_| Error::Render("axis plan storage overflow".into()))?,
             )
             .map_err(|error| Error::Render(format!("axis plan admission: {error}")))?;
-        let standard = super::StandardPanelInputs::new(theme)?;
+        let standard = standard()?;
         // Evaluate both siblings: a later fatal error takes precedence over a fit miss.
         let x_axis = self.x_axis.measure(
             &self.projection,

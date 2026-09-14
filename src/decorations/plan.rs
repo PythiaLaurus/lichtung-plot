@@ -162,6 +162,11 @@ pub(crate) fn plan_panel_with_context(
 ) -> Result<crate::layout::fit::FitOutcome<PanelPlan>, Error> {
     use crate::layout::fit::FitOutcome;
     use crate::layout::kernel::TrialOutcome;
+    let minimum = if crate::layout::interior::InteriorRoute::classify(kind).is_native() {
+        crate::layout::interior::standard::Intrinsics::new(plot, context.theme)?.minimum_body
+    } else {
+        DeferredLegacyPanelMinimum::SIZE
+    };
     let position = plot.legend_position_spec();
     if role == LegendRole::Suppressed
         || plot.legend_policy_spec() == LegendPolicy::Hidden
@@ -268,21 +273,13 @@ pub(crate) fn plan_panel_with_context(
                     - gutters[1]
                     - ink[0]
                     - ink[1]
-                    - if horizontal {
-                        0.0
-                    } else {
-                        DeferredLegacyPanelMinimum::SIZE.0 + gap
-                    },
+                    - if horizontal { 0.0 } else { minimum.0 + gap },
                 context.panel.height()
                     - gutters[2]
                     - gutters[3]
                     - ink[2]
                     - ink[3]
-                    - if horizontal {
-                        DeferredLegacyPanelMinimum::SIZE.1 + gap
-                    } else {
-                        0.0
-                    },
+                    - if horizontal { minimum.1 + gap } else { 0.0 },
             );
             let guide = match Legend::measure_outside(
                 &title,
@@ -303,7 +300,8 @@ pub(crate) fn plan_panel_with_context(
                     continue;
                 }
             };
-            let requirements = frame_requirements(Some(&guide), edge);
+            let mut requirements = frame_requirements(Some(&guide), edge);
+            requirements.minimum_body = minimum;
             #[cfg(test)]
             guide_trial.body();
             let mut assigned_gutters = gutters;
@@ -519,6 +517,12 @@ fn plan_panel_attempt(
     use crate::layout::fit::FitOutcome;
     let scope = FitScope::new(address, round.attempt_ordinal(address)?);
     let context = context.with_fit_scope(&scope);
+    let native = crate::layout::interior::InteriorRoute::classify(kind).is_native();
+    let minimum = if native {
+        crate::layout::interior::standard::Intrinsics::new(plot, context.theme)?.minimum_body
+    } else {
+        DeferredLegacyPanelMinimum::SIZE
+    };
     let cell = context.panel;
     round.begin_owner(address)?;
     round.observe_box(cell)?;
@@ -555,9 +559,10 @@ fn plan_panel_attempt(
         {
             *gutter += ink;
         }
-        match frame_requirements(Some(guide), planning_plot.legend_position_spec())
-            .assign_fit(cell, gutters, &scope)?
-        {
+        let mut requirements =
+            frame_requirements(Some(guide), planning_plot.legend_position_spec());
+        requirements.minimum_body = minimum;
+        match requirements.assign_fit(cell, gutters, &scope)? {
             FitOutcome::Measured(panel) => panel,
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
@@ -570,7 +575,8 @@ fn plan_panel_attempt(
         let width = if assigned_guide.is_some() {
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
             let ink = round.insets(address, FeedbackKind::OwnedInk);
-            (discovery_panel.width() + gutters[0] + gutters[1] + ink[0] + ink[1] - 80.0).max(0.0)
+            (discovery_panel.width() + gutters[0] + gutters[1] + ink[0] + ink[1] - minimum.0)
+                .max(0.0)
         } else {
             context.axis_label_width
         };
@@ -606,6 +612,7 @@ fn plan_panel_attempt(
     };
     let mut requirements =
         frame_requirements(legend.as_ref(), planning_plot.legend_position_spec());
+    requirements.minimum_body = minimum;
     if let Some(crate::layout::interior::DeferredMarkPlan {
         payload: crate::layout::interior::MarkPayload::Heatmap(payload),
         ..
@@ -632,7 +639,8 @@ fn plan_panel_attempt(
             &planning_plot,
             kind,
             context.with_panel(panel_box).with_axis_label_width(
-                (panel_box.width() + assigned_gutters[0] + assigned_gutters[1] - 80.0).max(0.0),
+                (panel_box.width() + assigned_gutters[0] + assigned_gutters[1] - minimum.0)
+                    .max(0.0),
             ),
         )? {
             FitOutcome::Measured(value) => value,
@@ -657,9 +665,15 @@ fn plan_panel_attempt(
     let mut gutters = [0.0; 4];
     if let Some(axes) = &panel_axes {
         let required = axes.requirements();
-        let base = planning_plot.base_canvas_layout(context.theme);
         let drawn_panel = result.layout.projection.panel_box();
-        if !planning_plot.parent_owns_axis_gutters() {
+        if native && !planning_plot.parent_owns_axis_gutters() {
+            // The root cell excludes only root-owned padding/title/caption.
+            // Replace the entire axis reserve, allowing contraction as well as
+            // growth without spending another component's reserved space.
+            gutters = [required.left, required.right, required.bottom, required.top]
+                .map(|value| (value + 4.0).ceil());
+        } else if !planning_plot.parent_owns_axis_gutters() {
+            let base = planning_plot.base_canvas_layout(context.theme);
             gutters = [
                 (required.left + 4.0 - base.insets.left - (drawn_panel.x0 - panel_box.x0))
                     .max(0.0)
@@ -708,7 +722,7 @@ fn plan_panel_attempt(
     }
     let gutter_request =
         InteriorReserveRequest::AxisGutter(gutters).submit(round, address, address)?;
-    if gutter_request.is_some() && gutters.iter().any(|value| *value > 0.0) {
+    if gutter_request.is_some() {
         round.miss(
             address,
             FitKind::Tick,
@@ -1759,8 +1773,7 @@ fn frame_requirements(legend: Option<&Legend>, position: LegendPosition) -> Fram
             _ => {}
         }
     }
-    // The legacy family adapter still owns this hard body floor. Native interior
-    // migrations replace it with their traced scientific minimum requirements.
+    // Native carriers add traced text intrinsics; the sole parity floor remains T5c.
     FrameRequirements {
         minimum_body: DeferredLegacyPanelMinimum::SIZE,
         natural_insets,

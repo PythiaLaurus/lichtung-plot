@@ -103,8 +103,8 @@ impl crate::Plot {
 /// T5a supplies typography and preferred aspect; mark/density inputs belong to T5c.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StandardPanelInputs {
-    pub(super) tick_label: crate::theme::TextAppearance,
-    pub(super) axis_title: crate::theme::TextAppearance,
+    pub(crate) tick_label: crate::theme::TextAppearance,
+    pub(crate) axis_title: crate::theme::TextAppearance,
     preferred_aspect: [u8; 2],
 }
 

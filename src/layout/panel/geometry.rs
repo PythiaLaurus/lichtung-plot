@@ -99,6 +99,10 @@ impl Layout {
         theme: &ResolvedTheme,
         scope: &crate::layout::fit::FitScope,
     ) -> Result<Self, crate::layout::fit::PlanError> {
+        #[cfg(test)]
+        crate::orchestrator::measurements::count(
+            crate::orchestrator::measurements::Counter::LegacyPanelConstructor,
+        );
         let pixel_box = panel_box.as_tuple();
 
         // Don't expand categorical x ranges — the user picked
@@ -169,7 +173,7 @@ impl Layout {
 }
 
 impl AxisSpec {
-    fn layout_ticks(
+    pub(crate) fn layout_ticks(
         &self,
         supplied: Vec<AxisTick>,
         projection: &Projection,

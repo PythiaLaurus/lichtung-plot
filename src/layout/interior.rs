@@ -1,6 +1,6 @@
 //! Closed interior boundary. All 25 families consume prepared semantics and
 //! selected payloads. Parent composition adapters remain separately classified.
-//! Axis/frame policies remain legacy until their native migration.
+//! Point/path axes and frames use the native standard-coordinate producer.
 
 use crate::layout::kernel::{FeedbackKind, FeedbackRequestId, FeedbackRound};
 use crate::layout::ComponentAddress;
@@ -9,21 +9,31 @@ use crate::spec::PlotRenderContext;
 use crate::spec::{PlotKind, PlotRenderResult};
 use crate::{Error, Plot};
 
+pub(crate) mod standard;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StandardCoordinate {
+    Scatter,
+    Line,
+    Trajectory,
+    LinePath,
+}
+
 macro_rules! interior_routes {
     ($($class:ident { $($kind:ident => $renderer:path),+ $(,)? }),+ $(,)?) => {
         $(#[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub(crate) enum $class { $($kind),+ })+
 
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) enum InteriorRoute { Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression, $($class($class)),+ }
+        pub(crate) enum InteriorRoute { StandardCoordinate(StandardCoordinate), Histogram, Density, Qq, Regression, $($class($class)),+ }
 
         impl InteriorRoute {
             pub(crate) const fn classify(kind: PlotKind) -> Self {
-                match kind { PlotKind::Scatter => Self::Scatter, PlotKind::Line => Self::Line, PlotKind::Trajectory => Self::Trajectory, PlotKind::LinePath => Self::LinePath, PlotKind::Histogram => Self::Histogram, PlotKind::Density => Self::Density, PlotKind::Qq => Self::Qq, PlotKind::Regression => Self::Regression, $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
+                match kind { PlotKind::Scatter => Self::StandardCoordinate(StandardCoordinate::Scatter), PlotKind::Line => Self::StandardCoordinate(StandardCoordinate::Line), PlotKind::Trajectory => Self::StandardCoordinate(StandardCoordinate::Trajectory), PlotKind::LinePath => Self::StandardCoordinate(StandardCoordinate::LinePath), PlotKind::Histogram => Self::Histogram, PlotKind::Density => Self::Density, PlotKind::Qq => Self::Qq, PlotKind::Regression => Self::Regression, $($(PlotKind::$kind => Self::$class($class::$kind),)+)+ }
             }
 
             pub(crate) const fn kind(self) -> PlotKind {
-                match self { Self::Scatter => PlotKind::Scatter, Self::Line => PlotKind::Line, Self::Trajectory => PlotKind::Trajectory, Self::LinePath => PlotKind::LinePath, Self::Histogram => PlotKind::Histogram, Self::Density => PlotKind::Density, Self::Qq => PlotKind::Qq, Self::Regression => PlotKind::Regression, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
+                match self { Self::StandardCoordinate(StandardCoordinate::Scatter) => PlotKind::Scatter, Self::StandardCoordinate(StandardCoordinate::Line) => PlotKind::Line, Self::StandardCoordinate(StandardCoordinate::Trajectory) => PlotKind::Trajectory, Self::StandardCoordinate(StandardCoordinate::LinePath) => PlotKind::LinePath, Self::Histogram => PlotKind::Histogram, Self::Density => PlotKind::Density, Self::Qq => PlotKind::Qq, Self::Regression => PlotKind::Regression, $($(Self::$class($class::$kind) => PlotKind::$kind,)+)+ }
             }
 
             /// Audit-only rejection of the removed combined execution route.
@@ -35,7 +45,7 @@ macro_rules! interior_routes {
                 backend: &mut dyn crate::render::backend::Backend,
             ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
                 self.validate(plot)?;
-                match self { Self::Scatter | Self::Line | Self::Trajectory | Self::LinePath | Self::Histogram | Self::Density | Self::Qq | Self::Regression => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
+                match self { Self::StandardCoordinate(_) | Self::Histogram | Self::Density | Self::Qq | Self::Regression => Err(Error::Render("extracted families require prepared measurement or selected payload capture".into()).into()), $($(Self::$class($class::$kind) => $renderer(plot, context, backend),)+)+ }
             }
         }
     };
@@ -66,6 +76,18 @@ interior_routes! {
 }
 
 impl InteriorRoute {
+    pub(crate) const fn is_native(self) -> bool {
+        match self {
+            Self::StandardCoordinate(_) => true,
+            Self::Histogram
+            | Self::Density
+            | Self::Qq
+            | Self::Regression
+            | Self::CategoricalLegacy(_)
+            | Self::SpecializedLegacy(_) => false,
+        }
+    }
+
     pub(crate) fn validate(self, plot: &Plot) -> Result<(), Error> {
         if self.kind() != plot.kind() {
             return Err(Error::Data(format!(
@@ -223,7 +245,7 @@ pub(crate) enum RetainedInteriorPayload<'a> {
     Selected(&'a PlotRenderResult),
 }
 
-/// Selected marks retain the classified legacy axis/frame policy.
+/// Selected mark consequences remain deferred to T5c, independently of axes.
 #[derive(Debug)]
 pub(crate) struct DeferredMarkPlan {
     pub(crate) payload: MarkPayload,

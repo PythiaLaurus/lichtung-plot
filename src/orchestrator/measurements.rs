@@ -30,10 +30,13 @@ pub(crate) enum Counter {
     AxisRangePreparation,
     AxisSpecPreparation,
     AxisSourcePreparation,
+    StandardPanelIntrinsic,
+    StandardCoordinateMeasure,
+    LegacyPanelConstructor,
 }
 
 impl Counter {
-    pub(crate) const ALL: [Self; 24] = [
+    pub(crate) const ALL: [Self; 27] = [
         Self::GuideTrial,
         Self::GuideBodyCheck,
         Self::InsideLegendCandidate,
@@ -58,6 +61,9 @@ impl Counter {
         Self::AxisRangePreparation,
         Self::AxisSpecPreparation,
         Self::AxisSourcePreparation,
+        Self::StandardPanelIntrinsic,
+        Self::StandardCoordinateMeasure,
+        Self::LegacyPanelConstructor,
     ];
 
     pub(crate) const fn name(self) -> &'static str {
@@ -86,6 +92,9 @@ impl Counter {
             Self::AxisRangePreparation => "AxisRangePreparation",
             Self::AxisSpecPreparation => "AxisSpecPreparation",
             Self::AxisSourcePreparation => "AxisSourcePreparation",
+            Self::StandardPanelIntrinsic => "StandardPanelIntrinsic",
+            Self::StandardCoordinateMeasure => "StandardCoordinateMeasure",
+            Self::LegacyPanelConstructor => "LegacyPanelConstructor",
         }
     }
 }
@@ -136,6 +145,29 @@ pub(crate) struct ChildCacheEvent {
     pub counter: Counter,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct GutterChange {
+    pub owner: crate::layout::ComponentAddress,
+    pub consumed: [f64; 4],
+    pub requested: [f64; 4],
+}
+
+pub(crate) fn gutter_change(
+    owner: &crate::layout::ComponentAddress,
+    consumed: [f64; 4],
+    requested: [f64; 4],
+) {
+    ACTIVE.with(|active| {
+        if let Some(observation) = active.borrow_mut().as_mut() {
+            observation.gutters.push(GutterChange {
+                owner: owner.clone(),
+                consumed,
+                requested,
+            });
+        }
+    });
+}
+
 pub(crate) fn child_cache(
     owner: &crate::layout::ComponentAddress,
     phase: &'static str,
@@ -178,6 +210,7 @@ pub(crate) struct Observations {
     pub guides: Vec<GuideAttempt>,
     pub roots: Vec<RootRound>,
     pub children: Vec<ChildCacheEvent>,
+    pub gutters: Vec<GutterChange>,
     session: Rc<()>,
     resources: Vec<crate::font::canonical::OperationFontResources>,
 }

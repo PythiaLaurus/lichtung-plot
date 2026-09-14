@@ -86,11 +86,15 @@ pub(super) fn measure_case<R>(
 
 /// Three interleaved runs, with alternating order and separate failure summaries.
 /// Closures may use different root types and assert actual captured guide choices.
+#[expect(
+    clippy::too_many_lines,
+    reason = "keep paired timing, raw observations, and stable-count checks in one lifecycle"
+)]
 pub(super) fn measure_pair(
     names: [&str; 2],
     cases: [&dyn Fn() -> CaseMeasurement; 2],
 ) -> Vec<[CaseMeasurement; 2]> {
-    let mut samples = Vec::new();
+    let mut samples: Vec<[CaseMeasurement; 2]> = Vec::new();
     for run in 0..3 {
         let pair = if run % 2 == 0 {
             [cases[0](), cases[1]()]
@@ -132,6 +136,9 @@ pub(super) fn measure_pair(
             for guide in &sample.observations.guides {
                 println!("paired_guide,{name},{run},{guide:?}");
             }
+            for gutter in &sample.observations.gutters {
+                println!("paired_gutter,{name},{run},{gutter:?}");
+            }
             if let Some(bytes) = &sample.output {
                 let mut reader = png::Decoder::new(std::io::Cursor::new(&bytes.png))
                     .read_info()
@@ -147,6 +154,16 @@ pub(super) fn measure_pair(
                 if let Some(svg) = &bytes.preserved_svg {
                     println!("paired_preserved_hash,{name},{run},{}", hash(svg));
                 }
+            }
+        }
+        if let Some(first) = samples.first() {
+            for (index, sample) in pair.iter().enumerate() {
+                assert_eq!(
+                    sample.observations.counters, first[index].observations.counters,
+                    "unstable work counts for {}",
+                    names[index]
+                );
+                assert_eq!(sample.shapes, first[index].shapes);
             }
         }
         samples.push(pair);

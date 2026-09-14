@@ -505,7 +505,7 @@ fn unthemed_standalone_selects_publication_once() {
     plot.render_with_backend(&mut backend).unwrap();
     assert_eq!(
         crate::layout::kernel::ROOT_FEEDBACK_ROUNDS.with(std::cell::Cell::get),
-        1
+        3
     );
 
     assert_eq!(resolved_theme_count(), 1);

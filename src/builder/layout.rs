@@ -11,7 +11,17 @@ impl<K: crate::kind::Marker> Plot<K> {
     #[cfg(test)]
     pub(crate) fn canvas_layout(&self) -> CanvasLayout {
         let theme = self.theme.unwrap_or(crate::Theme::Publication).resolve();
-        crate::kind::into_erased(self.clone()).canvas_layout_erased(&theme)
+        let mut plot = crate::kind::into_erased(self.clone());
+        if crate::layout::interior::InteriorRoute::classify(plot.kind()).is_native() {
+            plot = crate::plots::shared_x::prepare_plot(
+                &plot,
+                &crate::font::canonical::OperationGenerationResources::new(),
+            )
+            .expect("valid test plot")
+            .attach(plot)
+            .expect("matching test route");
+        }
+        plot.canvas_layout_erased(&theme)
     }
 }
 
@@ -53,6 +63,12 @@ impl Plot {
         &self,
         theme: &ResolvedTheme,
     ) -> Result<CanvasLayout, Error> {
+        if crate::layout::interior::InteriorRoute::classify(self.kind()).is_native()
+            && !self.has_facets()
+        {
+            return crate::layout::interior::standard::canvas_layout(self, theme)
+                .map_err(crate::layout::fit::PlanError::into_error);
+        }
         let labels_present = self.axis_label_presence();
         let measure = |spec, text| {
             CanvasLayout::measured_plot_root(

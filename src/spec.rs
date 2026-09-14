@@ -742,7 +742,9 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data,
             panel,
-            axis_label_width: (panel.width() - 80.0).max(0.0),
+            axis_label_width: (panel.width()
+                - crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0)
+                .max(0.0),
             retained_axes: None,
             retained_layout: None,
             selected_interior: None,
@@ -767,7 +769,9 @@ impl<'a> PlotRenderContext<'a> {
         Self {
             data: data.map_source_rows(source_rows),
             panel,
-            axis_label_width: (panel.width() - 80.0).max(0.0),
+            axis_label_width: (panel.width()
+                - crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0)
+                .max(0.0),
             retained_axes: None,
             retained_layout: None,
             selected_interior: None,
@@ -1029,13 +1033,18 @@ impl<'a> PlotRenderContext<'a> {
             if let (Some(axes), Some(kind)) = (self.prepared_axes, self.prepared_kind) {
                 let standard = match kind {
                     PlotKind::Scatter
-                    | PlotKind::Regression
+                    | PlotKind::Line
+                    | PlotKind::Trajectory
+                    | PlotKind::LinePath => {
+                        return Err(Error::Render(
+                            "native axes require the standard-coordinate producer".into(),
+                        )
+                        .into())
+                    }
+                    PlotKind::Regression
                     | PlotKind::Histogram
                     | PlotKind::Density
                     | PlotKind::Qq
-                    | PlotKind::Line
-                    | PlotKind::Trajectory
-                    | PlotKind::LinePath
                     | PlotKind::Interaction
                     | PlotKind::PointInterval
                     | PlotKind::Coefficient
@@ -1141,7 +1150,7 @@ impl<'a> PlotRenderContext<'a> {
 
 #[cfg(test)]
 #[test]
-fn native_axis_consumption_admits_every_owned_source_copy() {
+fn deferred_axis_consumption_admits_every_owned_source_copy() {
     use crate::layout::{AxisSpec, AxisTick};
     let plot = crate::Plot::scatter(
         crate::NumericValues::new("x", [0.0, 1.0]),
@@ -1172,8 +1181,8 @@ fn native_axis_consumption_admits_every_owned_source_copy() {
         let mut context =
             PlotRenderContext::new(plot.data(), PanelBox::new(0.0, 400.0, 0.0, 300.0), theme);
         context.prepared_axes = Some(&axes);
-        context.prepared_kind = Some(PlotKind::Line);
-        context.axis_layout(|| panic!("native preparation must be consumed"))
+        context.prepared_kind = Some(PlotKind::Interaction);
+        context.axis_layout(|| panic!("prepared axes must be consumed"))
     };
     let theme = crate::Theme::Publication.resolve();
     let resources = theme

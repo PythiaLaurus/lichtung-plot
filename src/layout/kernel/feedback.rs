@@ -741,7 +741,16 @@ impl FeedbackRound {
                 }
             }
         }
-        self.request(source, target, kind, FeedbackValue::Insets(normalized))
+        let request = self.request(source, target, kind, FeedbackValue::Insets(normalized))?;
+        #[cfg(test)]
+        if kind == FeedbackKind::AxisGutter && request.is_some() {
+            crate::orchestrator::measurements::gutter_change(
+                target,
+                self.insets(target, kind),
+                self.next_insets(target, kind),
+            );
+        }
+        Ok(request)
     }
 
     pub(crate) fn domain(

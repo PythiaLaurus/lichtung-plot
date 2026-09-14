@@ -184,9 +184,10 @@ impl ScatterPayload {
 
 /// Measure the assigned Scatter payload from root-prepared scientific inputs.
 /// Projection may change with the assignment; capture only draws this payload.
-pub(crate) fn measure(
+pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
+    layout: crate::layout::Layout,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     STAGES.with(|stages| {
@@ -210,8 +211,6 @@ pub(crate) fn measure(
                 "Scatter measurement requires root-prepared semantics for its component".into(),
             )
         })?;
-    let layout = context
-        .axis_layout(|| Err(Error::Render("Scatter requires root-prepared axes".into()).into()))?;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
@@ -431,6 +430,9 @@ mod tests {
                     shapes
                 );
                 for counter in [
+                    Counter::StandardPanelIntrinsic,
+                    Counter::StandardCoordinateMeasure,
+                    Counter::LegacyPanelConstructor,
                     Counter::AxisRangePreparation,
                     Counter::AxisSpecPreparation,
                     Counter::AxisSourcePreparation,

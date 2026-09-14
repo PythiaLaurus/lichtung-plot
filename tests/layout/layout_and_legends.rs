@@ -58,13 +58,31 @@ fn x_tick_labels_clear_tick_marks_by_their_measured_edge_gap() {
 }
 
 #[test]
-fn default_single_panel_left_inset_is_compact() {
+fn native_single_panel_left_inset_tracks_selected_labels_not_root_size() {
     let svg = render(
-        fixture_scatter().y_label("response").size(320, 240),
+        fixture_scatter()
+            .y_label("response")
+            .y_ticks(vec![AxisTick::new(10.0, "10")])
+            .size(320, 240),
         "compact-left-inset",
     );
     let left = parse_first_clip_rect(&svg).x;
-    assert!((72.0..=84.0).contains(&left), "left inset={left}");
+    let larger = render(
+        fixture_scatter()
+            .y_label("response")
+            .y_ticks(vec![AxisTick::new(10.0, "10")])
+            .size(640, 480),
+        "native-larger-root",
+    );
+    assert!((parse_first_clip_rect(&larger).x - left).abs() < 1.0 / 1024.0);
+    let wider_label = render(
+        fixture_scatter()
+            .y_label("response")
+            .y_ticks(vec![AxisTick::new(10.0, "Extended measurement")])
+            .size(640, 480),
+        "native-wider-tick",
+    );
+    assert!(parse_first_clip_rect(&wider_label).x > left);
 }
 
 #[test]
