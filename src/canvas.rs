@@ -3654,7 +3654,7 @@ impl Canvas {
         let entries = crate::decorations::legend::merge_exact_entries(
             entries,
             "shared canvas legend",
-            themes.root(),
+            &resources,
         )?;
         if entries.is_empty() {
             Ok((None, probes))

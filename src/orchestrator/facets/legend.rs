@@ -135,7 +135,7 @@ pub(super) fn shared_legend_entries(
                 .iter()
                 .flat_map(|result| result.legend_entries.iter().cloned()),
             "shared facet legend",
-            theme,
+            &theme.prepared_font_environment()?.generation_resources(),
         )?
     };
     if !entries.is_empty() {

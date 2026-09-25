@@ -115,7 +115,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b0 | COMPLETE | T5a | `docs(layout): pin native composition migration contracts` |
 | T5b1 | IN PROGRESS | T5b0 | Umbrella; completes after T5b1a-c |
 | T5b1a | COMPLETE | T5b0 | `feat(legend): classify shared guide kinds before fonts` |
-| T5b1b | PENDING | T5b1a | `refactor(legend): retain discrete guide descriptors` |
+| T5b1b | IN PROGRESS | T5b1a | Umbrella; completes after T5b1b1-b2 |
+| T5b1b1 | COMPLETE | T5b1a | `refactor(legend): admit compatibility before fonts` |
+| T5b1b2 | PENDING | T5b1b1 | `refactor(legend): retain discrete guide descriptors` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -243,6 +245,25 @@ guides already render under the final policy. Focused fixture and strict Clippy
 pass. `just verify` passed after formatting: 1,025 library tests (17 ignored),
 467 integration tests including 27 snapshots, API docs, and package verification
 (271 files). Log: `/tmp/opencode/t5b1a-verify.log`.
+
+T5b1b is split because the current `merge_exact_entries` and title compatibility
+use the post-font theme/measurement allocator. T5b1b1 moves that one comparison
+and reservation contract onto the already-prepared operation ledger, with no
+parallel compatibility route and identical glyph/identity rules. T5b1b2 then
+moves actual family entry/style preparation and merged descriptor ownership ahead
+of the font census, replacing the temporary channel-level inference from T5b1a.
+Neither substep alone establishes the full T5b1 acceptance contract.
+
+T5b1b1 completion: `merge_exact_entries` now takes the current operation ledger
+instead of requiring a prepared font environment. Its identity/title/label/glyph
+rules are unchanged; comparisons charge actual examined bytes and merging admits
+retained entries before allocation. Plot, facet, and Canvas callers consume the
+same routine with their existing root ledger. The pre-font test covers duplicate
+merging, conflicting glyph refusal, exact work/storage limits, and zero font
+discovery. Focused legend and composition tests passed; `just verify` passed
+1,026 library tests (17 ignored), 467 integration tests, docs and package checks
+(271 files). Log: `/tmp/opencode/t5b1b1-verify.log`. T5b1b2 remains pending:
+family entries are not yet all prepared before the font census.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 

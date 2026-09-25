@@ -19,6 +19,7 @@
     clippy::cast_precision_loss
 )]
 
+use crate::font::canonical::OperationGenerationResources;
 use crate::layout::{PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{
     Backend, FillStyle, LineStyle, PlannedTextPlacement, Point2D, PointStyle, TextAnchor,
@@ -171,11 +172,15 @@ impl LegendIdentity {
         }
     }
 
-    fn same_title(&self, other: &Self, theme: &crate::theme::ResolvedTheme) -> Result<bool, Error> {
+    fn same_title(
+        &self,
+        other: &Self,
+        resources: &OperationGenerationResources,
+    ) -> Result<bool, Error> {
         match (self, other) {
             (Self::Single { field: left, .. }, Self::Single { field: right, .. })
             | (Self::Literal { title: left, .. }, Self::Literal { title: right, .. }) => {
-                legend_text_eq(left, right, theme)
+                legend_text_eq(left, right, resources)
             }
             (
                 Self::Pair {
@@ -188,8 +193,8 @@ impl LegendIdentity {
                     hue_field: right_hue,
                     ..
                 },
-            ) => Ok(legend_text_eq(left_group, right_group, theme)?
-                && legend_text_eq(left_hue, right_hue, theme)?),
+            ) => Ok(legend_text_eq(left_group, right_group, resources)?
+                && legend_text_eq(left_hue, right_hue, resources)?),
             _ => Ok(false),
         }
     }
@@ -197,15 +202,15 @@ impl LegendIdentity {
     fn same_identity(
         &self,
         other: &Self,
-        theme: &crate::theme::ResolvedTheme,
+        resources: &OperationGenerationResources,
     ) -> Result<bool, Error> {
-        if !self.same_title(other, theme)? {
+        if !self.same_title(other, resources)? {
             return Ok(false);
         }
         match (self, other) {
             (Self::Single { value: left, .. }, Self::Single { value: right, .. })
             | (Self::Literal { value: left, .. }, Self::Literal { value: right, .. }) => {
-                legend_text_eq(left, right, theme)
+                legend_text_eq(left, right, resources)
             }
             (
                 Self::Pair {
@@ -218,8 +223,8 @@ impl LegendIdentity {
                     hue_value: right_hue,
                     ..
                 },
-            ) => Ok(legend_text_eq(left_group, right_group, theme)?
-                && legend_text_eq(left_hue, right_hue, theme)?),
+            ) => Ok(legend_text_eq(left_group, right_group, resources)?
+                && legend_text_eq(left_hue, right_hue, resources)?),
             _ => Ok(false),
         }
     }
@@ -471,21 +476,23 @@ pub(crate) fn resolve_entries(
     for entry in entries.iter_mut() {
         (entry.title, entry.label) = entry.identity.resolved_text(plot, data)?;
     }
-    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", theme)?;
+    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", &resources)?;
     Ok(())
 }
 
 pub(crate) fn merge_exact_entries(
     entries: impl IntoIterator<Item = LegendEntry>,
     context: &str,
-    theme: &crate::theme::ResolvedTheme,
+    resources: &OperationGenerationResources,
 ) -> Result<Vec<LegendEntry>, Error> {
     let mut merged: Vec<LegendEntry> = Vec::new();
     for entry in entries {
-        legend_visits(theme, 1)?;
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
         if let Some(first) = merged.first() {
-            if !first.identity.same_title(&entry.identity, theme)?
-                || !legend_text_eq(&first.title, &entry.title, theme)?
+            if !first.identity.same_title(&entry.identity, resources)?
+                || !legend_text_eq(&first.title, &entry.title, resources)?
             {
                 return Err(Error::Render(format!(
                     "{context} requires compatible semantic titles, labels, and styles; glyphs must match exactly"
@@ -494,9 +501,14 @@ pub(crate) fn merge_exact_entries(
         }
         let mut duplicate = None;
         for existing in &merged {
-            legend_visits(theme, 1)?;
-            if !existing.identity.same_identity(&entry.identity, theme)? {
-                if legend_text_eq(&existing.label, &entry.label, theme)? {
+            resources
+                .claim_visits(1)
+                .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
+            if !existing
+                .identity
+                .same_identity(&entry.identity, resources)?
+            {
+                if legend_text_eq(&existing.label, &entry.label, resources)? {
                     return Err(Error::Render(format!(
                         "{context} has distinct raw identities resolving to display label {:?}",
                         entry.label
@@ -507,8 +519,8 @@ pub(crate) fn merge_exact_entries(
             }
         }
         if let Some(existing) = duplicate {
-            if !legend_text_eq(&existing.title, &entry.title, theme)?
-                || !legend_text_eq(&existing.label, &entry.label, theme)?
+            if !legend_text_eq(&existing.title, &entry.title, resources)?
+                || !legend_text_eq(&existing.label, &entry.label, resources)?
                 || !existing.glyph.exact_eq(&entry.glyph)
             {
                 return Err(Error::Render(format!(
@@ -516,7 +528,18 @@ pub(crate) fn merge_exact_entries(
                 )));
             }
         } else {
-            crate::layout::fit::reserve(theme, &mut merged, 1, "merged legend entries")?;
+            resources
+                .claim_slots(1)
+                .map_err(|error| Error::Render(format!("merged legend records: {error:?}")))?;
+            resources
+                .claim_bytes(
+                    u64::try_from(std::mem::size_of::<LegendEntry>())
+                        .map_err(|_| Error::Render("legend entry storage overflow".into()))?,
+                )
+                .map_err(|error| Error::Render(format!("merged legend storage: {error}")))?;
+            merged
+                .try_reserve(1)
+                .map_err(|error| Error::Render(format!("merged legend reservation: {error}")))?;
             merged.push(entry);
         }
     }
@@ -532,8 +555,9 @@ pub(crate) fn resolved_title(
     };
     legend_visits(theme, entries.len())?;
     for entry in entries {
-        if !entry.identity.same_title(&first.identity, theme)?
-            || !legend_text_eq(&entry.title, &first.title, theme)?
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        if !entry.identity.same_title(&first.identity, &resources)?
+            || !legend_text_eq(&entry.title, &first.title, &resources)?
         {
             return Err(Error::Render(
                 "legend entries require one compatible semantic title".into(),
@@ -553,9 +577,11 @@ fn legend_visits(theme: &crate::theme::ResolvedTheme, count: usize) -> Result<()
 fn legend_text_eq(
     left: &str,
     right: &str,
-    theme: &crate::theme::ResolvedTheme,
+    resources: &OperationGenerationResources,
 ) -> Result<bool, Error> {
-    legend_visits(theme, 1)?;
+    resources
+        .claim_visits(1)
+        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
     if left.len() != right.len() {
         return Ok(false);
     }
@@ -563,7 +589,9 @@ fn legend_text_eq(
         return Ok(true);
     }
     for index in 0..left.len() {
-        legend_visits(theme, 1)?;
+        resources
+            .claim_visits(1)
+            .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
         if left.as_bytes()[index] != right.as_bytes()[index] {
             return Ok(false);
         }
@@ -1690,6 +1718,51 @@ mod tests {
         entry.title = "group".into();
         entry.label = label.into();
         entry
+    }
+
+    #[test]
+    fn entry_compatibility_uses_operation_resources_without_font_discovery() {
+        let prepared = |label: &str| {
+            let mut entry = entry(label);
+            entry.identity = LegendIdentity::literal("group", label);
+            entry
+        };
+        let run = |limits: Option<(u128, u64)>| {
+            let resources = OperationGenerationResources::new();
+            if let Some((visits, bytes)) = limits {
+                resources.set_test_limits(visits, bytes);
+            }
+            let result = merge_exact_entries(
+                [prepared("first"), prepared("second"), prepared("first")],
+                "prepared discrete guide",
+                &resources,
+            );
+            (resources, result)
+        };
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let (resources, result) = run(None);
+        assert_eq!(result.unwrap().len(), 2);
+        let visits = resources.usage().unwrap().1;
+        let bytes = resources.byte_usage().unwrap();
+        assert!(visits > 0 && bytes > 0);
+        assert_eq!(run(Some((visits, bytes))).1.unwrap().len(), 2);
+        assert!(run(Some((visits - 1, bytes))).1.is_err());
+        assert!(run(Some((visits, bytes - 1))).1.is_err());
+
+        let resources = OperationGenerationResources::new();
+        let mut conflicting = prepared("first");
+        conflicting.glyph = LegendGlyph {
+            point: Some(PointStyle::new((255, 0, 0), 3)),
+            ..LegendGlyph::default()
+        };
+        assert!(matches!(
+            merge_exact_entries([prepared("first"), conflicting], "shared guide", &resources),
+            Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
     }
 
     fn legend() -> Legend {
