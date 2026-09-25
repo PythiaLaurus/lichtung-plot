@@ -927,8 +927,9 @@ the deterministic current obstacle context before the keyed call; no later
 sibling backtracking or obstacle feedback loop occurs. Touching at required
 clearance is allowed. A collision after listed attempts is a terminal miss.
 
-After applying the closed source-owned reserve/domain rules, all remaining
-painted ink outside its exact assigned containing box is a terminal fit miss,
+After applying the closed source-owned reserve/domain rules and the explicit
+data-window policy below, all remaining required painted ink outside its exact
+assigned containing box is a terminal fit miss,
 even when it remains inside the root. Overlay ownership or collision-free
 placement alone does not authorize overflow into neighboring axes or cells.
 
@@ -940,6 +941,41 @@ Shelf is above minimum target ink top by data gap plus level*step; label baselin
 is shelf minus label gap minus descent, centered over span. Horizontal-value
 orientation uses exact axis swap/quarter-turn. Stroke/label union is owned ink.
 There is no draw-time reserve, packing, shelf choice, or generic grow-until-fit.
+
+### Explicit Data Windows Versus Layout Overflow
+
+The existing `x_limits` and `y_limits` setters specify data windows, not root
+dimensions. The user approved preserving their clipping semantics during the
+T5b-T5e planning revision. This clarification does not introduce a clipping API
+or claim the remaining native geometry policies are already implemented.
+
+On an explicitly limited data axis, finite data marks may be partially or wholly
+outside the window. Preserve their prepared scientific identities and project
+crossing lines/paths/intervals before applying the data-panel clip; do not filter
+away endpoints needed by visible crossings, mutate data to the boundary, expand
+the exact domain, or fail solely because data paint lies outside that window.
+The explicit window can clip the stroke of a marker centered at its boundary.
+
+On an automatic axis, use complete painted mark requirements and the approved
+intrinsic/reserve/automatic-domain rules. Required unresolved ink is a fit miss;
+the data-panel clip is not implicit permission to discard it. For mixed exact
+and automatic axes, preserve this distinction per dimension. Primary-mark counts
+and semantic topology are not compacted merely because the window hides paint.
+
+Titles, subtitles, captions, axes and tick labels, legends, and required
+annotations must still fit their assigned layout boxes. The data-window policy
+alone does not authorize omitting a required annotation or its text/bracket.
+Existing explicit visibility/domain policies keep their own ledger-defined
+semantics; absent such authorization, an incompatible required annotation fails.
+An exact image size cannot be made successful by clipping layout content.
+
+Nonfinite, unrepresentable, or nonzero source geometry collapsed by scale
+transformation or quantization still rejects under the canonical primitive
+contract, even if a clip would conceal it. Genuine scientific zero geometry
+retains its current specified behavior. T5c owns per-family implementation and
+the case-table evidence in `92_T5B_T5E_EXECUTION_PLAN.md`; T5e repeats it across
+all three root requests. This is an explicit exception for data-window clipping,
+not a relaxation of strict Unicode wrapping or semantic text preservation.
 
 ## Topology And Ownership
 

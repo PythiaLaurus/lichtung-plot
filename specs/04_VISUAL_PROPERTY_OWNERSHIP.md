@@ -8744,3 +8744,21 @@ source tables or make T6 APIs current. In particular,
 `composition.root-caption.horizontal-alignment` closes only its T5a private
 alignment and standalone/outer-root replay portion here; embedded Plot caption
 allocation, exactly-once composition rendering, and fit refusal remain T5b work.
+
+### Remaining T5 Execution And Data-Window Disposition
+
+`92_T5B_T5E_EXECUTION_PLAN.md` partitions the remaining owners without adding
+ledger identities. The user-approved interpretation of existing explicit x/y
+limits is a data window: finite data marks and crossing segments/intervals may
+be clipped on those explicit axes. Automatic axes use complete mark-ink
+requirements; exact image dimensions never authorize clipping required layout
+text, legends, or annotations. Existing explicit annotation/visibility policies
+retain their own scope. Canonical malformed/nonzero-collapse rejection remains
+independent from clipping.
+
+This disposition clarifies existing limit/clip owners and supersedes a blanket
+reading of target complete-ink containment for explicitly windowed data marks.
+It changes no key totals or historical implementation evidence. T5c0 maps every
+affected family/policy key, T5c1-T5c5 supply implementation/evidence, and T5e tests
+the distinction in all root modes. No new clip switch, omission policy, or early
+public sizing/theme API is admitted.

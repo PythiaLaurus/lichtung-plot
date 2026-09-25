@@ -1,0 +1,609 @@
+# T5b-T5e Execution Plan
+
+**Status: PENDING (execution); no implementation stage here has started.**
+
+This is the execution partition of the four PENDING umbrellas in
+`91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
+The user requested this planning work and approved the explicit-data-window
+decision below. Planning is not evidence of implementation. `03_THEME_SYSTEM.md`
+and `05_LAYOUT_SYSTEM.md` retain authority over target behavior; `01` and `02`
+describe the implemented public contract until its scheduled migration.
+
+`91` records umbrella progress. The tables here are the authoritative substage
+status inventory; update them as work proceeds rather than maintaining another
+copy of their statuses. All substages are initially PENDING. Complete, review,
+verify, and commit each logical substage before its successor. An umbrella has
+no separate implementation commit. Further splitting is allowed before a broad
+substage starts, with explicit dependencies and unchanged behavior boundaries.
+
+## Starting Point And Obligations
+
+Reuse, do not reimplement, these T5a foundations:
+
+- Twenty native ordinary interiors, five retained specialized interiors, and
+  retained Facet/Canvas parent adapters; one selected mark/annotation payload.
+- `RootFramePlan`, `RootTitleBlockPlan`, prepared text/font data, `PanelAxisPlan`,
+  common projection and canonical quantum operands, and `LegendDrawPlan` replay.
+- The one at-most-eight-round root driver, typed fit versus fatal failures,
+  independently admitted records, processing visits, calls, cache entries,
+  topology, discovery, and bytes; no alternate solver or fresh per-child ledger.
+- Operation-local font freshness and immutable font bytes; one final capture,
+  one Null validation, and concrete replay without post-freeze layout work.
+
+The remaining work changes owners and policies deliberately left deferred. It
+is not another family-wide extraction of scientific data or a second scene
+representation. The source baseline and detailed evidence are in
+`docs/t5a-closure.md`. A symbol already removed there is a regression-search
+assertion, not a new implementation deliverable.
+
+### Cross-Stage Handoff
+
+| Boundary | Current state | Replacement owner | Required handoff |
+| --- | --- | --- | --- |
+| Discrete/continuous guide input | Current entries, retained calls, family continuous-guide inputs | T5b shared descriptor/measurement; T5d final scale values | One compatibility path and one final measured guide; no second descriptor introduced by T5d |
+| Facet/Canvas parent allocation | Named adapters with legacy equal tracks | T5b | Delete parent adapters as native composition lands; preserve child producer/capture contracts |
+| Embedded Plot headings/captions | Private policies carried; caption/heading-track integration deferred | T5b | Consume the common root-text producer locally, exactly once, with independent Canvas heading ownership |
+| Mark/annotation requirements | Retained payloads and consequences with named `80x60` parity floor | T5c | Native hard/preferred/ink/domain inputs for every consumer before deleting the floor and deferred consequences |
+| Mark paints and semantic color identity | Current resolved styles and mixed palette consumers | T5c styles; T5d identity/mapping | T5c consumes opaque data color plus owned alpha; T5d supplies final color/domain without taking style ownership |
+| Special-purpose packing | Five `SpecializedLegacy` interiors with frozen payloads | T5e | Replace packing separately for each family; do not redo prepared statistics or permit backend discovery |
+| Automatic/width-only root requests | Target only; public exact defaults remain | T5e private implementation, T6 public switch | One root engine with three requests; public exact defaults/getters remain until T6 |
+
+### Required Evidence In Every Implementation Substage
+
+Record the active ledger keys, input owner, validation stage, intrinsic supplier,
+assigned constraints, feedback, cache identity, admitted allocations/work, frozen
+payload, and old implementation deleted. No completion claim based solely on a
+new type name or passing route-count test.
+
+- Add tests with the implementation: semantic failures before fonts where
+  font-independent; genuine geometry misses recover only through their named
+  owner; arithmetic/font/resource failures are fatal and publish no artifact.
+- Admit before materialization. Copying/reservation is records/bytes, not a new
+  processing price. Charge actual searches/iterations, calls including cache
+  hits, insertions, and topology at their approved independent boundaries.
+- For new constraint-sensitive fields, update the immutable measurement input
+  and cache identity together. Hits replay retained effects; rejected trials
+  discard effects but never refund work. Use cache-on/off differentials on real
+  parent layouts, plus a controlled fixture that actually demonstrates a hit.
+- Keep raw identities distinct from display aliases, source-row identity from
+  canonical address, and source nonzero intent from post-transform geometry.
+- Prove zero source preparation, projection, packing, wrapping/shaping, style
+  assembly, and candidate selection during selected capture and final replay.
+- Inspect intentional SVG/snapshot changes with the source change. Preserve
+  historical fingerprints as historical evidence, not current byte-parity claims.
+  Record complete text, relevant geometry, and output-equivalent comparisons.
+- Run focused tests while iterating, strict locked/offline all-target Clippy,
+  then `just verify` before completion. Never substitute `cargo check`. No
+  Python, `tools/`, runtime network/provisioning, or cross-`lichtung-*` dispatch.
+- Rerun affected ignored release groups when a measured path changes. Preserve
+  full workloads, rejected cases, min/median/max, actual trials and resource
+  classes. No timing threshold or universal speedup claim is a CI requirement.
+
+## Approved Data-Window Decision
+
+The existing `x_limits`/`y_limits` APIs remain data-window policies, not root
+dimensions. The user approved preserving their conventional clipping behavior.
+The target clarification is in `05_LAYOUT_SYSTEM.md`; implementation tests land
+in T5c1 and the relevant geometry substages.
+
+| Case | Required target behavior |
+| --- | --- |
+| Finite mark outside an explicitly limited data axis | Keep its semantic/prepared identity; the data-panel clip may hide its paint. Do not extend the exact domain or reject merely because that paint lies outside the explicit window |
+| Line/path or interval crosses an explicit boundary | Preserve the crossing geometry and clipping. Do not prefilter away endpoints needed to draw the visible crossing or move an endpoint to the boundary as data mutation |
+| Stroked marker centered at an explicit boundary | Data-mark stroke may be clipped under that explicit window, even if the full marker would fit at another range |
+| Automatic data axis | Include actual mark ink/clearance through the approved intrinsic, reserve, and automatic-domain rules; unresolved required ink is a fit miss, not silent cropping |
+| One exact axis, one automatic axis | Apply the explicit window only along its constrained data dimension; automatic-axis geometry still follows its complete-ink rules |
+| Title, subtitle, caption, axis/exact-tick label, legend | Preserve required content within its assigned layout allocation. Data clipping cannot hide layout overflow |
+| Required annotation or label attached to data | The data-window policy alone does not authorize dropping its text/bracket. Use its existing explicit visibility/domain policy if one exists; otherwise an incompatible required annotation fails |
+| Nonfinite geometry or nonzero source geometry collapsed by transformation/quantization | Preserve the existing canonical rejection, even if a clip would hide the malformed geometry. True scientific zeros keep their documented semantics |
+
+This adds no clipping switch, annotation-omission policy, emergency wrapping, or
+new public control. Audit existing Heatmap Elide and other explicit caller
+policies against their ledger owners; do not extend them to other text roles.
+If an existing default is inconsistent with the approved semantic-preservation
+rules and has no explicit policy owner, stop that affected implementation and
+ask the user rather than silently changing the default or legitimizing omission.
+
+## T5b: Native Guides And Composition
+
+**Entry:** T5a complete. Exact public root sizing remains unchanged. The existing
+Plot/Canvas theme replacement and narrow title/subtitle precedence are settled.
+No broader nesting, public alignment builders, or new guide positions are added.
+
+| Step | Status | Depends on | Logical commit |
+| --- | --- | --- | --- |
+| T5b0 | PENDING | T5a | `docs(layout): pin native composition migration contracts` |
+| T5b1 | PENDING | T5b0 | `feat(legend): unify prepared guide descriptors` |
+| T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
+| T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
+| T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
+| T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
+| T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
+| T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
+
+### T5b0 — Source Map And Behavioral Fixtures
+
+Inventory current `decorations/legend.rs`, `canvas.rs`, facet planning, shared
+range preparation, and the relevant `04` rows. Distinguish already-frozen calls
+from remaining legacy flow/track policies. Record a supported/rejected matrix
+for each PlotKind in Canvas and generic facets, and reject unsupported shapes
+before fonts; private adapter replacement must not silently expand support.
+
+Pin representative fixture definitions, old output evidence, and expected
+intentional differences: asymmetric gutters, sparse/spanning cells, long panel
+titles, panel plus Canvas captions, shared/per-Plot/hidden guides, mixed explicit
+themes, categorical/fixed/free facets, TextPanel-only and mixed canvases. Preserve
+the current row-title versus panel-heading conflict unless separately approved.
+This documentation step runs no test suite; execution evidence starts below.
+
+### T5b1 — Prepared Guide Semantics And Compatibility
+
+Create one kind-discriminated private descriptor for discrete and continuous
+contributors using current prepared semantic inputs. Resolve identities,
+display titles/labels, complete glyphs, exact/automatic envelopes, missing blocks,
+and ownership before the font census. Feed the existing guide path immediately;
+do not add unused final-scale placeholders or a second current descriptor.
+
+Discrete equality is typed identity plus resolved label and complete glyph;
+continuous compatibility and domain merging follow `03` exactly. Shared guides
+format the final merged domain once under Canvas typography. Preserve hidden
+contributors' visible-mark domain participation and the rejection of explicit
+per-Plot placement under Shared. Replace duplicate family/Canvas compatibility
+branches; T5d later supplies its final resolved values to this same path.
+
+Evidence: compatible/incompatible kinds, titles, aliases, shape/stroke/alpha,
+fixed/automatic continuous domains, source ordering, hidden contributors, and
+failure before font discovery or any artifact. No separate legend sections.
+
+### T5b2 — Native Discrete And Continuous Measurement
+
+Use separate guide intrinsics and assigned-width measurement, exact label plans,
+fixed entry widths before greedy flow, one preferred and one compact flow per
+edge, and the exact continuous-guide minimum-length formulas from `05`.
+Retain title/entry/key/label or gradient/missing-block geometry in the existing
+frozen draw representation. Zero entries mean absent guide; keys reflect final
+mark glyphs. Supersede legacy measurement/spacing/style reconstruction in place.
+
+Evidence: the normative horizontal/vertical worked examples, minimum-width
+failure before wrapping, duplicate compact allocation reuse, all explicit edges,
+constant/diverging guides, endpoint overhang, nonempty many-entry reflow, and
+actual body-starvation recovery. Glyph/style/resource errors never become another
+edge trial. Do not make unreachable automatic inside-corner selection public.
+
+### T5b3 — One Track Allocator, Used By Active Parents
+
+Implement the `05` Grid/sequence rules in quanta: columns before rows, canonical
+span order, flexible/inflexible tracks, proportional shrink, largest-remainder
+ties, capped surplus, trailing slack, and post-allocation span validation.
+Use the allocator and sequence primitives in the active TextPanel content
+producer under its currently assigned Canvas cell: measure intrinsic title/body
+requirements, then place complete content top-left after chrome insets. This is
+the first production consumer; T5b5 supplies its final native parent tracks. Do
+not leave a dormant general-purpose layout framework. Keep data-panel alignment
+separate from unequal decoration gutters. Admit complete sparse topology before arrays.
+
+Evidence: hand-calculated vectors, exact one-quantum ties, overflow/refusal,
+infeasible overlapping spans, empty/trailing noncollapsing rows and columns,
+zero-size empty children, header spans, and no fallback allocation search.
+Intrinsic and measured-result interfaces must support later specialized parents
+without implementing their packing in this step.
+
+### T5b4 — Native Facet Parent
+
+Replace the facet parent adapter and equal-panel allocation with measured tracks.
+Keep canonical facet cells, fixed/free domain rules, fixed-axis outer ownership,
+free-axis panel ownership, strip placement, and exact Plot theme ownership.
+Use prepared child intrinsics, remeasure only changed assignments, and retain
+all shared axes/strips/guides/child plans before capture. Delete the facet adapter
+and obsolete facet-specific stabilization, not the common bounded root driver.
+
+Evidence: all four scale modes, sparse Cartesian cells and wrap trailing slots,
+matching categorical domains, empty/unavailable estimate panels, Forest Log10,
+asymmetric labels with aligned data panels, and native/deferred specialized child
+combinations allowed by the support matrix. Cache-on/off bytes and actual-hit
+feedback replay must agree through rejected guide attempts and later rounds.
+
+### T5b5 — Native Canvas Cells And Complete Local Text
+
+Integrate measured tracks with Plot/TextPanel/empty cells, spanning headers and
+row titles. Replace the Canvas parent adapter and `DeferredT5bPanelHeadingInputs`
+with native inputs. Embedded Plot title/subtitle/caption use the common producer
+within the panel's local post-inset span. Local captions contribute to row
+requirements and remain independent of the Canvas caption. Reuse T5b3's TextPanel
+producer: a fill surface with top-left nonfill content; extra size does not center
+that content. Do not rebuild its intrinsic or assigned-width measurement route.
+
+Resolve title as Plot instruction > Canvas panel instruction > resolved theme;
+subtitle as Plot instruction > Canvas panel instruction > optional theme subtitle
+> final title. Canvas root headings, row titles, strips, TextPanels, and captions
+do not inherit the panel instruction. Builders remain private until T6.
+
+Evidence: mixed Nature/CHI/Publication/Science panels, explicit exceptions,
+subtitle-only content, all alignments, simultaneous local/Canvas captions,
+mandatory blank lines, RTL physical alignment, narrow wrapping, exact-height
+refusal, and exactly-once content/layers. Existing exact Plot dimensions do not
+become panel preferences. Preserve current validation of invalid child settings;
+do not use this layout migration to change validation timing or admit nesting.
+
+### T5b6 — Shared Axes, Guide Frames, And Multi-Owner Recovery
+
+Complete shared-x installation and shared/per-Plot/hidden guide integration over
+the native tracks. Use the prepared strict union, never override explicit limits
+or admit categorical members. Reuse the T5b1 descriptor, T5b2 guide producer, and
+one frame-fit path. Consume T5a's retained union directly; remove any remaining
+adapter-only range reapplication and duplicated outside-gap reservation without
+recreating the already-removed renderer-probe preparation. All native parent
+chrome is frozen before capture.
+
+Require a concrete multi-owner trace on supported shapes: canonical owner order,
+initial current choices, ancestor constraint changes, provisional gutter miss,
+root-round retry, repeated cache hit versus new trial, and budget exhaustion.
+No selected-sibling backtracking or combinations of guide choices. A budget stop
+is not proof of geometric nonfit. Shared policy suppresses panel guides; do not
+invent a fixture with simultaneous shared and per-panel guides forbidden by that
+policy. Use PerPlot for genuinely multiple panel-guide owners.
+
+### T5b7 — Composition Closure
+
+Publish the native-parent route census, owner/track/guide matrix, support matrix,
+cache evidence, and before/after populated-guide measurements. Both parent
+adapters and deferred panel-heading storage must be gone. Shared compatibility
+has one implementation; T5c/T5d provide new final styles/scales through it.
+T5b does not require final mark density or specialized packing. Tests cover every
+admitted child family, mixed TextPanels, exact roots, sparse/spanning topology,
+required local captions, resource refusal, and immutable output reuse.
+
+## T5c: Native Mark And Annotation Requirements
+
+**Entry:** T5b complete. The data-window table above is approved. This stage must
+not become an excuse to change statistical definitions, condition order, or exact
+caller styles while centralizing their ownership.
+
+| Step | Status | Depends on | Logical commit |
+| --- | --- | --- | --- |
+| T5c0 | PENDING | T5b | `docs(marks): classify appearance and content policies` |
+| T5c1 | PENDING | T5c0 | `feat(theme): resolve private mark and annotation roles` |
+| T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
+| T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
+| T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
+| T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
+| T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
+| T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
+| T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
+
+### T5c0 — Property And Content Disposition Table
+
+Map each active family constant and override from the T2h relationships in `04`
+to a semantic theme role, specialized component default, exact caller style, or
+renderer invariant. Include sampled/supplied Histogram and Raincloud, point-layer
+accent slots, grouped-bar significance spans, uncertainty, missing rows, and
+raw supplemental overlays. Distinguish already-retained geometry from remaining
+legacy requirements. Attach the data-window case table to the concrete consumers.
+
+Define the prepared-primary-mark count for every family before using the standard
+density preference: distinguish semantic marks from raw input rows, curve sample
+vertices, supplemental marks, and final visible primitives. Coincidence, alpha,
+and explicit-window clipping must not silently reduce that semantic count. This
+count is not a replacement for the independently owned structural-address census.
+
+List every clipping/elision/omission branch, its caller-policy key if any, and the
+target disposition. Preserve admitted explicit policies rather than inventing a
+universal ban or a new omission feature. Any actual unresolved behavior change
+requires user approval before the affected implementation starts.
+
+### T5c1 — Complete Private Style Inputs
+
+Implement complete private mark/annotation roles and exact local-style precedence.
+Keep data identity/domain in the scale owner: styles receive one opaque data color
+and the owned alpha or one exact RGBA paint. Implement the approved independent
+fill/stroke alpha replacement rules internally; no multiplicative fallback.
+T5d owns final palette/gradient algorithms. Until then current resolved data colors
+feed the same style assembly, without creating a second rendering route.
+
+Resolve actual style before measuring glyph/mark ink. Automatic light/dark text
+selection uses the approved complete roles and backdrop before font resolution,
+not a late color-only substitution. Preserve the pinned numerical requirements;
+validate their evidence/admission before integrating a new mathematical primitive.
+
+Evidence: exact overrides/setter orders, independent fill/stroke alpha, transparent
+surfaces/backdrop, candidates with deliberately different fonts/sizes, missing
+coverage only in an unselected contrast role, and retained mark/legend glyph
+equality. Public theme/style replacement remains T6; private custom-value tests
+must exercise more than built-in defaults.
+
+### T5c2a-d — Native Mark Requirements By Cluster
+
+All four steps use the existing prepared scientific results and selected payload
+types. Add native hard/preferred requirements and complete painted ink; do not
+re-extract statistics or add a second projection. Preserve source nonzero intent,
+canonical degeneracy rejection, exact data windows, and explicit caller styles.
+
+| Step | Consumers | Required additional evidence |
+| --- | --- | --- |
+| T5c2a | Scatter, Line, Trajectory, LinePath, Histogram, Density, Qq, Regression | Full stroked point/path/band ink, prepared-primary-mark count including coincident/transparent marks, representability, reference/uncertainty geometry; no count from only visible clipped primitives |
+| T5c2b | PointInterval, Coefficient, Forest, Dumbbell, four bar kinds | Orientation-aware category pitch, unavailable slots, interval/cap clearance, sign/stack extents, adjacent value labels, exact local widths, Forest raw/log source distinctions |
+| T5c2c | Boxplot, Violin, Raincloud, Interaction | Sample/supplied parity, summaries/outliers/clouds/raw points, sparse collective slots/connectors, shared group/hue styles, category occupancy without dropping missing combinations |
+| T5c2d | Heatmap, Beeswarm, Waterfall, Marginal, Matrix mark consumers | Exact cell/glyph/label and mark requirements delivered to their still-deferred packing owners; no new tangent packing or track algorithm yet |
+
+The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
+categorical hard/preferred pitch is derived from actual occupied slots. Aspect
+and density are preferences, not a new hard minimum or root-size percentage.
+Data-window tests include off-domain marks, crossing lines/intervals, exact-edge
+strokes, mixed exact/automatic axes, genuine zeros, and malformed/collapsed data.
+
+### T5c3 — Native Annotation And Overlay Consequences
+
+Separate normal-flow requirements from inside guides, significance, value labels,
+panel text, and supplemental layers. Implement the closed anchor order, source-
+owned shelves, canonical obstacle order, and painted-ink containment from `05`.
+Use retained final targets and glyphs; no post-draw reserve or global optimization.
+Declared data clipping does not become permission to discard required text.
+
+Establish one typed resolved-target input for significance/facet ownership. It
+consumes current target identities now; T5d supplies final scale/domain identities
+through the same input. No string-target fallback or later second resolver.
+Evidence: exact-domain conflicts, automatic monotonic domain requests, horizontal
+brackets, unavailable targets, all accepted anchors, collision clearance/tangency,
+required annotation fit failures, and no retry after resource refusal.
+
+### T5c4 — Atomic Deferred-Consequence Retirement
+
+Before this step, verify every row in T5c2a-d and T5c3 provides native requirements.
+Then remove `DeferredMarkPlan`/`DeferredAnnotationPlan` as deferred ownership
+boundaries and `DeferredLegacyPanelMinimum` together. Retained drawing storage
+may remain under its single native owner; do not duplicate or rebuild it merely
+to rename a type. All parents and specialized adapters consume actual child hard
+and preferred requirements. No hidden `80x60`, sentinel minimum, or fallback path.
+
+Evidence: small valid exact panels previously excluded only by the generic floor,
+larger invalid panels rejected by genuine geometry, each family's hard boundary,
+all public exact defaults, cache identity changes, and refusal before geometry
+construction. T5e may replace packing, not repair an omitted native mark input.
+
+### T5c5 — Mark/Annotation Closure
+
+Reconcile every appearance constant and local override in the T5c ledger portion.
+Check all 25 families and every annotation/layer route, private custom styles,
+complete-ink geometry, exact clipping policy, mark/legend equality, and resource
+scaling. Keep only the five specialized layout adapters; no deferred generic
+mark/annotation requirement remains. Record the final values T5d must consume.
+
+## T5d: Resolved Data Scales And Final Guide Semantics
+
+**Entry:** T5c complete. Reuse private RGBA/style ownership and T5b's one descriptor
+and compatibility path. This stage changes data mapping, not non-data style
+ownership, statistical estimates, public extension points, or layout strategy.
+
+| Step | Status | Depends on | Logical commit |
+| --- | --- | --- | --- |
+| T5d0 | PENDING | T5c | `docs(scales): map semantic domains and migration consumers` |
+| T5d1 | PENDING | T5d0 | `feat(color): implement deterministic scale arithmetic` |
+| T5d2 | PENDING | T5d1 | `feat(scales): resolve categorical maps palettes and accents` |
+| T5d3 | PENDING | T5d2 | `feat(scales): resolve sequential and diverging mappings` |
+| T5d4 | PENDING | T5d3 | `refactor(scales): coordinate final domains guides and contrast` |
+| T5d5 | PENDING | T5d4 | `test(scales): close mapping and guide consistency` |
+
+### T5d0 — Domain And Consumer Census
+
+Map every categorical field, positioned series, unkeyed primary/accent consumer,
+continuous field, missing-value section, guide contributor, and significance
+target to its prepared identity and current override API. Specify the private
+replacement and deletion owner for every existing palette/gradient helper.
+Pin fixtures for domain growth, sparse facets, hidden legends with visible marks,
+same-color exact mappings, mixed themes, and unequal exact/automatic domains.
+
+### T5d1 — Pinned Color Arithmetic
+
+Implement the approved first-party OKLab/OKLCH conversion, gamut reduction,
+interpolation, and deterministic candidate/tie order for prefix-stable extension.
+Freeze the finite candidate construction, operation order, termination and resource
+admission before wiring consumers. Verify reference vectors independently of the
+implementation under test, including gamut boundaries, exact ties, alpha-free
+data color, and all supported opaque channel values used by contrast.
+
+No platform-libm substitute or approximate fallback may silently replace a pinned
+numerical contract. If the prescribed primitive cannot be implemented within the
+standalone/offline/safe and budgeted boundary, present the concrete alternatives
+and obtain approval for a specification change before using one. Do not ship a
+dead optional numerical route or claim correctness from a few visual snapshots.
+
+### T5d2 — Categorical And Accent Mapping
+
+Implement fixed/extendable palettes, exact raw-key maps, capacity/coverage checks,
+and nonempty extendable accent sequences under one deterministic color engine.
+Facets resolve the parent domain before slicing; Canvas shared domains use
+row-major visible semantic contributors. Display aliases do not recolor data.
+An exact local point-layer paint still consumes its documented accent position.
+
+Replace mixed categorical/accent-slot use across all families. Preserve supplied
+prefixes and exact caller colors, allow unused keys/repeated colors, reject fixed
+capacity and missing used-key errors before fonts, and never cycle silently.
+Evidence includes increasing domain prefixes, absent identities, hidden legend
+contributors, independent group/hue identities, and all family-specific exceptions
+justified by a named semantic owner rather than implementation history.
+
+### T5d3 — Continuous Mapping
+
+Implement ordered opaque stops, deterministic sequential/diverging interpolation,
+exact semantic centers, symmetric automatic diverging domains where representable,
+exact caller domains, and specified constant-domain behavior. Missing data maps
+through the non-data missing-mark style from T5c, not a gradient endpoint.
+Preserve the existing explicit color-domain saturation policy identified by
+`04`: finite values beyond a configured color domain use its endpoint colors.
+This is color mapping, not geometric data-window clipping or an invented fit
+clamp. Shared-domain containment still follows the separate exact/automatic
+compatibility rule in `03`.
+Heatmap and Beeswarm marks/guides consume one resolved scale; remove hardcoded
+gradient logic as its last consumer migrates.
+
+Evidence: endpoints and center exactness, one-sided/constant/extreme domains,
+invalid centers/stops, missing values, resource refusal, and exact color agreement
+between prepared marks, retained gradient stops, and decoded output pixels.
+
+### T5d4 — Final Shared Descriptors, Contrast, And Targets
+
+Feed final categorical identities, complete paints/glyphs, continuous domains,
+gradient/title/missing descriptors, and generated guide text into T5b's existing
+compatibility and measurement owners. Automatic contributors union; exact domains
+must agree and contain automatic envelopes. No arbitrary winner or second merge.
+
+Choose final variable-fill text roles before the font census using the T5c contrast
+mechanism and final T5d fills. Revalidate changed metrics, intrinsics, cells,
+guides, and cache identities with light/dark candidates of different sizes/fonts.
+Supply final rendered-target/facet identities to the T5c annotation input.
+Evidence spans transparent surfaces/backdrops, exact override precedence,
+same-field conflicting glyphs, data-dependent guide cardinality, and no late
+recoloring, reshaping, or target resolution in capture.
+
+### T5d5 — Scale Closure
+
+All marks, legends, gradients, colorbars, facets, and Canvas use one final mapping
+per semantic owner. Remove old mixed-palette, hardcoded-gradient, and duplicate
+domain/target resolution paths. Publish the full consumer/equality/error-precedence
+matrix. Public replacement types/setters remain T6, but complete private custom
+values must already exercise the final behavior and layout dependencies.
+
+## T5e: Specialized Layout And Automatic-Root Closure
+
+**Entry:** T5d complete. Native parents, exact mark/annotation requirements, and
+final data scales are inputs, not unfinished tasks inherited by this umbrella.
+The sole root driver and numerical/resource policies remain unchanged.
+
+| Step | Status | Depends on | Logical commit |
+| --- | --- | --- | --- |
+| T5e0 | PENDING | T5d | `docs(layout): pin specialized and root sizing closure inputs` |
+| T5e1 | PENDING | T5e0 | `feat(heatmap): allocate native measured cell tracks` |
+| T5e2 | PENDING | T5e1 | `feat(matrix): allocate native variable grid tracks` |
+| T5e3 | PENDING | T5e2 | `feat(marginal): measure native linked subpanels` |
+| T5e4 | PENDING | T5e3 | `feat(beeswarm): implement bounded deterministic tangent packing` |
+| T5e5 | PENDING | T5e4 | `feat(waterfall): measure native annotation shelves` |
+| T5e6 | PENDING | T5e5 | `feat(layout): resolve private automatic root requests` |
+| T5e7 | PENDING | T5e6 | `test(layout): close all producer resource and feedback contracts` |
+| T5e8 | PENDING | T5e7 | `refactor(layout): close private scientific layout` |
+
+### T5e0 — Rebase The Specialized Census
+
+Map current specialized hard requirements, packing, topology and output to the
+native T5b tracks, T5c requirements, and T5d scales. T5a already removed dummy root
+plans, backend discovery, and final text/axis reconstruction; do not implement
+those deletions again. Record the exact legacy packing symbols still active and
+their replacement stage. Confirm all private automatic-root inputs have an owner
+and no new preference, hard floor, or algorithm choice is being invented locally.
+
+### T5e1 — Heatmap
+
+Replace legacy pitches/reserves with complete measured column/row tracks. Retain
+every semantic cell, merged row, highlight, value label, missing cell, and trailing
+slot. Columns allocate before constrained text derives row requirements; preserve
+the approved square preference as soft. Use final scales/contrast and explicit
+current overflow policy. Evidence includes merged spans, long unbreakable content,
+missing values, exact-size failure, and no silent elision beyond its owned policy.
+Delete the Heatmap specialized adapter when this native producer lands.
+
+### T5e2 — Matrix
+
+Use native variable grid requirements and the specified `12em` preferred cell
+side, including all declared diagonal and off-diagonal cells. Reuse retained
+scientific pairs/statistics and common `PanelAxisPlan`; do not recompute either.
+Replace local label/cell stabilization with common parent allocation and root
+feedback. Evidence includes unequal names, null pair patterns, shared axis spans,
+all cell modes, variable-count growth, tight exact roots, and admission before
+quadratic topology/storage. Delete the Matrix specialized adapter.
+
+### T5e3 — Marginal
+
+Build the specified two-by-two Grid, with top/right preferences derived once
+from the central natural preference. Central/top share width; central/right
+share height; preserve the empty corner. Reuse existing KDE/source preparation
+and selected primitives. No alternating subpanel-size search. Check linked ranges,
+exact widths/heights, guides and labels, and typed fit refusal. Delete the fixed-
+band owner and Marginal specialized adapter.
+
+### T5e4 — Beeswarm
+
+Replace deterministic bins with the already-approved greedy tangent producer:
+source-row order within category, zero then ordered/deduplicated tangent offsets,
+first complete collision-free placement, no backtracking over prior points.
+Use a conservative radius containing the complete stroked glyph; validate all
+admitted shapes, not only circles. Admit each offset and pair comparison before
+work. Occupied height supplies native category tracks; tight height fails rather
+than repacking or hiding points. This intentionally changes geometry: retain bin
+baselines as historical evidence, inspect new snapshots, and measure increasing
+coincident/dense inputs and refusal scaling. Delete the Beeswarm adapter.
+
+### T5e5 — Waterfall
+
+Use native category requirements and the approved base/terminal greedy shelves,
+exact targets, baseline ascent/descent, and reserved band. Preserve cumulative
+scientific endpoints, signed zero rules, source-row errors, crossing connectors,
+data-window semantics, and source-aware collapse rejection. No row-index search
+or clipping of required shelf labels. Evidence includes overlapping labels,
+multiple shelf rows, mixed exact/automatic domains, and finite cumulative
+endpoints despite detached-sum overflow. Delete the Waterfall adapter.
+
+### T5e6 — One Private Three-Mode Root Engine
+
+Extend the existing root request boundary to automatic, exact width/automatic
+height, and exact pair. Automatic width comes once from bottom-up preferred
+composition; Auto guides contribute initial preferred-right intrinsics without
+committing placement. Later edge recovery never restarts width choice. Measure
+height at that width, converge under the same driver, and round dimensions upward
+once. Exact pairs still fail instead of resizing.
+
+Public constructors continue supplying the existing exact defaults. Exercise the
+other requests through private tests, not a second renderer, public selector,
+measurement API, `max_width`, or early default switch. Canvas owns assigned panel
+dimensions regardless of a valid stored standalone Plot size. Keep current
+invalid-input validation and record it explicitly; no implicit validation change.
+
+Evidence: short/long multiline captions, automatic-right-to-top recovery with
+unchanged chosen width, 300px exact width with measured height, all 25 families,
+sparse/spanning mixed Canvas, changing guide/track constraints, eighth-round fit,
+cycles, extreme representability, and no hidden fallback to old exact defaults.
+
+### T5e7 — All-Producer Feedback, Cache, And Resource Census
+
+Close every native producer under all three requests with the common evidence
+matrix: prepared/intrinsic/measured/arranged/frozen data, canonical addresses,
+consumed/emitted feedback, cache identity, actual replay, and admission classes.
+Independently exhaust records/visits/calls/cache/topology/bytes, including hits,
+rejected attempts, and later rounds. Preserve complete scientific inputs and
+actual work accounting; no aggregate shape-count substitute for layout trials.
+
+Verify PNG gates remain terminal-local in every mode: valid SVG can outlive PNG
+refusal, including outlined parser input and requested DPI. T5a already removed
+shared hypothetical PNG rejection; extend its evidence to new modes instead of
+reintroducing and removing another gate. No third-party OOM-recovery promise.
+
+### T5e8 — Private Layout Closure And T6 Entry
+
+Audit all ledger portions and delete remaining specialized adapters, fixed-band/
+generic-minimum/global-search remnants, post-freeze reconstruction, and unused
+legacy root helpers. Reconcile source counts and exclusions, not merely type
+names. Publish ordinary/specialized/composition fit/failure, byte/pixel geometry,
+resource and scaling evidence; include long captions and legal-break workloads.
+
+All geometry-affecting private theme, RGBA, contrast, and scale inputs must already
+work here, including private custom values, before describing T6 as public API
+exposure. T6 performs the atomic public replacement and repeats integration tests;
+it is not the first phase to discover that a custom contrast role changes metrics.
+
+T5e completion does not start T6. At T6 ENTRY present DF1/DF2/remaining DF5/DF7
+evidence and record user-approved admission with a new phase, rejection, or a
+new explicit re-deferral checkpoint. DF3/DF4 remain T6 CLOSURE; DF6/DF8/DF9/DF10
+remain T7 CLOSURE. No review gate silently admits those features.
+
+## Completion And Decision Discipline
+
+This revision has one newly confirmed behavior decision: preserve explicit data
+windows as specified above. All other behavior comes from existing approved
+contracts. No unresolved product question is currently blocking the planning
+partition. This is not a guarantee that implementation cannot uncover one.
+
+Ask the user before expanding composition support, changing an existing explicit
+policy, replacing a prescribed numerical contract without equivalent approved
+evidence, adding new public controls, changing resource caps, or admitting a
+deferred feature. Engineering choices within the contracts are implementation
+work, not reasons to stop at a partial checkpoint. Each implementation owner
+reports actual remaining gaps; passing tests alone cannot close a missing owner,
+admission boundary, or semantic preservation requirement.

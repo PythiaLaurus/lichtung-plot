@@ -27,6 +27,13 @@ and commit each admitted phase as one logical change before starting the next
 phase. Split a broad phase into smaller approved phases before implementation
 rather than combining unrelated migrations in one commit.
 
+The current execution partition for the remaining T5b-T5e umbrellas is
+`92_T5B_T5E_EXECUTION_PLAN.md`. That document owns their substage status tables,
+dependencies, logical commits, deletion targets, and evidence requirements;
+the umbrella statuses here remain authoritative for overall progress. No stage
+starts merely because its partition is documented. Its baseline is completed
+T5a at `1e8e3ee`, not the earlier combined-renderer implementation.
+
 The primary-approved T5a1r2-r4/T5a3a1-f closure is one coupled interface migration
 after the completed T5a1r1 commit, as recorded under T5a3f. Its original per-stage
 commit titles are intended partition labels, not claims that those commits exist.
@@ -6207,6 +6214,11 @@ Commit: `refactor(layout): close ordinary exact-root planning`.
 
 Dependencies: T5a.
 
+Execution: T5b0-T5b7 in `92_T5B_T5E_EXECUTION_PLAN.md`, in dependency order.
+Start from retained T5a parent/guide payloads. Native guide measurement, tracks,
+embedded Plot text, and parent-adapter retirement are separate reviewable steps;
+do not redo family extraction or defer native composition closure to T5e.
+
 Give composed and explanatory chrome coherent theme ownership.
 
 Scope:
@@ -6302,6 +6314,12 @@ Acceptance:
 
 Dependencies: T5b.
 
+Execution: T5c0, T5c1, T5c2a-d, T5c3-T5c5 in
+`92_T5B_T5E_EXECUTION_PLAN.md`. Its approved data-window disposition preserves
+existing explicit `x_limits`/`y_limits` clipping of data marks and crossing
+segments/intervals. It does not authorize clipping required layout text or
+annotations, nor permit malformed/nonzero-collapsed scientific geometry.
+
 Unify common mark roles without erasing typed local control.
 
 Scope:
@@ -6343,6 +6361,11 @@ Scope:
   branches so automatic layout preserves semantic content unless an explicit
   current caller policy already identified in the ledger owns a narrower
   behavior. Do not create a new omission policy in implementation.
+- Use the approved explicit-data-window versus layout-containment case table in
+  `92`. Exact data limits are not root dimensions. Automatic axes must consume
+  complete mark-ink requirements; explicit windows can crop data marks without
+  silently dropping source identities or changing scientific endpoints. New
+  defaults/omission policies require user approval, not implementation inference.
 
 Acceptance:
 
@@ -6362,6 +6385,11 @@ Acceptance:
 **Status**: PENDING
 
 Dependencies: T5c.
+
+Execution: T5d0-T5d5 in `92_T5B_T5E_EXECUTION_PLAN.md`. Pin numerical/candidate
+rules before mapping consumers, then migrate categorical/accent mapping,
+continuous mapping, and final shared descriptors/contrast/targets. Reuse T5b's
+sole compatibility path and T5c's style/annotation owners.
 
 Separate data-to-color mapping from non-data theme appearance.
 
@@ -6414,6 +6442,12 @@ Acceptance:
 **Status**: PENDING
 
 Dependencies: T5d.
+
+Execution: T5e0-T5e8 in `92_T5B_T5E_EXECUTION_PLAN.md`: five separate native
+specialized migrations, one private root-sizing engine, then all-producer and
+ledger closure. It is not a catch-all for incomplete T5b tracks or T5c geometry.
+Already-removed T5a fallback/backend paths are regression-search obligations,
+not tasks to reimplement. Public sizing remains unchanged until T6.
 
 Complete private automatic layout only after every appearance, semantic,
 geometry, and scale input can participate in one measurement protocol.
@@ -6468,8 +6502,9 @@ Acceptance:
 - Automatic and exact-width/automatic-height private plans are finite, deterministic,
   viable under the approved local-layout rules, and complete in semantic
   content.
-- Exact dimensions remain exact and fail rather than clip when complete content
-  cannot fit.
+- Exact dimensions remain exact and fail rather than clip required layout content
+  when it cannot fit. The approved explicit data-window policy may still clip
+  data marks; it never changes the root dimensions or permits malformed geometry.
 - Examples: a private exact 300-pixel root measures caption-dependent height;
   an exact pair that cannot fit fails after bounded frame recovery. Valid SVG
   above PNG limits or 64 MiB remains possible under shared safety gates, with
@@ -6560,6 +6595,10 @@ Scope:
   serializer, gradient stops, text/bracket paints, paint-aware geometry, and PNG
   conversion. RGB token spelling remains a serialization dependency, not an
   alpha owner.
+- Private mark/annotation RGBA and geometry dependencies close in T5c, and final
+  scale/contrast/guide inputs close in T5d before T5e's layout gate. T6 removes the
+  replaced public tuple/opacity representations atomically and rechecks those
+  dependencies with public custom values; it is not their first implementation.
 - Atomically update `01_ARCHITECTURE.md` and `02_RENDERING_CONTRACT.md` to the
   implemented theme and layout contracts, mark `03_THEME_SYSTEM.md` and
   `05_LAYOUT_SYSTEM.md` current, and reconcile `99_DEFERRED_FEATURES.md`; no
