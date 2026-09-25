@@ -112,7 +112,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
-| T5b0 | PENDING | T5a | `docs(layout): pin native composition migration contracts` |
+| T5b0 | COMPLETE | T5a | `docs(layout): pin native composition migration contracts` |
 | T5b1 | PENDING | T5b0 | `feat(legend): unify prepared guide descriptors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -135,6 +135,65 @@ titles, panel plus Canvas captions, shared/per-Plot/hidden guides, mixed explici
 themes, categorical/fixed/free facets, TextPanel-only and mixed canvases. Preserve
 the current row-title versus panel-heading conflict unless separately approved.
 This documentation step runs no test suite; execution evidence starts below.
+
+#### T5b0 Current-Source Inventory And Baseline
+
+The current-source comparison is against `1e8e3ee`, not the older ledger's
+historical line-number table. This inventory is a deletion checklist for T5b1-7;
+it does not declare those substitutions implemented.
+
+| Current owner | Already retained | T5b replacement/deletion |
+| --- | --- | --- |
+| `decorations/legend.rs`: `LegendEntry`, `LegendIdentity`, `LegendDrawPlan` | Exact typed entry identity and glyph, resource-backed entry merge, measured operands retained before capture | T5b1 introduces one discrete/continuous descriptor. T5b2 replaces root-scaled `LegendMetrics::from_canvas`, 11/18 font clamps, six-entry column heuristic, hardcoded paint/gaps, and legacy column packing with assigned-width flow. Keep the selected draw-plan storage, not an alternate route |
+| `decorations/plan.rs`, `orchestrator/facets.rs`, `canvas.rs` | Bounded automatic outside-guide trial/feedback and final containing-frame checks | T5b2/T5b6 route every guide through the one descriptor, measured producer, and exact enclosing-frame fit; replace duplicate helper-local gap/reserve logic. Keep first-fit order and existing trial budgets |
+| `canvas.rs::preflight_shared_legend` | Renderer-selected `LegendEntry` merge and final draw calls; cached body probes | T5b1 resolves compatible guide contributors *before* fonts and without measuring children for compatibility. T5b6 consumes the descriptor, removing compatibility dependence on body probes and repeated title/label choice |
+| `plots/shared_x/prepared.rs`, Canvas `prepare_shared_x` | Font-independent scientific domains and checked strict union retained | T5b6 installs union in native measured children and removes only adapter-only reapplication; the renderer-probe alternative was already removed by T5a |
+| `layout/canvas.rs::allocate_composed_grid_fit`, facet and Canvas planning | Parent-assigned equal legacy cells with unequal decoration gutters and cached child results | T5b3 installs the active allocator and TextPanel consumer; T5b4/T5b5 replace equal-grid parent adapters separately. Keep explicit sparse coordinates, header spans, and one root driver |
+| `layout/canvas.rs::PanelRequirements`, `canvas.rs::DeferredT5bPanelHeadingInputs` | Frozen legacy panel headers/row titles and private alignment-policy inputs; outer roots already use `RootTitleBlockPlan` | T5b5 integrates complete Plot-local title/subtitle/caption within its assigned cell and top-left TextPanel; remove legacy panel header storage, not the common outer-root title producer |
+| `decorations/plan/children.rs` | Constraint/input keyed reuse and feedback replay | T5b4-6 update identities as tracks/guides change; hits charge calls, rejected trials retain work, no independent parent budget |
+
+The closed *current API* composition matrix, to be tested before and after adapter
+deletion, is:
+
+| Shape | Current admission and responsible boundary |
+| --- | --- |
+| Ordinary Plot inside Canvas | Admitted when individually valid; `Canvas::panel` stores a Plot, with inherited Canvas or complete explicit Plot theme |
+| Specialized Heatmap, Marginal, Beeswarm, Waterfall inside Canvas | Admitted as valid Plot cells under current route classification. Matrix is rejected before fonts as self-managed. Existing family-specific input restrictions still apply |
+| Generic-faceted Plot inside Canvas | Rejected before fonts (`ParentCompositionAdapter::Canvas`), independently of child kind |
+| Generic faceting of ordinary Plot kinds | Admitted subject to that kind's existing facet/input/channel validation. Panel-text annotation, value-derived category order, and some supplied geometries remain rejected by their specific policies |
+| Generic faceting of Heatmap, Beeswarm, Waterfall | Admitted under existing kind/channel validation, with current parent/cell policies; no new topology inferred from the private selected-payload representation |
+| Generic faceting of Matrix or Marginal | Rejected before fonts as self-managed panels (`ParentCompositionAdapter::Facet`) |
+| Canvas inside Canvas | No public insertion type; `Canvas::panel` accepts a Plot, so there is no nested-Canvas planning route |
+
+`src/layout/interior.rs::ParentCompositionAdapter::validate_child` is the
+pre-font unsupported-shape gate. `canvas.rs::validate_structure` rejects
+faceted-in-Canvas and Matrix-in-Canvas; `orchestrator/validation.rs` rejects
+Matrix/Marginal faceting and other family-specific channel combinations.
+Current late `SelfManaged` checks in the parent planners are redundant guards,
+not permission to add a supported shape. Verify the semantic timing and remove
+obsolete late alternatives when native parents replace the adapters. A current
+row title is incompatible with any present Plot title/subtitle in its row; retain
+this rule even after Plot-local alignment becomes effective.
+
+| Regression fixture / source | Current contract to pin; intended T5b change |
+| --- | --- |
+| `tests/benchmarks/legends.rs`, `docs/local-search-benchmarks.md` | Nonempty right-fit, body-starvation→top, genuine compact-right, many-entry reflow, fixed edge failure, sparse/dense inside, shared facet/Canvas, controlled cache replay. Three interleaved release samples, actual trial/round/call counters and Auto/selected-edge SVG/PNG/pixel identity. T5b changes flow/track geometry deliberately; older timings and hashes stay attributed to their T5a checkout |
+| `src/canvas/admission_tests.rs`, `tests/composition`, seven parent/title snapshots in `tests/visual_regression` | Exact defaults and varied sizes, mixed/all-TextPanel, spans and sparse coordinates, current row-title conflict, Canvas root heading independent of private panel policy. T5b adds simultaneous local and Canvas captions plus varied mixed themes; snapshot changes must be inspected against source and geometry |
+| `src/orchestrator/facets/parent_tests.rs`, facet/scales integration | Fixed/free x/y, strip text, exact shared domains and empty/unavailable estimate panels; T5b changes track widths while retaining data-panel alignment, source rows, and one semantic owner per caption |
+| `src/decorations/plan/tests.rs`, `src/decorations/plan/children.rs` | Complete affected-frame fit, rejected/provisional/final choices, cached feedback replay, and fatal-versus-fit classification. Native composition must prove several guide owners and cache-on/off identical outputs; it must not infer reuse from multiple root rounds |
+
+The initial implementation report for T5b1 must distinguish the current lack
+of a publicly reachable populated automatic inside-corner selection from its
+explicit fixed-corner controls. Do not manufacture automatic corner counts or
+broaden public nesting to create a benchmark. Baseline snapshots and T5a release
+measurements already exist; T5b0 pins their fixture sources and conditions
+without rerunning tests in a documentation-only stage.
+
+T5b0 closure: current owners, supported/rejected composition shapes, existing
+fixture sources, and deliberate T5b replacements are pinned above. This adds no
+runtime code or public API; `git diff --check` is the documentation gate. The
+next step is T5b1. Completion here does not change the T5b umbrella's PENDING
+implementation status.
 
 ### T5b1 — Prepared Guide Semantics And Compatibility
 
