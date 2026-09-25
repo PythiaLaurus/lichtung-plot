@@ -268,7 +268,7 @@ The approved theme and layout targets follow these rules:
 | T5a6c3 | Categorical distribution families | COMPLETE |
 | T5a6c4 | Interaction family | COMPLETE |
 | T5a6d | Ordinary exact-root closure audit | COMPLETE |
-| T5b | Legends, facets, and Canvas composition chrome | PENDING |
+| T5b | Legends, facets, and Canvas composition chrome | IN PROGRESS |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
 | T5d | Categorical and continuous data scales | PENDING |
 | T5e | Scientific layout closure | PENDING |
@@ -6210,7 +6210,7 @@ Commit: `refactor(layout): close ordinary exact-root planning`.
 
 ## Phase T5b: Legends, Facets, And Canvas Composition Chrome
 
-**Status**: PENDING
+**Status**: IN PROGRESS (T5b1)
 
 Dependencies: T5a.
 

@@ -103,6 +103,67 @@ mod d1_tests {
     use super::*;
 
     #[test]
+    fn mixed_shared_guide_kinds_reject_before_font_discovery() {
+        let heatmap = || {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", [1.0, 2.0]),
+            )
+        };
+        let scatter = || {
+            Plot::scatter(
+                crate::NumericValues::new("x", [1.0, 2.0]),
+                crate::NumericValues::new("y", [2.0, 3.0]),
+            )
+        };
+        let mixed = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, heatmap())
+            .unwrap()
+            .panel(
+                0,
+                1,
+                scatter().hue(crate::CategoryValues::new("hue", ["A", "B"]).unwrap()),
+            )
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            mixed.preflight_plan(),
+            Err(Error::Data(message)) if message.contains("mixes discrete and continuous")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        // An unlabeled Scatter and an explicitly hidden discrete legend have no
+        // competing guide kind; compatibility follows contributions, not PlotKind.
+        let no_guide = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, heatmap())
+            .unwrap()
+            .panel(0, 1, scatter())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        assert!(no_guide.validate_shared_guide_kinds().is_ok());
+        let hidden = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, heatmap())
+            .unwrap()
+            .panel(
+                0,
+                1,
+                scatter()
+                    .hue(crate::CategoryValues::new("hue", ["A", "B"]).unwrap())
+                    .legend(crate::LegendPolicy::Hidden),
+            )
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        assert!(hidden.validate_shared_guide_kinds().is_ok());
+    }
+
+    #[test]
     fn odd_canvas_root_policy_is_independent_of_deferred_panel_headings() {
         let mut canvas = Canvas::grid(2, 3)
             .unwrap()
@@ -1447,6 +1508,7 @@ impl Canvas {
             plot.validate_configuration(kind)?;
             crate::layout::interior::ParentCompositionAdapter::Canvas.validate_child(plot)?;
         }
+        self.validate_shared_guide_kinds()?;
         for group in &self.x_range_groups {
             for &index in group {
                 let plot = self.panels[index].as_ref().ok_or_else(|| {
@@ -1481,6 +1543,28 @@ impl Canvas {
                     title.start
                 )));
             }
+        }
+        Ok(())
+    }
+
+    /// Reject incompatible semantic guide kinds before the font census or body
+    /// measurement. The exact entries and continuous descriptor are prepared by
+    /// their owners; an unconfigured or hidden discrete guide contributes no kind.
+    fn validate_shared_guide_kinds(&self) -> Result<(), Error> {
+        if self.legend_policy != CanvasLegendPolicy::Shared {
+            return Ok(());
+        }
+        let mut selected = None;
+        for plot in self.panels.iter().flatten() {
+            let Some(kind) = crate::decorations::legend::GuideKind::contributing_plot(plot) else {
+                continue;
+            };
+            if selected.is_some_and(|selected| selected != kind) {
+                return Err(Error::Data(
+                    "shared Canvas guide mixes discrete and continuous contributors".into(),
+                ));
+            }
+            selected = Some(kind);
         }
         Ok(())
     }

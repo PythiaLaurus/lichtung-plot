@@ -25,6 +25,31 @@ use crate::render::backend::{
 };
 use crate::Error;
 
+/// The semantic kind of a contributing guide, determined before font discovery.
+/// Entry and glyph compatibility is resolved by the prepared descriptor owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GuideKind {
+    Discrete,
+    Continuous,
+}
+
+impl GuideKind {
+    pub(crate) fn contributing_plot(plot: &crate::Plot) -> Option<Self> {
+        if matches!(
+            plot.kind(),
+            crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
+        ) {
+            return Some(Self::Continuous);
+        }
+        if plot.legend_policy_spec() != crate::LegendPolicy::Hidden
+            && (plot.hue_col().is_some() || plot.group_col().is_some())
+        {
+            return Some(Self::Discrete);
+        }
+        None
+    }
+}
+
 #[derive(Debug)]
 enum LegendCall {
     Background([f64; 5], FillStyle),

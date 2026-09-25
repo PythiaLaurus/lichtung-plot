@@ -113,7 +113,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5b0 | COMPLETE | T5a | `docs(layout): pin native composition migration contracts` |
-| T5b1 | PENDING | T5b0 | `feat(legend): unify prepared guide descriptors` |
+| T5b1 | IN PROGRESS | T5b0 | Umbrella; completes after T5b1a-c |
+| T5b1a | COMPLETE | T5b0 | `feat(legend): classify shared guide kinds before fonts` |
+| T5b1b | PENDING | T5b1a | `refactor(legend): retain discrete guide descriptors` |
+| T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
@@ -197,6 +200,21 @@ implementation status.
 
 ### T5b1 — Prepared Guide Semantics And Compatibility
 
+This migration is split into three dependency-ordered logical commits: T5b1a
+classifies continuous-family guides and configured visible discrete channels
+before fonts, rejecting known mixed kinds; T5b1b replaces that channel-level
+classification with the actual prepared discrete entry set, including explicit
+layer entries and empty contributors, and moves identity/glyph/title compatibility into the
+same prepared owner instead of probing a measured body; T5b1c supplies and
+merges the complete continuous descriptor under that owner. They evolve one
+active descriptor, not parallel render paths. T5b1 as an umbrella has no commit
+and remains incomplete until all three are verified. T5b1a's early tag is a
+validation input, not a selected guide or proof that every configured channel
+produces entries. A continuous guide's
+native measurement belongs to T5b2, but its semantics and compatibility must
+already be final in T5b1c. A genuine empty contributor does not manufacture a
+kind, and Hidden does not override data-color domain coordination.
+
 Create one kind-discriminated private descriptor for discrete and continuous
 contributors using current prepared semantic inputs. Resolve identities,
 display titles/labels, complete glyphs, exact/automatic envelopes, missing blocks,
@@ -213,6 +231,18 @@ branches; T5d later supplies its final resolved values to this same path.
 Evidence: compatible/incompatible kinds, titles, aliases, shape/stroke/alpha,
 fixed/automatic continuous domains, source ordering, hidden contributors, and
 failure before font discovery or any artifact. No separate legend sections.
+
+T5b1a evidence: the active Canvas preflight now rejects a Shared guide with a
+configured discrete channel alongside Heatmap/Beeswarm continuous color before
+font discovery. An unconfigured Scatter or a hidden discrete legend contributes
+no competing kind; non-Shared Canvas behavior is unchanged. T5b1b must replace
+this conservative channel tag with actual prepared entries (including labeled
+layers, filtered/empty data, and full glyph equality); T5b1c must supply the
+complete continuous descriptor. This result is not a claim that all Shared
+guides already render under the final policy. Focused fixture and strict Clippy
+pass. `just verify` passed after formatting: 1,025 library tests (17 ignored),
+467 integration tests including 27 snapshots, API docs, and package verification
+(271 files). Log: `/tmp/opencode/t5b1a-verify.log`.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 
