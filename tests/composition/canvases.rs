@@ -237,6 +237,34 @@ fn shared_canvas_legend_skips_plot_local_hidden_entries() {
 }
 
 #[test]
+fn hidden_discrete_guide_still_coordinates_visible_mark_colors() {
+    let scatter = |hue: &str| {
+        Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0]),
+            NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hue(CategoryValues::new("cohort", [hue, hue]).unwrap())
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, scatter("hidden").legend(LegendPolicy::Hidden))
+            .unwrap()
+            .panel(0, 1, scatter("visible"))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "shared-hidden-visible-color-domain",
+    )
+    .unwrap();
+    let guide = svg.split_once("<g id=\"canvas-shared-legend\">").unwrap().1;
+    assert!(guide.contains(">Visible</text>"));
+    assert!(!guide.contains(">Hidden</text>"));
+    // The hidden panel contributes the first color identity. The visible panel
+    // retains the second color, not a fresh local slot zero.
+    assert!(svg.contains("fill=\"#D55E00\""));
+}
+
+#[test]
 fn canvas_filters_point_labels_outside_an_exact_y_range() {
     let outside = lichtung_plot::PointLayer::new(
         NumericValues::new("point x", [2.0]),

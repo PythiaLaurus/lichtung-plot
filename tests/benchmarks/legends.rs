@@ -420,8 +420,8 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
             2,
             2,
             4,
-            if facet { 0 } else { 24 },
-            if facet { 29 } else { 52 },
+            if facet { 0 } else { 12 },
+            if facet { 29 } else { 40 },
         )
     };
     assert_eq!(sample.observations.roots.len(), rounds);
@@ -528,7 +528,12 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
     assert_eq!(
         observed.counters[Counter::ChildCacheMiss as usize],
-        if pressure { 24 } else { 16 }
+        match (facet, pressure) {
+            (true, true) => 24,
+            (true, false) => 16,
+            (false, true) => 18,
+            (false, false) => 12,
+        }
     );
     for counter in [
         Counter::ChildCacheHit,

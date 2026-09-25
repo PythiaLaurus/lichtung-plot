@@ -1,5 +1,20 @@
 # Local-Search Measurements
 
+### T5b1b2b1 Prepared Scatter Shared Guides
+
+The T5b migration keeps the historical T5a tables below as stage-attributed
+evidence. On the T5b1b2b1 checkout, all-Scatter Shared Canvas guide identities,
+glyphs, and titles are resolved before fonts. Their containing-frame body probes
+remain for geometric fit, but the two Hue-only child probes per root round are
+gone. Three ignored release legend samples passed and retained Auto/selected-edge
+SVG, PNG, and decoded-pixel equality. Adequate/pressured Canvas examples record
+12/18 child misses instead of 16/24, respectively, with no child hits; both
+still retain their actual 2/3 root rounds. The 3-sample adequate Canvas
+end-to-end minimum/median/maximum was 38.898/40.711/52.767 ms and pressured
+Canvas 34.656/34.760/34.796 ms. These uncontrolled measurements are not a
+universal speedup claim. The prior historical timings and hashes have not been
+rewritten. Log: `/tmp/opencode/t5b1b2b1-legends-release.log`.
+
 This is a measured cost and coverage report for T5a3q, not an optimization.
 The final aggregate release run in
 `/tmp/opencode/t5a3q-all.log` passed all 10 requested ignored measurement tests

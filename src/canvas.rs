@@ -60,6 +60,9 @@ struct PlannedCanvasPanel {
     layers: [String; 3],
 }
 
+type PreparedHueGroups = Vec<(String, Vec<String>)>;
+type PreparedDiscreteGuide = (String, Arc<[LegendEntry]>);
+
 /// T5b consumes these as actual panel-heading semantics, not outer-root fallbacks.
 /// Until then the legacy panel headers keep their current placement.
 struct DeferredT5bPanelHeadingInputs {
@@ -86,6 +89,8 @@ struct PreparedCanvasInputs {
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
+    scatter_hue_groups: Option<Arc<PreparedHueGroups>>,
+    scatter_shared_guide: Option<PreparedDiscreteGuide>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
 }
 
@@ -101,6 +106,75 @@ struct PreparedCanvasRound<'a> {
 #[cfg(test)]
 mod d1_tests {
     use super::*;
+
+    #[test]
+    fn scatter_shared_hue_order_is_retained_before_fonts_and_includes_hidden_marks() {
+        let scatter = |hue: &str| {
+            Plot::scatter(
+                crate::NumericValues::new("x", [0.0, 1.0]),
+                crate::NumericValues::new("y", [1.0, 2.0]),
+            )
+            .hue(crate::CategoryValues::new("cohort", [hue, hue]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, scatter("hidden").legend(crate::LegendPolicy::Hidden))
+            .unwrap()
+            .panel(0, 1, scatter("visible"))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        crate::layout::plan_exact_root(
+            960,
+            640,
+            |stage| {
+                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                let groups = canvas
+                    .prepared_scatter_hue_groups(&interiors, &stage.generation_resources())?
+                    .unwrap();
+                assert_eq!(
+                    groups.as_slice(),
+                    [("cohort".into(), vec!["hidden".into(), "visible".into()])]
+                );
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn conflicting_scatter_glyphs_reject_before_fonts_without_body_probes() {
+        let source = || {
+            Plot::scatter(
+                crate::NumericValues::new("x", [1.0, 2.0]),
+                crate::NumericValues::new("y", [2.0, 3.0]),
+            )
+            .hue(crate::CategoryValues::new("cohort", ["shared", "shared"]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, source().theme(Theme::Nature))
+            .unwrap()
+            .panel(0, 1, source().theme(Theme::Science))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let error = canvas.preflight().unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Render(message) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
 
     #[test]
     fn mixed_shared_guide_kinds_reject_before_font_discovery() {
@@ -472,6 +546,8 @@ mod d1_tests {
                         round,
                         &mut children,
                         &[],
+                        None,
+                        None,
                         interiors,
                     )?;
                     if calls == 2 {
@@ -640,6 +716,8 @@ mod d1_tests {
                             round,
                             &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
                             &[],
+                            None,
+                            None,
                             interiors,
                         )?,
                     ))
@@ -745,6 +823,8 @@ mod d1_tests {
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::canvas(&canvas),
                         &[],
+                        None,
+                        None,
                         interiors,
                     )?,
                 ))
@@ -1569,6 +1649,157 @@ impl Canvas {
         Ok(())
     }
 
+    /// Prepare the shared hue order from retained Scatter semantics, without
+    /// measuring child bodies or opening a font environment. Other families are
+    /// migrated into this same owner in T5b1b2b.
+    fn prepared_scatter_hue_groups(
+        &self,
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Option<Arc<PreparedHueGroups>>, Error> {
+        if self.legend_policy != CanvasLegendPolicy::Shared {
+            return Ok(None);
+        }
+        if self
+            .panels
+            .iter()
+            .flatten()
+            .any(|plot| plot.hue_dimension_key().is_some() && plot.kind() != PlotKind::Scatter)
+        {
+            return Ok(None);
+        }
+        let Some(first) = self.panels.iter().flatten().next() else {
+            return Ok(None);
+        };
+        let mut groups = Vec::new();
+        first
+            .data()
+            .with_axis_resources(resources)
+            .reserve_source(&mut groups, self.panels.len())?;
+        for (index, plot) in self.panels.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            let Some(dimension) = plot.hue_dimension_key() else {
+                continue;
+            };
+            let data = plot.data().with_axis_resources(resources);
+            let prepared = interiors
+                .get(index)
+                .and_then(Option::as_ref)
+                .and_then(|inputs| inputs.scatter.as_ref())
+                .and_then(|inputs| {
+                    inputs
+                        .panels
+                        .first()
+                        .filter(|(scope, _)| scope.is_some() && inputs.panels.len() == 1)
+                })
+                .map(|(_, prepared)| prepared)
+                .ok_or_else(|| {
+                    Error::Render("Canvas Scatter guide is missing prepared semantics".into())
+                })?;
+            let group_index = data.source_position(&groups, |(field, _)| field == dimension)?;
+            let levels = if let Some(group_index) = group_index {
+                &mut groups[group_index].1
+            } else {
+                groups.push((data.copy_source_string(dimension)?, Vec::new()));
+                &mut groups.last_mut().expect("new guide field").1
+            };
+            for level in prepared.hue_levels() {
+                if data
+                    .source_position(levels, |existing| existing == level)?
+                    .is_none()
+                {
+                    data.reserve_source(levels, 1)?;
+                    levels.push(data.copy_source_string(level)?);
+                }
+            }
+        }
+        first
+            .data()
+            .with_axis_resources(resources)
+            .source_arc(groups)
+            .map(Some)
+    }
+
+    /// Prepare the one shared Scatter guide without requiring a measured body or
+    /// font environment. An empty retained set is still a prepared result.
+    fn prepared_scatter_shared_guide(
+        &self,
+        themes: &ResolvedCanvasThemes,
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        hue_groups: Option<&[(String, Vec<String>)]>,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Option<PreparedDiscreteGuide>, Error> {
+        if self.legend_policy != CanvasLegendPolicy::Shared
+            || self
+                .panels
+                .iter()
+                .flatten()
+                .any(|plot| plot.kind() != PlotKind::Scatter)
+        {
+            return Ok(None);
+        }
+        let mut entries = Vec::new();
+        for (index, plot) in self.panels.iter().enumerate() {
+            let Some(source) = plot else { continue };
+            if source.legend_policy_spec() == crate::LegendPolicy::Hidden {
+                continue;
+            }
+            let data = source.data().with_axis_resources(resources);
+            let mut plot = source.admitted_clone(data)?;
+            if let Some(labels) = &self.labels {
+                plot = plot.labels(labels.clone());
+            }
+            if let Some((_, levels)) = hue_groups.and_then(|groups| {
+                groups
+                    .iter()
+                    .find(|(field, _)| Some(field.as_str()) == plot.hue_dimension_key())
+            }) {
+                let levels =
+                    data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?;
+                plot = plot.with_global_hue_levels(levels);
+            }
+            let theme = themes
+                .plot(index)
+                .expect("configured Canvas panel has a resolved theme");
+            let prepared = interiors
+                .get(index)
+                .and_then(Option::as_ref)
+                .and_then(|inputs| inputs.scatter.as_ref())
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared)
+                .ok_or_else(|| {
+                    Error::Render("Canvas Scatter guide is missing prepared semantics".into())
+                })?;
+            let order = prepared.group_order(&plot, data)?;
+            let mut contribution = prepared.guide_entries_in_order(&plot, theme, data, &order)?;
+            crate::decorations::legend::resolve_entries(&plot, &mut contribution, resources)?;
+            data.reserve_source(&mut entries, contribution.len())?;
+            entries.extend(contribution);
+        }
+        let entries = crate::decorations::legend::merge_exact_entries(
+            entries,
+            "shared canvas legend",
+            resources,
+        )?;
+        let title = crate::decorations::legend::resolved_title(&entries, resources)?;
+        let first = self
+            .panels
+            .iter()
+            .flatten()
+            .next()
+            .ok_or_else(|| Error::Data("canvas requires a configured panel".into()))?;
+        let data = first.data().with_axis_resources(resources);
+        data.claim_source_bytes(
+            std::alloc::Layout::array::<LegendEntry>(entries.len())
+                .and_then(|entries| std::alloc::Layout::new::<[usize; 2]>().extend(entries))
+                .map_err(|_| Error::Render("Canvas shared guide Arc storage overflow".into()))?
+                .0
+                .pad_to_align()
+                .size(),
+        )?;
+        Ok(Some((title, entries.into())))
+    }
+
     fn prepare_shared_x(
         &self,
         stage: &mut crate::layout::kernel::PreparedStage<'_>,
@@ -1958,6 +2189,16 @@ impl Canvas {
                 }
                 self.validate_structure()?;
                 let (interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
+                let scatter_hue_groups = self.prepared_scatter_hue_groups(
+                    &interiors,
+                    &prepared_stage.generation_resources(),
+                )?;
+                let scatter_shared_guide = self.prepared_scatter_shared_guide(
+                    &themes,
+                    &interiors,
+                    scatter_hue_groups.as_deref().map(Vec::as_slice),
+                    &prepared_stage.generation_resources(),
+                )?;
                 let (mut census, scalar_presence) =
                     self.foundational_text_census(&themes, &interiors, prepared_stage)?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
@@ -1967,6 +2208,8 @@ impl Canvas {
                     text_census: census,
                     root_text,
                     shared_x,
+                    scatter_hue_groups,
+                    scatter_shared_guide,
                     interiors,
                 })
             },
@@ -1984,6 +2227,8 @@ impl Canvas {
                     round,
                     &mut children,
                     &prepared.shared_x,
+                    prepared.scatter_hue_groups.as_deref().map(Vec::as_slice),
+                    prepared.scatter_shared_guide.as_ref(),
                     &prepared.interiors,
                 )?;
                 #[cfg(test)]
@@ -2250,6 +2495,11 @@ impl Canvas {
         Ok((census, scalar_presence))
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "one Canvas round consumes separate retained domains, hue identities, and child inputs"
+    )]
     fn build_canvas_plan(
         &self,
         themes: Arc<ResolvedCanvasThemes>,
@@ -2257,12 +2507,22 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
+        prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
+        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
         use crate::layout::kernel::TrialOutcome;
-        let prepared =
-            self.prepare_canvas_round(themes, assigned, round, children, shared_x, interiors)?;
+        let prepared = self.prepare_canvas_round(
+            themes,
+            assigned,
+            round,
+            children,
+            shared_x,
+            prepared_scatter_hues,
+            prepared_scatter_guide,
+            interiors,
+        )?;
         let mut compact_changes = true;
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return match self.build_canvas_attempt(
@@ -2360,6 +2620,7 @@ impl Canvas {
     }
 
     #[expect(
+        clippy::too_many_arguments,
         clippy::too_many_lines,
         reason = "admitted scoped configuration and shared-guide preparation form one parent round"
     )]
@@ -2370,6 +2631,8 @@ impl Canvas {
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
+        prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
+        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
@@ -2434,10 +2697,16 @@ impl Canvas {
             }
             plots.push(Some(plot));
         }
-        let hue_groups = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::canvas_hue_groups(&plots, full_outer, &themes, children, round)?
+        let fallback_hues;
+        let hue_groups: &[(String, Vec<String>)] = if self.legend_policy
+            != CanvasLegendPolicy::Shared
+        {
+            &[]
+        } else if let Some(hues) = prepared_scatter_hues {
+            hues
         } else {
-            Vec::new()
+            fallback_hues = Self::canvas_hue_groups(&plots, full_outer, &themes, children, round)?;
+            &fallback_hues
         };
         for slot in &mut plots {
             if let Some(plot) = slot.take() {
@@ -2471,26 +2740,37 @@ impl Canvas {
             }
         }
         let (shared_legend, body_probes) = if self.legend_policy == CanvasLegendPolicy::Shared {
-            Self::preflight_shared_legend(&plots, &themes, full_outer, children, round)?
+            Self::preflight_shared_legend(
+                &plots,
+                &themes,
+                full_outer,
+                children,
+                round,
+                prepared_scatter_guide,
+            )?
         } else {
             (None, Vec::new())
         };
         if let Some((_, entries)) = &shared_legend {
-            resources
-                .claim_bytes(
-                    u64::try_from(
-                        std::mem::size_of_val(entries.as_slice())
-                            + 2 * std::mem::size_of::<usize>(),
+            if prepared_scatter_guide.is_none() {
+                resources
+                    .claim_bytes(
+                        u64::try_from(
+                            std::mem::size_of_val(entries.as_ref())
+                                + 2 * std::mem::size_of::<usize>(),
+                        )
+                        .map_err(|_| Error::Render("Canvas legend Arc overflow".into()))?,
                     )
-                    .map_err(|_| Error::Render("Canvas legend Arc overflow".into()))?,
-                )
-                .map_err(|error| Error::Render(format!("Canvas legend Arc admission: {error}")))?;
+                    .map_err(|error| {
+                        Error::Render(format!("Canvas legend Arc admission: {error}"))
+                    })?;
+            }
         }
         Ok(PreparedCanvasRound {
             themes,
             canvas_layout,
             plots,
-            shared_legend: shared_legend.map(|(title, entries)| (title, entries.into())),
+            shared_legend,
             body_probes,
             shared_x,
         })
@@ -3541,9 +3821,6 @@ impl Canvas {
         for (index, plot) in plots.iter().enumerate() {
             let Some(plot) = plot else { continue };
             let data = plot.data().with_axis_resources(&resources);
-            if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
-                continue;
-            }
             let Some(dimension) = plot.hue_dimension_key() else {
                 continue;
             };
@@ -3552,8 +3829,28 @@ impl Canvas {
                 .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
             record_canvas_theme(index, "shared-hue-discovery", theme);
-            let observed =
-                children.canvas_probe(plot, panel, theme, index, MeasurementPhase::Hue, round)?;
+            let prepared_scatter = plot
+                .prepared_scatter
+                .as_ref()
+                .and_then(|inputs| {
+                    inputs
+                        .panels
+                        .iter()
+                        .find(|(scope, _)| scope.as_deref() == plot.axis_scope())
+                })
+                .map(|(_, prepared)| prepared);
+            let observed = if prepared_scatter.is_none() {
+                Some(children.canvas_probe(
+                    plot,
+                    panel,
+                    theme,
+                    index,
+                    MeasurementPhase::Hue,
+                    round,
+                )?)
+            } else {
+                None
+            };
             data.claim_source_visits(
                 groups
                     .len()
@@ -3568,20 +3865,25 @@ impl Canvas {
                     groups.push((data.copy_source_string(dimension)?, Vec::new()));
                     &mut groups[index].1
                 };
-            for entry in &observed.legend_entries {
-                if let Some(level) = entry.coordinated_hue_value_for(dimension) {
-                    data.claim_source_visits(
-                        levels
-                            .len()
-                            .checked_mul(level.len().max(1))
-                            .ok_or_else(|| {
-                                Error::Render("Canvas hue level lookup overflow".into())
-                            })?,
-                    )?;
-                    if !levels.iter().any(|value| value == level) {
-                        data.reserve_source(levels, 1)?;
-                        levels.push(data.copy_source_string(level)?);
-                    }
+            let observed_levels = prepared_scatter
+                .into_iter()
+                .flat_map(crate::plots::scatter::PreparedScatter::hue_levels)
+                .chain(observed.iter().flat_map(|result| {
+                    result
+                        .legend_entries
+                        .iter()
+                        .filter_map(|entry| entry.coordinated_hue_value_for(dimension))
+                }));
+            for level in observed_levels {
+                data.claim_source_visits(
+                    levels
+                        .len()
+                        .checked_mul(level.len().max(1))
+                        .ok_or_else(|| Error::Render("Canvas hue level lookup overflow".into()))?,
+                )?;
+                if !levels.iter().any(|value| value == level) {
+                    data.reserve_source(levels, 1)?;
+                    levels.push(data.copy_source_string(level)?);
                 }
             }
         }
@@ -3598,9 +3900,10 @@ impl Canvas {
         panel: PanelBox,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
+        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
     ) -> Result<
         (
-            Option<(String, Vec<LegendEntry>)>,
+            Option<PreparedDiscreteGuide>,
             Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
         ),
         Error,
@@ -3642,7 +3945,9 @@ impl Canvas {
                 MeasurementPhase::Legend,
                 round,
             )?;
-            if plot.legend_policy_spec() != crate::LegendPolicy::Hidden {
+            if prepared_scatter_guide.is_none()
+                && plot.legend_policy_spec() != crate::LegendPolicy::Hidden
+            {
                 let data = plot.data().with_axis_resources(&resources);
                 data.reserve_source(&mut entries, result.legend_entries.len())?;
                 for entry in &result.legend_entries {
@@ -3650,6 +3955,21 @@ impl Canvas {
                 }
             }
             probes[index] = Some(result);
+        }
+        if let Some((title, entries)) = prepared_scatter_guide {
+            if entries.is_empty() {
+                return Ok((None, probes));
+            }
+            let source = plots
+                .iter()
+                .flatten()
+                .next()
+                .expect("prepared guide owns a plot");
+            let title = source
+                .data()
+                .with_axis_resources(&resources)
+                .copy_source_string(title)?;
+            return Ok((Some((title, Arc::clone(entries))), probes));
         }
         let entries = crate::decorations::legend::merge_exact_entries(
             entries,
@@ -3662,7 +3982,7 @@ impl Canvas {
             Ok((
                 Some((
                     crate::decorations::legend::resolved_title(&entries, &resources)?,
-                    entries,
+                    entries.into(),
                 )),
                 probes,
             ))

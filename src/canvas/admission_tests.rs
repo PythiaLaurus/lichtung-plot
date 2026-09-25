@@ -370,6 +370,8 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                     round,
                     &mut children,
                     shared,
+                    None,
+                    None,
                     interiors,
                 )?;
                 children.finish_round(round);

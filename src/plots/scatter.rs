@@ -47,6 +47,12 @@ pub(crate) struct ScatterPayload {
 }
 
 impl PreparedScatter {
+    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.groups
+            .iter()
+            .filter_map(|group| group.label.as_deref())
+    }
+
     pub(crate) fn new(chart: &Plot, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
         data.claim_mark_rows()?;
         #[cfg(test)]
@@ -109,6 +115,53 @@ impl PreparedScatter {
         Ok(Self { ranges, groups })
     }
 
+    pub(crate) fn guide_entries_in_order(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+        order: &[usize],
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let mut entries = Vec::new();
+        data.reserve_source(
+            &mut entries,
+            self.groups
+                .iter()
+                .filter(|group| group.label.is_some())
+                .count(),
+        )?;
+        for (slot, &group_index) in order.iter().enumerate() {
+            let Some(label) = &self.groups[group_index].label else {
+                continue;
+            };
+            let color = theme.colors[chart.hue_color_index(label, slot) % theme.colors.len()];
+            entries.push(LegendEntry::point(
+                chart.point_legend_identity(label, data)?,
+                chart.point_style(color, 3),
+            ));
+        }
+        Ok(entries)
+    }
+
+    /// Semantic order is independent of panel assignment and font discovery.
+    pub(crate) fn group_order(
+        &self,
+        chart: &Plot,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<usize>, Error> {
+        let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
+        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+            let key = |index: usize| {
+                self.groups[index]
+                    .label
+                    .as_ref()
+                    .map_or(0, |label| chart.hue_color_index(label, usize::MAX))
+            };
+            (key(*a), *a).cmp(&(key(*b), *b))
+        })?;
+        Ok(order)
+    }
+
     fn project(
         &self,
         chart: &Plot,
@@ -123,22 +176,9 @@ impl PreparedScatter {
             stages.set(counts);
         });
         let mut groups = Vec::new();
-        let mut legends = Vec::new();
         data.reserve_source(&mut groups, self.groups.len())?;
-        data.reserve_source(
-            &mut legends,
-            self.groups.iter().filter(|g| g.label.is_some()).count(),
-        )?;
-        let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
-        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
-            let key = |index: usize| {
-                self.groups[index]
-                    .label
-                    .as_ref()
-                    .map_or(0, |label| chart.hue_color_index(label, usize::MAX))
-            };
-            (key(*a), *a).cmp(&(key(*b), *b))
-        })?;
+        let order = self.group_order(chart, data)?;
+        let legends = self.guide_entries_in_order(chart, theme, data, &order)?;
         for (index, group_index) in order.into_iter().enumerate() {
             let group = &self.groups[group_index];
             let color = group.label.as_ref().map_or_else(
@@ -151,12 +191,6 @@ impl PreparedScatter {
                 let (x, y) = projection.project(*x, *y);
                 Ok(Point2D::new(x, y))
             }))?;
-            if let Some(label) = &group.label {
-                legends.push(LegendEntry::point(
-                    chart.point_legend_identity(label, data)?,
-                    style.clone(),
-                ));
-            }
             groups.push((points, style));
         }
         Ok(ScatterPayload {
@@ -242,6 +276,41 @@ mod tests {
         )
         .hue(CategoryValues::new("hue", ["b", "omitted", "a", "b"]).unwrap())
         .erase()
+    }
+
+    #[test]
+    fn prepared_guide_glyphs_match_selected_marks_without_fonts_or_a_panel_search() {
+        let plot = source();
+        let theme = crate::Theme::Publication.resolve();
+        let resources = OperationGenerationResources::new();
+        let data = plot.data().with_axis_resources(&resources);
+        let prepared = PreparedScatter::new(&plot, data).unwrap();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let order = prepared.group_order(&plot, data).unwrap();
+        let entries = prepared
+            .guide_entries_in_order(&plot, &theme, data, &order)
+            .unwrap();
+        let selected = prepared
+            .project(
+                &plot,
+                &crate::layout::Projection::new(
+                    prepared.ranges[0],
+                    prepared.ranges[1],
+                    (30.0, 600.0, 30.0, 400.0),
+                ),
+                &theme,
+                data,
+            )
+            .unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries
+            .iter()
+            .zip(&selected.legends)
+            .all(|(prepared, selected)| prepared.same_child_input(selected)));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
     }
 
     #[test]

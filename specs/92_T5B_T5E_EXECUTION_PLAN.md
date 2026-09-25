@@ -119,7 +119,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b1 | COMPLETE | T5b1a | `refactor(legend): admit compatibility before fonts` |
 | T5b1b2 | IN PROGRESS | T5b1b1 | Umbrella; completes after T5b1b2a-b |
 | T5b1b2a | COMPLETE | T5b1b1 | `refactor(legend): resolve display labels before fonts` |
-| T5b1b2b | PENDING | T5b1b2a | `refactor(legend): retain discrete guide descriptors` |
+| T5b1b2b | IN PROGRESS | T5b1b2a | Umbrella; completes after T5b1b2b1-b3 |
+| T5b1b2b1 | COMPLETE | T5b1b2a | `refactor(legend): prepare Scatter shared guides` |
+| T5b1b2b2 | PENDING | T5b1b2b1 | `refactor(legend): prepare remaining ordinary guide entries` |
+| T5b1b2b3 | PENDING | T5b1b2b2 | `refactor(legend): close discrete contributor preparation` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -282,6 +285,47 @@ and composition tests passed; `just verify` passed 1,027 library tests (17
 ignored), 467 integration tests, docs and package verification (271 files).
 Log: `/tmp/opencode/t5b1b2a-verify.log`. Actual family entry generation and
 glyph compatibility still await T5b1b2b.
+
+T5b1b2b in-progress evidence: Scatter now has one guide-glyph producer over
+root-prepared semantic groups and current theme; the same order and glyphs feed
+selected marks. For an all-Scatter Shared Canvas, canonical hue groups and
+actual merged entries/title are retained before font discovery, including visible
+marks whose local legend is hidden. Compatibility does not read probe entries;
+the existing body probes remain for the T5b2/T5b6 *geometry* fit contract.
+Mixed explicit-theme conflicting glyphs refuse before fonts, while label and
+output equivalence checks for the existing shared Scatter fixtures pass. This
+does **not** close T5b1b2b: other families still generate their entries during
+constrained measurement, and the temporary channel-kind inference must be
+replaced by actual prepared contributors before claiming T5b1 complete.
+
+T5b1b2b1 is an independently reviewable source migration: it covers only the
+all-Scatter Shared Canvas owner, including a hidden contributor to the hue domain.
+The non-Scatter producer remains explicitly classified for later migration,
+not a fallback when a prepared Scatter descriptor fails. T5b1b2b2 extracts
+the remaining ordinary and labeled-layer entries from retained semantics;
+T5b1b2b3 connects eligible specialized discrete contributors and faceted owners,
+removes the channel-level kind inference, and proves one pre-font descriptor
+across all admitted routes. None changes the existing supported nesting matrix.
+
+T5b1b2b1 completion: `PreparedScatter` now produces guide entries, order, and
+complete point glyphs from the same semantic groups/style source used by its
+selected mark payload. All-Scatter Shared Canvas roots retain their canonical
+hue domain and merged guide entries/title before font discovery; hidden local
+legends still contribute visible mark identities to that domain. Conflicting
+glyphs from mixed explicit themes reject before font discovery. The prepared
+guide owns compatibility; the existing body probes are retained only for
+complete-frame geometry until T5b2/T5b6. Real composition and pre-font tests
+pass; all three release legend samples preserve successful Auto/selected-edge
+output equality. Canvas child-cache misses change from 16 to 12 (adequate) and
+24 to 18 (pressured) because the Hue-only body probes are gone. The selected
+guide flow and root-round counts are unchanged; adequate Canvas text work
+falls from 24 to 12 proposals and 52 to 40 exact trials, while pressured text
+counts remain unchanged. Primary `just verify` passed 1,030 library tests (17
+ignored), 468 integration tests, docs, and package verification (271 files).
+Logs: `/tmp/opencode/t5b1b2b1-verify.log` and
+`/tmp/opencode/t5b1b2b1-legends-release.log`. Remaining ordinary, labeled-layer,
+specialized discrete, and facet contributors belong to T5b1b2b2/b3; no claim
+of complete T5b1 or continuous shared measurement is made.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 
