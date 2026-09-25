@@ -121,7 +121,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2a | COMPLETE | T5b1b1 | `refactor(legend): resolve display labels before fonts` |
 | T5b1b2b | IN PROGRESS | T5b1b2a | Umbrella; completes after T5b1b2b1-b3 |
 | T5b1b2b1 | COMPLETE | T5b1b2a | `refactor(legend): prepare Scatter shared guides` |
-| T5b1b2b2 | PENDING | T5b1b2b1 | `refactor(legend): prepare remaining ordinary guide entries` |
+| T5b1b2b2 | IN PROGRESS | T5b1b2b1 | Umbrella; completes after T5b1b2b2a-b |
+| T5b1b2b2a | COMPLETE | T5b1b2b1 | `refactor(legend): prepare point-path shared guides` |
+| T5b1b2b2b | PENDING | T5b1b2b2a | `refactor(legend): prepare remaining ordinary guide entries` |
 | T5b1b2b3 | PENDING | T5b1b2b2 | `refactor(legend): close discrete contributor preparation` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
@@ -301,8 +303,9 @@ replaced by actual prepared contributors before claiming T5b1 complete.
 T5b1b2b1 is an independently reviewable source migration: it covers only the
 all-Scatter Shared Canvas owner, including a hidden contributor to the hue domain.
 The non-Scatter producer remains explicitly classified for later migration,
-not a fallback when a prepared Scatter descriptor fails. T5b1b2b2 extracts
-the remaining ordinary and labeled-layer entries from retained semantics;
+not a fallback when a prepared Scatter descriptor fails. T5b1b2b2a extends
+the same owner to Line, Trajectory, and LinePath, including labeled point-layer
+entries; T5b1b2b2b covers the remaining ordinary entries;
 T5b1b2b3 connects eligible specialized discrete contributors and faceted owners,
 removes the channel-level kind inference, and proves one pre-font descriptor
 across all admitted routes. None changes the existing supported nesting matrix.
@@ -326,6 +329,22 @@ Logs: `/tmp/opencode/t5b1b2b1-verify.log` and
 `/tmp/opencode/t5b1b2b1-legends-release.log`. Remaining ordinary, labeled-layer,
 specialized discrete, and facet contributors belong to T5b1b2b2/b3; no claim
 of complete T5b1 or continuous shared measurement is made.
+
+T5b1b2b2a completion: the same source of `LegendEntry` glyphs is used before
+fonts and during selected mark measurement for Line, Trajectory, and LinePath,
+including ribbon/marker combinations and labeled supplemental point layers.
+The prepared Shared Canvas hue domain now covers Scatter and these three path
+families without Hue-only child body probes. All-point/path Shared canvases
+perform compatibility before fonts; conflicting mixed mark glyphs fail there,
+and hidden discrete guides still contribute visible-mark color identities.
+The retained enclosing-frame body probes remain for geometric fit, not guide
+compatibility. Tests check all path-family pre-font glyphs against selected
+payloads, mixed Scatter/Line source order and rejection timing, unchanged
+composition output, and theme-owner provenance once in preparation rather
+than once per root round. `just verify` passed 1,033 library tests (17 ignored),
+468 integration tests including 27 snapshots, docs and package checks (271
+files); log `/tmp/opencode/t5b1b2b2a-verify.log`. Remaining ordinary families,
+specialized discrete contributors, and Facet ownership still await b2b/b3.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 

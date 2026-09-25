@@ -82,6 +82,149 @@ enum LineMark {
 }
 
 impl PreparedLine {
+    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.hues.iter().map(String::as_str)
+    }
+
+    pub(crate) fn group_order(
+        &self,
+        chart: &Plot,
+        data: PlotData<'_>,
+    ) -> Result<Vec<usize>, Error> {
+        let hue_paths = chart.kind() == PlotKind::LinePath
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
+        let mut order = data.collect_source((0..self.groups.len()).map(Ok))?;
+        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+            let key = |index: usize| {
+                let group = &self.groups[index];
+                group
+                    .identity
+                    .as_ref()
+                    .and_then(|identity| {
+                        if chart.kind() == PlotKind::Line || hue_paths {
+                            chart
+                                .global_collective_pairs()
+                                .and_then(|pairs| pairs.iter().position(|pair| pair == identity))
+                        } else {
+                            chart.global_group_levels().and_then(|levels| {
+                                levels
+                                    .iter()
+                                    .position(|level| Some(level) == identity.group.as_ref())
+                            })
+                        }
+                    })
+                    .unwrap_or(index)
+            };
+            (key(*a), *a).cmp(&(key(*b), *b))
+        })?;
+        Ok(order)
+    }
+
+    /// Exact legend glyphs from prepared semantic groups; no assigned panel,
+    /// source reprojection, or font environment is needed.
+    pub(crate) fn guide_entries_in_order(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        order: &[usize],
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let mut entries = Vec::new();
+        let hue_paths = chart.kind() == PlotKind::LinePath
+            && chart.line_path_style_spec() == LinePathStyle::Hue;
+        for &index in order {
+            let group = &self.groups[index];
+            let color = if chart.kind() == PlotKind::Line {
+                let slot = group
+                    .identity
+                    .as_ref()
+                    .and_then(|identity| identity.hue.as_ref())
+                    .map_or(0, |hue| {
+                        chart.hue_color_index(hue, group.hue_index.unwrap_or(0))
+                    });
+                theme.colors[slot % theme.colors.len()]
+            } else if hue_paths {
+                let hue = group.hue_index.ok_or_else(|| {
+                    Error::Render("line path: hue-styled path has no resolved hue index".into())
+                })?;
+                chart.categorical_color(
+                    "line path",
+                    &self.hues[hue],
+                    chart.hue_color_index(&self.hues[hue], hue),
+                    theme,
+                )?
+            } else {
+                theme.foreground
+            };
+            let Some(identity) = group
+                .identity
+                .as_ref()
+                .filter(|identity| identity.hue.is_some())
+            else {
+                continue;
+            };
+            data.claim_source_visits(group.points.len())?;
+            let has_fill = chart.kind() == PlotKind::Line
+                && group.points.iter().all(|point| point.interval.is_some());
+            let line = LineStyle::solid(
+                color,
+                if chart.kind() == PlotKind::Line {
+                    1.8
+                } else {
+                    1.4
+                },
+            );
+            let point =
+                chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
+            let fill = FillStyle {
+                color,
+                stroke: color,
+                stroke_width: 0.0,
+                opacity: 0.18,
+            };
+            data.reserve_source(&mut entries, 1)?;
+            let identity = chart.collective_legend_identity(identity, data)?;
+            entries.push(match (chart.markers_visible(), has_fill) {
+                (true, true) => LegendEntry::point_line_fill(identity, point, line, fill),
+                (true, false) => LegendEntry::point_line(identity, point, line),
+                (false, true) => LegendEntry::line_fill(identity, line, fill),
+                (false, false) => LegendEntry::line(identity, line),
+            });
+        }
+        if chart.kind() != PlotKind::Line
+            && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
+            && !hue_paths
+        {
+            let levels = chart.global_hue_levels().unwrap_or(&self.hues);
+            data.reserve_source(&mut entries, levels.len())?;
+            for (index, label) in levels.iter().enumerate() {
+                entries.push(LegendEntry::point(
+                    chart.point_legend_identity(label, data)?,
+                    chart.point_style(theme.colors[index % theme.colors.len()], 4),
+                ));
+            }
+        }
+        let slots = if chart.hue_col().is_some() {
+            chart
+                .global_hue_levels()
+                .map_or(self.primary_color_slots, <[String]>::len)
+        } else {
+            self.primary_color_slots
+        };
+        for (index, layer) in self.layers.iter().enumerate() {
+            if let Some(label) = &layer.legend {
+                data.reserve_source(&mut entries, 1)?;
+                let style = chart.point_layers()[index]
+                    .point_style(theme.colors[(slots + index) % theme.colors.len()]);
+                entries.push(
+                    LegendEntry::point(chart.point_legend_identity(label, data)?, style)
+                        .without_hue_level(),
+                );
+            }
+        }
+        Ok(entries)
+    }
+
     #[expect(
         clippy::too_many_lines,
         clippy::float_cmp,
@@ -484,37 +627,14 @@ fn project(
         marks: Vec::new(),
         layers: Vec::new(),
     };
-    let mut legends = Vec::new();
     let project = |x, y| {
         let (x, y) = layout.projection.project(x, y);
         Point2D::new(x, y)
     };
     let hue_paths =
         chart.kind() == PlotKind::LinePath && chart.line_path_style_spec() == LinePathStyle::Hue;
-    let mut order = data.collect_source((0..prepared.groups.len()).map(Ok))?;
-    crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
-        let key = |index: usize| {
-            let group = &prepared.groups[index];
-            group
-                .identity
-                .as_ref()
-                .and_then(|identity| {
-                    if chart.kind() == PlotKind::Line || hue_paths {
-                        chart
-                            .global_collective_pairs()
-                            .and_then(|pairs| pairs.iter().position(|pair| pair == identity))
-                    } else {
-                        chart.global_group_levels().and_then(|levels| {
-                            levels
-                                .iter()
-                                .position(|level| Some(level) == identity.group.as_ref())
-                        })
-                    }
-                })
-                .unwrap_or(index)
-        };
-        (key(*a), *a).cmp(&(key(*b), *b))
-    })?;
+    let order = prepared.group_order(chart, data)?;
+    let legends = prepared.guide_entries_in_order(chart, theme, data, &order)?;
     for &index in &order {
         let group = &prepared.groups[index];
         let color = if chart.kind() == PlotKind::Line {
@@ -652,18 +772,6 @@ fn project(
             data.reserve_source(&mut payload.marks, 1)?;
             payload.marks.push(LineMark::Line(points, line.clone()));
         }
-        if let Some(identity) = &group.identity {
-            if identity.hue.is_some() {
-                data.reserve_source(&mut legends, 1)?;
-                let identity = chart.collective_legend_identity(identity, data)?;
-                legends.push(match (chart.markers_visible(), has_fill) {
-                    (true, true) => LegendEntry::point_line_fill(identity, point_style, line, fill),
-                    (true, false) => LegendEntry::point_line(identity, point_style, line),
-                    (false, true) => LegendEntry::line_fill(identity, line, fill),
-                    (false, false) => LegendEntry::line(identity, line),
-                });
-            }
-        }
     }
     // Trajectories and paths paint every connector before any point.
     if chart.kind() != PlotKind::Line
@@ -693,16 +801,6 @@ fn project(
                 payload.marks.push(LineMark::Points(
                     data.collect_source(std::iter::once(Ok(project(point.x, point.y))))?,
                     chart.point_style(color, 4),
-                ));
-            }
-        }
-        if !hue_paths {
-            let levels = chart.global_hue_levels().unwrap_or(&prepared.hues);
-            data.reserve_source(&mut legends, levels.len())?;
-            for (index, label) in levels.iter().enumerate() {
-                legends.push(LegendEntry::point(
-                    chart.point_legend_identity(label, data)?,
-                    chart.point_style(theme.colors[index % theme.colors.len()], 4),
                 ));
             }
         }
@@ -761,13 +859,6 @@ fn project(
                     0.0,
                 ));
             }
-        }
-        if let Some(label) = &layer.legend {
-            data.reserve_source(&mut legends, 1)?;
-            legends.push(
-                LegendEntry::point(chart.point_legend_identity(label, data)?, style.clone())
-                    .without_hue_level(),
-            );
         }
         payload.layers.push((points, style, text));
     }

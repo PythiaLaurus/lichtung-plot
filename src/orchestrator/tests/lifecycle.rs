@@ -101,8 +101,19 @@ fn assert_canvas_theme_identity(owner: usize, stages: &[&str]) {
         .position(|stage| *stage == "render" || stage.ends_with("-render"))
         .unwrap_or(stages.len());
     let mut expected = vec![stages[0]];
+    expected.extend(
+        stages[1..first_render]
+            .iter()
+            .copied()
+            .filter(|stage| *stage == "prepared-shared-hue"),
+    );
     for _ in 0..rounds {
-        expected.extend_from_slice(&stages[1..first_render]);
+        expected.extend(
+            stages[1..first_render]
+                .iter()
+                .copied()
+                .filter(|stage| *stage != "prepared-shared-hue"),
+        );
     }
     expected.extend_from_slice(&stages[first_render..]);
     crate::canvas::CANVAS_THEME_EVIDENCE.with(|evidence| {
@@ -1102,7 +1113,7 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
             owner,
             &[
                 "resolved",
-                "shared-hue-discovery",
+                "prepared-shared-hue",
                 "shared-legend-preflight",
                 "panel-measure",
                 "panel-plan",
@@ -1140,7 +1151,7 @@ fn sparse_canvas_coordination_keeps_theme_identity_at_declared_indices() {
             owner,
             &[
                 "resolved",
-                "shared-hue-discovery",
+                "prepared-shared-hue",
                 "shared-legend-preflight",
                 "panel-measure",
                 "panel-plan",

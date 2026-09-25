@@ -185,6 +185,43 @@ fn decorated_line() -> Plot {
 }
 
 #[test]
+fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
+    for plot in sources(false, None).into_iter().chain([decorated_line()]) {
+        let resources = OperationGenerationResources::new();
+        let data = plot.data().with_axis_resources(&resources);
+        let prepared = PreparedLine::new(&plot, data, None).unwrap();
+        let theme = crate::Theme::Publication.resolve();
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let order = prepared.group_order(&plot, data).unwrap();
+        let mut entries = prepared
+            .guide_entries_in_order(&plot, &theme, data, &order)
+            .unwrap();
+        crate::decorations::legend::resolve_entries(&plot, &mut entries, &resources).unwrap();
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        theme.prepare_font_environment().unwrap();
+        let selected = crate::plots::shared_x::prepare_plot(&plot, &resources)
+            .unwrap()
+            .attach(plot)
+            .unwrap();
+        let result = selected
+            .measure_selected_interior(PlotRenderContext::new(
+                selected.data().with_axis_resources(&resources),
+                crate::layout::PanelBox::new(60.0, 600.0, 50.0, 400.0),
+                &theme,
+            ))
+            .unwrap();
+        assert_eq!(entries.len(), result.legend_entries.len());
+        assert!(entries
+            .iter()
+            .zip(&result.legend_entries)
+            .all(|(prepared, selected)| prepared.same_child_input(selected)));
+    }
+}
+
+#[test]
 fn semantic_order_ranges_conditions_and_exact_admission_precede_fonts() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
         crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));

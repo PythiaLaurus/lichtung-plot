@@ -89,8 +89,8 @@ struct PreparedCanvasInputs {
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
-    scatter_hue_groups: Option<Arc<PreparedHueGroups>>,
-    scatter_shared_guide: Option<PreparedDiscreteGuide>,
+    point_path_hue_groups: Option<Arc<PreparedHueGroups>>,
+    point_path_shared_guide: Option<PreparedDiscreteGuide>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
 }
 
@@ -130,7 +130,7 @@ mod d1_tests {
             |stage| {
                 let (interiors, _) = canvas.prepare_interiors(stage)?;
                 let groups = canvas
-                    .prepared_scatter_hue_groups(&interiors, &stage.generation_resources())?
+                    .prepared_point_path_hue_groups(&interiors, &stage.generation_resources())?
                     .unwrap();
                 assert_eq!(
                     groups.as_slice(),
@@ -142,6 +142,87 @@ mod d1_tests {
             |(), _, (), _| Ok(()),
         )
         .unwrap();
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn mixed_scatter_line_hue_order_is_prepared_before_fonts() {
+        let scatter = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .hue(crate::CategoryValues::new("cohort", ["first", "first"]).unwrap())
+        .legend(crate::LegendPolicy::Hidden);
+        let line = Plot::line(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hue(crate::CategoryValues::new("cohort", ["second", "second"]).unwrap());
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, scatter)
+            .unwrap()
+            .panel(0, 1, line)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        crate::layout::plan_exact_root(
+            960,
+            640,
+            |stage| {
+                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                let levels = canvas
+                    .prepared_point_path_hue_groups(&interiors, &stage.generation_resources())?
+                    .unwrap();
+                assert_eq!(
+                    levels.as_slice(),
+                    [("cohort".into(), vec!["first".into(), "second".into()])]
+                );
+                Ok(())
+            },
+            |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |(), _, (), _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+        let scene = canvas.render_scene().unwrap();
+        let svg = String::from_utf8(scene.svg_bytes().to_vec()).unwrap();
+        let guide = svg.split_once("<g id=\"canvas-shared-legend\">").unwrap().1;
+        assert!(guide.contains(">Second</text>"));
+        assert!(!guide.contains(">First</text>"));
+    }
+
+    #[test]
+    fn mixed_point_path_shared_glyph_conflict_precedes_fonts() {
+        let hue = || crate::CategoryValues::new("cohort", ["one", "one"]).unwrap();
+        let scatter = Plot::scatter(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [1.0, 2.0]),
+        )
+        .hue(hue());
+        let line = Plot::line(
+            crate::NumericValues::new("x", [0.0, 1.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hue(hue());
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, scatter)
+            .unwrap()
+            .panel(0, 1, line)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas.preflight(),
+            Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
@@ -1649,10 +1730,9 @@ impl Canvas {
         Ok(())
     }
 
-    /// Prepare the shared hue order from retained Scatter semantics, without
-    /// measuring child bodies or opening a font environment. Other families are
-    /// migrated into this same owner in T5b1b2b.
-    fn prepared_scatter_hue_groups(
+    /// Prepare point/path hue identities from retained semantics before fonts.
+    /// Further categorical families migrate to this same owner in T5b1b2b.
+    fn prepared_point_path_hue_groups(
         &self,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
         resources: &crate::font::canonical::OperationGenerationResources,
@@ -1660,12 +1740,13 @@ impl Canvas {
         if self.legend_policy != CanvasLegendPolicy::Shared {
             return Ok(None);
         }
-        if self
-            .panels
-            .iter()
-            .flatten()
-            .any(|plot| plot.hue_dimension_key().is_some() && plot.kind() != PlotKind::Scatter)
-        {
+        if self.panels.iter().flatten().any(|plot| {
+            plot.hue_dimension_key().is_some()
+                && !matches!(
+                    plot.kind(),
+                    PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                )
+        }) {
             return Ok(None);
         }
         let Some(first) = self.panels.iter().flatten().next() else {
@@ -1682,20 +1763,27 @@ impl Canvas {
                 continue;
             };
             let data = plot.data().with_axis_resources(resources);
-            let prepared = interiors
+            let inputs = interiors
                 .get(index)
                 .and_then(Option::as_ref)
-                .and_then(|inputs| inputs.scatter.as_ref())
-                .and_then(|inputs| {
-                    inputs
-                        .panels
-                        .first()
-                        .filter(|(scope, _)| scope.is_some() && inputs.panels.len() == 1)
-                })
-                .map(|(_, prepared)| prepared)
                 .ok_or_else(|| {
-                    Error::Render("Canvas Scatter guide is missing prepared semantics".into())
+                    Error::Render("Canvas hue guide is missing prepared semantics".into())
                 })?;
+            let scatter = inputs
+                .scatter
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            let line = inputs
+                .line
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            if scatter.is_none() && line.is_none() {
+                return Err(Error::Render(
+                    "Canvas point/path guide has no prepared color source".into(),
+                ));
+            }
             let group_index = data.source_position(&groups, |(field, _)| field == dimension)?;
             let levels = if let Some(group_index) = group_index {
                 &mut groups[group_index].1
@@ -1703,7 +1791,14 @@ impl Canvas {
                 groups.push((data.copy_source_string(dimension)?, Vec::new()));
                 &mut groups.last_mut().expect("new guide field").1
             };
-            for level in prepared.hue_levels() {
+            for level in scatter
+                .into_iter()
+                .flat_map(crate::plots::scatter::PreparedScatter::hue_levels)
+                .chain(
+                    line.into_iter()
+                        .flat_map(crate::plots::line::PreparedLine::hue_levels),
+                )
+            {
                 if data
                     .source_position(levels, |existing| existing == level)?
                     .is_none()
@@ -1720,9 +1815,9 @@ impl Canvas {
             .map(Some)
     }
 
-    /// Prepare the one shared Scatter guide without requiring a measured body or
-    /// font environment. An empty retained set is still a prepared result.
-    fn prepared_scatter_shared_guide(
+    /// Prepare one shared point/path guide without measuring bodies or fonts.
+    /// An empty retained set is still a prepared result.
+    fn prepared_point_path_shared_guide(
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
@@ -1730,11 +1825,12 @@ impl Canvas {
         resources: &crate::font::canonical::OperationGenerationResources,
     ) -> Result<Option<PreparedDiscreteGuide>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared
-            || self
-                .panels
-                .iter()
-                .flatten()
-                .any(|plot| plot.kind() != PlotKind::Scatter)
+            || self.panels.iter().flatten().any(|plot| {
+                !matches!(
+                    plot.kind(),
+                    PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                )
+            })
         {
             return Ok(None);
         }
@@ -1761,17 +1857,41 @@ impl Canvas {
             let theme = themes
                 .plot(index)
                 .expect("configured Canvas panel has a resolved theme");
-            let prepared = interiors
+            let inputs = interiors
                 .get(index)
                 .and_then(Option::as_ref)
-                .and_then(|inputs| inputs.scatter.as_ref())
-                .and_then(|inputs| inputs.panels.first())
-                .map(|(_, prepared)| prepared)
                 .ok_or_else(|| {
-                    Error::Render("Canvas Scatter guide is missing prepared semantics".into())
+                    Error::Render("Canvas point/path guide is missing prepared semantics".into())
                 })?;
-            let order = prepared.group_order(&plot, data)?;
-            let mut contribution = prepared.guide_entries_in_order(&plot, theme, data, &order)?;
+            let mut contribution = match plot.kind() {
+                PlotKind::Scatter => {
+                    let prepared = inputs
+                        .scatter
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas Scatter guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    let order = prepared.group_order(&plot, data)?;
+                    prepared.guide_entries_in_order(&plot, theme, data, &order)?
+                }
+                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                    let prepared = inputs
+                        .line
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render("Canvas Line guide is missing prepared semantics".into())
+                        })?;
+                    let order = prepared.group_order(&plot, data)?;
+                    prepared.guide_entries_in_order(&plot, theme, data, &order)?
+                }
+                _ => unreachable!("prepared point/path guide family was checked"),
+            };
             crate::decorations::legend::resolve_entries(&plot, &mut contribution, resources)?;
             data.reserve_source(&mut entries, contribution.len())?;
             entries.extend(contribution);
@@ -2189,14 +2309,29 @@ impl Canvas {
                 }
                 self.validate_structure()?;
                 let (interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
-                let scatter_hue_groups = self.prepared_scatter_hue_groups(
+                let point_path_hue_groups = self.prepared_point_path_hue_groups(
                     &interiors,
                     &prepared_stage.generation_resources(),
                 )?;
-                let scatter_shared_guide = self.prepared_scatter_shared_guide(
+                #[cfg(test)]
+                if point_path_hue_groups.is_some() {
+                    for (index, plot) in self.panels.iter().enumerate() {
+                        if plot
+                            .as_ref()
+                            .is_some_and(|plot| plot.hue_dimension_key().is_some())
+                        {
+                            record_canvas_theme(
+                                index,
+                                "prepared-shared-hue",
+                                themes.plot(index).expect("configured Canvas theme"),
+                            );
+                        }
+                    }
+                }
+                let point_path_shared_guide = self.prepared_point_path_shared_guide(
                     &themes,
                     &interiors,
-                    scatter_hue_groups.as_deref().map(Vec::as_slice),
+                    point_path_hue_groups.as_deref().map(Vec::as_slice),
                     &prepared_stage.generation_resources(),
                 )?;
                 let (mut census, scalar_presence) =
@@ -2208,8 +2343,8 @@ impl Canvas {
                     text_census: census,
                     root_text,
                     shared_x,
-                    scatter_hue_groups,
-                    scatter_shared_guide,
+                    point_path_hue_groups,
+                    point_path_shared_guide,
                     interiors,
                 })
             },
@@ -2227,8 +2362,8 @@ impl Canvas {
                     round,
                     &mut children,
                     &prepared.shared_x,
-                    prepared.scatter_hue_groups.as_deref().map(Vec::as_slice),
-                    prepared.scatter_shared_guide.as_ref(),
+                    prepared.point_path_hue_groups.as_deref().map(Vec::as_slice),
+                    prepared.point_path_shared_guide.as_ref(),
                     &prepared.interiors,
                 )?;
                 #[cfg(test)]
@@ -2508,7 +2643,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
-        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
+        prepared_point_path_guide: Option<&PreparedDiscreteGuide>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
@@ -2520,7 +2655,7 @@ impl Canvas {
             children,
             shared_x,
             prepared_scatter_hues,
-            prepared_scatter_guide,
+            prepared_point_path_guide,
             interiors,
         )?;
         let mut compact_changes = true;
@@ -2632,7 +2767,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
-        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
+        prepared_point_path_guide: Option<&PreparedDiscreteGuide>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
@@ -2746,13 +2881,13 @@ impl Canvas {
                 full_outer,
                 children,
                 round,
-                prepared_scatter_guide,
+                prepared_point_path_guide,
             )?
         } else {
             (None, Vec::new())
         };
         if let Some((_, entries)) = &shared_legend {
-            if prepared_scatter_guide.is_none() {
+            if prepared_point_path_guide.is_none() {
                 resources
                     .claim_bytes(
                         u64::try_from(
@@ -3900,7 +4035,7 @@ impl Canvas {
         panel: PanelBox,
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         round: &crate::layout::kernel::FeedbackRound,
-        prepared_scatter_guide: Option<&PreparedDiscreteGuide>,
+        prepared_point_path_guide: Option<&PreparedDiscreteGuide>,
     ) -> Result<
         (
             Option<PreparedDiscreteGuide>,
@@ -3945,7 +4080,7 @@ impl Canvas {
                 MeasurementPhase::Legend,
                 round,
             )?;
-            if prepared_scatter_guide.is_none()
+            if prepared_point_path_guide.is_none()
                 && plot.legend_policy_spec() != crate::LegendPolicy::Hidden
             {
                 let data = plot.data().with_axis_resources(&resources);
@@ -3956,7 +4091,7 @@ impl Canvas {
             }
             probes[index] = Some(result);
         }
-        if let Some((title, entries)) = prepared_scatter_guide {
+        if let Some((title, entries)) = prepared_point_path_guide {
             if entries.is_empty() {
                 return Ok((None, probes));
             }
