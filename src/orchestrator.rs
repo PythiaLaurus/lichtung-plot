@@ -431,7 +431,11 @@ fn resolve_rendered_labels(
             );
         }
         if !result.legend_entries.is_empty() {
-            crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries, theme)?;
+            crate::decorations::legend::resolve_entries(
+                plot,
+                &mut result.legend_entries,
+                &theme.prepared_font_environment()?.generation_resources(),
+            )?;
         }
         return Ok(());
     }
@@ -493,7 +497,11 @@ fn resolve_rendered_labels(
         result.y_tick_keys = Some(raw);
     }
     if !result.legend_entries.is_empty() {
-        crate::decorations::legend::resolve_entries(plot, &mut result.legend_entries, theme)?;
+        crate::decorations::legend::resolve_entries(
+            plot,
+            &mut result.legend_entries,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
     }
     if result.y_domain == AxisDomain::Categorical
         && result.layout.y_axis.assigned_tick_width.is_none()

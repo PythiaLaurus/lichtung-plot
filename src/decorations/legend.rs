@@ -468,15 +468,14 @@ impl LegendEntry {
 pub(crate) fn resolve_entries(
     plot: &crate::Plot,
     entries: &mut Vec<LegendEntry>,
-    theme: &crate::theme::ResolvedTheme,
+    resources: &OperationGenerationResources,
 ) -> Result<(), Error> {
-    let resources = theme.prepared_font_environment()?.generation_resources();
-    let data = plot.data().with_axis_resources(&resources);
+    let data = plot.data().with_axis_resources(resources);
     data.claim_source_visits(entries.len())?;
     for entry in entries.iter_mut() {
         (entry.title, entry.label) = entry.identity.resolved_text(plot, data)?;
     }
-    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", &resources)?;
+    *entries = merge_exact_entries(std::mem::take(entries), "plot legend", resources)?;
     Ok(())
 }
 
@@ -548,23 +547,38 @@ pub(crate) fn merge_exact_entries(
 
 pub(crate) fn resolved_title(
     entries: &[LegendEntry],
-    theme: &crate::theme::ResolvedTheme,
+    resources: &OperationGenerationResources,
 ) -> Result<String, Error> {
     let Some(first) = entries.first() else {
         return Ok(String::new());
     };
-    legend_visits(theme, entries.len())?;
+    resources
+        .claim_visits(entries.len() as u128)
+        .map_err(|error| Error::Render(format!("legend work admission: {error:?}")))?;
     for entry in entries {
-        let resources = theme.prepared_font_environment()?.generation_resources();
-        if !entry.identity.same_title(&first.identity, &resources)?
-            || !legend_text_eq(&entry.title, &first.title, &resources)?
+        if !entry.identity.same_title(&first.identity, resources)?
+            || !legend_text_eq(&entry.title, &first.title, resources)?
         {
             return Err(Error::Render(
                 "legend entries require one compatible semantic title".into(),
             ));
         }
     }
-    copy_legend_string(&first.title, theme)
+    resources
+        .claim_slots(1)
+        .map_err(|error| Error::Render(format!("legend title record admission: {error:?}")))?;
+    resources
+        .claim_bytes(
+            u64::try_from(first.title.len())
+                .map_err(|_| Error::Render("legend title length overflow".into()))?,
+        )
+        .map_err(|error| Error::Render(format!("legend title storage admission: {error}")))?;
+    let mut title = String::new();
+    title
+        .try_reserve_exact(first.title.len())
+        .map_err(|error| Error::Render(format!("legend title reservation: {error}")))?;
+    title.push_str(&first.title);
+    Ok(title)
 }
 
 fn legend_visits(theme: &crate::theme::ResolvedTheme, count: usize) -> Result<(), Error> {
@@ -1689,8 +1703,8 @@ mod tests {
             if let Some((visits, bytes)) = limits {
                 resources.set_test_limits(visits, bytes);
             }
-            let result = resolve_entries(&plot, &mut entries, &theme)
-                .and_then(|()| resolved_title(&entries, &theme));
+            let result = resolve_entries(&plot, &mut entries, &resources)
+                .and_then(|()| resolved_title(&entries, &resources));
             (resources, entries, result)
         };
         let (resources, entries, title) = run(None);
@@ -1759,6 +1773,29 @@ mod tests {
             merge_exact_entries([prepared("first"), conflicting], "shared guide", &resources),
             Err(Error::Render(message)) if message.contains("glyphs must match")
         ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn semantic_entry_labels_resolve_before_font_discovery() {
+        let plot = crate::Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let mut entries = vec![LegendEntry::point(
+            LegendIdentity::single("study_group", "control_group"),
+            PointStyle::new((0, 0, 0), 3),
+        )];
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        resolve_entries(&plot, &mut entries, &resources).unwrap();
+        assert_eq!(entries[0].title, "Study group");
+        assert_eq!(entries[0].label, "Control group");
+        assert_eq!(resolved_title(&entries, &resources).unwrap(), "Study group");
         assert_eq!(
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0

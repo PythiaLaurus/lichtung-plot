@@ -766,9 +766,16 @@ fn matrix_legend(
             },
         ));
     }
-    crate::decorations::legend::resolve_entries(chart, &mut entries, theme)?;
+    crate::decorations::legend::resolve_entries(
+        chart,
+        &mut entries,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
     Ok(Some(Legend::new(
-        &crate::decorations::legend::resolved_title(&entries, theme)?,
+        &crate::decorations::legend::resolved_title(
+            &entries,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?,
         entries,
         f64::from(chart.width()),
         f64::from(chart.height()),

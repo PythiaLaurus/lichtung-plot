@@ -229,8 +229,13 @@ pub(crate) fn plan_panel_with_context(
             Some((discovered, discovery)),
         );
     }
-    let title =
-        crate::decorations::legend::resolved_title(&discovered.legend_entries, context.theme)?;
+    let title = crate::decorations::legend::resolved_title(
+        &discovered.legend_entries,
+        &context
+            .theme
+            .prepared_font_environment()?
+            .generation_resources(),
+    )?;
     let entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
         std::mem::take(&mut discovered.legend_entries).into();
     let automatic_edges = [
@@ -648,7 +653,13 @@ fn plan_panel_attempt(
         Some(guide)
     } else if visible {
         Some(Legend::new(
-            &crate::decorations::legend::resolved_title(&discovered.legend_entries, context.theme)?,
+            &crate::decorations::legend::resolved_title(
+                &discovered.legend_entries,
+                &context
+                    .theme
+                    .prepared_font_environment()?
+                    .generation_resources(),
+            )?,
             data.collect_source(
                 discovered
                     .legend_entries

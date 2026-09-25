@@ -218,7 +218,10 @@ impl FacetPlan {
         source.data().claim_source_bytes(legend_storage.size())?;
         let legend_entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
             legend_entries.into();
-        let title = crate::decorations::legend::resolved_title(&legend_entries, theme)?;
+        let title = crate::decorations::legend::resolved_title(
+            &legend_entries,
+            &theme.prepared_font_environment()?.generation_resources(),
+        )?;
         let position = source.legend_position_spec();
         let automatic = position == LegendPosition::Auto && !legend_entries.is_empty();
         let automatic_edges = [

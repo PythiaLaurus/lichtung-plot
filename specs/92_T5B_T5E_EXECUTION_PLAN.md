@@ -117,7 +117,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1a | COMPLETE | T5b0 | `feat(legend): classify shared guide kinds before fonts` |
 | T5b1b | IN PROGRESS | T5b1a | Umbrella; completes after T5b1b1-b2 |
 | T5b1b1 | COMPLETE | T5b1a | `refactor(legend): admit compatibility before fonts` |
-| T5b1b2 | PENDING | T5b1b1 | `refactor(legend): retain discrete guide descriptors` |
+| T5b1b2 | IN PROGRESS | T5b1b1 | Umbrella; completes after T5b1b2a-b |
+| T5b1b2a | COMPLETE | T5b1b1 | `refactor(legend): resolve display labels before fonts` |
+| T5b1b2b | PENDING | T5b1b2a | `refactor(legend): retain discrete guide descriptors` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -252,7 +254,13 @@ and reservation contract onto the already-prepared operation ledger, with no
 parallel compatibility route and identical glyph/identity rules. T5b1b2 then
 moves actual family entry/style preparation and merged descriptor ownership ahead
 of the font census, replacing the temporary channel-level inference from T5b1a.
-Neither substep alone establishes the full T5b1 acceptance contract.
+Neither substep alone establishes the full T5b1 acceptance contract. T5b1b2a
+transfers current Plot/facet/Canvas display-title and alias resolution to the
+same operation ledger without requiring an already-prepared font environment;
+actual entry generation still follows selected mark measurement. T5b1b2b moves
+the originating family entries/glyphs into prepared ownership and eliminates
+post-font compatibility/body-probe dependencies. Splitting these contracts keeps
+the same current `LegendEntry` representation; no public selector is added.
 
 T5b1b1 completion: `merge_exact_entries` now takes the current operation ledger
 instead of requiring a prepared font environment. Its identity/title/label/glyph
@@ -262,8 +270,18 @@ same routine with their existing root ledger. The pre-font test covers duplicate
 merging, conflicting glyph refusal, exact work/storage limits, and zero font
 discovery. Focused legend and composition tests passed; `just verify` passed
 1,026 library tests (17 ignored), 467 integration tests, docs and package checks
-(271 files). Log: `/tmp/opencode/t5b1b1-verify.log`. T5b1b2 remains pending:
+(271 files). Log: `/tmp/opencode/t5b1b1-verify.log`. T5b1b2 is in progress:
 family entries are not yet all prepared before the font census.
+
+T5b1b2a completion: `resolve_entries` and `resolved_title` use the owning
+generation resources directly. Identity display aliases, titles, duplicate
+merging, and source bytes can be processed before font discovery; the title
+copy is charged as records/bytes, not synthetic processing visits. Plot, facet,
+Canvas, and Matrix consumers have migrated to these signatures. Focused legend
+and composition tests passed; `just verify` passed 1,027 library tests (17
+ignored), 467 integration tests, docs and package verification (271 files).
+Log: `/tmp/opencode/t5b1b2a-verify.log`. Actual family entry generation and
+glyph compatibility still await T5b1b2b.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 

@@ -3661,7 +3661,7 @@ impl Canvas {
         } else {
             Ok((
                 Some((
-                    crate::decorations::legend::resolved_title(&entries, themes.root())?,
+                    crate::decorations::legend::resolved_title(&entries, &resources)?,
                     entries,
                 )),
                 probes,

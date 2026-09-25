@@ -952,8 +952,10 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     PanelBox::new(100.0, 500.0, 80.0, 400.0),
                     &theme,
                 )?;
-                let title =
-                    crate::decorations::legend::resolved_title(&initial.legend_entries, &theme)?;
+                let title = crate::decorations::legend::resolved_title(
+                    &initial.legend_entries,
+                    &theme.prepared_font_environment()?.generation_resources(),
+                )?;
                 let legend = Legend::new(
                     &title,
                     initial.legend_entries,
