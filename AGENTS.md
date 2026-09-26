@@ -28,10 +28,13 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 
 ## Testing
 
-Run the narrowest relevant check while iterating. Before completing a change,
-run `just verify` if you modified code. If the change only affects documentation,
-do not run the test suite. Snapshot changes must be inspected and committed with
-the source change that intentionally alters SVG output.
+Run the narrowest relevant checks while iterating. Small implementation stages
+can be completed and committed after focused tests and strict Clippy; `just verify`
+is not required for every such commit. Run `just verify` before closing a broad
+phase (for example T5b, T5c, T5d, or T5e), or when the scope or a failure makes
+the full gate necessary. Documentation-only changes do not require the test
+suite. Snapshot changes must be inspected and committed with the source change
+that intentionally alters SVG output.
 
 Compiler validation must use `cargo clippy --locked --offline --all-targets --
 -D warnings` (or `just lint`), never `cargo check`. Pass this requirement to every
