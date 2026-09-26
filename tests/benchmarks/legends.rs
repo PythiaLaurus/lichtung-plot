@@ -246,18 +246,18 @@ fn assert_outside_trace(sample: &CaseMeasurement, fixture: &str, edge: LegendPos
     } else {
         expected.push((1, first_edge, false, Body, Accepted));
     }
-    // Exact profiles after retained intrinsics reuse the operation's glyph analysis.
-    // Inputs, chosen frames and failed terminals are unchanged.
+    // Assigned-width flow no longer shapes an unrelated "0" ch probe; exact
+    // work changes while the chosen frames and failed terminals remain pinned.
     let (rounds, trials, checks, proposals, exact) = match (fixture, edge) {
-        ("small", _) => (2, 2, 2, 0, 27),
-        ("starvation", Auto) => (2, 4, 2, 10, 31),
-        ("starvation", OutsideRight) => (2, 3, 1, 10, 31),
-        ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 25),
-        ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 31),
-        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 111),
-        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 108),
-        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 45),
-        ("native_compact_right", LegendPosition::OutsideBottom) => (2, 2, 2, 0, 43),
+        ("small", _) => (2, 2, 2, 0, 26),
+        ("starvation", Auto) => (2, 4, 2, 10, 30),
+        ("starvation", OutsideRight) => (2, 3, 1, 10, 30),
+        ("starvation" | "preferred_right_control", _) if !right_flow => (2, 2, 2, 0, 24),
+        ("preferred_right_control", Auto | OutsideRight) => (2, 2, 2, 10, 30),
+        ("historical_reflow_640x400", Auto | OutsideRight) => (3, 3, 3, 0, 110),
+        ("historical_reflow_640x400", _) => (2, 2, 2, 0, 107),
+        ("native_compact_right", Auto | OutsideRight) => (2, 3, 2, 6, 44),
+        ("native_compact_right", LegendPosition::OutsideBottom) => (2, 2, 2, 0, 42),
         _ => unreachable!(),
     };
     let observed = &sample.observations;
@@ -411,9 +411,9 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
     assert_child_reuse(&sample, facet, pressure);
     let (rounds, trials, checks, proposals, exact) = if pressure {
         if facet {
-            (3, 4, 6, 148, 178)
+            (3, 4, 6, 148, 177)
         } else {
-            (3, 7, 6, 72, 133)
+            (3, 7, 6, 72, 132)
         }
     } else {
         (
@@ -421,7 +421,7 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
             2,
             4,
             if facet { 0 } else { 12 },
-            if facet { 30 } else { 41 },
+            if facet { 29 } else { 40 },
         )
     };
     assert_eq!(sample.observations.roots.len(), rounds);

@@ -130,7 +130,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1c | COMPLETE | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | IN PROGRESS | T5b1 | Umbrella; completes after T5b2a-c |
 | T5b2a | COMPLETE | T5b1 | `refactor(legend): resolve complete private legend roles` |
-| T5b2b | PENDING | T5b2a | `feat(legend): measure native discrete and continuous guides` |
+| T5b2b | IN PROGRESS | T5b2a | Umbrella; completes after T5b2b1-b3 |
+| T5b2b1 | COMPLETE | T5b2a | `refactor(legend): measure assigned discrete outside flow` |
+| T5b2b2 | PENDING | T5b2b1 | `refactor(legend): replace legacy inside packing` |
+| T5b2b3 | PENDING | T5b2b2 | `feat(legend): measure shared continuous guides` |
 | T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
@@ -440,20 +443,44 @@ frames and removes superseded helper-local gap/reservation logic. These steps
 share one active guide representation and are committed in order; this umbrella
 has no separate commit.
 
+T5b2b is split into three dependency-ordered commits: replace assigned-width
+outside discrete flow and its premeasurements (b1); replace the remaining
+legacy `Legend::new` packing for explicit inside/Marginal/Matrix consumers with
+the same intrinsic and assigned-width semantics (b2); then measure and draw
+continuous Canvas guides from their prepared descriptor (b3). The outside and
+inside placements are distinct current consumers during the migration, not
+alternative fallbacks for one selected guide. Close the umbrella only when all
+three share the theme-owned measured representation and old packing is gone.
+
 T5b2a closure: active discrete Plot/facet/Canvas guides now measure and freeze
 title, label, frame, key, and spacing roles from the owning theme rather than
 deriving typography from root dimensions. Specialized Heatmap/Beeswarm guides
 use the same title and label text roles. Prepared font census admits these
 roles, including Canvas's continuous descriptor and specialized guide values;
-cell annotations remain
-body text. T5b2b adds continuous descriptor drawing and replaces the existing
-edge/flow algorithm; T5e replaces specialized colorbar packing. Updated
-affected SVG fingerprints and inspected the Beeswarm clip-structure snapshot,
-while retaining genuine right-guide
-rejection in the native cache-equivalence fixture. `just lint` and `just test`
-pass: 1,045 library tests and 468 integration tests, including 13 visual
-regressions. Logs: `/tmp/opencode/t5b2a-lint.log`,
+cell annotations remain body text. T5b2b adds continuous descriptor drawing
+and replaces the existing edge/flow algorithm; T5e replaces specialized
+colorbar packing. Updated affected SVG fingerprints and inspected the
+Beeswarm clip-structure snapshot,
+while retaining genuine right-guide rejection in the native cache-equivalence
+fixture. `just lint` and `just test` pass: 1,045 library tests and 468
+integration tests, including 13 visual regressions. Logs:
+`/tmp/opencode/t5b2a-lint.log`,
 `/tmp/opencode/t5b2a-test.log`. T5b2b is next.
+
+T5b2b1 closure: outside discrete guides derive checked key-plus-label minimum
+and preferred widths before entry text layout. Assigned horizontal rows keep
+fixed preferred entry widths; assigned vertical columns share one fixed width.
+Compact width uses the single quantized half-width trial, and row baselines
+include the union of ascent and descent. Title gaps are active only for present
+titles; a zero-entry guide has no assigned geometry. Normative worked examples,
+hard-unbroken label failure, actual body-starvation recovery, 1,048 library
+tests, affected composition/geometry/visual integration tests, refreshed
+exact-work traces, and strict Clippy pass. Logs:
+`/tmp/opencode/t5b2b1-lint.log`, `/tmp/opencode/t5b2b1-lib.log`,
+`/tmp/opencode/t5b2b1-legend-bench.log`,
+`/tmp/opencode/t5b2b1-integration.log`, and
+`/tmp/opencode/t5b2b1-geometry-integration.log`. T5b2b2 removes legacy
+inside-guide packing.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

@@ -854,6 +854,174 @@ struct LegendSlot {
     height: f64,
 }
 
+struct MeasuredEntry {
+    width: f64,
+    key: f64,
+    chrome: f64,
+    ascent: f64,
+    descent: f64,
+}
+
+struct EntryIntrinsics {
+    minimum: f64,
+    preferred: f64,
+    key: f64,
+    chrome: f64,
+}
+
+struct DiscreteGuideIntrinsics {
+    entries: Vec<EntryIntrinsics>,
+    preferred_column: f64,
+}
+
+fn discrete_guide_intrinsics(
+    entries: &[LegendEntry],
+    theme: &crate::theme::ResolvedTheme,
+    metrics: &LegendMetrics,
+) -> Result<DiscreteGuideIntrinsics, Error> {
+    let mut widths = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut widths,
+        entries.len(),
+        "guide width requirements",
+    )?;
+    let mut preferred_column = 0.0_f64;
+    for entry in entries {
+        let (hard, natural) = crate::layout::fit::intrinsic_widths(
+            theme,
+            &entry.label,
+            &theme.typography.legend_label,
+            "legend entry intrinsic",
+        )?;
+        let key = metrics.handle_w.max(2.0 * entry.glyph_extent());
+        let chrome = crate::layout::kernel::required_length(key + metrics.handle_text)?;
+        let preferred = crate::layout::kernel::required_length(hard.max(natural) + chrome)?;
+        preferred_column = preferred_column.max(preferred);
+        widths.push(EntryIntrinsics {
+            minimum: crate::layout::kernel::required_length(hard + chrome)?,
+            preferred,
+            key,
+            chrome,
+        });
+    }
+    Ok(DiscreteGuideIntrinsics {
+        entries: widths,
+        preferred_column,
+    })
+}
+
+struct MeasuredLegendFlow {
+    slots: Vec<LegendSlot>,
+    width: f64,
+    height: f64,
+    columns: usize,
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the assigned edge flow consumes one frozen set of measured entries"
+)]
+fn flow_assigned_entries(
+    entries: &[MeasuredEntry],
+    width: f64,
+    height: f64,
+    body_top: f64,
+    metrics: &LegendMetrics,
+    horizontal: bool,
+    theme: &crate::theme::ResolvedTheme,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<crate::layout::fit::FitOutcome<MeasuredLegendFlow>, Error> {
+    use crate::layout::fit::FitOutcome;
+    use crate::layout::kernel::FitKind;
+
+    let mut slots: Vec<LegendSlot> = Vec::new();
+    crate::layout::fit::reserve(theme, &mut slots, entries.len(), "measured guide slots")?;
+    let mut x = 0.0;
+    let mut y = 0.0;
+    let mut used_width = 0.0_f64;
+    let mut used_height = 0.0_f64;
+    let mut columns = 1;
+    let mut row_entries = 0;
+    let mut row_start = 0;
+    let mut row_ascent = 0.0_f64;
+    let mut row_descent = 0.0_f64;
+    for entry in entries {
+        let entry_height = entry.ascent + entry.descent;
+        if horizontal {
+            if row_entries > 0 && x + entry.width > width {
+                let baseline = body_top - y - row_ascent;
+                for slot in &mut slots[row_start..] {
+                    slot.key.y = baseline;
+                    slot.label.position.y = baseline;
+                }
+                y += row_ascent + row_descent + metrics.row_gap;
+                row_start = slots.len();
+                row_entries = 0;
+                row_ascent = 0.0;
+                row_descent = 0.0;
+                x = 0.0;
+            }
+            row_entries += 1;
+            columns = columns.max(row_entries);
+            row_ascent = row_ascent.max(entry.ascent);
+            row_descent = row_descent.max(entry.descent);
+        } else if y > 0.0 && y + entry_height > height {
+            x += entry.width + metrics.column_gap;
+            y = 0.0;
+            columns += 1;
+        }
+        if x + entry.width > width || (!horizontal && y + entry_height > height) {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "outside legend flow exceeds its assigned track",
+            )));
+        }
+        let baseline = if horizontal {
+            0.0
+        } else {
+            body_top - y - entry.ascent
+        };
+        slots.push(LegendSlot {
+            key: Point2D::new(x + (entry.key - metrics.handle_w) / 2.0, baseline),
+            label: PlannedTextPlacement::baseline(
+                Point2D::new(x + entry.chrome, baseline),
+                TextAnchor::Start,
+                0.0,
+            ),
+            width: entry.width,
+            height: entry_height,
+        });
+        used_width = used_width.max(x + entry.width);
+        if horizontal {
+            x += entry.width + metrics.column_gap;
+        } else {
+            used_height = used_height.max(y + entry_height);
+            y += entry_height + metrics.row_gap;
+        }
+    }
+    if horizontal {
+        let baseline = body_top - y - row_ascent;
+        for slot in &mut slots[row_start..] {
+            slot.key.y = baseline;
+            slot.label.position.y = baseline;
+        }
+        used_height = y + row_ascent + row_descent;
+        if used_height > height {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "outside legend rows exceed their assigned height",
+            )));
+        }
+    }
+    Ok(FitOutcome::Measured(MeasuredLegendFlow {
+        slots,
+        width: used_width,
+        height: used_height,
+        columns,
+    }))
+}
+
 /// A resolved legend rectangle in math-style pixel coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LegendBox {
@@ -918,6 +1086,12 @@ impl Legend {
         if !available.0.is_finite() || !available.1.is_finite() {
             return Err(Error::Render("nonfinite guide assignment".into()));
         }
+        if entries.is_empty() {
+            return Ok(FitOutcome::Miss(scope.failure(
+                FitKind::LegendOrGuide,
+                "an empty guide has no assigned geometry",
+            )));
+        }
         let metrics = LegendMetrics::from_theme(theme);
         let font_size = metrics.font_size.round() as u32;
         let edge_pad = metrics.pad + GLYPH_EDGE_PAD_FACTOR * f64::from(font_size);
@@ -943,7 +1117,11 @@ impl Legend {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let title_gap = metrics.title_gap;
+        let title_gap = if title.is_empty() {
+            0.0
+        } else {
+            metrics.title_gap
+        };
         let body_height = inner_height - title_plan.height() - title_gap;
         if body_height <= 0.0 {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -952,50 +1130,13 @@ impl Legend {
             )));
         }
         let gap = metrics.column_gap;
-        let row_gap = metrics.row_gap;
-        let zero = theme.measure_legacy_appearance_text(
-            "0",
-            appearance,
-            PhysicalTextAlignment::Start,
-            "legend metric probe",
-            false,
-        )?;
-        let ch = zero
-            .lines
-            .first()
-            .map_or(0.0, |line| line.logical_advance_quanta as f64 / 1024.0);
-        if ch <= 0.0 || !ch.is_finite() {
-            return Err(Error::Render("invalid legend ch metric".into()));
-        }
-        let mut widths = Vec::new();
-        fit::reserve(
-            theme,
-            &mut widths,
-            entries.len(),
-            "guide width requirements",
-        )?;
-        for entry in entries.iter() {
-            let (hard, natural) =
-                fit::intrinsic_widths(theme, &entry.label, appearance, "legend entry intrinsic")?;
-            let key = metrics.handle_w.max(2.0 * entry.glyph_extent());
-            let chrome = crate::layout::kernel::required_length(key + metrics.handle_text)?;
-            widths.push((
-                hard + chrome,
-                hard.max(natural.min(66.0 * ch)) + chrome,
-                key,
-                chrome,
-            ));
-        }
-        let preferred_column = widths
-            .iter()
-            .map(|(_, preferred, _, _)| *preferred)
-            .fold(0.0_f64, f64::max)
-            .min(inner_width);
+        let intrinsic = discrete_guide_intrinsics(&entries, theme, &metrics)?;
+        let preferred_column = intrinsic.preferred_column.min(inner_width);
         if !compact {
             if let Some(cap) = crate::layout::kernel::compact_half_width(inner_width, gap)? {
-                *compact_changes = widths.iter().any(|(_, preferred, _, _)| {
+                *compact_changes = intrinsic.entries.iter().any(|entry| {
                     if horizontal {
-                        preferred.min(inner_width) > cap
+                        entry.preferred.min(inner_width) > cap
                     } else {
                         preferred_column > cap
                     }
@@ -1013,120 +1154,91 @@ impl Legend {
         } else {
             inner_width
         };
+        for (index, entry) in intrinsic.entries.iter().enumerate() {
+            let allocated = if horizontal {
+                entry.preferred.min(cap)
+            } else {
+                preferred_column.min(cap)
+            };
+            if allocated < entry.minimum {
+                return Ok(FitOutcome::Miss(
+                    scope.child(AddressRole::LegendEntry, index)?.failure(
+                        FitKind::Text,
+                        "guide entry allocation is below its hard unbroken requirement",
+                    ),
+                ));
+            }
+        }
         let mut entry_blocks = Vec::new();
-        let mut slots = Vec::new();
+        let mut measured = Vec::new();
         fit::reserve(
             theme,
             &mut entry_blocks,
             entries.len(),
             "measured guide labels",
         )?;
-        fit::reserve(theme, &mut slots, entries.len(), "measured guide slots")?;
+        fit::reserve(
+            theme,
+            &mut measured,
+            entries.len(),
+            "measured guide entries",
+        )?;
         let title_half = GLYPH_HALF_HEIGHT_FACTOR * f64::from(title_appearance.font_size);
         let body_top = title_half - title_plan.height() - title_gap;
-        let mut x = 0.0;
-        let mut y = 0.0;
-        let mut row_height = 0.0_f64;
-        let mut used_width = 0.0_f64;
-        let mut used_height = 0.0_f64;
-        let mut columns = 1;
-        let mut row_entries = 0;
-        let mut miss = None;
-        for (index, (entry, (minimum, preferred, key, chrome))) in
-            entries.iter().zip(widths).enumerate()
-        {
+        for (index, (entry, width)) in entries.iter().zip(intrinsic.entries).enumerate() {
             let allocated = if horizontal {
-                preferred.min(cap)
+                width.preferred.min(cap)
             } else {
                 preferred_column.min(cap)
             };
-            if allocated < minimum {
-                crate::layout::fit::FitFailure::retain_least(
-                    &mut miss,
-                    scope.child(AddressRole::LegendEntry, index)?.failure(
-                        FitKind::Text,
-                        "guide entry allocation is below its hard unbroken requirement",
-                    ),
-                );
-                continue;
-            }
             let plan = match fit::text(
                 theme,
                 &entry.label,
                 appearance,
-                allocated - chrome,
+                allocated - width.chrome,
                 PhysicalTextAlignment::Start,
                 "outside legend entry",
                 &scope.child(AddressRole::LegendEntry, index)?,
             )? {
                 FitOutcome::Measured(plan) => plan,
-                FitOutcome::Miss(reason) => {
-                    crate::layout::fit::FitFailure::retain_least(&mut miss, reason);
-                    continue;
-                }
+                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
             let baseline = plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
             let key_half = entry.glyph_extent().max(f64::from(font_size) * 0.32);
             let ascent = baseline.max(key_half);
-            let height = ascent + (plan.height() - baseline).max(key_half);
-            if horizontal {
-                if x > 0.0 && x + allocated > inner_width {
-                    x = 0.0;
-                    y += row_height + row_gap;
-                    row_height = 0.0;
-                    row_entries = 0;
-                }
-                row_height = row_height.max(height);
-                row_entries += 1;
-                columns = columns.max(row_entries);
-            } else if y > 0.0 && y + height > body_height {
-                y = 0.0;
-                x += allocated + gap;
-                columns += 1;
-            }
-            if x + allocated > inner_width || y + height > body_height {
-                crate::layout::fit::FitFailure::retain_least(
-                    &mut miss,
-                    scope.failure(
-                        FitKind::LegendOrGuide,
-                        "outside legend flow exceeds its assigned track",
-                    ),
-                );
-            }
-            let baseline_y = body_top - y - ascent;
-            slots.push(LegendSlot {
-                key: Point2D::new(x + (key - metrics.handle_w) / 2.0, baseline_y),
-                label: PlannedTextPlacement::baseline(
-                    Point2D::new(x + chrome, baseline_y),
-                    TextAnchor::Start,
-                    0.0,
-                ),
+            measured.push(MeasuredEntry {
                 width: allocated,
-                height,
+                key: width.key,
+                chrome: width.chrome,
+                ascent,
+                descent: (plan.height() - baseline).max(key_half),
             });
-            used_width = used_width.max(x + allocated);
-            used_height = used_height.max(y + height);
             entry_blocks.push(TextBlock::from_resolved(plan));
-            if horizontal {
-                x += allocated + gap;
-            } else {
-                y += height + row_gap;
-            }
         }
-        if let Some(failure) = miss {
-            return Ok(FitOutcome::Miss(failure));
-        }
+        let flow = match flow_assigned_entries(
+            &measured,
+            inner_width,
+            body_height,
+            body_top,
+            &metrics,
+            horizontal,
+            theme,
+            scope,
+        )? {
+            FitOutcome::Measured(flow) => flow,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
         let title_baseline = title_plan.first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
         let layout = LegendLayout {
-            width: used_width.max(title_plan.width()) + 2.0 * metrics.pad,
-            height: title_plan.height() + title_gap + used_height + 2.0 * edge_pad,
-            columns,
+            width: flow.width.max(title_plan.width()) + 2.0 * metrics.pad,
+            height: title_plan.height() + title_gap + flow.height + 2.0 * edge_pad,
+            columns: flow.columns,
             title: PlannedTextPlacement::baseline(
                 Point2D::new(0.0, title_half - title_baseline),
                 TextAnchor::Start,
                 0.0,
             ),
-            entries: slots,
+            entries: flow.slots,
         };
         Ok(FitOutcome::Measured(Self {
             entries,
@@ -1689,6 +1801,183 @@ impl Legend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "horizontal, vertical, and compact worked cases share one measured-flow fixture"
+    )]
+    fn assigned_discrete_flow_matches_horizontal_and_vertical_worked_examples() {
+        use crate::layout::fit::{FitOutcome, FitScope};
+        let theme = crate::Theme::Publication.resolve();
+        let mut metrics = LegendMetrics::from_theme(&theme);
+        metrics.column_gap = 5.0;
+        metrics.row_gap = 4.0;
+        let horizontal = [(60.0, 6.0, 4.0), (50.0, 6.0, 4.0), (90.0, 10.0, 10.0)].map(
+            |(width, ascent, descent)| MeasuredEntry {
+                width,
+                key: metrics.handle_w,
+                chrome: 20.0,
+                ascent,
+                descent,
+            },
+        );
+        let FitOutcome::Measured(rows) = flow_assigned_entries(
+            &horizontal,
+            100.0,
+            50.0,
+            0.0,
+            &metrics,
+            true,
+            &theme,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("worked rows must fit");
+        };
+        assert_eq!((rows.width, rows.height, rows.columns), (90.0, 48.0, 1));
+        assert_eq!(
+            rows.slots.iter().map(|slot| slot.key.x).collect::<Vec<_>>(),
+            [0.0; 3]
+        );
+        assert_eq!(
+            rows.slots.iter().map(|slot| slot.key.y).collect::<Vec<_>>(),
+            [-6.0, -20.0, -38.0]
+        );
+
+        metrics.column_gap = 10.0;
+        metrics.row_gap = 5.0;
+        let vertical = [60.0, 70.0, 50.0].map(|_| MeasuredEntry {
+            width: 70.0,
+            key: metrics.handle_w,
+            chrome: 20.0,
+            ascent: 10.0,
+            descent: 10.0,
+        });
+        let FitOutcome::Measured(columns) = flow_assigned_entries(
+            &vertical,
+            150.0,
+            45.0,
+            0.0,
+            &metrics,
+            false,
+            &theme,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("worked columns must fit");
+        };
+        assert_eq!(
+            (columns.width, columns.height, columns.columns),
+            (150.0, 45.0, 2)
+        );
+        assert_eq!(
+            columns
+                .slots
+                .iter()
+                .map(|slot| slot.key.x)
+                .collect::<Vec<_>>(),
+            [0.0, 0.0, 80.0]
+        );
+        assert!(matches!(
+            flow_assigned_entries(
+                &vertical,
+                140.0,
+                45.0,
+                0.0,
+                &metrics,
+                false,
+                &theme,
+                &FitScope::root()
+            )
+            .unwrap(),
+            FitOutcome::Miss(_)
+        ));
+        let compact = vertical.map(|entry| MeasuredEntry {
+            width: 65.0,
+            ..entry
+        });
+        let FitOutcome::Measured(columns) = flow_assigned_entries(
+            &compact,
+            140.0,
+            45.0,
+            0.0,
+            &metrics,
+            false,
+            &theme,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("compact columns must fit after remeasurement");
+        };
+        assert_eq!(
+            (columns.width, columns.height, columns.columns),
+            (140.0, 45.0, 2)
+        );
+    }
+
+    #[test]
+    fn entries_in_one_row_share_a_baseline_and_union_their_ink_heights() {
+        use crate::layout::fit::{FitOutcome, FitScope};
+        let theme = crate::Theme::Publication.resolve();
+        let metrics = LegendMetrics::from_theme(&theme);
+        let entries = [(6.0, 4.0), (9.0, 1.0)].map(|(ascent, descent)| MeasuredEntry {
+            width: 40.0,
+            key: metrics.handle_w,
+            chrome: 20.0,
+            ascent,
+            descent,
+        });
+        let FitOutcome::Measured(flow) = flow_assigned_entries(
+            &entries,
+            100.0,
+            13.0,
+            0.0,
+            &metrics,
+            true,
+            &theme,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("both entries should share a row");
+        };
+        assert_eq!(flow.height.to_bits(), 13.0_f64.to_bits());
+        assert_eq!(flow.columns, 2);
+        assert_eq!(flow.slots[0].key.y.to_bits(), (-9.0_f64).to_bits());
+        assert_eq!(
+            flow.slots[1].label.position.y.to_bits(),
+            (-9.0_f64).to_bits()
+        );
+    }
+
+    #[test]
+    fn assigned_guide_rejects_an_unbreakable_label_before_other_entries_wrap() {
+        use crate::layout::fit::{FitOutcome, FitScope};
+        let theme = crate::Theme::Publication.resolve();
+        let scope = FitScope::root();
+        let entries: std::sync::Arc<[LegendEntry]> =
+            vec![entry("first"), entry("M".repeat(40))].into();
+        let FitOutcome::Miss(failure) = Legend::measure_outside(
+            "group",
+            entries,
+            (100.0, 400.0),
+            true,
+            false,
+            &theme,
+            &mut false,
+            &scope,
+        )
+        .unwrap() else {
+            panic!("the second unbroken label cannot fit its assigned width");
+        };
+        assert_eq!(failure.reason.kind, crate::layout::fit::FitKind::Text);
+        assert_eq!(
+            failure.reason.address,
+            crate::layout::ComponentAddress::root()
+                .child(crate::layout::AddressRole::LegendEntry, 1)
+                .unwrap()
+        );
+    }
 
     #[test]
     fn constructor_admits_long_labels_arc_and_packing_before_work() {
