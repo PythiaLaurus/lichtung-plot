@@ -664,11 +664,10 @@ fn clearance_arithmetic_failures_are_fatal_through_every_owner() {
         PlotRenderContext::new(plot.data(), cell, &theme),
     )
     .unwrap();
-    let legend = Legend::new(
+    let legend = crate::decorations::legend::test_assigned_legend(
         "hue",
         result.legend_entries.clone(),
-        f64::from(plot.width()),
-        f64::from(plot.height()),
+        (cell.width(), cell.height()),
         &theme,
     )
     .unwrap();
@@ -814,11 +813,10 @@ fn annotation_conflict_links_only_to_a_resolving_assignment() {
             &theme,
         )
         .unwrap();
-    let legend = Legend::new(
+    let legend = crate::decorations::legend::test_assigned_legend(
         "hue",
         initial.legend_entries,
-        f64::from(source.width()),
-        f64::from(source.height()),
+        (400.0, 320.0),
         &theme,
     )
     .unwrap();
@@ -956,11 +954,10 @@ fn automatic_outside_guides_avoid_annotations_at_all_inside_corners() {
                     &initial.legend_entries,
                     &theme.prepared_font_environment()?.generation_resources(),
                 )?;
-                let legend = Legend::new(
+                let legend = crate::decorations::legend::test_assigned_legend(
                     &title,
                     initial.legend_entries,
-                    f64::from(source.width()),
-                    f64::from(source.height()),
+                    (400.0, 320.0),
                     &theme,
                 )?;
                 let note_width = theme
@@ -1195,11 +1192,10 @@ fn automatic_legend_ignores_zero_width_lines_but_avoids_painted_lines() {
         PlotRenderContext::new(crate::data::PlotData::new(&plot), cell, &theme()),
     )
     .unwrap();
-    let legend = Legend::new(
+    let legend = crate::decorations::legend::test_assigned_legend(
         "hue",
         result.legend_entries,
-        f64::from(plot.width()),
-        f64::from(plot.height()),
+        (cell.width(), cell.height()),
         &theme(),
     )
     .unwrap();
@@ -1503,11 +1499,10 @@ fn auto_legend_leaves_dense_categorical_domains_unchanged_in_normal_flow() {
         PlotRenderContext::new(crate::data::PlotData::new(&plot), cell, &theme()),
     )
     .unwrap();
-    let initial_legend = Legend::new(
+    let initial_legend = crate::decorations::legend::test_assigned_legend(
         "hue",
         initial.legend_entries,
-        f64::from(plot.width()),
-        f64::from(plot.height()),
+        (cell.width(), cell.height()),
         &theme(),
     )
     .unwrap();
@@ -1654,11 +1649,10 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     .unwrap();
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    let legend = Legend::new(
+    let legend = crate::decorations::legend::test_assigned_legend(
         "hue",
         result.legend_entries.clone(),
-        f64::from(plot.width()),
-        f64::from(plot.height()),
+        (cell.width(), cell.height()),
         &theme(),
     )
     .unwrap();

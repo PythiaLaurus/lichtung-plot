@@ -321,9 +321,21 @@ pub(crate) fn measure(
     let display_cols = &prepared.labels;
 
     let groups = &prepared.groups;
-    let legend = matrix_legend(chart, groups, theme, data)?
-        .map(|legend| data.source_arc(legend))
-        .transpose()?;
+    let legend = match matrix_legend(
+        chart,
+        groups,
+        context.panel,
+        theme,
+        context.fit_scope(),
+        data,
+    )? {
+        crate::layout::fit::FitOutcome::Measured(legend) => {
+            legend.map(|legend| data.source_arc(legend)).transpose()?
+        }
+        crate::layout::fit::FitOutcome::Miss(reason) => {
+            return Err(crate::layout::fit::PlanError::Fit(reason));
+        }
+    };
 
     // --- Layout geometry ---
     let w = chart.width() as f64;
@@ -744,13 +756,16 @@ fn panel_box(chart: &Plot, theme: &ResolvedTheme) -> Result<crate::layout::Panel
 fn matrix_legend(
     chart: &Plot,
     groups: &[HueGroup],
+    available: crate::layout::PanelBox,
     theme: &ResolvedTheme,
+    scope: &crate::layout::fit::FitScope,
     data: crate::data::PlotData<'_>,
-) -> Result<Option<Legend>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<Option<Legend>>, Error> {
+    use crate::layout::fit::FitOutcome;
     if !groups.iter().any(|group| group.identity.hue.is_some())
         || chart.legend_policy_spec() == crate::LegendPolicy::Hidden
     {
-        return Ok(None);
+        return Ok(FitOutcome::Measured(None));
     }
     let mut entries = Vec::new();
     data.reserve_source(&mut entries, groups.len())?;
@@ -771,16 +786,25 @@ fn matrix_legend(
         &mut entries,
         &theme.prepared_font_environment()?.generation_resources(),
     )?;
-    Ok(Some(Legend::new(
-        &crate::decorations::legend::resolved_title(
-            &entries,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?,
+    let title = crate::decorations::legend::resolved_title(
+        &entries,
+        &theme.prepared_font_environment()?.generation_resources(),
+    )?;
+    let entries = Legend::admit_entries(entries, theme)?;
+    let scope = scope.child(crate::layout::AddressRole::InsideGuide, 0)?;
+    match Legend::measure_assigned(
+        &title,
         entries,
-        f64::from(chart.width()),
-        f64::from(chart.height()),
+        (available.width(), available.height()),
+        false,
+        false,
         theme,
-    )?))
+        &mut false,
+        &scope,
+    )? {
+        FitOutcome::Measured(legend) => Ok(FitOutcome::Measured(Some(legend))),
+        FitOutcome::Miss(reason) => Ok(FitOutcome::Miss(reason)),
+    }
 }
 
 fn legend_total_width(legend: &Legend) -> f64 {
@@ -1196,13 +1220,18 @@ mod semantic_tests {
             let result = matrix_legend(
                 &source,
                 &prepared.groups,
+                PanelBox::new(0.0, 1600.0, 0.0, 1000.0),
                 &theme,
+                &crate::layout::fit::FitScope::root(),
                 source.data().with_axis_resources(&resources),
             );
             (resources, result)
         };
         let (resources, legend) = run(None);
-        assert_eq!(legend.unwrap().unwrap().text_plans().count(), 13);
+        let crate::layout::fit::FitOutcome::Measured(Some(legend)) = legend.unwrap() else {
+            panic!("prepared matrix guide should fit its assigned panel")
+        };
+        assert_eq!(legend.text_plans().count(), 13);
         let visits = resources.usage().unwrap().1;
         let bytes = resources.byte_usage().unwrap();
         for limits in [

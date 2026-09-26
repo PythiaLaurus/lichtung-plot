@@ -768,8 +768,6 @@ fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -
 const GLYPH_HALF_HEIGHT_FACTOR: f64 = 0.6;
 /// Extra edge comfort retained from the previous bottom padding (x font_size).
 const GLYPH_EDGE_PAD_FACTOR: f64 = 0.2;
-/// Maximum number of entries retained in one automatic legend column.
-const MAX_SINGLE_COLUMN_ENTRIES: usize = 6;
 
 /// Resolved role-local metrics for legend layout and frozen drawing.
 #[derive(Debug, Clone, Copy)]
@@ -827,7 +825,7 @@ impl LegendMetrics {
 pub(crate) struct Legend {
     /// The entries in the legend.
     entries: std::sync::Arc<[LegendEntry]>,
-    /// Layout metrics (derived from canvas size or overridden).
+    /// Resolved theme-owned metrics retained for selection and frozen drawing.
     pub(crate) metrics: LegendMetrics,
     available_width: f64,
     available_height: f64,
@@ -1067,7 +1065,7 @@ impl Legend {
         clippy::too_many_lines,
         reason = "one assigned edge/flow measurement retains all entry geometry"
     )]
-    pub(crate) fn measure_outside(
+    pub(crate) fn measure_assigned(
         title: &str,
         entries: std::sync::Arc<[LegendEntry]>,
         available: (f64, f64),
@@ -1247,7 +1245,7 @@ impl Legend {
             available_height: available.1,
             title_block: TextBlock::from_resolved(title_plan),
             entry_blocks,
-            font_family: theme.typography.legend_label.stack.clone(),
+            font_family: copy_legend_string(&theme.typography.legend_label.stack, theme)?,
             layout,
         }))
     }
@@ -1304,25 +1302,11 @@ impl Legend {
         }
         Ok(())
     }
-    /// Create a new legend with metrics derived from canvas size.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "admission and unchanged legacy packing share one constructor"
-    )]
-    pub fn new(
-        title: &str,
+    /// Admit the exact slice allocation before converting measured entries to Arc.
+    pub(crate) fn admit_entries(
         entries: Vec<LegendEntry>,
-        canvas_w: f64,
-        canvas_h: f64,
         theme: &crate::theme::ResolvedTheme,
-    ) -> Result<Self, Error> {
-        let mut entry_blocks = Vec::new();
-        crate::layout::fit::reserve(
-            theme,
-            &mut entry_blocks,
-            entries.len(),
-            "legend text blocks",
-        )?;
+    ) -> Result<std::sync::Arc<[LegendEntry]>, Error> {
         let allocation = std::alloc::Layout::new::<[std::sync::atomic::AtomicUsize; 2]>()
             .extend(
                 std::alloc::Layout::array::<LegendEntry>(entries.len())
@@ -1340,127 +1324,12 @@ impl Legend {
             )
             .map_err(|error| Error::Render(format!("legend entry Arc admission: {error}")))?;
         // Stable Arc has no fallible slice constructor; admit its exact layout first.
-        let entries: std::sync::Arc<[LegendEntry]> = entries.into();
-        let metrics = LegendMetrics::from_theme(theme);
-        let title_maximum_width = (canvas_w * 0.5).max(metrics.font_size);
-        let entry_maximum_width = (canvas_w * 0.35).max(metrics.font_size);
-        let title_appearance = &theme.typography.legend_title;
-        let entry_appearance = &theme.typography.legend_label;
-        let title_block = TextBlock::from_resolved(theme.plan_legacy_appearance_text(
-            title,
-            title_appearance,
-            title_maximum_width,
-            PhysicalTextAlignment::Start,
-            "legend title",
-            false,
-        )?);
-        legend_visits(theme, entries.len())?;
-        for entry in entries.iter() {
-            entry_blocks.push(
-                theme
-                    .plan_legacy_appearance_text(
-                        &entry.label,
-                        entry_appearance,
-                        entry_maximum_width,
-                        PhysicalTextAlignment::Start,
-                        "legend entry",
-                        false,
-                    )
-                    .map(TextBlock::from_resolved)?,
-            );
-        }
-        let mut legend = Self {
-            entries,
-            metrics,
-            available_width: canvas_w * 0.8,
-            available_height: canvas_h * 0.8,
-            title_block,
-            entry_blocks,
-            font_family: copy_legend_string(&theme.typography.legend_label.stack, theme)?,
-            layout: LegendLayout {
-                width: 0.0,
-                height: 0.0,
-                columns: 1,
-                title: PlannedTextPlacement::middle(Point2D::new(0.0, 0.0), TextAnchor::Start, 0.0),
-                entries: Vec::new(),
-            },
-        };
-        let columns =
-            legend.balanced_column_count(legend.available_width, legend.available_height, theme)?;
-        let (width, height) = legend.box_size_for_columns(columns, theme)?;
-        let widths = legend.column_widths(columns, &legend.entry_blocks, theme)?;
-        let centers =
-            legend.row_centers(columns, &legend.title_block, &legend.entry_blocks, theme)?;
-        let mut slots = Vec::new();
-        crate::layout::fit::reserve(theme, &mut slots, legend.entries.len(), "legend slots")?;
-        for (index, block) in legend.entry_blocks.iter().enumerate() {
-            let column = index % columns;
-            let row = index / columns;
-            legend_visits(theme, column + 1)?;
-            let x = widths[..column].iter().sum::<f64>() + column as f64 * legend.column_spacing();
-            slots.push(LegendSlot {
-                key: Point2D::new(x, centers[row]),
-                label: PlannedTextPlacement::middle(
-                    Point2D::new(x + metrics.handle_w + metrics.handle_text, centers[row]),
-                    TextAnchor::Start,
-                    0.0,
-                ),
-                width: widths[column],
-                height: block
-                    .height()
-                    .max(2.0 * legend.entries[index].glyph_extent()),
-            });
-        }
-        legend.layout = LegendLayout {
-            width,
-            height,
-            columns,
-            title: PlannedTextPlacement::middle(
-                Point2D::new(
-                    0.0,
-                    -(legend.title_block.lines().len().saturating_sub(1) as f64)
-                        * legend.title_block.line_height()
-                        / 2.0,
-                ),
-                TextAnchor::Start,
-                0.0,
-            ),
-            entries: slots,
-        };
-        Ok(legend)
+        Ok(entries.into())
     }
 
     /// Compute the total bounding box width based on entry labels.
     pub fn compute_box_width(&self) -> f64 {
         self.layout.width
-    }
-
-    fn box_size_for_columns(
-        &self,
-        columns: usize,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<(f64, f64), Error> {
-        let m = &self.metrics;
-        let columns = columns.clamp(1, self.entries.len().max(1));
-        let title_block = &self.title_block;
-        let entry_blocks = &self.entry_blocks;
-        let column_widths = self.column_widths(columns, entry_blocks, theme)?;
-        legend_visits(theme, column_widths.len())?;
-        let entries_width = column_widths.iter().sum::<f64>()
-            + (columns.saturating_sub(1) as f64) * self.column_spacing();
-        let title_width = title_block.width();
-        let width = entries_width.max(title_width) + m.pad * 2.0;
-        let content_height = if self.entries.is_empty() {
-            title_block.height()
-        } else {
-            let centers = self.row_centers(columns, title_block, entry_blocks, theme)?;
-            legend_visits(theme, self.entries.len())?;
-            legend_visits(theme, entry_blocks.len())?;
-            self.title_half_height()
-                + -centers.last().copied().unwrap_or(0.0)
-                + self.last_row_half_height(columns, entry_blocks)
-        };
-        Ok((width, content_height + self.glyph_edge_pad() * 2.0))
     }
 
     /// Compute the total bounding box height.
@@ -1684,117 +1553,35 @@ impl Legend {
         GLYPH_HALF_HEIGHT_FACTOR * self.title_font_size()
     }
 
-    fn entry_half_height(&self) -> f64 {
-        GLYPH_HALF_HEIGHT_FACTOR * self.entry_font_size()
-    }
-
-    fn last_row_half_height(&self, columns: usize, entry_blocks: &[TextBlock]) -> f64 {
-        let rows = self.entries.len().div_ceil(columns);
-        let marker_extent = self
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| index / columns == rows.saturating_sub(1))
-            .map(|(_, entry)| entry.glyph_extent())
-            .fold(0.0_f64, f64::max);
-        let text_extent = entry_blocks
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| index / columns == rows.saturating_sub(1))
-            .map(|(_, block)| block.height() / 2.0)
-            .fold(self.entry_half_height(), f64::max);
-        text_extent.max(marker_extent)
-    }
-
     fn glyph_edge_pad(&self) -> f64 {
         self.metrics.pad + GLYPH_EDGE_PAD_FACTOR * self.entry_font_size()
-    }
-
-    fn column_spacing(&self) -> f64 {
-        self.metrics.column_gap
-    }
-
-    fn column_widths(
-        &self,
-        columns: usize,
-        entry_blocks: &[TextBlock],
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<Vec<f64>, Error> {
-        let mut widths = Vec::new();
-        crate::layout::fit::reserve(theme, &mut widths, columns, "legend column widths")?;
-        legend_visits(theme, columns)?;
-        widths.resize(columns, self.metrics.handle_w + self.metrics.handle_text);
-        legend_visits(theme, entry_blocks.len())?;
-        for (index, block) in entry_blocks.iter().enumerate() {
-            widths[index % columns] = widths[index % columns]
-                .max(self.metrics.handle_w + self.metrics.handle_text + block.width());
-        }
-        Ok(widths)
-    }
-
-    fn row_centers(
-        &self,
-        columns: usize,
-        title_block: &TextBlock,
-        entry_blocks: &[TextBlock],
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<Vec<f64>, Error> {
-        let rows = self.entries.len().div_ceil(columns);
-        if rows == 0 {
-            return Ok(Vec::new());
-        }
-        let title_extra =
-            title_block.lines().len().saturating_sub(1) as f64 * title_block.line_height();
-        let mut centers = Vec::new();
-        crate::layout::fit::reserve(theme, &mut centers, rows, "legend row centers")?;
-        legend_visits(theme, rows)?;
-        centers.push(-self.metrics.title_h - title_extra);
-        let row_gap = self.metrics.entry_h - self.entry_font_size() * 1.2;
-        for row in 1..rows {
-            legend_visits(theme, entry_blocks.len())?;
-            legend_visits(theme, entry_blocks.len())?;
-            let previous_half = self.row_half_height(row - 1, columns, entry_blocks);
-            let current_half = self.row_half_height(row, columns, entry_blocks);
-            centers.push(centers[row - 1] - previous_half - row_gap - current_half);
-        }
-        Ok(centers)
-    }
-
-    fn row_half_height(&self, row: usize, columns: usize, entry_blocks: &[TextBlock]) -> f64 {
-        entry_blocks
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| index / columns == row)
-            .map(|(index, block)| (block.height() / 2.0).max(self.entries[index].glyph_extent()))
-            .fold(self.entry_half_height(), f64::max)
     }
 
     fn column_count(&self) -> usize {
         self.layout.columns
     }
+}
 
-    fn balanced_column_count(
-        &self,
-        available_width: f64,
-        available_height: f64,
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<usize, Error> {
-        if self.entries.len() <= MAX_SINGLE_COLUMN_ENTRIES {
-            return Ok(1);
-        }
-        let minimum_columns = self.entries.len().div_ceil(MAX_SINGLE_COLUMN_ENTRIES);
-        let mut best: Option<(f64, usize)> = None;
-        for columns in minimum_columns..=self.entries.len() {
-            legend_visits(theme, 1)?;
-            let (width, height) = self.box_size_for_columns(columns, theme)?;
-            if width <= available_width && height <= available_height {
-                let score = (width / available_width).max(height / available_height);
-                if best.is_none_or(|(previous, _)| score.total_cmp(&previous).is_lt()) {
-                    best = Some((score, columns));
-                }
-            }
-        }
-        Ok(best.map_or(1, |(_, columns)| columns))
+#[cfg(test)]
+pub(crate) fn test_assigned_legend(
+    title: &str,
+    entries: Vec<LegendEntry>,
+    available: (f64, f64),
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<Legend, Error> {
+    let entries = Legend::admit_entries(entries, theme)?;
+    match Legend::measure_assigned(
+        title,
+        entries,
+        available,
+        false,
+        false,
+        theme,
+        &mut false,
+        &crate::layout::fit::FitScope::root(),
+    )? {
+        crate::layout::fit::FitOutcome::Measured(legend) => Ok(legend),
+        crate::layout::fit::FitOutcome::Miss(reason) => Err(reason.into_error()),
     }
 }
 
@@ -1957,7 +1744,7 @@ mod tests {
         let scope = FitScope::root();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("first"), entry("M".repeat(40))].into();
-        let FitOutcome::Miss(failure) = Legend::measure_outside(
+        let FitOutcome::Miss(failure) = Legend::measure_assigned(
             "group",
             entries,
             (100.0, 400.0),
@@ -1980,7 +1767,7 @@ mod tests {
     }
 
     #[test]
-    fn constructor_admits_long_labels_arc_and_packing_before_work() {
+    fn assigned_guide_admits_long_label_arc_and_slots_before_text_work() {
         let run = |limits: Option<(u128, u64)>| {
             let theme = crate::Theme::Publication.resolve();
             let resources = theme
@@ -1998,11 +1785,10 @@ mod tests {
                 resources.set_test_limits(visits, bytes);
             }
             let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
-            let legend = Legend::new(
+            let legend = test_assigned_legend(
                 "Long measurement conditions",
                 entries,
-                1600.0,
-                1000.0,
+                (1600.0, 1000.0),
                 &theme,
             );
             (
@@ -2014,7 +1800,7 @@ mod tests {
         let (resources, legend, _) = run(None);
         let legend = legend.unwrap();
         assert_eq!(legend.entry_blocks.len(), 16);
-        assert_eq!(legend.layout.columns, 3);
+        assert_eq!(legend.layout.columns, 1);
         let visits = resources.usage().unwrap().1;
         let bytes = resources.byte_usage().unwrap();
         for limits in [(visits - 1, bytes), (visits, bytes - 1)] {
@@ -2023,7 +1809,7 @@ mod tests {
         for limits in [(0, bytes), (visits, 0)] {
             let (_, result, shapes) = run(Some(limits));
             assert!(result.is_err());
-            assert_eq!(shapes, 0, "constructor refusal must precede text planning");
+            assert_eq!(shapes, 0, "entry admission must precede text planning");
         }
         let (_, exact, _) = run(Some((visits, bytes)));
         let exact = exact.unwrap();
@@ -2162,32 +1948,29 @@ mod tests {
 
     fn legend() -> Legend {
         let theme = crate::Theme::Publication.resolve();
-        Legend::new(
+        test_assigned_legend(
             "group",
             vec![entry("first"), entry("second")],
-            640.0,
-            480.0,
+            (640.0, 480.0),
             &theme,
         )
         .unwrap()
     }
 
     #[test]
-    fn legend_text_roles_do_not_scale_with_outer_root_size() {
+    fn legend_text_roles_do_not_scale_with_assigned_size() {
         let theme = crate::Theme::Publication.resolve();
-        let smaller = Legend::new(
+        let smaller = test_assigned_legend(
             "group",
             vec![entry("one"), entry("two")],
-            640.0,
-            480.0,
+            (640.0, 480.0),
             &theme,
         )
         .unwrap();
-        let larger = Legend::new(
+        let larger = test_assigned_legend(
             "group",
             vec![entry("one"), entry("two")],
-            1600.0,
-            1200.0,
+            (1600.0, 1200.0),
             &theme,
         )
         .unwrap();
@@ -2214,7 +1997,7 @@ mod tests {
         let theme = crate::Theme::Publication.resolve();
         let entries: std::sync::Arc<[LegendEntry]> =
             vec![entry("longer longer"), entry("a"), entry("b"), entry("c")].into();
-        let probe = match Legend::measure_outside(
+        let probe = match Legend::measure_assigned(
             "group",
             std::sync::Arc::clone(&entries),
             (500.0, 1000.0),
@@ -2236,11 +2019,12 @@ mod tests {
             + title_gap
             + 3.0 * probe.layout.entries[0].height
             + 2.0 * row_gap;
-        let width =
-            2.0 * probe.layout.entries[0].width + probe.column_spacing() + 2.0 * probe.metrics.pad
-                - 2.0;
+        let width = 2.0 * probe.layout.entries[0].width
+            + probe.metrics.column_gap
+            + 2.0 * probe.metrics.pad
+            - 2.0;
         assert!(matches!(
-            Legend::measure_outside(
+            Legend::measure_assigned(
                 "group",
                 std::sync::Arc::clone(&entries),
                 (width, height),
@@ -2253,7 +2037,7 @@ mod tests {
             .unwrap(),
             FitOutcome::Miss(_)
         ));
-        let compact = match Legend::measure_outside(
+        let compact = match Legend::measure_assigned(
             "group",
             entries,
             (width, height),
@@ -2331,22 +2115,13 @@ mod tests {
         let bounds = legend.box_at(20.0, 30.0);
         let (_, title_center) = bounds.anchor();
         let title_top = title_center + legend.title_half_height();
-        let columns = legend.column_count();
-        let title_block = &legend.title_block;
-        let entry_blocks = &legend.entry_blocks;
-        let last_center = title_center
-            + legend
-                .row_centers(
-                    columns,
-                    title_block,
-                    entry_blocks,
-                    &crate::Theme::Publication.resolve(),
-                )
-                .unwrap()
-                .last()
-                .copied()
-                .unwrap();
-        let last_bottom = last_center - legend.last_row_half_height(columns, entry_blocks);
+        let last = legend.layout.entries.last().unwrap();
+        let text = legend.entry_blocks.last().unwrap();
+        let baseline = text.plan().first_baseline_quanta.unwrap_or(0) as f64 / 1024.0;
+        let descent = (text.height() - baseline)
+            .max(legend.entries.last().unwrap().glyph_extent())
+            .max(legend.entry_font_size() * 0.32);
+        let last_bottom = title_center + last.label.position.y - descent;
         let top_padding = bounds.top - title_top;
         let bottom_padding = last_bottom - bounds.bottom;
         let previous_bottom_comfort =
@@ -2357,29 +2132,29 @@ mod tests {
     }
 
     #[test]
-    fn eight_short_entries_use_multiple_balanced_columns() {
+    fn eight_short_entries_use_one_column_when_the_assigned_height_fits() {
         let entries = (1..=8)
             .map(|index| entry(format!("item {index}")))
             .collect();
         let theme = crate::Theme::Publication.resolve();
-        let legend = Legend::new("group", entries, 640.0, 480.0, &theme).unwrap();
+        let legend = test_assigned_legend("group", entries, (640.0, 480.0), &theme).unwrap();
 
-        assert_eq!(legend.column_count(), 2);
+        assert_eq!(legend.column_count(), 1);
     }
 
     #[test]
     fn overwide_legend_text_returns_the_planning_error() {
         let theme = crate::Theme::Publication.resolve();
-        let error = Legend::new(
+        let error = test_assigned_legend(
             &"W".repeat(10_000),
             vec![entry("entry")],
-            160.0,
-            120.0,
+            (160.0, 120.0),
             &theme,
         )
         .expect_err("overwide legend title must fail");
 
-        assert!(error.to_string().contains("legend title text planning"));
+        assert!(error.to_string().contains("layout fit"));
+        assert!(error.to_string().contains("LegendTitle"));
     }
 
     #[test]

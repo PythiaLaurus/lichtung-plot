@@ -132,7 +132,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2a | COMPLETE | T5b1 | `refactor(legend): resolve complete private legend roles` |
 | T5b2b | IN PROGRESS | T5b2a | Umbrella; completes after T5b2b1-b3 |
 | T5b2b1 | COMPLETE | T5b2a | `refactor(legend): measure assigned discrete outside flow` |
-| T5b2b2 | PENDING | T5b2b1 | `refactor(legend): replace legacy inside packing` |
+| T5b2b2 | COMPLETE | T5b2b1 | `refactor(legend): replace legacy inside packing` |
 | T5b2b3 | PENDING | T5b2b2 | `feat(legend): measure shared continuous guides` |
 | T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -481,6 +481,21 @@ exact-work traces, and strict Clippy pass. Logs:
 `/tmp/opencode/t5b2b1-integration.log`, and
 `/tmp/opencode/t5b2b1-geometry-integration.log`. T5b2b2 removes legacy
 inside-guide packing.
+
+T5b2b2 closure: ordinary Plot inside overlays and the Matrix-owned guide now
+use the same assigned-width `Legend` measurement as outside guides. The root
+width/height percentages, six-entry column heuristic, multi-column search,
+row-center reconstruction, and old `Legend::new` constructor have been removed;
+an inside fit miss retains its typed guide address and rejects before capture.
+Exact entry-Arc admission remains part of this path. The inspected Matrix SVG
+snapshot changes only the title baseline placement. Focused Legend, panel,
+Matrix, explicit-inside, annotation, composition, visual, and measured-work
+tests pass, along with strict Clippy. Logs: `/tmp/opencode/t5b2b2-lint.log`,
+`/tmp/opencode/t5b2b2-legend-unit.log`,
+`/tmp/opencode/t5b2b2-plan-unit.log`,
+`/tmp/opencode/t5b2b2-matrix-unit.log`, and
+`/tmp/opencode/t5b2b2-composition-integration.log`. T5b2b3 adds the
+continuous guide producer.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

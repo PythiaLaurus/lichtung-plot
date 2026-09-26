@@ -331,7 +331,7 @@ impl FacetPlan {
                         canvas_layout.panel_box.height()
                             - if horizontal { minimum.1 + gap } else { 0.0 },
                     );
-                    let guide = match crate::decorations::legend::Legend::measure_outside(
+                    let guide = match crate::decorations::legend::Legend::measure_assigned(
                         title,
                         std::sync::Arc::clone(&legend_entries),
                         available,

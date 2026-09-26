@@ -3576,7 +3576,7 @@ impl Canvas {
                         0.0
                     },
             );
-            let legend = match Legend::measure_outside(
+            let legend = match Legend::measure_assigned(
                 title,
                 Arc::clone(entries),
                 available,

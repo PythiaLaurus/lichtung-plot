@@ -304,7 +304,7 @@ pub(crate) fn plan_panel_with_context(
                     - ink[3]
                     - if horizontal { minimum.1 + gap } else { 0.0 },
             );
-            let guide = match Legend::measure_outside(
+            let guide = match Legend::measure_assigned(
                 &title,
                 std::sync::Arc::clone(&entries),
                 available,
@@ -648,24 +648,36 @@ fn plan_panel_attempt(
     let legend = if let Some(guide) = assigned_guide {
         Some(guide)
     } else if visible {
-        Some(Legend::new(
-            &crate::decorations::legend::resolved_title(
-                &discovered.legend_entries,
-                &context
-                    .theme
-                    .prepared_font_environment()?
-                    .generation_resources(),
-            )?,
+        let title = crate::decorations::legend::resolved_title(
+            &discovered.legend_entries,
+            &context
+                .theme
+                .prepared_font_environment()?
+                .generation_resources(),
+        )?;
+        let entries = Legend::admit_entries(
             data.collect_source(
                 discovered
                     .legend_entries
                     .iter()
                     .map(|entry| entry.admitted_clone(data)),
             )?,
-            f64::from(planning_plot.width()),
-            f64::from(planning_plot.height()),
             context.theme,
-        )?)
+        )?;
+        let guide_scope = scope.child(AddressRole::InsideGuide, 0)?;
+        match Legend::measure_assigned(
+            &title,
+            entries,
+            (discovery_panel.width(), discovery_panel.height()),
+            false,
+            false,
+            context.theme,
+            &mut false,
+            &guide_scope,
+        )? {
+            FitOutcome::Measured(guide) => Some(guide),
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        }
     } else {
         None
     };

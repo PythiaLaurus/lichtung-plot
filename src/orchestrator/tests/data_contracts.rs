@@ -68,7 +68,12 @@ fn oversized_explicit_inside_legend_rejects_before_begin() {
     let error = chart.render_with_backend(&mut backend).unwrap_err();
 
     assert!(matches!(error, Error::Render(_)));
-    assert!(error.to_string().contains("legend entry text planning"));
+    assert!(
+        error
+            .to_string()
+            .contains("explicit inside legend InsideTopLeft cannot fit"),
+        "{error}"
+    );
     assert_eq!(backend.begins, 0);
 }
 
