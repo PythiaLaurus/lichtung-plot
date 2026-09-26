@@ -26,6 +26,8 @@ use crate::render::backend::{
 };
 use crate::Error;
 
+pub(crate) mod descriptor;
+
 /// The semantic kind of a contributing guide, determined before font discovery.
 /// Entry and glyph compatibility is resolved by the prepared descriptor owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

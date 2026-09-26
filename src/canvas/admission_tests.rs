@@ -355,7 +355,7 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                 canvas.admit_parent_metadata(&resources)?;
                 let (interiors, shared) = canvas.prepare_interiors(stage)?;
                 let (mut census, presence) =
-                    canvas.foundational_text_census(&themes, &interiors, stage)?;
+                    canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
                 let root_text = canvas.prepare_intrinsics(&themes, &interiors)?;
                 Ok((interiors, shared, resources, root_text))

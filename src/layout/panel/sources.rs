@@ -611,6 +611,55 @@ pub(super) fn format_label(
     precision: usize,
     environment: Option<&PreparedFontEnvironment>,
 ) -> Result<String, Error> {
+    let (buffer, text_len, suffix) = format_label_parts(value, log, integral, precision)?;
+    let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
+    let length = text
+        .len()
+        .checked_add(suffix.len())
+        .ok_or_else(|| Error::Render("numeric label bytes overflow".into()))?;
+    if let Some(environment) = environment {
+        environment
+            .claim_unicode_bytes(length as u64)
+            .map_err(|error| Error::Render(error.to_string()))?;
+    }
+    let mut label = String::new();
+    label
+        .try_reserve_exact(length)
+        .map_err(|error| Error::Render(error.to_string()))?;
+    label.push_str(text);
+    label.push_str(suffix);
+    Ok(label)
+}
+
+/// Prepare a guide label before fonts, admitting actual bytes before the only
+/// heap allocation. Both axis and guide roles use the same numeric grammar.
+pub(crate) fn format_guide_label(
+    value: f64,
+    precision: usize,
+    data: crate::data::PlotData<'_>,
+) -> Result<String, Error> {
+    let (buffer, text_len, suffix) = format_label_parts(value, false, false, precision)?;
+    let text = std::str::from_utf8(&buffer[..text_len]).expect("ASCII numeric formatter");
+    let length = text_len
+        .checked_add(suffix.len())
+        .ok_or_else(|| Error::Render("guide label bytes overflow".into()))?;
+    data.claim_source_records(1)?;
+    data.claim_source_bytes(length)?;
+    let mut label = String::new();
+    label
+        .try_reserve_exact(length)
+        .map_err(|error| Error::Render(format!("guide label reservation: {error}")))?;
+    label.push_str(text);
+    label.push_str(suffix);
+    Ok(label)
+}
+
+fn format_label_parts(
+    value: f64,
+    log: bool,
+    integral: bool,
+    precision: usize,
+) -> Result<([u8; 64], usize, &'static str), Error> {
     use std::io::Write;
     let mut buffer = [0_u8; 64];
     let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
@@ -671,28 +720,16 @@ pub(super) fn format_label(
     })();
     write.map_err(|error| Error::Render(format!("bounded numeric formatter: {error}")))?;
     let length = cursor.position() as usize;
-    let text = std::str::from_utf8(&buffer[..length]).expect("ASCII numeric formatter");
-    let text = if fixed {
-        text.trim_end_matches('0').trim_end_matches('.')
+    let trimmed = if fixed {
+        std::str::from_utf8(&buffer[..length])
+            .expect("ASCII numeric formatter")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .len()
     } else {
-        text
+        length
     };
-    let length = text
-        .len()
-        .checked_add(suffix.len())
-        .ok_or_else(|| Error::Render("numeric label bytes overflow".into()))?;
-    if let Some(environment) = environment {
-        environment
-            .claim_unicode_bytes(length as u64)
-            .map_err(|error| Error::Render(error.to_string()))?;
-    }
-    let mut label = String::new();
-    label
-        .try_reserve_exact(length)
-        .map_err(|error| Error::Render(error.to_string()))?;
-    label.push_str(text);
-    label.push_str(suffix);
-    Ok(label)
+    Ok((buffer, trimmed, suffix))
 }
 
 pub(super) fn labels_fit(

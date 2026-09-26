@@ -113,7 +113,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5b0 | COMPLETE | T5a | `docs(layout): pin native composition migration contracts` |
-| T5b1 | IN PROGRESS | T5b0 | Umbrella; completes after T5b1a-c |
+| T5b1 | COMPLETE | T5b0 | Umbrella; completed after T5b1a-c |
 | T5b1a | COMPLETE | T5b0 | `feat(legend): classify shared guide kinds before fonts` |
 | T5b1b | COMPLETE | T5b1a | Umbrella; completed after T5b1b1-b2 |
 | T5b1b1 | COMPLETE | T5b1a | `refactor(legend): admit compatibility before fonts` |
@@ -127,7 +127,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2b3 | COMPLETE | T5b1b2b2 | Umbrella; completed after T5b1b2b3a-b |
 | T5b1b2b3a | COMPLETE | T5b1b2b2 | `refactor(legend): classify prepared Canvas contributors` |
 | T5b1b2b3b | COMPLETE | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
-| T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
+| T5b1c | COMPLETE | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
@@ -352,6 +352,27 @@ integrations, docs and package verification (272 files), and all three ignored
 release legend groups passed. Logs: `/tmp/opencode/t5b1b2b3b-verify.log` and
 `/tmp/opencode/t5b1b2b3b-legends-release.log`. T5b1 remains IN PROGRESS for
 the complete continuous descriptor; guide flow and native tracks are T5b2+.
+
+T5b1c completion: Shared Canvas uses one kind-discriminated prepared descriptor.
+Heatmap and Beeswarm contribute raw color-field identity, resolved title,
+complete semantic low/center/high paint, diverging center, missing-key paint/text,
+and either exact domain or automatic data envelope before font discovery. One
+owner validates title/scale/missing compatibility, unions automatic domains,
+requires identical exact domains containing every automatic envelope, and
+generates a single unique numeric-label vector only from the final domain.
+Constant domains retain one label. Its title, final labels, and optional missing
+key enter Canvas-owned font census under the shared-guide address; the merged
+semantic identity enters root feedback. Tests cover two unequal automatic
+Heatmaps, contained versus conflicting exact domains, Heatmap/Beeswarm palette
+conflict, close endpoints requiring precision retries, independent work/storage
+refusal, and no font discovery before semantic rejection. Focused Canvas,
+numeric-source, 58 composition, and 37 Heatmap integration tests pass.
+`just verify` passed 1,044 library tests (17 ignored), 468 integration tests
+including 27 snapshots, docs and package verification (273 files); log
+`/tmp/opencode/t5b1c-verify.log`. T5b2 will measure and publish the one shared
+continuous guide from this descriptor; existing specialized colorbar geometry
+is not falsely called native guide measurement here. The public surface and
+supported nesting matrix are unchanged.
 
 T5b1b2b1 completion: `PreparedScatter` now produces guide entries, order, and
 complete point glyphs from the same semantic groups/style source used by its

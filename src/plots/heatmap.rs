@@ -43,6 +43,42 @@ pub(crate) struct HeatmapData {
     pub(crate) color_label: String,
 }
 
+impl HeatmapData {
+    pub(crate) fn guide_semantics(
+        &self,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<crate::decorations::legend::descriptor::ContinuousSemantics, Error> {
+        let domain = self.domain;
+        let center = domain.center;
+        let palette = crate::decorations::legend::descriptor::Palette {
+            low: heatmap_color(domain.minimum, domain),
+            center: center.map(|value| heatmap_color(value, domain)),
+            high: heatmap_color(domain.maximum, domain),
+        };
+        let missing = self
+            .has_missing
+            .then(|| -> Result<_, Error> {
+                let label = self.colorbar_values.last().ok_or_else(|| {
+                    Error::Render("heatmap missing key has no prepared label".into())
+                })?;
+                Ok(crate::decorations::legend::descriptor::MissingKey {
+                    fill: MISSING_FILL,
+                    outline: MISSING_STROKE,
+                    label: data.copy_source_string(label)?,
+                })
+            })
+            .transpose()?;
+        Ok(
+            crate::decorations::legend::descriptor::ContinuousSemantics {
+                domain: (domain.minimum, domain.maximum),
+                center,
+                palette,
+                missing,
+            },
+        )
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedHeatmapInputs {
     pub(crate) panels: Vec<(Option<String>, HeatmapData)>,

@@ -13,6 +13,7 @@ pub(crate) use canvas::{LegacyRootAxes, PanelBox, RootFramePlan};
 pub(crate) use kernel::{force_reservation_failure, ReservationStage};
 pub(crate) use kernel::{plan_exact_root, FrozenRoot, MeasuredLayout, RootSize};
 pub(crate) use kernel::{AddressRole, ComponentAddress};
+pub(crate) use panel::format_guide_label;
 #[cfg(test)]
 pub(crate) use panel::nice_ticks;
 pub use panel::AxisTick;

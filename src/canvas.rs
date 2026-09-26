@@ -61,7 +61,7 @@ struct PlannedCanvasPanel {
 }
 
 type PreparedHueGroups = Vec<(String, Vec<String>)>;
-type PreparedDiscreteGuide = (String, Arc<[LegendEntry]>);
+use crate::decorations::legend::descriptor::{PreparedDiscreteGuide, PreparedGuideDescriptor};
 
 /// T5b consumes these as actual panel-heading semantics, not outer-root fallbacks.
 /// Until then the legacy panel headers keep their current placement.
@@ -90,7 +90,7 @@ struct PreparedCanvasInputs {
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
     shared_x: Vec<Option<(f64, f64)>>,
     point_path_hue_groups: Option<Arc<PreparedHueGroups>>,
-    discrete_shared_guide: Option<PreparedDiscreteGuide>,
+    shared_guide: Option<PreparedGuideDescriptor>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
 }
 
@@ -106,6 +106,149 @@ struct PreparedCanvasRound<'a> {
 #[cfg(test)]
 mod d1_tests {
     use super::*;
+
+    #[test]
+    fn continuous_shared_domains_merge_before_fonts_without_choosing_one_panel() {
+        let plot = |values: [f64; 2]| {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", values),
+            )
+        };
+        let run = |first, second| {
+            let canvas = Canvas::grid(1, 2)
+                .unwrap()
+                .panel(0, 0, first)
+                .unwrap()
+                .panel(0, 1, second)
+                .unwrap()
+                .legend_policy(CanvasLegendPolicy::Shared);
+            crate::layout::plan_exact_root(
+                1200,
+                640,
+                |stage| {
+                    let (interiors, _) = canvas.prepare_interiors(stage)?;
+                    canvas.validate_shared_guide_kinds(&interiors)?;
+                    canvas
+                        .prepare_continuous_shared_guide(&interiors, &stage.generation_resources())
+                },
+                |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |descriptor, _, (), _| Ok(descriptor.clone()),
+            )
+            .map(|root| root.plan().clone())
+        };
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let merged = run(plot([0.0, 2.0]), plot([1.0, 5.0])).unwrap().unwrap();
+        assert_eq!(merged.field, "fill");
+        assert_eq!(merged.title, "Fill");
+        assert_eq!(merged.domain, (0.0, 5.0));
+        assert!(!merged.exact);
+        assert_eq!(merged.labels, ["0", "5"]);
+        let exact = run(plot([0.0, 2.0]).color_limits(0.0, 5.0), plot([1.0, 5.0]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(exact.domain, (0.0, 5.0));
+        assert!(exact.exact);
+        assert_eq!(exact.labels, merged.labels);
+        assert!(matches!(
+            run(plot([0.0, 2.0]).color_limits(0.0, 3.0), plot([1.0, 5.0])),
+            Err(Error::Data(message)) if message.contains("excludes an automatic")
+        ));
+        assert!(matches!(
+            run(plot([0.0, 2.0]).color_limits(0.0, 3.0),
+                plot([1.0, 5.0]).color_limits(0.0, 5.0)),
+            Err(Error::Data(message)) if message.contains("exact domains disagree")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn continuous_shared_guide_rejects_incompatible_gradients_before_fonts() {
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(
+                0,
+                0,
+                Plot::heatmap(
+                    crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                    crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                    crate::NumericValues::new("fill", [1.0, 2.0]),
+                ),
+            )
+            .unwrap()
+            .panel(
+                0,
+                1,
+                Plot::beeswarm(
+                    crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                    crate::NumericValues::new("x", [1.0, 2.0]),
+                    crate::NumericValues::new("fill", [1.0, 2.0]),
+                ),
+            )
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        let result = crate::layout::plan_exact_root(
+            1200,
+            640,
+            |stage| {
+                let (interiors, _) = canvas.prepare_interiors(stage)?;
+                canvas.validate_shared_guide_kinds(&interiors)?;
+                canvas.prepare_continuous_shared_guide(&interiors, &stage.generation_resources())
+            },
+            |_, assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+            |_, _, (), _| Ok(()),
+        );
+        assert!(matches!(
+            result,
+            Err(Error::Data(message)) if message.contains("incompatible identity, title, scale")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn merged_continuous_guide_text_is_censused_under_the_canvas_owner() {
+        let plot = |values: [f64; 2]| {
+            Plot::heatmap(
+                crate::CategoryValues::new("column", ["a", "b"]).unwrap(),
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("fill", values),
+            )
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot([0.0, 2.0]))
+            .unwrap()
+            .panel(0, 1, plot([1.0, 5.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("merged guide must retain its numeric domain");
+        };
+        assert_eq!(guide.domain, (0.0, 5.0));
+        let sources = root
+            .prepared()
+            .text_census
+            .requirements
+            .iter()
+            .filter(|requirement| {
+                requirement.component_address.leaf_role() == crate::layout::AddressRole::GuideLabel
+            })
+            .map(|requirement| requirement.source.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(sources, ["0", "5"]);
+    }
 
     #[test]
     fn scatter_shared_hue_order_is_retained_before_fonts_and_includes_hidden_marks() {
@@ -823,7 +966,7 @@ mod d1_tests {
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
                     let (mut census, presence) =
-                        canvas.foundational_text_census(&themes, &interiors, stage)?;
+                        canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
                     Ok(interiors)
                 },
@@ -992,7 +1135,7 @@ mod d1_tests {
                 |stage| {
                     let (interiors, _) = canvas.prepare_interiors(stage)?;
                     let (mut census, presence) =
-                        canvas.foundational_text_census(&themes, &interiors, stage)?;
+                        canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
                     Ok(interiors)
                 },
@@ -1099,7 +1242,7 @@ mod d1_tests {
             |stage| {
                 let (interiors, _) = canvas.prepare_interiors(stage)?;
                 let (mut census, presence) =
-                    canvas.foundational_text_census(&themes, &interiors, stage)?;
+                    canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
                 Ok(interiors)
             },
@@ -1959,6 +2102,47 @@ impl Canvas {
         Ok(())
     }
 
+    fn prepare_continuous_shared_guide(
+        &self,
+        interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<Option<crate::decorations::legend::descriptor::ContinuousDescriptor>, Error> {
+        if self.legend_policy != CanvasLegendPolicy::Shared {
+            return Ok(None);
+        }
+        let Some(first) = self.panels.iter().flatten().next() else {
+            return Ok(None);
+        };
+        let first_data = first.data().with_axis_resources(resources);
+        let mut contributors = Vec::new();
+        first_data.reserve_source(&mut contributors, self.panels.len())?;
+        for (index, plot) in self.panels.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            if !matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
+                continue;
+            }
+            let inputs = interiors
+                .get(index)
+                .and_then(Option::as_ref)
+                .ok_or_else(|| {
+                    Error::Render("shared continuous guide has no prepared interior".into())
+                })?;
+            let data = plot.data().with_axis_resources(resources);
+            let contributor =
+                crate::decorations::legend::descriptor::ContinuousContributor::for_plot(
+                    plot, inputs, data,
+                )?
+                .ok_or_else(|| {
+                    Error::Render("shared continuous guide has no color identity".into())
+                })?;
+            contributors.push(contributor);
+        }
+        crate::decorations::legend::descriptor::ContinuousContributor::merge(
+            contributors,
+            first_data,
+        )
+    }
+
     /// Prepare point/path hue identities from retained semantics before fonts.
     /// Further categorical families migrate to this same owner in T5b1b2b.
     #[expect(
@@ -2612,8 +2796,26 @@ impl Canvas {
                     point_path_hue_groups.as_deref().map(Vec::as_slice),
                     &prepared_stage.generation_resources(),
                 )?;
-                let (mut census, scalar_presence) =
-                    self.foundational_text_census(&themes, &interiors, prepared_stage)?;
+                let continuous_shared_guide = self.prepare_continuous_shared_guide(
+                    &interiors,
+                    &prepared_stage.generation_resources(),
+                )?;
+                let shared_guide = match (discrete_shared_guide, continuous_shared_guide) {
+                    (Some(guide), None) => Some(PreparedGuideDescriptor::Discrete(guide)),
+                    (None, Some(guide)) => Some(PreparedGuideDescriptor::Continuous(guide)),
+                    (None, None) => None,
+                    (Some(_), Some(_)) => {
+                        return Err(Error::Data(
+                            "shared Canvas guide mixes discrete and continuous contributors".into(),
+                        ));
+                    }
+                };
+                let (mut census, scalar_presence) = self.foundational_text_census(
+                    &themes,
+                    &interiors,
+                    shared_guide.as_ref(),
+                    prepared_stage,
+                )?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
                 let root_text = self.prepare_intrinsics(&themes, &interiors)?;
                 Ok(PreparedCanvasInputs {
@@ -2622,11 +2824,30 @@ impl Canvas {
                     root_text,
                     shared_x,
                     point_path_hue_groups,
-                    discrete_shared_guide,
+                    shared_guide,
                     interiors,
                 })
             },
             |prepared, assigned, round| {
+                if let Some(PreparedGuideDescriptor::Continuous(guide)) = &prepared.shared_guide {
+                    round.observe_string(&guide.field)?;
+                    round.observe_string(&guide.title)?;
+                    round.observe_count(usize::from(guide.exact))?;
+                    round.observe_number(guide.domain.0)?;
+                    round.observe_number(guide.domain.1)?;
+                    if let Some(center) = guide.center {
+                        round.observe_number(center)?;
+                    }
+                    for color in [guide.palette.low, guide.palette.high]
+                        .into_iter()
+                        .chain(guide.palette.center)
+                    {
+                        for channel in [color.0, color.1, color.2] {
+                            round.observe_count(usize::from(channel))?;
+                        }
+                    }
+                    round.observe_count(usize::from(guide.missing.is_some()))?;
+                }
                 prepared
                     .root_text
                     .check_width(f64::from(assigned.dimensions().0) - 32.0, &FitScope::root())
@@ -2641,7 +2862,10 @@ impl Canvas {
                     &mut children,
                     &prepared.shared_x,
                     prepared.point_path_hue_groups.as_deref().map(Vec::as_slice),
-                    prepared.discrete_shared_guide.as_ref(),
+                    match prepared.shared_guide.as_ref() {
+                        Some(PreparedGuideDescriptor::Discrete(guide)) => Some(guide),
+                        Some(PreparedGuideDescriptor::Continuous(_)) | None => None,
+                    },
                     &prepared.interiors,
                 )?;
                 #[cfg(test)]
@@ -2717,6 +2941,7 @@ impl Canvas {
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
+        shared_guide: Option<&PreparedGuideDescriptor>,
         prepared_stage: &mut crate::layout::kernel::PreparedStage<'_>,
     ) -> Result<(crate::layout::PreparedTextCensus, Vec<u64>), Error> {
         let root = crate::layout::ComponentAddress::root();
@@ -2750,6 +2975,71 @@ impl Canvas {
                     0,
                     source,
                     appearance,
+                    prepared_stage,
+                )?;
+            }
+        }
+
+        if let Some(PreparedGuideDescriptor::Continuous(guide)) = shared_guide {
+            let guide_owner = root.prepared_child(
+                crate::layout::AddressRole::CanvasSharedLegend,
+                0,
+                prepared_stage,
+            )?;
+            let title_appearance = themes.root().legacy_text_appearance(
+                themes.root().composition_title_font_size,
+                crate::TextWeight::Normal,
+            );
+            let label_appearance = themes
+                .root()
+                .legacy_text_appearance(themes.root().label_font_size, crate::TextWeight::Normal);
+            if !guide.title.is_empty() {
+                let address = guide_owner.prepared_child(
+                    crate::layout::AddressRole::GuideTitle,
+                    0,
+                    prepared_stage,
+                )?;
+                push_text_requirement(
+                    &mut requirements,
+                    address,
+                    crate::layout::PreparedTextRole::LegendTitle,
+                    0,
+                    &guide.title,
+                    &title_appearance,
+                    prepared_stage,
+                )?;
+            }
+            for (index, label) in guide.labels.iter().enumerate() {
+                let ordinal = u32::try_from(index)
+                    .map_err(|_| Error::Render("shared guide label ordinal overflow".into()))?;
+                let address = guide_owner.prepared_child(
+                    crate::layout::AddressRole::GuideLabel,
+                    ordinal,
+                    prepared_stage,
+                )?;
+                push_text_requirement(
+                    &mut requirements,
+                    address,
+                    crate::layout::PreparedTextRole::LegendLabel,
+                    ordinal,
+                    label,
+                    &label_appearance,
+                    prepared_stage,
+                )?;
+            }
+            if let Some(missing) = &guide.missing {
+                let address = guide_owner.prepared_child(
+                    crate::layout::AddressRole::GuideMissingBlock,
+                    0,
+                    prepared_stage,
+                )?;
+                push_text_requirement(
+                    &mut requirements,
+                    address,
+                    crate::layout::PreparedTextRole::LegendLabel,
+                    0,
+                    &missing.label,
+                    &label_appearance,
                     prepared_stage,
                 )?;
             }

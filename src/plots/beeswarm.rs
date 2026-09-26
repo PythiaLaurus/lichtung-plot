@@ -127,6 +127,21 @@ pub(crate) fn prepare(
 }
 
 impl PreparedBeeswarm {
+    pub(crate) fn guide_semantics(
+        &self,
+    ) -> crate::decorations::legend::descriptor::ContinuousSemantics {
+        crate::decorations::legend::descriptor::ContinuousSemantics {
+            domain: self.color_range,
+            center: None,
+            palette: crate::decorations::legend::descriptor::Palette {
+                low: self.stops[0].color,
+                center: None,
+                high: self.stops[1].color,
+            },
+            missing: None,
+        }
+    }
+
     pub(crate) fn finish(
         &mut self,
         range: (f64, f64),

@@ -898,6 +898,10 @@ impl<K: crate::kind::Marker> Plot<K> {
         }
     }
 
+    pub(crate) fn color_dimension_key(&self) -> Option<&str> {
+        self.color_values().map(crate::NumericValues::name)
+    }
+
     pub(crate) fn legend_title_key(&self) -> &str {
         self.interaction_styles
             .as_ref()
