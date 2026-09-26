@@ -6,11 +6,8 @@
 //!
 //! ## Sizing philosophy
 //!
-//! All dimensions are derived from a computed `font_size` which itself
-//! scales with the canvas size:
-//!   font_size = BASE_FONT × (min(canvas_w, canvas_h) / REF_SIZE)
-//! Spacings are multiples of font_size. This ensures the legend looks
-//! proportional on any canvas size while remaining overridable.
+//! Resolved legend text and chrome come from the owning theme. Measurement
+//! responds to the assigned guide width and height, never a root-size font scale.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -401,6 +398,10 @@ pub(crate) struct LegendEntry {
 }
 
 impl LegendEntry {
+    pub(crate) fn display_label(&self) -> &str {
+        &self.label
+    }
+
     pub(crate) fn admitted_clone(&self, data: crate::data::PlotData<'_>) -> Result<Self, Error> {
         let identity = match &self.identity {
             LegendIdentity::Single { field, value } => [Some(field), Some(value), None, None],
@@ -761,43 +762,16 @@ fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -
     }
 }
 
-// ─── Reference constants ────────────────────────────────────────────────────
+// ─── Local glyph metrics ──────────────────────────────────────────────────────
 
-/// Reference canvas dimension (px) at which BASE_FONT applies 1:1.
-const REF_SIZE: f64 = 640.0;
-/// Base font size at REF_SIZE canvas.
-const BASE_FONT: f64 = 14.0;
-/// Minimum font size to ensure readability on very small canvases.
-const MIN_FONT: f64 = 11.0;
-/// Maximum font size to avoid oversized legends on huge canvases.
-const MAX_FONT: f64 = 18.0;
-
-// ─── Fontsize-relative multipliers (following matplotlib conventions) ────────
-
-/// Padding between legend border and content (× font_size).
-const BORDER_PAD_FACTOR: f64 = 0.8;
-/// Vertical spacing between entries (× font_size).
-const LABEL_SPACING_FACTOR: f64 = 0.5;
-/// Horizontal pad between marker and label text (× font_size).
-const HANDLE_TEXT_PAD_FACTOR: f64 = 0.8;
-/// Width of the marker area (× font_size).
-const HANDLE_LENGTH_FACTOR: f64 = 1.0;
 /// Conservative half-height around the backend's middle-aligned text anchor.
 const GLYPH_HALF_HEIGHT_FACTOR: f64 = 0.6;
 /// Extra edge comfort retained from the previous bottom padding (x font_size).
 const GLYPH_EDGE_PAD_FACTOR: f64 = 0.2;
-/// Horizontal separation between adjacent legend columns (x font_size).
-const COLUMN_SPACING_FACTOR: f64 = 1.2;
 /// Maximum number of entries retained in one automatic legend column.
 const MAX_SINGLE_COLUMN_ENTRIES: usize = 6;
-/// Title line height relative to font_size.
-const TITLE_HEIGHT_FACTOR: f64 = 1.8;
-/// Background frame opacity (matplotlib default: 0.8).
-const FRAME_ALPHA: f64 = 0.8;
-/// Corner radius for the background box.
-const CORNER_RADIUS: f64 = 2.0;
 
-/// Computed metrics for legend layout, derived from canvas size.
+/// Resolved role-local metrics for legend layout and frozen drawing.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LegendMetrics {
     /// Effective font size (px).
@@ -812,19 +786,24 @@ pub(crate) struct LegendMetrics {
     pub handle_w: f64,
     /// Handle-to-text gap (px).
     pub handle_text: f64,
+    pub column_gap: f64,
+    pub row_gap: f64,
+    pub title_gap: f64,
+    pub frame_fill: crate::render::backend::Rgba,
+    pub frame_outline: crate::render::backend::Rgba,
+    pub frame_stroke_width: f32,
+    pub frame_radius: f64,
 }
 
 impl LegendMetrics {
-    /// Compute metrics from canvas dimensions.
-    /// Uses `min(canvas_w, canvas_h)` as the reference for scaling.
-    pub fn from_canvas(canvas_w: f64, canvas_h: f64) -> Self {
-        let scale = canvas_w.min(canvas_h) / REF_SIZE;
-        let font_size = (BASE_FONT * scale).clamp(MIN_FONT, MAX_FONT);
-        let pad = BORDER_PAD_FACTOR * font_size;
-        let entry_h = font_size + LABEL_SPACING_FACTOR * font_size;
-        let title_h = TITLE_HEIGHT_FACTOR * font_size;
-        let handle_w = HANDLE_LENGTH_FACTOR * font_size;
-        let handle_text = HANDLE_TEXT_PAD_FACTOR * font_size;
+    /// Complete role-local metrics do not depend on the outer root dimensions.
+    pub(crate) fn from_theme(theme: &crate::theme::ResolvedTheme) -> Self {
+        let font_size = f64::from(theme.typography.legend_label.font_size);
+        let pad = theme.legend.padding;
+        let entry_h = theme.typography.legend_label.line_height() + theme.legend.row_gap;
+        let title_h = theme.typography.legend_title.line_height() + theme.legend.title_gap;
+        let handle_w = theme.legend.key_width;
+        let handle_text = theme.legend.key_label_gap;
         Self {
             font_size,
             pad,
@@ -832,6 +811,13 @@ impl LegendMetrics {
             title_h,
             handle_w,
             handle_text,
+            column_gap: theme.legend.column_gap,
+            row_gap: theme.legend.row_gap,
+            title_gap: theme.legend.title_gap,
+            frame_fill: theme.legend.frame_fill,
+            frame_outline: theme.legend.frame_outline,
+            frame_stroke_width: theme.legend.frame_stroke_width,
+            frame_radius: theme.legend.frame_radius,
         }
     }
 }
@@ -916,7 +902,6 @@ impl Legend {
     pub(crate) fn measure_outside(
         title: &str,
         entries: std::sync::Arc<[LegendEntry]>,
-        root: (u32, u32),
         available: (f64, f64),
         horizontal: bool,
         compact: bool,
@@ -933,7 +918,7 @@ impl Legend {
         if !available.0.is_finite() || !available.1.is_finite() {
             return Err(Error::Render("nonfinite guide assignment".into()));
         }
-        let metrics = LegendMetrics::from_canvas(f64::from(root.0), f64::from(root.1));
+        let metrics = LegendMetrics::from_theme(theme);
         let font_size = metrics.font_size.round() as u32;
         let edge_pad = metrics.pad + GLYPH_EDGE_PAD_FACTOR * f64::from(font_size);
         let inner_width = available.0 - 2.0 * metrics.pad;
@@ -944,17 +929,12 @@ impl Legend {
                 "outside guide has no positive content extent",
             )));
         }
-        let mut title_appearance = theme.legacy_text_appearance(
-            (metrics.font_size * 1.1).round() as u32,
-            crate::TextWeight::Normal,
-        );
-        title_appearance.paint = (60, 60, 60).into();
-        let mut appearance = theme.legacy_text_appearance(font_size, crate::TextWeight::Normal);
-        appearance.paint = (40, 40, 40).into();
+        let title_appearance = &theme.typography.legend_title;
+        let appearance = &theme.typography.legend_label;
         let title_plan = match fit::text(
             theme,
             title,
-            &title_appearance,
+            title_appearance,
             inner_width,
             PhysicalTextAlignment::Start,
             "outside legend title",
@@ -963,7 +943,7 @@ impl Legend {
             FitOutcome::Measured(plan) => plan,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
-        let title_gap = (metrics.title_h - f64::from(title_appearance.font_size)).max(0.0);
+        let title_gap = metrics.title_gap;
         let body_height = inner_height - title_plan.height() - title_gap;
         if body_height <= 0.0 {
             return Ok(FitOutcome::Miss(scope.failure(
@@ -971,11 +951,11 @@ impl Legend {
                 "outside legend title leaves no entry height",
             )));
         }
-        let gap = COLUMN_SPACING_FACTOR * metrics.font_size;
-        let row_gap = (metrics.entry_h - f64::from(font_size) * 1.2).max(0.0);
+        let gap = metrics.column_gap;
+        let row_gap = metrics.row_gap;
         let zero = theme.measure_legacy_appearance_text(
             "0",
-            &appearance,
+            appearance,
             PhysicalTextAlignment::Start,
             "legend metric probe",
             false,
@@ -996,7 +976,7 @@ impl Legend {
         )?;
         for entry in entries.iter() {
             let (hard, natural) =
-                fit::intrinsic_widths(theme, &entry.label, &appearance, "legend entry intrinsic")?;
+                fit::intrinsic_widths(theme, &entry.label, appearance, "legend entry intrinsic")?;
             let key = metrics.handle_w.max(2.0 * entry.glyph_extent());
             let chrome = crate::layout::kernel::required_length(key + metrics.handle_text)?;
             widths.push((
@@ -1073,7 +1053,7 @@ impl Legend {
             let plan = match fit::text(
                 theme,
                 &entry.label,
-                &appearance,
+                appearance,
                 allocated - chrome,
                 PhysicalTextAlignment::Start,
                 "outside legend entry",
@@ -1155,7 +1135,7 @@ impl Legend {
             available_height: available.1,
             title_block: TextBlock::from_resolved(title_plan),
             entry_blocks,
-            font_family: theme.font_family.clone(),
+            font_family: theme.typography.legend_label.stack.clone(),
             layout,
         }))
     }
@@ -1176,8 +1156,18 @@ impl Legend {
             self.metrics.title_h,
             self.metrics.handle_w,
             self.metrics.handle_text,
+            self.metrics.column_gap,
+            self.metrics.row_gap,
+            self.metrics.title_gap,
+            f64::from(self.metrics.frame_stroke_width),
+            self.metrics.frame_radius,
         ] {
             round.observe_number(metric)?;
+        }
+        for paint in [self.metrics.frame_fill, self.metrics.frame_outline] {
+            for channel in [paint.red(), paint.green(), paint.blue(), paint.alpha()] {
+                round.observe_count(usize::from(channel))?;
+            }
         }
         round.observe_count(self.entry_blocks.len())?;
         round.observe_string(&self.font_family)?;
@@ -1239,28 +1229,14 @@ impl Legend {
             .map_err(|error| Error::Render(format!("legend entry Arc admission: {error}")))?;
         // Stable Arc has no fallible slice constructor; admit its exact layout first.
         let entries: std::sync::Arc<[LegendEntry]> = entries.into();
-        let metrics = LegendMetrics::from_canvas(canvas_w, canvas_h);
+        let metrics = LegendMetrics::from_theme(theme);
         let title_maximum_width = (canvas_w * 0.5).max(metrics.font_size);
         let entry_maximum_width = (canvas_w * 0.35).max(metrics.font_size);
-        let title_font_size = (metrics.font_size * 1.1).round() as u32;
-        let entry_font_size = metrics.font_size.round() as u32;
-        let title_appearance = crate::theme::TextAppearance {
-            stack: copy_legend_string(&theme.font_family, theme)?,
-            paint: (60, 60, 60).into(),
-            font_size: title_font_size,
-            weight: crate::TextWeight::Normal,
-            line_height_multiplier: 1.2,
-        };
-        let entry_appearance = crate::theme::TextAppearance {
-            stack: copy_legend_string(&theme.font_family, theme)?,
-            paint: (40, 40, 40).into(),
-            font_size: entry_font_size,
-            weight: crate::TextWeight::Normal,
-            line_height_multiplier: 1.2,
-        };
+        let title_appearance = &theme.typography.legend_title;
+        let entry_appearance = &theme.typography.legend_label;
         let title_block = TextBlock::from_resolved(theme.plan_legacy_appearance_text(
             title,
-            &title_appearance,
+            title_appearance,
             title_maximum_width,
             PhysicalTextAlignment::Start,
             "legend title",
@@ -1272,7 +1248,7 @@ impl Legend {
                 theme
                     .plan_legacy_appearance_text(
                         &entry.label,
-                        &entry_appearance,
+                        entry_appearance,
                         entry_maximum_width,
                         PhysicalTextAlignment::Start,
                         "legend entry",
@@ -1288,7 +1264,7 @@ impl Legend {
             available_height: canvas_h * 0.8,
             title_block,
             entry_blocks,
-            font_family: copy_legend_string(&theme.font_family, theme)?,
+            font_family: copy_legend_string(&theme.typography.legend_label.stack, theme)?,
             layout: LegendLayout {
                 width: 0.0,
                 height: 0.0,
@@ -1503,10 +1479,18 @@ impl Legend {
         let ry_bot = y + self.glyph_edge_pad() + self.title_half_height() - box_h;
 
         let bg_fill = FillStyle {
-            color: (255, 255, 255),
-            stroke: (200, 200, 200),
-            stroke_width: 1.0,
-            opacity: FRAME_ALPHA,
+            color: (
+                m.frame_fill.red(),
+                m.frame_fill.green(),
+                m.frame_fill.blue(),
+            ),
+            stroke: (
+                m.frame_outline.red(),
+                m.frame_outline.green(),
+                m.frame_outline.blue(),
+            ),
+            stroke_width: m.frame_stroke_width,
+            opacity: f64::from(m.frame_fill.alpha()) / 255.0,
         };
         emit(LegendCall::Background(
             [
@@ -1514,7 +1498,7 @@ impl Legend {
                 ry_bot + 0.5,
                 box_w - 1.0,
                 box_h - 1.0,
-                CORNER_RADIUS,
+                m.frame_radius,
             ],
             bg_fill,
         ))?;
@@ -1577,11 +1561,11 @@ impl Legend {
     }
 
     fn title_font_size(&self) -> f64 {
-        (self.metrics.font_size * 1.1).round()
+        f64::from(self.title_block.plan().style.font_size)
     }
 
     fn entry_font_size(&self) -> f64 {
-        self.metrics.font_size.round()
+        self.metrics.font_size
     }
 
     fn title_half_height(&self) -> f64 {
@@ -1615,7 +1599,7 @@ impl Legend {
     }
 
     fn column_spacing(&self) -> f64 {
-        COLUMN_SPACING_FACTOR * self.metrics.font_size
+        self.metrics.column_gap
     }
 
     fn column_widths(
@@ -1741,7 +1725,7 @@ mod tests {
         let (resources, legend, _) = run(None);
         let legend = legend.unwrap();
         assert_eq!(legend.entry_blocks.len(), 16);
-        assert_eq!(legend.layout.columns, 1);
+        assert_eq!(legend.layout.columns, 3);
         let visits = resources.usage().unwrap().1;
         let bytes = resources.byte_usage().unwrap();
         for limits in [(visits - 1, bytes), (visits, bytes - 1)] {
@@ -1900,6 +1884,42 @@ mod tests {
     }
 
     #[test]
+    fn legend_text_roles_do_not_scale_with_outer_root_size() {
+        let theme = crate::Theme::Publication.resolve();
+        let smaller = Legend::new(
+            "group",
+            vec![entry("one"), entry("two")],
+            640.0,
+            480.0,
+            &theme,
+        )
+        .unwrap();
+        let larger = Legend::new(
+            "group",
+            vec![entry("one"), entry("two")],
+            1600.0,
+            1200.0,
+            &theme,
+        )
+        .unwrap();
+        assert_eq!(
+            smaller.metrics.font_size.to_bits(),
+            larger.metrics.font_size.to_bits()
+        );
+        assert_eq!(smaller.metrics.pad.to_bits(), larger.metrics.pad.to_bits());
+        assert_eq!(
+            smaller.title_block.plan().style.font_size,
+            theme.typography.legend_title.font_size
+        );
+        assert!(smaller.entry_blocks.iter().all(|entry| {
+            entry.plan().style.font_size == theme.typography.legend_label.font_size
+        }));
+        assert!(larger.entry_blocks.iter().all(|entry| {
+            entry.plan().style.font_size == theme.typography.legend_label.font_size
+        }));
+    }
+
+    #[test]
     fn compact_vertical_flow_remeasures_labels_and_fits_two_columns() {
         use crate::layout::fit::FitOutcome;
         let theme = crate::Theme::Publication.resolve();
@@ -1908,7 +1928,6 @@ mod tests {
         let probe = match Legend::measure_outside(
             "group",
             std::sync::Arc::clone(&entries),
-            (640, 480),
             (500.0, 1000.0),
             false,
             false,
@@ -1921,8 +1940,8 @@ mod tests {
             FitOutcome::Measured(guide) => guide,
             FitOutcome::Miss(reason) => panic!("{reason}"),
         };
-        let row_gap = probe.metrics.entry_h - probe.entry_font_size() * 1.2;
-        let title_gap = (probe.metrics.title_h - probe.title_font_size()).max(0.0);
+        let row_gap = probe.metrics.row_gap;
+        let title_gap = probe.metrics.title_gap;
         let height = 2.0 * probe.glyph_edge_pad()
             + probe.title_block.height()
             + title_gap
@@ -1935,7 +1954,6 @@ mod tests {
             Legend::measure_outside(
                 "group",
                 std::sync::Arc::clone(&entries),
-                (640, 480),
                 (width, height),
                 false,
                 false,
@@ -1949,7 +1967,6 @@ mod tests {
         let compact = match Legend::measure_outside(
             "group",
             entries,
-            (640, 480),
             (width, height),
             false,
             true,

@@ -40,23 +40,12 @@ fn census_borrows_retained_formatted_values_in_render_order() {
     )
     .unwrap();
     let source = inputs.attach(source).unwrap();
-    let mut sources = Vec::new();
-    text_census(retained(&source).unwrap(), |source| {
-        sources.push(match source {
-            crate::font::canonical::CensusSource::Formatted(arguments) => {
-                crate::font::canonical::format_census_source(arguments, None)
-                    .map_err(|error| Error::Render(error.to_string()))?
-            }
-            crate::font::canonical::CensusSource::Text(std::borrow::Cow::Borrowed(text)) => {
-                text.to_owned()
-            }
-            crate::font::canonical::CensusSource::Text(std::borrow::Cow::Owned(_)) => {
-                panic!("census must not build formatted String drafts")
-            }
-        });
-        Ok(())
-    })
-    .unwrap();
+    let marks = retained(&source).unwrap();
+    let sources: Vec<_> = marks
+        .guide_labels()
+        .chain(marks.annotation_labels())
+        .chain(marks.missing_guide_label())
+        .collect();
     assert_eq!(
         sources,
         [
@@ -89,17 +78,20 @@ fn census_stops_on_first_admission_refusal_without_visiting_later_values() {
         |stage| {
             stage.font_resources().claim_visits(1_000_000).unwrap();
             let mut visits = 0;
-            let result = text_census(retained(&source).unwrap(), |source| {
-                visits += 1;
-                let crate::font::canonical::CensusSource::Text(std::borrow::Cow::Borrowed(source)) =
-                    source
-                else {
-                    panic!("numeric source must borrow prepared text")
-                };
-                crate::font::canonical::format_census_source(format_args!("{source}"), Some(stage))
+            let marks = retained(&source).unwrap();
+            let result = marks
+                .guide_labels()
+                .chain(marks.annotation_labels())
+                .chain(marks.missing_guide_label())
+                .try_for_each(|source| {
+                    visits += 1;
+                    crate::font::canonical::format_census_source(
+                        format_args!("{source}"),
+                        Some(stage),
+                    )
                     .map(|_| ())
                     .map_err(|error| Error::Render(error.to_string()))
-            });
+                });
             assert!(result
                 .unwrap_err()
                 .to_string()

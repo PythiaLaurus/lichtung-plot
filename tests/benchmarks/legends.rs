@@ -421,7 +421,7 @@ fn shared_case(facet: bool, pressure: bool, edge: LegendPosition) -> CaseMeasure
             2,
             4,
             if facet { 0 } else { 12 },
-            if facet { 29 } else { 40 },
+            if facet { 30 } else { 41 },
         )
     };
     assert_eq!(sample.observations.roots.len(), rounds);

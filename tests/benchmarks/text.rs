@@ -47,7 +47,7 @@ fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
     } else if long || ambiguous {
         assert_eq!(
             trials,
-            if ambiguous { 96 } else { 400 },
+            if ambiguous { 96 } else { 403 },
             "long labels must exercise actual prefix candidates: {:?}",
             sample.observations.roots
         );
@@ -55,14 +55,14 @@ fn heatmap_case(long: bool, wrap: bool, ambiguous: bool) -> CaseMeasurement {
         assert_eq!(trials, 0, "full-label width checks are not prefix trials");
     }
     if long && !wrap && !ambiguous {
-        // 2026-09-11: current-policy work, not an optimization of the old 500 expectation.
+        // Guide typography changes the reserved width and the actual prefix candidates.
         let roots = sample
             .observations
             .roots
             .iter()
             .map(|root| (root.ordinal, root.heatmap_prefix_trials, root.successful))
             .collect::<Vec<_>>();
-        assert_eq!(roots, [(0, 200, false), (1, 200, true)]);
+        assert_eq!(roots, [(0, 202, false), (1, 201, true)]);
         assert_eq!(trials, roots.iter().map(|root| root.1).sum::<u64>());
         println!("heatmap_prefix_roots,{roots:?}");
     }

@@ -323,10 +323,7 @@ impl FacetPlan {
                             | LegendPosition::OutsideBottom
                             | LegendPosition::OutsideBottomRight
                     );
-                    let metrics = crate::decorations::legend::LegendMetrics::from_canvas(
-                        f64::from(source.width()),
-                        f64::from(source.height()),
-                    );
+                    let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
                     let gap = metrics.pad.max(8.0);
                     let available = (
                         canvas_layout.panel_box.width()
@@ -337,7 +334,6 @@ impl FacetPlan {
                     let guide = match crate::decorations::legend::Legend::measure_outside(
                         title,
                         std::sync::Arc::clone(&legend_entries),
-                        (source.width(), source.height()),
                         available,
                         horizontal,
                         compact,

@@ -187,15 +187,8 @@ impl PreparedBeeswarm {
         Ok(())
     }
 
-    pub(crate) fn text_census(
-        &self,
-        mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
-    ) -> Result<(), Error> {
-        visit(self.color_label.as_str().into())?;
-        for label in &self.values {
-            visit(label.as_str().into())?;
-        }
-        Ok(())
+    pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
+        self.values.iter().map(String::as_str)
     }
 }
 
@@ -220,7 +213,6 @@ pub(crate) fn measure(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let text = context.producer_text()?;
-    let detail_font_size = theme.detail_font_size;
     let [high_label, low_label] = &prepared.values;
     let color_label = &prepared.color_label;
     let guide_scope = context
@@ -231,7 +223,7 @@ pub(crate) fn measure(
             crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 color_label,
-                &theme.legacy_text_appearance(detail_font_size, crate::TextWeight::Normal),
+                &theme.typography.legend_title,
                 context.panel.height().min(150.0),
                 PhysicalTextAlignment::Center,
                 "beeswarm colorbar title",
@@ -242,11 +234,12 @@ pub(crate) fn measure(
     data.reserve_source(&mut values, 2)?;
     for label in [high_label, low_label] {
         values.push(text.plan(label, "beeswarm colorbar value", || {
-            Ok(theme.measure_legacy_text(
+            Ok(theme.measure_legacy_appearance_text(
                 label,
-                detail_font_size,
+                &theme.typography.legend_label,
                 PhysicalTextAlignment::Start,
                 "beeswarm colorbar value",
+                false,
             )?)
         })?);
     }
@@ -257,7 +250,7 @@ pub(crate) fn measure(
     let colorbar_reserve = (34.0 + value_width).max(
         65.0 + color_label_block.lines().len().saturating_sub(1) as f64
             * color_label_block.line_height()
-            + f64::from(detail_font_size) / 2.0,
+            + f64::from(theme.typography.legend_label.font_size) / 2.0,
     ) + 4.0;
     if context.panel.width() - colorbar_reserve < 100.0 {
         return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide,
@@ -493,7 +486,7 @@ mod fit_tests {
         );
 
         let mut invalid = crate::Theme::Publication.resolve();
-        invalid.detail_font_size = 0;
+        invalid.typography.legend_title.font_size = 0;
         invalid.prepare_font_environment().unwrap();
         assert!(plot
             .preflight_measurement(

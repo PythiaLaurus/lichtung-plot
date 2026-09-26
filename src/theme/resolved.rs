@@ -92,6 +92,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) surfaces: SurfaceAppearance,
     /// Complete foundational text roles.
     pub(crate) typography: FoundationalTypography,
+    /// Legend typography-adjacent chrome with owner-local lengths.
+    pub(crate) legend: LegendAppearance,
     /// Nonsemantic axis chrome and its local spacing.
     pub(crate) axes: AxisAppearance,
     /// Root and panel composition relationships.
@@ -929,6 +931,22 @@ pub(crate) struct FoundationalTypography {
     pub(crate) tick_label: TextAppearance,
     /// Significance-label default before an exact caller override.
     pub(crate) significance_label: TextAppearance,
+    pub(crate) legend_title: TextAppearance,
+    pub(crate) legend_label: TextAppearance,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LegendAppearance {
+    pub(crate) padding: f64,
+    pub(crate) key_width: f64,
+    pub(crate) key_label_gap: f64,
+    pub(crate) row_gap: f64,
+    pub(crate) column_gap: f64,
+    pub(crate) title_gap: f64,
+    pub(crate) frame_fill: Rgba,
+    pub(crate) frame_outline: Rgba,
+    pub(crate) frame_stroke_width: f32,
+    pub(crate) frame_radius: f64,
 }
 
 impl FoundationalTypography {
@@ -1138,6 +1156,20 @@ fn resolved_theme(
                 SIGNIFICANCE_FONT_SIZE,
                 1.2,
             ),
+            legend_title: text_appearance(&stack, Rgba::rgb(60, 60, 60), 12, 1.2),
+            legend_label: text_appearance(&stack, Rgba::rgb(40, 40, 40), 11, 1.2),
+        },
+        legend: LegendAppearance {
+            padding: 8.8,
+            key_width: 11.0,
+            key_label_gap: 8.8,
+            row_gap: 3.3,
+            column_gap: 13.2,
+            title_gap: 7.8,
+            frame_fill: Rgba::new(255, 255, 255, 204),
+            frame_outline: Rgba::rgb(200, 200, 200),
+            frame_stroke_width: 1.0,
+            frame_radius: 2.0,
         },
         axes: AxisAppearance {
             frame: Some(FrameAppearance {
@@ -1413,6 +1445,10 @@ mod tests {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one complete built-in owner fixture keeps every resolved role explicit"
+    )]
     fn expected_theme(theme: Theme) -> ResolvedTheme {
         let (colors, expected) = expected_preset(theme);
         let stack = crate::DEFAULT_FONT_FAMILY_STACK.to_owned();
@@ -1459,6 +1495,20 @@ mod tests {
                 axis_title: text(foreground, expected.axis_title_size, 1.2),
                 tick_label: text(foreground, 16, 1.2),
                 significance_label: text(foreground, 16, 1.2),
+                legend_title: text(Rgba::rgb(60, 60, 60), 12, 1.2),
+                legend_label: text(Rgba::rgb(40, 40, 40), 11, 1.2),
+            },
+            legend: LegendAppearance {
+                padding: 8.8,
+                key_width: 11.0,
+                key_label_gap: 8.8,
+                row_gap: 3.3,
+                column_gap: 13.2,
+                title_gap: 7.8,
+                frame_fill: Rgba::new(255, 255, 255, 204),
+                frame_outline: Rgba::rgb(200, 200, 200),
+                frame_stroke_width: 1.0,
+                frame_radius: 2.0,
             },
             axes: AxisAppearance {
                 frame: Some(FrameAppearance {

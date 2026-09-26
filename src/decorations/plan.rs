@@ -288,10 +288,7 @@ pub(crate) fn plan_panel_with_context(
             guide_scope.ordinal = scope.ordinal;
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
             let ink = round.insets(address, FeedbackKind::OwnedInk);
-            let metrics = crate::decorations::legend::LegendMetrics::from_canvas(
-                f64::from(plot.width()),
-                f64::from(plot.height()),
-            );
+            let metrics = crate::decorations::legend::LegendMetrics::from_theme(context.theme);
             let gap = metrics.pad.max(8.0);
             let available = (
                 context.panel.width()
@@ -310,7 +307,6 @@ pub(crate) fn plan_panel_with_context(
             let guide = match Legend::measure_outside(
                 &title,
                 std::sync::Arc::clone(&entries),
-                (plot.width(), plot.height()),
                 available,
                 horizontal,
                 compact,

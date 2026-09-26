@@ -219,19 +219,22 @@ pub(crate) fn prepare_intrinsics(
     Ok(minimum)
 }
 
-pub(crate) fn text_census(
-    prepared: &HeatmapData,
-    mut visit: impl FnMut(crate::font::canonical::CensusSource<'_>) -> Result<(), Error>,
-) -> Result<(), Error> {
-    let values = prepared.colorbar_values.len() - usize::from(prepared.has_missing);
-    for label in prepared.colorbar_values[..values]
-        .iter()
-        .chain(prepared.value_labels.iter().flatten())
-        .chain(&prepared.colorbar_values[values..])
-    {
-        visit(label.as_str().into())?;
+impl HeatmapData {
+    pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
+        self.colorbar_values[..self.colorbar_values.len() - usize::from(self.has_missing)]
+            .iter()
+            .map(String::as_str)
     }
-    Ok(())
+
+    pub(crate) fn missing_guide_label(&self) -> Option<&str> {
+        self.has_missing
+            .then(|| self.colorbar_values.last().map(String::as_str))
+            .flatten()
+    }
+
+    pub(crate) fn annotation_labels(&self) -> impl Iterator<Item = &str> {
+        self.value_labels.iter().flatten().map(String::as_str)
+    }
 }
 
 pub(crate) fn measure(
@@ -246,7 +249,6 @@ pub(crate) fn measure(
     let data = context.data.with_axis_resources(&resources);
     let text = context.producer_text()?;
     let color_label = &prepared.color_label;
-    let detail_font_size = theme.detail_font_size;
     let guide_scope = context
         .fit_scope()
         .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
@@ -260,7 +262,7 @@ pub(crate) fn measure(
             crate::layout::fit::measured(crate::layout::fit::text(
                 theme,
                 color_label,
-                &theme.legacy_text_appearance(detail_font_size, crate::TextWeight::Normal),
+                &theme.typography.legend_title,
                 title_width,
                 PhysicalTextAlignment::Center,
                 "heatmap colorbar title",
@@ -271,11 +273,12 @@ pub(crate) fn measure(
     data.reserve_source(&mut value_plans, prepared.colorbar_values.len())?;
     for label in &prepared.colorbar_values {
         value_plans.push(text.plan(label, "heatmap colorbar value", || {
-            Ok(theme.measure_legacy_text(
+            Ok(theme.measure_legacy_appearance_text(
                 label,
-                detail_font_size,
+                &theme.typography.legend_label,
                 PhysicalTextAlignment::Start,
                 "heatmap colorbar value",
+                false,
             )?)
         })?);
     }
@@ -286,7 +289,7 @@ pub(crate) fn measure(
     let colorbar_reserve = (36.0 + value_width).max(
         73.0 + color_label_block.lines().len().saturating_sub(1) as f64
             * color_label_block.line_height()
-            + f64::from(detail_font_size) / 2.0,
+            + f64::from(theme.typography.legend_label.font_size) / 2.0,
     ) + 4.0;
     let minimum = prepared.minimum;
     if context.panel.width() - colorbar_reserve < minimum.body().0 {

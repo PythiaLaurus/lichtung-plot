@@ -441,9 +441,10 @@ fn waterfall_close_total_annotations_are_measured_disjoint_and_in_bounds() {
 }
 
 #[test]
-fn affected_detail_text_uses_publication_detail_typography() {
-    let expected = crate::Theme::Publication.resolve().detail_font_size;
-    assert!(expected >= 11);
+fn detail_and_guide_text_use_publication_roles() {
+    let theme = crate::Theme::Publication.resolve();
+    let detail_size = theme.detail_font_size;
+    assert!(detail_size >= 11);
 
     let beeswarm_data = beeswarm_data(&[0.0, 1.0]);
     let beeswarm = beeswarm_chart(&beeswarm_data, None).color_label("Beeswarm detail");
@@ -473,14 +474,24 @@ fn affected_detail_text_uses_publication_detail_typography() {
         .render_kind(PlotKind::Coefficient, &mut coefficient_backend)
         .unwrap();
 
-    let detail_sizes = [
+    assert_eq!(
         text_style(&beeswarm_backend, "Beeswarm detail").font_size,
-        text_style(&beeswarm_backend, "0.000").font_size,
+        theme.typography.legend_title.font_size
+    );
+    assert_eq!(
         text_style(&heatmap_backend, "Heatmap detail").font_size,
-        text_style(&heatmap_backend, "Missing").font_size,
+        theme.typography.legend_title.font_size
+    );
+    for (backend, label) in [(&beeswarm_backend, "0.000"), (&heatmap_backend, "Missing")] {
+        assert_eq!(
+            text_style(backend, label).font_size,
+            theme.typography.legend_label.font_size
+        );
+    }
+    assert_eq!(
         text_style(&coefficient_backend, "1.25 detail").font_size,
-    ];
-    assert!(detail_sizes.into_iter().all(|size| size == expected));
+        detail_size
+    );
 }
 
 fn text_style<'a>(backend: &'a RecordingBackend, text: &str) -> &'a TextStyle {

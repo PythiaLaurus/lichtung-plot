@@ -74,22 +74,21 @@ fn svg<K: lichtung_plot::kind::Marker>(plot: Plot<K>) -> String {
 
 #[test]
 fn native_interaction_preserves_exact_root_svg_bytes() {
-    // 2026-09-14 T5a6d: canonical centers precede triangle construction; not
-    // pre-native mark parity. Historical 31fb8a2 styled-root fingerprints are
-    // in docs/local-search-benchmarks.md, "Final Numerical Follow-Up".
+    // T5b2a: theme-owned title, entry, and chrome roles replace root-scaled
+    // guide typography. T5a fingerprints remain attributed in the benchmarks.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (10909, 0x2a73_b002_705b_088f_u64),
-                (11257, 0xf50a_ce1d_7af7_e272),
+                (10926, 0x1fcd_5bb2_d9d9_7f64_u64),
+                (11270, 0x4a8e_0d36_bd2c_eaf0),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (10516, 0x7e2e_76a6_f80f_fdd4),
-                (10864, 0x608c_b595_d181_299d),
+                (10533, 0x4667_21ab_5c05_26b2),
+                (10877, 0x4235_a732_5bfa_9f36),
             ],
         ),
     ] {

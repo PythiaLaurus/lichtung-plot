@@ -2,16 +2,15 @@ use super::*;
 
 #[test]
 fn marginal_full_svg_fingerprints() {
-    // 2026-09-14 T5a6d: canonical projection/title midpoints and ink-aware
-    // endpoint anchors. Historical 13ce394 fingerprints and inspected deltas are
-    // in docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
+    // T5b2a: visible guides use theme-owned typography and chrome; hidden and
+    // absent guides retain their T5a fingerprints attributed in the benchmarks.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
                 (21377, 0x23ab_035b_b387_3cd5),
-                (22526, 0x1db2_ae0c_f480_f34f),
-                (22698, 0x09fa_0b62_35a6_4714),
+                (22431, 0x10de_42b6_8b46_03e1),
+                (22379, 0x04ea_2623_2bec_117e),
                 (20238, 0x3f3b_8cdf_fa3c_fdc4),
             ],
         ),
@@ -19,8 +18,8 @@ fn marginal_full_svg_fingerprints() {
             lichtung_plot::Theme::Science,
             [
                 (20930, 0x0be9_5cd7_ce39_53a1),
-                (22222, 0x7ad7_81ba_0fb2_bde2),
-                (22234, 0x7ab1_17b8_ed15_922c),
+                (22125, 0x8717_d641_a8a8_efc5),
+                (22074, 0xf953_4b68_c21f_3d55),
                 (19917, 0xac55_91db_9566_f8f8),
             ],
         ),

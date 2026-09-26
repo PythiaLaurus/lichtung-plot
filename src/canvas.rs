@@ -2980,22 +2980,28 @@ impl Canvas {
             }
         }
 
-        if let Some(PreparedGuideDescriptor::Continuous(guide)) = shared_guide {
+        if let Some(guide) = shared_guide {
             let guide_owner = root.prepared_child(
                 crate::layout::AddressRole::CanvasSharedLegend,
                 0,
                 prepared_stage,
             )?;
-            let title_appearance = themes.root().legacy_text_appearance(
-                themes.root().composition_title_font_size,
-                crate::TextWeight::Normal,
-            );
-            let label_appearance = themes
-                .root()
-                .legacy_text_appearance(themes.root().label_font_size, crate::TextWeight::Normal);
-            if !guide.title.is_empty() {
+            let title_appearance = &themes.root().typography.legend_title;
+            let label_appearance = &themes.root().typography.legend_label;
+            let title = match guide {
+                PreparedGuideDescriptor::Discrete((title, _)) => title.as_str(),
+                PreparedGuideDescriptor::Continuous(guide) => guide.title.as_str(),
+            };
+            if !title.is_empty() {
                 let address = guide_owner.prepared_child(
-                    crate::layout::AddressRole::GuideTitle,
+                    match guide {
+                        PreparedGuideDescriptor::Discrete(_) => {
+                            crate::layout::AddressRole::LegendTitle
+                        }
+                        PreparedGuideDescriptor::Continuous(_) => {
+                            crate::layout::AddressRole::GuideTitle
+                        }
+                    },
                     0,
                     prepared_stage,
                 )?;
@@ -3004,16 +3010,39 @@ impl Canvas {
                     address,
                     crate::layout::PreparedTextRole::LegendTitle,
                     0,
-                    &guide.title,
-                    &title_appearance,
+                    title,
+                    title_appearance,
                     prepared_stage,
                 )?;
             }
-            for (index, label) in guide.labels.iter().enumerate() {
+            let (discrete, continuous) = match guide {
+                PreparedGuideDescriptor::Discrete((_, entries)) => (Some(entries), None),
+                PreparedGuideDescriptor::Continuous(guide) => (None, Some(&guide.labels)),
+            };
+            let labels = discrete
+                .into_iter()
+                .flat_map(|entries| {
+                    entries
+                        .iter()
+                        .map(crate::decorations::legend::LegendEntry::display_label)
+                })
+                .chain(
+                    continuous
+                        .into_iter()
+                        .flat_map(|labels| labels.iter().map(String::as_str)),
+                );
+            for (index, label) in labels.enumerate() {
                 let ordinal = u32::try_from(index)
                     .map_err(|_| Error::Render("shared guide label ordinal overflow".into()))?;
                 let address = guide_owner.prepared_child(
-                    crate::layout::AddressRole::GuideLabel,
+                    match guide {
+                        PreparedGuideDescriptor::Discrete(_) => {
+                            crate::layout::AddressRole::LegendLabel
+                        }
+                        PreparedGuideDescriptor::Continuous(_) => {
+                            crate::layout::AddressRole::GuideLabel
+                        }
+                    },
                     ordinal,
                     prepared_stage,
                 )?;
@@ -3023,11 +3052,14 @@ impl Canvas {
                     crate::layout::PreparedTextRole::LegendLabel,
                     ordinal,
                     label,
-                    &label_appearance,
+                    label_appearance,
                     prepared_stage,
                 )?;
             }
-            if let Some(missing) = &guide.missing {
+            if let Some(missing) = match guide {
+                PreparedGuideDescriptor::Discrete(_) => None,
+                PreparedGuideDescriptor::Continuous(guide) => guide.missing.as_ref(),
+            } {
                 let address = guide_owner.prepared_child(
                     crate::layout::AddressRole::GuideMissingBlock,
                     0,
@@ -3039,7 +3071,7 @@ impl Canvas {
                     crate::layout::PreparedTextRole::LegendLabel,
                     0,
                     &missing.label,
-                    &label_appearance,
+                    label_appearance,
                     prepared_stage,
                 )?;
             }
@@ -3487,7 +3519,7 @@ impl Canvas {
     fn build_canvas_attempt(
         &self,
         prepared: &PreparedCanvasRound,
-        assigned: crate::layout::RootSize,
+        _assigned: crate::layout::RootSize,
         round: &mut crate::layout::kernel::FeedbackRound,
         guide_trial: Option<(crate::LegendPosition, bool)>,
         compact_changes: &mut bool,
@@ -3498,7 +3530,6 @@ impl Canvas {
         let guide_owner = root_address.child(crate::layout::AddressRole::CanvasSharedLegend, 0)?;
         let scope = FitScope::new(&root_address, round.attempt_ordinal(&guide_owner)?);
         let guide_scope = FitScope::new(&guide_owner, scope.ordinal);
-        let (width, height) = assigned.dimensions();
         let themes = Arc::clone(&prepared.themes);
         let canvas_layout = prepared.canvas_layout.clone();
         let full_outer = canvas_layout.panel_box;
@@ -3528,10 +3559,7 @@ impl Canvas {
                 edge,
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
-            let metrics = crate::decorations::legend::LegendMetrics::from_canvas(
-                f64::from(width),
-                f64::from(height),
-            );
+            let metrics = crate::decorations::legend::LegendMetrics::from_theme(themes.root());
             let gap = self.shared_legend_gap.unwrap_or(metrics.pad * 2.0);
             let minimum_width = self.columns as f64
                 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
@@ -3551,7 +3579,6 @@ impl Canvas {
             let legend = match Legend::measure_outside(
                 title,
                 Arc::clone(entries),
-                (width, height),
                 available,
                 horizontal,
                 compact,

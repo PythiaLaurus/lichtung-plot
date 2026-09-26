@@ -1096,7 +1096,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     label,
                     &[],
-                    &body,
+                    &theme.typography.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1111,7 +1111,7 @@ fn push_deferred_plot_requirements(
                 &mut body_index,
                 source,
                 &[],
-                &body,
+                &theme.typography.legend_title,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1126,7 +1126,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     plot.resolve_label(values.name()),
                     &[],
-                    &body,
+                    &theme.typography.legend_title,
                     prepared_stage.as_deref_mut(),
                 )?;
                 let levels = if matches!(kind, PlotKind::Scatter | PlotKind::Marginal)
@@ -1173,7 +1173,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         plot.resolve_label(value),
                         &[],
-                        &body,
+                        &theme.typography.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1186,7 +1186,7 @@ fn push_deferred_plot_requirements(
                 &mut body_index,
                 " × , ",
                 &[],
-                &body,
+                &theme.typography.legend_label,
                 prepared_stage.as_deref_mut(),
             )?;
         }
@@ -1200,7 +1200,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     source,
                     &[],
-                    &body,
+                    &theme.typography.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1213,7 +1213,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     source,
                     &[],
-                    &body,
+                    &theme.typography.legend_label,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1229,7 +1229,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         plot.resolve_label(hue),
                         &[],
-                        &body,
+                        &theme.typography.legend_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }
@@ -1297,18 +1297,44 @@ fn push_deferred_plot_requirements(
             .ok_or_else(|| {
                 Error::Render("beeswarm census requires root-prepared semantics".into())
             })?;
-        for (_, marks) in &beeswarm.panels {
-            marks.text_census(|source| {
-                push_deferred_body(
-                    requirements,
-                    &body_address,
-                    &mut body_index,
-                    source,
-                    &[],
-                    &body,
+        for (panel_index, (_, marks)) in beeswarm.panels.iter().enumerate() {
+            let guide = prepared_address_child(
+                base,
+                AddressRole::OutsideGuideRight,
+                panel_index
+                    .try_into()
+                    .map_err(|_| Error::Render("beeswarm guide panel index overflowed".into()))?,
+                prepared_stage.as_deref_mut(),
+            )?;
+            push_owned(
+                requirements,
+                prepared_address_child(
+                    &guide,
+                    AddressRole::GuideTitle,
+                    0,
                     prepared_stage.as_deref_mut(),
-                )
-            })?;
+                )?,
+                PreparedTextRole::LegendTitle,
+                0,
+                marks.color_label.as_str(),
+                &[],
+                &theme.typography.legend_title,
+                prepared_stage.as_deref_mut(),
+            )?;
+            for (index, label) in marks.guide_labels().enumerate() {
+                push_owned(
+                    requirements,
+                    prepared_address_clone(&guide, prepared_stage.as_deref_mut())?,
+                    PreparedTextRole::LegendLabel,
+                    index.try_into().map_err(|_| {
+                        Error::Render("beeswarm guide census index overflowed".into())
+                    })?,
+                    label,
+                    &[],
+                    &theme.typography.legend_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
         }
     } else if kind == PlotKind::Heatmap {
         let heatmap = interiors
@@ -1316,22 +1342,79 @@ fn push_deferred_plot_requirements(
             .ok_or_else(|| {
                 Error::Render("heatmap census requires root-prepared semantics".into())
             })?;
-        let mut visit = |source: CensusSource<'_>| {
-            push_deferred_body(
-                requirements,
-                &body_address,
-                &mut body_index,
-                source,
-                &[],
-                &body,
+        for (panel_index, (_, marks)) in heatmap.panels.iter().enumerate() {
+            let guide = prepared_address_child(
+                base,
+                AddressRole::OutsideGuideRight,
+                panel_index
+                    .try_into()
+                    .map_err(|_| Error::Render("heatmap guide panel index overflowed".into()))?,
                 prepared_stage.as_deref_mut(),
-            )
-        };
-        for (_, marks) in &heatmap.panels {
-            visit(marks.color_label.as_str().into())?;
-            crate::plots::heatmap::text_census(marks, &mut visit)?;
+            )?;
+            push_owned(
+                requirements,
+                prepared_address_child(
+                    &guide,
+                    AddressRole::GuideTitle,
+                    0,
+                    prepared_stage.as_deref_mut(),
+                )?,
+                PreparedTextRole::LegendTitle,
+                0,
+                marks.color_label.as_str(),
+                &[],
+                &theme.typography.legend_title,
+                prepared_stage.as_deref_mut(),
+            )?;
+            for (index, label) in marks.guide_labels().enumerate() {
+                push_owned(
+                    requirements,
+                    prepared_address_clone(&guide, prepared_stage.as_deref_mut())?,
+                    PreparedTextRole::LegendLabel,
+                    index.try_into().map_err(|_| {
+                        Error::Render("heatmap guide census index overflowed".into())
+                    })?,
+                    label,
+                    &[],
+                    &theme.typography.legend_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+            for label in marks.annotation_labels() {
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    label,
+                    &[],
+                    &body,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
+            if let Some(label) = marks.missing_guide_label() {
+                push_owned(
+                    requirements,
+                    prepared_address_clone(&guide, prepared_stage.as_deref_mut())?,
+                    PreparedTextRole::LegendLabel,
+                    marks.guide_labels().count().try_into().map_err(|_| {
+                        Error::Render("heatmap guide census index overflowed".into())
+                    })?,
+                    label,
+                    &[],
+                    &theme.typography.legend_label,
+                    prepared_stage.as_deref_mut(),
+                )?;
+            }
             for annotation in plot.heatmap_null_row_annotations_spec() {
-                visit(annotation.text().into())?;
+                push_deferred_body(
+                    requirements,
+                    &body_address,
+                    &mut body_index,
+                    annotation.text(),
+                    &[],
+                    &body,
+                    prepared_stage.as_deref_mut(),
+                )?;
             }
         }
     } else if plot.has_facets()

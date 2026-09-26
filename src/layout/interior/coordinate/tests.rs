@@ -685,7 +685,7 @@ fn native_real_compositions_remeasure_gutters_and_reject_guides_identically_with
         faceted: bool,
     ) -> (Plot, Option<crate::Canvas>) {
         let plot = plot
-            .hue(CategoryValues::new("group", vec!["M".repeat(34); 6]).unwrap())
+            .hue(CategoryValues::new("group", vec!["M".repeat(42); 6]).unwrap())
             .x_label("First axis line\nSecond axis line\nThird axis line")
             .size(640, 640);
         if faceted {

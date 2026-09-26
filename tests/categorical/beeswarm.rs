@@ -6,38 +6,37 @@ use super::*;
     reason = "parent fingerprints cover the complete supported composition and color matrix"
 )]
 fn beeswarm_parent_svg_fingerprints() {
-    // 2026-09-14 T5a6d: canonical projection and ink-aware endpoint anchors.
-    // Historical 0a41f1c fingerprints and inspected deltas are preserved in
-    // docs/local-search-benchmarks.md, "Final Numerical Follow-Up"; not byte parity.
+    // T5b2a: theme-owned guide typography changes colorbar text and panel reserve.
+    // Historical T5a fingerprints remain attributed in docs/local-search-benchmarks.md.
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (10946, 0x00cc_ae03_cf55_3497),
-                (10386, 0x9bd2_3e7b_85fa_aaa7),
-                (10961, 0x7fea_882a_8ad4_45d5),
-                (10678, 0xbc27_3f88_bd85_46e3),
-                (20932, 0x0908_10e0_78b4_41ab),
-                (20944, 0x354e_1563_114b_c064),
-                (20932, 0x0908_10e0_78b4_41ab),
-                (20944, 0x354e_1563_114b_c064),
-                (23546, 0x56ed_98f3_4890_4a0c),
-                (16217, 0x20c4_1435_dc3f_1d2a),
+                (10895, 0x847a_52df_86c5_10ce),
+                (11461, 0x59b6_3400_9660_be02),
+                (10893, 0x62d6_0a85_d95c_6fb7),
+                (10917, 0x4b7b_1a07_4443_da38),
+                (21065, 0x1659_4bfb_e2f5_b2d5),
+                (21073, 0x84ab_3035_cd57_8b29),
+                (21065, 0x1659_4bfb_e2f5_b2d5),
+                (21073, 0x84ab_3035_cd57_8b29),
+                (23610, 0x7e6d_5967_b41f_3d45),
+                (16319, 0x12a9_1f85_88ea_0723),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (10808, 0xebba_8167_47ab_02d5),
-                (10233, 0x1f7b_dc87_2e63_4a50),
-                (10806, 0x54c0_2423_3ca0_aa1f),
-                (10737, 0x0678_c536_f028_b9eb),
-                (20462, 0x4d76_0b94_93f9_2a03),
-                (20470, 0x105d_9e0c_e068_2c2d),
-                (20462, 0x4d76_0b94_93f9_2a03),
-                (20470, 0x105d_9e0c_e068_2c2d),
-                (21838, 0x359c_a0e8_129d_5367),
-                (15087, 0x6e84_deb3_6277_5888),
+                (10726, 0x4bc6_478a_014a_c817),
+                (10149, 0xd1c7_c4c8_2625_ebf9),
+                (10724, 0x31bd_1262_25e0_7ef2),
+                (10777, 0xf8b5_e0f6_070a_ba21),
+                (20272, 0x8c23_04d8_598f_132e),
+                (20280, 0xedd6_ee9d_c8b1_6a3e),
+                (20272, 0x8c23_04d8_598f_132e),
+                (20280, 0xedd6_ee9d_c8b1_6a3e),
+                (21650, 0xcd9c_5fdf_ab35_6c72),
+                (15052, 0xed6c_7564_e1f2_5a7f),
             ],
         ),
     ] {

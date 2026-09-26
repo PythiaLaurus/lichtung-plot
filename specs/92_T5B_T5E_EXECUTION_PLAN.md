@@ -128,7 +128,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2b3a | COMPLETE | T5b1b2b2 | `refactor(legend): classify prepared Canvas contributors` |
 | T5b1b2b3b | COMPLETE | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
 | T5b1c | COMPLETE | T5b1b | `feat(legend): merge continuous guide contributors` |
-| T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
+| T5b2 | IN PROGRESS | T5b1 | Umbrella; completes after T5b2a-c |
+| T5b2a | COMPLETE | T5b1 | `refactor(legend): resolve complete private legend roles` |
+| T5b2b | PENDING | T5b2a | `feat(legend): measure native discrete and continuous guides` |
+| T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
@@ -428,6 +431,29 @@ prepared guide ownership, and removal of the channel-inferred guide-kind gate
 are still T5b1b2b3 obligations; continuous contributors remain T5b1c.
 
 ### T5b2 — Native Discrete And Continuous Measurement
+
+The private typography/chrome migration (T5b2a) must be in active measurement,
+font census, and frozen draw before replacing flow; no root-size-scaled fallback.
+T5b2b replaces discrete/continuous assigned-width measurement using T5b1's
+descriptor. T5b2c connects the same result to Plot, facet, and Canvas enclosing
+frames and removes superseded helper-local gap/reservation logic. These steps
+share one active guide representation and are committed in order; this umbrella
+has no separate commit.
+
+T5b2a closure: active discrete Plot/facet/Canvas guides now measure and freeze
+title, label, frame, key, and spacing roles from the owning theme rather than
+deriving typography from root dimensions. Specialized Heatmap/Beeswarm guides
+use the same title and label text roles. Prepared font census admits these
+roles, including Canvas's continuous descriptor and specialized guide values;
+cell annotations remain
+body text. T5b2b adds continuous descriptor drawing and replaces the existing
+edge/flow algorithm; T5e replaces specialized colorbar packing. Updated
+affected SVG fingerprints and inspected the Beeswarm clip-structure snapshot,
+while retaining genuine right-guide
+rejection in the native cache-equivalence fixture. `just lint` and `just test`
+pass: 1,045 library tests and 468 integration tests, including 13 visual
+regressions. Logs: `/tmp/opencode/t5b2a-lint.log`,
+`/tmp/opencode/t5b2a-test.log`. T5b2b is next.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

@@ -161,7 +161,8 @@ fn shared_legend_gap_reduces_canvas_legend_separation() {
             + attribute(clip, "width").parse::<f64>().unwrap()
     };
     let default = render(None);
-    let compact = render(Some(18.0));
+    // Role-local 11px legend typography gives a 17.6px default shared gap.
+    let compact = render(Some(2.0));
     assert!(
         legend_x(&compact) - panel_right(&compact) < legend_x(&default) - panel_right(&default)
     );
