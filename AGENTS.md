@@ -28,13 +28,23 @@ Use modern Rust module layout: `foo.rs` plus `foo/` siblings. Do not add
 
 ## Testing
 
-Run the narrowest relevant checks while iterating. Small implementation stages
-can be completed and committed after focused tests and strict Clippy; `just verify`
-is not required for every such commit. Run `just verify` before closing a broad
-phase (for example T5b, T5c, T5d, or T5e), or when the scope or a failure makes
-the full gate necessary. Documentation-only changes do not require the test
-suite. Snapshot changes must be inspected and committed with the source change
-that intentionally alters SVG output.
+Run the narrowest tests that exercise the changed behavior and its affected
+callers, plus strict Clippy for code changes. A change spanning several modules
+does **not** by itself justify running all tests: identify the affected call
+paths, run focused unit tests in those modules and representative integration
+tests for the contracts they share. Expand to neighboring tests only when a
+failure or an uncovered interaction gives a concrete reason. Small stages can
+be committed after those checks.
+
+Treat `cargo test --lib`, `cargo test --tests`, `just test`, and `just verify` as
+full-suite commands, not routine regression discovery. Run one only for an
+explicit user request, a required broad-phase closure gate (such as completing
+T5b, T5c, T5d, or T5e), or a demonstrated cross-cutting failure/invariant that
+cannot be validated with a bounded set of focused tests. State the specific
+reason before running it; do not repeat a full suite after fixing one localized
+failure when its focused test and relevant neighbors suffice. Documentation-only
+changes do not require tests. Inspect snapshot changes and commit them with the
+source change that intentionally alters SVG output.
 
 Compiler validation must use `cargo clippy --locked --offline --all-targets --
 -D warnings` (or `just lint`), never `cargo check`. Pass this requirement to every
