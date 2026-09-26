@@ -124,7 +124,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2b2 | COMPLETE | T5b1b2b1 | Umbrella; completed after T5b1b2b2a-b |
 | T5b1b2b2a | COMPLETE | T5b1b2b1 | `refactor(legend): prepare point-path shared guides` |
 | T5b1b2b2b | COMPLETE | T5b1b2b2a | `refactor(legend): prepare remaining ordinary guide entries` |
-| T5b1b2b3 | PENDING | T5b1b2b2 | `refactor(legend): close discrete contributor preparation` |
+| T5b1b2b3 | IN PROGRESS | T5b1b2b2 | Umbrella; completes after T5b1b2b3a-b |
+| T5b1b2b3a | COMPLETE | T5b1b2b2 | `refactor(legend): classify prepared Canvas contributors` |
+| T5b1b2b3b | PENDING | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -309,6 +311,30 @@ entries; T5b1b2b2b covers the remaining ordinary entries;
 T5b1b2b3 connects eligible specialized discrete contributors and faceted owners,
 removes the channel-level kind inference, and proves one pre-font descriptor
 across all admitted routes. None changes the existing supported nesting matrix.
+
+T5b1b2b3a replaces the Canvas channel-level kind inference with actual prepared
+entry presence and a closed shared family dispatch, including group-only lines,
+labeled layers, hidden guides, and Marginal. T5b1b2b3b moves the facet parent's
+shared-guide compatibility to globally coordinated pre-font prepared entries;
+it retains panel body probes only for containing-frame geometry. Both must close
+before T5b1b2b3 or T5b1b can be marked complete. T5b1c separately supplies
+complete continuous descriptors under the same owner.
+
+T5b1b2b3a completion: `GuideKind` now consumes prepared semantic input and
+actual contributing entry presence, before the font census. It distinguishes
+group-only lines and genuinely labeled point layers, honors Hidden policy, and
+identifies Marginal's populated discrete guide independently of `PlotKind`.
+One closed `PreparedInteriorInputs::guide_entries` dispatcher supplies all
+20 ordinary kinds and Marginal to the Canvas's pre-font shared descriptor;
+Waterfall has no discrete entry. Matrix remains an unsupported Canvas child.
+Mixed-kind rejection and explicit per-Plot-edge refusal precede fonts. A shared
+Heatmap with no-guide Scatter or hidden guide remains kind-compatible, whereas
+Heatmap with a labeled Line layer or Marginal hue fails as mixed kinds. Focused
+Canvas, 58 composition, and five normal legend-contract tests passed.
+`just verify` passed 1,038 library tests (17 ignored), 468 integrations including
+27 snapshots, docs, and package verification (272 files); log
+`/tmp/opencode/t5b1b2b3a-verify.log`. Facet shared-legend preparation is still
+post-font and belongs to T5b1b2b3b; no T5b1 closure claim is made.
 
 T5b1b2b1 completion: `PreparedScatter` now produces guide entries, order, and
 complete point glyphs from the same semantic groups/style source used by its

@@ -67,6 +67,49 @@ pub(crate) struct PreparedMarginal {
     curves: MarginalCurves,
 }
 
+impl PreparedMarginal {
+    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.groups
+            .iter()
+            .filter_map(|group| group.identity.hue.as_deref())
+    }
+
+    pub(crate) fn guide_entries(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, self.groups.len())?;
+        for group in &self.groups {
+            let Some(hue) = &group.identity.hue else {
+                continue;
+            };
+            let color_index = chart
+                .global_hue_levels()
+                .map(|levels| {
+                    data.source_position(levels, |level| level == hue)
+                        .map(|found| found.unwrap_or(0))
+                })
+                .transpose()?
+                .unwrap_or(group.color_index);
+            let color = theme.colors[color_index % theme.colors.len()];
+            entries.push(LegendEntry::point_fill(
+                chart.collective_legend_identity(&group.identity, data)?,
+                chart.point_style(color, 3),
+                FillStyle {
+                    color,
+                    stroke: color,
+                    stroke_width: 1.0,
+                    opacity: 0.45,
+                },
+            ));
+        }
+        Ok(entries)
+    }
+}
+
 #[derive(Debug, Default)]
 struct MarginalCurves {
     x_grid: Vec<f64>,
@@ -241,8 +284,7 @@ pub(crate) fn measure(
     let right_panel = PanelBox::new(right_x0, right_x1, central_y0, central_y1);
     let mut selected = Vec::new();
     data.reserve_source(&mut selected, groups.len())?;
-    let mut legend_entries = Vec::new();
-    data.reserve_source(&mut legend_entries, groups.len())?;
+    let legend_entries = prepared.guide_entries(chart, theme, data)?;
     for (gi, group) in groups.iter().enumerate() {
         let color_index = if let Some(levels) = chart.global_hue_levels() {
             data.claim_source_visits(levels.len())?;
@@ -301,13 +343,6 @@ pub(crate) fn measure(
             stroke_width: 1.0,
             opacity: 0.45,
         };
-        if group.identity.hue.is_some() {
-            legend_entries.push(LegendEntry::point_fill(
-                chart.collective_legend_identity(&group.identity, data)?,
-                point_style.clone(),
-                fill.clone(),
-            ));
-        }
         selected.push(MarginalGroupPayload {
             points: pts,
             point_style,

@@ -62,6 +62,12 @@ impl PreparedInteraction {
             .filter_map(|trace| trace.identity.hue.as_deref())
     }
 
+    pub(crate) fn has_guide_entries(&self, chart: &Plot) -> bool {
+        self.traces
+            .iter()
+            .any(|trace| trace.identity.hue.is_some() || chart.interaction_styles_spec().is_some())
+    }
+
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,

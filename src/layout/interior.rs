@@ -8,6 +8,7 @@ use crate::spec::PlotKind;
 use crate::{Error, Plot};
 
 pub(crate) mod coordinate;
+pub(crate) mod guide;
 
 macro_rules! interior_routes {
     (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }

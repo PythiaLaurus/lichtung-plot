@@ -86,6 +86,17 @@ impl PreparedLine {
         self.hues.iter().map(String::as_str)
     }
 
+    pub(crate) fn has_guide_entries(&self, chart: &Plot) -> bool {
+        self.groups
+            .iter()
+            .any(|group| group.identity.as_ref().is_some_and(|id| id.hue.is_some()))
+            || (chart.kind() != PlotKind::Line
+                && (chart.kind() == PlotKind::Trajectory || chart.markers_visible())
+                && chart.line_path_style_spec() != LinePathStyle::Hue
+                && !self.hues.is_empty())
+            || self.layers.iter().any(|layer| layer.legend.is_some())
+    }
+
     pub(crate) fn group_order(
         &self,
         chart: &Plot,

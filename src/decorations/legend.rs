@@ -35,19 +35,102 @@ pub(crate) enum GuideKind {
 }
 
 impl GuideKind {
-    pub(crate) fn contributing_plot(plot: &crate::Plot) -> Option<Self> {
-        if matches!(
-            plot.kind(),
-            crate::PlotKind::Heatmap | crate::PlotKind::Beeswarm
-        ) {
-            return Some(Self::Continuous);
+    pub(crate) fn contributing_prepared(
+        plot: &crate::Plot,
+        inputs: &crate::layout::interior::PreparedInteriorInputs,
+    ) -> Result<Option<Self>, Error> {
+        use crate::PlotKind;
+        if matches!(plot.kind(), PlotKind::Heatmap | PlotKind::Beeswarm) {
+            return Ok(Some(Self::Continuous));
         }
-        if plot.legend_policy_spec() != crate::LegendPolicy::Hidden
-            && (plot.hue_col().is_some() || plot.group_col().is_some())
-        {
-            return Some(Self::Discrete);
+        if plot.legend_policy_spec() == crate::LegendPolicy::Hidden {
+            return Ok(None);
         }
-        None
+        let missing = || {
+            Error::Render(format!(
+                "{:?} guide has no prepared semantic input",
+                plot.kind()
+            ))
+        };
+        let contributes = match plot.kind() {
+            PlotKind::Scatter => inputs
+                .scatter
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .hue_levels()
+                .next()
+                .is_some(),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => inputs
+                .line
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .has_guide_entries(plot),
+            PlotKind::Bar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedBar
+            | PlotKind::StackedHorizontalBar => !inputs
+                .bars
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .hues
+                .is_empty(),
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => !inputs
+                .distributions
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .hue_levels()
+                .is_empty(),
+            PlotKind::Density => inputs
+                .density
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .hue_levels()
+                .next()
+                .is_some(),
+            PlotKind::Regression => {
+                matches!(plot.legend_policy_spec(), crate::LegendPolicy::Visible(_))
+            }
+            PlotKind::Dumbbell => true,
+            PlotKind::Interaction => inputs
+                .interaction
+                .as_ref()
+                .and_then(|p| p.panels.first())
+                .ok_or_else(missing)?
+                .1
+                .has_guide_entries(plot),
+            PlotKind::Marginal => inputs
+                .marginal
+                .as_ref()
+                .ok_or_else(missing)?
+                .hue_levels()
+                .next()
+                .is_some(),
+            PlotKind::Histogram
+            | PlotKind::Qq
+            | PlotKind::PointInterval
+            | PlotKind::Coefficient
+            | PlotKind::Forest
+            | PlotKind::Waterfall => false,
+            PlotKind::Heatmap | PlotKind::Beeswarm => {
+                unreachable!("continuous guides handled above")
+            }
+            PlotKind::Matrix => {
+                return Err(Error::Render(
+                    "Matrix cannot contribute a Canvas guide".into(),
+                ))
+            }
+        };
+        Ok(contributes.then_some(Self::Discrete))
     }
 }
 
