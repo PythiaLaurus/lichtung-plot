@@ -115,18 +115,18 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b0 | COMPLETE | T5a | `docs(layout): pin native composition migration contracts` |
 | T5b1 | IN PROGRESS | T5b0 | Umbrella; completes after T5b1a-c |
 | T5b1a | COMPLETE | T5b0 | `feat(legend): classify shared guide kinds before fonts` |
-| T5b1b | IN PROGRESS | T5b1a | Umbrella; completes after T5b1b1-b2 |
+| T5b1b | COMPLETE | T5b1a | Umbrella; completed after T5b1b1-b2 |
 | T5b1b1 | COMPLETE | T5b1a | `refactor(legend): admit compatibility before fonts` |
-| T5b1b2 | IN PROGRESS | T5b1b1 | Umbrella; completes after T5b1b2a-b |
+| T5b1b2 | COMPLETE | T5b1b1 | Umbrella; completed after T5b1b2a-b |
 | T5b1b2a | COMPLETE | T5b1b1 | `refactor(legend): resolve display labels before fonts` |
-| T5b1b2b | IN PROGRESS | T5b1b2a | Umbrella; completes after T5b1b2b1-b3 |
+| T5b1b2b | COMPLETE | T5b1b2a | Umbrella; completed after T5b1b2b1-b3 |
 | T5b1b2b1 | COMPLETE | T5b1b2a | `refactor(legend): prepare Scatter shared guides` |
 | T5b1b2b2 | COMPLETE | T5b1b2b1 | Umbrella; completed after T5b1b2b2a-b |
 | T5b1b2b2a | COMPLETE | T5b1b2b1 | `refactor(legend): prepare point-path shared guides` |
 | T5b1b2b2b | COMPLETE | T5b1b2b2a | `refactor(legend): prepare remaining ordinary guide entries` |
-| T5b1b2b3 | IN PROGRESS | T5b1b2b2 | Umbrella; completes after T5b1b2b3a-b |
+| T5b1b2b3 | COMPLETE | T5b1b2b2 | Umbrella; completed after T5b1b2b3a-b |
 | T5b1b2b3a | COMPLETE | T5b1b2b2 | `refactor(legend): classify prepared Canvas contributors` |
-| T5b1b2b3b | PENDING | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
+| T5b1b2b3b | COMPLETE | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
@@ -333,8 +333,25 @@ Heatmap with a labeled Line layer or Marginal hue fails as mixed kinds. Focused
 Canvas, 58 composition, and five normal legend-contract tests passed.
 `just verify` passed 1,038 library tests (17 ignored), 468 integrations including
 27 snapshots, docs, and package verification (272 files); log
-`/tmp/opencode/t5b1b2b3a-verify.log`. Facet shared-legend preparation is still
-post-font and belongs to T5b1b2b3b; no T5b1 closure claim is made.
+`/tmp/opencode/t5b1b2b3a-verify.log`. Facet preparation was still post-font at
+that checkpoint; T5b1b2b3b closes it below. T5b1 itself still awaits T5b1c.
+
+T5b1b2b3b completion: faceted roots now merge real prepared discrete glyphs,
+aliases, titles, and observed global hue identities before the font census.
+`FacetPlan` consumes the retained descriptor; it no longer derives compatibility
+from child body probes or performs a first probe solely to discover hues. One
+child measurement under the prepared global order still supplies scientific
+ranges, gutters, and enclosing-frame fit. Heatmap and Beeswarm continue to
+own continuous colorbars pending T5b1c; a faceted discrete display-label
+collision fails before font discovery. Source-row and theme ownership, all
+supported facet scale modes, exact-size output, and Auto/selected-edge SVG/PNG
+equivalence remain covered. Facet child cache misses decrease from 16/24 to
+12/18 (adequate/pressured); that is removed discovery work, not an assumed
+cache hit. `just verify` passed 1,039 library tests (17 ignored), 468
+integrations, docs and package verification (272 files), and all three ignored
+release legend groups passed. Logs: `/tmp/opencode/t5b1b2b3b-verify.log` and
+`/tmp/opencode/t5b1b2b3b-legends-release.log`. T5b1 remains IN PROGRESS for
+the complete continuous descriptor; guide flow and native tracks are T5b2+.
 
 T5b1b2b1 completion: `PreparedScatter` now produces guide entries, order, and
 complete point glyphs from the same semantic groups/style source used by its

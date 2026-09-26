@@ -190,11 +190,13 @@ pub(super) fn base_plot(
     kind: PlotKind,
     has_horizontal_axis_label: bool,
     has_vertical_axis_label: bool,
+    resources: &crate::font::canonical::OperationGenerationResources,
 ) -> Result<Plot, Error> {
     let source_rows = source.configured_source_rows()?;
-    let data =
-        source_rows.map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows));
-    let mut base_plot = source.clone().without_facets();
+    let data = source_rows
+        .map_or_else(|| source.data(), |rows| source.data().map_source_rows(rows))
+        .with_axis_resources(resources);
+    let mut base_plot = source.admitted_clone(data)?.without_facets();
     if has_horizontal_axis_label {
         base_plot = base_plot.x_label("");
     }

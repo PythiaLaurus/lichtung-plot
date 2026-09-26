@@ -3,6 +3,32 @@ use crate::render::backend::TextAnchor;
 use crate::theme::TitleAlignment::{Center, End, Start};
 
 #[test]
+fn ambiguous_faceted_legend_aliases_reject_before_font_discovery() {
+    let source = Plot::scatter(
+        crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        crate::NumericValues::new("y", [4.0, 3.0, 2.0, 1.0]),
+    )
+    .hue(crate::CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap())
+    .facet(crate::FacetSpec::column(
+        crate::CategoryValues::new("facet", ["left", "left", "right", "right"]).unwrap(),
+    ))
+    .labels(
+        crate::Labels::humanized()
+            .alias("a", "Same")
+            .alias("b", "Same"),
+    );
+    crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+    assert!(matches!(
+        source.preflight(),
+        Err(Error::Render(message)) if message.contains("distinct raw identities")
+    ));
+    assert_eq!(
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+        0
+    );
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "complete roots exercise independent text roles and selected capture"
@@ -50,12 +76,30 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
         crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
-            |inputs, assigned, round| {
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let guide = prepare_discrete_guide(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &inputs,
+                    &stage.generation_resources(),
+                )?;
+                Ok((inputs, guide))
+            },
+            |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS.with(|calls| calls.set(0));
-                let plan = FacetPlan::new(&source, PlotKind::Scatter, &theme, round, &mut children)
-                    .map_err(fit::PlanError::into_error)?;
+                let plan = FacetPlan::new(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    round,
+                    &mut children,
+                    guide,
+                )
+                .map_err(fit::PlanError::into_error)?;
                 crate::render::geometry::GEOMETRY_BACKEND_BEGINS
                     .with(|calls| assert_eq!(calls.get(), 0));
                 assert_eq!(
@@ -228,8 +272,18 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
     crate::layout::plan_exact_root(
         source.width(),
         source.height(),
-        |_| Ok(()),
-        |(), assigned, round| {
+        |stage| {
+            let inputs =
+                crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+            prepare_discrete_guide(
+                &source,
+                PlotKind::Scatter,
+                &theme,
+                &inputs,
+                &stage.generation_resources(),
+            )
+        },
+        |guide, assigned, round| {
             crate::decorations::plan::children::CHILD_MEASUREMENTS
                 .with(|calls| calls.borrow_mut().clear());
             let result = FacetPlan::new(
@@ -238,6 +292,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
                 &theme,
                 round,
                 &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                guide,
             );
             let Err(fit::PlanError::Fit(failure)) = result else {
                 panic!("typed outer title fit");
@@ -252,7 +307,7 @@ fn impossible_outer_title_returns_typed_fit_before_child_measurement() {
                 .with(|calls| assert!(calls.borrow().is_empty()));
             Ok(crate::layout::MeasuredLayout::new(assigned, ()))
         },
-        |(), _, (), _| Ok(()),
+        |_, _, (), _| Ok(()),
     )
     .unwrap();
 }

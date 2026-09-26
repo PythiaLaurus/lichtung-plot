@@ -528,12 +528,7 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
     assert_eq!(
         observed.counters[Counter::ChildCacheMiss as usize],
-        match (facet, pressure) {
-            (true, true) => 24,
-            (true, false) => 16,
-            (false, true) => 18,
-            (false, false) => 12,
-        }
+        if pressure { 18 } else { 12 }
     );
     for counter in [
         Counter::ChildCacheHit,

@@ -16,6 +16,7 @@ pub(super) struct PlotPlan {
 
 struct PreparedPlotInputs {
     axes: crate::layout::interior::PreparedInteriorInputs,
+    facet_guide: Option<super::facets::PreparedFacetGuide>,
     theme: Box<ResolvedTheme>,
     text_census: crate::layout::PreparedTextCensus,
     root_text: crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
@@ -180,6 +181,18 @@ impl PlotPlan {
                     source,
                     &prepared_stage.generation_resources(),
                 )?;
+                let facet_guide = source
+                    .has_facets()
+                    .then(|| {
+                        super::facets::prepare_discrete_guide(
+                            source,
+                            kind,
+                            &theme,
+                            &axes,
+                            &prepared_stage.generation_resources(),
+                        )
+                    })
+                    .transpose()?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&axes),
                     source,
@@ -226,6 +239,7 @@ impl PlotPlan {
                     )?;
                 Ok(PreparedPlotInputs {
                     axes,
+                    facet_guide,
                     theme,
                     text_census: census,
                     root_text,
@@ -256,6 +270,10 @@ impl PlotPlan {
                             &prepared.theme,
                             round,
                             &mut children,
+                            prepared
+                                .facet_guide
+                                .as_ref()
+                                .expect("faceted root guide was prepared"),
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?,
                     ))

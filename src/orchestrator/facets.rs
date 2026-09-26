@@ -122,6 +122,22 @@ pub(crate) fn text_census_panels<'a>(
     }))
 }
 
+pub(super) struct PreparedFacetGuide {
+    pub(super) entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
+    pub(super) title: String,
+    pub(super) hue_levels: Option<Vec<String>>,
+}
+
+pub(super) fn prepare_discrete_guide(
+    source: &Plot,
+    kind: PlotKind,
+    theme: &ResolvedTheme,
+    inputs: &crate::layout::interior::PreparedInteriorInputs,
+    resources: &crate::font::canonical::OperationGenerationResources,
+) -> Result<PreparedFacetGuide, Error> {
+    legend::prepare_discrete_guide(source, kind, theme, inputs, resources)
+}
+
 pub(super) struct FacetPlan {
     panels: Vec<data::FacetPanel>,
     panel_plans: Vec<std::sync::Arc<crate::decorations::plan::PanelPlan>>,
@@ -151,6 +167,7 @@ impl FacetPlan {
         theme: &ResolvedTheme,
         round: &mut crate::layout::kernel::FeedbackRound,
         children: &mut crate::decorations::plan::children::ChildPlans,
+        prepared_guide: &PreparedFacetGuide,
     ) -> Result<Self, crate::layout::fit::PlanError> {
         if !source.significance_annotations().is_empty()
             && !kind.supports_significance_annotations()
@@ -184,12 +201,20 @@ impl FacetPlan {
             &[],
             &FitScope::root(),
         ))?;
-        let base_plot = data::base_plot(
+        let mut base_plot = data::base_plot(
             source,
             kind,
             horizontal_axis_label.is_some(),
             vertical_axis_label.is_some(),
+            &theme.prepared_font_environment()?.generation_resources(),
         )?;
+        if let Some(levels) = &prepared_guide.hue_levels {
+            let resources = theme.prepared_font_environment()?.generation_resources();
+            let data = source.data().with_axis_resources(&resources);
+            base_plot = base_plot.with_global_hue_levels(
+                data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?,
+            );
+        }
         let mut panels =
             data::extract_panels(source, &selectors, Some(&provisional), source.data())?;
         data::validate_significance_facet_anchors(source, &panels, source.data())?;
@@ -206,22 +231,8 @@ impl FacetPlan {
             .with_resolved_facet_ranges(kind, horizontal_domain, vertical_domain)
             .with_parent_axis_gutters();
         let shared_plot = planning::feedback_plot(shared_plot, &panels, facet_scales, round)?;
-        let legend_entries =
-            legend::shared_legend_entries(source, &shared_plot, &preflight, theme)?;
-        let legend_storage = std::alloc::Layout::array::<crate::decorations::legend::LegendEntry>(
-            legend_entries.len(),
-        )
-        .and_then(|entries| std::alloc::Layout::new::<[usize; 2]>().extend(entries))
-        .map_err(|_| Error::Render("facet shared legend storage overflow".into()))?
-        .0
-        .pad_to_align();
-        source.data().claim_source_bytes(legend_storage.size())?;
-        let legend_entries: std::sync::Arc<[crate::decorations::legend::LegendEntry]> =
-            legend_entries.into();
-        let title = crate::decorations::legend::resolved_title(
-            &legend_entries,
-            &theme.prepared_font_environment()?.generation_resources(),
-        )?;
+        let legend_entries = std::sync::Arc::clone(&prepared_guide.entries);
+        let title = prepared_guide.title.as_str();
         let position = source.legend_position_spec();
         let automatic = position == LegendPosition::Auto && !legend_entries.is_empty();
         let automatic_edges = [
@@ -324,7 +335,7 @@ impl FacetPlan {
                             - if horizontal { minimum.1 + gap } else { 0.0 },
                     );
                     let guide = match crate::decorations::legend::Legend::measure_outside(
-                        &title,
+                        title,
                         std::sync::Arc::clone(&legend_entries),
                         (source.width(), source.height()),
                         available,
@@ -778,6 +789,13 @@ mod feedback_tests {
                             &source,
                             &stage.generation_resources(),
                         )?;
+                        let guide = prepare_discrete_guide(
+                            &source,
+                            PlotKind::Scatter,
+                            &theme,
+                            &inputs,
+                            &stage.generation_resources(),
+                        )?;
                         let requirements = crate::layout::foundational_plot_requirements(
                             Some(&inputs),
                             &source,
@@ -797,9 +815,9 @@ mod feedback_tests {
                         )
                         .map_err(|error| Error::Render(error.to_string()))?;
                         theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                        Ok(inputs)
+                        Ok((inputs, guide))
                     },
-                    |inputs, assigned, round| {
+                    |(inputs, guide), assigned, round| {
                         let source = inputs.attach(source.clone())?;
                         calls += 1;
                         let plan = FacetPlan::new(
@@ -808,6 +826,7 @@ mod feedback_tests {
                             &theme,
                             round,
                             &mut children,
+                            guide,
                         )
                         .map_err(crate::layout::fit::PlanError::into_error)?;
                         if calls == 2 {
@@ -955,6 +974,13 @@ mod feedback_tests {
             |stage| {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let guide = prepare_discrete_guide(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &inputs,
+                    &stage.generation_resources(),
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,
@@ -974,9 +1000,9 @@ mod feedback_tests {
                 )
                 .map_err(|error| Error::Render(error.to_string()))?;
                 theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(inputs)
+                Ok((inputs, guide))
             },
-            |inputs, assigned, round| {
+            |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
@@ -986,6 +1012,7 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                        guide,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
@@ -1072,6 +1099,13 @@ mod feedback_tests {
             |stage| {
                 let inputs =
                     crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let guide = prepare_discrete_guide(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &inputs,
+                    &stage.generation_resources(),
+                )?;
                 let requirements = crate::layout::foundational_plot_requirements(
                     Some(&inputs),
                     &source,
@@ -1091,9 +1125,9 @@ mod feedback_tests {
                 )
                 .map_err(|error| Error::Render(format!("facet D1 census: {error}")))?;
                 theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
-                Ok(inputs)
+                Ok((inputs, guide))
             },
-            |inputs, assigned, round| {
+            |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
@@ -1103,6 +1137,7 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                        guide,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
@@ -1170,8 +1205,19 @@ mod feedback_tests {
         crate::layout::plan_exact_root(
             source.width(),
             source.height(),
-            |stage| crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources()),
-            |inputs, assigned, round| {
+            |stage| {
+                let inputs =
+                    crate::plots::shared_x::prepare_plot(&source, &stage.generation_resources())?;
+                let guide = prepare_discrete_guide(
+                    &source,
+                    PlotKind::Scatter,
+                    &theme,
+                    &inputs,
+                    &stage.generation_resources(),
+                )?;
+                Ok((inputs, guide))
+            },
+            |(inputs, guide), assigned, round| {
                 let source = inputs.attach(source.clone())?;
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
@@ -1181,6 +1227,7 @@ mod feedback_tests {
                         &theme,
                         round,
                         &mut crate::decorations::plan::children::ChildPlans::facets(&source),
+                        guide,
                     )
                     .map_err(crate::layout::fit::PlanError::into_error)?,
                 ))
