@@ -133,6 +133,44 @@ pub(crate) struct PreparedRegression {
 }
 
 impl PreparedRegression {
+    /// Exact marker, fitted-line and optional band legend glyphs. The prepared
+    /// fit confirms this producer's semantic input; a panel is not needed.
+    pub(crate) fn guide_entries(
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        if !matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
+            return Ok(Vec::new());
+        }
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, 2)?;
+        let color = theme.colors[0];
+        let band = chart.regression_band_spec();
+        let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
+        let line = LineStyle::solid(theme.foreground, 1.5);
+        let fit_entry = if band == RegressionBand::PointwiseMean95 {
+            LegendEntry::line_fill(
+                fit_identity,
+                line,
+                FillStyle {
+                    color,
+                    stroke: color,
+                    stroke_width: 0.0,
+                    opacity: 0.25,
+                },
+            )
+        } else {
+            LegendEntry::line(fit_identity, line)
+        };
+        entries.push(LegendEntry::point(
+            chart.point_legend_identity("Observations", data)?,
+            chart.point_style(color, 3),
+        ));
+        entries.push(fit_entry);
+        Ok(entries)
+    }
+
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.claim_mark_rows()?;
         #[cfg(test)]
@@ -334,22 +372,7 @@ pub(crate) fn project(
         opacity: 0.25,
     };
 
-    let mut legend_entries = Vec::new();
-    let band = chart.regression_band_spec();
-    if matches!(chart.legend_policy_spec(), crate::LegendPolicy::Visible(_)) {
-        data.reserve_source(&mut legend_entries, 2)?;
-        let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
-        let fit_entry = if band == RegressionBand::PointwiseMean95 {
-            LegendEntry::line_fill(fit_identity, line_style.clone(), band_fill.clone())
-        } else {
-            LegendEntry::line(fit_identity, line_style.clone())
-        };
-        legend_entries.push(LegendEntry::point(
-            chart.point_legend_identity("Observations", data)?,
-            point_style.clone(),
-        ));
-        legend_entries.push(fit_entry);
-    }
+    let legend_entries = PreparedRegression::guide_entries(chart, theme, data)?;
     let payload = RegressionPayload {
         clip: projection.panel_box(),
         points: scatter_points,

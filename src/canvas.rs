@@ -230,6 +230,134 @@ mod d1_tests {
     }
 
     #[test]
+    fn conflicting_bar_shared_glyphs_reject_before_fonts() {
+        let bar = || {
+            Plot::bar(
+                crate::CategoryValues::new("category", ["a", "b"]).unwrap(),
+                crate::BarInput::estimates(crate::NumericValues::new("value", [1.0, 2.0])),
+            )
+            .series(crate::CategoryValues::new("cohort", ["one", "one"]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, bar().theme(Theme::Nature))
+            .unwrap()
+            .panel(0, 1, bar().theme(Theme::Science))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas.preflight(),
+            Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn conflicting_distribution_shared_glyphs_reject_before_fonts() {
+        let boxplot = || {
+            Plot::boxplot(
+                crate::CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
+                crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]),
+            )
+            .series(crate::CategoryValues::new("cohort", ["one"; 4]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, boxplot().theme(Theme::Nature))
+            .unwrap()
+            .panel(0, 1, boxplot().theme(Theme::Science))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas.preflight(),
+            Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn conflicting_density_shared_glyphs_reject_before_fonts() {
+        let density = || {
+            Plot::density(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
+                .hue(crate::CategoryValues::new("cohort", ["one"; 4]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, density().theme(Theme::Nature))
+            .unwrap()
+            .panel(0, 1, density().theme(Theme::Science))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas.preflight(),
+            Err(Error::Render(message)) if message.contains("glyphs must match")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn shared_policy_rejects_an_explicit_child_edge_before_fonts() {
+        let plot = Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hue(crate::CategoryValues::new("cohort", ["a", "a"]).unwrap())
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ));
+        let canvas = Canvas::grid(1, 1)
+            .unwrap()
+            .panel(0, 0, plot)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::font::canonical::FONT_DISCOVERY_CALLS.with(|calls| calls.set(0));
+        assert!(matches!(
+            canvas.preflight(),
+            Err(Error::Data(message)) if message.contains("explicit per-Plot placement")
+        ));
+        assert_eq!(
+            crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
+            0
+        );
+    }
+
+    #[test]
+    fn an_ordinary_plot_without_entries_does_not_block_prepared_shared_guides() {
+        let scatter = Plot::scatter(
+            crate::NumericValues::new("x", [1.0, 2.0]),
+            crate::NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hue(crate::CategoryValues::new("cohort", ["a", "a"]).unwrap());
+        let histogram = Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+            "observation",
+            [0.0, 1.0, 2.0, 3.0],
+        )));
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, scatter)
+            .unwrap()
+            .panel(0, 1, histogram)
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        let svg = canvas.render_scene().unwrap();
+        let svg = String::from_utf8(svg.svg_bytes().to_vec()).unwrap();
+        assert_eq!(svg.matches("id=\"canvas-shared-legend\"").count(), 1);
+        assert_eq!(svg.matches(">A</text>").count(), 1);
+    }
+
+    #[test]
     fn conflicting_scatter_glyphs_reject_before_fonts_without_body_probes() {
         let source = || {
             Plot::scatter(
@@ -1668,6 +1796,16 @@ impl Canvas {
             let kind = plot.kind();
             plot.validate_configuration(kind)?;
             crate::layout::interior::ParentCompositionAdapter::Canvas.validate_child(plot)?;
+            if self.legend_policy == CanvasLegendPolicy::Shared
+                && matches!(
+                    plot.legend_policy_spec(),
+                    crate::LegendPolicy::Visible(position) if position != crate::LegendPosition::Auto
+                )
+            {
+                return Err(Error::Data(
+                    "Canvas shared legend cannot honor explicit per-Plot placement".into(),
+                ));
+            }
         }
         self.validate_shared_guide_kinds()?;
         for group in &self.x_range_groups {
@@ -1732,6 +1870,10 @@ impl Canvas {
 
     /// Prepare point/path hue identities from retained semantics before fonts.
     /// Further categorical families migrate to this same owner in T5b1b2b.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "shared domain coordinates all currently prepared discrete family hue sources"
+    )]
     fn prepared_point_path_hue_groups(
         &self,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
@@ -1744,7 +1886,21 @@ impl Canvas {
             plot.hue_dimension_key().is_some()
                 && !matches!(
                     plot.kind(),
-                    PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
+                    PlotKind::Scatter
+                        | PlotKind::Line
+                        | PlotKind::Trajectory
+                        | PlotKind::LinePath
+                        | PlotKind::Bar
+                        | PlotKind::HorizontalBar
+                        | PlotKind::StackedBar
+                        | PlotKind::StackedHorizontalBar
+                        | PlotKind::Boxplot
+                        | PlotKind::Violin
+                        | PlotKind::Raincloud
+                        | PlotKind::Density
+                        | PlotKind::Regression
+                        | PlotKind::Dumbbell
+                        | PlotKind::Interaction
                 )
         }) {
             return Ok(None);
@@ -1779,9 +1935,37 @@ impl Canvas {
                 .as_ref()
                 .and_then(|inputs| inputs.panels.first())
                 .map(|(_, prepared)| prepared);
-            if scatter.is_none() && line.is_none() {
+            let bars = inputs
+                .bars
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            let distribution = inputs
+                .distributions
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            let density = inputs
+                .density
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            let interaction = inputs
+                .interaction
+                .as_ref()
+                .and_then(|inputs| inputs.panels.first())
+                .map(|(_, prepared)| prepared);
+            if scatter.is_none()
+                && line.is_none()
+                && bars.is_none()
+                && distribution.is_none()
+                && density.is_none()
+                && interaction.is_none()
+                && inputs.regression.is_none()
+                && inputs.dumbbell.is_none()
+            {
                 return Err(Error::Render(
-                    "Canvas point/path guide has no prepared color source".into(),
+                    "Canvas guide has no prepared color source".into(),
                 ));
             }
             let group_index = data.source_position(&groups, |(field, _)| field == dimension)?;
@@ -1797,6 +1981,25 @@ impl Canvas {
                 .chain(
                     line.into_iter()
                         .flat_map(crate::plots::line::PreparedLine::hue_levels),
+                )
+                .chain(
+                    bars.into_iter()
+                        .flat_map(|bars| bars.hues.iter().map(String::as_str)),
+                )
+                .chain(
+                    distribution
+                        .into_iter()
+                        .flat_map(|marks| marks.hue_levels().iter().map(String::as_str)),
+                )
+                .chain(
+                    density
+                        .into_iter()
+                        .flat_map(crate::plots::density::PreparedDensity::hue_levels),
+                )
+                .chain(
+                    interaction
+                        .into_iter()
+                        .flat_map(crate::plots::interaction::PreparedInteraction::hue_levels),
                 )
             {
                 if data
@@ -1817,6 +2020,10 @@ impl Canvas {
 
     /// Prepare one shared point/path guide without measuring bodies or fonts.
     /// An empty retained set is still a prepared result.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one closed prepared-contributor match retains exact glyphs for each migrated family"
+    )]
     fn prepared_point_path_shared_guide(
         &self,
         themes: &ResolvedCanvasThemes,
@@ -1826,10 +2033,7 @@ impl Canvas {
     ) -> Result<Option<PreparedDiscreteGuide>, Error> {
         if self.legend_policy != CanvasLegendPolicy::Shared
             || self.panels.iter().flatten().any(|plot| {
-                !matches!(
-                    plot.kind(),
-                    PlotKind::Scatter | PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath
-                )
+                !crate::layout::interior::InteriorRoute::classify(plot.kind()).is_native()
             })
         {
             return Ok(None);
@@ -1890,7 +2094,97 @@ impl Canvas {
                     let order = prepared.group_order(&plot, data)?;
                     prepared.guide_entries_in_order(&plot, theme, data, &order)?
                 }
-                _ => unreachable!("prepared point/path guide family was checked"),
+                PlotKind::Bar
+                | PlotKind::HorizontalBar
+                | PlotKind::StackedBar
+                | PlotKind::StackedHorizontalBar => {
+                    let prepared = inputs
+                        .bars
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render("Canvas Bar guide is missing prepared semantics".into())
+                        })?;
+                    crate::plots::bar_data::legend_entries(prepared, &plot, theme, data)?
+                }
+                PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+                    let prepared = inputs
+                        .distributions
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas distribution guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    prepared.guide_entries(&plot, theme, data)?
+                }
+                PlotKind::Density => {
+                    let prepared = inputs
+                        .density
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas Density guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    let order = prepared.group_order(&plot, data)?;
+                    prepared.guide_entries_in_order(&plot, theme, data, &order)?
+                }
+                PlotKind::Regression => {
+                    let _prepared = inputs
+                        .regression
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas Regression guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    crate::plots::regression::PreparedRegression::guide_entries(&plot, theme, data)?
+                }
+                PlotKind::Dumbbell => {
+                    inputs
+                        .dumbbell
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas Dumbbell guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    crate::plots::dumbbell::DumbbellData::guide_entries(&plot, data)?
+                }
+                PlotKind::Interaction => {
+                    let prepared = inputs
+                        .interaction
+                        .as_ref()
+                        .and_then(|inputs| inputs.panels.first())
+                        .map(|(_, prepared)| prepared)
+                        .ok_or_else(|| {
+                            Error::Render(
+                                "Canvas Interaction guide is missing prepared semantics".into(),
+                            )
+                        })?;
+                    prepared.guide_entries(&plot, theme, data)?
+                }
+                PlotKind::Histogram
+                | PlotKind::Qq
+                | PlotKind::PointInterval
+                | PlotKind::Coefficient
+                | PlotKind::Forest => Vec::new(),
+                PlotKind::Heatmap
+                | PlotKind::Marginal
+                | PlotKind::Matrix
+                | PlotKind::Beeswarm
+                | PlotKind::Waterfall => {
+                    unreachable!("specialized guide has a separate prepared owner")
+                }
             };
             crate::decorations::legend::resolve_entries(&plot, &mut contribution, resources)?;
             data.reserve_source(&mut entries, contribution.len())?;

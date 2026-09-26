@@ -37,6 +37,66 @@ pub(crate) struct PreparedDensityInputs {
 }
 
 impl PreparedDensity {
+    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.curves
+            .iter()
+            .filter_map(|curve| curve.identity.hue.as_deref())
+    }
+
+    pub(crate) fn group_order(
+        &self,
+        chart: &Plot,
+        data: PlotData<'_>,
+    ) -> Result<Vec<(usize, usize, usize)>, Error> {
+        let mut order =
+            data.collect_source(self.curves.iter().enumerate().map(|(index, curve)| {
+                let pairs = chart.global_collective_pairs().unwrap_or(&[]);
+                data.claim_source_visits(pairs.len())?;
+                let key = pairs
+                    .iter()
+                    .position(|pair| pair == &curve.identity)
+                    .unwrap_or(index);
+                data.claim_source_visits(chart.global_hue_levels().map_or(0, <[String]>::len))?;
+                let color_index = curve.identity.hue.as_ref().map_or(0, |hue| {
+                    chart.hue_color_index(hue, curve.hue_index.unwrap_or(0))
+                });
+                Ok((key, index, color_index))
+            }))?;
+        crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
+            (a.0, a.1).cmp(&(b.0, b.1))
+        })?;
+        Ok(order)
+    }
+
+    pub(crate) fn guide_entries_in_order(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+        order: &[(usize, usize, usize)],
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, order.len())?;
+        for &(_, index, color_index) in order {
+            let curve = &self.curves[index];
+            if curve.identity.hue.is_none() {
+                continue;
+            }
+            let color = theme.colors[color_index % theme.colors.len()];
+            entries.push(LegendEntry::line_fill(
+                chart.collective_legend_identity(&curve.identity, data)?,
+                LineStyle::solid(color, 1.6),
+                FillStyle {
+                    color,
+                    stroke: color,
+                    stroke_width: 0.0,
+                    opacity: 0.22,
+                },
+            ));
+        }
+        Ok(entries)
+    }
+
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.claim_mark_rows()?;
         #[cfg(test)]
@@ -174,23 +234,8 @@ pub(crate) fn project(
         curves: Vec::new(),
     };
     data.reserve_source(&mut payload.curves, prepared.curves.len())?;
-    let mut order =
-        data.collect_source(prepared.curves.iter().enumerate().map(|(index, curve)| {
-            let pairs = chart.global_collective_pairs().unwrap_or(&[]);
-            data.claim_source_visits(pairs.len())?;
-            let key = pairs
-                .iter()
-                .position(|pair| pair == &curve.identity)
-                .unwrap_or(index);
-            data.claim_source_visits(chart.global_hue_levels().map_or(0, <[String]>::len))?;
-            let color_index = curve.identity.hue.as_ref().map_or(0, |hue| {
-                chart.hue_color_index(hue, curve.hue_index.unwrap_or(0))
-            });
-            Ok((key, index, color_index))
-        }))?;
-    crate::data::source::sort_source_by(&mut order, Some(data), |a, b| {
-        (a.0, a.1).cmp(&(b.0, b.1))
-    })?;
+    let order = prepared.group_order(chart, data)?;
+    let legend_entries = prepared.guide_entries_in_order(chart, theme, data, &order)?;
     for &(_, index, color_index) in &order {
         let curve = &prepared.curves[index];
         let visible = visible_curve(curve, layout.projection.x_range(), data)?;
@@ -230,28 +275,6 @@ pub(crate) fn project(
         payload.curves.push(projected);
     }
 
-    let mut legend_entries = Vec::new();
-    data.reserve_source(&mut legend_entries, prepared.curves.len())?;
-    for entry in order
-        .iter()
-        .filter(|(_, index, _)| prepared.curves[*index].identity.hue.is_some())
-        .map(|&(_, index, color_index)| -> Result<_, Error> {
-            let curve = &prepared.curves[index];
-            let color = theme.colors[color_index % theme.colors.len()];
-            Ok(LegendEntry::line_fill(
-                chart.collective_legend_identity(&curve.identity, data)?,
-                LineStyle::solid(color, 1.6),
-                FillStyle {
-                    color,
-                    stroke: color,
-                    stroke_width: 0.0,
-                    opacity: 0.22,
-                },
-            ))
-        })
-    {
-        legend_entries.push(entry?);
-    }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     #[cfg(test)]
     crate::layout::interior::distributions::count(1, 2);

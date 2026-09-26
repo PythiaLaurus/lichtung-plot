@@ -121,9 +121,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2a | COMPLETE | T5b1b1 | `refactor(legend): resolve display labels before fonts` |
 | T5b1b2b | IN PROGRESS | T5b1b2a | Umbrella; completes after T5b1b2b1-b3 |
 | T5b1b2b1 | COMPLETE | T5b1b2a | `refactor(legend): prepare Scatter shared guides` |
-| T5b1b2b2 | IN PROGRESS | T5b1b2b1 | Umbrella; completes after T5b1b2b2a-b |
+| T5b1b2b2 | COMPLETE | T5b1b2b1 | Umbrella; completed after T5b1b2b2a-b |
 | T5b1b2b2a | COMPLETE | T5b1b2b1 | `refactor(legend): prepare point-path shared guides` |
-| T5b1b2b2b | PENDING | T5b1b2b2a | `refactor(legend): prepare remaining ordinary guide entries` |
+| T5b1b2b2b | COMPLETE | T5b1b2b2a | `refactor(legend): prepare remaining ordinary guide entries` |
 | T5b1b2b3 | PENDING | T5b1b2b2 | `refactor(legend): close discrete contributor preparation` |
 | T5b1c | PENDING | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | PENDING | T5b1 | `feat(legend): measure native guide flows` |
@@ -345,6 +345,23 @@ than once per root round. `just verify` passed 1,033 library tests (17 ignored),
 468 integration tests including 27 snapshots, docs and package checks (271
 files); log `/tmp/opencode/t5b1b2b2a-verify.log`. Remaining ordinary families,
 specialized discrete contributors, and Facet ownership still await b2b/b3.
+
+T5b1b2b2b completion: all 20 ordinary routes now have one prepared discrete
+entry producer (or an explicitly empty entry set). Existing selected payloads
+consume the same producers for point/path, bars, all categorical distributions
+including supplied Raincloud, Density, Regression, Dumbbell, and Interaction.
+Histogram, Qq, PointInterval, Coefficient, and Forest produce no detached
+entries. An all-ordinary Shared Canvas prepares actual merged glyphs, aliases,
+title, and row-major color identities before font discovery; geometry body
+probes remain only for containing-frame fit. Explicit child edges under Shared
+reject before fonts instead of being silently overridden. Tests include mixed
+Nature/Science glyph rejection for Bar, distribution, Density, point/path,
+empty-entry Histogram beside a populated guide, and hidden-but-visible hue
+identities. Primary `just verify` passed 1,038 library tests (17 ignored), 468
+integration tests, docs and package verification (271 files); log
+`/tmp/opencode/t5b1b2b2b-verify.log`. Specialized discrete owners, faceted
+prepared guide ownership, and removal of the channel-inferred guide-kind gate
+are still T5b1b2b3 obligations; continuous contributors remain T5b1c.
 
 ### T5b2 — Native Discrete And Continuous Measurement
 

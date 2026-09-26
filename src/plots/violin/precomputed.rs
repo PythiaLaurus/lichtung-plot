@@ -20,6 +20,38 @@ pub(crate) struct PreparedRaincloud {
     hues: Vec<String>,
 }
 
+impl PreparedRaincloud {
+    pub(crate) fn hue_levels(&self) -> &[String] {
+        &self.hues
+    }
+
+    pub(crate) fn guide_entries(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        data.collect_source(self.hues.iter().enumerate().map(|(index, hue)| {
+            let color = chart.categorical_color(
+                "raincloud",
+                hue,
+                chart.hue_color_index(hue, index),
+                theme,
+            )?;
+            Ok(LegendEntry::point_fill(
+                chart.point_legend_identity(hue, data)?,
+                crate::plots::distribution_sample::overlay_style(color),
+                FillStyle {
+                    color,
+                    stroke: theme.foreground,
+                    stroke_width: 1.0,
+                    opacity: 0.70,
+                },
+            ))
+        }))
+    }
+}
+
 #[derive(Debug)]
 struct PreparedRaincloudGroup {
     geometry: RaincloudGroup,
@@ -93,26 +125,7 @@ pub(super) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    let hue_levels = &input.hues;
-    let legend_entries =
-        data.collect_source(hue_levels.iter().enumerate().map(|(index, hue)| {
-            let color = chart.categorical_color(
-                "raincloud",
-                hue,
-                chart.hue_color_index(hue, index),
-                theme,
-            )?;
-            Ok(LegendEntry::point_fill(
-                chart.point_legend_identity(hue, data)?,
-                crate::plots::distribution_sample::overlay_style(color),
-                FillStyle {
-                    color,
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 0.70,
-                },
-            ))
-        }))?;
+    let legend_entries = input.guide_entries(chart, theme, data)?;
 
     let mut payload = DistributionPayload::new(layout.projection.panel_box(), chart.kind());
     for (index, group) in input.groups.iter().enumerate() {

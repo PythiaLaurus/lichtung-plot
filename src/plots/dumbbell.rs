@@ -29,6 +29,29 @@ pub(crate) struct DumbbellData {
     pub(crate) range: (f64, f64),
 }
 
+impl DumbbellData {
+    pub(crate) fn guide_entries(
+        chart: &Plot,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let endpoints = chart
+            .dumbbell_endpoints_spec()
+            .ok_or_else(|| Error::Render("Dumbbell guide requires endpoint metadata".into()))?;
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, 2)?;
+        for (label, color) in [
+            (endpoints.left_label(), endpoints.left_color()),
+            (endpoints.right_label(), endpoints.right_color()),
+        ] {
+            entries.push(LegendEntry::point(
+                chart.point_legend_identity(label, data)?,
+                chart.point_style(color, 4),
+            ));
+        }
+        Ok(entries)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedDumbbellInputs {
     pub(crate) panels: Vec<(Option<String>, DumbbellData)>,
@@ -133,17 +156,7 @@ fn project(
         geometry.scatter(&pair[..1], &payload.points[0], clip)?;
         geometry.scatter(&pair[1..], &payload.points[1], clip)?;
     }
-    let mut legend = Vec::new();
-    data.reserve_source(&mut legend, 2)?;
-    for (label, style) in [endpoints.left_label(), endpoints.right_label()]
-        .into_iter()
-        .zip(&payload.points)
-    {
-        legend.push(LegendEntry::point(
-            chart.point_legend_identity(label, data)?,
-            style.clone(),
-        ));
-    }
+    let legend = DumbbellData::guide_entries(chart, data)?;
     #[cfg(test)]
     count(2);
     let mut result = PlotRenderResult::new(layout, legend);

@@ -18,7 +18,6 @@
 use crate::Error;
 
 use crate::data::PlotData;
-use crate::decorations::legend::LegendEntry;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::{FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -122,7 +121,6 @@ pub(crate) fn measure_marks(
     let stats = &prepared.stats;
     let x_levels = &sample.x_levels;
     let group_levels = &sample.group_levels;
-    let hue_levels = &sample.hue_levels;
     let group_active = !group_levels.is_empty();
     let base_y_range = layout.projection.y_range();
     let mut rendered_maxima =
@@ -138,19 +136,7 @@ pub(crate) fn measure_marks(
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
     let legend_entries =
-        data.collect_source(hue_levels.iter().enumerate().map(|(idx, label)| {
-            let color = theme.colors[idx % theme.colors.len()];
-            Ok(LegendEntry::line_fill(
-                chart.point_legend_identity(label, data)?,
-                LineStyle::solid(theme.foreground, theme.interval_width),
-                FillStyle {
-                    color,
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 1.0,
-                },
-            ))
-        }))?;
+        categorical_distribution::retained(chart)?.guide_entries(chart, theme, data)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,

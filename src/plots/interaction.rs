@@ -55,6 +55,57 @@ pub(crate) struct PreparedInteraction {
     traces: Vec<Trace>,
 }
 
+impl PreparedInteraction {
+    pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
+        self.traces
+            .iter()
+            .filter_map(|trace| trace.identity.hue.as_deref())
+    }
+
+    pub(crate) fn guide_entries(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        let mut entries = Vec::new();
+        data.reserve_source(&mut entries, self.traces.len())?;
+        for trace in &self.traces {
+            if trace.identity.hue.is_none() && chart.interaction_styles_spec().is_none() {
+                continue;
+            }
+            let key = trace
+                .identity
+                .hue
+                .as_deref()
+                .or(trace.identity.group.as_deref())
+                .ok_or_else(|| Error::Render("interaction trace has no color identity".into()))?;
+            let color = chart.categorical_color("interaction", key, trace.color_index, theme)?;
+            let identity = chart.collective_legend_identity(&trace.identity, data)?;
+            let point = chart
+                .point_style(color, 4)
+                .with_shape(trace.style.point_shape);
+            let line = trace.style.line_pattern.line_style(color, 1.8);
+            entries.push(
+                match (
+                    chart.markers_visible(),
+                    chart.interaction_connectors_visible(),
+                ) {
+                    (true, true) => LegendEntry::point_line(identity, point, line),
+                    (true, false) => LegendEntry::point(identity, point),
+                    (false, true) => LegendEntry::line(identity, line),
+                    (false, false) => {
+                        return Err(Error::Render(
+                            "interaction legend has no visible glyph component".into(),
+                        ));
+                    }
+                },
+            );
+        }
+        Ok(entries)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedInteractionInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedInteraction)>,
@@ -236,10 +287,6 @@ impl InteractionPayload {
     clippy::cast_precision_loss,
     reason = "selected bounded category projection and frozen trace styles"
 )]
-#[expect(
-    clippy::too_many_lines,
-    reason = "validate scientific spans while retaining each trace's geometry and legend"
-)]
 pub(crate) fn measure_marks(
     chart: &Plot,
     context: PlotRenderContext<'_>,
@@ -269,9 +316,8 @@ pub(crate) fn measure_marks(
         clip: layout.projection.panel_box(),
         traces: Vec::new(),
     };
-    let mut legends = Vec::new();
+    let legends = marks.guide_entries(chart, context.theme, data)?;
     data.reserve_source(&mut payload.traces, marks.traces.len())?;
-    data.reserve_source(&mut legends, marks.traces.len())?;
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
     for trace in &marks.traces {
@@ -319,25 +365,6 @@ pub(crate) fn measure_marks(
         }
         if let Some(style) = &selected.marker {
             geometry.scatter(&selected.points, style, clip)?;
-        }
-        if trace.identity.hue.is_some() || chart.interaction_styles_spec().is_some() {
-            let identity = chart.collective_legend_identity(&trace.identity, data)?;
-            legends.push(
-                match (
-                    chart.markers_visible(),
-                    chart.interaction_connectors_visible(),
-                ) {
-                    (true, true) => LegendEntry::point_line(identity, point, line),
-                    (true, false) => LegendEntry::point(identity, point),
-                    (false, true) => LegendEntry::line(identity, line),
-                    (false, false) => {
-                        return Err(Error::Render(
-                            "interaction legend has no visible glyph component".into(),
-                        )
-                        .into())
-                    }
-                },
-            );
         }
         payload.traces.push(selected);
     }

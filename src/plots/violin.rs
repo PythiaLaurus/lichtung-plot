@@ -30,7 +30,6 @@ pub(crate) mod precomputed;
 use crate::Error;
 
 use crate::data::PlotData;
-use crate::decorations::legend::LegendEntry;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
 use crate::render::backend::{FillStyle, LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
@@ -201,32 +200,12 @@ pub(crate) fn measure_marks(
     let sample = &prepared.sample;
     let x_levels = &sample.x_levels;
     let group_levels = &sample.group_levels;
-    let hue_levels = &sample.hue_levels;
     let support_range = prepared.support_range;
     let base_display_range = layout.projection.y_range();
     let rendered_maxima = data.collect_source((0..x_levels.len()).map(|_| Ok(support_range.1)))?;
     let overlay = chart.raw_overlay_spec();
     let panel = context.panel;
-    let legend_entries =
-        data.collect_source(hue_levels.iter().enumerate().map(|(idx, label)| {
-            let color = chart.categorical_color(family, label, idx, theme)?;
-            let identity = chart.point_legend_identity(label, data)?;
-            let fill = FillStyle {
-                color,
-                stroke: theme.foreground,
-                stroke_width: 1.0,
-                opacity: 0.70,
-            };
-            Ok(if distribution_layout == DistributionLayout::Raincloud {
-                LegendEntry::point_fill(
-                    identity,
-                    crate::plots::distribution_sample::overlay_style(color),
-                    fill,
-                )
-            } else {
-                LegendEntry::fill(identity, fill)
-            })
-        }))?;
+    let legend_entries = retained.guide_entries(chart, theme, data)?;
     let significance = if group_levels.is_empty() {
         crate::significance::plan(
             chart,

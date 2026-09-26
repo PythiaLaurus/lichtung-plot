@@ -1,6 +1,7 @@
 //! Root-owned categorical distribution semantics and selected display operands.
 
 use crate::data::PlotData;
+use crate::decorations::legend::LegendEntry;
 use crate::render::backend::{Backend, FillStyle, LineStyle, Point2D, PointStyle};
 use crate::{Error, Plot, PlotKind};
 
@@ -15,6 +16,69 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
+    pub(crate) fn guide_entries(
+        &self,
+        chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
+        data: PlotData<'_>,
+    ) -> Result<Vec<LegendEntry>, Error> {
+        match self {
+            Self::Boxplot(prepared) => {
+                data.collect_source(prepared.sample.hue_levels.iter().enumerate().map(
+                    |(index, label)| {
+                        let color = theme.colors[index % theme.colors.len()];
+                        Ok(LegendEntry::line_fill(
+                            chart.point_legend_identity(label, data)?,
+                            LineStyle::solid(theme.foreground, theme.interval_width),
+                            FillStyle {
+                                color,
+                                stroke: theme.foreground,
+                                stroke_width: 1.0,
+                                opacity: 1.0,
+                            },
+                        ))
+                    },
+                ))
+            }
+            Self::Violin(prepared) => {
+                let family = if chart.kind() == PlotKind::Violin {
+                    "violin"
+                } else {
+                    "raincloud"
+                };
+                data.collect_source(prepared.sample.hue_levels.iter().enumerate().map(
+                    |(index, label)| {
+                        let color = chart.categorical_color(family, label, index, theme)?;
+                        let identity = chart.point_legend_identity(label, data)?;
+                        let fill = FillStyle {
+                            color,
+                            stroke: theme.foreground,
+                            stroke_width: 1.0,
+                            opacity: 0.70,
+                        };
+                        Ok(if chart.kind() == PlotKind::Violin {
+                            LegendEntry::fill(identity, fill)
+                        } else {
+                            LegendEntry::point_fill(
+                                identity,
+                                crate::plots::distribution_sample::overlay_style(color),
+                                fill,
+                            )
+                        })
+                    },
+                ))
+            }
+            Self::Supplied(prepared) => prepared.guide_entries(chart, theme, data),
+        }
+    }
+
+    pub(crate) fn hue_levels(&self) -> &[String] {
+        match self {
+            Self::Boxplot(prepared) => &prepared.sample.hue_levels,
+            Self::Violin(prepared) => &prepared.sample.hue_levels,
+            Self::Supplied(prepared) => prepared.hue_levels(),
+        }
+    }
     pub(crate) fn new(
         chart: &Plot,
         data: PlotData<'_>,
