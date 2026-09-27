@@ -133,7 +133,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2b | IN PROGRESS | T5b2a | Umbrella; completes after T5b2b1-b3 |
 | T5b2b1 | COMPLETE | T5b2a | `refactor(legend): measure assigned discrete outside flow` |
 | T5b2b2 | COMPLETE | T5b2b1 | `refactor(legend): replace legacy inside packing` |
-| T5b2b3 | PENDING | T5b2b2 | `feat(legend): measure shared continuous guides` |
+| T5b2b3 | IN PROGRESS | T5b2b2 | Umbrella; completes after T5b2b3a-b |
+| T5b2b3a | COMPLETE | T5b2b2 | `feat(canvas): install merged continuous domains` |
+| T5b2b3b | PENDING | T5b2b3a | `feat(legend): measure and draw shared continuous guides` |
 | T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
@@ -496,6 +498,25 @@ tests pass, along with strict Clippy. Logs: `/tmp/opencode/t5b2b2-lint.log`,
 `/tmp/opencode/t5b2b2-matrix-unit.log`, and
 `/tmp/opencode/t5b2b2-composition-integration.log`. T5b2b3 adds the
 continuous guide producer.
+
+T5b2b3 has two ordered commits. First install the prepared merged domain into
+Heatmap and Beeswarm children before font discovery and frozen color selection,
+updating any still-visible local guide labels and selected colors together.
+Then measure and draw the sole Canvas continuous guide from the same descriptor,
+suppressing its children's local colorbars and reserves in that same change.
+This prevents a displayed shared scale from disagreeing with child mark colors.
+
+T5b2b3a closure: Canvas installs the pre-font merged continuous domain in each
+prepared Heatmap/Beeswarm child before its text census or selected geometry.
+Heatmap cell colors and local value labels use the merged domain; Beeswarm
+prepared points, gradient stops, and local labels do likewise. A selected
+numeric value common to two Beeswarm children now has exactly the same RGB.
+Existing local guides still display that same domain until T5b2b3b replaces
+them with one Canvas guide. Focused Canvas, Heatmap, Beeswarm, and shared-domain
+tests, plus strict Clippy, pass. Logs: `/tmp/opencode/t5b2b3a-lint.log`,
+`/tmp/opencode/t5b2b3a-canvas-unit.log`,
+`/tmp/opencode/t5b2b3a-heatmap-unit.log`, and
+`/tmp/opencode/t5b2b3a-beeswarm-unit.log`.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

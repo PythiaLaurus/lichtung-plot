@@ -77,6 +77,20 @@ impl HeatmapData {
             },
         )
     }
+
+    pub(crate) fn install_shared_domain(
+        &mut self,
+        descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), Error> {
+        self.domain = ColorDomain {
+            minimum: descriptor.domain.0,
+            maximum: descriptor.domain.1,
+            center: descriptor.center,
+        };
+        self.colorbar_values = prepare_colorbar_values(self.domain, self.has_missing, data)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -656,27 +670,7 @@ pub(crate) fn prepare<'a>(
                 .expect("reserved annotation identity");
             Ok(Some(owner))
         }))?;
-    let mut colorbar_values = Vec::new();
-    data.reserve_source(&mut colorbar_values, 4)?;
-    for value in [
-        Some(domain.minimum),
-        Some(domain.maximum),
-        domain
-            .center
-            .filter(|center| *center > domain.minimum && *center < domain.maximum),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        use std::fmt::Write;
-        let mut label = String::new();
-        data.reserve_source_string(&mut label, 32)?;
-        write!(label, "{}", ColorbarValue(value)).expect("reserved colorbar number");
-        colorbar_values.push(label);
-    }
-    if has_missing {
-        colorbar_values.push(data.copy_source_string("Missing")?);
-    }
+    let colorbar_values = prepare_colorbar_values(domain, has_missing, data)?;
     Ok(HeatmapData {
         minimum: DeferredHeatmapMinimum {
             missing: has_missing,
@@ -694,6 +688,35 @@ pub(crate) fn prepare<'a>(
         has_missing,
         domain,
     })
+}
+
+fn prepare_colorbar_values(
+    domain: ColorDomain,
+    has_missing: bool,
+    data: crate::data::PlotData<'_>,
+) -> Result<Vec<String>, Error> {
+    let mut labels = Vec::new();
+    data.reserve_source(&mut labels, 4)?;
+    for value in [
+        Some(domain.minimum),
+        Some(domain.maximum),
+        domain
+            .center
+            .filter(|center| *center > domain.minimum && *center < domain.maximum),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        use std::fmt::Write;
+        let mut label = String::new();
+        data.reserve_source_string(&mut label, 32)?;
+        write!(label, "{}", ColorbarValue(value)).expect("reserved colorbar number");
+        labels.push(label);
+    }
+    if has_missing {
+        labels.push(data.copy_source_string("Missing")?);
+    }
+    Ok(labels)
 }
 
 fn validate_options(chart: &Plot) -> Result<(), Error> {

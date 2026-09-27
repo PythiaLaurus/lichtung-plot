@@ -237,6 +237,17 @@ mod d1_tests {
             panic!("merged guide must retain its numeric domain");
         };
         assert_eq!(guide.domain, (0.0, 5.0));
+        for (index, input) in root.prepared().interiors.iter().enumerate() {
+            let marks = &input.as_ref().unwrap().heatmap.as_ref().unwrap().panels[0].1;
+            assert_eq!(
+                marks
+                    .guide_semantics(canvas.panels[index].as_ref().unwrap().data())
+                    .unwrap()
+                    .domain,
+                guide.domain
+            );
+            assert_eq!(marks.guide_labels().collect::<Vec<_>>(), ["0", "5"]);
+        }
         let sources = root
             .prepared()
             .text_census
@@ -248,6 +259,45 @@ mod d1_tests {
             .map(|requirement| requirement.source.as_str())
             .collect::<Vec<_>>();
         assert_eq!(sources, ["0", "5"]);
+    }
+
+    #[test]
+    fn shared_beeswarm_children_select_one_color_for_the_same_numeric_value() {
+        let plot = |values| {
+            Plot::beeswarm(
+                crate::CategoryValues::new("row", ["one", "one"]).unwrap(),
+                crate::NumericValues::new("x", [0.0, 1.0]),
+                crate::NumericValues::new("fill", values),
+            )
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot([0.0, 1.0]))
+            .unwrap()
+            .panel(0, 1, plot([1.0, 5.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared)
+            .size(1200, 640);
+        let root = canvas.preflight_plan().unwrap();
+        let Some(PreparedGuideDescriptor::Continuous(guide)) =
+            root.prepared().shared_guide.as_ref()
+        else {
+            panic!("prepared continuous guide must own the shared domain");
+        };
+        assert_eq!(guide.domain, (0.0, 5.0));
+        let colors = root
+            .prepared()
+            .interiors
+            .iter()
+            .map(|input| {
+                let marks = &input.as_ref().unwrap().beeswarm.as_ref().unwrap().panels[0].1;
+                assert_eq!(marks.guide_semantics().domain, guide.domain);
+                assert_eq!(marks.guide_labels().collect::<Vec<_>>(), ["5.000", "0.000"]);
+                marks.color_for_source_value(1.0).unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(colors[0], colors[1]);
+        assert_ne!(colors[0], guide.palette.high);
     }
 
     #[test]
@@ -2143,6 +2193,43 @@ impl Canvas {
         )
     }
 
+    fn install_shared_continuous_domain(
+        &self,
+        interiors: &mut [Option<crate::layout::interior::PreparedInteriorInputs>],
+        descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<(), Error> {
+        for (index, plot) in self.panels.iter().enumerate() {
+            let Some(plot) = plot else { continue };
+            let Some(input) = interiors.get_mut(index).and_then(Option::as_mut) else {
+                continue;
+            };
+            let data = plot.data().with_axis_resources(resources);
+            match plot.kind() {
+                PlotKind::Heatmap => {
+                    let panels = Arc::get_mut(input.heatmap.as_mut().ok_or_else(|| {
+                        Error::Render("shared Heatmap has no prepared inputs".into())
+                    })?)
+                    .ok_or_else(|| Error::Render("shared Heatmap inputs are aliased".into()))?;
+                    for (_, marks) in &mut panels.panels {
+                        marks.install_shared_domain(descriptor, data)?;
+                    }
+                }
+                PlotKind::Beeswarm => {
+                    let panels = Arc::get_mut(input.beeswarm.as_mut().ok_or_else(|| {
+                        Error::Render("shared Beeswarm has no prepared inputs".into())
+                    })?)
+                    .ok_or_else(|| Error::Render("shared Beeswarm inputs are aliased".into()))?;
+                    for (_, marks) in &mut panels.panels {
+                        marks.install_shared_domain(descriptor, data)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// Prepare point/path hue identities from retained semantics before fonts.
     /// Further categorical families migrate to this same owner in T5b1b2b.
     #[expect(
@@ -2769,7 +2856,7 @@ impl Canvas {
                     }
                 }
                 self.validate_structure()?;
-                let (interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
+                let (mut interiors, shared_x) = self.prepare_interiors(prepared_stage)?;
                 self.validate_shared_guide_kinds(&interiors)?;
                 let point_path_hue_groups = self.prepared_point_path_hue_groups(
                     &interiors,
@@ -2810,6 +2897,13 @@ impl Canvas {
                         ));
                     }
                 };
+                if let Some(PreparedGuideDescriptor::Continuous(descriptor)) = &shared_guide {
+                    self.install_shared_continuous_domain(
+                        &mut interiors,
+                        descriptor,
+                        &prepared_stage.generation_resources(),
+                    )?;
+                }
                 let (mut census, scalar_presence) = self.foundational_text_census(
                     &themes,
                     &interiors,

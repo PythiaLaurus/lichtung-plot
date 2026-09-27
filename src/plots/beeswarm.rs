@@ -101,16 +101,7 @@ pub(crate) fn prepare(
             .then_with(|| a.2.total_cmp(&b.2))
             .then_with(|| a.3.cmp(&b.3))
     })?;
-    let mut values = [String::new(), String::new()];
-    for (label, value) in values.iter_mut().zip([color_range.1, color_range.0]) {
-        use std::fmt::Write;
-        data.reserve_source_string(label, 32)?;
-        if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
-            write!(label, "{value:.3e}").expect("reserved colorbar label");
-        } else {
-            write!(label, "{value:.3}").expect("reserved colorbar label");
-        }
-    }
+    let values = colorbar_values(color_range, data)?;
     Ok(PreparedBeeswarm {
         levels,
         x_data,
@@ -127,6 +118,33 @@ pub(crate) fn prepare(
 }
 
 impl PreparedBeeswarm {
+    #[cfg(test)]
+    pub(crate) fn color_for_source_value(&self, value: f64) -> Option<(u8, u8, u8)> {
+        self.rows
+            .iter()
+            .zip(&self.points)
+            .find(|(row, _)| row.2.to_bits() == value.to_bits())
+            .map(|(_, point)| point.2)
+    }
+
+    pub(crate) fn install_shared_domain(
+        &mut self,
+        descriptor: &crate::decorations::legend::descriptor::ContinuousDescriptor,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<(), Error> {
+        self.values = colorbar_values(descriptor.domain, data)?;
+        self.color_range = descriptor.domain;
+        self.stops = [
+            GradientStop::new(0.0, descriptor.palette.low),
+            GradientStop::new(1.0, descriptor.palette.high),
+        ];
+        data.claim_source_visits(self.rows.len())?;
+        for ((_, _, color), &(_, _, value, _)) in self.points.iter_mut().zip(&self.rows) {
+            *color = continuous_color(value, self.color_range);
+        }
+        Ok(())
+    }
+
     pub(crate) fn guide_semantics(
         &self,
     ) -> crate::decorations::legend::descriptor::ContinuousSemantics {
@@ -190,6 +208,23 @@ impl PreparedBeeswarm {
     pub(crate) fn guide_labels(&self) -> impl Iterator<Item = &str> {
         self.values.iter().map(String::as_str)
     }
+}
+
+fn colorbar_values(
+    range: (f64, f64),
+    data: crate::data::PlotData<'_>,
+) -> Result<[String; 2], Error> {
+    let mut values = [String::new(), String::new()];
+    for (label, value) in values.iter_mut().zip([range.1, range.0]) {
+        use std::fmt::Write;
+        data.reserve_source_string(label, 32)?;
+        if value.abs() >= 1_000_000.0 || (value.abs().to_bits() != 0 && value.abs() < 0.0001) {
+            write!(label, "{value:.3e}").expect("reserved colorbar label");
+        } else {
+            write!(label, "{value:.3}").expect("reserved colorbar label");
+        }
+    }
+    Ok(values)
 }
 
 pub(crate) fn measure(
