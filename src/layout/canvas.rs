@@ -4,18 +4,17 @@
 //! owns the canvas geometry around that panel: title, subtitle, caption,
 //! axis labels, tick labels, and future legend reservations.
 
-use crate::Error;
-
 #[cfg(test)]
 use crate::layout::Layout;
 use crate::layout::{PanelAxisPlan, PhysicalTextAlignment};
 use crate::theme::ResolvedTheme;
 #[cfg(test)]
 use crate::theme::TextAppearance;
+#[cfg(test)]
+use crate::Error;
 
 const MIN_PANEL_WIDTH: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.0;
 const MIN_PANEL_HEIGHT: f64 = super::interior::DeferredLegacyPanelMinimum::SIZE.1;
-const COMPOSED_PANEL_GAP: f64 = 12.0;
 pub(crate) const PANEL_HEADER_GAP: f64 = 4.0;
 
 /// A plot panel rectangle in math-style pixel coordinates.
@@ -167,94 +166,6 @@ impl PanelRequirements {
             top: top.max(required.top + 4.0),
         })
     }
-}
-
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "validated declared tracks fit the exact root coordinate domain"
-)]
-// Canvas parent adapter preservation boundary: declared equal legacy tracks,
-// including sparse cells. T5b owns any measured-track replacement.
-pub(crate) fn allocate_composed_grid_fit(
-    outer: PanelBox,
-    rows: usize,
-    columns: usize,
-    requirements: &[(usize, usize, PanelRequirements)],
-    description: &str,
-    scope: &crate::layout::fit::FitScope,
-) -> Result<crate::layout::fit::FitOutcome<Vec<PanelBox>>, Error> {
-    if rows == 0 || columns == 0 {
-        return Err(Error::Render(format!(
-            "{description} requires at least one row and column"
-        )));
-    }
-    let mut column_left = vec![0.0_f64; columns];
-    let mut column_right = vec![0.0_f64; columns];
-    let mut row_bottom = vec![0.0_f64; rows];
-    let mut row_top = vec![0.0_f64; rows];
-    for &(row, column, requirement) in requirements {
-        if row >= rows || column >= columns {
-            return Err(Error::Render(format!(
-                "{description} requirement ({row}, {column}) is outside {rows}x{columns} grid"
-            )));
-        }
-        column_left[column] = column_left[column].max(requirement.left);
-        column_right[column] = column_right[column].max(requirement.right);
-        row_bottom[row] = row_bottom[row].max(requirement.bottom);
-        row_top[row] = row_top[row].max(requirement.top);
-    }
-
-    let horizontal_reservation = column_left.iter().sum::<f64>()
-        + column_right.iter().sum::<f64>()
-        + columns.saturating_sub(1) as f64 * COMPOSED_PANEL_GAP;
-    let vertical_reservation = row_bottom.iter().sum::<f64>()
-        + row_top.iter().sum::<f64>()
-        + rows.saturating_sub(1) as f64 * COMPOSED_PANEL_GAP;
-    let panel_width = (outer.width() - horizontal_reservation) / columns as f64;
-    let panel_height = (outer.height() - vertical_reservation) / rows as f64;
-    if panel_width < MIN_PANEL_WIDTH || panel_height < MIN_PANEL_HEIGHT {
-        return Ok(crate::layout::fit::FitOutcome::Miss(scope.failure(crate::layout::kernel::FitKind::TrackOrResidual, format!(
-            "{description} is too dense for {rows}x{columns} panels after reserving measured decorations; available panel size is {panel_width:.1}x{panel_height:.1}"
-        ))));
-    }
-
-    let mut x_positions = Vec::with_capacity(columns);
-    let mut cursor = outer.x0;
-    for column in 0..columns {
-        cursor += column_left[column];
-        x_positions.push(cursor);
-        cursor += panel_width + column_right[column];
-        if column + 1 < columns {
-            cursor += COMPOSED_PANEL_GAP;
-        }
-    }
-    let mut y_positions = Vec::with_capacity(rows);
-    let mut cursor = outer.y1;
-    for row in 0..rows {
-        cursor -= row_top[row];
-        y_positions.push(cursor);
-        cursor -= panel_height + row_bottom[row];
-        if row + 1 < rows {
-            cursor -= COMPOSED_PANEL_GAP;
-        }
-    }
-
-    Ok(crate::layout::fit::FitOutcome::Measured(
-        (0..rows)
-            .flat_map(|row| {
-                let x_positions = &x_positions;
-                let y_positions = &y_positions;
-                (0..columns).map(move |column| {
-                    PanelBox::new(
-                        x_positions[column],
-                        x_positions[column] + panel_width,
-                        y_positions[row] - panel_height,
-                        y_positions[row],
-                    )
-                })
-            })
-            .collect(),
-    ))
 }
 
 /// Reserved canvas margins around the plot panel.
@@ -523,24 +434,6 @@ mod tests {
             (None, None, Some(&caption.repeat(8))),
         )
         .is_err());
-    }
-
-    #[test]
-    fn composed_grid_retains_fixed_gap_between_adjacent_panels() {
-        let cells = crate::layout::fit::measured(allocate_composed_grid_fit(
-            PanelBox::new(0.0, 400.0, 0.0, 300.0),
-            2,
-            2,
-            &[],
-            "test grid",
-            &crate::layout::fit::FitScope::root(),
-        ))
-        .unwrap();
-
-        assert_eq!(
-            (cells[1].x0 - cells[0].x1, cells[0].y0 - cells[2].y1),
-            (COMPOSED_PANEL_GAP, COMPOSED_PANEL_GAP)
-        );
     }
 
     #[test]

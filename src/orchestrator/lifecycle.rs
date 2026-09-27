@@ -236,6 +236,7 @@ impl PlotPlan {
                             source.subtitle_text(),
                             source.caption_text(),
                         ],
+                        None,
                     )?;
                 Ok(PreparedPlotInputs {
                     axes,

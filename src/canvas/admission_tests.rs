@@ -74,13 +74,16 @@ fn post_font_canvas_intrinsics_are_scoped_once_before_allocation_and_rebuilt_for
         assert!(work.roots.len() > 1);
         assert_eq!(work.counters[Counter::StandardPanelIntrinsic as usize], 2);
         assert_eq!(work.counters[Counter::HeatmapIntrinsic as usize], 1);
-        assert_eq!(work.counters[Counter::RootTitleIntrinsic as usize], 1);
-        assert_eq!(work.intrinsics.len(), 4);
+        assert_eq!(work.counters[Counter::RootTitleIntrinsic as usize], 4);
+        assert_eq!(work.intrinsics.len(), 7);
         for (counter, scope) in [
             (Counter::StandardPanelIntrinsic, Some("panel-0")),
             (Counter::StandardPanelIntrinsic, Some("panel-2")),
             (Counter::HeatmapIntrinsic, Some("panel-4")),
             (Counter::RootTitleIntrinsic, None),
+            (Counter::RootTitleIntrinsic, Some("panel-0")),
+            (Counter::RootTitleIntrinsic, Some("panel-2")),
+            (Counter::RootTitleIntrinsic, Some("panel-4")),
         ] {
             assert_eq!(
                 work.intrinsics
@@ -156,7 +159,7 @@ fn canvas_root_title_hard_width_rejects_before_child_measurement() {
         )
         .into_error();
     assert_eq!(error.to_string(), expected.to_string());
-    assert_eq!(work.counters[Counter::RootTitleIntrinsic as usize], 1);
+    assert_eq!(work.counters[Counter::RootTitleIntrinsic as usize], 4);
     assert_eq!(
         work.counters[Counter::StandardCoordinateMeasure as usize],
         0
@@ -307,6 +310,10 @@ fn parent_metadata_exact_refusal_precedes_fonts_and_backends() {
 }
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one exact-cap fixture inventories the complete prepared Canvas parent"
+)]
 fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
     let canvas = Canvas::grid(2, 2)
         .unwrap()
@@ -357,10 +364,20 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                 let (mut census, presence) =
                     canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
-                let root_text = canvas.prepare_intrinsics(&themes, &interiors)?;
-                Ok((interiors, shared, resources, root_text))
+                let (root_text, text_intrinsics, plot_intrinsics) =
+                    canvas.prepare_intrinsics(&themes, &interiors)?;
+                Ok((
+                    interiors,
+                    shared,
+                    resources,
+                    root_text,
+                    text_intrinsics,
+                    plot_intrinsics,
+                ))
             },
-            |(interiors, shared, _, root_text), assigned, round| {
+            |(interiors, shared, _, root_text, text_intrinsics, plot_intrinsics),
+             assigned,
+             round| {
                 root_text
                     .check_width(f64::from(assigned.dimensions().0) - 32.0, &FitScope::root())
                     .map_err(crate::layout::fit::PlanError::into_error)?;
@@ -372,12 +389,14 @@ fn complete_parent_admission_has_exact_work_and_storage_boundaries() {
                     shared,
                     None,
                     None,
+                    text_intrinsics,
+                    plot_intrinsics,
                     interiors,
                 )?;
                 children.finish_round(round);
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))
             },
-            |(_, _, resources, _), _, _, _| {
+            |(_, _, resources, _, _, _), _, _, _| {
                 let usage = (
                     resources.usage().unwrap().1,
                     resources.byte_usage().unwrap(),

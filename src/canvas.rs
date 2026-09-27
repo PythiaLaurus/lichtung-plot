@@ -19,6 +19,7 @@ use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 
 mod text_panel;
+mod tracks;
 
 #[cfg(test)]
 pub(crate) mod admission_tests;
@@ -94,6 +95,8 @@ struct PreparedCanvasInputs {
     point_path_hue_groups: Option<Arc<PreparedHueGroups>>,
     shared_guide: Option<PreparedGuideDescriptor>,
     interiors: Vec<Option<crate::layout::interior::PreparedInteriorInputs>>,
+    text_panel_intrinsics: Vec<Option<text_panel::TextPanelIntrinsics>>,
+    plot_intrinsics: Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
 }
 
 struct PreparedCanvasRound<'a> {
@@ -104,6 +107,9 @@ struct PreparedCanvasRound<'a> {
     shared_guide: Option<&'a PreparedGuideDescriptor>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
     shared_x: &'a [Option<(f64, f64)>],
+    text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
+    plot_intrinsics:
+        &'a [Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
 }
 
 enum MeasuredCanvasGuide {
@@ -1071,9 +1077,11 @@ mod d1_tests {
                     let (mut census, presence) =
                         canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
-                    Ok(interiors)
+                    let (_, text_intrinsics, plot_intrinsics) =
+                        canvas.prepare_intrinsics(&themes, &interiors)?;
+                    Ok((interiors, text_intrinsics, plot_intrinsics))
                 },
-                |interiors, assigned, round| {
+                |(interiors, text_intrinsics, plot_intrinsics), assigned, round| {
                     calls += 1;
                     let plan = canvas.build_canvas_plan(
                         Arc::clone(&themes),
@@ -1083,6 +1091,8 @@ mod d1_tests {
                         &[],
                         None,
                         None,
+                        text_intrinsics,
+                        plot_intrinsics,
                         interiors,
                     )?;
                     if calls == 2 {
@@ -1240,9 +1250,11 @@ mod d1_tests {
                     let (mut census, presence) =
                         canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                     themes.prepare_font_environment(&mut census, presence, stage)?;
-                    Ok(interiors)
+                    let (_, text_intrinsics, plot_intrinsics) =
+                        canvas.prepare_intrinsics(&themes, &interiors)?;
+                    Ok((interiors, text_intrinsics, plot_intrinsics))
                 },
-                |interiors, assigned, round| {
+                |(interiors, text_intrinsics, plot_intrinsics), assigned, round| {
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned,
                         canvas.build_canvas_plan(
@@ -1253,6 +1265,8 @@ mod d1_tests {
                             &[],
                             None,
                             None,
+                            text_intrinsics,
+                            plot_intrinsics,
                             interiors,
                         )?,
                     ))
@@ -1347,9 +1361,11 @@ mod d1_tests {
                 let (mut census, presence) =
                     canvas.foundational_text_census(&themes, &interiors, None, stage)?;
                 themes.prepare_font_environment(&mut census, presence, stage)?;
-                Ok(interiors)
+                let (_, text_intrinsics, plot_intrinsics) =
+                    canvas.prepare_intrinsics(&themes, &interiors)?;
+                Ok((interiors, text_intrinsics, plot_intrinsics))
             },
-            |interiors, assigned, round| {
+            |(interiors, text_intrinsics, plot_intrinsics), assigned, round| {
                 Ok(crate::layout::MeasuredLayout::new(
                     assigned,
                     canvas.build_canvas_plan(
@@ -1360,6 +1376,8 @@ mod d1_tests {
                         &[],
                         None,
                         None,
+                        text_intrinsics,
+                        plot_intrinsics,
                         interiors,
                     )?,
                 ))
@@ -2964,7 +2982,8 @@ impl Canvas {
                     prepared_stage,
                 )?;
                 themes.prepare_font_environment(&mut census, scalar_presence, prepared_stage)?;
-                let root_text = self.prepare_intrinsics(&themes, &interiors)?;
+                let (root_text, text_panel_intrinsics, plot_intrinsics) =
+                    self.prepare_intrinsics(&themes, &interiors)?;
                 Ok(PreparedCanvasInputs {
                     themes,
                     text_census: census,
@@ -2973,6 +2992,8 @@ impl Canvas {
                     point_path_hue_groups,
                     shared_guide,
                     interiors,
+                    text_panel_intrinsics,
+                    plot_intrinsics,
                 })
             },
             |prepared, assigned, round| {
@@ -3010,6 +3031,8 @@ impl Canvas {
                     &prepared.shared_x,
                     prepared.point_path_hue_groups.as_deref().map(Vec::as_slice),
                     prepared.shared_guide.as_ref(),
+                    &prepared.text_panel_intrinsics,
+                    &prepared.plot_intrinsics,
                     &prepared.interiors,
                 )?;
                 #[cfg(test)]
@@ -3052,11 +3075,22 @@ impl Canvas {
         Ok(root)
     }
 
+    #[expect(
+        clippy::type_complexity,
+        reason = "one prepared root and both cell-intrinsic inventories are retained before parent allocation"
+    )]
     fn prepare_intrinsics(
         &self,
         themes: &ResolvedCanvasThemes,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
-    ) -> Result<crate::decorations::title_block::plan::RootTitleBlockIntrinsics, Error> {
+    ) -> Result<
+        (
+            crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
+            Vec<Option<text_panel::TextPanelIntrinsics>>,
+            Vec<Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>>,
+        ),
+        Error,
+    > {
         // All summaries use the prepared labels and the actual owner theme,
         // after the font census and before any parent allocation or child probe.
         for (index, inputs) in interiors.iter().enumerate() {
@@ -3067,14 +3101,59 @@ impl Canvas {
                 )?;
             }
         }
-        crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
+        let mut text_panels = Vec::new();
+        crate::layout::fit::reserve(
+            themes.root(),
+            &mut text_panels,
+            self.text_panels.len(),
+            "TextPanel intrinsic summaries",
+        )?;
+        for panel in &self.text_panels {
+            text_panels.push(
+                panel
+                    .as_ref()
+                    .map(|panel| text_panel::TextPanelIntrinsics::prepare(panel, themes.root()))
+                    .transpose()?,
+            );
+        }
+        let mut plot_titles = Vec::new();
+        crate::layout::fit::reserve(
+            themes.root(),
+            &mut plot_titles,
+            self.panels.len(),
+            "Canvas Plot text intrinsics",
+        )?;
+        let resources = themes
+            .root()
+            .prepared_font_environment()?
+            .generation_resources();
+        for (index, plot) in self.panels.iter().enumerate() {
+            let summary = plot
+                .as_ref()
+                .map(|plot| -> Result<_, Error> {
+                    let data = plot.data().with_axis_resources(&resources);
+                    let mut scope = String::new();
+                    data.reserve_source_string(&mut scope, 32)?;
+                    write!(scope, "panel-{index}").expect("reserved Canvas scope");
+                    crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
+                        themes.plot(index).expect("configured Canvas Plot theme"),
+                        [plot.title_text(), plot.subtitle_text(), None],
+                        Some(&scope),
+                    )
+                })
+                .transpose()?;
+            plot_titles.push(summary);
+        }
+        let root = crate::decorations::title_block::plan::RootTitleBlockPlan::intrinsic_widths(
             themes.root(),
             [
                 self.title.as_deref(),
                 self.subtitle.as_deref(),
                 self.caption.as_deref(),
             ],
-        )
+            None,
+        )?;
+        Ok((root, text_panels, plot_titles))
     }
 
     #[expect(
@@ -3392,6 +3471,10 @@ impl Canvas {
         shared_x: &[Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&PreparedGuideDescriptor>,
+        text_panel_intrinsics: &[Option<text_panel::TextPanelIntrinsics>],
+        plot_intrinsics: &[Option<
+            crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
+        >],
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
@@ -3404,6 +3487,8 @@ impl Canvas {
             shared_x,
             prepared_scatter_hues,
             prepared_guide,
+            text_panel_intrinsics,
+            plot_intrinsics,
             interiors,
         )?;
         let mut compact_changes = true;
@@ -3519,6 +3604,10 @@ impl Canvas {
         shared_x: &'a [Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
         prepared_guide: Option<&'a PreparedGuideDescriptor>,
+        text_panel_intrinsics: &'a [Option<text_panel::TextPanelIntrinsics>],
+        plot_intrinsics: &'a [Option<
+            crate::decorations::title_block::plan::RootTitleBlockIntrinsics,
+        >],
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
@@ -3666,6 +3755,8 @@ impl Canvas {
             shared_guide: prepared_guide,
             body_probes,
             shared_x,
+            text_panel_intrinsics,
+            plot_intrinsics,
         })
     }
 
@@ -3830,12 +3921,14 @@ impl Canvas {
                 "canvas shared headers leave insufficient panel space; enlarge the canvas",
             )));
         }
-        let provisional = match crate::layout::canvas::allocate_composed_grid_fit(
+        let provisional = match tracks::allocate(
             outer,
-            self.rows,
-            self.columns,
+            (self.rows, self.columns),
+            &plots,
+            prepared.text_panel_intrinsics,
+            prepared.plot_intrinsics,
             &[],
-            "canvas layout",
+            &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
         )? {
             FitOutcome::Measured(cells) => cells,
@@ -3993,12 +4086,14 @@ impl Canvas {
                 requirements[index].2.right = requirements[index].2.right.max(alignment[1]);
             }
         }
-        let cells = match crate::layout::canvas::allocate_composed_grid_fit(
+        let cells = match tracks::allocate(
             outer,
-            self.rows,
-            self.columns,
+            (self.rows, self.columns),
+            &plots,
+            prepared.text_panel_intrinsics,
+            prepared.plot_intrinsics,
             &requirements,
-            "canvas layout",
+            &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
         )? {
             FitOutcome::Measured(cells) => cells,
@@ -4316,7 +4411,16 @@ impl Canvas {
             };
             #[cfg(test)]
             record_canvas_theme(usize::MAX, "text-plan", themes.root());
-            match TextPanelPlan::measure(text_panel, index, cells[index], themes.root(), &scope)? {
+            let intrinsic = prepared.text_panel_intrinsics[index]
+                .expect("configured TextPanel retains prepared intrinsics");
+            match TextPanelPlan::measure(
+                text_panel,
+                index,
+                cells[index],
+                themes.root(),
+                intrinsic,
+                &scope,
+            )? {
                 FitOutcome::Measured(plan) => text_panels.push(plan),
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             }

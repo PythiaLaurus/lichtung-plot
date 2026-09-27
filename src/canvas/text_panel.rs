@@ -25,6 +25,45 @@ fn text_appearance(theme: &ResolvedTheme) -> [TextAppearance; 2] {
     ]
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct TextPanelIntrinsics {
+    title: (f64, f64),
+    body: (f64, f64),
+    pub(super) minimum: (f64, f64),
+    pub(super) preferred_width: f64,
+}
+
+impl TextPanelIntrinsics {
+    pub(super) fn prepare(source: &TextPanel, theme: &ResolvedTheme) -> Result<Self, Error> {
+        let [title_style, body_style] = text_appearance(theme);
+        let title = fit::intrinsic_widths(
+            theme,
+            source.title(),
+            &title_style,
+            "text panel title intrinsics",
+        )?;
+        let body = fit::intrinsic_widths(
+            theme,
+            source.body(),
+            &body_style,
+            "text panel body intrinsics",
+        )?;
+        let inset = theme.composition.text_panel_inset;
+        Ok(Self {
+            title,
+            body,
+            minimum: (
+                title.0.max(body.0) + 2.0 * inset,
+                title_style.line_height()
+                    + body_style.line_height()
+                    + theme.composition.text_panel_gap
+                    + 2.0 * inset,
+            ),
+            preferred_width: title.1.max(body.1) + 2.0 * inset,
+        })
+    }
+}
+
 impl TextPanelPlan {
     #[expect(
         clippy::too_many_lines,
@@ -35,24 +74,15 @@ impl TextPanelPlan {
         index: usize,
         cell: PanelBox,
         theme: &ResolvedTheme,
+        intrinsics: TextPanelIntrinsics,
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
         let owner = scope.child(AddressRole::TextPanelContent, index)?;
         let title_scope = owner.child(AddressRole::TextPanelTitle, 0)?;
         let body_scope = owner.child(AddressRole::TextPanelBody, 0)?;
         let [title_style, body_style] = text_appearance(theme);
-        let (title_hard, title_preferred) = fit::intrinsic_widths(
-            theme,
-            source.title(),
-            &title_style,
-            "text panel title intrinsics",
-        )?;
-        let (body_hard, body_preferred) = fit::intrinsic_widths(
-            theme,
-            source.body(),
-            &body_style,
-            "text panel body intrinsics",
-        )?;
+        let (title_hard, title_preferred) = intrinsics.title;
+        let (body_hard, body_preferred) = intrinsics.body;
         let x0 = nearest_spatial_quanta(cell.x0)?;
         let x1 = nearest_spatial_quanta(cell.x1)?;
         let y0 = nearest_spatial_quanta(cell.y0)?;

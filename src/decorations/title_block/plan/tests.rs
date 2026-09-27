@@ -193,7 +193,7 @@ fn independent_physical_alignment_does_not_change_wrapping_or_fit() {
         "Latin \u{5e9}\u{5dc}\u{5d5}\u{5dd}\nsmall",
     ] {
         let sources = [Some(source); 3];
-        let widths = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap().widths();
+        let widths = RootTitleBlockPlan::intrinsic_widths(&theme, sources, None).unwrap().widths();
         assert!(widths.1 >= widths.0 && widths.0 > 0.0);
         let base = measure(
             &theme,
@@ -261,7 +261,7 @@ fn root_intrinsic_width_miss_and_storage_refusal_precede_materialization() {
     let theme = crate::Theme::Publication.resolve();
     let sources = [None, Some("Unbreakable"), None];
     let align = RootAlignments::resolve(&theme, [None; 2], [None; 2]);
-    let (hard, _) = RootTitleBlockPlan::intrinsic_widths(&theme, sources)
+    let (hard, _) = RootTitleBlockPlan::intrinsic_widths(&theme, sources, None)
         .unwrap()
         .widths();
     let failure = RootTitleBlockPlan::measure(
@@ -312,7 +312,7 @@ fn intrinsic_summary_and_constrained_title_share_glyph_analysis() {
         Some("Subtitle"),
         Some("Caption"),
     ];
-    let intrinsics = RootTitleBlockPlan::intrinsic_widths(&theme, sources).unwrap();
+    let intrinsics = RootTitleBlockPlan::intrinsic_widths(&theme, sources, None).unwrap();
     let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
     let resources = theme
         .prepared_font_environment()

@@ -99,7 +99,10 @@ impl RootTitleBlockPlan {
     pub(crate) fn intrinsic_widths(
         theme: &ResolvedTheme,
         sources: [Option<&str>; 3],
+        scope: Option<&str>,
     ) -> Result<RootTitleBlockIntrinsics, Error> {
+        #[cfg(not(test))]
+        let _ = scope;
         theme
             .prepared_font_environment()?
             .claim_measurement_call()
@@ -109,7 +112,7 @@ impl RootTitleBlockPlan {
         #[cfg(test)]
         crate::orchestrator::measurements::intrinsic(
             crate::orchestrator::measurements::Counter::RootTitleIntrinsic,
-            None,
+            scope,
         );
         let mut roles = [(0.0_f64, 0.0_f64); 3];
         for ((source, appearance), widths) in sources
