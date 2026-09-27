@@ -234,6 +234,65 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
 }
 
 #[test]
+fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
+    let source = decorated_line();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let plot = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(
+            plot.data(),
+            crate::layout::PanelBox::new(10.0, 600.0, 10.0, 410.0),
+            &theme,
+        ))
+        .unwrap();
+    let prepared = &inputs.line.as_ref().unwrap().panels[0].1;
+    let original = project(
+        &plot,
+        prepared,
+        selected.layout.clone(),
+        &theme,
+        plot.data(),
+    )
+    .unwrap();
+    theme.marks.series_line.width = 2.5;
+    theme.marks.series_line.alpha = 128;
+    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let line = |result: &crate::spec::PlotRenderResult| {
+        let crate::layout::interior::MarkPayload::Line(payload) =
+            &result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Line mark payload");
+        };
+        payload
+            .marks
+            .iter()
+            .find_map(|mark| match mark {
+                LineMark::Line(points, style) => Some((points.clone(), style.clone())),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let (original_points, original_style) = line(&original);
+    let (selected_points, selected_style) = line(&changed);
+    assert_eq!(original_points, selected_points);
+    assert_ne!(original_style, selected_style);
+    assert_eq!(selected_style.width.to_bits(), 2.5_f32.to_bits());
+    assert_eq!(selected_style.color.alpha(), 128);
+    let error = crate::decorations::legend::merge_exact_entries(
+        [
+            original.legend_entries[0].clone(),
+            changed.legend_entries[0].clone(),
+        ],
+        "custom series line style",
+        &OperationGenerationResources::new(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("glyphs must match exactly"));
+}
+
+#[test]
 fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
         let resources = OperationGenerationResources::new();

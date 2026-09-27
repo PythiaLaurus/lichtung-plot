@@ -935,6 +935,28 @@ pub(crate) struct MarkAppearance {
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
     pub(crate) summary_stroke: StrokeAppearance,
+    /// A Line series' data-colored path, reused in its legend glyph.
+    pub(crate) series_line: DataLineAppearance,
+    /// A Trajectory or LinePath series' data-colored path.
+    pub(crate) path_line: DataLineAppearance,
+}
+
+/// One complete data-colored mark stroke; the scale supplies opaque RGB only.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct DataLineAppearance {
+    pub(crate) width: f32,
+    pub(crate) alpha: u8,
+    pub(crate) pattern: StrokePattern,
+}
+
+impl DataLineAppearance {
+    pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> LineStyle {
+        LineStyle {
+            color: Rgba::new(color.0, color.1, color.2, self.alpha),
+            width: self.width,
+            pattern: self.pattern,
+        }
+    }
 }
 
 /// Annotation paths resolve independently of axes, marks, and label typography.
@@ -1171,6 +1193,16 @@ fn resolved_theme(
                 StrokePattern::Solid,
             ),
             summary_stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
+            series_line: DataLineAppearance {
+                width: 1.8,
+                alpha: 255,
+                pattern: StrokePattern::Solid,
+            },
+            path_line: DataLineAppearance {
+                width: 1.4,
+                alpha: 255,
+                pattern: StrokePattern::Solid,
+            },
         },
         annotations: AnnotationAppearance {
             bracket_stroke: BracketStrokeAppearance {
@@ -1535,6 +1567,16 @@ mod tests {
                 summary_stroke: StrokeAppearance {
                     paint: foreground,
                     width: expected.axis_width,
+                    pattern: StrokePattern::Solid,
+                },
+                series_line: DataLineAppearance {
+                    width: 1.8,
+                    alpha: 255,
+                    pattern: StrokePattern::Solid,
+                },
+                path_line: DataLineAppearance {
+                    width: 1.4,
+                    alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
             },

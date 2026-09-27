@@ -177,14 +177,12 @@ impl PreparedLine {
             data.claim_source_visits(group.points.len())?;
             let has_fill = chart.kind() == PlotKind::Line
                 && group.points.iter().all(|point| point.interval.is_some());
-            let line = LineStyle::solid(
-                color,
-                if chart.kind() == PlotKind::Line {
-                    1.8
-                } else {
-                    1.4
-                },
-            );
+            let line = if chart.kind() == PlotKind::Line {
+                &theme.marks.series_line
+            } else {
+                &theme.marks.path_line
+            }
+            .backend_style(color);
             let point =
                 chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
             let fill = FillStyle {
@@ -762,14 +760,12 @@ fn project(
                 }
             }
         }
-        let line = LineStyle::solid(
-            color,
-            if chart.kind() == PlotKind::Line {
-                1.8
-            } else {
-                1.4
-            },
-        );
+        let line = if chart.kind() == PlotKind::Line {
+            &theme.marks.series_line
+        } else {
+            &theme.marks.path_line
+        }
+        .backend_style(color);
         let point_style =
             chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
