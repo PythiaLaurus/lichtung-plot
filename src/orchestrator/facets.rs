@@ -324,7 +324,7 @@ impl FacetPlan {
                             | LegendPosition::OutsideBottomRight
                     );
                     let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
-                    let gap = metrics.pad.max(8.0);
+                    let gap = metrics.outside_gap;
                     let available = (
                         canvas_layout.panel_box.width()
                             - if horizontal { 0.0 } else { minimum.0 + gap },

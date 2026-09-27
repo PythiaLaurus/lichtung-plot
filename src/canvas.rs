@@ -3720,7 +3720,7 @@ impl Canvas {
                 crate::LegendPosition::OutsideTop | crate::LegendPosition::OutsideBottom
             );
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(themes.root());
-            let gap = self.shared_legend_gap.unwrap_or(metrics.pad * 2.0);
+            let gap = self.shared_legend_gap.unwrap_or(metrics.shared_gap);
             let minimum_width = self.columns as f64
                 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
                 + self.columns.saturating_sub(1) as f64 * 12.0;

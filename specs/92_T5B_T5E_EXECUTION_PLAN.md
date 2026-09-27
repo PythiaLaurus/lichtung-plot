@@ -136,7 +136,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2b3 | COMPLETE | T5b2b2 | Umbrella; completed with T5b2b3b |
 | T5b2b3a | COMPLETE | T5b2b2 | `feat(canvas): install merged continuous domains` |
 | T5b2b3b | COMPLETE | T5b2b3a | `feat(legend): measure and draw shared continuous guides` |
-| T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
+| T5b2c | IN PROGRESS | T5b2b | Umbrella; completes after T5b2c1-c2 |
+| T5b2c1 | COMPLETE | T5b2b | `refactor(layout): resolve guide frame gaps from themes` |
+| T5b2c2 | PENDING | T5b2c1 | `refactor(layout): unify assigned outside guide frames` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
@@ -533,6 +535,25 @@ focused Canvas/producer/Heatmap/Beeswarm tests, and strict Clippy pass. Logs:
 `/tmp/opencode/t5b2b3b-canvas-unit.log`, and
 `/tmp/opencode/t5b2b3b-heatmap-integration.log`. T5b2c connects the unified
 guide measurement to native enclosing frames.
+
+T5b2c proceeds in two dependency-ordered commits: first make Plot/facet and
+Canvas shared-track gaps explicit owner-local theme roles (preserving the
+current effective defaults and the exact Canvas override); then route the
+measured guide rectangles and residual panel through common assigned-frame
+requirements instead of parent-specific subtraction and reconstructed gaps.
+The second step must keep complete body and guide fit inside the one bounded
+attempt and preserve exact edge/compact budgets.
+
+T5b2c1 closure: private Plot/facet outside-guide and Canvas shared-guide
+track gaps now resolve from distinct owner-local theme roles, preserving their
+existing effective 8.8px and 17.6px defaults. The explicit Canvas gap remains
+an exact override. Both assigned-frame reservation and placement consume the
+same measured outside gap; a changed private theme role moves the Plot guide
+exactly once. Focused frame, facet, Canvas gap, complete-guide benchmark, and
+strict Clippy checks pass. Logs: `/tmp/opencode/t5b2c1-lint.log`,
+`/tmp/opencode/t5b2c1-frame-gap.log`,
+`/tmp/opencode/t5b2c1-legend-bench.log`, and
+`/tmp/opencode/t5b2c1-canvas-gap.log`.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

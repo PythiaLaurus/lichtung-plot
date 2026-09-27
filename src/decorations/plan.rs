@@ -289,7 +289,7 @@ pub(crate) fn plan_panel_with_context(
             let gutters = round.insets(address, FeedbackKind::AxisGutter);
             let ink = round.insets(address, FeedbackKind::OwnedInk);
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(context.theme);
-            let gap = metrics.pad.max(8.0);
+            let gap = metrics.outside_gap;
             let available = (
                 context.panel.width()
                     - gutters[0]
@@ -1831,7 +1831,7 @@ fn auto_candidate_avoiding_panel_text(
 fn frame_requirements(legend: Option<&Legend>, position: LegendPosition) -> FrameRequirements {
     let mut natural_insets = [0.0; 4];
     if let Some(legend) = legend {
-        let gap = legend.metrics.pad.max(8.0);
+        let gap = legend.metrics.outside_gap;
         match position {
             LegendPosition::OutsideLeftTop
             | LegendPosition::OutsideLeft
@@ -1961,7 +1961,7 @@ fn resolve_box(
 }
 
 fn outside_right(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.pad.max(8.0);
+    let gap = legend.metrics.outside_gap;
     let height = legend.compute_box_height();
     legend.box_at(
         panel.x1 + gap,
@@ -1970,7 +1970,7 @@ fn outside_right(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) 
 }
 
 fn outside_left(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.pad.max(8.0);
+    let gap = legend.metrics.outside_gap;
     let height = legend.compute_box_height();
     legend.box_at(
         panel.x0 - gap - legend.compute_box_width(),
@@ -1979,7 +1979,7 @@ fn outside_left(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -
 }
 
 fn outside_top(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.pad.max(8.0);
+    let gap = legend.metrics.outside_gap;
     legend.box_at(
         panel.x0 + (panel.width() - legend.compute_box_width()).max(0.0) * align,
         panel.y1 + gap,
@@ -1987,7 +1987,7 @@ fn outside_top(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) ->
 }
 
 fn outside_bottom(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.pad.max(8.0);
+    let gap = legend.metrics.outside_gap;
     legend.box_at(
         panel.x0 + (panel.width() - legend.compute_box_width()).max(0.0) * align,
         panel.y0 - gap - legend.compute_box_height(),

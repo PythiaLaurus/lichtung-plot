@@ -798,6 +798,8 @@ pub(crate) struct LegendMetrics {
     pub handle_w: f64,
     /// Handle-to-text gap (px).
     pub handle_text: f64,
+    pub outside_gap: f64,
+    pub shared_gap: f64,
     pub column_gap: f64,
     pub row_gap: f64,
     pub title_gap: f64,
@@ -823,6 +825,8 @@ impl LegendMetrics {
             title_h,
             handle_w,
             handle_text,
+            outside_gap: theme.legend.outside_gap,
+            shared_gap: theme.legend.shared_gap,
             column_gap: theme.legend.column_gap,
             row_gap: theme.legend.row_gap,
             title_gap: theme.legend.title_gap,
@@ -1280,6 +1284,8 @@ impl Legend {
             self.metrics.title_h,
             self.metrics.handle_w,
             self.metrics.handle_text,
+            self.metrics.outside_gap,
+            self.metrics.shared_gap,
             self.metrics.column_gap,
             self.metrics.row_gap,
             self.metrics.title_gap,
@@ -1602,6 +1608,29 @@ pub(crate) fn test_assigned_legend(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assigned_outside_frame_uses_the_owner_theme_gap_once() {
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.legend.outside_gap = 24.0;
+        let legend =
+            test_assigned_legend("group", vec![entry("one")], (300.0, 240.0), &theme).unwrap();
+        let width = legend.compute_box_width();
+        let crate::layout::fit::FitOutcome::Measured((panel, placed)) =
+            crate::decorations::plan::place_outside_legend(
+                legend,
+                crate::LegendPosition::OutsideRight,
+                crate::layout::PanelBox::new(0.0, 500.0, 0.0, 300.0),
+                (40.0, 40.0),
+                &crate::layout::fit::FitScope::root(),
+            )
+            .unwrap()
+        else {
+            panic!("right guide and containing panel must fit");
+        };
+        assert!((panel.x1 - (500.0 - width - 24.0)).abs() < 0.01);
+        assert!((placed.bounds.left - panel.x1 - 24.0).abs() < 0.01);
+    }
 
     #[test]
     #[expect(
