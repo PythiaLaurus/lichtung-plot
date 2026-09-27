@@ -1,5 +1,17 @@
 # Local-Search Measurements
 
+### T5c1 Independent RGBA Point And Outline Migration
+
+The next T5c1 checkout replaces the private point's RGB-plus-float-opacity
+carrier with independent RGBA fill and outline. Default point opacity `0.82`
+becomes `209/255`, and exact layer opacity `0.35` becomes `89/255` after the
+same nearest-even quantization. Seventeen inspected visual snapshots change
+the point fill-opacity attribute only; glyph positions, outlines, axes and
+guide ownership remain unchanged. SVG/PNG replay, point/outline painted-ink
+tests, actual point/guide equivalence, and focused composition/line/mark
+tests cover the result. The immediately preceding fill-only output/fingerprint
+checkpoint is commit `72582a8`; earlier pre-RGBA vectors remain below.
+
 ### T5c1 Independent RGBA Fill And Stroke Migration
 
 The T5c1 private fill carrier now has independent 8-bit RGBA fill and stroke.

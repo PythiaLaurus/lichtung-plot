@@ -736,7 +736,6 @@ fn optional_point_style_eq(left: Option<&PointStyle>, right: Option<&PointStyle>
             left.color == right.color
                 && left.radius == right.radius
                 && left.shape == right.shape
-                && left.opacity.to_bits() == right.opacity.to_bits()
                 && match (left.outline, right.outline) {
                     (Some(left), Some(right)) => {
                         left.color == right.color

@@ -171,7 +171,6 @@ impl Backend for RecordingBackend {
         };
         let style = PointStyle {
             color: scatter.color,
-            opacity: scatter.opacity,
             radius,
             shape,
             outline: scatter

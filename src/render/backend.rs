@@ -121,53 +121,52 @@ impl PartialEq<(u8, u8, u8)> for Rgba {
 
 /// Visual style for a scatter point.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PointStyle {
-    /// Fill color (R, G, B).
-    pub color: (u8, u8, u8),
+pub(crate) struct PointStyle {
+    /// Complete point fill paint.
+    pub(crate) color: Rgba,
     /// Radius in pixels.
-    pub radius: u32,
+    pub(crate) radius: u32,
     /// Optional outline stroke.
-    pub outline: Option<PointOutline>,
+    pub(crate) outline: Option<PointOutline>,
     /// Marker geometry.
-    pub shape: PointShape,
-    /// Fill opacity in the inclusive range `[0, 1]`.
-    pub opacity: f64,
+    pub(crate) shape: PointShape,
 }
 
 impl PointStyle {
     /// Construct a filled point with the default publication outline.
     #[must_use]
-    pub fn new(color: (u8, u8, u8), radius: u32) -> Self {
+    pub(crate) fn new(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color,
+            color: Rgba::from(color).with_alpha(209),
             radius,
             outline: Some(PointOutline::default()),
             shape: PointShape::Circle,
-            opacity: 0.82,
         }
     }
 
     /// Construct a filled point without an outline.
     #[must_use]
-    pub fn plain(color: (u8, u8, u8), radius: u32) -> Self {
+    pub(crate) fn plain(color: (u8, u8, u8), radius: u32) -> Self {
         Self {
-            color,
+            color: Rgba::from(color).with_alpha(209),
             radius,
             outline: None,
             shape: PointShape::Circle,
-            opacity: 0.82,
         }
     }
 
     /// Construct a filled point with an explicit outline setting.
     #[must_use]
-    pub fn with_outline(color: (u8, u8, u8), radius: u32, outline: Option<PointOutline>) -> Self {
+    pub(crate) fn with_outline(
+        color: (u8, u8, u8),
+        radius: u32,
+        outline: Option<PointOutline>,
+    ) -> Self {
         Self {
-            color,
+            color: Rgba::from(color).with_alpha(209),
             radius,
             outline,
             shape: PointShape::Circle,
-            opacity: 0.82,
         }
     }
 
@@ -179,20 +178,19 @@ impl PointStyle {
     }
 
     /// Set the point fill opacity.
-    #[must_use]
-    pub const fn with_opacity(mut self, opacity: f64) -> Self {
-        self.opacity = opacity;
-        self
+    pub(crate) fn with_opacity(mut self, opacity: f64) -> Result<Self, Error> {
+        self.color = self.color.with_alpha(Rgba::quantized_alpha(opacity)?);
+        Ok(self)
     }
 }
 
 /// Outline stroke for scatter-like point marks.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PointOutline {
-    /// Stroke color (R, G, B).
-    pub color: (u8, u8, u8),
+pub(crate) struct PointOutline {
+    /// Independent complete outline paint.
+    pub(crate) color: Rgba,
     /// Stroke width as a proportion of the point radius.
-    pub width_ratio: f64,
+    pub(crate) width_ratio: f64,
 }
 
 impl PointOutline {
@@ -206,7 +204,7 @@ impl PointOutline {
 impl Default for PointOutline {
     fn default() -> Self {
         Self {
-            color: (255, 255, 255),
+            color: Rgba::rgb(255, 255, 255),
             width_ratio: 0.1,
         }
     }
@@ -829,12 +827,6 @@ pub(crate) fn validate_triangle_points(
 }
 
 pub(crate) fn validate_point_style(style: &PointStyle) -> Result<(), Error> {
-    if !style.opacity.is_finite() || !(0.0..=1.0).contains(&style.opacity) {
-        return Err(Error::Render(format!(
-            "point opacity must be finite and in [0, 1]; got {}",
-            style.opacity
-        )));
-    }
     if let Some(outline) = style.outline {
         let width = outline.width_for_radius(style.radius);
         if !outline.width_ratio.is_finite() || outline.width_ratio < 0.0 || !width.is_finite() {

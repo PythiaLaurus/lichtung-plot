@@ -11,19 +11,19 @@ fn marginal_full_svg_fingerprints() {
         (
             lichtung_plot::Theme::Publication,
             [
-                (21407, 0xd98b_8667_3bf4_eda3),
-                (22520, 0x4e6e_8fe7_8fff_b7e9),
-                (22468, 0x37dc_e108_76a3_247e),
-                (20298, 0x0b82_06e4_e0c7_15ea),
+                (21491, 0x25b0_3588_4d7a_7027),
+                (22632, 0xd27a_773c_c3ba_409b),
+                (22580, 0x571d_cb5e_faa5_8d48),
+                (20382, 0xcd38_c610_5045_7780),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (20960, 0x1167_e8da_cd48_f613),
-                (22214, 0x874e_499b_d3cb_5dcf),
-                (22163, 0xee10_4c90_f944_01a5),
-                (19977, 0x91ed_5cbf_bafc_9a36),
+                (21044, 0x2a1d_a522_3aec_375b),
+                (22326, 0x7c9b_7ec5_4cb4_604d),
+                (22275, 0xa753_eef6_5294_fc0d),
+                (20061, 0xd509_cf22_f29a_d784),
             ],
         ),
     ] {

@@ -223,7 +223,7 @@ impl PreparedLine {
             if let Some(label) = &layer.legend {
                 data.reserve_source(&mut entries, 1)?;
                 let style = chart.point_layers()[index]
-                    .point_style(theme.colors[(slots + index) % theme.colors.len()]);
+                    .point_style(theme.colors[(slots + index) % theme.colors.len()])?;
                 entries.push(
                     LegendEntry::point(chart.point_legend_identity(label, data)?, style)
                         .without_hue_level(),
@@ -820,7 +820,7 @@ fn project(
             prepared.primary_color_slots
         };
         let style = chart.point_layers()[index]
-            .point_style(theme.colors[(slots + index) % theme.colors.len()]);
+            .point_style(theme.colors[(slots + index) % theme.colors.len()])?;
         let points = data.collect_source(layer.points.iter().map(|&(x, y)| {
             data.claim_source_visits(1)?;
             Ok(project(x, y))
@@ -846,7 +846,7 @@ fn project(
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
                 let mut appearance = theme.legacy_text_appearance(10, crate::TextWeight::Normal);
                 appearance.line_height_multiplier = 1.2;
-                appearance.paint = style.color.into();
+                appearance.paint = style.color;
                 let plan = theme.measure_legacy_appearance_text(
                     label,
                     &appearance,

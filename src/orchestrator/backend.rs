@@ -1578,7 +1578,7 @@ mod tests {
             (0, 0, 0),
             1,
             Some(crate::render::backend::PointOutline {
-                color: (0, 0, 0),
+                color: (0, 0, 0).into(),
                 width_ratio: 1.0 / 4096.0,
             }),
         );
@@ -2148,24 +2148,24 @@ mod tests {
             )?;
             backend.draw_scatter(
                 &[Point2D::new(10.0, 20.0)],
-                &PointStyle::plain((1, 2, 3), 2).with_opacity(1.0),
+                &PointStyle::plain((1, 2, 3), 2).with_opacity(1.0).unwrap(),
             )
         });
         let plan = root.plan();
-        validate_text_replay_plan(100, 100, plan, "legacy fixture Null").unwrap();
+        validate_text_replay_plan(100, 100, plan, "complete paint fixture Null").unwrap();
         let mut writer = plan.take_svg_backend().unwrap();
-        plan.replay(100, 100, &mut writer, "legacy fixture SVG")
+        plan.replay(100, 100, &mut writer, "complete paint fixture SVG")
             .unwrap();
         let scene = crate::scene::RenderedScene::new(100, 100, writer.into_output()).unwrap();
-        let legacy = concat!(
+        let expected = concat!(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" role=\"img\">\n",
             "<style>line,path,polyline,polygon,circle{vector-effect:non-scaling-stroke}</style>\n",
             "<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n",
-            "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#010203\" fill-opacity=\"1\"/>\n",
+            "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#010203\"/>\n",
             "</svg>\n",
         ).as_bytes();
-        assert_eq!(scene.svg_bytes(), legacy);
-        assert_eq!(scene.svg_with_text_as_paths().unwrap(), legacy);
+        assert_eq!(scene.svg_bytes(), expected);
+        assert_eq!(scene.svg_with_text_as_paths().unwrap(), expected);
         let options = crate::PngOptions {
             sizing: crate::PngSizing::Source,
             compression: crate::PngCompression::Balanced,
@@ -2175,16 +2175,16 @@ mod tests {
             &options,
         )
         .unwrap();
-        let legacy_png =
-            crate::render::svg_backend::rasterize_svg_bytes_to_png(legacy, target, &options)
+        let expected_png =
+            crate::render::svg_backend::rasterize_svg_bytes_to_png(expected, target, &options)
                 .unwrap();
         let png = scene.png_bytes(&options).unwrap();
-        assert_eq!(png, legacy_png);
+        assert_eq!(png, expected_png);
         println!(
-            "r4 legacy SVG SHA-256: {:x}",
+            "complete RGBA SVG SHA-256: {:x}",
             Sha256::digest(scene.svg_bytes())
         );
-        println!("r4 legacy PNG SHA-256: {:x}", Sha256::digest(&png));
+        println!("complete RGBA PNG SHA-256: {:x}", Sha256::digest(&png));
     }
 
     #[test]

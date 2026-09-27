@@ -560,7 +560,7 @@ mod tests {
                     style.outline = None;
                 }
                 for opacity in [0.0, 0.5, 1.0] {
-                    style.opacity = opacity;
+                    style = style.with_opacity(opacity).unwrap();
                     let mut selected = GeometrySnapshot::new(&theme).unwrap();
                     selected.scatter(&points, &style, clip).unwrap();
                     let mut legacy = GeometryBackend::new(&theme).unwrap();

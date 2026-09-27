@@ -21,9 +21,9 @@ expression: normalize_embedded_font(&svg)
 </g>
 <g clip-path="url(#clip-0)">
 <polyline points="98.36328125,125 232,223.181640625 365.63671875,26.818359375" fill="none" stroke="#0072B2" stroke-width="1.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="98.36328125" cy="125" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="232" cy="223.181640625" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="365.63671875" cy="26.818359375" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="98.36328125" cy="125" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="232" cy="223.181640625" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="365.63671875" cy="26.818359375" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
 </g>
 <g id="axes">
 <polyline points="85,233 379,233" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>

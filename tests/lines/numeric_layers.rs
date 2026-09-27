@@ -401,7 +401,7 @@ fn separate_point_layers_preserve_row_count_radius_and_opacity() {
             line.starts_with("<circle ")
                 && line.contains("fill=\"#7B2DC8\"")
                 && line.contains("r=\"5\"")
-                && line.contains("fill-opacity=\"0.35\"")
+                && line.contains("fill-opacity=\"0.34901960784313724\"")
         })
         .count();
     assert_eq!(count, 7);
@@ -430,7 +430,9 @@ fn point_layer_and_line_ribbon_share_one_projection() {
         .unwrap();
     let ribbon = output
         .lines()
-        .find(|line| line.starts_with("<polygon ") && line.contains("fill-opacity=\"0.18\""))
+        .find(|line| {
+            line.starts_with("<polygon ") && line.contains("fill-opacity=\"0.1803921568627451\"")
+        })
         .unwrap();
     let x_prefix = format!("{},", attribute(point, "cx"));
     assert!(line.contains(&coordinate) && ribbon.matches(&x_prefix).count() == 2);
@@ -527,5 +529,5 @@ fn unused_numeric_layer_defaults_leave_standard_line_scene_inert() {
     let second = svg(line_plot(&line_data()));
     assert_eq!(first, second);
     assert!(!first.contains("#C81122") && !first.contains("#7B2DC8"));
-    assert!(first.contains("fill-opacity=\"0.82\""));
+    assert!(first.contains("fill-opacity=\"0.8196078431372549\""));
 }

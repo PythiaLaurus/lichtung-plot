@@ -74,11 +74,10 @@ enum Observation {
 
 #[derive(Debug, PartialEq, Eq)]
 struct PointGlyphState {
-    color: (u8, u8, u8),
+    color: crate::render::backend::Rgba,
     radius: u32,
     shape: crate::PointShape,
-    opacity: u64,
-    outline: Option<((u8, u8, u8), u64)>,
+    outline: Option<(crate::render::backend::Rgba, u64)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -535,7 +534,6 @@ impl FeedbackRound {
                     color: style.color,
                     radius: style.radius,
                     shape: style.shape,
-                    opacity: number(style.opacity)?,
                     outline: style
                         .outline
                         .map(|outline| {

@@ -194,7 +194,7 @@ impl BarPointLayer {
         self.opacity
     }
 
-    pub(crate) fn point_style(&self) -> crate::render::backend::PointStyle {
+    pub(crate) fn point_style(&self) -> Result<crate::render::backend::PointStyle, Error> {
         crate::render::backend::PointStyle::plain(self.color, self.radius)
             .with_opacity(self.opacity)
     }
@@ -292,7 +292,7 @@ impl PointLayer {
     pub(crate) fn point_style(
         &self,
         automatic_color: (u8, u8, u8),
-    ) -> crate::render::backend::PointStyle {
+    ) -> Result<crate::render::backend::PointStyle, Error> {
         crate::render::backend::PointStyle::plain(
             self.color.unwrap_or(automatic_color),
             self.radius,

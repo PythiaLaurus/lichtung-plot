@@ -36,12 +36,12 @@ expression: normalize_embedded_font(&svg)
 <polyline points="242.78125,130.7255859375 254.513671875,130.7255859375" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="242.78125,155.53515625 254.513671875,155.53515625 254.513671875,138.9951171875 242.78125,138.9951171875" fill="#FFFFFF" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 <polyline points="242.78125,147.265625 254.513671875,147.265625" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="171.0107421875" cy="169.8193359375" r="2" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="171.0107421875" cy="150.2724609375" r="2" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="386.6689453125" cy="192.3740234375" r="2" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="386.6689453125" cy="158.5419921875" r="2" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="248.6474609375" cy="163.8046875" r="2" fill="#D55E00" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="248.6474609375" cy="130.7255859375" r="2" fill="#D55E00" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="171.0107421875" cy="169.8193359375" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="171.0107421875" cy="150.2724609375" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="386.6689453125" cy="192.3740234375" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="386.6689453125" cy="158.5419921875" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="248.6474609375" cy="163.8046875" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="248.6474609375" cy="130.7255859375" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
 </g>
 <path class="significance-bracket" d="M 209.8291015625 77 L 425.4873046875 77 M 209.8291015625 77 L 209.8291015625 84 M 425.4873046875 77 L 425.4873046875 84" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round"/>
 <text x="313.658203125" y="69" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">*</text>

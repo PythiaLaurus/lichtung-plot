@@ -912,6 +912,7 @@ fn scatter_bounds(
     backend::validate_point_style(style)?;
     let outline_width = style
         .outline
+        .filter(|outline| outline.color.alpha() > 0)
         .map(|outline| {
             super::coordinates::CanonicalCoordinate::nonnegative_length(
                 outline.width_for_radius(style.radius),
@@ -929,7 +930,7 @@ fn scatter_bounds(
             )?
             .units();
             for point in canonical_points {
-                if style.opacity == 0.0 && outline_width == 0 {
+                if style.color.alpha() == 0 && outline_width == 0 {
                     continue;
                 }
                 record(GeometryBox::from_canonical_points(
@@ -940,7 +941,7 @@ fn scatter_bounds(
         }
         PointShape::TriangleUp => {
             for triangle in backend::validate_triangle_points(points, style.radius)? {
-                let fill = (style.opacity > 0.0)
+                let fill = (style.color.alpha() > 0)
                     .then(|| GeometryBox::from_canonical_points(&triangle, 0))
                     .transpose()?
                     .flatten();
@@ -1693,11 +1694,12 @@ mod tests {
                     (0, 0, 0),
                     1,
                     Some(backend::PointOutline {
-                        color: (0, 0, 0),
+                        color: (0, 0, 0).into(),
                         width_ratio: f64::from(width),
                     }),
                 )
-                .with_opacity(0.0),
+                .with_opacity(0.0)
+                .unwrap(),
             ),
             "bracket" => geometry.draw_bracket(
                 &SignificanceBracket {
@@ -1911,7 +1913,8 @@ mod tests {
                     &[Point2D::new(10.0, 10.0)],
                     &PointStyle::new((0, 0, 0), 2)
                         .with_shape(shape)
-                        .with_opacity(0.0),
+                        .with_opacity(0.0)
+                        .unwrap(),
                 )
                 .unwrap();
             let bounds = geometry.bounds()[0];
@@ -2426,6 +2429,35 @@ mod tests {
         assert!((bounds.overlap_area(other, 0.0) - 2.0).abs() < f64::EPSILON);
         assert!((weighted.overlap_area(other, 0.0) - 200.0).abs() < f64::EPSILON);
         assert!((bounds.overlap_area(other, 1.0) - 6.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn invisible_point_parts_do_not_create_collision_bounds() {
+        let theme = crate::Theme::Publication.resolve();
+        let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
+        for shape in [PointShape::Circle, PointShape::TriangleUp] {
+            let mut style = PointStyle::with_outline(
+                (1, 2, 3),
+                2,
+                Some(backend::PointOutline {
+                    color: backend::Rgba::new(4, 5, 6, 0),
+                    width_ratio: 0.5,
+                }),
+            )
+            .with_shape(shape);
+            style.color = backend::Rgba::new(1, 2, 3, 0);
+            let mut empty = GeometrySnapshot::new(&theme).unwrap();
+            empty
+                .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
+                .unwrap();
+            assert!(empty.bounds.is_empty());
+            style.outline.as_mut().unwrap().color = backend::Rgba::new(4, 5, 6, 128);
+            let mut stroked = GeometrySnapshot::new(&theme).unwrap();
+            stroked
+                .scatter(&[Point2D::new(40.0, 40.0)], &style, panel)
+                .unwrap();
+            assert_eq!(stroked.bounds.len(), 1);
+        }
     }
 
     #[test]

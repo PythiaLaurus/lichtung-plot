@@ -1575,10 +1575,10 @@ impl<S: SvgSink> SvgSerializer<S> {
         scatter: &CanonicalScatter,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_scatter")?;
-        let color = SvgPaint::from(scatter.color);
+        let color = SvgPaint::from(scatter.color).attributes("fill");
         let outline = scatter
             .outline
-            .map(|(color, width)| (SvgPaint::from(color), width));
+            .map(|(color, width)| (SvgPaint::from(color).attributes("stroke"), width));
         match &scatter.markers {
             CanonicalMarkers::Circles { points, radius } => {
                 let buf = self.buf();
@@ -1586,14 +1586,14 @@ impl<S: SvgSink> SvgSerializer<S> {
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             buf,
-                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width}\"/>",
-                            p.x, p.y, radius, scatter.opacity
+                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" {color} {outline_color} stroke-width=\"{outline_width}\"/>",
+                            p.x, p.y, radius
                         );
                     } else {
                         let _ = writeln!(
                             buf,
-                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            p.x, p.y, radius, scatter.opacity
+                            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" {color}/>",
+                            p.x, p.y, radius
                         );
                     }
                 }
@@ -1604,15 +1604,10 @@ impl<S: SvgSink> SvgSerializer<S> {
                     if let Some((outline_color, outline_width)) = &outline {
                         let _ = writeln!(
                             self.buf(),
-                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\" stroke=\"{outline_color}\" stroke-width=\"{outline_width}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
-                            scatter.opacity,
+                            "<polygon points=\"{vertices}\" {color} {outline_color} stroke-width=\"{outline_width}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
                         );
                     } else {
-                        let _ = writeln!(
-                            self.buf(),
-                            "<polygon points=\"{vertices}\" fill=\"{color}\" fill-opacity=\"{}\"/>",
-                            scatter.opacity
-                        );
+                        let _ = writeln!(self.buf(), "<polygon points=\"{vertices}\" {color}/>");
                     }
                 }
             }
@@ -2559,10 +2554,10 @@ mod tests {
         assert_eq!(
             primitives,
             [
-                "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#000000\" fill-opacity=\"0.82\"/>",
-                "<polygon points=\"20,78 18.267578125,81 21.732421875,81\" fill=\"#010203\" fill-opacity=\"0.82\"/>",
-                "<circle cx=\"15\" cy=\"80\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\"/>",
-                "<polygon points=\"30,78 28.267578125,81 31.732421875,81\" fill=\"#040506\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<circle cx=\"10\" cy=\"80\" r=\"2\" fill=\"#000000\" fill-opacity=\"0.8196078431372549\"/>",
+                "<polygon points=\"20,78 18.267578125,81 21.732421875,81\" fill=\"#010203\" fill-opacity=\"0.8196078431372549\"/>",
+                "<circle cx=\"15\" cy=\"80\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.8196078431372549\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\"/>",
+                "<polygon points=\"30,78 28.267578125,81 31.732421875,81\" fill=\"#040506\" fill-opacity=\"0.8196078431372549\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
                 "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
             ]
         );
@@ -2672,6 +2667,39 @@ mod tests {
             assert!(tag.contains("fill=\"#010203\" fill-opacity=\"0.5019607843137255\""));
             assert!(tag.contains("stroke=\"#040506\" stroke-opacity=\"0.25098039215686274\""));
             assert!(!tag.contains(" opacity="));
+        }
+    }
+
+    #[test]
+    fn outlined_points_emit_independent_fill_and_outline_alphas() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        let mut style = PointStyle::with_outline(
+            (1, 2, 3),
+            2,
+            Some(crate::render::backend::PointOutline {
+                color: Rgba::new(4, 5, 6, 64),
+                width_ratio: 0.5,
+            }),
+        );
+        style.color = Rgba::new(1, 2, 3, 128);
+        backend
+            .draw_scatter(&[Point2D::new(10.0, 10.0)], &style)
+            .unwrap();
+        backend
+            .draw_scatter(
+                &[Point2D::new(30.0, 30.0)],
+                &style.with_shape(crate::PointShape::TriangleUp),
+            )
+            .unwrap();
+        backend.end().unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        for tag in svg
+            .lines()
+            .filter(|line| line.starts_with("<circle ") || line.starts_with("<polygon "))
+        {
+            assert!(tag.contains("fill=\"#010203\" fill-opacity=\"0.5019607843137255\""));
+            assert!(tag.contains("stroke=\"#040506\" stroke-opacity=\"0.25098039215686274\""));
         }
     }
 

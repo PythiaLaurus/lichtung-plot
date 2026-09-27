@@ -26,12 +26,12 @@ expression: normalize_embedded_font(&svg)
 <polyline points="264.2353515625,83.3330078125 340.470703125,83.3330078125" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="264.2353515625,87.3330078125 264.2353515625,79.3330078125" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="340.470703125,87.3330078125 340.470703125,79.3330078125" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="289.6474609375" cy="83.3330078125" r="4" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.400390625"/>
+<circle cx="289.6474609375" cy="83.3330078125" r="4" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.400390625"/>
 <text x="379.7509765625" y="151.63671875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="14" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Not estimable</text>
 <polyline points="340.470703125,212.6669921875 543.7646484375,212.6669921875" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="340.470703125,216.6669921875 340.470703125,208.6669921875" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
 <polyline points="543.7646484375,216.6669921875 543.7646484375,208.6669921875" fill="none" stroke="#000000" stroke-width="1.400390625" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="442.1171875" cy="212.6669921875" r="4" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.400390625"/>
+<circle cx="442.1171875" cy="212.6669921875" r="4" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.400390625"/>
 </g>
 <g id="axes">
 <polyline points="188,245 620,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>

@@ -19,9 +19,9 @@ expression: normalize_embedded_font(&svg)
 </g>
 <g clip-path="url(#clip-0)">
 <polyline points="98.9423828125,245 377.4345703125,51" fill="none" stroke="#000000" stroke-width="1.2001953125" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="104.8271484375" cy="245" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="220.533203125" cy="148" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
-<circle cx="325.466796875" cy="99.5" r="3" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="104.8271484375" cy="245" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="220.533203125" cy="148" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
+<circle cx="325.466796875" cy="99.5" r="3" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2998046875"/>
 </g>
 <g id="axes">
 <polyline points="86,245 460,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>

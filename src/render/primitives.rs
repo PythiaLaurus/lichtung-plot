@@ -362,9 +362,8 @@ pub(crate) enum CanonicalMarkers {
 #[derive(Debug)]
 pub(crate) struct CanonicalScatter {
     pub(crate) markers: CanonicalMarkers,
-    pub(crate) color: (u8, u8, u8),
-    pub(crate) opacity: f64,
-    pub(crate) outline: Option<((u8, u8, u8), CanonicalCoordinate)>,
+    pub(crate) color: Rgba,
+    pub(crate) outline: Option<(Rgba, CanonicalCoordinate)>,
 }
 
 impl CanonicalScatter {
@@ -417,7 +416,6 @@ impl CanonicalScatter {
         Ok(Self {
             markers,
             color: style.color,
-            opacity: style.opacity,
             outline,
         })
     }
