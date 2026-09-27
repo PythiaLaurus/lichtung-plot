@@ -74,8 +74,6 @@ pub(crate) struct ResolvedTheme {
     pub(crate) font_family: String,
     /// Legacy paint source retained for later legend, mark, and annotation roles.
     pub(crate) foreground: (u8, u8, u8),
-    /// Legacy interval-mark width retained until T5c mark migration.
-    pub(crate) interval_width: f32,
     /// Width of plot series lines in pixels.
     pub(crate) line_width: f32,
     /// Width of significance bracket strokes in pixels.
@@ -96,6 +94,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) legend: LegendAppearance,
     /// Nonsemantic axis chrome and its local spacing.
     pub(crate) axes: AxisAppearance,
+    /// Complete stroke roles for currently migrated marks.
+    pub(crate) marks: MarkAppearance,
     /// Root and panel composition relationships.
     pub(crate) composition: CompositionAppearance,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
@@ -328,7 +328,6 @@ impl PartialEq for ResolvedTheme {
         self.colors == other.colors
             && self.font_family == other.font_family
             && self.foreground == other.foreground
-            && self.interval_width == other.interval_width
             && self.line_width == other.line_width
             && self.bracket_width == other.bracket_width
             && self.detail_font_size == other.detail_font_size
@@ -338,6 +337,7 @@ impl PartialEq for ResolvedTheme {
             && self.surfaces == other.surfaces
             && self.typography == other.typography
             && self.axes == other.axes
+            && self.marks == other.marks
             && self.composition == other.composition
     }
 }
@@ -931,6 +931,15 @@ impl StrokeAppearance {
     }
 }
 
+/// Mark strokes are independent of structurally similar axis chrome.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MarkAppearance {
+    /// Bar uncertainty stems/caps in either orientation.
+    pub(crate) uncertainty_stroke: StrokeAppearance,
+    /// Distribution summary and whisker strokes, including their guide glyphs.
+    pub(crate) summary_stroke: StrokeAppearance,
+}
+
 /// Structurally present frame appearance.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FrameAppearance {
@@ -1067,7 +1076,6 @@ fn resolved_theme(
         colors,
         font_family: stack.clone(),
         foreground,
-        interval_width: axis_width,
         line_width,
         bracket_width,
         detail_font_size: 14,
@@ -1146,6 +1154,14 @@ fn resolved_theme(
                 y_title_tick_label_gap: 16.0,
                 y_title_edge_padding: 12.0,
             },
+        },
+        marks: MarkAppearance {
+            uncertainty_stroke: stroke_appearance(
+                foreground_paint,
+                axis_width,
+                StrokePattern::Solid,
+            ),
+            summary_stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1426,7 +1442,6 @@ mod tests {
             colors,
             font_family: stack.clone(),
             foreground: expected.foreground,
-            interval_width: expected.axis_width,
             line_width: expected.line_width,
             bracket_width: expected.bracket_width,
             detail_font_size: 14,
@@ -1506,6 +1521,18 @@ mod tests {
                     y_title_edge_padding: 12.0,
                 },
             },
+            marks: MarkAppearance {
+                uncertainty_stroke: StrokeAppearance {
+                    paint: foreground,
+                    width: expected.axis_width,
+                    pattern: StrokePattern::Solid,
+                },
+                summary_stroke: StrokeAppearance {
+                    paint: foreground,
+                    width: expected.axis_width,
+                    pattern: StrokePattern::Solid,
+                },
+            },
             composition: CompositionAppearance {
                 root_title_alignment: TitleAlignment::Center,
                 root_subtitle_alignment: None,
@@ -1551,7 +1578,10 @@ mod tests {
 
             assert!(!resolved.colors.is_empty(), "{theme:?} has no colors");
             assert_eq!(resolved.font_family, crate::DEFAULT_FONT_FAMILY_STACK);
-            assert!(resolved.interval_width.is_finite() && resolved.interval_width > 0.0);
+            assert!(resolved.marks.uncertainty_stroke.width.is_finite());
+            assert!(resolved.marks.uncertainty_stroke.width > 0.0);
+            assert!(resolved.marks.summary_stroke.width.is_finite());
+            assert!(resolved.marks.summary_stroke.width > 0.0);
             assert!(resolved.line_width.is_finite() && resolved.line_width > 0.0);
             assert!(resolved.bracket_width.is_finite() && resolved.bracket_width > 0.0);
             assert_eq!(resolved.detail_font_size, 14);
@@ -1590,6 +1620,28 @@ mod tests {
             assert_eq!(resolved.typography.tick_label.paint, foreground);
             assert_eq!(resolved.typography.significance_label.paint, foreground);
         }
+    }
+
+    #[test]
+    fn private_uncertainty_and_summary_strokes_are_independent_of_axis_chrome() {
+        let mut theme = Theme::Publication.resolve();
+        let axis = theme.axes.frame.as_ref().unwrap().stroke.backend_style();
+        theme.marks.uncertainty_stroke.paint = Rgba::rgb(11, 23, 37);
+        theme.marks.uncertainty_stroke.width = 2.5;
+        theme.marks.summary_stroke.paint = Rgba::rgb(43, 59, 71);
+        theme.marks.summary_stroke.width = 3.5;
+
+        let uncertainty = theme.marks.uncertainty_stroke.backend_style();
+        let summary = theme.marks.summary_stroke.backend_style();
+        assert_eq!(uncertainty.color, Rgba::rgb(11, 23, 37));
+        assert_eq!(uncertainty.width.to_bits(), 2.5_f32.to_bits());
+        assert_eq!(summary.color, Rgba::rgb(43, 59, 71));
+        assert_eq!(summary.width.to_bits(), 3.5_f32.to_bits());
+        assert_eq!(
+            theme.axes.frame.as_ref().unwrap().stroke.backend_style(),
+            axis
+        );
+        assert_ne!(uncertainty, summary);
     }
 
     #[test]

@@ -29,7 +29,7 @@ impl PreparedDistribution {
                         let color = theme.colors[index % theme.colors.len()];
                         Ok(LegendEntry::line_fill(
                             chart.point_legend_identity(label, data)?,
-                            LineStyle::solid(theme.foreground, theme.interval_width),
+                            theme.marks.summary_stroke.backend_style(),
                             FillStyle {
                                 color,
                                 stroke: theme.foreground,

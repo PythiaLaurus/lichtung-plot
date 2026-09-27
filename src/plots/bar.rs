@@ -149,7 +149,7 @@ pub(crate) fn measure_marks(
         domain_expansion,
         zero: None,
         zero_style: LineStyle::solid(theme.foreground, 0.8),
-        interval_style: LineStyle::solid(theme.foreground, theme.interval_width),
+        interval_style: theme.marks.uncertainty_stroke.backend_style(),
         bars: Vec::new(),
         text: Vec::new(),
         points: Vec::new(),

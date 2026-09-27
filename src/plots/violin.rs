@@ -317,7 +317,7 @@ pub(crate) fn measure_marks(
                         context,
                     )?;
                 }
-                let whisker_line = LineStyle::solid(theme.foreground, theme.interval_width);
+                let whisker_line = theme.marks.summary_stroke.backend_style();
                 payload.line(
                     &[
                         Point2D::new(cx_px, lo_whisker_px),

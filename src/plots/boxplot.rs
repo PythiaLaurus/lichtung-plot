@@ -19,7 +19,7 @@ use crate::Error;
 
 use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
-use crate::render::backend::{FillStyle, LineStyle, Point2D};
+use crate::render::backend::{FillStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 #[cfg(test)]
 use crate::stats::distribution::quantile;
@@ -178,7 +178,7 @@ pub(crate) fn measure_marks(
             stroke_width: 1.0,
             opacity: 1.0,
         };
-        let style = LineStyle::solid(theme.foreground, theme.interval_width);
+        let style = theme.marks.summary_stroke.backend_style();
 
         let x_center_data =
             crate::plots::distribution_sample::center(&sample.groups[i], group_levels.len());

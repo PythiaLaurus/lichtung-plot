@@ -919,7 +919,9 @@ caller styles while centralizing their ownership.
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
 | T5c0 | COMPLETE | T5b | `docs(marks): classify appearance and content policies` |
-| T5c1 | PENDING | T5c0 | `feat(theme): resolve private mark and annotation roles` |
+| T5c1 | IN PROGRESS | T5c0 | Umbrella; completes after T5c1a-b |
+| T5c1a | COMPLETE | T5c0 | `feat(theme): separate interval and summary strokes` |
+| T5c1b | PENDING | T5c1a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -960,6 +962,17 @@ branches without making a new omission API. This documentation-only stage
 requires diff review, not tests; T5c1 is the first implementation consumer.
 
 ### T5c1 — Complete Private Style Inputs
+
+T5c1a closure: the legacy `ResolvedTheme::interval_width` field is gone. One
+complete private uncertainty stroke now supplies vertical/horizontal bar stems
+and caps, while an independent complete summary stroke supplies Boxplot and
+Violin whiskers and Boxplot's originating legend line. Both presets preserve
+their existing exact paint/width/pattern; neither borrows `AxisTheme` at the
+consumer. Resolved-theme equality includes both roles for child cache identity.
+A private custom-value test varies both independently of frame stroke; focused
+bar/facet/Canvas, sampled/supplied distribution, SVG snapshot, and strict Clippy
+checks pass. No alternate style assembly or old interval-width alias remains.
+T5c1b completes the remaining mark/annotation styles and contrast policy.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color
