@@ -85,7 +85,7 @@ impl PreparedDensity {
             let color = theme.colors[color_index % theme.colors.len()];
             entries.push(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity, data)?,
-                LineStyle::solid(color, 1.6),
+                theme.marks.density_line.backend_style(color),
                 FillStyle {
                     color,
                     stroke: color,
@@ -262,7 +262,7 @@ pub(crate) fn project(
                 stroke_width: 0.0,
                 opacity: 0.22,
             },
-            line_style: LineStyle::solid(color, 1.6),
+            line_style: theme.marks.density_line.backend_style(color),
         };
         data.reserve_source(&mut projected.segments, visible.len() - 1)?;
         for pair in visible.windows(2) {
@@ -735,7 +735,7 @@ mod tests {
                     hue: Some("a".into()),
                 },
             ]);
-        let theme = crate::Theme::Publication.resolve();
+        let mut theme = crate::Theme::Publication.resolve();
         let reads = crate::data::SOURCE_COLUMN_READS.with(std::cell::Cell::get);
         let selected = chart
             .measure_selected_interior(PlotRenderContext::new(
@@ -756,6 +756,40 @@ mod tests {
         assert_eq!(payload.curves[0].fill_style.color, theme.colors[0]);
         assert_eq!(payload.curves[1].fill_style.color, theme.colors[1]);
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
+        theme.marks.density_line.width = 2.5;
+        theme.marks.density_line.alpha = 128;
+        let changed = chart
+            .measure_selected_interior(PlotRenderContext::new(
+                chart.data(),
+                crate::layout::PanelBox::new(10.0, 600.0, 20.0, 400.0),
+                &theme,
+            ))
+            .unwrap();
+        let crate::layout::interior::MarkPayload::Density(changed_payload) =
+            &changed.marks.as_ref().unwrap().payload
+        else {
+            panic!("changed Density payload")
+        };
+        assert_eq!(
+            payload.curves[0].segments,
+            changed_payload.curves[0].segments
+        );
+        assert_eq!(
+            changed_payload.curves[0].line_style.width.to_bits(),
+            2.5_f32.to_bits()
+        );
+        assert_eq!(changed_payload.curves[0].line_style.color.alpha(), 128);
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                selected.legend_entries[0].clone(),
+                changed.legend_entries[0].clone()
+            ],
+            "custom Density line",
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
     }
 
     struct DensityValues {

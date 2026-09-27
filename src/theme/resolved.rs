@@ -943,6 +943,8 @@ pub(crate) struct MarkAppearance {
     pub(crate) histogram_curve: StrokeAppearance,
     /// Histogram rug ticks independently resolved from the KDE overlay.
     pub(crate) histogram_rug: StrokeAppearance,
+    /// Density group curve, reused exactly by its originating guide glyph.
+    pub(crate) density_line: DataLineAppearance,
 }
 
 /// One complete data-colored mark stroke; the scale supplies opaque RGB only.
@@ -1209,6 +1211,11 @@ fn resolved_theme(
             },
             histogram_curve: stroke_appearance(foreground_paint, 1.0, StrokePattern::Solid),
             histogram_rug: stroke_appearance(foreground_paint, 0.7, StrokePattern::Solid),
+            density_line: DataLineAppearance {
+                width: 1.6,
+                alpha: 255,
+                pattern: StrokePattern::Solid,
+            },
         },
         annotations: AnnotationAppearance {
             bracket_stroke: BracketStrokeAppearance {
@@ -1593,6 +1600,11 @@ mod tests {
                 histogram_rug: StrokeAppearance {
                     paint: foreground,
                     width: 0.7,
+                    pattern: StrokePattern::Solid,
+                },
+                density_line: DataLineAppearance {
+                    width: 1.6,
+                    alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
             },
