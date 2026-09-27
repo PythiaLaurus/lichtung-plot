@@ -771,11 +771,11 @@ fn project(
         clip: layout.projection.panel_box(),
         reference,
         reference_style: if prepared.point_interval {
-            LineStyle::solid(theme.foreground, 0.8)
+            theme.marks.point_interval_reference.backend_style()
         } else {
-            LineStyle::medium_dashed(theme.foreground, 1.0)
+            theme.marks.estimate_reference.backend_style()
         },
-        interval_style: LineStyle::solid(theme.foreground, 1.4),
+        interval_style: theme.marks.estimate_interval.backend_style(),
         point_style: chart.point_style(theme.colors[0], 4),
         rows: Vec::new(),
         #[cfg(test)]

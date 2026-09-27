@@ -117,7 +117,7 @@ fn project(
         .dumbbell_endpoints_spec()
         .expect("dumbbell input owns endpoint metadata");
     let category_count = prepared.categories.len();
-    let connector = LineStyle::solid(theme.foreground, 1.2);
+    let connector = theme.marks.dumbbell_connector.backend_style();
     let mut payload = DumbbellPayload {
         clip: layout.projection.panel_box(),
         pairs: Vec::new(),

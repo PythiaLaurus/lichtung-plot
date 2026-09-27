@@ -947,6 +947,16 @@ pub(crate) struct MarkAppearance {
     pub(crate) density_line: DataLineAppearance,
     /// Regression fit line independently resolved from its observations/band.
     pub(crate) regression_fit: StrokeAppearance,
+    /// Estimate intervals do not borrow axis or bar uncertainty strokes.
+    pub(crate) estimate_interval: StrokeAppearance,
+    /// PointInterval's solid reference at an exact caller value.
+    pub(crate) point_interval_reference: StrokeAppearance,
+    /// Coefficient/Forest reference has its own fixed medium-dash grammar.
+    pub(crate) estimate_reference: StrokeAppearance,
+    /// Q-Q reference is independent of the estimate-display reference role.
+    pub(crate) qq_reference: StrokeAppearance,
+    /// Dumbbell pairs use one neutral connecting stroke.
+    pub(crate) dumbbell_connector: StrokeAppearance,
 }
 
 /// One complete data-colored mark stroke; the scale supplies opaque RGB only.
@@ -1219,6 +1229,15 @@ fn resolved_theme(
                 pattern: StrokePattern::Solid,
             },
             regression_fit: stroke_appearance(foreground_paint, 1.5, StrokePattern::Solid),
+            estimate_interval: stroke_appearance(foreground_paint, 1.4, StrokePattern::Solid),
+            point_interval_reference: stroke_appearance(
+                foreground_paint,
+                0.8,
+                StrokePattern::Solid,
+            ),
+            estimate_reference: stroke_appearance(foreground_paint, 1.0, StrokePattern::MediumDash),
+            qq_reference: stroke_appearance(foreground_paint, 1.2, StrokePattern::Solid),
+            dumbbell_connector: stroke_appearance(foreground_paint, 1.2, StrokePattern::Solid),
         },
         annotations: AnnotationAppearance {
             bracket_stroke: BracketStrokeAppearance {
@@ -1615,6 +1634,31 @@ mod tests {
                     width: 1.5,
                     pattern: StrokePattern::Solid,
                 },
+                estimate_interval: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.4,
+                    pattern: StrokePattern::Solid,
+                },
+                point_interval_reference: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.8,
+                    pattern: StrokePattern::Solid,
+                },
+                estimate_reference: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.0,
+                    pattern: StrokePattern::MediumDash,
+                },
+                qq_reference: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.2,
+                    pattern: StrokePattern::Solid,
+                },
+                dumbbell_connector: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.2,
+                    pattern: StrokePattern::Solid,
+                },
             },
             annotations: AnnotationAppearance {
                 bracket_stroke: BracketStrokeAppearance {
@@ -1794,6 +1838,37 @@ mod tests {
             theme.marks.histogram_rug.backend_style().color,
             Rgba::rgb(97, 121, 145)
         );
+    }
+
+    #[test]
+    fn estimate_reference_and_dumbbell_roles_do_not_alias_each_other() {
+        let mut theme = Theme::Nature.resolve();
+        let original = theme.clone();
+        theme.marks.estimate_interval.paint = Rgba::rgb(23, 47, 71);
+        theme.marks.estimate_interval.width = 2.25;
+        theme.marks.point_interval_reference.paint = Rgba::rgb(31, 53, 79);
+        theme.marks.estimate_reference.width = 3.0;
+        theme.marks.qq_reference.paint = Rgba::rgb(41, 67, 89);
+        theme.marks.dumbbell_connector.width = 2.0;
+        assert_ne!(theme, original);
+        assert_eq!(theme.axes, original.axes);
+        assert_eq!(
+            theme.marks.uncertainty_stroke,
+            original.marks.uncertainty_stroke
+        );
+        assert_eq!(
+            theme.marks.estimate_reference.pattern,
+            StrokePattern::MediumDash
+        );
+        assert_eq!(
+            theme.marks.point_interval_reference.pattern,
+            StrokePattern::Solid
+        );
+        assert_ne!(
+            theme.marks.estimate_interval,
+            theme.marks.estimate_reference
+        );
+        assert_ne!(theme.marks.qq_reference, theme.marks.dumbbell_connector);
     }
 
     #[test]

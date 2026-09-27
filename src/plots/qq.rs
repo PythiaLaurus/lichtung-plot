@@ -144,7 +144,7 @@ pub(crate) fn project(
         clip: layout.projection.panel_box(),
         line: None,
         points: Vec::new(),
-        line_style: LineStyle::solid(theme.foreground, 1.2),
+        line_style: theme.marks.qq_reference.backend_style(),
         point_style: chart.point_style(theme.colors[0], 3),
     };
     data.claim_source_visits(1)?;
