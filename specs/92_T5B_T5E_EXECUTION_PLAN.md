@@ -128,7 +128,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1b2b3a | COMPLETE | T5b1b2b2 | `refactor(legend): classify prepared Canvas contributors` |
 | T5b1b2b3b | COMPLETE | T5b1b2b3a | `refactor(legend): prepare faceted shared guides` |
 | T5b1c | COMPLETE | T5b1b | `feat(legend): merge continuous guide contributors` |
-| T5b2 | IN PROGRESS | T5b1 | Umbrella; completes after T5b2a-c |
+| T5b2 | COMPLETE | T5b1 | Umbrella; completed with T5b2c2 |
 | T5b2a | COMPLETE | T5b1 | `refactor(legend): resolve complete private legend roles` |
 | T5b2b | COMPLETE | T5b2a | Umbrella; completed with T5b2b3b |
 | T5b2b1 | COMPLETE | T5b2a | `refactor(legend): measure assigned discrete outside flow` |
@@ -136,9 +136,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2b3 | COMPLETE | T5b2b2 | Umbrella; completed with T5b2b3b |
 | T5b2b3a | COMPLETE | T5b2b2 | `feat(canvas): install merged continuous domains` |
 | T5b2b3b | COMPLETE | T5b2b3a | `feat(legend): measure and draw shared continuous guides` |
-| T5b2c | IN PROGRESS | T5b2b | Umbrella; completes after T5b2c1-c2 |
+| T5b2c | COMPLETE | T5b2b | Umbrella; completed with T5b2c2 |
 | T5b2c1 | COMPLETE | T5b2b | `refactor(layout): resolve guide frame gaps from themes` |
-| T5b2c2 | PENDING | T5b2c1 | `refactor(layout): unify assigned outside guide frames` |
+| T5b2c2 | COMPLETE | T5b2c1 | `refactor(layout): unify assigned outside guide frames` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
@@ -554,6 +554,21 @@ strict Clippy checks pass. Logs: `/tmp/opencode/t5b2c1-lint.log`,
 `/tmp/opencode/t5b2c1-frame-gap.log`,
 `/tmp/opencode/t5b2c1-legend-bench.log`, and
 `/tmp/opencode/t5b2c1-canvas-gap.log`.
+
+T5b2c2 closure: Plot, facet, and Canvas outside guides use one measured
+`AssignedGuideFrame` for available guide constraints, quantized residual-body
+reservation, and suffix-aware placement. Canvas no longer subtracts guide
+width/height directly, and Plot no longer reconstructs separate side-specific
+gaps or retains the old frame-requirements helper. The final frame still checks
+every affected child under the same bounded edge/compact attempt. Four-edge
+quantized enclosure, Plot and facet body feedback, Canvas shared continuous
+output, unchanged Plot/Marginal SVG fingerprints, exact guide-work contracts,
+and strict Clippy pass. Logs: `/tmp/opencode/t5b2c2-lint.log`,
+`/tmp/opencode/t5b2c2-assigned-frame.log`,
+`/tmp/opencode/t5b2c2-legend-bench.log`,
+`/tmp/opencode/t5b2c2-plot-frame.log`,
+`/tmp/opencode/t5b2c2-facet-frame.log`, and
+`/tmp/opencode/t5b2c2-canvas-frame.log`. T5b3 is next.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

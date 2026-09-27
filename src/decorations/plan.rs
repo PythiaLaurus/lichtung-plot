@@ -4,9 +4,7 @@ use crate::Error;
 
 use crate::decorations::legend::{Legend, LegendBox};
 use crate::layout::fit::{FitFailure, FitScope};
-use crate::layout::interior::{
-    ClearanceAxis, DeferredLegacyPanelMinimum, DomainExpansion, InteriorReserveRequest,
-};
+use crate::layout::interior::{ClearanceAxis, DomainExpansion, InteriorReserveRequest};
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::AddressRole;
 use crate::layout::ComponentAddress;
@@ -31,6 +29,145 @@ pub(crate) enum LegendRole {
 pub(crate) struct ResolvedLegend {
     pub(crate) legend: Legend,
     pub(crate) bounds: LegendBox,
+}
+
+/// One measured outside guide and its containing residual body share a single
+/// owner-local gap and the same assigned-frame constraint.
+pub(crate) struct AssignedGuideFrame {
+    edge: LegendPosition,
+    minimum_body: (f64, f64),
+    gap: f64,
+}
+
+impl AssignedGuideFrame {
+    pub(crate) const fn new(edge: LegendPosition, minimum_body: (f64, f64), gap: f64) -> Self {
+        Self {
+            edge,
+            minimum_body,
+            gap,
+        }
+    }
+
+    fn horizontal(&self) -> bool {
+        matches!(
+            self.edge,
+            LegendPosition::OutsideTopLeft
+                | LegendPosition::OutsideTop
+                | LegendPosition::OutsideTopRight
+                | LegendPosition::OutsideBottomLeft
+                | LegendPosition::OutsideBottom
+                | LegendPosition::OutsideBottomRight
+        )
+    }
+
+    fn vertical(&self) -> bool {
+        matches!(
+            self.edge,
+            LegendPosition::OutsideLeftTop
+                | LegendPosition::OutsideLeft
+                | LegendPosition::OutsideLeftBottom
+                | LegendPosition::OutsideRightTop
+                | LegendPosition::OutsideRight
+                | LegendPosition::OutsideRightBottom
+        )
+    }
+
+    pub(crate) fn available(&self, cell: PanelBox, gutters: [f64; 4]) -> (f64, f64) {
+        let horizontal = self.horizontal();
+        (
+            cell.width()
+                - gutters[0]
+                - gutters[1]
+                - if horizontal {
+                    0.0
+                } else {
+                    self.minimum_body.0 + self.gap
+                },
+            cell.height()
+                - gutters[2]
+                - gutters[3]
+                - if horizontal {
+                    self.minimum_body.1 + self.gap
+                } else {
+                    0.0
+                },
+        )
+    }
+
+    pub(crate) fn assign_fit(
+        &self,
+        cell: PanelBox,
+        guide: Option<(f64, f64)>,
+        gutters: [f64; 4],
+        scope: &FitScope,
+    ) -> Result<crate::layout::fit::FitOutcome<PanelBox>, Error> {
+        let mut insets = [0.0; 4];
+        if let Some((width, height)) = guide {
+            match self.edge {
+                LegendPosition::OutsideLeftTop
+                | LegendPosition::OutsideLeft
+                | LegendPosition::OutsideLeftBottom => insets[0] = width + self.gap,
+                LegendPosition::OutsideRightTop
+                | LegendPosition::OutsideRight
+                | LegendPosition::OutsideRightBottom => insets[1] = width + self.gap,
+                LegendPosition::OutsideBottomLeft
+                | LegendPosition::OutsideBottom
+                | LegendPosition::OutsideBottomRight => insets[2] = height + self.gap,
+                LegendPosition::OutsideTopLeft
+                | LegendPosition::OutsideTop
+                | LegendPosition::OutsideTopRight => insets[3] = height + self.gap,
+                _ => {}
+            }
+        }
+        FrameRequirements {
+            minimum_body: self.minimum_body,
+            natural_insets: insets,
+        }
+        .assign_fit(cell, gutters, scope)
+    }
+
+    pub(crate) fn place(&self, residual: PanelBox, guide: (f64, f64)) -> PanelBox {
+        let (width, height) = guide;
+        let align = match self.edge {
+            LegendPosition::OutsideRightTop
+            | LegendPosition::OutsideLeftTop
+            | LegendPosition::OutsideTopRight
+            | LegendPosition::OutsideBottomRight => 1.0,
+            LegendPosition::OutsideRightBottom
+            | LegendPosition::OutsideLeftBottom
+            | LegendPosition::OutsideTopLeft
+            | LegendPosition::OutsideBottomLeft => 0.0,
+            _ => 0.5,
+        };
+        let (left, bottom) = match self.edge {
+            LegendPosition::OutsideRightTop
+            | LegendPosition::OutsideRight
+            | LegendPosition::OutsideRightBottom => (
+                residual.x1 + self.gap,
+                residual.y0 + (residual.height() - height).max(0.0) * align,
+            ),
+            LegendPosition::OutsideLeftTop
+            | LegendPosition::OutsideLeft
+            | LegendPosition::OutsideLeftBottom => (
+                residual.x0 - self.gap - width,
+                residual.y0 + (residual.height() - height).max(0.0) * align,
+            ),
+            LegendPosition::OutsideTopLeft
+            | LegendPosition::OutsideTop
+            | LegendPosition::OutsideTopRight => (
+                residual.x0 + (residual.width() - width).max(0.0) * align,
+                residual.y1 + self.gap,
+            ),
+            LegendPosition::OutsideBottomLeft
+            | LegendPosition::OutsideBottom
+            | LegendPosition::OutsideBottomRight => (
+                residual.x0 + (residual.width() - width).max(0.0) * align,
+                residual.y0 - self.gap - height,
+            ),
+            _ => unreachable!("inside guides are collision overlays, not outside tracks"),
+        };
+        PanelBox::new(left, left + width, bottom, bottom + height)
+    }
 }
 
 impl ResolvedLegend {
@@ -63,9 +200,13 @@ pub(crate) fn place_outside_legend(
     minimum_body: (f64, f64),
     scope: &FitScope,
 ) -> Result<crate::layout::fit::FitOutcome<(PanelBox, ResolvedLegend)>, Error> {
-    let mut requirements = frame_requirements(Some(&legend), position);
-    requirements.minimum_body = minimum_body;
-    let panel_box = match requirements.assign_fit(cell, [0.0; 4], scope)? {
+    let frame = AssignedGuideFrame::new(position, minimum_body, legend.metrics.outside_gap);
+    let panel_box = match frame.assign_fit(
+        cell,
+        Some((legend.compute_box_width(), legend.compute_box_height())),
+        [0.0; 4],
+        scope,
+    )? {
         crate::layout::fit::FitOutcome::Measured(panel) => panel,
         crate::layout::fit::FitOutcome::Miss(reason) => {
             return Ok(crate::layout::fit::FitOutcome::Miss(reason))
@@ -73,11 +214,11 @@ pub(crate) fn place_outside_legend(
     };
     let bounds = resolve_box(
         &legend,
+        &frame,
         position,
         LegendDefault::LowestOverlap,
         panel_box,
         panel_box,
-        cell,
         &[],
     );
     Ok(crate::layout::fit::FitOutcome::Measured((
@@ -290,19 +431,15 @@ pub(crate) fn plan_panel_with_context(
             let ink = round.insets(address, FeedbackKind::OwnedInk);
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(context.theme);
             let gap = metrics.outside_gap;
-            let available = (
-                context.panel.width()
-                    - gutters[0]
-                    - gutters[1]
-                    - ink[0]
-                    - ink[1]
-                    - if horizontal { 0.0 } else { minimum.0 + gap },
-                context.panel.height()
-                    - gutters[2]
-                    - gutters[3]
-                    - ink[2]
-                    - ink[3]
-                    - if horizontal { minimum.1 + gap } else { 0.0 },
+            let frame = AssignedGuideFrame::new(edge, minimum, gap);
+            let available = frame.available(
+                context.panel,
+                [
+                    gutters[0] + ink[0],
+                    gutters[1] + ink[1],
+                    gutters[2] + ink[2],
+                    gutters[3] + ink[3],
+                ],
             );
             let guide = match Legend::measure_assigned(
                 &title,
@@ -322,23 +459,23 @@ pub(crate) fn plan_panel_with_context(
                     continue;
                 }
             };
-            let mut requirements = frame_requirements(Some(&guide), edge);
-            requirements.minimum_body = minimum;
+            let size = (guide.compute_box_width(), guide.compute_box_height());
             #[cfg(test)]
             guide_trial.body();
             let mut assigned_gutters = gutters;
             for (gutter, reserve) in assigned_gutters.iter_mut().zip(ink) {
                 *gutter += reserve;
             }
-            let panel = match requirements.assign_fit(context.panel, assigned_gutters, &scope)? {
-                FitOutcome::Measured(panel) => panel,
-                FitOutcome::Miss(reason) => {
-                    FitFailure::retain_least(&mut first_miss, reason);
-                    #[cfg(test)]
-                    guide_trial.reject();
-                    continue;
-                }
-            };
+            let panel =
+                match frame.assign_fit(context.panel, Some(size), assigned_gutters, &scope)? {
+                    FitOutcome::Measured(panel) => panel,
+                    FitOutcome::Miss(reason) => {
+                        FitFailure::retain_least(&mut first_miss, reason);
+                        #[cfg(test)]
+                        guide_trial.reject();
+                        continue;
+                    }
+                };
             if let FitOutcome::Miss(reason) = check_assigned_body(
                 plot,
                 &discovered,
@@ -598,10 +735,17 @@ fn plan_panel_attempt(
         {
             *gutter += ink;
         }
-        let mut requirements =
-            frame_requirements(Some(guide), planning_plot.legend_position_spec());
-        requirements.minimum_body = minimum;
-        match requirements.assign_fit(cell, gutters, &scope)? {
+        let frame = AssignedGuideFrame::new(
+            planning_plot.legend_position_spec(),
+            minimum,
+            guide.metrics.outside_gap,
+        );
+        match frame.assign_fit(
+            cell,
+            Some((guide.compute_box_width(), guide.compute_box_height())),
+            gutters,
+            &scope,
+        )? {
             FitOutcome::Measured(panel) => panel,
             FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
         }
@@ -681,15 +825,26 @@ fn plan_panel_attempt(
     } else {
         None
     };
-    let mut requirements =
-        frame_requirements(legend.as_ref(), planning_plot.legend_position_spec());
-    requirements.minimum_body = minimum;
+    let frame = AssignedGuideFrame::new(
+        planning_plot.legend_position_spec(),
+        minimum,
+        legend
+            .as_ref()
+            .map_or(0.0, |guide| guide.metrics.outside_gap),
+    );
     let mut assigned_gutters = round.insets(address, FeedbackKind::AxisGutter);
     let owned_ink = round.insets(address, FeedbackKind::OwnedInk);
     for (gutter, ink) in assigned_gutters.iter_mut().zip(owned_ink) {
         *gutter += ink;
     }
-    let panel_box = match requirements.assign_fit(cell, assigned_gutters, &scope)? {
+    let panel_box = match frame.assign_fit(
+        cell,
+        legend
+            .as_ref()
+            .map(|guide| (guide.compute_box_width(), guide.compute_box_height())),
+        assigned_gutters,
+        &scope,
+    )? {
         FitOutcome::Measured(panel) => panel,
         FitOutcome::Miss(failure) => return Ok(FitOutcome::Miss(failure)),
     };
@@ -813,11 +968,11 @@ fn plan_panel_attempt(
                 } else {
                     resolve_box(
                         &legend,
+                        &frame,
                         position,
                         legend_default,
                         result.layout.projection.panel_box(),
                         guide_panel(panel_box, assigned_gutters, position),
-                        cell,
                         geometry.bounds(),
                     )
                 };
@@ -977,8 +1132,14 @@ fn plan_panel_attempt(
     {
         *gutter += ink;
     }
-    let next_frame = match requirements.assign_fit(
+    let next_frame = match frame.assign_fit(
         cell,
+        resolved.as_ref().map(|guide| {
+            (
+                guide.legend.compute_box_width(),
+                guide.legend.compute_box_height(),
+            )
+        }),
         next_gutters,
         &FitScope::new(address, round.attempt_ordinal(address)?),
     )? {
@@ -1047,11 +1208,11 @@ fn plan_panel_attempt(
         } else {
             resolve_box(
                 &legend.legend,
+                &frame,
                 position,
                 legend_default,
                 next_axes,
                 guide_panel(next_frame, next_gutters, position),
-                cell,
                 geometry.bounds(),
             )
         };
@@ -1196,11 +1357,8 @@ fn plan_panel_attempt(
             }
         } else {
             let fits_track = |panel: PanelBox| {
-                (requirements.natural_insets[0] == 0.0 && requirements.natural_insets[1] == 0.0
-                    || legend.legend.compute_box_height() <= panel.height())
-                    && (requirements.natural_insets[2] == 0.0
-                        && requirements.natural_insets[3] == 0.0
-                        || legend.legend.compute_box_width() <= panel.width())
+                (!frame.vertical() || legend.legend.compute_box_height() <= panel.height())
+                    && (!frame.horizontal() || legend.legend.compute_box_width() <= panel.width())
             };
             if !fits_track(panel_box) {
                 round.miss(
@@ -1828,41 +1986,6 @@ fn auto_candidate_avoiding_panel_text(
     Ok(None)
 }
 
-fn frame_requirements(legend: Option<&Legend>, position: LegendPosition) -> FrameRequirements {
-    let mut natural_insets = [0.0; 4];
-    if let Some(legend) = legend {
-        let gap = legend.metrics.outside_gap;
-        match position {
-            LegendPosition::OutsideLeftTop
-            | LegendPosition::OutsideLeft
-            | LegendPosition::OutsideLeftBottom => {
-                natural_insets[0] = legend.compute_box_width() + gap;
-            }
-            LegendPosition::OutsideRightTop
-            | LegendPosition::OutsideRight
-            | LegendPosition::OutsideRightBottom => {
-                natural_insets[1] = legend.compute_box_width() + gap;
-            }
-            LegendPosition::OutsideBottomLeft
-            | LegendPosition::OutsideBottom
-            | LegendPosition::OutsideBottomRight => {
-                natural_insets[2] = legend.compute_box_height() + gap;
-            }
-            LegendPosition::OutsideTopLeft
-            | LegendPosition::OutsideTop
-            | LegendPosition::OutsideTopRight => {
-                natural_insets[3] = legend.compute_box_height() + gap;
-            }
-            _ => {}
-        }
-    }
-    // Native carriers add traced text intrinsics; the sole parity floor remains T5c.
-    FrameRequirements {
-        minimum_body: DeferredLegacyPanelMinimum::SIZE,
-        natural_insets,
-    }
-}
-
 fn guide_panel(mut panel: PanelBox, gutters: [f64; 4], position: LegendPosition) -> PanelBox {
     match position {
         LegendPosition::OutsideLeftTop
@@ -1918,11 +2041,11 @@ fn initial_auto_candidate(
 
 fn resolve_box(
     legend: &Legend,
+    frame: &AssignedGuideFrame,
     position: LegendPosition,
     default: LegendDefault,
     axes: PanelBox,
     reserved_panel: PanelBox,
-    cell: PanelBox,
     geometry: &[crate::render::geometry::GeometryBox],
 ) -> LegendBox {
     let pixel_box = axes.as_tuple();
@@ -1945,53 +2068,25 @@ fn resolve_box(
         }
         LegendPosition::InsideBottom => legend.aligned_inside_box(pixel_box, 0.5, 0.0),
         LegendPosition::InsideLeft => legend.aligned_inside_box(pixel_box, 0.0, 0.5),
-        LegendPosition::OutsideRightTop => outside_right(legend, reserved_panel, cell, 1.0),
-        LegendPosition::OutsideRight => outside_right(legend, reserved_panel, cell, 0.5),
-        LegendPosition::OutsideRightBottom => outside_right(legend, reserved_panel, cell, 0.0),
-        LegendPosition::OutsideLeftTop => outside_left(legend, reserved_panel, cell, 1.0),
-        LegendPosition::OutsideLeft => outside_left(legend, reserved_panel, cell, 0.5),
-        LegendPosition::OutsideLeftBottom => outside_left(legend, reserved_panel, cell, 0.0),
-        LegendPosition::OutsideTopLeft => outside_top(legend, reserved_panel, cell, 0.0),
-        LegendPosition::OutsideTop => outside_top(legend, reserved_panel, cell, 0.5),
-        LegendPosition::OutsideTopRight => outside_top(legend, reserved_panel, cell, 1.0),
-        LegendPosition::OutsideBottomLeft => outside_bottom(legend, reserved_panel, cell, 0.0),
-        LegendPosition::OutsideBottom => outside_bottom(legend, reserved_panel, cell, 0.5),
-        LegendPosition::OutsideBottomRight => outside_bottom(legend, reserved_panel, cell, 1.0),
+        LegendPosition::OutsideRightTop
+        | LegendPosition::OutsideRight
+        | LegendPosition::OutsideRightBottom
+        | LegendPosition::OutsideLeftTop
+        | LegendPosition::OutsideLeft
+        | LegendPosition::OutsideLeftBottom
+        | LegendPosition::OutsideTopLeft
+        | LegendPosition::OutsideTop
+        | LegendPosition::OutsideTopRight
+        | LegendPosition::OutsideBottomLeft
+        | LegendPosition::OutsideBottom
+        | LegendPosition::OutsideBottomRight => {
+            let rect = frame.place(
+                reserved_panel,
+                (legend.compute_box_width(), legend.compute_box_height()),
+            );
+            legend.box_at(rect.x0, rect.y0)
+        }
     }
-}
-
-fn outside_right(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.outside_gap;
-    let height = legend.compute_box_height();
-    legend.box_at(
-        panel.x1 + gap,
-        panel.y0 + (panel.height() - height).max(0.0) * align,
-    )
-}
-
-fn outside_left(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.outside_gap;
-    let height = legend.compute_box_height();
-    legend.box_at(
-        panel.x0 - gap - legend.compute_box_width(),
-        panel.y0 + (panel.height() - height).max(0.0) * align,
-    )
-}
-
-fn outside_top(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.outside_gap;
-    legend.box_at(
-        panel.x0 + (panel.width() - legend.compute_box_width()).max(0.0) * align,
-        panel.y1 + gap,
-    )
-}
-
-fn outside_bottom(legend: &Legend, panel: PanelBox, _cell: PanelBox, align: f64) -> LegendBox {
-    let gap = legend.metrics.outside_gap;
-    legend.box_at(
-        panel.x0 + (panel.width() - legend.compute_box_width()).max(0.0) * align,
-        panel.y0 - gap - legend.compute_box_height(),
-    )
 }
 
 #[cfg(test)]

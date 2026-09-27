@@ -3727,15 +3727,12 @@ impl Canvas {
             let minimum_height = self.rows as f64
                 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
                 + self.rows.saturating_sub(1) as f64 * 12.0;
-            let available = (
-                full_outer.width() - if horizontal { 0.0 } else { minimum_width + gap },
-                full_outer.height()
-                    - if horizontal {
-                        minimum_height + gap
-                    } else {
-                        0.0
-                    },
+            let frame = crate::decorations::plan::AssignedGuideFrame::new(
+                edge,
+                (minimum_width, minimum_height),
+                gap,
             );
+            let available = frame.available(full_outer, [0.0; 4]);
             let measured = match prepared.shared_guide {
                 Some(PreparedGuideDescriptor::Continuous(descriptor)) => {
                     match MeasuredContinuousGuide::measure(
@@ -3774,37 +3771,12 @@ impl Canvas {
             let (w, h) = measured.dimensions();
             #[cfg(test)]
             crate::orchestrator::measurements::guide_body();
-            let (left, bottom) = match edge {
-                crate::LegendPosition::OutsideRight => {
-                    outer.x1 -= w + gap;
-                    (
-                        outer.x1 + gap,
-                        f64::midpoint(full_outer.y0, full_outer.y1) - h / 2.0,
-                    )
-                }
-                crate::LegendPosition::OutsideLeft => {
-                    outer.x0 += w + gap;
-                    (
-                        full_outer.x0,
-                        f64::midpoint(full_outer.y0, full_outer.y1) - h / 2.0,
-                    )
-                }
-                crate::LegendPosition::OutsideTop => {
-                    outer.y1 -= h + gap;
-                    (
-                        f64::midpoint(full_outer.x0, full_outer.x1) - w / 2.0,
-                        outer.y1 + gap,
-                    )
-                }
-                crate::LegendPosition::OutsideBottom => {
-                    outer.y0 += h + gap;
-                    (
-                        f64::midpoint(full_outer.x0, full_outer.x1) - w / 2.0,
-                        full_outer.y0,
-                    )
-                }
-                _ => unreachable!("closed shared guide edge order"),
+            outer = match frame.assign_fit(full_outer, Some((w, h)), [0.0; 4], &scope)? {
+                FitOutcome::Measured(panel) => panel,
+                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
             };
+            let placed = frame.place(outer, (w, h));
+            let (left, bottom) = (placed.x0, placed.y0);
             Some(match measured {
                 MeasuredCanvasGuide::Discrete(legend) => {
                     let bounds = legend.box_at(left, bottom);
@@ -3815,7 +3787,7 @@ impl Canvas {
                 }
                 MeasuredCanvasGuide::Continuous(guide) => SharedMeasuredGuide::Continuous {
                     guide,
-                    bounds: PanelBox::new(left, left + w, bottom, bottom + h),
+                    bounds: placed,
                 },
             })
         } else {

@@ -324,13 +324,12 @@ impl FacetPlan {
                             | LegendPosition::OutsideBottomRight
                     );
                     let metrics = crate::decorations::legend::LegendMetrics::from_theme(theme);
-                    let gap = metrics.outside_gap;
-                    let available = (
-                        canvas_layout.panel_box.width()
-                            - if horizontal { 0.0 } else { minimum.0 + gap },
-                        canvas_layout.panel_box.height()
-                            - if horizontal { minimum.1 + gap } else { 0.0 },
+                    let frame = crate::decorations::plan::AssignedGuideFrame::new(
+                        edge,
+                        minimum,
+                        metrics.outside_gap,
                     );
+                    let available = frame.available(canvas_layout.panel_box, [0.0; 4]);
                     let guide = match crate::decorations::legend::Legend::measure_assigned(
                         title,
                         std::sync::Arc::clone(&legend_entries),

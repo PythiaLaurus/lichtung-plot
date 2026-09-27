@@ -1671,3 +1671,56 @@ fn automatic_clearance_does_not_expand_categorical_domains() {
     .unwrap()
     .is_none());
 }
+
+#[test]
+fn one_assigned_frame_reserves_guide_and_gap_on_each_selected_edge() {
+    use crate::layout::fit::FitOutcome;
+    let cell = PanelBox::new(10.0, 510.0, 20.0, 320.0);
+    let minimum = (100.0, 100.0);
+    let guide = (80.25, 60.25);
+    let gap = 17.6;
+    for (edge, expected_width, expected_height) in [
+        (LegendPosition::OutsideRight, guide.0, 0.0),
+        (LegendPosition::OutsideLeft, guide.0, 0.0),
+        (LegendPosition::OutsideTop, 0.0, guide.1),
+        (LegendPosition::OutsideBottom, 0.0, guide.1),
+    ] {
+        let frame = AssignedGuideFrame::new(edge, minimum, gap);
+        let available = frame.available(cell, [0.0; 4]);
+        assert!(guide.0 <= available.0 && guide.1 <= available.1);
+        let FitOutcome::Measured(body) = frame
+            .assign_fit(cell, Some(guide), [0.0; 4], &FitScope::root())
+            .unwrap()
+        else {
+            panic!("measured guide must leave the containing body fit");
+        };
+        let reserved_width = cell.width() - body.width();
+        let reserved_height = cell.height() - body.height();
+        let expected_width = if expected_width > 0.0 {
+            expected_width + gap
+        } else {
+            0.0
+        };
+        let expected_height = if expected_height > 0.0 {
+            expected_height + gap
+        } else {
+            0.0
+        };
+        assert!(reserved_width >= expected_width && reserved_width < expected_width + 1.0 / 1024.0);
+        assert!(
+            reserved_height >= expected_height && reserved_height < expected_height + 1.0 / 1024.0
+        );
+        assert!(body.width() >= minimum.0 && body.height() >= minimum.1);
+        let placed = frame.place(body, guide);
+        let clearance = match edge {
+            LegendPosition::OutsideRight => placed.x0 - body.x1,
+            LegendPosition::OutsideLeft => body.x0 - placed.x1,
+            LegendPosition::OutsideTop => placed.y0 - body.y1,
+            LegendPosition::OutsideBottom => body.y0 - placed.y1,
+            _ => unreachable!("the fixture uses the four outside edges"),
+        };
+        assert!((clearance - gap).abs() < 1.0e-9);
+        assert!(placed.x0 >= cell.x0 && placed.x1 <= cell.x1);
+        assert!(placed.y0 >= cell.y0 && placed.y1 <= cell.y1);
+    }
+}
