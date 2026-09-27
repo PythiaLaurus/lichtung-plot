@@ -1616,7 +1616,9 @@ fn orchestration_runs_measurement_planning_and_render_passes() {
             preflight_calls,
             rendered_canvas_calls
         ),
-        (0, 8, 2, 2, 2)
+        // Native cells use selected plans at capture; only the facet's
+        // separate semantic probes still enter the legacy panel renderer.
+        (0, 4, 0, 0, 0)
     );
 }
 

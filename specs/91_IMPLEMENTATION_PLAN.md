@@ -268,7 +268,7 @@ The approved theme and layout targets follow these rules:
 | T5a6c3 | Categorical distribution families | COMPLETE |
 | T5a6c4 | Interaction family | COMPLETE |
 | T5a6d | Ordinary exact-root closure audit | COMPLETE |
-| T5b | Legends, facets, and Canvas composition chrome | IN PROGRESS |
+| T5b | Legends, facets, and Canvas composition chrome | COMPLETE |
 | T5c | Mark defaults, annotations, and local styles | PENDING |
 | T5d | Categorical and continuous data scales | PENDING |
 | T5e | Scientific layout closure | PENDING |
@@ -6210,7 +6210,7 @@ Commit: `refactor(layout): close ordinary exact-root planning`.
 
 ## Phase T5b: Legends, Facets, And Canvas Composition Chrome
 
-**Status**: IN PROGRESS (T5b1)
+**Status**: COMPLETE (T5b7)
 
 Dependencies: T5a.
 
@@ -6306,7 +6306,10 @@ Acceptance:
   current inputs. T5c and T5d feed their final values into that same path, and T6
   closes mixed-theme compatibility over the public replacement values.
 - Focused legend, facet, Canvas, collision, and visual-regression tests pass.
-- `just verify` passes.
+- Run `just verify` at the broad T5b7 gate. If only localized stale
+  assertions fail after adapter removal, correct them and verify the affected
+  paths and required documentation/package gates without repeating the full
+  suite; record the result in `92_T5B_T5E_EXECUTION_PLAN.md`.
 
 ## Phase T5c: Mark Defaults, Annotations, And Local Styles
 

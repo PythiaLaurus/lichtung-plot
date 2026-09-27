@@ -259,7 +259,7 @@ impl Plot {
 
     fn validate_facet_configuration(&self) -> Result<(), Error> {
         if self.has_facets() {
-            crate::layout::interior::ParentCompositionAdapter::Facet.validate_child(self)?;
+            crate::layout::interior::CompositionChildPolicy::Facet.validate_child(self)?;
         }
         if self.has_facets() && !self.panel_text_annotations().is_empty() {
             return Err(Error::Data(

@@ -52,8 +52,8 @@ fn exhaustive_route_census_has_twenty_ordinary_five_specialized_two_parents() {
     }
     assert_eq!(counts, [8, 12, 5]);
     let parents = [
-        ParentCompositionAdapter::Facet,
-        ParentCompositionAdapter::Canvas,
+        CompositionChildPolicy::Facet,
+        CompositionChildPolicy::Canvas,
     ];
     assert_ne!(parents[0], parents[1]);
 }

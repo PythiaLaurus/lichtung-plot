@@ -900,7 +900,8 @@ mod feedback_tests {
                 assert_eq!(calls, 3);
                 CHILD_MEASUREMENTS.with(|events| {
                     let events = events.borrow();
-                    for phase in ["probe", "layout", "panel"] {
+                    assert!(events.iter().all(|(_, phase)| *phase != "layout"));
+                    for phase in ["probe", "panel"] {
                         assert_eq!(
                             events
                                 .iter()

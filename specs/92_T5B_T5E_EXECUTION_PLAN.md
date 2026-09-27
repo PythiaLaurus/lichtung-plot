@@ -1,8 +1,8 @@
 # T5b-T5e Execution Plan
 
-**Status: PENDING (execution); no implementation stage here has started.**
+**Status: IN PROGRESS — T5b complete; T5c–T5e pending.**
 
-This is the execution partition of the four PENDING umbrellas in
+This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
 The user requested this planning work and approved the explicit-data-window
 decision below. Planning is not evidence of implementation. `03_THEME_SYSTEM.md`
@@ -157,7 +157,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b6a | COMPLETE | T5b5 | `refactor(canvas): skip absent shared guide trials` |
 | T5b6b | COMPLETE | T5b6a | `refactor(canvas): install shared ranges before guide probes` |
 | T5b6c | COMPLETE | T5b6b | `test(canvas): trace multi-owner guide recovery` |
-| T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
+| T5b7 | COMPLETE | T5b6 | `test(layout): close native composition ownership` |
 
 ### T5b0 — Source Map And Behavioral Fixtures
 
@@ -865,6 +865,42 @@ invent a fixture with simultaneous shared and per-panel guides forbidden by that
 policy. Use PerPlot for genuinely multiple panel-guide owners.
 
 ### T5b7 — Composition Closure
+
+Native-parent route census (25 Plot kinds, one fixed root driver per operation):
+
+| Parent / selected child | Track and text owner | Guide owner and fitted frame |
+| --- | --- | --- |
+| Plot root with an ordinary child (20 kinds) | Native interior intrinsics, `RootFramePlan`, and selected `PanelPlan` | Plot-scoped prepared entries, `Legend::measure_assigned`, `AssignedGuideFrame` |
+| Plot root with a specialized child (Heatmap, Marginal, Matrix, Beeswarm, Waterfall) | Root frame and retained specialized intrinsics/selected payloads; final specialized mark packing remains T5e | Kind-owned guides, with prepared continuous Heatmap/Beeswarm descriptors under Canvas sharing |
+| Generic facets of an admitted Plot | `orchestrator/facets/tracks.rs` measured row/column Grid and strip/axis plans; no equal-cell parent allocator or later layout-only child probe | One prepared facet guide descriptor, one enclosing `AssignedGuideFrame`, suppressed child guides |
+| Canvas Plot cell | `canvas/tracks.rs` measured Grid: cell minima, actual gutters, spanning column/row headers and measured row-title tracks; complete Plot-local text/body | `PerPlot` owns each separate child frame, `Shared` owns one Canvas guide frame, `Hidden` has no guide; empty shared guide has no fictitious trials |
+| Canvas TextPanel or empty declared cell | Same measured Canvas tracks, with top-left assigned-width TextPanel flow; empty coordinates and gaps remain declared | No cell guide |
+
+The current support boundary remains closed: ordinary Plot kinds and Heatmap,
+Beeswarm, and Waterfall may be Canvas children or generic facet sources subject
+to each kind's pre-existing validation; Marginal may be a Canvas child but not
+generically faceted; Matrix is self-managed and may be neither. A faceted Plot
+cannot be nested in Canvas, and Canvas cannot be inserted into a Plot cell.
+`CompositionChildPolicy::validate_child` is solely this pre-font support gate,
+not a retained parent layout adapter. The old equal-cell parent functions and
+deferred panel-heading representation are absent; the specialized *interior*
+parity minimum remains named separately until T5c/T5e.
+
+Closure evidence: the 25-family lifecycle fixture renders all 24 admitted
+Canvas child kinds in bounded four-cell groups, rejects Matrix before fonts,
+and compares cached/uncached SVG bytes. Focused mixed TextPanel, sparse and
+spanning headers, root/local captions, wrapped text, exact dimensions,
+unsupported nesting, resource refusal, immutable replay, and separate
+shared/hidden/per-Plot guide tests pass. The 66 composition integrations and
+13 visual-regression snapshots pass. The T5b7 broad gate ran `just verify`:
+1,070 library tests passed; two stale phase-probe-count assertions failed
+after deletion of duplicate layout-only child passes. Those two assertions
+were updated to the measured native path and pass individually, along with
+their neighboring facet/cache, 25-family, composition, and snapshot tests;
+strict Clippy passes. Documentation and package gates were completed
+separately rather than repeating the full test suite for these localized
+assertions. The release populated-guide before/after table and retained
+historical baseline appear in `docs/local-search-benchmarks.md`.
 
 Publish the native-parent route census, owner/track/guide matrix, support matrix,
 cache evidence, and before/after populated-guide measurements. Both parent

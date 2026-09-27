@@ -2308,7 +2308,7 @@ impl Canvas {
         for plot in self.panels.iter().flatten() {
             let kind = plot.kind();
             plot.validate_configuration(kind)?;
-            crate::layout::interior::ParentCompositionAdapter::Canvas.validate_child(plot)?;
+            crate::layout::interior::CompositionChildPolicy::Canvas.validate_child(plot)?;
             if self.legend_policy == CanvasLegendPolicy::Shared
                 && matches!(
                     plot.legend_policy_spec(),

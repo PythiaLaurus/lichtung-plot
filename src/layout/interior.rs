@@ -72,14 +72,14 @@ impl InteriorRoute {
     }
 }
 
-/// Parent classification is independent of the child's interior classification.
+/// Composition support is independent of the child's interior route.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ParentCompositionAdapter {
+pub(crate) enum CompositionChildPolicy {
     Facet,
     Canvas,
 }
 
-impl ParentCompositionAdapter {
+impl CompositionChildPolicy {
     pub(crate) fn validate_child(self, plot: &Plot) -> Result<(), Error> {
         match self {
             Self::Canvas if plot.kind() == PlotKind::Matrix => Err(Error::Render(

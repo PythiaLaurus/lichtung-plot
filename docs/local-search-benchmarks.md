@@ -1,5 +1,30 @@
 # Local-Search Measurements
 
+### T5b7 Native-Composition Shared-Guide Comparison
+
+The T5b7 checkout retains the same two-Scatter, three-entry adequate Canvas
+(1200×720) and 12-entry pressured Canvas (480×360) release fixtures and the
+same three interleaved Auto/selected-edge samples. The ignored
+`orchestrator::tests::benchmarks::legends::shared_legend_measurements` test
+passed with byte-identical Auto/selected-edge SVG and PNG, decoded pixels,
+and exact shared-guide owner/attempt traces. Measurements are stage-attributed;
+they are not a claim about performance on other machines or inputs.
+
+| Canvas fixture | Earlier T5b1b2b1 child misses | T5b7 child misses | T5b7 root rounds / guide trials | T5b1b2b1 end-to-end min/median/max ms | T5b7 end-to-end min/median/max ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Adequate | 12 | 8 | 2 / 2 | 38.898 / 40.711 / 52.767 | 35.810 / 37.427 / 51.703 |
+| Pressured | 18 | 12 | 3 / 7 | 34.656 / 34.760 / 34.796 | 31.593 / 31.667 / 43.010 |
+
+Both fixtures have zero child-cache hits: changed assigned cells are genuinely
+remeasured. The separate two-guide `PerPlot` Canvas regression records a
+feedback-replayed cache hit for an unchanged neighbor and a fresh trial for a
+dirty panel. The shared facet fixture likewise retains 2/3 root rounds, 2/4
+guide trials, and 8/12 child misses for adequate/pressured assignments.
+Release reproduction:
+`cargo test --release --locked --offline --lib benchmarks::legends::shared_legend_measurements -- --ignored --nocapture --test-threads=1`.
+The old T5a and T5b1b2b1 snapshots and timings below retain their original
+checkout attribution; T5b deliberately changes composed geometry.
+
 ### T5b1b2b1 Prepared Scatter Shared Guides
 
 The T5b migration keeps the historical T5a tables below as stage-attributed

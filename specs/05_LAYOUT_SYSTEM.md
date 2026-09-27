@@ -25,11 +25,12 @@ Current exact-root T5a6d implementation evidence is in `docs/t5a-closure.md` and
 spec 91. T5a6d, T5a6, and parent T5a are COMPLETE after final review corrections
 and the full gate in `/tmp/opencode/t5a6d-verify.log`: 1,024 library and 467
 integration tests passed, 17 ignored, with strict Clippy, API docs, and package
-verification passing. All ten release benchmark groups separately passed. The
-20 native ordinary kinds, five specialized and two parent adapters, and deferred
-Mark/Annotation consequences do not make this document's complete target current:
-automatic sizing, native composition tracks, final specialized packing, and public
-APIs remain in their later phases. T5b onward remain PENDING. Existing public
+verification passing. All ten release benchmark groups separately passed. At
+that T5a checkpoint, the 20 native ordinary kinds, five specialized kinds, and
+two retained parent adapters did not make this document's target current. T5b
+has since completed native guides and composition tracks; T5c–T5e remain
+pending for mark/annotation consequences, scales, and specialized packing.
+Automatic sizing and public theme/layout APIs remain T6 work. Existing public
 defaults remain exact 640x480 Plot and 960x640 Canvas until the atomic T6 switch.
 
 Post-T5a3 accepted policies are recorded in `91_IMPLEMENTATION_PLAN.md`, T5a3p0
