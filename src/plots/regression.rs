@@ -148,7 +148,7 @@ impl PreparedRegression {
         let color = theme.colors[0];
         let band = chart.regression_band_spec();
         let fit_identity = chart.point_legend_identity(band.legend_label(), data)?;
-        let line = LineStyle::solid(theme.foreground, 1.5);
+        let line = theme.marks.regression_fit.backend_style();
         let fit_entry = if band == RegressionBand::PointwiseMean95 {
             LegendEntry::line_fill(
                 fit_identity,
@@ -320,7 +320,7 @@ pub(crate) fn project(
             let (x, y) = projection.project(*x_value, *y_value);
             Ok(Point2D::new(x, y))
         }))?;
-    let line_style = LineStyle::solid(theme.foreground, 1.5);
+    let line_style = theme.marks.regression_fit.backend_style();
     data.claim_source_visits(2)?;
     let (fit_x0, fit_y0) = projection.project(prepared.fit_line[0].0, prepared.fit_line[0].1);
     let (fit_x1, fit_y1) = projection.project(prepared.fit_line[1].0, prepared.fit_line[1].1);
@@ -397,4 +397,63 @@ pub(crate) fn project(
         geometry,
     })?);
     Ok(result)
+}
+
+#[cfg(test)]
+mod style_tests {
+    use super::*;
+    use crate::font::canonical::OperationGenerationResources;
+
+    #[test]
+    fn custom_fit_stroke_preserves_scientific_line_and_changes_exact_guide_glyph() {
+        let source = Plot::regression(
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
+        )
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ))
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let old = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        theme.marks.regression_fit.paint = crate::render::backend::Rgba::rgb(17, 41, 67);
+        theme.marks.regression_fit.width = 2.5;
+        let changed = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let payload = |result: &PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Regression(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("Regression mark payload")
+            };
+            (payload.fit_line, payload.line_style.clone())
+        };
+        let (old_line, old_style) = payload(&old);
+        let (new_line, new_style) = payload(&changed);
+        assert_eq!(old_line, new_line);
+        assert_ne!(old_style, new_style);
+        assert_eq!(
+            new_style.color,
+            crate::render::backend::Rgba::rgb(17, 41, 67)
+        );
+        assert_eq!(new_style.width.to_bits(), 2.5_f32.to_bits());
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                old.legend_entries[1].clone(),
+                changed.legend_entries[1].clone()
+            ],
+            "custom regression fit",
+            &OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
+    }
 }

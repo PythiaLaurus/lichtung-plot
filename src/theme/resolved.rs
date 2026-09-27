@@ -945,6 +945,8 @@ pub(crate) struct MarkAppearance {
     pub(crate) histogram_rug: StrokeAppearance,
     /// Density group curve, reused exactly by its originating guide glyph.
     pub(crate) density_line: DataLineAppearance,
+    /// Regression fit line independently resolved from its observations/band.
+    pub(crate) regression_fit: StrokeAppearance,
 }
 
 /// One complete data-colored mark stroke; the scale supplies opaque RGB only.
@@ -1216,6 +1218,7 @@ fn resolved_theme(
                 alpha: 255,
                 pattern: StrokePattern::Solid,
             },
+            regression_fit: stroke_appearance(foreground_paint, 1.5, StrokePattern::Solid),
         },
         annotations: AnnotationAppearance {
             bracket_stroke: BracketStrokeAppearance {
@@ -1605,6 +1608,11 @@ mod tests {
                 density_line: DataLineAppearance {
                     width: 1.6,
                     alpha: 255,
+                    pattern: StrokePattern::Solid,
+                },
+                regression_fit: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.5,
                     pattern: StrokePattern::Solid,
                 },
             },
