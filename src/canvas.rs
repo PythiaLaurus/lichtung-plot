@@ -160,6 +160,29 @@ mod d1_tests {
     use super::*;
 
     #[test]
+    fn shared_policy_without_a_guide_allocates_cells_without_guide_trials() {
+        let plot = || {
+            Plot::scatter(
+                crate::NumericValues::new("x", [1.0, 2.0]),
+                crate::NumericValues::new("y", [2.0, 3.0]),
+            )
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot())
+            .unwrap()
+            .panel(0, 1, plot())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared);
+        crate::orchestrator::measurements::start();
+        let result = canvas.preflight();
+        let observed = crate::orchestrator::measurements::finish();
+        result.unwrap();
+        assert!(observed.guides.is_empty());
+        assert!(observed.roots.last().is_some_and(|round| round.successful));
+    }
+
+    #[test]
     fn continuous_shared_domains_merge_before_fonts_without_choosing_one_panel() {
         let plot = |values: [f64; 2]| {
             Plot::heatmap(
@@ -3444,7 +3467,13 @@ impl Canvas {
             interiors,
         )?;
         let mut compact_changes = true;
-        if self.legend_policy != CanvasLegendPolicy::Shared {
+        if self.legend_policy != CanvasLegendPolicy::Shared
+            || (prepared.shared_legend.is_none()
+                && !matches!(
+                    prepared.shared_guide,
+                    Some(PreparedGuideDescriptor::Continuous(_))
+                ))
+        {
             return match self.build_canvas_attempt(
                 &prepared,
                 assigned,
@@ -3766,12 +3795,13 @@ impl Canvas {
             );
             let metrics = crate::decorations::legend::LegendMetrics::from_theme(themes.root());
             let gap = self.shared_legend_gap.unwrap_or(metrics.shared_gap);
+            let grid_gap = themes.root().composition.canvas_grid_gap;
             let minimum_width = self.columns as f64
                 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
-                + self.columns.saturating_sub(1) as f64 * 12.0;
+                + self.columns.saturating_sub(1) as f64 * grid_gap;
             let minimum_height = self.rows as f64
                 * crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
-                + self.rows.saturating_sub(1) as f64 * 12.0;
+                + self.rows.saturating_sub(1) as f64 * grid_gap;
             let frame = crate::decorations::plan::AssignedGuideFrame::new(
                 edge,
                 (minimum_width, minimum_height),

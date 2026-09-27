@@ -153,7 +153,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b5d1a | COMPLETE | T5b5c | `feat(canvas): constrain spanning header columns` |
 | T5b5d1b | COMPLETE | T5b5d1a | `feat(canvas): measure header bands` |
 | T5b5d2 | COMPLETE | T5b5d1b | `feat(canvas): allocate measured row titles` |
-| T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
+| T5b6 | IN PROGRESS | T5b5 | Umbrella; completes after T5b6a-c |
+| T5b6a | COMPLETE | T5b5 | `refactor(canvas): skip absent shared guide trials` |
+| T5b6b | PENDING | T5b6a | `refactor(canvas): integrate shared axes and guide frames` |
+| T5b6c | PENDING | T5b6b | `test(canvas): trace multi-owner guide recovery` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
 
 ### T5b0 — Source Map And Behavioral Fixtures
@@ -813,6 +816,15 @@ become panel preferences. Preserve current validation of invalid child settings;
 do not use this layout migration to change validation timing or admit nesting.
 
 ### T5b6 — Shared Axes, Guide Frames, And Multi-Owner Recovery
+
+T5b6a closure: a shared policy with no measured discrete or continuous guide
+now allocates its cells directly, without opening eight fictitious guide
+choices or consuming the shared guide trial budget. Genuine shared guides keep
+the same first-fit order. The containing frame's minimum cell footprint uses
+the Canvas Grid's resolved gap rather than duplicating a literal. No-guide
+trial observations, a real shared-guide recovery, and strict Clippy pass.
+T5b6b integrates the retained shared domains and guide frames; T5b6c records
+multi-owner recovery before closing T5b6.
 
 Complete shared-x installation and shared/per-Plot/hidden guide integration over
 the native tracks. Use the prepared strict union, never override explicit limits
