@@ -172,12 +172,7 @@ pub(crate) fn measure_marks(
     for (i, stat) in stats.iter().enumerate() {
         let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
         let color = theme.colors[color_index % theme.colors.len()];
-        let fill = FillStyle {
-            color,
-            stroke: theme.foreground,
-            stroke_width: 1.0,
-            opacity: 1.0,
-        };
+        let fill = FillStyle::new(color.into(), theme.foreground.into(), 1.0);
         let style = theme.marks.summary_stroke.backend_style();
 
         let x_center_data =

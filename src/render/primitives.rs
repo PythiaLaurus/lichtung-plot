@@ -294,10 +294,9 @@ impl CanonicalLineStyle {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CanonicalFillStyle {
-    pub(crate) color: (u8, u8, u8),
-    pub(crate) stroke: (u8, u8, u8),
+    pub(crate) color: Rgba,
+    pub(crate) stroke: Rgba,
     pub(crate) stroke_width: CanonicalCoordinate,
-    pub(crate) opacity: f64,
 }
 
 impl CanonicalFillStyle {
@@ -306,7 +305,6 @@ impl CanonicalFillStyle {
         Ok(Self {
             color: style.color,
             stroke: style.stroke,
-            opacity: style.opacity,
             stroke_width: CanonicalCoordinate::nonnegative_length(
                 f64::from(style.stroke_width),
                 "polygon stroke width",

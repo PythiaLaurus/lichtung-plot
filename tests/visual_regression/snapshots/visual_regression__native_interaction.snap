@@ -52,7 +52,7 @@ expression: normalize_embedded_font(&svg)
 <text x="2.7119140625" y="142.916015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,40.6376953125,138.5)">Estimate</text>
 </g>
 <g id="legend">
-<rect x="519.998046875" y="104.0927734375" width="104.5009765625" height="68.814453125" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.80" stroke="#C8C8C8" stroke-width="1"/>
+<rect x="519.998046875" y="104.0927734375" width="104.5009765625" height="68.814453125" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.8" stroke="#C8C8C8" stroke-width="1"/>
 <text x="527.326171875" y="124" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" xml:space="preserve" fill="#3C3C3C" text-anchor="start" direction="ltr">Group × Hue</text>
 <polyline points="528.2978515625,142.75 539.2978515625,142.75" fill="none" stroke="#0072B2" stroke-width="1.7998046875" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="533.7978515625" cy="142.75" r="4" fill="#0072B2" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.400390625"/>

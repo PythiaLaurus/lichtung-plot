@@ -153,12 +153,11 @@ impl PreparedRegression {
             LegendEntry::line_fill(
                 fit_identity,
                 line,
-                FillStyle {
-                    color,
-                    stroke: color,
-                    stroke_width: 0.0,
-                    opacity: 0.25,
-                },
+                FillStyle::new(
+                    crate::render::backend::Rgba::from(color).with_alpha(64),
+                    color.into(),
+                    0.0,
+                ),
             )
         } else {
             LegendEntry::line(fit_identity, line)
@@ -365,12 +364,11 @@ pub(crate) fn project(
             Ok(upper)
         })
         .transpose()?;
-    let band_fill = FillStyle {
-        color: theme.colors[0],
-        stroke: theme.colors[0],
-        stroke_width: 0.0,
-        opacity: 0.25,
-    };
+    let band_fill = FillStyle::new(
+        crate::render::backend::Rgba::from(theme.colors[0]).with_alpha(64),
+        theme.colors[0].into(),
+        0.0,
+    );
 
     let legend_entries = PreparedRegression::guide_entries(chart, theme, data)?;
     let payload = RegressionPayload {

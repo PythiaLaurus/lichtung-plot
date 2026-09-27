@@ -1571,12 +1571,7 @@ mod tests {
         assert_paired_rejection(|backend| {
             backend.draw_polygon(
                 &points,
-                &FillStyle {
-                    color: (0, 0, 0),
-                    stroke: (0, 0, 0),
-                    stroke_width: 1.0 / 4096.0,
-                    opacity: 1.0,
-                },
+                &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0 / 4096.0),
             )
         });
         let outlined = PointStyle::with_outline(
@@ -1683,12 +1678,7 @@ mod tests {
             backend.draw_line(&points, &LineStyle::short_dashed((7, 8, 9), 0.8))?;
             backend.draw_polygon(
                 &[points[0], points[1], points[2], points[0]],
-                &FillStyle {
-                    color: (10, 11, 12),
-                    stroke: (13, 14, 15),
-                    stroke_width: 0.8,
-                    opacity: 0.75,
-                },
+                &FillStyle::new(Rgba::new(10, 11, 12, 191), Rgba::rgb(13, 14, 15), 0.8),
             )?;
             backend.draw_linear_gradient(
                 PanelBox::new(-0.25, 4.5, -3.0, 5.75),
@@ -2001,12 +1991,7 @@ mod tests {
                 20.125,
                 10.25,
                 1.125,
-                &FillStyle {
-                    color: (4, 5, 6),
-                    stroke: (7, 8, 9),
-                    opacity: 0.75,
-                    stroke_width: 0.8,
-                },
+                &FillStyle::new(Rgba::new(4, 5, 6, 191), Rgba::rgb(7, 8, 9), 0.8),
             )?;
             backend.end_clip()?;
             SPATIAL_CONVERSIONS.with(|count| {
@@ -2045,12 +2030,7 @@ mod tests {
             Point2D::new(50.0, 10.0),
         ];
         let line = LineStyle::short_dashed((1, 2, 3), 0.8);
-        let fill = FillStyle {
-            color: (10, 20, 30),
-            stroke: (1, 2, 3),
-            stroke_width: 0.5,
-            opacity: 0.75,
-        };
+        let fill = FillStyle::new(Rgba::new(10, 20, 30, 191), Rgba::rgb(1, 2, 3), 0.5);
         backend.draw_surface(bounds, Rgba::rgb(255, 255, 255), SurfaceRole::CanvasRoot)?;
         backend.draw_surface(bounds, Rgba::new(1, 2, 3, 128), SurfaceRole::PlotPanel)?;
         backend.begin_layer_with_role("grid<&", LayerRole::Grid)?;
@@ -2646,12 +2626,7 @@ mod tests {
                                         Point2D::new(1.0, 1.0),
                                         Point2D::new(2.0, 0.0),
                                     ],
-                                    &FillStyle {
-                                        color: (0, 0, 0),
-                                        stroke: (0, 0, 0),
-                                        stroke_width: 1.0,
-                                        opacity: 1.0,
-                                    },
+                                    &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0),
                                 ),
                                 _ => backend.draw_linear_gradient(
                                     PanelBox::new(0.0, 10.0, 0.0, 10.0),
@@ -2847,12 +2822,7 @@ mod tests {
     #[test]
     fn null_backend_preserves_degenerate_line_and_polygon_noops() {
         let invalid_line = LineStyle::solid((0, 0, 0), f32::NAN);
-        let invalid_fill = FillStyle {
-            color: (0, 0, 0),
-            stroke: (0, 0, 0),
-            stroke_width: f32::NAN,
-            opacity: f64::NAN,
-        };
+        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
 
         let (result, svg) = paired_draw_result(|backend| {
             backend.draw_line(&[Point2D::new(f64::NAN, f64::NAN)], &invalid_line)?;
@@ -2872,12 +2842,7 @@ mod tests {
 
     #[test]
     fn null_and_svg_share_non_degenerate_line_and_polygon_failures() {
-        let invalid_fill = FillStyle {
-            color: (0, 0, 0),
-            stroke: (0, 0, 0),
-            stroke_width: f32::NAN,
-            opacity: f64::NAN,
-        };
+        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
 
         assert_paired_rejection(|backend| {
             backend.draw_line(
@@ -2972,18 +2937,8 @@ mod tests {
 
     #[test]
     fn null_and_svg_share_rounded_rect_geometry_style_and_order() {
-        let valid_fill = FillStyle {
-            color: (0, 0, 0),
-            stroke: (0, 0, 0),
-            stroke_width: 1.0,
-            opacity: 1.0,
-        };
-        let invalid_fill = FillStyle {
-            color: (0, 0, 0),
-            stroke: (0, 0, 0),
-            stroke_width: f32::NAN,
-            opacity: f64::NAN,
-        };
+        let valid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0);
+        let invalid_fill = FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN);
 
         assert_paired_success(|backend| {
             backend.draw_rounded_rect(1.0, 2.0, 0.0, 0.0, 0.0, &valid_fill)

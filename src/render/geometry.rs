@@ -325,12 +325,17 @@ impl GeometrySnapshot {
         backend::validate_fill_style(style)?;
         if rounded.rect.width.value() == 0.0
             || rounded.rect.height.value() == 0.0
-            || (style.opacity == 0.0 && style.stroke_width == 0.0)
+            || (style.color.alpha() == 0
+                && (style.stroke.alpha() == 0 || style.stroke_width == 0.0))
         {
             return Ok(());
         }
         let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
-            f64::from(style.stroke_width),
+            f64::from(if style.stroke.alpha() == 0 {
+                0.0
+            } else {
+                style.stroke_width
+            }),
             "rectangle stroke width",
         )?
         .units();
@@ -411,11 +416,15 @@ impl GeometrySnapshot {
         let points = backend::validate_polygon_points(points)?;
         let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
-        let fill = (style.opacity > 0.0 && polygon_has_positive_area(&ring)?)
+        let fill = (style.color.alpha() > 0 && polygon_has_positive_area(&ring)?)
             .then(|| GeometryBox::from_canonical_points(&ring, 0))
             .transpose()?
             .flatten();
-        let stroke = polygon_stroke_bounds(&ring, style.stroke_width.units())?;
+        let stroke = if style.stroke.alpha() > 0 {
+            polygon_stroke_bounds(&ring, style.stroke_width.units())?
+        } else {
+            None
+        };
         self.record(
             match (fill, stroke) {
                 (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
@@ -1472,11 +1481,15 @@ impl Backend for GeometryBackend {
         let points = backend::validate_polygon_points(points)?;
         let style = super::primitives::CanonicalFillStyle::new(style)?;
         let ring = polygon_ring(&points);
-        let fill_bounds = (style.opacity > 0.0 && polygon_has_positive_area(&ring)?)
+        let fill_bounds = (style.color.alpha() > 0 && polygon_has_positive_area(&ring)?)
             .then(|| GeometryBox::from_canonical_points(&ring, 0))
             .transpose()?
             .flatten();
-        let stroke_bounds = polygon_stroke_bounds(&ring, style.stroke_width.units())?;
+        let stroke_bounds = if style.stroke.alpha() > 0 {
+            polygon_stroke_bounds(&ring, style.stroke_width.units())?
+        } else {
+            None
+        };
         self.record(match (fill_bounds, stroke_bounds) {
             (Some(fill), Some(stroke)) => Some(fill.union(stroke)),
             (fill, stroke) => fill.or(stroke),
@@ -1580,12 +1593,17 @@ impl Backend for GeometryBackend {
         backend::validate_fill_style(style)?;
         if rounded.rect.width.value() == 0.0
             || rounded.rect.height.value() == 0.0
-            || (style.opacity == 0.0 && style.stroke_width == 0.0)
+            || (style.color.alpha() == 0
+                && (style.stroke.alpha() == 0 || style.stroke_width == 0.0))
         {
             return Ok(());
         }
         let padding = super::coordinates::CanonicalCoordinate::nonnegative_length(
-            f64::from(style.stroke_width),
+            f64::from(if style.stroke.alpha() == 0 {
+                0.0
+            } else {
+                style.stroke_width
+            }),
             "rectangle stroke width",
         )?
         .units();
@@ -2232,12 +2250,12 @@ mod tests {
     }
 
     fn test_fill_style(opacity: f64, stroke_width: f32) -> FillStyle {
-        FillStyle {
-            color: (0, 0, 0),
-            stroke: (0, 0, 0),
+        FillStyle::new(
+            crate::render::backend::Rgba::rgb(0, 0, 0)
+                .with_alpha(crate::render::backend::Rgba::quantized_alpha(opacity).unwrap()),
+            crate::render::backend::Rgba::rgb(0, 0, 0),
             stroke_width,
-            opacity,
-        }
+        )
     }
 
     fn recorded_polygon(points: &[Point2D], style: &FillStyle) -> Option<GeometryBox> {
@@ -2505,6 +2523,20 @@ mod tests {
         assert!(stroke.left < -0.9 && stroke.right > 12.4);
         assert!(stroke.bottom < -0.9 && stroke.top > 12.4);
         assert!(recorded_polygon(&triangle, &test_fill_style(0.0, 0.0)).is_none());
+        let fill_only = FillStyle::new(
+            crate::render::backend::Rgba::rgb(0, 0, 0),
+            crate::render::backend::Rgba::new(0, 0, 0, 0),
+            2.0,
+        );
+        let stroke_only = FillStyle::new(
+            crate::render::backend::Rgba::new(0, 0, 0, 0),
+            crate::render::backend::Rgba::new(0, 0, 0, 128),
+            2.0,
+        );
+        let invisible = FillStyle::new(fill_only.stroke, fill_only.stroke, 2.0);
+        assert_eq!(recorded_polygon(&triangle, &fill_only), Some(fill));
+        assert_eq!(recorded_polygon(&triangle, &stroke_only), Some(stroke));
+        assert!(recorded_polygon(&triangle, &invisible).is_none());
         assert!(recorded_polygon(
             &[
                 Point2D::new(0.0, 0.0),

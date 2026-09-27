@@ -71,6 +71,25 @@ impl Rgba {
         }
     }
 
+    pub(crate) const fn with_alpha(self, alpha: u8) -> Self {
+        Self { alpha, ..self }
+    }
+
+    /// Resolve one validated legacy unit opacity to the canonical 8-bit alpha.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "finite validated unit opacity rounds to an integral value in 0..=255"
+    )]
+    pub(crate) fn quantized_alpha(opacity: f64) -> Result<u8, Error> {
+        if !opacity.is_finite() || !(0.0..=1.0).contains(&opacity) {
+            return Err(Error::Render(format!(
+                "paint opacity must be finite and in [0, 1]; got {opacity}"
+            )));
+        }
+        Ok((opacity * 255.0).round_ties_even() as u8)
+    }
+
     pub(crate) const fn red(self) -> u8 {
         self.red
     }
@@ -270,17 +289,23 @@ impl StrokePattern {
     }
 }
 
-/// Visual style for a filled polygon (e.g. bar bodies, violin body).
+/// Independent complete fill and stroke paints for a polygon or rectangle.
 #[derive(Debug, Clone)]
-pub struct FillStyle {
-    /// Fill color (R, G, B).
-    pub color: (u8, u8, u8),
-    /// Stroke color (R, G, B); some backends draw an outline.
-    pub stroke: (u8, u8, u8),
+pub(crate) struct FillStyle {
+    pub(crate) color: Rgba,
+    pub(crate) stroke: Rgba,
     /// Stroke width in pixels (0.0 for no outline).
-    pub stroke_width: f32,
-    /// Fill opacity (0.0 = fully transparent, 1.0 = fully opaque).
-    pub opacity: f64,
+    pub(crate) stroke_width: f32,
+}
+
+impl FillStyle {
+    pub(crate) const fn new(color: Rgba, stroke: Rgba, stroke_width: f32) -> Self {
+        Self {
+            color,
+            stroke,
+            stroke_width,
+        }
+    }
 }
 
 /// One color in a linear gradient at a normalized offset.
@@ -840,12 +865,6 @@ pub(crate) fn validate_fill_style(style: &FillStyle) -> Result<(), Error> {
             style.stroke_width
         )));
     }
-    if !style.opacity.is_finite() || !(0.0..=1.0).contains(&style.opacity) {
-        return Err(Error::Render(format!(
-            "fill opacity must be finite and in [0, 1]; got {}",
-            style.opacity
-        )));
-    }
     Ok(())
 }
 
@@ -1379,6 +1398,31 @@ mod tests {
             ),
             (4, 5, 6, 0)
         );
+    }
+
+    #[test]
+    fn legacy_opacity_rounds_nearest_even_once_before_complete_paint() {
+        for (opacity, alpha) in [
+            (0.0, 0),
+            (1.0 / 510.0, 0),
+            (3.0 / 510.0, 2),
+            (0.25, 64),
+            (0.70, 178),
+            (0.82, 209),
+            (1.0, 255),
+        ] {
+            assert_eq!(Rgba::quantized_alpha(opacity).unwrap(), alpha);
+        }
+        for opacity in [f64::NAN, f64::INFINITY, -0.1, 1.1] {
+            assert!(Rgba::quantized_alpha(opacity).is_err());
+        }
+        let fill = FillStyle::new(
+            Rgba::rgb(1, 2, 3).with_alpha(Rgba::quantized_alpha(0.25).unwrap()),
+            Rgba::new(4, 5, 6, 128),
+            1.0,
+        );
+        assert_eq!(fill.color.alpha(), 64);
+        assert_eq!(fill.stroke.alpha(), 128);
     }
 
     #[test]

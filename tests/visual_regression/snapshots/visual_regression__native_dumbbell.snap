@@ -62,7 +62,7 @@ expression: normalize_embedded_font(&svg)
 <text x="21.1103515625" y="152.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,40.9658203125,148)">Term</text>
 </g>
 <g id="legend">
-<rect x="552.1337890625" y="113.5927734375" width="72.365234375" height="68.814453125" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.80" stroke="#C8C8C8" stroke-width="1"/>
+<rect x="552.1337890625" y="113.5927734375" width="72.365234375" height="68.814453125" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.8" stroke="#C8C8C8" stroke-width="1"/>
 <text x="559.349609375" y="133" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">series</text>
 <circle cx="565.93359375" cy="152.25" r="4" fill="#14508C" fill-opacity="0.82" stroke="#FFFFFF" stroke-width="0.400390625"/>
 <text x="578.9208984375" y="152" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">Before</text>

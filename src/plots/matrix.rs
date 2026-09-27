@@ -773,12 +773,14 @@ fn matrix_legend(
         entries.push(LegendEntry::point_fill(
             chart.collective_legend_identity(&group.identity, data)?,
             chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2),
-            FillStyle {
-                color: theme.colors[group.color_index % theme.colors.len()],
-                stroke: theme.colors[group.color_index % theme.colors.len()],
-                stroke_width: 1.0,
-                opacity: 0.40,
-            },
+            FillStyle::new(
+                crate::render::backend::Rgba::from(
+                    theme.colors[group.color_index % theme.colors.len()],
+                )
+                .with_alpha(102),
+                theme.colors[group.color_index % theme.colors.len()].into(),
+                1.0,
+            ),
         ));
     }
     crate::decorations::legend::resolve_entries(
@@ -931,12 +933,11 @@ fn select_diagonal_kde(
             poly.push(point);
         }
         poly.push(Point2D::new(x1, y0));
-        let fill = FillStyle {
-            color,
-            stroke: color,
-            stroke_width: 1.0,
-            opacity: 0.40,
-        };
+        let fill = FillStyle::new(
+            crate::render::backend::Rgba::from(color).with_alpha(102),
+            color.into(),
+            1.0,
+        );
         marks.push(MatrixPrimitive::Polygon(poly, fill));
     }
     Ok(())

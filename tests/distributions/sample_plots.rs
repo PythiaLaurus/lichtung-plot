@@ -238,7 +238,10 @@ fn density_hue_is_deterministic_with_independent_curves_and_stable_legend() {
     let svg = std::fs::read_to_string(first).unwrap();
     assert_eq!(svg, std::fs::read_to_string(second).unwrap());
     let marks = remove_legend_layers(&svg);
-    assert_eq!(marks.matches("fill-opacity=\"0.22\"").count(), 2);
+    assert_eq!(
+        marks.matches("fill-opacity=\"0.2196078431372549\"").count(),
+        2
+    );
     assert!(svg.find(">B</text>").unwrap() < svg.find(">A</text>").unwrap());
     assert!(svg.contains(">Value</text>") && svg.contains(">Density</text>"));
     std::fs::remove_dir_all(dir).unwrap();
@@ -352,7 +355,7 @@ fn density_renders_broad_opposite_sign_support_with_tiny_auto_y_range() {
         .unwrap();
     let svg = std::fs::read_to_string(output).unwrap();
 
-    assert!(svg.contains("fill-opacity=\"0.22\""));
+    assert!(svg.contains("fill-opacity=\"0.2196078431372549\""));
     assert!(!svg.contains("NaN") && !svg.contains("inf"));
     std::fs::remove_dir_all(dir).unwrap();
 }

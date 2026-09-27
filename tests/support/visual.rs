@@ -200,7 +200,7 @@ pub(super) fn parse_legend_rect_and_start(svg: &str) -> (SvgRect, usize) {
                 .expect("legend rect tag should be closed")
             + 2;
         let tag = &svg[start..tag_end];
-        if tag.contains("fill-opacity=\"0.80\"") && tag.contains("stroke=\"#C8C8C8\"") {
+        if tag.contains("fill-opacity=\"0.8\"") && tag.contains("stroke=\"#C8C8C8\"") {
             return (
                 SvgRect {
                     x: parse_svg_attr(tag, "x"),

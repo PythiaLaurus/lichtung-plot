@@ -1675,14 +1675,14 @@ impl<S: SvgSink> SvgSerializer<S> {
         style: &CanonicalFillStyle,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_polygon")?;
-        let fill = SvgPaint::from(style.color);
-        let stroke = SvgPaint::from(style.stroke);
+        let fill = SvgPaint::from(style.color).attributes("fill");
+        let stroke = SvgPaint::from(style.stroke).attributes("stroke");
         let pts_str = PointTokens(points);
         let buf = self.buf();
         let _ = writeln!(
             buf,
-            "<polygon points=\"{pts_str}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
-            style.opacity, style.stroke_width,
+            "<polygon points=\"{pts_str}\" {fill} {stroke} stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-miterlimit=\"{POLYGON_MITER_LIMIT:.1}\"/>",
+            style.stroke_width,
         );
         Ok(())
     }
@@ -1758,19 +1758,18 @@ impl<S: SvgSink> SvgSerializer<S> {
         rounded: coordinates::CanonicalRoundedBox,
     ) -> Result<(), Error> {
         self.ensure_begun("draw_rounded_rect")?;
-        let fill = SvgPaint::from(rounded.color);
-        let stroke = SvgPaint::from(rounded.stroke);
+        let fill = SvgPaint::from(rounded.color).attributes("fill");
+        let stroke = SvgPaint::from(rounded.stroke).attributes("stroke");
         let buf = self.buf();
         let _ = writeln!(
             buf,
-            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{fill}\" fill-opacity=\"{:.2}\" stroke=\"{stroke}\" stroke-width=\"{}\"/>",
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" {fill} {stroke} stroke-width=\"{}\"/>",
             rounded.bounds.x,
             rounded.bounds.y,
             rounded.bounds.width,
             rounded.bounds.height,
             rounded.radius,
             rounded.radius,
-            rounded.opacity,
             rounded.stroke_width,
         );
         Ok(())
@@ -2348,12 +2347,7 @@ mod tests {
     }
 
     fn test_fill_style() -> FillStyle {
-        FillStyle {
-            color: (1, 2, 3),
-            stroke: (4, 5, 6),
-            stroke_width: 0.0,
-            opacity: 1.0,
-        }
+        FillStyle::new(Rgba::rgb(1, 2, 3), Rgba::rgb(4, 5, 6), 0.0)
     }
 
     #[test]
@@ -2569,7 +2563,7 @@ mod tests {
                 "<polygon points=\"20,78 18.267578125,81 21.732421875,81\" fill=\"#010203\" fill-opacity=\"0.82\"/>",
                 "<circle cx=\"15\" cy=\"80\" r=\"2\" fill=\"#070809\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\"/>",
                 "<polygon points=\"30,78 28.267578125,81 31.732421875,81\" fill=\"#040506\" fill-opacity=\"0.82\" stroke=\"#FFFFFF\" stroke-width=\"0.2001953125\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
-                "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" fill-opacity=\"1.00\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
+                "<polygon points=\"10,90 20,90 10,80\" fill=\"#010203\" stroke=\"#040506\" stroke-width=\"0\" stroke-linejoin=\"miter\" stroke-miterlimit=\"4.0\"/>",
             ]
         );
     }
@@ -2590,12 +2584,7 @@ mod tests {
                     Point2D::new(f64::NAN, f64::NAN),
                     Point2D::new(f64::NAN, f64::NAN),
                 ],
-                &FillStyle {
-                    color: (0, 0, 0),
-                    stroke: (0, 0, 0),
-                    stroke_width: f32::NAN,
-                    opacity: f64::NAN,
-                },
+                &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), f32::NAN),
             )
             .unwrap();
         let points = [Point2D::new(1.0, 1.0), Point2D::new(2.0, 2.0)];
@@ -2637,12 +2626,7 @@ mod tests {
                 30.0,
                 20.0,
                 3.0,
-                &FillStyle {
-                    color: (1, 2, 3),
-                    stroke: (4, 5, 6),
-                    stroke_width: 1.5,
-                    opacity: 0.25,
-                },
+                &FillStyle::new(Rgba::new(1, 2, 3, 64), Rgba::rgb(4, 5, 6), 1.5),
             )
             .unwrap();
         backend.end().unwrap();
@@ -2655,10 +2639,40 @@ mod tests {
         assert_eq!(
             rounded_rects,
             [
-                "<rect x=\"10\" y=\"74\" width=\"30\" height=\"20\" rx=\"3\" ry=\"3\" fill=\"#010203\" fill-opacity=\"0.25\" stroke=\"#040506\" stroke-width=\"1.5\"/>"
+                "<rect x=\"10\" y=\"74\" width=\"30\" height=\"20\" rx=\"3\" ry=\"3\" fill=\"#010203\" fill-opacity=\"0.25098039215686274\" stroke=\"#040506\" stroke-width=\"1.5\"/>"
             ]
         );
         assert!(!svg.contains("<polygon"));
+    }
+
+    #[test]
+    fn filled_paths_emit_independent_fill_and_stroke_alphas() {
+        let mut backend = SvgBackend::in_memory(100, 100);
+        backend.begin(100, 100).unwrap();
+        let style = FillStyle::new(Rgba::new(1, 2, 3, 128), Rgba::new(4, 5, 6, 64), 1.0);
+        backend
+            .draw_polygon(
+                &[
+                    Point2D::new(10.0, 10.0),
+                    Point2D::new(20.0, 10.0),
+                    Point2D::new(10.0, 20.0),
+                ],
+                &style,
+            )
+            .unwrap();
+        backend
+            .draw_rounded_rect(30.0, 10.0, 20.0, 20.0, 2.0, &style)
+            .unwrap();
+        backend.end().unwrap();
+        let svg = String::from_utf8(backend.into_bytes().unwrap()).unwrap();
+        for tag in svg
+            .lines()
+            .filter(|line| line.starts_with("<polygon ") || line.starts_with("<rect "))
+        {
+            assert!(tag.contains("fill=\"#010203\" fill-opacity=\"0.5019607843137255\""));
+            assert!(tag.contains("stroke=\"#040506\" stroke-opacity=\"0.25098039215686274\""));
+            assert!(!tag.contains(" opacity="));
+        }
     }
 
     #[test]

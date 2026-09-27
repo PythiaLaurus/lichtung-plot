@@ -305,7 +305,12 @@ fn narrow_composed_canvas_rejects_before_lifecycle_or_artifact_creation() {
     let directory = unique_dir("narrow-overlay-canvas");
     let output = directory.join("plot.svg");
     let error = canvas.svg(&output).err().unwrap();
-    assert!(error.to_string().contains("canvas layout is too dense"));
+    assert!(
+        error
+            .to_string()
+            .contains("assigned tracks cannot preserve their hard requirements"),
+        "{error}"
+    );
     assert!(!output.exists());
     std::fs::remove_dir_all(directory).unwrap();
 }

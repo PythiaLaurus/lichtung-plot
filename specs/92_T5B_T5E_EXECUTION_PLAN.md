@@ -939,7 +939,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2a | COMPLETE | T5c1b2b2b2b1 | `feat(theme): resolve estimate and reference strokes` |
 | T5c1b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2a | Umbrella; completes after RGBA conversion and remaining roles |
 | T5c1b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2a | `docs(theme): pin legacy alpha resolution` |
-| T5c1b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b1 | Umbrella; completes after complete-fill transport and remaining roles |
+| T5c1b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b1 | `feat(render): resolve independent fill and stroke paints` |
+| T5c1b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1063,6 +1065,21 @@ local paint/width/pattern assemblies without sharing unrelated semantic roles.
 Custom private roles remain separate from axes/bar uncertainty. Focused Log10
 shared estimates, projected Dumbbell geometry, Q-Q integration, estimate SVG
 snapshots, and strict Clippy pass.
+
+T5c1b2b2b2b2b2a closure: the private polygon/rounded-container `FillStyle`
+now carries independent complete `Rgba` fill and stroke paints plus one finite
+stroke width. The old RGB+float-opacity carrier, legend opacity round trip and
+duplicate SVG alpha writer were removed; canonical primitive storage, feedback
+identity and GeometryBackend use the same final paints, including invisible
+fill/stroke exclusion. Preset fractional fills resolve to 8-bit alpha once by
+the approved nearest-even rule; `0.18/0.22/0.25/0.40/0.45/0.70/0.82` become
+`46/56/64/102/115/178/209` respectively. Twelve inspected visual-regression
+snapshots change only paint-alpha attributes; Waterfall, Beeswarm and Marginal
+source fingerprints retain their prior values as historical evidence. Focused
+backend/feedback, all composition, Heatmap, representative SVG/PNG and
+sample/supplied distribution callers, current snapshots and strict Clippy pass.
+T5c1b2b2b2b2b2b resolves the family-specific fill roles before T5c2 measures
+their complete ink.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

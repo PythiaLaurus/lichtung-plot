@@ -239,12 +239,12 @@ pub(crate) fn project(
             )?;
             Ok(points)
         }))?,
-        fill: FillStyle {
-            color: theme.colors[0],
-            stroke: theme.foreground,
-            stroke_width: 0.8,
-            opacity: 0.82,
-        },
+        fill: FillStyle::new(
+            crate::render::backend::Rgba::from(theme.colors[0])
+                .with_alpha(crate::render::backend::Rgba::quantized_alpha(0.82)?),
+            theme.foreground.into(),
+            0.8,
+        ),
         curve_style: theme.marks.histogram_curve.backend_style(),
         rug_style: theme.marks.histogram_rug.backend_style(),
     };

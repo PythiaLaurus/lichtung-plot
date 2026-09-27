@@ -455,12 +455,7 @@ fn null_backend_rejects_non_finite_geometry_and_styles() {
                 Point2D::new(f64::NAN, 1.0),
                 Point2D::new(1.0, 0.0),
             ],
-            &FillStyle {
-                color: (0, 0, 0),
-                stroke: (0, 0, 0),
-                stroke_width: 1.0,
-                opacity: 1.0,
-            },
+            &FillStyle::new((0, 0, 0).into(), (0, 0, 0).into(), 1.0),
         )
         .unwrap_err();
     let style_error = backend

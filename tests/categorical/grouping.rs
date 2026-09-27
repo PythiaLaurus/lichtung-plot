@@ -411,7 +411,12 @@ fn hue_only_line_and_density_create_one_mark_per_hue() {
             .count(),
         2
     );
-    assert_eq!(density_marks.matches("fill-opacity=\"0.22\"").count(), 2);
+    assert_eq!(
+        density_marks
+            .matches("fill-opacity=\"0.2196078431372549\"")
+            .count(),
+        2
+    );
 }
 
 #[test]
@@ -426,7 +431,10 @@ fn density_renders_each_observed_crossed_pair() {
     .unwrap();
 
     let marks = remove_legend_layers(&svg);
-    assert_eq!(marks.matches("fill-opacity=\"0.22\"").count(), 3);
+    assert_eq!(
+        marks.matches("fill-opacity=\"0.2196078431372549\"").count(),
+        3
+    );
 }
 
 #[test]
@@ -483,7 +491,12 @@ fn density_legend_preserves_curve_and_translucent_fill_without_point() {
         .0;
 
     assert_eq!(legend.matches("stroke-width=\"1.599609375\"").count(), 2);
-    assert_eq!(legend.matches("fill-opacity=\"0.22\"").count(), 2);
+    assert_eq!(
+        legend
+            .matches("fill-opacity=\"0.2196078431372549\"")
+            .count(),
+        2
+    );
     assert!(!legend.contains("<circle "));
 }
 

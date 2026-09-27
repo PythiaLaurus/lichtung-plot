@@ -254,6 +254,9 @@ fn marginal_parent_hue_order_controls_selected_colors_without_repreparation() {
     };
     assert_eq!(payload.groups[0].point_style.color, theme.colors[1]);
     assert_eq!(payload.groups[1].point_style.color, theme.colors[0]);
-    assert_eq!(payload.groups[0].fill.color, theme.colors[1]);
+    assert_eq!(
+        payload.groups[0].fill.color,
+        crate::render::backend::Rgba::from(theme.colors[1]).with_alpha(115)
+    );
     assert_eq!(stages[..2], STAGES.with(std::cell::Cell::get)[..2]);
 }

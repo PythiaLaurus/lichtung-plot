@@ -257,12 +257,19 @@ pub(crate) fn measure_marks(
             0.8
         };
 
-        let fill = FillStyle {
-            color: group_color(chart, group, i, group_active, family, theme)?,
-            stroke: theme.foreground,
-            stroke_width: 1.0,
-            opacity: 0.70,
-        };
+        let fill = FillStyle::new(
+            crate::render::backend::Rgba::from(group_color(
+                chart,
+                group,
+                i,
+                group_active,
+                family,
+                theme,
+            )?)
+            .with_alpha(178),
+            theme.foreground.into(),
+            1.0,
+        );
         match distribution_layout {
             DistributionLayout::Mirrored => {
                 // Violin shape
@@ -352,12 +359,11 @@ pub(crate) fn measure_marks(
                     .into_iter()
                     .map(Ok),
                 )?;
-                let box_fill = FillStyle {
-                    color: (255, 255, 255),
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 1.0,
-                };
+                let box_fill = FillStyle::new(
+                    crate::render::backend::Rgba::rgb(255, 255, 255),
+                    theme.foreground.into(),
+                    1.0,
+                );
                 payload.polygon(box_pts, box_fill, data)?;
 
                 let median_line = LineStyle::solid(theme.foreground, 1.5);
@@ -417,12 +423,11 @@ pub(crate) fn measure_marks(
                         .into_iter()
                         .map(Ok),
                     )?,
-                    FillStyle {
-                        color: (255, 255, 255),
-                        stroke: theme.foreground,
-                        stroke_width: 1.0,
-                        opacity: 1.0,
-                    },
+                    FillStyle::new(
+                        crate::render::backend::Rgba::rgb(255, 255, 255),
+                        theme.foreground.into(),
+                        1.0,
+                    ),
                     data,
                 )?;
                 payload.line(

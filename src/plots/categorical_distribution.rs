@@ -30,12 +30,7 @@ impl PreparedDistribution {
                         Ok(LegendEntry::line_fill(
                             chart.point_legend_identity(label, data)?,
                             theme.marks.summary_stroke.backend_style(),
-                            FillStyle {
-                                color,
-                                stroke: theme.foreground,
-                                stroke_width: 1.0,
-                                opacity: 1.0,
-                            },
+                            FillStyle::new(color.into(), theme.foreground.into(), 1.0),
                         ))
                     },
                 ))
@@ -50,12 +45,11 @@ impl PreparedDistribution {
                     |(index, label)| {
                         let color = chart.categorical_color(family, label, index, theme)?;
                         let identity = chart.point_legend_identity(label, data)?;
-                        let fill = FillStyle {
-                            color,
-                            stroke: theme.foreground,
-                            stroke_width: 1.0,
-                            opacity: 0.70,
-                        };
+                        let fill = FillStyle::new(
+                            crate::render::backend::Rgba::from(color).with_alpha(178),
+                            theme.foreground.into(),
+                            1.0,
+                        );
                         Ok(if chart.kind() == PlotKind::Violin {
                             LegendEntry::fill(identity, fill)
                         } else {

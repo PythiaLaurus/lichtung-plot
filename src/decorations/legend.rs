@@ -769,7 +769,6 @@ fn optional_fill_style_eq(left: Option<&FillStyle>, right: Option<&FillStyle>) -
             left.color == right.color
                 && left.stroke == right.stroke
                 && left.stroke_width.to_bits() == right.stroke_width.to_bits()
-                && left.opacity.to_bits() == right.opacity.to_bits()
         }
         (None, None) => true,
         _ => false,
@@ -1479,20 +1478,7 @@ impl Legend {
         let rx = x - m.pad;
         let ry_bot = y + self.glyph_edge_pad() + self.title_half_height() - box_h;
 
-        let bg_fill = FillStyle {
-            color: (
-                m.frame_fill.red(),
-                m.frame_fill.green(),
-                m.frame_fill.blue(),
-            ),
-            stroke: (
-                m.frame_outline.red(),
-                m.frame_outline.green(),
-                m.frame_outline.blue(),
-            ),
-            stroke_width: m.frame_stroke_width,
-            opacity: f64::from(m.frame_fill.alpha()) / 255.0,
-        };
+        let bg_fill = FillStyle::new(m.frame_fill, m.frame_outline, m.frame_stroke_width);
         emit(LegendCall::Background(
             [
                 rx + 0.5,

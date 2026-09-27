@@ -139,13 +139,13 @@ fn marginal_and_matrix_render_each_observed_crossed_pair() {
 
     assert_eq!(
         remove_legend_layers(&marginal_svg)
-            .matches("fill-opacity=\"0.45\"")
+            .matches("fill-opacity=\"0.45098039215686275\"")
             .count(),
         6
     );
     assert_eq!(
         remove_legend_layers(&matrix_svg)
-            .matches("fill-opacity=\"0.40\"")
+            .matches("fill-opacity=\"0.4\"")
             .count(),
         9
     );

@@ -1,5 +1,30 @@
 # Local-Search Measurements
 
+### T5c1 Independent RGBA Fill And Stroke Migration
+
+The T5c1 private fill carrier now has independent 8-bit RGBA fill and stroke.
+Current 12 deliberately changed visual-regression snapshots differ in SVG
+paint-alpha attributes only: opaque `fill-opacity="1.00"` disappears, the
+legend frame's `0.80` is serialized from its existing 204/255 alpha as `0.8`,
+and 0.22/0.25/0.45/0.70/0.82 fills become 56/64/115/178/209 divided by
+255. Painted paths, labels, axis positions and guide choices are unchanged in
+the inspected snapshot diffs. The independent-stroke RGBA backend and geometry
+tests prove alpha affects only its own paint. The current fingerprint assertions
+are in `tests/categorical/{waterfall,beeswarm}.rs` and
+`tests/marginal_matrix/parity.rs`.
+
+Historical **pre-T5c1** FNV64 `(byte length, hash)` vectors retained here,
+not asserted as current SVG byte parity (case order is the source fixture's):
+
+| Fixture / theme | Historical vectors |
+| --- | --- |
+| Waterfall / Publication | `(11631,ca3595c4f274732f) (13591,0a7069bb87d33258) (9308,9c74f6fa64201727) (19169,0bfbfd117fae60f4) (20319,eb2a3dac0d7bb178) (19169,0bfbfd117fae60f4) (20319,eb2a3dac0d7bb178) (21510,aa465388a0fc596f) (11878,a930324a5cd7c27e)` |
+| Waterfall / Science | `(11455,e9800eead1f7ecf6) (13375,0c7b4ce257faf4a3) (9172,683a31ed45db1dbe) (18567,a130fea7c8fe99c2) (19739,38e4d759cc83e1ba) (18567,a130fea7c8fe99c2) (19739,38e4d759cc83e1ba) (19753,34d44d64988dd71b) (11708,f23ab5075d3a2591)` |
+| Beeswarm Canvas cases 8/9 / Publication | `(23610,7e6d5967b41f3d45) (16319,12a91f8588ea0723)` |
+| Beeswarm Canvas cases 8/9 / Science | `(21650,cd9c5fdfab356c72) (15052,ed6c7564e1f25a7f)` |
+| Marginal / Publication | `(21377,23ab035bb3873cd5) (22431,10de42b68b4603e1) (22379,04ea26232bec117e) (20238,3f3b8cdffa3cfdc4)` |
+| Marginal / Science | `(20930,0be95cd7ce3953a1) (22125,8717d641a8a8efc5) (22074,f9534b68c21f3d55) (19917,ac5591db9566f8f8)` |
+
 ### T5b7 Native-Composition Shared-Guide Comparison
 
 The T5b7 checkout retains the same two-Scatter, three-entry adequate Canvas

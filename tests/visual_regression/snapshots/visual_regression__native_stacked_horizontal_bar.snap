@@ -20,12 +20,12 @@ expression: normalize_embedded_font(&svg)
 <polyline points="147,83.3330078125 533.31640625,83.3330078125" fill="none" stroke="#DCDCDC" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
 </g>
 <g clip-path="url(#clip-0)">
-<polygon points="252.359375,230.4501953125 199.6796875,230.4501953125 199.6796875,194.8837890625 252.359375,194.8837890625" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
-<polygon points="252.359375,165.783203125 340.158203125,165.783203125 340.158203125,130.216796875 252.359375,130.216796875" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
-<polygon points="252.359375,101.1162109375 287.478515625,101.1162109375 287.478515625,65.5498046875 252.359375,65.5498046875" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
-<polygon points="199.6796875,230.4501953125 164.5595703125,230.4501953125 164.5595703125,194.8837890625 199.6796875,194.8837890625" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
-<polygon points="340.158203125,165.783203125 463.0771484375,165.783203125 463.0771484375,130.216796875 340.158203125,130.216796875" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
-<polygon points="252.359375,101.1162109375 182.1201171875,101.1162109375 182.1201171875,65.5498046875 252.359375,65.5498046875" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="252.359375,230.4501953125 199.6796875,230.4501953125 199.6796875,194.8837890625 252.359375,194.8837890625" fill="#0072B2" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="252.359375,165.783203125 340.158203125,165.783203125 340.158203125,130.216796875 252.359375,130.216796875" fill="#0072B2" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="252.359375,101.1162109375 287.478515625,101.1162109375 287.478515625,65.5498046875 252.359375,65.5498046875" fill="#0072B2" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="199.6796875,230.4501953125 164.5595703125,230.4501953125 164.5595703125,194.8837890625 199.6796875,194.8837890625" fill="#D55E00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="340.158203125,165.783203125 463.0771484375,165.783203125 463.0771484375,130.216796875 340.158203125,130.216796875" fill="#D55E00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="252.359375,101.1162109375 182.1201171875,101.1162109375 182.1201171875,65.5498046875 252.359375,65.5498046875" fill="#D55E00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 </g>
 <path class="significance-bracket horizontal" d="M 476.0771484375 148 L 476.0771484375 83.3330078125 M 476.0771484375 148 L 469.0771484375 148 M 476.0771484375 83.3330078125 L 469.0771484375 83.3330078125" fill="none" stroke="#000000" stroke-width="1" stroke-linecap="round"/>
 <text x="483.6005859375" y="119.8232421875" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" fill="#000000" text-anchor="start" direction="ltr">*</text>
@@ -59,11 +59,11 @@ expression: normalize_embedded_font(&svg)
 <text x="2.296875" y="152.416015625" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" fill="#000000" text-anchor="start" direction="ltr" transform="rotate(-90.0,41.3486328125,148)">Category</text>
 </g>
 <g id="legend">
-<rect x="547.6162109375" y="114.072265625" width="76.8828125" height="67.8544921875" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.80" stroke="#C8C8C8" stroke-width="1"/>
+<rect x="547.6162109375" y="114.072265625" width="76.8828125" height="67.8544921875" rx="2" ry="2" fill="#FFFFFF" fill-opacity="0.8" stroke="#C8C8C8" stroke-width="1"/>
 <text x="555.208984375" y="134" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="12" fill="#3C3C3C" text-anchor="start" direction="ltr">Series</text>
-<polygon points="555.916015625,156.25 566.916015625,156.25 566.916015625,149.2099609375 555.916015625,149.2099609375" fill="#0072B2" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="555.916015625,156.25 566.916015625,156.25 566.916015625,149.2099609375 555.916015625,149.2099609375" fill="#0072B2" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 <text x="574.9208984375" y="153" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">First</text>
-<polygon points="555.916015625,171.427734375 566.916015625,171.427734375 566.916015625,164.3876953125 555.916015625,164.3876953125" fill="#D55E00" fill-opacity="1.00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
+<polygon points="555.916015625,171.427734375 566.916015625,171.427734375 566.916015625,164.3876953125 555.916015625,164.3876953125" fill="#D55E00" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 <text x="575.275390625" y="168" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="11" fill="#282828" text-anchor="start" direction="ltr">Second</text>
 </g>
 <text x="189.2451171875" y="27.1953125" font-family="Noto Sans, Noto Sans CJK SC, DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" xml:space="preserve" fill="#000000" text-anchor="start" direction="ltr">Native signed bar families</text>

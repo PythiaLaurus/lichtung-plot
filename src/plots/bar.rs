@@ -171,12 +171,11 @@ pub(crate) fn measure_marks(
         let polygon = project_bar(&layout.projection, x_center, width, bar)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
-            fill: FillStyle {
-                color: theme.colors[color_index % theme.colors.len()],
-                stroke: theme.foreground,
-                stroke_width: 1.0,
-                opacity: 1.0,
-            },
+            fill: FillStyle::new(
+                theme.colors[color_index % theme.colors.len()].into(),
+                theme.foreground.into(),
+                1.0,
+            ),
             interval: bar
                 .interval
                 .map(|(lower, upper)| {

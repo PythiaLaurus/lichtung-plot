@@ -83,10 +83,9 @@ struct PointGlyphState {
 
 #[derive(Debug, PartialEq, Eq)]
 struct FillGlyphState {
-    color: (u8, u8, u8),
-    stroke: (u8, u8, u8),
+    color: crate::render::backend::Rgba,
+    stroke: crate::render::backend::Rgba,
     stroke_width: u64,
-    opacity: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -559,7 +558,6 @@ impl FeedbackRound {
                     color: style.color,
                     stroke: style.stroke,
                     stroke_width: number(f64::from(style.stroke_width))?,
-                    opacity: number(style.opacity)?,
                 })
             })
             .transpose()?;

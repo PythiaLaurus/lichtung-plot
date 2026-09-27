@@ -1148,12 +1148,7 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: FillStyle {
-                    color: MISSING_FILL,
-                    stroke: (255, 255, 255),
-                    stroke_width: 0.5,
-                    opacity: 1.0,
-                },
+                fill: FillStyle::new(MISSING_FILL.into(), (255, 255, 255).into(), 0.5),
                 cross: None,
                 text: Some(PlacedText {
                     plan: annotation.clone(),
@@ -1188,16 +1183,15 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: FillStyle {
-                    color,
-                    stroke: if highlighted {
-                        theme.foreground
+                fill: FillStyle::new(
+                    color.into(),
+                    if highlighted {
+                        theme.foreground.into()
                     } else {
-                        (255, 255, 255)
+                        (255, 255, 255).into()
                     },
-                    stroke_width: if highlighted { 2.5 } else { 0.5 },
-                    opacity: 1.0,
-                },
+                    if highlighted { 2.5 } else { 0.5 },
+                ),
                 text: None,
                 cross: None,
             };
@@ -1434,12 +1428,7 @@ fn select_colorbar(
                 Point2D::new(left + 12.0, swatch_bottom + 12.0),
                 Point2D::new(left, swatch_bottom + 12.0),
             ],
-            fill: FillStyle {
-                color: MISSING_FILL,
-                stroke: MISSING_STROKE,
-                stroke_width: 0.8,
-                opacity: 1.0,
-            },
+            fill: FillStyle::new(MISSING_FILL.into(), MISSING_STROKE.into(), 0.8),
             cross: None,
             text: Some(PlacedText::from_deferred_first_line(
                 values

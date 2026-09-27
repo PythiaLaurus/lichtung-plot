@@ -306,12 +306,11 @@ impl MeasuredContinuousGuide {
             let row_height = plan.height().max(thickness);
             (
                 PanelBox::new(metrics.pad, metrics.pad + thickness, y0, y0 + thickness),
-                FillStyle {
-                    color: key.fill,
-                    stroke: key.outline,
-                    stroke_width: metrics.frame_stroke_width,
-                    opacity: 1.0,
-                },
+                FillStyle::new(
+                    key.fill.into(),
+                    key.outline.into(),
+                    metrics.frame_stroke_width,
+                ),
                 PlacedText::middle(
                     plan,
                     Point2D::new(metrics.pad + thickness + key_gap, y0 + row_height / 2.0),
@@ -363,7 +362,12 @@ impl MeasuredContinuousGuide {
         round.observe_count(usize::from(self.missing.is_some()))?;
         if let Some((bounds, fill, text)) = &self.missing {
             round.observe_box(*bounds)?;
-            for channel in [fill.color.0, fill.color.1, fill.color.2] {
+            for channel in [
+                fill.color.red(),
+                fill.color.green(),
+                fill.color.blue(),
+                fill.color.alpha(),
+            ] {
                 round.observe_count(usize::from(channel))?;
             }
             round.observe_text(&text.plan)?;
@@ -398,20 +402,7 @@ impl MeasuredContinuousGuide {
                 self.height - 1.0,
                 m.frame_radius,
             ],
-            FillStyle {
-                color: (
-                    m.frame_fill.red(),
-                    m.frame_fill.green(),
-                    m.frame_fill.blue(),
-                ),
-                stroke: (
-                    m.frame_outline.red(),
-                    m.frame_outline.green(),
-                    m.frame_outline.blue(),
-                ),
-                stroke_width: m.frame_stroke_width,
-                opacity: f64::from(m.frame_fill.alpha()) / 255.0,
-            },
+            FillStyle::new(m.frame_fill, m.frame_outline, m.frame_stroke_width),
         ));
         let bounds = self.gradient;
         let gradient = PanelBox::new(

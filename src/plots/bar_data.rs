@@ -951,12 +951,11 @@ pub(crate) fn legend_entries(
     data.collect_source(prepared.hues.iter().enumerate().map(|(index, label)| {
         Ok(LegendEntry::fill(
             chart.point_legend_identity(label, data)?,
-            FillStyle {
-                color: theme.colors[index % theme.colors.len()],
-                stroke: theme.foreground,
-                stroke_width: 1.0,
-                opacity: 1.0,
-            },
+            FillStyle::new(
+                theme.colors[index % theme.colors.len()].into(),
+                theme.foreground.into(),
+                1.0,
+            ),
         ))
     }))
 }

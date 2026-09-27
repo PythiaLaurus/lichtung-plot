@@ -20,8 +20,8 @@ fn beeswarm_parent_svg_fingerprints() {
                 (21073, 0x84ab_3035_cd57_8b29),
                 (21065, 0x1659_4bfb_e2f5_b2d5),
                 (21073, 0x84ab_3035_cd57_8b29),
-                (23610, 0x7e6d_5967_b41f_3d45),
-                (16319, 0x12a9_1f85_88ea_0723),
+                (23666, 0xb1ba_9122_5895_3c22),
+                (16335, 0xd55d_76c4_1ccf_344c),
             ],
         ),
         (
@@ -35,12 +35,13 @@ fn beeswarm_parent_svg_fingerprints() {
                 (20280, 0xedd6_ee9d_c8b1_6a3e),
                 (20272, 0x8c23_04d8_598f_132e),
                 (20280, 0xedd6_ee9d_c8b1_6a3e),
-                (21650, 0xcd9c_5fdf_ab35_6c72),
-                (15052, 0xed6c_7564_e1f2_5a7f),
+                (21706, 0xc57e_0178_3533_ae79),
+                (15068, 0xe7e2_7758_a0f8_1372),
             ],
         ),
     ] {
-        for (case, expected) in expected.into_iter().enumerate() {
+        let mut observed = Vec::new();
+        for (case, _) in expected.into_iter().enumerate() {
             let colors = match case {
                 2 => vec![0.25; 12],
                 3 => vec![
@@ -161,7 +162,8 @@ fn beeswarm_parent_svg_fingerprints() {
             let hash = svg.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
                 (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
             });
-            assert_eq!((svg.len(), hash), expected, "{theme:?} case {case}");
+            observed.push((svg.len(), hash));
         }
+        assert_eq!(observed, expected, "{theme:?}");
     }
 }

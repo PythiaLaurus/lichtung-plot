@@ -41,12 +41,11 @@ impl PreparedRaincloud {
             Ok(LegendEntry::point_fill(
                 chart.point_legend_identity(hue, data)?,
                 crate::plots::distribution_sample::overlay_style(color),
-                FillStyle {
-                    color,
-                    stroke: theme.foreground,
-                    stroke_width: 1.0,
-                    opacity: 0.70,
-                },
+                FillStyle::new(
+                    crate::render::backend::Rgba::from(color).with_alpha(178),
+                    theme.foreground.into(),
+                    1.0,
+                ),
             ))
         }))
     }
@@ -207,12 +206,17 @@ fn project_cloud_and_summary(
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
     payload.polygon(
         cloud,
-        FillStyle {
-            color: group_color(chart, group, local_color_index, theme)?,
-            stroke: theme.foreground,
-            stroke_width: 1.0,
-            opacity: 0.70,
-        },
+        FillStyle::new(
+            crate::render::backend::Rgba::from(group_color(
+                chart,
+                group,
+                local_color_index,
+                theme,
+            )?)
+            .with_alpha(178),
+            theme.foreground.into(),
+            1.0,
+        ),
         data,
     )?;
 
@@ -241,12 +245,11 @@ fn project_cloud_and_summary(
             .into_iter()
             .map(Ok),
         )?,
-        FillStyle {
-            color: (255, 255, 255),
-            stroke: theme.foreground,
-            stroke_width: 1.0,
-            opacity: 1.0,
-        },
+        FillStyle::new(
+            crate::render::backend::Rgba::rgb(255, 255, 255),
+            theme.foreground.into(),
+            1.0,
+        ),
         data,
     )?;
     payload.line(

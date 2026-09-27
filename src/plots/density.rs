@@ -86,12 +86,11 @@ impl PreparedDensity {
             entries.push(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity, data)?,
                 theme.marks.density_line.backend_style(color),
-                FillStyle {
-                    color,
-                    stroke: color,
-                    stroke_width: 0.0,
-                    opacity: 0.22,
-                },
+                FillStyle::new(
+                    crate::render::backend::Rgba::from(color).with_alpha(56),
+                    color.into(),
+                    0.0,
+                ),
             ));
         }
         Ok(entries)
@@ -256,12 +255,11 @@ pub(crate) fn project(
                 Vec::new()
             },
             segments: Vec::new(),
-            fill_style: FillStyle {
-                color,
-                stroke: color,
-                stroke_width: 0.0,
-                opacity: 0.22,
-            },
+            fill_style: FillStyle::new(
+                crate::render::backend::Rgba::from(color).with_alpha(56),
+                color.into(),
+                0.0,
+            ),
             line_style: theme.marks.density_line.backend_style(color),
         };
         data.reserve_source(&mut projected.segments, visible.len() - 1)?;
@@ -753,8 +751,14 @@ mod tests {
         else {
             panic!("Density payload")
         };
-        assert_eq!(payload.curves[0].fill_style.color, theme.colors[0]);
-        assert_eq!(payload.curves[1].fill_style.color, theme.colors[1]);
+        assert_eq!(
+            payload.curves[0].fill_style.color,
+            crate::render::backend::Rgba::from(theme.colors[0]).with_alpha(56)
+        );
+        assert_eq!(
+            payload.curves[1].fill_style.color,
+            crate::render::backend::Rgba::from(theme.colors[1]).with_alpha(56)
+        );
         assert!(payload.curves[0].fill[0].x > payload.curves[1].fill[0].x);
         theme.marks.density_line.width = 2.5;
         theme.marks.density_line.alpha = 128;

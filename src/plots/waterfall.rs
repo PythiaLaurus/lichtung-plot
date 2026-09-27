@@ -226,12 +226,7 @@ pub(crate) fn measure(
                 Point2D::new(right, top),
                 Point2D::new(left, top),
             ],
-            FillStyle {
-                color,
-                stroke: theme.foreground,
-                stroke_width: 0.8,
-                opacity: 1.0,
-            },
+            FillStyle::new(color.into(), theme.foreground.into(), 0.8),
         ));
         if index + 1 < spans.len() {
             let (x, from_y) = layout.projection.project(*end, y1);

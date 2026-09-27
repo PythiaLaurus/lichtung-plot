@@ -1,6 +1,10 @@
 use super::*;
 
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one cross-parent fixture retains all Waterfall theme and scale fingerprints"
+)]
 fn waterfall_full_svg_fingerprints() {
     // 2026-09-14 T5a6d: exact category bands, canonical title midpoints and
     // ink-aware endpoint anchors. Historical 0e8c344 fingerprints are preserved
@@ -9,33 +13,34 @@ fn waterfall_full_svg_fingerprints() {
         (
             lichtung_plot::Theme::Publication,
             [
-                (11631, 0xca35_95c4_f274_732f),
-                (13591, 0x0a70_69bb_87d3_3258),
-                (9308, 0x9c74_f6fa_6420_1727),
-                (19169, 0x0bfb_fd11_7fae_60f4),
-                (20319, 0xeb2a_3dac_0d7b_b178),
-                (19169, 0x0bfb_fd11_7fae_60f4),
-                (20319, 0xeb2a_3dac_0d7b_b178),
-                (21510, 0xaa46_5388_a0fc_596f),
-                (11878, 0xa930_324a_5cd7_c27e),
+                (11551, 0x03c5_6745_6919_5895),
+                (13511, 0x8c52_1a56_5593_25be),
+                (9228, 0x9f67_23dd_a047_eb4d),
+                (19089, 0xf3a0_7b27_ce2b_290c),
+                (20239, 0xc304_afbc_8257_b288),
+                (19089, 0xf3a0_7b27_ce2b_290c),
+                (20239, 0xc304_afbc_8257_b288),
+                (21446, 0x55d8_9ed9_f883_597a),
+                (11798, 0xc759_4392_037a_ceb4),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (11455, 0xe980_0eea_d1f7_ecf6),
-                (13375, 0x0c7b_4ce2_57fa_f4a3),
-                (9172, 0x683a_31ed_45db_1dbe),
-                (18567, 0xa130_fea7_c8fe_99c2),
-                (19739, 0x38e4_d759_cc83_e1ba),
-                (18567, 0xa130_fea7_c8fe_99c2),
-                (19739, 0x38e4_d759_cc83_e1ba),
-                (19753, 0x34d4_4d64_988d_d71b),
-                (11708, 0xf23a_b507_5d3a_2591),
+                (11375, 0xcf25_95f0_e76f_69a4),
+                (13295, 0x23e6_7f91_c3c8_05d9),
+                (9092, 0x0333_b4a3_ca40_0784),
+                (18487, 0xfad4_f91b_4e9b_3136),
+                (19659, 0xe49d_3bac_4385_602a),
+                (18487, 0xfad4_f91b_4e9b_3136),
+                (19659, 0xe49d_3bac_4385_602a),
+                (19689, 0x7e83_740e_794f_b006),
+                (11628, 0x13c5_5f8d_1b5a_f071),
             ],
         ),
     ] {
-        for (case, expected) in expected.into_iter().enumerate() {
+        let mut observed = Vec::new();
+        for (case, _) in expected.into_iter().enumerate() {
             let mut plot = Plot::waterfall(
                 CategoryValues::new("step", ["gain", "loss", "gain", "loss"]).unwrap(),
                 NumericValues::new("delta", [4.0, -2.0, -0.0, 1.0]),
@@ -101,7 +106,8 @@ fn waterfall_full_svg_fingerprints() {
             let hash = svg.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
                 (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
             });
-            assert_eq!((svg.len(), hash), expected, "{theme:?} case {case}");
+            observed.push((svg.len(), hash));
         }
+        assert_eq!(observed, expected, "{theme:?}");
     }
 }

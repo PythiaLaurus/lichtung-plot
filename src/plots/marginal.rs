@@ -98,12 +98,11 @@ impl PreparedMarginal {
             entries.push(LegendEntry::point_fill(
                 chart.collective_legend_identity(&group.identity, data)?,
                 chart.point_style(color, 3),
-                FillStyle {
-                    color,
-                    stroke: color,
-                    stroke_width: 1.0,
-                    opacity: 0.45,
-                },
+                FillStyle::new(
+                    crate::render::backend::Rgba::from(color).with_alpha(115),
+                    color.into(),
+                    1.0,
+                ),
             ));
         }
         Ok(entries)
@@ -337,12 +336,11 @@ pub(crate) fn measure(
         }
         top_poly.push(Point2D::new(central_x1, top_y0));
         right_poly.push(Point2D::new(right_x0, central_y1));
-        let fill = FillStyle {
-            color,
-            stroke: color,
-            stroke_width: 1.0,
-            opacity: 0.45,
-        };
+        let fill = FillStyle::new(
+            crate::render::backend::Rgba::from(color).with_alpha(115),
+            color.into(),
+            1.0,
+        );
         selected.push(MarginalGroupPayload {
             points: pts,
             point_style,

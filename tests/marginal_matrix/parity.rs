@@ -2,29 +2,33 @@ use super::*;
 
 #[test]
 fn marginal_full_svg_fingerprints() {
-    // T5b2a: visible guides use theme-owned typography and chrome; hidden and
-    // absent guides retain their T5a fingerprints attributed in the benchmarks.
+    // T5b2a: guides use theme-owned typography/chrome. Historical pre-RGBA
+    // Publication: (21377,23ab035bb3873cd5), (22431,10de42b68b4603e1),
+    // (22379,04ea26232bec117e), (20238,3f3b8cdffa3cfdc4).
+    // Science: (20930,0be95cd7ce3953a1), (22125,8717d641a8a8efc5),
+    // (22074,f9534b68c21f3d55), (19917,ac5591db9566f8f8).
     for (theme, expected) in [
         (
             lichtung_plot::Theme::Publication,
             [
-                (21377, 0x23ab_035b_b387_3cd5),
-                (22431, 0x10de_42b6_8b46_03e1),
-                (22379, 0x04ea_2623_2bec_117e),
-                (20238, 0x3f3b_8cdf_fa3c_fdc4),
+                (21407, 0xd98b_8667_3bf4_eda3),
+                (22520, 0x4e6e_8fe7_8fff_b7e9),
+                (22468, 0x37dc_e108_76a3_247e),
+                (20298, 0x0b82_06e4_e0c7_15ea),
             ],
         ),
         (
             lichtung_plot::Theme::Science,
             [
-                (20930, 0x0be9_5cd7_ce39_53a1),
-                (22125, 0x8717_d641_a8a8_efc5),
-                (22074, 0xf953_4b68_c21f_3d55),
-                (19917, 0xac55_91db_9566_f8f8),
+                (20960, 0x1167_e8da_cd48_f613),
+                (22214, 0x874e_499b_d3cb_5dcf),
+                (22163, 0xee10_4c90_f944_01a5),
+                (19977, 0x91ed_5cbf_bafc_9a36),
             ],
         ),
     ] {
-        for (case, expected) in expected.into_iter().enumerate() {
+        let mut observed = Vec::new();
+        for (case, _) in expected.into_iter().enumerate() {
             let mut plot = Plot::marginal(
                 NumericValues::new("x", [1.0, 1.2, 1.4, 3.0, 3.2, 3.4]),
                 NumericValues::new("y", [2.0, 2.1, 2.3, 4.0, 4.2, 4.3]),
@@ -54,7 +58,8 @@ fn marginal_full_svg_fingerprints() {
             let hash = svg.iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
                 (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
             });
-            assert_eq!((svg.len(), hash), expected, "{theme:?} case {case}");
+            observed.push((svg.len(), hash));
         }
+        assert_eq!(observed, expected, "{theme:?}");
     }
 }
