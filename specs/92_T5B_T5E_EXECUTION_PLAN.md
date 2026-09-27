@@ -139,7 +139,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2c | COMPLETE | T5b2b | Umbrella; completed with T5b2c2 |
 | T5b2c1 | COMPLETE | T5b2b | `refactor(layout): resolve guide frame gaps from themes` |
 | T5b2c2 | COMPLETE | T5b2c1 | `refactor(layout): unify assigned outside guide frames` |
-| T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
+| T5b3 | IN PROGRESS | T5b2 | Umbrella; completes after T5b3a-b |
+| T5b3a | COMPLETE | T5b2 | `feat(layout): allocate TextPanel sequence tracks` |
+| T5b3b | PENDING | T5b3a | `feat(layout): allocate checked grid spans` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
@@ -584,6 +586,27 @@ actual body-starvation recovery. Glyph/style/resource errors never become anothe
 edge trial. Do not make unreachable automatic inside-corner selection public.
 
 ### T5b3 — One Track Allocator, Used By Active Parents
+
+T5b3 has two dependency-ordered commits: install one quantized sequence-track
+allocator in the active Canvas TextPanel content producer (a), replacing its
+centered fixed-gap placement with intrinsic top-left measured content; then
+extend the same allocator with checked Grid topology and spans and consume its
+one-column/two-row Grid in TextPanel (b). Canvas/facet parent track migration
+remains T5b4/T5b5. Neither step leaves a dormant competing TextPanel producer.
+
+T5b3a closure: quantized tracks now perform one checked proportional shrink,
+largest-remainder tie by canonical index, capped equal surplus redistribution,
+and explicit trailing slack. The active Canvas TextPanel measures title/body
+intrinsics, allocates its fill width and nonfill two-row sequence, then freezes
+complete text at the post-inset top-left instead of centering it in spare cell
+space. Private composition roles retain the former 16px insets and 12px gap.
+Hand-computed allocation, one-quantum height refusal, exact resource caps,
+small/large TextPanel position invariance, mixed-theme ownership, Canvas
+admission/capture, and strict Clippy pass. Logs: `/tmp/opencode/t5b3a-lint.log`,
+`/tmp/opencode/t5b3a-track-unit.log`,
+`/tmp/opencode/t5b3a-text-panel-integration.log`, and
+`/tmp/opencode/t5b3a-canvas-admission.log`. T5b3b adds Grid and spans to this
+same producer.
 
 Implement the `05` Grid/sequence rules in quanta: columns before rows, canonical
 span order, flexible/inflexible tracks, proportional shrink, largest-remainder

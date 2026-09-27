@@ -47,6 +47,47 @@ fn clip_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
 }
 
 #[test]
+fn text_panel_content_stays_top_left_when_its_fill_cell_grows() {
+    let render = |width, height| {
+        render_canvas(
+            Canvas::grid(1, 1)
+                .unwrap()
+                .size(width, height)
+                .text_panel(
+                    0,
+                    0,
+                    lichtung_plot::TextPanel::new("Note", "Short body").unwrap(),
+                )
+                .unwrap(),
+            "text-panel-top-left",
+        )
+        .unwrap()
+    };
+    let positions = |svg: &str| {
+        let doc = roxmltree::Document::parse(svg).unwrap();
+        ["Note", "Short body"].map(|source| {
+            let node = doc
+                .descendants()
+                .find(|node| node.has_tag_name("text") && node.text() == Some(source))
+                .unwrap();
+            (
+                node.attribute("x").unwrap().parse::<f64>().unwrap(),
+                node.attribute("y").unwrap().parse::<f64>().unwrap(),
+            )
+        })
+    };
+    let compact = render(400, 260);
+    let expanded = render(700, 560);
+    let [title, body] = positions(&compact);
+    let [large_title, large_body] = positions(&expanded);
+    assert!((title.0 - large_title.0).abs() <= 1.0);
+    assert!((title.1 - large_title.1).abs() <= 1.0);
+    assert!((body.0 - large_body.0).abs() <= 1.0);
+    assert!((body.1 - large_body.1).abs() <= 1.0);
+    assert!(body.1 > title.1);
+}
+
+#[test]
 fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
     let plot = |values| {
         Plot::heatmap(

@@ -11,12 +11,14 @@ use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::{PanelRequirements, PANEL_HEADER_GAP};
 use crate::layout::fit::{FitFailure, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
-use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan, TextBlock};
+use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan};
 use crate::render::backend::{with_layer, Backend, Point2D, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::{AxisDomain, DecorationMode};
 use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
+
+mod text_panel;
 
 #[cfg(test)]
 pub(crate) mod admission_tests;
@@ -4314,88 +4316,10 @@ impl Canvas {
             };
             #[cfg(test)]
             record_canvas_theme(usize::MAX, "text-plan", themes.root());
-            let cell = cells[index];
-            let maximum_width = (cell.width() - 32.0).max(1.0);
-            let title = match fit::text(
-                themes.root(),
-                text_panel.title(),
-                &themes.root().legacy_text_appearance(
-                    themes.root().composition_title_font_size,
-                    crate::TextWeight::Normal,
-                ),
-                maximum_width,
-                PhysicalTextAlignment::Center,
-                "text panel title",
-                &scope
-                    .child(crate::layout::AddressRole::TextPanelContent, index)?
-                    .child(crate::layout::AddressRole::TextPanelTitle, 0)?,
-            )? {
-                FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+            match TextPanelPlan::measure(text_panel, index, cells[index], themes.root(), &scope)? {
+                FitOutcome::Measured(plan) => text_panels.push(plan),
                 FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
-            };
-            let body = match fit::text(
-                themes.root(),
-                text_panel.body(),
-                &themes.root().legacy_text_appearance(
-                    themes.root().label_font_size,
-                    crate::TextWeight::Normal,
-                ),
-                maximum_width,
-                PhysicalTextAlignment::Center,
-                "text panel body",
-                &scope
-                    .child(crate::layout::AddressRole::TextPanelContent, index)?
-                    .child(crate::layout::AddressRole::TextPanelBody, 0)?,
-            )? {
-                FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
-                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
-            };
-            let required_height = title.height() + 12.0 + body.height();
-            if required_height > cell.height() - 32.0 {
-                return Ok(FitOutcome::Miss(scope.child(crate::layout::AddressRole::TextPanelContent, index)?.failure(FitKind::Text, format!(
-                    "text panel at ({}, {}) requires {required_height:.1}px but only {:.1}px is available; increase canvas size or shorten text",
-                    index / self.columns,
-                    index % self.columns,
-                    (cell.height() - 32.0).max(0.0)
-                ))));
             }
-            themes
-                .root()
-                .prepared_font_environment()?
-                .claim_unicode_bytes(40)
-                .map_err(|error| Error::Render(error.to_string()))?;
-            text_panels.push(TextPanelPlan {
-                layer: format!("canvas-text-panel-{index}"),
-                cell,
-                title_placement: crate::render::backend::PlacedText::from_deferred_first_line(
-                    title.plan().clone(),
-                    Point2D::new(
-                        cell.x0.midpoint(cell.x1).round(),
-                        (cell.y0.midpoint(cell.y1) + required_height / 2.0
-                            - title.line_height() / 2.0)
-                            .round(),
-                    ),
-                    crate::render::backend::TextAnchor::Middle,
-                    0.0,
-                )
-                .placement,
-                body_placement: crate::render::backend::PlacedText::from_deferred_first_line(
-                    body.plan().clone(),
-                    Point2D::new(
-                        cell.x0.midpoint(cell.x1).round(),
-                        (cell.y0.midpoint(cell.y1) + required_height / 2.0
-                            - title.line_height() / 2.0
-                            - title.height()
-                            - 12.0)
-                            .round(),
-                    ),
-                    crate::render::backend::TextAnchor::Middle,
-                    0.0,
-                )
-                .placement,
-                title,
-                body,
-            });
         }
 
         for text_panel in &text_panels {

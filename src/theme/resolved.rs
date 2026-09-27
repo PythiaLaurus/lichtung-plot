@@ -1083,22 +1083,21 @@ pub(crate) struct RootTitleBlockAppearance {
     pub(crate) caption_to_content_clearance: f64,
 }
 
-/// Root composition appearance.
+/// Root and TextPanel composition appearance.
 #[derive(Debug, Clone, PartialEq)]
-#[expect(
-    clippy::struct_field_names,
-    reason = "root policies are distinct from future panel composition policies"
-)]
 pub(crate) struct CompositionAppearance {
     pub(crate) root_title_alignment: TitleAlignment,
     pub(crate) root_subtitle_alignment: Option<TitleAlignment>,
     pub(crate) root_caption_alignment: TitleAlignment,
     /// Plot or Canvas root title block.
     pub(crate) root_title_block: RootTitleBlockAppearance,
+    pub(crate) text_panel_inset: f64,
+    pub(crate) text_panel_gap: f64,
 }
 
 #[allow(
     clippy::too_many_arguments,
+    clippy::too_many_lines,
     reason = "the four closed presets provide one compact table of preserved scalar values"
 )]
 fn resolved_theme(
@@ -1211,6 +1210,8 @@ fn resolved_theme(
                 title_block_to_content_clearance: 14.0,
                 caption_to_content_clearance: 12.0,
             },
+            text_panel_inset: 16.0,
+            text_panel_gap: 12.0,
         },
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
@@ -1562,6 +1563,8 @@ mod tests {
                     title_block_to_content_clearance: 14.0,
                     caption_to_content_clearance: 12.0,
                 },
+                text_panel_inset: 16.0,
+                text_panel_gap: 12.0,
             },
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),
