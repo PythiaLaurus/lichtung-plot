@@ -935,7 +935,11 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2a | COMPLETE | T5c1b2b2b1 | `feat(theme): resolve Density curve strokes` |
 | T5c1b2b2b2b | IN PROGRESS | T5c1b2b2b2a | Umbrella; completes after Regression and remaining roles |
 | T5c1b2b2b2b1 | COMPLETE | T5c1b2b2b2a | `feat(theme): resolve regression fit strokes` |
-| T5c1b2b2b2b2 | PENDING | T5c1b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b1 | Umbrella; completes after reference strokes and remaining roles |
+| T5c1b2b2b2b2a | COMPLETE | T5c1b2b2b2b1 | `feat(theme): resolve estimate and reference strokes` |
+| T5c1b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2a | Umbrella; completes after RGBA conversion and remaining roles |
+| T5c1b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2a | `docs(theme): pin legacy alpha resolution` |
+| T5c1b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -976,6 +980,16 @@ branches without making a new omission API. This documentation-only stage
 requires diff review, not tests; T5c1 is the first implementation consumer.
 
 ### T5c1 — Complete Private Style Inputs
+
+Legacy exact opacity resolution decision (user delegated implementation timing):
+T5c converts each validated `f64` point/fill opacity once using nearest-even
+rounding of `opacity * 255` to an RGBA `u8` alpha. The old positive/finite
+caller validation remains at its existing boundary. Exact alpha replaces its
+paint's complete alpha and never multiplies a theme default; fill and stroke
+remain independent. This is an intentional T5c SVG/PNG change for fractions
+not exactly representable in 8-bit alpha. T6 exposes the replacement
+public `Color` controls without introducing another internal representation.
+Inspect all affected snapshots and update them with their source changes.
 
 T5c1a closure: the legacy `ResolvedTheme::interval_width` field is gone. One
 complete private uncertainty stroke now supplies vertical/horizontal bar stems
@@ -1041,6 +1055,14 @@ endpoints, changes the frozen mark and mismatches the original guide glyph;
 focused Regression data/facet/Canvas and layout tests plus strict Clippy pass.
 The distinct observation and optional uncertainty-band roles remain in
 T5c1b2b2b2b2.
+
+T5c1b2b2b2b2a closure: estimate interval, solid PointInterval reference,
+dashed Coefficient/Forest reference, Q-Q reference, and Dumbbell connector now
+consume five independent complete mark strokes. This removes their renderer-
+local paint/width/pattern assemblies without sharing unrelated semantic roles.
+Custom private roles remain separate from axes/bar uncertainty. Focused Log10
+shared estimates, projected Dumbbell geometry, Q-Q integration, estimate SVG
+snapshots, and strict Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

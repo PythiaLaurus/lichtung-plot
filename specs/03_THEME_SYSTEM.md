@@ -301,6 +301,16 @@ Alpha values are never multiplied. Fill and stroke are independent paints. SVG
 emits the one alpha through the property appropriate to the paint and does not
 combine RGBA alpha with element-wide opacity.
 
+During the private T5c migration, a retained exact `f64` point/fill opacity
+input passes its existing finite/range validation, then resolves once to a
+`u8` alpha by nearest-even rounding of `opacity * 255`. That alpha replaces
+the complete fill-paint alpha, including for an exact RGB color; it never
+multiplies the theme alpha or affects an independent outline/stroke. This
+quantization intentionally changes intermediate SVG/PNG bytes for values that
+cannot be expressed as 8-bit alpha. T6 replaces the public legacy input
+with the complete `Color`/alpha controls; it does not re-quantize retained
+marks or introduce a second paint route.
+
 Canvas and panel surfaces accept RGBA `Color`. The SVG backend does not insert a
 hardcoded white root. Transparent SVG and PNG output preserves the resolved
 surface alpha, and composed panel colors composite over the Canvas surface in
