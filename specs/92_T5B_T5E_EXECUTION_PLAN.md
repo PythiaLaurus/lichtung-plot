@@ -142,9 +142,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b3 | COMPLETE | T5b2 | Umbrella; completed with T5b3b |
 | T5b3a | COMPLETE | T5b2 | `feat(layout): allocate TextPanel sequence tracks` |
 | T5b3b | COMPLETE | T5b3a | `feat(layout): allocate checked grid spans` |
-| T5b4 | IN PROGRESS | T5b3 | Umbrella; completes after T5b4a-b |
+| T5b4 | COMPLETE | T5b3 | Umbrella; completed with T5b4b |
 | T5b4a | COMPLETE | T5b3 | `feat(layout): allocate measured facet tracks` |
-| T5b4b | PENDING | T5b4a | `refactor(layout): retire facet parent adapter` |
+| T5b4b | COMPLETE | T5b4a | `refactor(layout): retire facet parent adapter` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
@@ -661,6 +661,21 @@ and strict Clippy checks pass. Logs: `/tmp/opencode/t5b4a-lint.log`,
 `/tmp/opencode/t5b4a-beeswarm-fingerprint.log`, and
 `/tmp/opencode/t5b4a-waterfall-fingerprint.log`. T5b4b retires the remaining
 parent adapter.
+
+T5b4b closure: one `native_parent` now allocates the measured facet Grid,
+checks containing guide/body/strip constraints, plans each affected cell once,
+submits the measured axis gutters, and freezes the selected panel results.
+The old layout-only child probe, second panel-planning pass, and late
+self-managed alternative were removed; the early unsupported-shape gate stays
+in force. Exact shared-domain and legend identities, cell addresses, feedback,
+and child cache keys remain under the single root. Focused parent tests,
+cache-on/off complete-guide benchmarks (including no intermediate `layout`
+phase), sparse and shared-axis composition, unavailable fixed/free estimates,
+unchanged Beeswarm/Waterfall SVG fingerprints, and strict Clippy pass. Logs:
+`/tmp/opencode/t5b4b-lint.log`, `/tmp/opencode/t5b4b-parent-unit.log`,
+`/tmp/opencode/t5b4b-legend-bench.log`,
+`/tmp/opencode/t5b4b-beeswarm-fingerprint.log`, and
+`/tmp/opencode/t5b4b-waterfall-fingerprint.log`. T5b5 is next.
 
 Replace the facet parent adapter and equal-panel allocation with measured tracks.
 Keep canonical facet cells, fixed/free domain rules, fixed-axis outer ownership,

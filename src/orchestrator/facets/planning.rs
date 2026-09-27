@@ -5,13 +5,12 @@ use crate::Error;
 use super::data::FacetPanel;
 use super::rendering::facet_label;
 use crate::builder::Plot;
-use crate::decorations::plan::children::MeasurementPhase;
 use crate::decorations::plan::{LegendRole, PanelPlan};
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::kernel::{FeedbackKind, FeedbackRound, FitKind, FrameRequirements};
 use crate::layout::{AddressRole, ComponentAddress};
 use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan};
-use crate::spec::{DecorationMode, FacetScales, PlotKind, PlotRenderContext};
+use crate::spec::{FacetScales, PlotRenderContext};
 use crate::theme::ResolvedTheme;
 
 pub(super) fn canvas_layout(
@@ -175,11 +174,11 @@ fn adjusted_shared_axis_panel(
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
+    clippy::type_complexity,
     reason = "facet measurement keeps immutable grid, scale, theme, and child-plan inputs explicit"
 )]
-pub(super) fn legacy_parent_adapter(
+pub(super) fn native_parent(
     plot: &Plot,
-    kind: PlotKind,
     panels: &mut [FacetPanel],
     outer: PanelBox,
     shape: (usize, usize),
@@ -190,9 +189,10 @@ pub(super) fn legacy_parent_adapter(
     probe_cells: &[PanelBox],
     minima: &[(f64, f64)],
     containing_trial: bool,
+    legend_entries: &std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
-) -> Result<crate::layout::fit::FitOutcome<()>, Error> {
+) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
     use crate::layout::fit::{self, FitOutcome};
     let (rows, columns) = shape;
     let grid = ComponentAddress::root().child(AddressRole::FacetGrid, 0)?;
@@ -230,10 +230,15 @@ pub(super) fn legacy_parent_adapter(
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
     let mut child_miss = None;
+    let mut panel_plans = Vec::new();
+    plot.data().reserve_source(&mut panel_plans, panels.len())?;
+    let mut legend_owner = !containing_trial;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = plot.data().with_axis_resources(&resources);
     for (index, facet) in panels.iter().enumerate() {
         let mut panel_plot = plot
-            .clone()
-            .with_render_scope(facet.render_scope(plot.data())?)
+            .admitted_clone(data)?
+            .with_render_scope(facet.render_scope(data)?)
             .with_significance_subset(facet.significance_selectors());
         let domain_address = ComponentAddress::root().child(
             AddressRole::FacetCell,
@@ -286,31 +291,18 @@ pub(super) fn legacy_parent_adapter(
         )
         .with_facet_scales(facet_scales)
         .with_fit_scope(&cell_scope);
-        let result = match children.measure(
+        let role = if legend_owner {
+            LegendRole::Panel
+        } else {
+            LegendRole::Suppressed
+        };
+        let result = match children.plan(
             &panel_plot,
+            role,
             context,
-            &domain_address,
-            MeasurementPhase::Layout,
+            (role == LegendRole::Panel).then_some(legend_entries),
             round,
-            |call| {
-                fit::outcome(
-                    panel_plot.measure_panel_in_call(
-                        kind,
-                        PlotRenderContext::new(
-                            crate::data::PlotData::with_rows(
-                                &panel_plot,
-                                &facet.rows,
-                                &facet.source_rows,
-                            ),
-                            cells[facet.row * columns + facet.column],
-                            theme,
-                        )
-                        .with_facet_scales(facet_scales)
-                        .with_fit_scope(&cell_scope),
-                        call,
-                    ),
-                )
-            },
+            &domain_address,
         )? {
             FitOutcome::Measured(result) => result,
             FitOutcome::Miss(failure) => {
@@ -318,31 +310,34 @@ pub(super) fn legacy_parent_adapter(
                 continue;
             }
         };
+        if result.legend.is_some() {
+            legend_owner = false;
+        }
         let label = facet_label(&panel_plot, &facet.cell)?;
         let cell = cells[facet.row * columns + facet.column];
-        let requirement = match fit::outcome(PanelRequirements::measure(
-            result
-                .axes
-                .as_ref()
-                .ok_or_else(|| Error::Render("facet panel is missing its measured axes".into()))?,
-            theme,
-            Some(&label),
-            cell,
-            &cell_scope,
-        ))? {
-            FitOutcome::Measured(requirement) => requirement,
-            FitOutcome::Miss(failure) => {
-                fit::FitFailure::retain_least(&mut child_miss, failure);
-                continue;
-            }
-        };
+        let requirement =
+            match fit::outcome(PanelRequirements::measure(
+                result.result.axes.as_ref().ok_or_else(|| {
+                    Error::Render("facet panel is missing its measured axes".into())
+                })?,
+                theme,
+                Some(&label),
+                cell,
+                &cell_scope,
+            ))? {
+                FitOutcome::Measured(requirement) => requirement,
+                FitOutcome::Miss(failure) => {
+                    fit::FitFailure::retain_least(&mut child_miss, failure);
+                    continue;
+                }
+            };
         let address = grid.child(
             AddressRole::FacetCell,
             u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
         )?;
         round.begin_owner(&address)?;
         round.observe_box(cell)?;
-        round.observe_layout(&result.layout)?;
+        round.observe_layout(&result.result.layout)?;
         if let Some(request) = round.request_insets(
             &address,
             &address,
@@ -361,6 +356,7 @@ pub(super) fn legacy_parent_adapter(
                 "facet cell requires measured decoration gutters",
             )?;
         }
+        panel_plans.push(result);
     }
     if let Some(failure) = child_miss {
         return Ok(FitOutcome::Miss(failure));
@@ -368,7 +364,10 @@ pub(super) fn legacy_parent_adapter(
     for facet in panels {
         facet.panel = cells[facet.row * columns + facet.column];
     }
-    Ok(FitOutcome::Measured(()))
+    Ok(FitOutcome::Measured((
+        plot.admitted_clone(data)?,
+        panel_plans,
+    )))
 }
 
 pub(super) fn feedback_plot(
@@ -408,78 +407,4 @@ pub(super) fn feedback_plot(
         }
     }
     Ok(plot)
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    clippy::type_complexity,
-    reason = "one facet round carries shared-domain and parent feedback explicitly"
-)]
-pub(super) fn plan_panels(
-    plot: Plot,
-    kind: PlotKind,
-    panels: &[FacetPanel],
-    outside_legend: bool,
-    legend_entries: &std::sync::Arc<[crate::decorations::legend::LegendEntry]>,
-    facet_scales: FacetScales,
-    theme: &ResolvedTheme,
-    round: &mut FeedbackRound,
-    children: &mut crate::decorations::plan::children::ChildPlans,
-) -> Result<crate::layout::fit::FitOutcome<(Plot, Vec<std::sync::Arc<PanelPlan>>)>, Error> {
-    let mut panel_plans = Vec::new();
-    plot.data().reserve_source(&mut panel_plans, panels.len())?;
-    let mut legend_owner = !outside_legend;
-    let mut child_miss = None;
-    for (index, facet) in panels.iter().enumerate() {
-        let panel_plot = plot
-            .clone()
-            .with_render_scope(facet.render_scope(plot.data())?)
-            .with_significance_subset(facet.significance_selectors());
-        let role = if legend_owner {
-            LegendRole::Panel
-        } else {
-            LegendRole::Suppressed
-        };
-        let context = PlotRenderContext::new(
-            crate::data::PlotData::with_rows(&panel_plot, &facet.rows, &facet.source_rows),
-            facet.panel,
-            theme,
-        )
-        .with_facet_scales(facet_scales);
-        let address = ComponentAddress::root().child(
-            AddressRole::FacetCell,
-            u32::try_from(index).map_err(|_| Error::Render("facet address overflowed".into()))?,
-        )?;
-        let outcome = children.plan(
-            &panel_plot,
-            role,
-            context,
-            (role == LegendRole::Panel).then_some(legend_entries),
-            round,
-            &address,
-        )?;
-        let plan = match outcome {
-            crate::layout::fit::FitOutcome::Measured(plan) => plan,
-            crate::layout::fit::FitOutcome::Miss(failure) => {
-                crate::layout::fit::FitFailure::retain_least(&mut child_miss, failure);
-                continue;
-            }
-        };
-        if plan.result.decoration_mode == DecorationMode::SelfManaged {
-            return Err(Error::Render(format!(
-                "{kind:?} cannot be nested in generic faceting"
-            )));
-        }
-        if plan.legend.is_some() {
-            legend_owner = false;
-        }
-        panel_plans.push(plan);
-    }
-    if let Some(failure) = child_miss {
-        return Ok(crate::layout::fit::FitOutcome::Miss(failure));
-    }
-    Ok(crate::layout::fit::FitOutcome::Measured((
-        plot,
-        panel_plans,
-    )))
 }

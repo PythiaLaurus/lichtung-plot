@@ -483,9 +483,8 @@ impl FacetPlan {
                     outer,
                     outside_legend.as_mut(),
                 );
-                let measured = planning::legacy_parent_adapter(
+                let measured = planning::native_parent(
                     &shared_plot,
-                    kind,
                     &mut panels,
                     outer,
                     (selectors.rows, selectors.columns),
@@ -496,31 +495,11 @@ impl FacetPlan {
                     &provisional,
                     &minima,
                     outside,
+                    &legend_entries,
                     &scope,
                     children,
                 )?;
-                if let FitOutcome::Miss(reason) = measured {
-                    #[cfg(test)]
-                    if let Some(trial) = &guide_trial {
-                        trial.reject();
-                    }
-                    round.record_failure(reason)?;
-                    if let TrialOutcome::Miss(reason) = round.finish_trial(checkpoint) {
-                        FitFailure::retain_least(&mut first_miss, reason);
-                    }
-                    continue;
-                }
-                let (planned_plot, panel_plans) = match planning::plan_panels(
-                    shared_plot.clone(),
-                    kind,
-                    &panels,
-                    outside_legend.is_some(),
-                    &legend_entries,
-                    facet_scales,
-                    theme,
-                    round,
-                    children,
-                )? {
+                let (planned_plot, panel_plans) = match measured {
                     FitOutcome::Measured(value) => value,
                     FitOutcome::Miss(failure) => {
                         #[cfg(test)]
