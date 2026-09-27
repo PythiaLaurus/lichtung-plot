@@ -941,6 +941,8 @@ pub(crate) struct MarkAppearance {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AnnotationAppearance {
     pub(crate) bracket_stroke: BracketStrokeAppearance,
+    /// Clearance from a labeled supplemental point's painted radius.
+    pub(crate) point_label_gap: f64,
 }
 
 /// Bracket paths have a fixed solid topology; only their paint and width vary.
@@ -1175,6 +1177,7 @@ fn resolved_theme(
                 paint: foreground_paint,
                 width: bracket_width,
             },
+            point_label_gap: 2.0,
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1540,6 +1543,7 @@ mod tests {
                     paint: foreground,
                     width: expected.bracket_width,
                 },
+                point_label_gap: 2.0,
             },
             composition: CompositionAppearance {
                 root_title_alignment: TitleAlignment::Center,
@@ -1673,6 +1677,21 @@ mod tests {
         );
         assert_eq!(theme.axes, original.axes);
         assert_eq!(theme.marks, original.marks);
+    }
+
+    #[test]
+    fn point_label_gap_is_independent_of_point_and_text_appearance() {
+        let mut theme = Theme::CHI.resolve();
+        let original = theme.clone();
+        theme.annotations.point_label_gap = 7.0;
+        assert_ne!(theme, original);
+        assert_eq!(
+            theme.annotations.point_label_gap.to_bits(),
+            7.0_f64.to_bits()
+        );
+        assert_eq!(theme.marks, original.marks);
+        assert_eq!(theme.typography, original.typography);
+        assert_eq!(theme.axes, original.axes);
     }
 
     #[test]

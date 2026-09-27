@@ -185,6 +185,55 @@ fn decorated_line() -> Plot {
 }
 
 #[test]
+fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
+    let source = decorated_line();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let plot = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(
+            plot.data(),
+            crate::layout::PanelBox::new(10.0, 600.0, 10.0, 410.0),
+            &theme,
+        ))
+        .unwrap();
+    let prepared = &inputs.line.as_ref().unwrap().panels[0].1;
+    let original = project(
+        &plot,
+        prepared,
+        selected.layout.clone(),
+        &theme,
+        plot.data(),
+    )
+    .unwrap();
+    theme.annotations.point_label_gap = 9.0;
+    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let crate::layout::interior::MarkPayload::Line(old) = &original.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected line payload");
+    };
+    let crate::layout::interior::MarkPayload::Line(new) = &changed.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected line payload");
+    };
+    let (old_points, old_style, old_labels) = &old.layers[0];
+    let (new_points, new_style, new_labels) = &new.layers[0];
+    assert_eq!(old_points, new_points);
+    assert_eq!(old_style, new_style);
+    assert_eq!(old_labels.len(), 1);
+    assert_eq!(new_labels.len(), 1);
+    assert_eq!(
+        (new_labels[0].placement.position.x - old_labels[0].placement.position.x).to_bits(),
+        7.0_f64.to_bits()
+    );
+    assert_eq!(
+        (new_labels[0].placement.position.y - old_labels[0].placement.position.y).to_bits(),
+        7.0_f64.to_bits()
+    );
+}
+
+#[test]
 fn prepared_path_family_glyphs_match_selected_marks_before_fonts() {
     for plot in sources(false, None).into_iter().chain([decorated_line()]) {
         let resources = OperationGenerationResources::new();

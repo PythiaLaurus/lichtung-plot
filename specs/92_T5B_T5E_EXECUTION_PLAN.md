@@ -925,7 +925,9 @@ caller styles while centralizing their ownership.
 | T5c1b1 | COMPLETE | T5c1a | `refactor(theme): retire unused line width` |
 | T5c1b2 | IN PROGRESS | T5c1b1 | Umbrella; completes after bracket and remaining roles |
 | T5c1b2a | COMPLETE | T5c1b1 | `feat(theme): resolve significance bracket stroke` |
-| T5c1b2b | PENDING | T5c1b2a | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b | IN PROGRESS | T5c1b2a | Umbrella; completes after point-label spacing and remaining roles |
+| T5c1b2b1 | COMPLETE | T5c1b2a | `feat(theme): measure point-label gap from annotation role` |
+| T5c1b2b2 | PENDING | T5c1b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -993,6 +995,14 @@ the annotation identity without changing axis, mark, or label roles; focused
 significance, mixed bar/facet/Canvas, Boxplot bracket, SVG snapshot, and strict
 Clippy checks pass. T5c3 will use this already-resolved paint to close full
 painted stroke clearance before freezing annotation geometry.
+
+T5c1b2b1 closure: the supplemental line point-label offset now consumes the
+private `AnnotationAppearance::point_label_gap`, never a renderer-local `2.0`.
+It is identity-bearing in the resolved theme, with independent private values.
+A selected Line payload test varies that gap and observes text move by exactly
+the requested difference while its points/style stay fixed; focused line-label,
+strict Clippy, and rendered composition neighbors pass. T5c1b2b2 handles the
+remaining text appearance, mark paints and automatic contrast roles.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

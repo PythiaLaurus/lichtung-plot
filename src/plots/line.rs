@@ -836,7 +836,7 @@ fn project(
             data.reserve_source(&mut text, labels.len())?;
             let x_range = layout.projection.x_range();
             let y_range = layout.projection.y_range();
-            let offset = f64::from(style.radius) + 2.0;
+            let offset = f64::from(style.radius) + theme.annotations.point_label_gap;
             for ((&(x, y), point), label) in layer.points.iter().zip(&points).zip(labels) {
                 if x < x_range.0 || x > x_range.1 || y < y_range.0 || y > y_range.1 {
                     continue;
