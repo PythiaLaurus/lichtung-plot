@@ -149,7 +149,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b5a | COMPLETE | T5b4 | `feat(canvas): allocate measured Canvas cell tracks` |
 | T5b5b | COMPLETE | T5b5a | `feat(canvas): measure complete Plot-local text` |
 | T5b5c | COMPLETE | T5b5b | `refactor(canvas): retire duplicate panel probe` |
-| T5b5d | PENDING | T5b5c | `feat(canvas): integrate measured header spans` |
+| T5b5d | IN PROGRESS | T5b5c | Umbrella; completes after T5b5d1a-d2 |
+| T5b5d1a | COMPLETE | T5b5c | `feat(canvas): constrain spanning header columns` |
+| T5b5d1b | PENDING | T5b5d1a | `feat(canvas): measure header bands` |
+| T5b5d2 | PENDING | T5b5d1b | `feat(canvas): allocate measured row titles` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
 
@@ -701,8 +704,10 @@ using prepared Plot/TextPanel intrinsics, declared sparse slots, and measured
 gutters. T5b5b replaces the old header in place with complete
 title/subtitle/caption within each Plot cell and final resolved alignments.
 T5b5c removes the remaining duplicate layout-only child adapter and retains
-one selected parent/child plan. T5b5d replaces fixed parent header and row
-title reservations with measured Grid spans. No stage introduces a new public
+one selected parent/child plan. T5b5d1a admits column-header span widths into
+the active Grid; T5b5d1b replaces fixed column/row header bands with measured
+text plans. T5b5d2 moves row titles onto those Grid tracks and
+deletes the old OwnedInk workaround. No stage introduces a new public
 nesting shape or second renderer lifecycle.
 
 T5b5a closure: Canvas provisional and final cell allocations now use the T5b3
@@ -750,6 +755,18 @@ equal under focused tests. Strict Clippy passes. Logs:
 `/tmp/opencode/t5b5c-admission.log`, and
 `/tmp/opencode/t5b5c-snapshot.log`. Header and row-title span allocation is
 T5b5d.
+
+T5b5d1a closure: each configured Canvas column header now contributes its
+pre-font-source, post-font hard/preferred width as one canonical Grid span over
+the declared columns. The already-active Grid allocator raises and rechecks
+its covered tracks without repacking sparse or trailing slots; header paint
+and height still follow the prior band until T5b5d1b. A populated two-column
+span beside an empty third slot, shared horizontal-bar headers/ranges, row
+titles, root capture, Canvas admission, and strict Clippy pass. Logs:
+`/tmp/opencode/t5b5d1a-lint.log`,
+`/tmp/opencode/t5b5d1a-tracks-unit.log`,
+`/tmp/opencode/t5b5d1a-headers-integration.log`, and
+`/tmp/opencode/t5b5d1a-producer.log`.
 
 Integrate measured tracks with Plot/TextPanel/empty cells, spanning headers and
 row titles. Replace the Canvas parent adapter and `DeferredT5bPanelHeadingInputs`
