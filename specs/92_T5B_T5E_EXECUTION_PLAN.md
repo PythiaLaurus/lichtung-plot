@@ -943,7 +943,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b1 | `feat(render): resolve independent fill and stroke paints` |
 | T5c1b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2a | Umbrella; completes after point paint and remaining roles |
 | T5c1b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2a | `feat(render): resolve independent point and outline paints` |
-| T5c1b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b1 | Umbrella; completes after primary-point appearance and remaining roles |
+| T5c1b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b1 | `feat(theme): resolve primary point appearance` |
+| T5c1b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1095,6 +1097,17 @@ value. Focused point/path/geometry/backend tests, 66 composition, 67
 distribution, 37 Heatmap, 41 line tests after localized old-literal assertion
 updates, output SVG/PNG and strict Clippy pass. T5c1b2b2b2b2b2b2 resolves
 the remaining semantic point-role defaults and specialized fills.
+
+T5c1b2b2b2b2b2b2a closure: all Plot primary points now resolve fill alpha,
+shape and independent outline paint/width from one private `MarkAppearance`
+role; their existing family-specific radii remain consumer inputs pending
+separate occupancy/ink measurement. The sole caller outline instruction is
+stored as visibility, so hiding the outline cannot be undone by theme
+resolution. Repository guide and selected-mark callers were migrated together
+and the obsolete `PointStyle::with_outline` construction path was deleted.
+Custom-theme Scatter evidence confirms prepared guide equality, changed
+point/outline paints and persistent hidden visibility; focused point/path,
+Canvas shared guides, composition, current snapshots and strict Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

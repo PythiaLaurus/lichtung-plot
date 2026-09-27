@@ -32,6 +32,7 @@ pub(crate) struct DumbbellData {
 impl DumbbellData {
     pub(crate) fn guide_entries(
         chart: &Plot,
+        theme: &crate::theme::ResolvedTheme,
         data: crate::data::PlotData<'_>,
     ) -> Result<Vec<LegendEntry>, Error> {
         let endpoints = chart
@@ -45,7 +46,7 @@ impl DumbbellData {
         ] {
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label, data)?,
-                chart.point_style(color, 4),
+                chart.point_style(theme, color, 4),
             ));
         }
         Ok(entries)
@@ -123,8 +124,8 @@ fn project(
         pairs: Vec::new(),
         connector,
         points: [
-            chart.point_style(endpoints.left_color(), 4),
-            chart.point_style(endpoints.right_color(), 4),
+            chart.point_style(theme, endpoints.left_color(), 4),
+            chart.point_style(theme, endpoints.right_color(), 4),
         ],
     };
     data.reserve_source(&mut payload.pairs, prepared.rows.len())?;
@@ -156,7 +157,7 @@ fn project(
         geometry.scatter(&pair[..1], &payload.points[0], clip)?;
         geometry.scatter(&pair[1..], &payload.points[1], clip)?;
     }
-    let legend = DumbbellData::guide_entries(chart, data)?;
+    let legend = DumbbellData::guide_entries(chart, theme, data)?;
     #[cfg(test)]
     count(2);
     let mut result = PlotRenderResult::new(layout, legend);

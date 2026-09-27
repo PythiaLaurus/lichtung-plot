@@ -89,7 +89,7 @@ impl PreparedInteraction {
             let color = chart.categorical_color("interaction", key, trace.color_index, theme)?;
             let identity = chart.collective_legend_identity(&trace.identity, data)?;
             let point = chart
-                .point_style(color, 4)
+                .point_style(theme, color, 4)
                 .with_shape(trace.style.point_shape);
             let line = trace.style.line_pattern.line_style(color, 1.8);
             entries.push(
@@ -336,7 +336,7 @@ pub(crate) fn measure_marks(
         let color =
             chart.categorical_color("interaction", key, trace.color_index, context.theme)?;
         let point = chart
-            .point_style(color, 4)
+            .point_style(context.theme, color, 4)
             .with_shape(trace.style.point_shape);
         let line = trace.style.line_pattern.line_style(color, 1.8);
         let mut selected = TracePayload {

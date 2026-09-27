@@ -1574,14 +1574,11 @@ mod tests {
                 &FillStyle::new(Rgba::rgb(0, 0, 0), Rgba::rgb(0, 0, 0), 1.0 / 4096.0),
             )
         });
-        let outlined = PointStyle::with_outline(
-            (0, 0, 0),
-            1,
-            Some(crate::render::backend::PointOutline {
-                color: (0, 0, 0).into(),
-                width_ratio: 1.0 / 4096.0,
-            }),
-        );
+        let mut outlined = PointStyle::new((0, 0, 0), 1);
+        outlined.outline = Some(crate::render::backend::PointOutline {
+            color: (0, 0, 0).into(),
+            width_ratio: 1.0 / 4096.0,
+        });
         assert_paired_rejection(|backend| backend.draw_scatter(&points, &outlined));
         assert_paired_rejection(|backend| {
             backend.draw_scatter(

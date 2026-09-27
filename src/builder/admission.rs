@@ -43,7 +43,7 @@ impl Plot {
             histogram_stat: _,
             histogram_composite: _,
             qq_line: _,
-            point_outline: _,
+            point_outline_visible: _,
             legend_policy: _,
             suppress_continuous_guide: _,
             color_label: _,

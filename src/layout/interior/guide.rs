@@ -100,7 +100,7 @@ impl PreparedInteriorInputs {
                     scope,
                     kind,
                 )?;
-                crate::plots::dumbbell::DumbbellData::guide_entries(chart, data)
+                crate::plots::dumbbell::DumbbellData::guide_entries(chart, theme, data)
             }
             PlotKind::Histogram
             | PlotKind::Qq

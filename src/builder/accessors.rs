@@ -1087,8 +1087,16 @@ impl<K: crate::kind::Marker> Plot<K> {
 
     /// Build a point style using this chart's point-outline policy.
     #[must_use]
-    pub(crate) fn point_style(&self, color: (u8, u8, u8), radius: u32) -> PointStyle {
-        PointStyle::with_outline(color, radius, self.point_outline)
+    pub(crate) fn point_style(
+        &self,
+        theme: &crate::theme::ResolvedTheme,
+        color: (u8, u8, u8),
+        radius: u32,
+    ) -> PointStyle {
+        theme
+            .marks
+            .primary_point
+            .backend_style(color, radius, self.point_outline_visible)
     }
 
     /// Selected semantic plot kind.

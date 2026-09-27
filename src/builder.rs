@@ -18,7 +18,6 @@ mod layout;
 use crate::input::{AxisValues, PlotInput};
 use crate::layers::{BarPointLayer, GuideSpec, PointLayer};
 use crate::layout::AxisSpec;
-use crate::render::backend::PointOutline;
 use crate::spec::{
     AxisScale, BarSpacing, CategoricalColors, CategoryOrder, DumbbellEndpoints, FacetSpec,
     HeatmapAnnotations, HeatmapLabelFit, HeatmapLayout, HeatmapNullRowAnnotation, HeatmapScale,
@@ -463,7 +462,7 @@ pub struct Plot<K: crate::kind::Marker = crate::kind::Any> {
     histogram_stat: HistogramStat,
     histogram_composite: Arc<HistogramComposite>,
     qq_line: QqLine,
-    point_outline: Option<PointOutline>,
+    point_outline_visible: bool,
     legend_policy: LegendPolicy,
     /// Canvas Shared owns the continuous color guide for this prepared child.
     suppress_continuous_guide: bool,
@@ -604,7 +603,7 @@ impl Plot<crate::kind::Any> {
             histogram_stat: HistogramStat::default(),
             histogram_composite: Arc::new(HistogramComposite::default()),
             qq_line: QqLine::default(),
-            point_outline: Some(PointOutline::default()),
+            point_outline_visible: true,
             legend_policy: LegendPolicy::Automatic,
             suppress_continuous_guide: false,
             color_label: None,
@@ -1019,7 +1018,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             histogram_stat,
             histogram_composite,
             qq_line,
-            point_outline,
+            point_outline_visible,
             legend_policy,
             suppress_continuous_guide,
             color_label,
@@ -1129,7 +1128,7 @@ impl<K: crate::kind::ExactFamily> Plot<K> {
             histogram_stat,
             histogram_composite,
             qq_line,
-            point_outline,
+            point_outline_visible,
             legend_policy,
             suppress_continuous_guide,
             color_label,

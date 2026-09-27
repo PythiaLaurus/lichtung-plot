@@ -253,7 +253,7 @@ pub(crate) fn measure_marks(
         )?;
 
         if overlay == RawOverlay::Hidden {
-            let flier_style = chart.point_style(theme.foreground, 2);
+            let flier_style = chart.point_style(theme, theme.foreground, 2);
             let flier_points = data.collect_source(stat.fliers.iter().map(|y| {
                 data.claim_source_visits(1)?;
                 let (x_px, y_px) = proj.project(x_center_data, *y);

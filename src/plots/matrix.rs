@@ -575,8 +575,11 @@ pub(crate) fn measure(
                 for group in groups {
                     let xs = &group.columns[col];
                     let ys = &group.columns[row];
-                    let ps =
-                        chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2);
+                    let ps = chart.point_style(
+                        theme,
+                        theme.colors[group.color_index % theme.colors.len()],
+                        2,
+                    );
                     let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
                         data.claim_source_visits(1)?;
                         let (px, py) = cell_layout.projection.project(xi, yi);
@@ -772,7 +775,11 @@ fn matrix_legend(
     for group in groups.iter().filter(|group| group.identity.hue.is_some()) {
         entries.push(LegendEntry::point_fill(
             chart.collective_legend_identity(&group.identity, data)?,
-            chart.point_style(theme.colors[group.color_index % theme.colors.len()], 2),
+            chart.point_style(
+                theme,
+                theme.colors[group.color_index % theme.colors.len()],
+                2,
+            ),
             FillStyle::new(
                 crate::render::backend::Rgba::from(
                     theme.colors[group.color_index % theme.colors.len()],

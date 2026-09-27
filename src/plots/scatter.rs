@@ -137,7 +137,7 @@ impl PreparedScatter {
             let color = theme.colors[chart.hue_color_index(label, slot) % theme.colors.len()];
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label, data)?,
-                chart.point_style(color, 3),
+                chart.point_style(theme, color, 3),
             ));
         }
         Ok(entries)
@@ -185,7 +185,7 @@ impl PreparedScatter {
                 || theme.colors.first().copied().unwrap_or((0, 0, 0)),
                 |label| theme.colors[chart.hue_color_index(label, index) % theme.colors.len()],
             );
-            let style = chart.point_style(color, 3);
+            let style = chart.point_style(theme, color, 3);
             let points = data.collect_source(group.points.iter().map(|(x, y)| {
                 data.claim_source_visits(1)?;
                 let (x, y) = projection.project(*x, *y);
@@ -311,6 +311,72 @@ mod tests {
             crate::font::canonical::FONT_DISCOVERY_CALLS.with(std::cell::Cell::get),
             0
         );
+    }
+
+    #[test]
+    fn custom_primary_point_paints_match_prepared_guides_and_hidden_outline_stays_hidden() {
+        let plot = source();
+        let resources = OperationGenerationResources::new();
+        let data = plot.data().with_axis_resources(&resources);
+        let prepared = PreparedScatter::new(&plot, data).unwrap();
+        let order = prepared.group_order(&plot, data).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let original = prepared
+            .project(
+                &plot,
+                &crate::layout::Projection::new(
+                    prepared.ranges[0],
+                    prepared.ranges[1],
+                    (30.0, 600.0, 30.0, 400.0),
+                ),
+                &theme,
+                data,
+            )
+            .unwrap();
+        theme.marks.primary_point.fill_alpha = 128;
+        theme.marks.primary_point.shape = crate::PointShape::TriangleUp;
+        theme.marks.primary_point.outline.color = crate::render::backend::Rgba::new(3, 5, 7, 64);
+        let selected = prepared
+            .project(
+                &plot,
+                &crate::layout::Projection::new(
+                    prepared.ranges[0],
+                    prepared.ranges[1],
+                    (30.0, 600.0, 30.0, 400.0),
+                ),
+                &theme,
+                data,
+            )
+            .unwrap();
+        assert_eq!(original.groups[0].0, selected.groups[0].0);
+        let style = &selected.groups[0].1;
+        assert_eq!(style.color.alpha(), 128);
+        assert_eq!(style.shape, crate::PointShape::TriangleUp);
+        assert_eq!(style.outline.unwrap().color.alpha(), 64);
+        assert!(selected
+            .legends
+            .iter()
+            .zip(
+                prepared
+                    .guide_entries_in_order(&plot, &theme, data, &order)
+                    .unwrap()
+            )
+            .all(|(mark, guide)| mark.same_child_input(&guide)));
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [original.legends[0].clone(), selected.legends[0].clone()],
+            "custom primary point",
+            &OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
+        let hidden = Plot::scatter(
+            NumericValues::new("x", [1.0, 2.0]),
+            NumericValues::new("y", [2.0, 3.0]),
+        )
+        .hide_point_outline()
+        .erase();
+        assert!(hidden.point_style(&theme, (1, 2, 3), 3).outline.is_none());
     }
 
     #[test]
@@ -554,7 +620,7 @@ mod tests {
         ];
         for shape in [crate::PointShape::Circle, crate::PointShape::TriangleUp] {
             for outline in [true, false] {
-                let mut style = source().point_style((10, 20, 30), 3);
+                let mut style = source().point_style(&theme, (10, 20, 30), 3);
                 style.shape = shape;
                 if !outline {
                     style.outline = None;

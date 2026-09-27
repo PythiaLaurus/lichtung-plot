@@ -183,8 +183,11 @@ impl PreparedLine {
                 &theme.marks.path_line
             }
             .backend_style(color);
-            let point =
-                chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
+            let point = chart.point_style(
+                theme,
+                color,
+                if chart.kind() == PlotKind::Line { 3 } else { 4 },
+            );
             let fill = FillStyle::new(
                 crate::render::backend::Rgba::from(color).with_alpha(46),
                 color.into(),
@@ -208,7 +211,7 @@ impl PreparedLine {
             for (index, label) in levels.iter().enumerate() {
                 entries.push(LegendEntry::point(
                     chart.point_legend_identity(label, data)?,
-                    chart.point_style(theme.colors[index % theme.colors.len()], 4),
+                    chart.point_style(theme, theme.colors[index % theme.colors.len()], 4),
                 ));
             }
         }
@@ -764,8 +767,11 @@ fn project(
             &theme.marks.path_line
         }
         .backend_style(color);
-        let point_style =
-            chart.point_style(color, if chart.kind() == PlotKind::Line { 3 } else { 4 });
+        let point_style = chart.point_style(
+            theme,
+            color,
+            if chart.kind() == PlotKind::Line { 3 } else { 4 },
+        );
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
             data.reserve_source(&mut payload.marks, 2)?;
             let markers = data.collect_source(points.iter().copied().map(Ok))?;
@@ -805,7 +811,7 @@ fn project(
                 data.reserve_source(&mut payload.marks, 1)?;
                 payload.marks.push(LineMark::Points(
                     data.collect_source(std::iter::once(Ok(project(point.x, point.y))))?,
-                    chart.point_style(color, 4),
+                    chart.point_style(theme, color, 4),
                 ));
             }
         }

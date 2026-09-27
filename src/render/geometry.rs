@@ -1688,19 +1688,14 @@ mod tests {
                 &[Point2D::new(x, 10.0), Point2D::new(x, 20.0)],
                 &LineStyle::solid((0, 0, 0), width),
             ),
-            "circle" => geometry.draw_scatter(
-                &[Point2D::new(x, 15.0)],
-                &PointStyle::with_outline(
-                    (0, 0, 0),
-                    1,
-                    Some(backend::PointOutline {
-                        color: (0, 0, 0).into(),
-                        width_ratio: f64::from(width),
-                    }),
-                )
-                .with_opacity(0.0)
-                .unwrap(),
-            ),
+            "circle" => {
+                let mut style = PointStyle::new((0, 0, 0), 1).with_opacity(0.0).unwrap();
+                style.outline = Some(backend::PointOutline {
+                    color: (0, 0, 0).into(),
+                    width_ratio: f64::from(width),
+                });
+                geometry.draw_scatter(&[Point2D::new(x, 15.0)], &style)
+            }
             "bracket" => geometry.draw_bracket(
                 &SignificanceBracket {
                     x_left: x,
@@ -2436,15 +2431,11 @@ mod tests {
         let theme = crate::Theme::Publication.resolve();
         let panel = PanelBox::new(0.0, 100.0, 0.0, 100.0);
         for shape in [PointShape::Circle, PointShape::TriangleUp] {
-            let mut style = PointStyle::with_outline(
-                (1, 2, 3),
-                2,
-                Some(backend::PointOutline {
-                    color: backend::Rgba::new(4, 5, 6, 0),
-                    width_ratio: 0.5,
-                }),
-            )
-            .with_shape(shape);
+            let mut style = PointStyle::new((1, 2, 3), 2).with_shape(shape);
+            style.outline = Some(backend::PointOutline {
+                color: backend::Rgba::new(4, 5, 6, 0),
+                width_ratio: 0.5,
+            });
             style.color = backend::Rgba::new(1, 2, 3, 0);
             let mut empty = GeometrySnapshot::new(&theme).unwrap();
             empty

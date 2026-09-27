@@ -2674,14 +2674,11 @@ mod tests {
     fn outlined_points_emit_independent_fill_and_outline_alphas() {
         let mut backend = SvgBackend::in_memory(100, 100);
         backend.begin(100, 100).unwrap();
-        let mut style = PointStyle::with_outline(
-            (1, 2, 3),
-            2,
-            Some(crate::render::backend::PointOutline {
-                color: Rgba::new(4, 5, 6, 64),
-                width_ratio: 0.5,
-            }),
-        );
+        let mut style = PointStyle::new((1, 2, 3), 2);
+        style.outline = Some(crate::render::backend::PointOutline {
+            color: Rgba::new(4, 5, 6, 64),
+            width_ratio: 0.5,
+        });
         style.color = Rgba::new(1, 2, 3, 128);
         backend
             .draw_scatter(&[Point2D::new(10.0, 10.0)], &style)

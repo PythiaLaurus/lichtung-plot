@@ -145,7 +145,7 @@ fn native_bottom_conditions_keep_parent_trace_order_palette_sparse_connectors_an
                     assert_eq!(
                         actual.marker,
                         Some(
-                            plot.point_style(color, 4)
+                            plot.point_style(&theme, color, 4)
                                 .with_shape(trace.style.point_shape)
                         )
                     );

@@ -931,6 +931,8 @@ impl StrokeAppearance {
 /// Mark strokes are independent of structurally similar axis chrome.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MarkAppearance {
+    /// Shared primary-point paint/outline before family-specific size selection.
+    pub(crate) primary_point: PointAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -957,6 +959,30 @@ pub(crate) struct MarkAppearance {
     pub(crate) qq_reference: StrokeAppearance,
     /// Dumbbell pairs use one neutral connecting stroke.
     pub(crate) dumbbell_connector: StrokeAppearance,
+}
+
+/// One complete default point paint and its independently painted outline.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PointAppearance {
+    pub(crate) fill_alpha: u8,
+    pub(crate) shape: crate::PointShape,
+    pub(crate) outline: crate::render::backend::PointOutline,
+}
+
+impl PointAppearance {
+    pub(crate) fn backend_style(
+        &self,
+        color: (u8, u8, u8),
+        radius: u32,
+        outline_visible: bool,
+    ) -> crate::render::backend::PointStyle {
+        crate::render::backend::PointStyle {
+            color: Rgba::from(color).with_alpha(self.fill_alpha),
+            radius,
+            outline: outline_visible.then_some(self.outline),
+            shape: self.shape,
+        }
+    }
 }
 
 /// One complete data-colored mark stroke; the scale supplies opaque RGB only.
@@ -1205,6 +1231,11 @@ fn resolved_theme(
             },
         },
         marks: MarkAppearance {
+            primary_point: PointAppearance {
+                fill_alpha: 209,
+                shape: crate::PointShape::Circle,
+                outline: crate::render::backend::PointOutline::default(),
+            },
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
                 axis_width,
@@ -1594,6 +1625,11 @@ mod tests {
                 },
             },
             marks: MarkAppearance {
+                primary_point: PointAppearance {
+                    fill_alpha: 209,
+                    shape: crate::PointShape::Circle,
+                    outline: crate::render::backend::PointOutline::default(),
+                },
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,
                     width: expected.axis_width,

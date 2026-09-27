@@ -314,7 +314,7 @@ impl<K: crate::kind::Marker> Plot<K> {
     where
         K: crate::kind::PointOutline,
     {
-        self.point_outline = None;
+        self.point_outline_visible = false;
         self
     }
 

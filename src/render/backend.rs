@@ -155,21 +155,6 @@ impl PointStyle {
         }
     }
 
-    /// Construct a filled point with an explicit outline setting.
-    #[must_use]
-    pub(crate) fn with_outline(
-        color: (u8, u8, u8),
-        radius: u32,
-        outline: Option<PointOutline>,
-    ) -> Self {
-        Self {
-            color: Rgba::from(color).with_alpha(209),
-            radius,
-            outline,
-            shape: PointShape::Circle,
-        }
-    }
-
     /// Set the marker geometry.
     #[must_use]
     pub const fn with_shape(mut self, shape: PointShape) -> Self {

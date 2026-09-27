@@ -164,7 +164,7 @@ impl PreparedRegression {
         };
         entries.push(LegendEntry::point(
             chart.point_legend_identity("Observations", data)?,
-            chart.point_style(color, 3),
+            chart.point_style(theme, color, 3),
         ));
         entries.push(fit_entry);
         Ok(entries)
@@ -312,7 +312,7 @@ pub(crate) fn project(
     data: PlotData<'_>,
 ) -> Result<PlotRenderResult, Error> {
     let projection = &layout.projection;
-    let point_style = chart.point_style(theme.colors[0], 3);
+    let point_style = chart.point_style(theme, theme.colors[0], 3);
     let scatter_points =
         data.collect_source(prepared.points.iter().map(|(x_value, y_value)| {
             data.claim_source_visits(1)?;
