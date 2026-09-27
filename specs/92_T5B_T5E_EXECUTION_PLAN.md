@@ -1,6 +1,6 @@
 # T5b-T5e Execution Plan
 
-**Status: IN PROGRESS — T5b complete; T5c–T5e pending.**
+**Status: IN PROGRESS — T5b complete; T5c in progress; T5d–T5e pending.**
 
 This is the execution partition of the four T5b–T5e umbrellas in
 `91_IMPLEMENTATION_PLAN.md`, based on the verified T5a closure at `1e8e3ee`.
@@ -918,7 +918,7 @@ caller styles while centralizing their ownership.
 
 | Step | Status | Depends on | Logical commit |
 | --- | --- | --- | --- |
-| T5c0 | PENDING | T5b | `docs(marks): classify appearance and content policies` |
+| T5c0 | COMPLETE | T5b | `docs(marks): classify appearance and content policies` |
 | T5c1 | PENDING | T5c0 | `feat(theme): resolve private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
@@ -947,6 +947,17 @@ List every clipping/elision/omission branch, its caller-policy key if any, and t
 target disposition. Preserve admitted explicit policies rather than inventing a
 universal ban or a new omission feature. Any actual unresolved behavior change
 requires user approval before the affected implementation starts.
+
+T5c0 closure: `docs/t5c0-property-disposition.md` assigns the reconciled T2h
+source clusters to `MarkTheme`, `AnnotationTheme`, `TypographyTheme`, T5d
+data-color mapping, exact local style, or a fixed renderer invariant. It defines
+the selected source-backed primary-mark count for all 25 families (including
+sampled/supplied Histogram and Raincloud, sparse and missing slots) separately
+from raw rows, tessellation, overlays and structural addresses. Its concrete
+data-window, caller-elision, renderer-generated visibility, and required-text
+table preserves the approved clipping policy and names the intended correction
+branches without making a new omission API. This documentation-only stage
+requires diff review, not tests; T5c1 is the first implementation consumer.
 
 ### T5c1 — Complete Private Style Inputs
 

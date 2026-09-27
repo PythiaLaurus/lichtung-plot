@@ -269,7 +269,7 @@ The approved theme and layout targets follow these rules:
 | T5a6c4 | Interaction family | COMPLETE |
 | T5a6d | Ordinary exact-root closure audit | COMPLETE |
 | T5b | Legends, facets, and Canvas composition chrome | COMPLETE |
-| T5c | Mark defaults, annotations, and local styles | PENDING |
+| T5c | Mark defaults, annotations, and local styles | IN PROGRESS |
 | T5d | Categorical and continuous data scales | PENDING |
 | T5e | Scientific layout closure | PENDING |
 | T6 | Public immutable theme, scale, tick-interval, and sizing API | PENDING |
@@ -6313,7 +6313,7 @@ Acceptance:
 
 ## Phase T5c: Mark Defaults, Annotations, And Local Styles
 
-**Status**: PENDING
+**Status**: IN PROGRESS (T5c0 complete)
 
 Dependencies: T5b.
 
