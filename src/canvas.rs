@@ -160,6 +160,99 @@ mod d1_tests {
     use super::*;
 
     #[test]
+    fn per_plot_guides_trace_distinct_owners_and_root_rounds() {
+        use crate::orchestrator::measurements::{GuideOutcome, GuidePhase};
+        let plot = |offset| {
+            Plot::scatter(
+                crate::NumericValues::new("x", [offset, offset + 1.0]),
+                crate::NumericValues::new("y", [2.0, 3.0]),
+            )
+            .hue(crate::CategoryValues::new("cohort", ["first", "second"]).unwrap())
+        };
+        let canvas = Canvas::grid(1, 2)
+            .unwrap()
+            .panel(0, 0, plot(1.0))
+            .unwrap()
+            .panel(0, 1, plot(5.0))
+            .unwrap()
+            .size(480, 640)
+            .legend_policy(CanvasLegendPolicy::PerPlot);
+        crate::orchestrator::measurements::start();
+        let result = canvas.preflight();
+        let work = crate::orchestrator::measurements::finish();
+        result.unwrap();
+        let first = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::CanvasCell, 0)
+            .unwrap();
+        let second = crate::layout::ComponentAddress::root()
+            .child(crate::layout::AddressRole::CanvasCell, 1)
+            .unwrap();
+        assert_eq!(work.roots.len(), 2);
+        assert_eq!(work.roots[0].guides, 0..2);
+        assert!(!work.roots[0].successful);
+        assert_eq!(work.roots[1].guides, 2..6);
+        assert!(work.roots[1].successful);
+        assert_eq!(work.gutters.len(), 2);
+        assert!(work.gutters.iter().all(|gutter| {
+            gutter.consumed.iter().all(|value| value.to_bits() == 0)
+                && gutter.requested[0] > 0.0
+                && gutter.requested[2] > 0.0
+        }));
+        for (attempt, (owner, round, edge, outcome, phase)) in work.guides.iter().zip([
+            (
+                &first,
+                0,
+                crate::LegendPosition::OutsideRight,
+                GuideOutcome::Accepted,
+                GuidePhase::Body,
+            ),
+            (
+                &second,
+                0,
+                crate::LegendPosition::OutsideRight,
+                GuideOutcome::Accepted,
+                GuidePhase::Body,
+            ),
+            (
+                &first,
+                1,
+                crate::LegendPosition::OutsideRight,
+                GuideOutcome::Rejected,
+                GuidePhase::GuideOnly,
+            ),
+            (
+                &first,
+                1,
+                crate::LegendPosition::OutsideTop,
+                GuideOutcome::Accepted,
+                GuidePhase::Body,
+            ),
+            (
+                &second,
+                1,
+                crate::LegendPosition::OutsideRight,
+                GuideOutcome::Rejected,
+                GuidePhase::GuideOnly,
+            ),
+            (
+                &second,
+                1,
+                crate::LegendPosition::OutsideTop,
+                GuideOutcome::Accepted,
+                GuidePhase::Body,
+            ),
+        ]) {
+            assert_eq!(&attempt.owner, owner);
+            assert_eq!(attempt.root_round, round);
+            assert_eq!(attempt.edge, edge);
+            assert_eq!(attempt.outcome, outcome);
+            assert_eq!(attempt.phase, phase);
+            assert!(!attempt.compact);
+        }
+        assert_eq!(work.guides.len(), 6);
+    }
+
+    #[test]
     fn shared_policy_without_a_guide_allocates_cells_without_guide_trials() {
         let plot = || {
             Plot::scatter(
@@ -1086,10 +1179,12 @@ mod d1_tests {
         use crate::decorations::plan::children::{
             ChildPlans, CHILD_MEASUREMENTS, DISABLE_CHILD_REUSE,
         };
+        use crate::orchestrator::measurements::{self, Counter};
         let plot = Plot::scatter(
             crate::NumericValues::new("x", [0.0, 1.0]),
             crate::NumericValues::new("y", [0.0, 1.0]),
         )
+        .hue(crate::CategoryValues::new("cohort", ["first", "second"]).unwrap())
         .x_ticks(vec![
             crate::layout::AxisTick::new(0.0, "zero"),
             crate::layout::AxisTick::new(1.0, "one"),
@@ -1097,14 +1192,15 @@ mod d1_tests {
         .panel_text_annotation(
             crate::PanelTextAnnotation::new(crate::PanelCorner::TopLeft, "annotation").unwrap(),
         )
-        .legend(crate::LegendPolicy::Hidden);
+        .legend(crate::LegendPolicy::Automatic);
         let canvas = Canvas::grid(1, 2)
             .unwrap()
             .panel(0, 0, plot.clone())
             .unwrap()
             .panel(0, 1, plot)
             .unwrap()
-            .size(1200, 800);
+            .size(1200, 800)
+            .legend_policy(CanvasLegendPolicy::PerPlot);
         let owner = crate::layout::ComponentAddress::root()
             .child(crate::layout::AddressRole::CanvasCell, 0)
             .unwrap();
@@ -1119,6 +1215,7 @@ mod d1_tests {
             let mut children = ChildPlans::canvas(&canvas);
             let mut calls = 0;
             let mut retained_neighbor = None;
+            measurements::start();
             let root = crate::layout::plan_exact_root(
                 canvas.width,
                 canvas.height,
@@ -1222,8 +1319,31 @@ mod d1_tests {
                 },
             )
             .unwrap();
+            let work = measurements::finish();
             DISABLE_CHILD_REUSE.with(|value| value.set(false));
             assert_eq!(calls, 3);
+            for guide_owner in [&owner, &neighbor] {
+                assert!(work
+                    .guides
+                    .iter()
+                    .any(|attempt| &attempt.owner == guide_owner));
+            }
+            assert_eq!(
+                work.counters[Counter::ChildCacheHit as usize] > 0,
+                !disabled
+            );
+            assert_eq!(
+                work.counters[Counter::ChildFeedbackReplay as usize] > 0,
+                !disabled
+            );
+            assert_eq!(
+                work.children.iter().any(|event| {
+                    event.owner == neighbor
+                        && event.root_round == 2
+                        && event.counter == Counter::ChildCacheHit
+                }),
+                !disabled
+            );
             CHILD_MEASUREMENTS.with(|events| {
                 let events = events.borrow();
                 assert!(events.iter().all(|(_, phase)| *phase != "layout"));

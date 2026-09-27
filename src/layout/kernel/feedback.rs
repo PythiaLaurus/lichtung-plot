@@ -1296,6 +1296,47 @@ mod tests {
     }
 
     #[test]
+    fn multiple_guide_owners_keep_independent_budgets_through_rejected_trials() {
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let owners = [0, 1].map(|index| {
+            ComponentAddress::root()
+                .child(super::super::AddressRole::CanvasCell, index)
+                .unwrap()
+        });
+        let mut round = FeedbackRound::new(None, resources.clone(), 0).unwrap();
+        for ordinal in 0..8 {
+            for owner in &owners {
+                round.claim_guide_trial(owner, 8, ordinal).unwrap();
+                let trial = round.begin_trial().unwrap();
+                round
+                    .miss(
+                        owner,
+                        FitKind::TrackOrResidual,
+                        &[],
+                        "containing frame rejected this guide trial",
+                    )
+                    .unwrap();
+                assert!(matches!(round.finish_trial(trial), TrialOutcome::Miss(_)));
+            }
+        }
+        assert!(round.state.misses.is_empty());
+        for owner in &owners {
+            assert_eq!(round.attempt_ordinal(owner).unwrap(), 7);
+            assert!(round
+                .claim_guide_trial(owner, 8, 8)
+                .unwrap_err()
+                .to_string()
+                .contains("planning limit"));
+        }
+        let state = round.finish().unwrap();
+        let mut next = FeedbackRound::new(Some(&state), resources, 1).unwrap();
+        for owner in &owners {
+            next.claim_guide_trial(owner, 8, 0).unwrap();
+            assert_eq!(next.attempt_ordinal(owner).unwrap(), 0);
+        }
+    }
+
+    #[test]
     fn text_observations_share_admitted_payload_and_refuse_before_retention() {
         let plan = text_plan();
         let block = crate::layout::TextBlock::from_resolved(plan.clone());

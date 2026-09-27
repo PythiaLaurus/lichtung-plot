@@ -153,10 +153,10 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b5d1a | COMPLETE | T5b5c | `feat(canvas): constrain spanning header columns` |
 | T5b5d1b | COMPLETE | T5b5d1a | `feat(canvas): measure header bands` |
 | T5b5d2 | COMPLETE | T5b5d1b | `feat(canvas): allocate measured row titles` |
-| T5b6 | IN PROGRESS | T5b5 | Umbrella; completes after T5b6a-c |
+| T5b6 | COMPLETE | T5b5 | Shared-domain and guide-frame ownership closed by T5b6c |
 | T5b6a | COMPLETE | T5b5 | `refactor(canvas): skip absent shared guide trials` |
 | T5b6b | COMPLETE | T5b6a | `refactor(canvas): install shared ranges before guide probes` |
-| T5b6c | PENDING | T5b6b | `test(canvas): trace multi-owner guide recovery` |
+| T5b6c | COMPLETE | T5b6b | `test(canvas): trace multi-owner guide recovery` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
 
 ### T5b0 — Source Map And Behavioral Fixtures
@@ -835,6 +835,18 @@ and continuous guide placement. Focused shared-x and Forest log-domain unit
 tests, mixed horizontal-bar shared ranges, per-Plot/hidden/shared discrete
 guides, shared continuous Heatmap output, Canvas admission, and strict Clippy
 pass. Multi-owner trial/replay evidence is T5b6c.
+
+T5b6c closure: a real two-Plot `PerPlot` Canvas at 480 px records canonical
+owners 0 then 1, initial OutsideRight choices, and two changed Grid-cell
+gutters that trigger a root retry. On the second round, each owner rejects its
+own OutsideRight trial and selects OutsideTop without revisiting its sibling's
+choice. A separate three-round two-guide fixture compares cached/uncached
+exact rendered output: a changed owner takes a new panel measurement while an
+unchanged neighbor reuses its selected plan and replays feedback. A kernel
+two-owner trace confirms eight rejected attempts per owner are independent,
+exhaustion is a planning-budget error rather than a geometric-fit verdict,
+and the new root round starts fresh. Strict Clippy and these focused tests pass.
+This closes T5b6; T5b7 records the native-composition closure matrix.
 
 Complete shared-x installation and shared/per-Plot/hidden guide integration over
 the native tracks. Use the prepared strict union, never override explicit limits
