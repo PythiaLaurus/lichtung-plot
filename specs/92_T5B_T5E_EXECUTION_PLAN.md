@@ -155,7 +155,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b5d2 | COMPLETE | T5b5d1b | `feat(canvas): allocate measured row titles` |
 | T5b6 | IN PROGRESS | T5b5 | Umbrella; completes after T5b6a-c |
 | T5b6a | COMPLETE | T5b5 | `refactor(canvas): skip absent shared guide trials` |
-| T5b6b | PENDING | T5b6a | `refactor(canvas): integrate shared axes and guide frames` |
+| T5b6b | COMPLETE | T5b6a | `refactor(canvas): install shared ranges before guide probes` |
 | T5b6c | PENDING | T5b6b | `test(canvas): trace multi-owner guide recovery` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
 
@@ -825,6 +825,16 @@ the Canvas Grid's resolved gap rather than duplicating a literal. No-guide
 trial observations, a real shared-guide recovery, and strict Clippy pass.
 T5b6b integrates the retained shared domains and guide frames; T5b6c records
 multi-owner recovery before closing T5b6.
+
+T5b6b closure: the pre-font strict shared-x union now installs on each scoped,
+semantically attached Canvas child once per root round, before any shared-guide
+body probe or native Grid allocation. Later guide trials reuse that prepared
+range; the grouped-child reapplication occurs only when root feedback expands
+the union. The existing single `AssignedGuideFrame` still owns shared discrete
+and continuous guide placement. Focused shared-x and Forest log-domain unit
+tests, mixed horizontal-bar shared ranges, per-Plot/hidden/shared discrete
+guides, shared continuous Heatmap output, Canvas admission, and strict Clippy
+pass. Multi-owner trial/replay evidence is T5b6c.
 
 Complete shared-x installation and shared/per-Plot/hidden guide integration over
 the native tracks. Use the prepared strict union, never override explicit limits

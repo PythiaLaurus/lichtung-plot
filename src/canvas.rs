@@ -3651,6 +3651,10 @@ impl Canvas {
             if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
                 plot = inputs.attach(plot)?;
             }
+            if let Some(Some(range)) = shared_x.get(index) {
+                let kind = plot.kind();
+                plot = plot.with_resolved_facet_ranges(kind, Some(*range), None);
+            }
             if matches!(prepared_guide, Some(PreparedGuideDescriptor::Continuous(_))) {
                 plot = plot.with_suppressed_continuous_guide();
             }
@@ -3964,9 +3968,12 @@ impl Canvas {
                     ));
                 }
                 for &index in group {
-                    let plot = plots[index].take().expect("validated grouped panel");
-                    let kind = plot.kind();
-                    plots[index] = Some(plot.with_resolved_facet_ranges(kind, Some(shared), None));
+                    if Some(shared) != prepared.shared_x[index] {
+                        let plot = plots[index].take().expect("validated grouped panel");
+                        let kind = plot.kind();
+                        plots[index] =
+                            Some(plot.with_resolved_facet_ranges(kind, Some(shared), None));
+                    }
                 }
             }
         }
