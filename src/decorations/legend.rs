@@ -23,7 +23,9 @@ use crate::render::backend::{
 };
 use crate::Error;
 
+mod continuous;
 pub(crate) mod descriptor;
+pub(crate) use continuous::MeasuredContinuousGuide;
 
 /// The semantic kind of a contributing guide, determined before font discovery.
 /// Entry and glyph compatibility is resolved by the prepared descriptor owner.
@@ -136,6 +138,12 @@ impl GuideKind {
 #[derive(Debug)]
 enum LegendCall {
     Background([f64; 5], FillStyle),
+    Gradient(
+        crate::layout::PanelBox,
+        Point2D,
+        Point2D,
+        Vec<crate::render::backend::GradientStop>,
+    ),
     Fill([Point2D; 4], FillStyle),
     Line([Point2D; 2], LineStyle),
     Point([Point2D; 1], PointStyle),
@@ -147,6 +155,9 @@ impl LegendCall {
         match self {
             Self::Background([x, y, width, height, radius], style) => {
                 backend.draw_rounded_rect(*x, *y, *width, *height, *radius, style)
+            }
+            Self::Gradient(bounds, start, end, stops) => {
+                backend.draw_linear_gradient(*bounds, *start, *end, stops)
             }
             Self::Fill(points, style) => backend.draw_polygon(points, style),
             Self::Line(points, style) => backend.draw_line(points, style),
@@ -177,6 +188,9 @@ impl LegendDrawPlan {
         for call in &self.calls {
             match call {
                 LegendCall::Background(rect, style) => geometry.rounded_rect(*rect, style, None)?,
+                LegendCall::Gradient(bounds, start, end, stops) => {
+                    geometry.linear_gradient(*bounds, *start, *end, stops, None)?;
+                }
                 LegendCall::Fill(points, style) => geometry.polygon(points, style, None)?,
                 LegendCall::Line(points, style) => geometry.line(points, style, None)?,
                 LegendCall::Point(points, style) => {

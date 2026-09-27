@@ -153,9 +153,19 @@ fn selected_payload_preserves_bounds_baselines_and_poisoned_capture_does_no_work
     marks.draw(&mut drawn).unwrap();
     drawn.end().unwrap();
     assert_eq!(marks.geometry.bounds(), drawn.bounds());
-    assert_eq!(payload.colorbar.text.len(), selected.producer_text.len());
+    assert_eq!(
+        payload.colorbar.as_ref().unwrap().text.len(),
+        selected.producer_text.len()
+    );
     assert_eq!(payload.points.len(), 12);
-    for (retained, selected) in payload.colorbar.text.iter().zip(&selected.producer_text) {
+    for (retained, selected) in payload
+        .colorbar
+        .as_ref()
+        .unwrap()
+        .text
+        .iter()
+        .zip(&selected.producer_text)
+    {
         assert_eq!(retained.plan, selected.plan);
         assert_eq!(retained.placement, selected.placement);
     }

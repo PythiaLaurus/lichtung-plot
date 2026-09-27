@@ -45,6 +45,7 @@ impl Plot {
             qq_line: _,
             point_outline: _,
             legend_policy: _,
+            suppress_continuous_guide: _,
             color_label: _,
             heatmap_scale: _,
             heatmap_layout: _,

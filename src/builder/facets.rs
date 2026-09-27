@@ -170,6 +170,7 @@ impl<K: crate::kind::Marker> Plot<K> {
                 && self.y_tick_labels_visible == other.y_tick_labels_visible
                 && self.render_scope == other.render_scope
                 && self.legend_policy == other.legend_policy
+                && self.suppress_continuous_guide == other.suppress_continuous_guide
                 && (self.width, self.height) == (other.width, other.height),
         )
     }
@@ -262,6 +263,7 @@ impl<K: crate::kind::Marker> Plot<K> {
             y_tick_labels_visible: self.y_tick_labels_visible,
             render_scope: self.render_scope.as_deref().map(copy).transpose()?,
             legend_policy: self.legend_policy,
+            suppress_continuous_guide: self.suppress_continuous_guide,
             width: self.width,
             height: self.height,
         })

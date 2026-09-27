@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::Error;
 
-use crate::decorations::legend::{Legend, LegendEntry};
+use crate::decorations::legend::{Legend, LegendEntry, MeasuredContinuousGuide};
 use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::{PanelRequirements, PANEL_HEADER_GAP};
 use crate::layout::fit::{FitFailure, FitScope};
@@ -99,8 +99,59 @@ struct PreparedCanvasRound<'a> {
     canvas_layout: RootFramePlan,
     plots: Vec<Option<Plot>>,
     shared_legend: Option<(String, Arc<[LegendEntry]>)>,
+    shared_guide: Option<&'a PreparedGuideDescriptor>,
     body_probes: Vec<Option<Arc<crate::spec::PlotRenderResult>>>,
     shared_x: &'a [Option<(f64, f64)>],
+}
+
+enum MeasuredCanvasGuide {
+    Discrete(Legend),
+    Continuous(MeasuredContinuousGuide),
+}
+
+impl MeasuredCanvasGuide {
+    fn dimensions(&self) -> (f64, f64) {
+        match self {
+            Self::Discrete(legend) => (legend.compute_box_width(), legend.compute_box_height()),
+            Self::Continuous(guide) => (guide.width, guide.height),
+        }
+    }
+}
+
+enum SharedMeasuredGuide {
+    Discrete(crate::decorations::plan::ResolvedLegend),
+    Continuous {
+        guide: MeasuredContinuousGuide,
+        bounds: PanelBox,
+    },
+}
+
+impl SharedMeasuredGuide {
+    fn observe_feedback(
+        &self,
+        round: &mut crate::layout::kernel::FeedbackRound,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Discrete(legend) => legend.observe_feedback(round),
+            Self::Continuous { guide, bounds } => {
+                round.observe_box(*bounds)?;
+                guide.observe_feedback(round)
+            }
+        }
+    }
+
+    fn select(
+        &self,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<crate::decorations::legend::LegendDrawPlan, Error> {
+        match self {
+            Self::Discrete(legend) => {
+                let (x, y) = legend.bounds.anchor();
+                legend.legend.select(x, y, data)
+            }
+            Self::Continuous { guide, bounds } => guide.select(bounds.x0, bounds.y0, data),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2956,10 +3007,7 @@ impl Canvas {
                     &mut children,
                     &prepared.shared_x,
                     prepared.point_path_hue_groups.as_deref().map(Vec::as_slice),
-                    match prepared.shared_guide.as_ref() {
-                        Some(PreparedGuideDescriptor::Discrete(guide)) => Some(guide),
-                        Some(PreparedGuideDescriptor::Continuous(_)) | None => None,
-                    },
+                    prepared.shared_guide.as_ref(),
                     &prepared.interiors,
                 )?;
                 #[cfg(test)]
@@ -3276,6 +3324,10 @@ impl Canvas {
             }
             let plot = if self.legend_policy == CanvasLegendPolicy::Hidden {
                 plot.with_suppressed_legend()
+            } else if self.legend_policy == CanvasLegendPolicy::Shared
+                && matches!(shared_guide, Some(PreparedGuideDescriptor::Continuous(_)))
+            {
+                plot.with_suppressed_continuous_guide()
             } else {
                 plot
             };
@@ -3337,7 +3389,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans,
         shared_x: &[Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
-        prepared_discrete_guide: Option<&PreparedDiscreteGuide>,
+        prepared_guide: Option<&PreparedGuideDescriptor>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<CanvasPlan, Error> {
         use crate::layout::fit::FitOutcome;
@@ -3349,7 +3401,7 @@ impl Canvas {
             children,
             shared_x,
             prepared_scatter_hues,
-            prepared_discrete_guide,
+            prepared_guide,
             interiors,
         )?;
         let mut compact_changes = true;
@@ -3391,9 +3443,12 @@ impl Canvas {
                 )?;
                 let checkpoint = round.begin_trial()?;
                 #[cfg(test)]
-                let guide_trial = prepared.shared_legend.as_ref().map(|_| {
-                    crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact)
-                });
+                let guide_trial = (prepared.shared_legend.is_some()
+                    || matches!(
+                        prepared.shared_guide,
+                        Some(PreparedGuideDescriptor::Continuous(_))
+                    ))
+                .then(|| crate::orchestrator::measurements::GuideTrial::new(&owner, edge, compact));
                 round.observe_count(edge as usize)?;
                 round.observe_count(usize::from(compact))?;
                 let outcome = self.build_canvas_attempt(
@@ -3461,7 +3516,7 @@ impl Canvas {
         children: &mut crate::decorations::plan::children::ChildPlans<'_>,
         shared_x: &'a [Option<(f64, f64)>],
         prepared_scatter_hues: Option<&[(String, Vec<String>)]>,
-        prepared_discrete_guide: Option<&PreparedDiscreteGuide>,
+        prepared_guide: Option<&'a PreparedGuideDescriptor>,
         interiors: &[Option<crate::layout::interior::PreparedInteriorInputs>],
     ) -> Result<PreparedCanvasRound<'a>, Error> {
         let (width, height) = assigned.dimensions();
@@ -3524,6 +3579,9 @@ impl Canvas {
             if let Some(inputs) = interiors.get(index).and_then(Option::as_ref) {
                 plot = inputs.attach(plot)?;
             }
+            if matches!(prepared_guide, Some(PreparedGuideDescriptor::Continuous(_))) {
+                plot = plot.with_suppressed_continuous_guide();
+            }
             plots.push(Some(plot));
         }
         let fallback_hues;
@@ -3575,13 +3633,16 @@ impl Canvas {
                 full_outer,
                 children,
                 round,
-                prepared_discrete_guide,
+                match prepared_guide {
+                    Some(PreparedGuideDescriptor::Discrete(guide)) => Some(guide),
+                    Some(PreparedGuideDescriptor::Continuous(_)) | None => None,
+                },
             )?
         } else {
             (None, Vec::new())
         };
         if let Some((_, entries)) = &shared_legend {
-            if prepared_discrete_guide.is_none() {
+            if !matches!(prepared_guide, Some(PreparedGuideDescriptor::Discrete(_))) {
                 resources
                     .claim_bytes(
                         u64::try_from(
@@ -3600,6 +3661,7 @@ impl Canvas {
             canvas_layout,
             plots,
             shared_legend,
+            shared_guide: prepared_guide,
             body_probes,
             shared_x,
         })
@@ -3647,7 +3709,11 @@ impl Canvas {
             );
         }
         let mut outer = full_outer;
-        let shared_legend = if let Some((title, entries)) = &prepared.shared_legend {
+        let shared_legend = if prepared.shared_legend.is_some()
+            || matches!(
+                prepared.shared_guide,
+                Some(PreparedGuideDescriptor::Continuous(_))
+            ) {
             let (edge, compact) = guide_trial.expect("shared guide has an owned trial");
             let horizontal = matches!(
                 edge,
@@ -3670,23 +3736,44 @@ impl Canvas {
                         0.0
                     },
             );
-            let legend = match Legend::measure_assigned(
-                title,
-                Arc::clone(entries),
-                available,
-                horizontal,
-                compact,
-                themes.root(),
-                compact_changes,
-                &guide_scope,
-            )? {
-                FitOutcome::Measured(legend) => legend,
-                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+            let measured = match prepared.shared_guide {
+                Some(PreparedGuideDescriptor::Continuous(descriptor)) => {
+                    match MeasuredContinuousGuide::measure(
+                        descriptor,
+                        available,
+                        horizontal,
+                        compact,
+                        themes.root(),
+                        compact_changes,
+                        &guide_scope,
+                    )? {
+                        FitOutcome::Measured(guide) => MeasuredCanvasGuide::Continuous(guide),
+                        FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+                    }
+                }
+                Some(PreparedGuideDescriptor::Discrete(_)) | None => {
+                    let (title, entries) = prepared
+                        .shared_legend
+                        .as_ref()
+                        .expect("prepared discrete guide");
+                    match Legend::measure_assigned(
+                        title,
+                        Arc::clone(entries),
+                        available,
+                        horizontal,
+                        compact,
+                        themes.root(),
+                        compact_changes,
+                        &guide_scope,
+                    )? {
+                        FitOutcome::Measured(legend) => MeasuredCanvasGuide::Discrete(legend),
+                        FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+                    }
+                }
             };
-            let w = legend.compute_box_width();
+            let (w, h) = measured.dimensions();
             #[cfg(test)]
             crate::orchestrator::measurements::guide_body();
-            let h = legend.compute_box_height();
             let (left, bottom) = match edge {
                 crate::LegendPosition::OutsideRight => {
                     outer.x1 -= w + gap;
@@ -3718,8 +3805,19 @@ impl Canvas {
                 }
                 _ => unreachable!("closed shared guide edge order"),
             };
-            let bounds = legend.box_at(left, bottom);
-            Some(crate::decorations::plan::ResolvedLegend { legend, bounds })
+            Some(match measured {
+                MeasuredCanvasGuide::Discrete(legend) => {
+                    let bounds = legend.box_at(left, bottom);
+                    SharedMeasuredGuide::Discrete(crate::decorations::plan::ResolvedLegend {
+                        legend,
+                        bounds,
+                    })
+                }
+                MeasuredCanvasGuide::Continuous(guide) => SharedMeasuredGuide::Continuous {
+                    guide,
+                    bounds: PanelBox::new(left, left + w, bottom, bottom + h),
+                },
+            })
         } else {
             None
         };
@@ -4442,16 +4540,13 @@ impl Canvas {
             canvas_layout,
             shared_legend_draw: shared_legend
                 .as_ref()
-                .map(|legend| {
-                    let (x, y) = legend.bounds.anchor();
-                    legend.legend.select(
-                        x,
-                        y,
+                .map(|guide| {
+                    guide.select(
                         plots
                             .iter()
                             .flatten()
                             .next()
-                            .expect("shared legend has a source")
+                            .expect("shared guide has a source")
                             .data()
                             .with_axis_resources(&resources),
                     )
@@ -4459,7 +4554,10 @@ impl Canvas {
                 .transpose()?,
             plots,
             #[cfg(test)]
-            shared_legend,
+            shared_legend: shared_legend.and_then(|guide| match guide {
+                SharedMeasuredGuide::Discrete(legend) => Some(legend),
+                SharedMeasuredGuide::Continuous { .. } => None,
+            }),
             panels,
             text_panels,
             headers,

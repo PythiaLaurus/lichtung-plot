@@ -47,6 +47,196 @@ fn clip_rects(svg: &str) -> Vec<(f64, f64, f64, f64)> {
 }
 
 #[test]
+fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
+    let plot = |values| {
+        Plot::heatmap(
+            CategoryValues::new("column", ["one", "two"]).unwrap(),
+            CategoryValues::new("row", ["only", "only"]).unwrap(),
+            NumericValues::new("fill", values),
+        )
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1200, 640)
+            .panel(0, 0, plot([0.0, 2.0]))
+            .unwrap()
+            .panel(0, 1, plot([1.0, 5.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "shared-continuous-heatmaps",
+    )
+    .unwrap();
+    assert_eq!(svg.matches("<linearGradient ").count(), 1);
+    let doc = roxmltree::Document::parse(&svg).unwrap();
+    let gradient = doc
+        .descendants()
+        .find(|node| node.has_tag_name("linearGradient"))
+        .unwrap();
+    assert_eq!(gradient.attribute("x1"), gradient.attribute("x2"));
+    assert_ne!(gradient.attribute("y1"), gradient.attribute("y2"));
+    assert_eq!(
+        gradient
+            .children()
+            .filter(|node| node.has_tag_name("stop"))
+            .map(|node| node.attribute("stop-color").unwrap())
+            .collect::<Vec<_>>(),
+        ["#F7FBFF", "#08306B"]
+    );
+    let guide = doc
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-shared-legend"))
+        .unwrap();
+    let texts = guide
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["Fill", "0", "5"]);
+    assert_unique_svg_ids(&svg);
+}
+
+#[test]
+fn shared_beeswarm_guide_has_one_gradient_and_final_domain_labels() {
+    let plot = |values| {
+        Plot::beeswarm(
+            CategoryValues::new("row", ["one", "one"]).unwrap(),
+            NumericValues::new("x", [0.0, 1.0]),
+            NumericValues::new("fill", values),
+        )
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1200, 640)
+            .panel(0, 0, plot([0.0, 1.0]))
+            .unwrap()
+            .panel(0, 1, plot([1.0, 5.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "shared-continuous-beeswarm",
+    )
+    .unwrap();
+    assert_eq!(svg.matches("<linearGradient ").count(), 1);
+    let doc = roxmltree::Document::parse(&svg).unwrap();
+    let guide = doc
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-shared-legend"))
+        .unwrap();
+    let texts = guide
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["Fill", "0", "5"]);
+    assert_unique_svg_ids(&svg);
+}
+
+#[test]
+fn constant_shared_beeswarm_has_one_midpoint_label_and_gradient() {
+    let plot = || {
+        Plot::beeswarm(
+            CategoryValues::new("row", ["one", "one"]).unwrap(),
+            NumericValues::new("x", [0.0, 1.0]),
+            NumericValues::new("fill", [1.0, 1.0]),
+        )
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1200, 640)
+            .panel(0, 0, plot())
+            .unwrap()
+            .panel(0, 1, plot())
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "constant-shared-beeswarm",
+    )
+    .unwrap();
+    assert_eq!(svg.matches("<linearGradient ").count(), 1);
+    let doc = roxmltree::Document::parse(&svg).unwrap();
+    let gradient = doc
+        .descendants()
+        .find(|node| node.has_tag_name("linearGradient"))
+        .unwrap();
+    let stops = gradient
+        .children()
+        .filter(|node| node.has_tag_name("stop"))
+        .map(|node| node.attribute("stop-color").unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(stops.len(), 2);
+    assert_eq!(stops[0], stops[1]);
+    let guide = doc
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-shared-legend"))
+        .unwrap();
+    let texts = guide
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["Fill", "1"]);
+}
+
+#[test]
+fn shared_diverging_heatmap_keeps_center_and_one_missing_key() {
+    let plot = |values| {
+        Plot::heatmap(
+            CategoryValues::new("column", ["one", "two", "one"]).unwrap(),
+            CategoryValues::new("row", ["top", "top", "bottom"]).unwrap(),
+            NumericValues::new("fill", values),
+        )
+        .scale(lichtung_plot::HeatmapScale::Diverging { center: 0.0 })
+    };
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1400, 700)
+            .panel(0, 0, plot([-2.0, 0.0, 1.0]))
+            .unwrap()
+            .panel(0, 1, plot([-3.0, 0.0, 2.0]))
+            .unwrap()
+            .legend_policy(CanvasLegendPolicy::Shared),
+        "shared-diverging-heatmap",
+    )
+    .unwrap();
+    assert_eq!(svg.matches("<linearGradient ").count(), 1);
+    let doc = roxmltree::Document::parse(&svg).unwrap();
+    let stops = doc
+        .descendants()
+        .find(|node| node.has_tag_name("linearGradient"))
+        .unwrap()
+        .children()
+        .filter(|node| node.has_tag_name("stop"))
+        .map(|node| {
+            (
+                node.attribute("offset").unwrap(),
+                node.attribute("stop-color").unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        stops,
+        [
+            ("0.000000", "#3182BD"),
+            ("0.500000", "#F7F7F7"),
+            ("1.000000", "#DE2D26")
+        ]
+    );
+    let guide = doc
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-shared-legend"))
+        .unwrap();
+    let texts = guide
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["Fill", "-3", "0", "3", "Missing"]);
+    assert_unique_svg_ids(&svg);
+}
+
+#[test]
 fn shared_legend_is_global_complete_and_semantically_validated() {
     let first_x = NumericValues::new("x", [1.0, 2.0]);
     let first_y = NumericValues::new("y", [1.0, 2.0]);

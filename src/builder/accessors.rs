@@ -1115,6 +1115,15 @@ impl<K: crate::kind::Marker> Plot<K> {
         self
     }
 
+    pub(crate) fn with_suppressed_continuous_guide(mut self) -> Self {
+        self.suppress_continuous_guide = true;
+        self
+    }
+
+    pub(crate) const fn continuous_guide_suppressed(&self) -> bool {
+        self.suppress_continuous_guide
+    }
+
     pub(crate) const fn parent_owns_axis_gutters(&self) -> bool {
         matches!(self.axis_gutter_owner, super::AxisGutterOwner::Composition)
     }

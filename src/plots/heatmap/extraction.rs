@@ -298,7 +298,7 @@ fn selected_payload_geometry_and_poisoned_capture_preserve_every_operand() {
         assert_eq!(payload.cells.len(), 5);
         assert!(payload.cells[3].cross.is_some());
         assert!(payload.cells[4].text.is_some());
-        assert_eq!(payload.colorbar.stops.len(), 3);
+        assert_eq!(payload.colorbar.as_ref().unwrap().stops.len(), 3);
         assert!(marks
             .geometry
             .bounds()
@@ -392,7 +392,17 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
     else {
         panic!("wrong payload")
     };
-    let title = TextBlock::from_resolved(payload.colorbar.text.last().unwrap().plan.clone());
+    let title = TextBlock::from_resolved(
+        payload
+            .colorbar
+            .as_ref()
+            .unwrap()
+            .text
+            .last()
+            .unwrap()
+            .plan
+            .clone(),
+    );
     let values = marks
         .colorbar_values
         .iter()

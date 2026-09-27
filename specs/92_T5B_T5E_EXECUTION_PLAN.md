@@ -130,12 +130,12 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b1c | COMPLETE | T5b1b | `feat(legend): merge continuous guide contributors` |
 | T5b2 | IN PROGRESS | T5b1 | Umbrella; completes after T5b2a-c |
 | T5b2a | COMPLETE | T5b1 | `refactor(legend): resolve complete private legend roles` |
-| T5b2b | IN PROGRESS | T5b2a | Umbrella; completes after T5b2b1-b3 |
+| T5b2b | COMPLETE | T5b2a | Umbrella; completed with T5b2b3b |
 | T5b2b1 | COMPLETE | T5b2a | `refactor(legend): measure assigned discrete outside flow` |
 | T5b2b2 | COMPLETE | T5b2b1 | `refactor(legend): replace legacy inside packing` |
-| T5b2b3 | IN PROGRESS | T5b2b2 | Umbrella; completes after T5b2b3a-b |
+| T5b2b3 | COMPLETE | T5b2b2 | Umbrella; completed with T5b2b3b |
 | T5b2b3a | COMPLETE | T5b2b2 | `feat(canvas): install merged continuous domains` |
-| T5b2b3b | PENDING | T5b2b3a | `feat(legend): measure and draw shared continuous guides` |
+| T5b2b3b | COMPLETE | T5b2b3a | `feat(legend): measure and draw shared continuous guides` |
 | T5b2c | PENDING | T5b2b | `refactor(layout): connect native guide frame measurement` |
 | T5b3 | PENDING | T5b2 | `feat(layout): allocate measured composition tracks` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
@@ -517,6 +517,22 @@ tests, plus strict Clippy, pass. Logs: `/tmp/opencode/t5b2b3a-lint.log`,
 `/tmp/opencode/t5b2b3a-canvas-unit.log`,
 `/tmp/opencode/t5b2b3a-heatmap-unit.log`, and
 `/tmp/opencode/t5b2b3a-beeswarm-unit.log`.
+
+T5b2b3b closure: Canvas measures the prepared continuous descriptor at each
+assigned outside edge and freezes one title, projected numeric labels, ordered
+gradient stops, and optional missing-key block before capture. A Shared Canvas
+now suppresses child Heatmap/Beeswarm colorbar reserves and paints, while
+retaining the merged data-color domain. The gradient, labels, and theme-owned
+chrome participate in guide fit and root feedback. Ordinary, constant, and
+diverging supported compositions render one gradient with final-domain labels;
+the diverging missing key remains present once. Projected length, compact
+selection, horizontal/vertical placement, Plot-local unaffected fingerprints,
+focused Canvas/producer/Heatmap/Beeswarm tests, and strict Clippy pass. Logs:
+`/tmp/opencode/t5b2b3b-lint.log`,
+`/tmp/opencode/t5b2b3b-continuous-unit.log`,
+`/tmp/opencode/t5b2b3b-canvas-unit.log`, and
+`/tmp/opencode/t5b2b3b-heatmap-integration.log`. T5b2c connects the unified
+guide measurement to native enclosing frames.
 
 Use separate guide intrinsics and assigned-width measurement, exact label plans,
 fixed entry widths before greedy flow, one preferred and one compact flow per

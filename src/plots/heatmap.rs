@@ -262,51 +262,59 @@ pub(crate) fn measure(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let text = context.producer_text()?;
-    let color_label = &prepared.color_label;
-    let guide_scope = context
-        .fit_scope()
-        .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-    let title_width = if prepared.has_missing {
-        (context.panel.height() - 34.0).clamp(40.0, 160.0)
+    let colorbar = if chart.continuous_guide_suppressed() {
+        None
     } else {
-        context.panel.height().clamp(40.0, 180.0)
+        let color_label = &prepared.color_label;
+        let guide_scope = context
+            .fit_scope()
+            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+        let title_width = if prepared.has_missing {
+            (context.panel.height() - 34.0).clamp(40.0, 160.0)
+        } else {
+            context.panel.height().clamp(40.0, 180.0)
+        };
+        let title =
+            TextBlock::from_resolved(text.plan(color_label, "heatmap colorbar title", || {
+                crate::layout::fit::measured(crate::layout::fit::text(
+                    theme,
+                    color_label,
+                    &theme.typography.legend_title,
+                    title_width,
+                    PhysicalTextAlignment::Center,
+                    "heatmap colorbar title",
+                    &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
+                ))
+            })?);
+        let mut values = Vec::new();
+        data.reserve_source(&mut values, prepared.colorbar_values.len())?;
+        for label in &prepared.colorbar_values {
+            values.push(text.plan(label, "heatmap colorbar value", || {
+                Ok(theme.measure_legacy_appearance_text(
+                    label,
+                    &theme.typography.legend_label,
+                    PhysicalTextAlignment::Start,
+                    "heatmap colorbar value",
+                    false,
+                )?)
+            })?);
+        }
+        let value_width = values
+            .iter()
+            .map(crate::layout::ResolvedTextPlan::width)
+            .fold(0.0_f64, f64::max);
+        let reserve = (36.0 + value_width).max(
+            73.0 + title.lines().len().saturating_sub(1) as f64 * title.line_height()
+                + f64::from(theme.typography.legend_label.font_size) / 2.0,
+        ) + 4.0;
+        Some((title, values, reserve))
     };
-    let color_label_block =
-        TextBlock::from_resolved(text.plan(color_label, "heatmap colorbar title", || {
-            crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                color_label,
-                &theme.typography.legend_title,
-                title_width,
-                PhysicalTextAlignment::Center,
-                "heatmap colorbar title",
-                &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
-            ))
-        })?);
-    let mut value_plans = Vec::new();
-    data.reserve_source(&mut value_plans, prepared.colorbar_values.len())?;
-    for label in &prepared.colorbar_values {
-        value_plans.push(text.plan(label, "heatmap colorbar value", || {
-            Ok(theme.measure_legacy_appearance_text(
-                label,
-                &theme.typography.legend_label,
-                PhysicalTextAlignment::Start,
-                "heatmap colorbar value",
-                false,
-            )?)
-        })?);
-    }
-    let value_width = value_plans
-        .iter()
-        .map(crate::layout::ResolvedTextPlan::width)
-        .fold(0.0_f64, f64::max);
-    let colorbar_reserve = (36.0 + value_width).max(
-        73.0 + color_label_block.lines().len().saturating_sub(1) as f64
-            * color_label_block.line_height()
-            + f64::from(theme.typography.legend_label.font_size) / 2.0,
-    ) + 4.0;
     let minimum = prepared.minimum;
+    let colorbar_reserve = colorbar.as_ref().map_or(0.0, |(_, _, reserve)| *reserve);
     if context.panel.width() - colorbar_reserve < minimum.body().0 {
+        let guide_scope = context
+            .fit_scope()
+            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
         return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide, "heatmap: colorbar title does not fit while preserving the minimum 40px plot panel; increase chart width").into());
     }
     let mut body = context.panel;
@@ -443,7 +451,10 @@ pub(crate) fn measure(
         clip: panel,
         cross_style: LineStyle::solid(MISSING_STROKE, 1.0),
         cells: select_cells(prepared, &layout, theme, &annotations, data)?,
-        colorbar: select_colorbar(prepared, &layout, &color_label_block, &value_plans, data)?,
+        colorbar: colorbar
+            .as_ref()
+            .map(|(title, values, _)| select_colorbar(prepared, &layout, title, values, data))
+            .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
 
@@ -457,12 +468,12 @@ pub(crate) fn measure(
         .cells
         .iter()
         .filter_map(|cell| cell.text.as_ref())
-        .chain(&payload.colorbar.text)
+        .chain(payload.colorbar.iter().flat_map(|bar| &bar.text))
         .chain(
             payload
                 .colorbar
-                .missing
                 .iter()
+                .filter_map(|bar| bar.missing.as_ref())
                 .filter_map(|cell| cell.text.as_ref()),
         );
     for text in texts {
@@ -1014,7 +1025,7 @@ pub(crate) struct HeatmapPayload {
     clip: PanelBox,
     cross_style: LineStyle,
     cells: Vec<CellPayload>,
-    colorbar: ColorbarPayload,
+    colorbar: Option<ColorbarPayload>,
 }
 
 #[derive(Debug)]
@@ -1078,13 +1089,14 @@ impl HeatmapPayload {
             }
             Ok(())
         })?;
-        let bar = &self.colorbar;
-        backend.draw_linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops)?;
-        for text in &bar.text {
-            text.draw(backend)?;
-        }
-        if let Some(missing) = &bar.missing {
-            missing.draw(backend, &self.cross_style)?;
+        if let Some(bar) = &self.colorbar {
+            backend.draw_linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops)?;
+            for text in &bar.text {
+                text.draw(backend)?;
+            }
+            if let Some(missing) = &bar.missing {
+                missing.draw(backend, &self.cross_style)?;
+            }
         }
         Ok(())
     }
@@ -1098,13 +1110,14 @@ impl HeatmapPayload {
         for cell in &self.cells {
             cell.geometry(&mut geometry, Some(clip), &self.cross_style)?;
         }
-        let bar = &self.colorbar;
-        geometry.linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops, None)?;
-        for text in &bar.text {
-            geometry.text(text.placement, &text.plan, None)?;
-        }
-        if let Some(missing) = &bar.missing {
-            missing.geometry(&mut geometry, None, &self.cross_style)?;
+        if let Some(bar) = &self.colorbar {
+            geometry.linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops, None)?;
+            for text in &bar.text {
+                geometry.text(text.placement, &text.plan, None)?;
+            }
+            if let Some(missing) = &bar.missing {
+                missing.geometry(&mut geometry, None, &self.cross_style)?;
+            }
         }
         Ok(geometry)
     }

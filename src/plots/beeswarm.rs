@@ -248,46 +248,54 @@ pub(crate) fn measure(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
     let text = context.producer_text()?;
-    let [high_label, low_label] = &prepared.values;
-    let color_label = &prepared.color_label;
-    let guide_scope = context
-        .fit_scope()
-        .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
-    let color_label_block =
-        TextBlock::from_resolved(text.plan(color_label, "beeswarm colorbar title", || {
-            crate::layout::fit::measured(crate::layout::fit::text(
-                theme,
-                color_label,
-                &theme.typography.legend_title,
-                context.panel.height().min(150.0),
-                PhysicalTextAlignment::Center,
-                "beeswarm colorbar title",
-                &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
-            ))
-        })?);
-    let mut values = Vec::new();
-    data.reserve_source(&mut values, 2)?;
-    for label in [high_label, low_label] {
-        values.push(text.plan(label, "beeswarm colorbar value", || {
-            Ok(theme.measure_legacy_appearance_text(
-                label,
-                &theme.typography.legend_label,
-                PhysicalTextAlignment::Start,
-                "beeswarm colorbar value",
-                false,
-            )?)
-        })?);
-    }
-    let value_width = values
-        .iter()
-        .map(crate::layout::ResolvedTextPlan::width)
-        .fold(0.0_f64, f64::max);
-    let colorbar_reserve = (34.0 + value_width).max(
-        65.0 + color_label_block.lines().len().saturating_sub(1) as f64
-            * color_label_block.line_height()
-            + f64::from(theme.typography.legend_label.font_size) / 2.0,
-    ) + 4.0;
+    let colorbar = if chart.continuous_guide_suppressed() {
+        None
+    } else {
+        let [high_label, low_label] = &prepared.values;
+        let color_label = &prepared.color_label;
+        let guide_scope = context
+            .fit_scope()
+            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
+        let title =
+            TextBlock::from_resolved(text.plan(color_label, "beeswarm colorbar title", || {
+                crate::layout::fit::measured(crate::layout::fit::text(
+                    theme,
+                    color_label,
+                    &theme.typography.legend_title,
+                    context.panel.height().min(150.0),
+                    PhysicalTextAlignment::Center,
+                    "beeswarm colorbar title",
+                    &guide_scope.child(crate::layout::AddressRole::GuideTitle, 0)?,
+                ))
+            })?);
+        let mut values = Vec::new();
+        data.reserve_source(&mut values, 2)?;
+        for label in [high_label, low_label] {
+            values.push(text.plan(label, "beeswarm colorbar value", || {
+                Ok(theme.measure_legacy_appearance_text(
+                    label,
+                    &theme.typography.legend_label,
+                    PhysicalTextAlignment::Start,
+                    "beeswarm colorbar value",
+                    false,
+                )?)
+            })?);
+        }
+        let value_width = values
+            .iter()
+            .map(crate::layout::ResolvedTextPlan::width)
+            .fold(0.0_f64, f64::max);
+        let reserve = (34.0 + value_width).max(
+            65.0 + title.lines().len().saturating_sub(1) as f64 * title.line_height()
+                + f64::from(theme.typography.legend_label.font_size) / 2.0,
+        ) + 4.0;
+        Some((title, values, reserve))
+    };
+    let colorbar_reserve = colorbar.as_ref().map_or(0.0, |(_, _, reserve)| *reserve);
     if context.panel.width() - colorbar_reserve < 100.0 {
+        let guide_scope = context
+            .fit_scope()
+            .child(crate::layout::AddressRole::OutsideGuideRight, 0)?;
         return Err(guide_scope.failure(crate::layout::fit::FitKind::LegendOrGuide,
             "beeswarm: colorbar title does not fit while preserving the minimum 100px plot panel; increase chart width"
         ).into());
@@ -327,13 +335,17 @@ pub(crate) fn measure(
         clip: layout.projection.panel_box(),
         zero,
         points,
-        colorbar: select_colorbar(&layout, &color_label_block, &values, prepared.stops, data)?,
+        colorbar: colorbar
+            .as_ref()
+            .map(|(title, values, _)| select_colorbar(&layout, title, values, prepared.stops, data))
+            .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
-    result.producer_text =
-        data.collect_source(payload.colorbar.text.iter().map(|text| Ok(text.clone())))?;
+    if let Some(bar) = &payload.colorbar {
+        result.producer_text = data.collect_source(bar.text.iter().map(|text| Ok(text.clone())))?;
+    }
     result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {
         payload: crate::layout::interior::MarkPayload::Beeswarm(payload),
         geometry,
@@ -346,7 +358,7 @@ pub(crate) struct BeeswarmPayload {
     clip: PanelBox,
     zero: Option<([Point2D; 2], LineStyle)>,
     points: Vec<(Point2D, crate::render::backend::PointStyle)>,
-    colorbar: ColorbarPayload,
+    colorbar: Option<ColorbarPayload>,
 }
 
 #[derive(Debug)]
@@ -369,10 +381,11 @@ impl BeeswarmPayload {
             }
             Ok(())
         })?;
-        let bar = &self.colorbar;
-        backend.draw_linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops)?;
-        for text in &bar.text {
-            text.draw(backend)?;
+        if let Some(bar) = &self.colorbar {
+            backend.draw_linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops)?;
+            for text in &bar.text {
+                text.draw(backend)?;
+            }
         }
         Ok(())
     }
@@ -389,10 +402,11 @@ impl BeeswarmPayload {
         for (point, style) in &self.points {
             geometry.scatter(&[*point], style, clip)?;
         }
-        let bar = &self.colorbar;
-        geometry.linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops, None)?;
-        for text in &bar.text {
-            geometry.text(text.placement, &text.plan, None)?;
+        if let Some(bar) = &self.colorbar {
+            geometry.linear_gradient(bar.bounds, bar.start, bar.end, &bar.stops, None)?;
+            for text in &bar.text {
+                geometry.text(text.placement, &text.plan, None)?;
+            }
         }
         Ok(geometry)
     }
