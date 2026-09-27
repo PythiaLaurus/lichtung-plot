@@ -17,6 +17,7 @@ mod legend;
 mod parent_tests;
 mod planning;
 mod rendering;
+mod tracks;
 
 pub(crate) fn text_census_labels(
     source: &Plot,
@@ -193,20 +194,14 @@ impl FacetPlan {
         )?;
         let mut outer = canvas_layout.panel_box;
         round.observe_canvas(&canvas_layout)?;
-        let provisional = fit::measured(planning::allocate_legacy_grid(
-            source.data(),
-            outer,
-            selectors.rows,
-            selectors.columns,
-            &[],
-            &FitScope::root(),
-        ))?;
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        let data = source.data().with_axis_resources(&resources);
         let mut base_plot = data::base_plot(
             source,
             kind,
             horizontal_axis_label.is_some(),
             vertical_axis_label.is_some(),
-            &theme.prepared_font_environment()?.generation_resources(),
+            &resources,
         )?;
         if let Some(levels) = &prepared_guide.hue_levels {
             let resources = theme.prepared_font_environment()?.generation_resources();
@@ -215,9 +210,29 @@ impl FacetPlan {
                 data.collect_source(levels.iter().map(|level| data.copy_source_string(level)))?,
             );
         }
-        let mut panels =
-            data::extract_panels(source, &selectors, Some(&provisional), source.data())?;
-        data::validate_significance_facet_anchors(source, &panels, source.data())?;
+        let mut panels = data::extract_panels(source, &selectors, None, data)?;
+        data::validate_significance_facet_anchors(source, &panels, data)?;
+        let mut minima = Vec::new();
+        data.reserve_source(&mut minima, panels.len())?;
+        for facet in &panels {
+            let scoped = base_plot
+                .admitted_clone(data)?
+                .with_render_scope(facet.render_scope(data)?);
+            minima.push(scoped.intrinsic_body_minimum(theme)?);
+        }
+        let provisional = fit::measured(tracks::allocate(
+            data,
+            outer,
+            (selectors.rows, selectors.columns),
+            &panels,
+            &minima,
+            &[],
+            theme,
+            &FitScope::root(),
+        ))?;
+        for facet in &mut panels {
+            facet.panel = provisional[facet.row * selectors.columns + facet.column];
+        }
         let facet_scales = source.facet_scales_spec();
 
         let (base_plot, preflight) = legend::preflight_coordinated_panels(
@@ -479,6 +494,7 @@ impl FacetPlan {
                     round,
                     &preflight,
                     &provisional,
+                    &minima,
                     outside,
                     &scope,
                     children,

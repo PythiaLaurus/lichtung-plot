@@ -142,7 +142,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b3 | COMPLETE | T5b2 | Umbrella; completed with T5b3b |
 | T5b3a | COMPLETE | T5b2 | `feat(layout): allocate TextPanel sequence tracks` |
 | T5b3b | COMPLETE | T5b3a | `feat(layout): allocate checked grid spans` |
-| T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
+| T5b4 | IN PROGRESS | T5b3 | Umbrella; completes after T5b4a-b |
+| T5b4a | COMPLETE | T5b3 | `feat(layout): allocate measured facet tracks` |
+| T5b4b | PENDING | T5b4a | `refactor(layout): retire facet parent adapter` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
@@ -639,6 +641,26 @@ Intrinsic and measured-result interfaces must support later specialized parents
 without implementing their packing in this step.
 
 ### T5b4 — Native Facet Parent
+
+Migrate in two commits: T5b4a installs the T5b3 Grid allocation for actual
+facet cells, keeping the existing measured-child and guide trial owners while
+the panel minimum/gutter inputs are transferred. T5b4b removes the remaining
+legacy parent adapter, its equal-grid path, and duplicate per-child probes in
+favor of one native containing-frame plan with unchanged bounded feedback.
+
+T5b4a closure: root-prepared per-panel body intrinsics and column/row-specific
+decoration gutters feed the active quantized Grid axis allocator, including
+declared sparse and trailing tracks. The former equal facet allocator and its
+exact-budget wrapper are gone; child probe/feedback routing remains under the
+current parent owner until T5b4b. An asymmetric fixture proves unequal data
+column widths and aligned row positions. Focused facet-parent, sparse/header,
+fixed/free estimate, four-scale Beeswarm/Waterfall fingerprint, resource-limit,
+and strict Clippy checks pass. Logs: `/tmp/opencode/t5b4a-lint.log`,
+`/tmp/opencode/t5b4a-tracks-unit.log`,
+`/tmp/opencode/t5b4a-parent-unit.log`,
+`/tmp/opencode/t5b4a-beeswarm-fingerprint.log`, and
+`/tmp/opencode/t5b4a-waterfall-fingerprint.log`. T5b4b retires the remaining
+parent adapter.
 
 Replace the facet parent adapter and equal-panel allocation with measured tracks.
 Keep canonical facet cells, fixed/free domain rules, fixed-axis outer ownership,

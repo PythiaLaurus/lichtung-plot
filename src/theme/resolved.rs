@@ -1093,6 +1093,7 @@ pub(crate) struct CompositionAppearance {
     pub(crate) root_title_block: RootTitleBlockAppearance,
     pub(crate) text_panel_inset: f64,
     pub(crate) text_panel_gap: f64,
+    pub(crate) facet_gap: f64,
 }
 
 #[allow(
@@ -1212,6 +1213,7 @@ fn resolved_theme(
             },
             text_panel_inset: 16.0,
             text_panel_gap: 12.0,
+            facet_gap: 12.0,
         },
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
@@ -1565,6 +1567,7 @@ mod tests {
                 },
                 text_panel_inset: 16.0,
                 text_panel_gap: 12.0,
+                facet_gap: 12.0,
             },
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),

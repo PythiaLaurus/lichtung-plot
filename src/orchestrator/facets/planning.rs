@@ -188,6 +188,7 @@ pub(super) fn legacy_parent_adapter(
     round: &mut FeedbackRound,
     probes: &[std::sync::Arc<crate::spec::PlotRenderResult>],
     probe_cells: &[PanelBox],
+    minima: &[(f64, f64)],
     containing_trial: bool,
     scope: &crate::layout::fit::FitScope,
     children: &mut crate::decorations::plan::children::ChildPlans,
@@ -215,12 +216,14 @@ pub(super) fn legacy_parent_adapter(
             },
         ));
     }
-    let cells = match allocate_legacy_grid(
+    let cells = match super::tracks::allocate(
         plot.data(),
         outer,
-        rows,
-        columns,
+        (rows, columns),
+        panels,
+        minima,
         &requirements,
+        theme,
         &scope.child(AddressRole::FacetGrid, 0)?,
     )? {
         FitOutcome::Measured(cells) => cells,
@@ -366,43 +369,6 @@ pub(super) fn legacy_parent_adapter(
         facet.panel = cells[facet.row * columns + facet.column];
     }
     Ok(FitOutcome::Measured(()))
-}
-
-/// Admission boundary for the unchanged equal-panel allocator, not measured tracks.
-pub(super) fn allocate_legacy_grid(
-    data: crate::data::PlotData<'_>,
-    outer: PanelBox,
-    rows: usize,
-    columns: usize,
-    requirements: &[(usize, usize, PanelRequirements)],
-    scope: &crate::layout::fit::FitScope,
-) -> Result<crate::layout::fit::FitOutcome<Vec<PanelBox>>, Error> {
-    let cells = rows
-        .checked_mul(columns)
-        .ok_or_else(|| Error::Render("facet topology overflow".into()))?;
-    let tracks = rows
-        .checked_add(columns)
-        .and_then(|count| count.checked_mul(3))
-        .ok_or_else(|| Error::Render("facet track storage overflow".into()))?;
-    let bytes = cells
-        .checked_mul(std::mem::size_of::<PanelBox>())
-        .and_then(|bytes| {
-            tracks
-                .checked_mul(std::mem::size_of::<f64>())
-                .and_then(|extra| bytes.checked_add(extra))
-        })
-        .ok_or_else(|| Error::Render("facet allocation storage overflow".into()))?;
-    data.claim_source_visits(cells)?;
-    data.claim_source_visits(tracks)?;
-    data.claim_source_bytes(bytes)?;
-    crate::layout::canvas::allocate_composed_grid_fit(
-        outer,
-        rows,
-        columns,
-        requirements,
-        "facet layout",
-        scope,
-    )
 }
 
 pub(super) fn feedback_plot(

@@ -181,7 +181,7 @@ fn outer_roles_use_one_root_producer_without_changing_centered_strips() {
 }
 
 #[test]
-fn legacy_parent_allocation_keeps_exact_fit_and_typed_owner() {
+fn measured_facet_tracks_keep_exact_fit_and_typed_owner() {
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0]),
         crate::NumericValues::new("y", [0.0]),
@@ -190,13 +190,24 @@ fn legacy_parent_allocation_keeps_exact_fit_and_typed_owner() {
     let scope = FitScope::root()
         .child(crate::layout::AddressRole::FacetGrid, 0)
         .unwrap();
+    let theme = crate::Theme::Publication.resolve();
     for width in [80.0, 80.0 - 1.0 / 1024.0] {
-        let outcome = planning::allocate_legacy_grid(
+        let outcome = tracks::allocate(
             plot.data(),
             crate::layout::PanelBox::new(0.0, width, 0.0, 60.0),
-            1,
-            1,
+            (1, 1),
+            &[data::FacetPanel {
+                panel_index: 0,
+                row: 0,
+                column: 0,
+                cell: Vec::new(),
+                rows: vec![0],
+                source_rows: vec![0],
+                panel: crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0),
+            }],
+            &[(80.0, 60.0)],
             &[],
+            &theme,
             &scope,
         )
         .unwrap();
@@ -215,44 +226,61 @@ fn legacy_parent_allocation_keeps_exact_fit_and_typed_owner() {
 
 #[test]
 fn parent_topology_admits_exact_budget_and_does_not_refund_rejected_trials() {
-    use crate::font::canonical::OperationGenerationResources;
     let plot = Plot::scatter(
         crate::NumericValues::new("x", [0.0]),
         crate::NumericValues::new("y", [0.0]),
     )
     .erase();
     let scope = FitScope::root();
-    let bytes = u64::try_from(
-        std::mem::size_of::<crate::layout::PanelBox>() + 6 * std::mem::size_of::<f64>(),
-    )
-    .unwrap();
-    for (visits, storage, admitted) in [(7, bytes, true), (6, bytes, false), (7, bytes - 1, false)]
-    {
-        let resources = OperationGenerationResources::with_test_limits(visits, storage);
-        let data = plot.data().with_axis_resources(&resources);
-        let result = planning::allocate_legacy_grid(
-            data,
-            crate::layout::PanelBox::new(0.0, 79.0, 0.0, 60.0),
-            1,
-            1,
-            &[],
-            &scope,
-        );
-        assert_eq!(result.is_ok(), admitted);
-        if admitted {
-            assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
-            assert_eq!(resources.byte_usage().unwrap(), bytes);
-            assert!(planning::allocate_legacy_grid(
-                data,
-                crate::layout::PanelBox::new(0.0, 80.0, 0.0, 60.0),
-                1,
-                1,
-                &[],
-                &scope
-            )
-            .is_err());
+    let run = |limits: Option<(u128, u64)>, repeat: bool| {
+        let theme = crate::Theme::Publication.resolve();
+        theme.prepare_font_environment().unwrap();
+        let resources = theme
+            .prepared_font_environment()
+            .unwrap()
+            .generation_resources();
+        if let Some((visits, bytes)) = limits {
+            resources.set_test_limits(visits, bytes);
         }
-    }
+        let data = plot.data().with_axis_resources(&resources);
+        let panels = [data::FacetPanel {
+            panel_index: 0,
+            row: 0,
+            column: 0,
+            cell: Vec::new(),
+            rows: vec![0],
+            source_rows: vec![0],
+            panel: crate::layout::PanelBox::new(0.0, 1.0, 0.0, 1.0),
+        }];
+        let attempt = |width| {
+            tracks::allocate(
+                data,
+                crate::layout::PanelBox::new(0.0, width, 0.0, 60.0),
+                (1, 1),
+                &panels,
+                &[(80.0, 60.0)],
+                &[],
+                &theme,
+                &scope,
+            )
+        };
+        let result = attempt(79.0);
+        let second = repeat.then(|| attempt(80.0));
+        (resources, result, second)
+    };
+    let (resources, result, _) = run(None, false);
+    assert!(matches!(result.unwrap(), FitOutcome::Miss(_)));
+    let visits = resources.usage().unwrap().1;
+    let bytes = resources.byte_usage().unwrap();
+    assert!(visits > 0 && bytes > 0);
+    assert!(run(Some((visits - 1, bytes)), false).1.is_err());
+    assert!(run(Some((visits, bytes - 1)), false).1.is_err());
+    let (_, exact, next) = run(Some((visits, bytes)), true);
+    assert!(matches!(exact.unwrap(), FitOutcome::Miss(_)));
+    assert!(
+        next.unwrap().is_err(),
+        "a rejected fit does not refund admitted work"
+    );
 }
 
 #[test]
