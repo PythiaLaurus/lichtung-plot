@@ -339,8 +339,8 @@ impl Plot {
                 for bracket in &significance.brackets {
                     let label = &bracket.label.plan;
                     let style = crate::render::backend::BracketStyle {
-                        color: context.theme.foreground.into(),
-                        width: context.theme.bracket_width,
+                        color: context.theme.annotations.bracket_stroke.paint,
+                        width: context.theme.annotations.bracket_stroke.width,
                         label_color: label.style.paint,
                         font_family: data.copy_source_string(&label.style.stack_source)?,
                         font_size: label.style.font_size,

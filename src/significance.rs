@@ -1096,8 +1096,8 @@ pub(crate) fn render(
     for bracket in &plan.brackets {
         let label = &bracket.label.plan;
         let style = BracketStyle {
-            color: theme.foreground.into(),
-            width: theme.bracket_width,
+            color: theme.annotations.bracket_stroke.paint,
+            width: theme.annotations.bracket_stroke.width,
             label_color: label.style.paint,
             font_family: label.style.stack_source.clone(),
             font_size: label.style.font_size,

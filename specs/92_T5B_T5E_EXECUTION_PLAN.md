@@ -923,7 +923,9 @@ caller styles while centralizing their ownership.
 | T5c1a | COMPLETE | T5c0 | `feat(theme): separate interval and summary strokes` |
 | T5c1b | IN PROGRESS | T5c1a | Umbrella; completes after remaining roles and contrast |
 | T5c1b1 | COMPLETE | T5c1a | `refactor(theme): retire unused line width` |
-| T5c1b2 | PENDING | T5c1b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2 | IN PROGRESS | T5c1b1 | Umbrella; completes after bracket and remaining roles |
+| T5c1b2a | COMPLETE | T5c1b1 | `feat(theme): resolve significance bracket stroke` |
+| T5c1b2b | PENDING | T5c1b2a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -981,6 +983,16 @@ constructor input are removed, not repurposed into a second line-style default.
 Resolved-theme equality, all four preset fixtures, strict Clippy, and focused
 built-in theme checks remain valid. T5c1b2 resolves the actually consumed
 line, point, fill, specialized mark, and annotation roles.
+
+T5c1b2a closure: `ResolvedTheme::bracket_width` is removed. One complete
+`AnnotationAppearance::bracket_stroke` now supplies the same independent RGBA
+paint and finite width to final significance drawing and both bar/distribution
+geometry observations; label typography and exact caller gap remain separate.
+The new role enters resolved-theme equality. A custom private stroke changes
+the annotation identity without changing axis, mark, or label roles; focused
+significance, mixed bar/facet/Canvas, Boxplot bracket, SVG snapshot, and strict
+Clippy checks pass. T5c3 will use this already-resolved paint to close full
+painted stroke clearance before freezing annotation geometry.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

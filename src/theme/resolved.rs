@@ -74,8 +74,6 @@ pub(crate) struct ResolvedTheme {
     pub(crate) font_family: String,
     /// Legacy paint source retained for later legend, mark, and annotation roles.
     pub(crate) foreground: (u8, u8, u8),
-    /// Width of significance bracket strokes in pixels.
-    pub(crate) bracket_width: f32,
     /// Font size in points for annotations, status text, and color scales.
     pub(crate) detail_font_size: u32,
     /// Legacy label-size source retained for later body and annotation roles.
@@ -94,6 +92,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) axes: AxisAppearance,
     /// Complete stroke roles for currently migrated marks.
     pub(crate) marks: MarkAppearance,
+    /// Resolved non-text annotation appearance.
+    pub(crate) annotations: AnnotationAppearance,
     /// Root and panel composition relationships.
     pub(crate) composition: CompositionAppearance,
     font_environment: Arc<OnceLock<Result<PreparedFontEnvironment, String>>>,
@@ -326,7 +326,6 @@ impl PartialEq for ResolvedTheme {
         self.colors == other.colors
             && self.font_family == other.font_family
             && self.foreground == other.foreground
-            && self.bracket_width == other.bracket_width
             && self.detail_font_size == other.detail_font_size
             && self.label_font_size == other.label_font_size
             && self.composition_title_font_size == other.composition_title_font_size
@@ -335,6 +334,7 @@ impl PartialEq for ResolvedTheme {
             && self.typography == other.typography
             && self.axes == other.axes
             && self.marks == other.marks
+            && self.annotations == other.annotations
             && self.composition == other.composition
     }
 }
@@ -937,6 +937,12 @@ pub(crate) struct MarkAppearance {
     pub(crate) summary_stroke: StrokeAppearance,
 }
 
+/// Annotation paths resolve independently of axes, marks, and label typography.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct AnnotationAppearance {
+    pub(crate) bracket_stroke: StrokeAppearance,
+}
+
 /// Structurally present frame appearance.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FrameAppearance {
@@ -1072,7 +1078,6 @@ fn resolved_theme(
         colors,
         font_family: stack.clone(),
         foreground,
-        bracket_width,
         detail_font_size: 14,
         label_font_size: axis_title_font_size,
         composition_title_font_size: title_font_size,
@@ -1157,6 +1162,13 @@ fn resolved_theme(
                 StrokePattern::Solid,
             ),
             summary_stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
+        },
+        annotations: AnnotationAppearance {
+            bracket_stroke: stroke_appearance(
+                foreground_paint,
+                bracket_width,
+                StrokePattern::Solid,
+            ),
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1428,7 +1440,6 @@ mod tests {
             colors,
             font_family: stack.clone(),
             foreground: expected.foreground,
-            bracket_width: expected.bracket_width,
             detail_font_size: 14,
             label_font_size: expected.axis_title_size,
             composition_title_font_size: expected.title_size,
@@ -1518,6 +1529,13 @@ mod tests {
                     pattern: StrokePattern::Solid,
                 },
             },
+            annotations: AnnotationAppearance {
+                bracket_stroke: StrokeAppearance {
+                    paint: foreground,
+                    width: expected.bracket_width,
+                    pattern: StrokePattern::Solid,
+                },
+            },
             composition: CompositionAppearance {
                 root_title_alignment: TitleAlignment::Center,
                 root_subtitle_alignment: None,
@@ -1567,7 +1585,8 @@ mod tests {
             assert!(resolved.marks.uncertainty_stroke.width > 0.0);
             assert!(resolved.marks.summary_stroke.width.is_finite());
             assert!(resolved.marks.summary_stroke.width > 0.0);
-            assert!(resolved.bracket_width.is_finite() && resolved.bracket_width > 0.0);
+            assert!(resolved.annotations.bracket_stroke.width.is_finite());
+            assert!(resolved.annotations.bracket_stroke.width > 0.0);
             assert_eq!(resolved.detail_font_size, 14);
             let (_, expected) = expected_preset(theme);
             assert_eq!(resolved.label_font_size, expected.axis_title_size);
@@ -1626,6 +1645,29 @@ mod tests {
             axis
         );
         assert_ne!(uncertainty, summary);
+    }
+
+    #[test]
+    fn custom_bracket_stroke_changes_annotation_identity_without_recoloring_text_or_axes() {
+        let mut theme = Theme::Nature.resolve();
+        let original = theme.clone();
+        theme.annotations.bracket_stroke.paint = Rgba::rgb(15, 29, 41);
+        theme.annotations.bracket_stroke.width = 2.25;
+        assert_ne!(theme, original);
+        assert_eq!(
+            theme.annotations.bracket_stroke.paint,
+            Rgba::rgb(15, 29, 41)
+        );
+        assert_eq!(
+            theme.annotations.bracket_stroke.width.to_bits(),
+            2.25_f32.to_bits()
+        );
+        assert_eq!(
+            theme.typography.significance_label,
+            original.typography.significance_label
+        );
+        assert_eq!(theme.axes, original.axes);
+        assert_eq!(theme.marks, original.marks);
     }
 
     #[test]
