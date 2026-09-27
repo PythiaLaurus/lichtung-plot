@@ -14,7 +14,7 @@ use crate::font::canonical::PreparedFontEnvironment;
 use crate::layout::{
     PhysicalTextAlignment, ResolvedTextPlan, TextLineHeight, TextPlanInput, TextPlanProvenance,
 };
-use crate::render::backend::{LineStyle, Rgba, StrokePattern, TextAnchor, TextStyle};
+use crate::render::backend::{LineStyle, Rgba, StrokePattern, TextAnchor};
 use crate::{Error, SignificanceMarkStyle, TextWeight};
 
 /// Built-in axis tick-label font size in points.
@@ -901,18 +901,6 @@ impl TextAppearance {
     /// Resolve this role's current line pitch in pixels.
     pub(crate) fn line_height(&self) -> f64 {
         f64::from(self.font_size) * self.line_height_multiplier
-    }
-
-    /// Build the private backend style for a fixed renderer-owned placement.
-    pub(crate) fn backend_style(&self, anchor: TextAnchor, rotation: f64) -> TextStyle {
-        TextStyle {
-            color: self.paint,
-            font_family: self.stack.clone(),
-            font_size: self.font_size,
-            weight: self.weight,
-            anchor,
-            rotation,
-        }
     }
 }
 

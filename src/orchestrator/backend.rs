@@ -1618,10 +1618,15 @@ mod tests {
     }
 
     fn replay_text_style(theme: &crate::theme::ResolvedTheme) -> TextStyle {
-        theme
-            .typography
-            .title
-            .backend_style(TextAnchor::Middle, 0.0)
+        let title = &theme.typography.title;
+        TextStyle {
+            color: title.paint,
+            font_family: title.stack.clone(),
+            font_size: title.font_size,
+            weight: title.weight,
+            anchor: TextAnchor::Middle,
+            rotation: 0.0,
+        }
     }
 
     fn capture_test_plan(

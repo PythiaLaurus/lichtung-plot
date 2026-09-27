@@ -103,8 +103,35 @@ pub(super) fn allocate(
             let title = plot_titles[index]
                 .expect("configured Plot retains prepared text intrinsics")
                 .widths();
-            hard.0 = hard.0.max(title.0 + 16.0);
-            Some((hard, hard.0.max(title.1 + 16.0)))
+            let present = [plot.title_text(), plot.subtitle_text(), plot.caption_text()]
+                .map(|value| value.is_some_and(|text| !text.is_empty()));
+            let text_insets = if present.into_iter().any(|value| value) {
+                32.0
+            } else {
+                0.0
+            };
+            let spacing = &child_theme.composition.root_title_block;
+            let top = if present[0] || present[1] {
+                f64::from(u32::from(present[0])) * child_theme.typography.title.line_height()
+                    + f64::from(u32::from(present[1]))
+                        * child_theme.typography.subtitle.line_height()
+                    + if present[0] && present[1] {
+                        spacing.title_subtitle_gap
+                    } else {
+                        0.0
+                    }
+                    + spacing.title_block_to_content_clearance
+            } else {
+                0.0
+            };
+            let bottom = if present[2] {
+                child_theme.typography.caption.line_height() + spacing.caption_to_content_clearance
+            } else {
+                0.0
+            };
+            hard.1 += top + bottom + if text_insets > 0.0 { 20.0 } else { 0.0 };
+            hard.0 = hard.0.max(title.0 + text_insets);
+            Some((hard, hard.0.max(title.1 + text_insets)))
         } else {
             text_panels[index].map(|text| (text.minimum, text.preferred_width))
         };

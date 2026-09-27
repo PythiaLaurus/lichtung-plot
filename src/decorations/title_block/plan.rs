@@ -88,9 +88,29 @@ impl RootTitleBlockIntrinsics {
 }
 
 impl RootTitleBlockPlan {
+    #[cfg(test)]
+    pub(crate) fn placed_text(
+        &self,
+    ) -> impl Iterator<Item = (PlannedTextPlacement, &ResolvedTextPlan)> {
+        self.roles
+            .iter()
+            .flatten()
+            .map(|role| (role.placement, &role.text))
+    }
+
     pub(crate) fn draw_retained(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         for role in self.roles.iter().flatten() {
             backend.draw_planned_text(role.placement, &role.text)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn geometry(
+        &self,
+        geometry: &mut crate::render::geometry::GeometrySnapshot,
+    ) -> Result<(), Error> {
+        for role in self.roles.iter().flatten() {
+            geometry.text(role.placement, &role.text, None)?;
         }
         Ok(())
     }

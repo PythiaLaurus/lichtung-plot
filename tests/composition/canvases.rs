@@ -88,6 +88,56 @@ fn text_panel_content_stays_top_left_when_its_fill_cell_grows() {
 }
 
 #[test]
+fn plot_local_and_canvas_captions_coexist_in_their_own_spans() {
+    let svg = render_canvas(
+        Canvas::grid(1, 2)
+            .unwrap()
+            .size(1101, 701)
+            .theme(Theme::Nature)
+            .panel(
+                0, 0,
+                Plot::scatter(
+                    NumericValues::new("x", [0.0, 1.0]),
+                    NumericValues::new("y", [1.0, 2.0]),
+                )
+                .theme(Theme::Science)
+                .title("Independent Plot title")
+                .subtitle("Independent Plot subtitle")
+                .caption("Local Plot caption"),
+            )
+            .unwrap()
+            .text_panel(0, 1, lichtung_plot::TextPanel::new("Context", "Neighbor body").unwrap())
+            .unwrap()
+            .title("Canvas root title")
+            .caption("Canvas root caption"),
+        "plot-local-and-canvas-captions",
+    )
+    .unwrap();
+    let doc = roxmltree::Document::parse(&svg).unwrap();
+    for source in [
+        "Independent Plot title", "Independent Plot subtitle", "Local Plot caption",
+        "Canvas root title", "Canvas root caption",
+    ] {
+        assert_eq!(doc.descendants().filter(|node| node.has_tag_name("text") && node.text() == Some(source)).count(), 1,
+            "{source} must be drawn exactly once");
+    }
+    let local = doc.descendants()
+        .find(|node| node.attribute("id") == Some("panel-0-title")).unwrap();
+    assert_eq!(local.descendants().filter(|node| node.has_tag_name("text")).count(), 3);
+    let local_caption = local.descendants().find(|node| node.text() == Some("Local Plot caption")).unwrap();
+    let outer_caption = doc.descendants().find(|node| node.text() == Some("Canvas root caption")).unwrap();
+    let caption_y = local_caption.attribute("y").unwrap().parse::<f64>().unwrap();
+    let root_y = outer_caption.attribute("y").unwrap().parse::<f64>().unwrap();
+    assert!(caption_y < root_y, "local caption stays within its cell, above the root caption");
+    let plot_clip = doc.descendants().find(|node| node.attribute("id") == Some("clip-0")).unwrap();
+    let bounds = plot_clip.descendants().find(|node| node.has_tag_name("rect")).unwrap();
+    let data_bottom = bounds.attribute("y").unwrap().parse::<f64>().unwrap()
+        + bounds.attribute("height").unwrap().parse::<f64>().unwrap();
+    assert!(caption_y > data_bottom, "local caption clears the data projection");
+    assert_unique_svg_ids(&svg);
+}
+
+#[test]
 fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
     let plot = |values| {
         Plot::heatmap(

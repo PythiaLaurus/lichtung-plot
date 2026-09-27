@@ -147,7 +147,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b4b | COMPLETE | T5b4a | `refactor(layout): retire facet parent adapter` |
 | T5b5 | IN PROGRESS | T5b4 | Umbrella; completes after T5b5a-c |
 | T5b5a | COMPLETE | T5b4 | `feat(canvas): allocate measured Canvas cell tracks` |
-| T5b5b | PENDING | T5b5a | `feat(canvas): measure complete Plot-local text` |
+| T5b5b | COMPLETE | T5b5a | `feat(canvas): measure complete Plot-local text` |
 | T5b5c | PENDING | T5b5b | `refactor(canvas): retire duplicate panel probe` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
@@ -717,6 +717,23 @@ parent SVG fingerprints, and strict Clippy pass. Logs:
 `/tmp/opencode/t5b5a-canvas-unit.log`, and
 `/tmp/opencode/t5b5a-legend-bench.log`. T5b5b replaces local panel headers
 with full Plot-local title/subtitle/caption flow.
+
+T5b5b closure: the common `RootTitleBlockPlan` now measures and freezes every
+present embedded Plot title, subtitle, and caption inside its assigned Canvas
+cell. Plot alignment overrides Canvas panel policy, which overrides the Plot's
+resolved theme; a missing subtitle policy follows the final title. The Canvas
+root title/caption remains separate. The old panel-header text producer was
+deleted, and the Canvas font census and prepared Plot widths include local
+captions before font discovery. The measured local body retains the rest of
+the cell. Title/subtitle and simultaneous local/root caption integration,
+row-title conflict, theme ownership, cached/uncached replay, guide pressure,
+and strict Clippy pass. The inspected Canvas root/title SVG snapshot changes
+the embedded title order/alignment and keeps all axis/mark content. Logs:
+`/tmp/opencode/t5b5b-lint.log`, `/tmp/opencode/t5b5b-captions.log`,
+`/tmp/opencode/t5b5b-canvas-unit.log`,
+`/tmp/opencode/t5b5b-legend-bench.log`, and
+`/tmp/opencode/t5b5b-root-snapshot.log`. T5b5c removes the remaining
+layout-only child probe.
 
 Integrate measured tracks with Plot/TextPanel/empty cells, spanning headers and
 row titles. Replace the Canvas parent adapter and `DeferredT5bPanelHeadingInputs`
