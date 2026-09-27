@@ -3913,40 +3913,6 @@ impl Canvas {
             None
         };
         let header_theme = themes.root();
-        let header_outer = outer;
-        let column_header_height = if self.column_headers.is_empty() {
-            0.0
-        } else {
-            f64::from(header_theme.composition_title_font_size) + 18.0
-        };
-        let mut row_header_width = 0.0_f64;
-        for header in &self.row_headers {
-            row_header_width = row_header_width.max(
-                header_theme
-                    .measure_legacy_text(
-                        &header.text,
-                        header_theme.composition_title_font_size,
-                        PhysicalTextAlignment::Center,
-                        "canvas row header",
-                    )?
-                    .width(),
-            );
-        }
-        row_header_width += if self.row_headers.is_empty() {
-            0.0
-        } else {
-            20.0
-        };
-        outer.y1 -= column_header_height;
-        outer.x0 += row_header_width;
-        if outer.width() < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.0
-            || outer.height() < crate::layout::interior::DeferredLegacyPanelMinimum::SIZE.1
-        {
-            return Ok(FitOutcome::Miss(scope.failure(
-                FitKind::TrackOrResidual,
-                "canvas shared headers leave insufficient panel space; enlarge the canvas",
-            )));
-        }
         let provisional = match tracks::allocate(
             outer,
             (self.rows, self.columns),
@@ -3954,11 +3920,12 @@ impl Canvas {
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
+            &self.row_headers,
             &[],
             &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
         )? {
-            FitOutcome::Measured(cells) => cells,
+            FitOutcome::Measured(grid) => grid.cells,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
         if self.category_labels == CanvasCategoryLabels::FirstColumnPerRow {
@@ -4113,20 +4080,23 @@ impl Canvas {
                 requirements[index].2.right = requirements[index].2.right.max(alignment[1]);
             }
         }
-        let cells = match tracks::allocate(
+        let grid = match tracks::allocate(
             outer,
             (self.rows, self.columns),
             &plots,
             prepared.text_panel_intrinsics,
             prepared.plot_intrinsics,
             &self.column_headers,
+            &self.row_headers,
             &requirements,
             &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
         )? {
-            FitOutcome::Measured(cells) => cells,
+            FitOutcome::Measured(grid) => grid,
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
         };
+        let cells = grid.cells;
+        let headers = grid.headers;
         let mut measured = Vec::new();
         let mut requirements = Vec::new();
         fit::reserve(
@@ -4352,77 +4322,6 @@ impl Canvas {
                     "canvas cell requires measured decoration gutters",
                 )?;
             }
-        }
-        let mut headers = Vec::new();
-        crate::render::backend::reserve_text_records(
-            &mut headers,
-            self.column_headers.len() + self.row_headers.len(),
-            header_theme.prepared_font_environment()?,
-        )?;
-        for (header_index, header) in self.column_headers.iter().enumerate() {
-            let left = cells[header.start].x0;
-            let right = cells[header.start + header.span - 1].x1;
-            let appearance = header_theme.legacy_text_appearance(
-                header_theme.composition_title_font_size,
-                crate::TextWeight::Normal,
-            );
-            let plan = match fit::text(
-                header_theme,
-                &header.text,
-                &appearance,
-                right - left,
-                PhysicalTextAlignment::Center,
-                "Canvas column header",
-                &scope.child(crate::layout::AddressRole::CanvasHeader, header_index)?,
-            )? {
-                FitOutcome::Measured(plan)
-                    if plan.lines.len() == 1 && plan.height() <= column_header_height =>
-                {
-                    plan
-                }
-                FitOutcome::Measured(_) => {
-                    return Ok(FitOutcome::Miss(
-                        scope
-                            .child(crate::layout::AddressRole::CanvasHeader, header_index)?
-                            .failure(
-                                FitKind::Text,
-                                "Canvas column header exceeds its assigned header band",
-                            ),
-                    ))
-                }
-                FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
-            };
-            headers.push(CanvasHeaderPlan {
-                text: crate::render::backend::PlacedText::from_deferred_first_line(
-                    plan,
-                    Point2D::new(
-                        f64::midpoint(left, right).round(),
-                        (header_outer.y1 - column_header_height / 2.0).round(),
-                    ),
-                    crate::render::backend::TextAnchor::Middle,
-                    0.0,
-                ),
-            });
-        }
-        for header in &self.row_headers {
-            let bottom = cells[(header.start + header.span - 1) * self.columns].y0;
-            let top = cells[header.start * self.columns].y1;
-            headers.push(CanvasHeaderPlan {
-                text: crate::render::backend::PlacedText::middle(
-                    header_theme.measure_legacy_text(
-                        &header.text,
-                        header_theme.composition_title_font_size,
-                        PhysicalTextAlignment::Center,
-                        "canvas row header",
-                    )?,
-                    Point2D::new(
-                        (header_outer.x0 + row_header_width / 2.0).round(),
-                        f64::midpoint(bottom, top).round(),
-                    ),
-                    crate::render::backend::TextAnchor::Middle,
-                    0.0,
-                ),
-            });
         }
         let row_titles = self.plan_row_titles(&cells, header_theme)?;
         #[cfg(test)]

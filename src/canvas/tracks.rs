@@ -1,13 +1,17 @@
 //! Canvas Grid tracks use the same quantized allocator as facet and TextPanel
 //! owners while keeping each Plot's theme and declared sparse coordinates.
 
-use super::{text_panel::TextPanelIntrinsics, CanvasHeader, ResolvedCanvasThemes};
+use super::{
+    text_panel::TextPanelIntrinsics, CanvasHeader, CanvasHeaderPlan, ResolvedCanvasThemes,
+};
 use crate::layout::canvas::PanelRequirements;
-use crate::layout::fit::{FitOutcome, FitScope};
+use crate::layout::fit::{self, FitOutcome, FitScope};
 use crate::layout::kernel::{
     allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
 };
+use crate::layout::PhysicalTextAlignment;
 use crate::layout::{AddressRole, ComponentAddress, PanelBox};
+use crate::render::backend::{PlacedText, Point2D, TextAnchor};
 use crate::{Error, Plot};
 
 #[expect(
@@ -26,6 +30,11 @@ fn checked(value: i128) -> Result<i64, Error> {
     i64::try_from(value).map_err(|_| Error::Render("Canvas track arithmetic overflowed".into()))
 }
 
+pub(super) struct CanvasGridAssignment {
+    pub cells: Vec<PanelBox>,
+    pub headers: Vec<CanvasHeaderPlan>,
+}
+
 #[expect(
     clippy::too_many_arguments,
     clippy::too_many_lines,
@@ -38,10 +47,11 @@ pub(super) fn allocate(
     text_panels: &[Option<TextPanelIntrinsics>],
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
+    row_headers: &[CanvasHeader],
     gutters: &[(usize, usize, PanelRequirements)],
     themes: &ResolvedCanvasThemes,
     scope: &FitScope,
-) -> Result<FitOutcome<Vec<PanelBox>>, Error> {
+) -> Result<FitOutcome<CanvasGridAssignment>, Error> {
     let (rows, columns) = shape;
     let count = rows
         .checked_mul(columns)
@@ -60,6 +70,48 @@ pub(super) fn allocate(
     let resources = theme.prepared_font_environment()?.generation_resources();
     let gap = required(theme.composition.canvas_grid_gap)?;
     let em = required(f64::from(theme.composition_title_font_size))?;
+    let appearance =
+        theme.legacy_text_appearance(theme.composition_title_font_size, crate::TextWeight::Normal);
+    let mut row_header_plans = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut row_header_plans,
+        row_headers.len(),
+        "Canvas row-header plans",
+    )?;
+    let mut row_header_width = 0.0_f64;
+    for header in row_headers {
+        if header.span == 0
+            || header
+                .start
+                .checked_add(header.span)
+                .is_none_or(|end| end > rows)
+        {
+            return Err(Error::Render(
+                "Canvas row header span is outside declared Grid tracks".into(),
+            ));
+        }
+        let plan = theme.measure_legacy_appearance_text(
+            &header.text,
+            &appearance,
+            PhysicalTextAlignment::Center,
+            "Canvas row header intrinsic",
+            false,
+        )?;
+        row_header_width = row_header_width.max(plan.width());
+        row_header_plans.push(plan);
+    }
+    if !row_headers.is_empty() {
+        row_header_width += theme.composition.row_header_padding;
+    }
+    let header_outer = outer;
+    let outer = PanelBox::new(outer.x0 + row_header_width, outer.x1, outer.y0, outer.y1);
+    if outer.width() <= 0.0 {
+        return Ok(FitOutcome::Miss(scope.failure(
+            FitKind::TrackOrResidual,
+            "Canvas row headers leave no width for cell tracks",
+        )));
+    }
     let mut column_insets = Vec::new();
     let mut row_insets = Vec::new();
     crate::layout::fit::reserve(theme, &mut column_insets, columns, "Canvas column gutters")?;
@@ -102,7 +154,10 @@ pub(super) fn allocate(
         width_count,
         "Canvas column requirements",
     )?;
-    crate::layout::fit::reserve(theme, &mut heights, count, "Canvas row requirements")?;
+    let height_count = count
+        .checked_add(row_headers.len())
+        .ok_or_else(|| Error::Render("Canvas row-header requirement count overflowed".into()))?;
+    crate::layout::fit::reserve(theme, &mut heights, height_count, "Canvas row requirements")?;
     for index in 0..count {
         let minimum = if let Some(plot) = &plots[index] {
             let child_theme = themes
@@ -164,6 +219,36 @@ pub(super) fn allocate(
             address: &owners[index],
         });
     }
+    let mut row_header_owners = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut row_header_owners,
+        row_headers.len(),
+        "Canvas row-header owners",
+    )?;
+    for index in 0..row_headers.len() {
+        let ordinal = column_headers
+            .len()
+            .checked_add(index)
+            .and_then(|index| u32::try_from(index).ok())
+            .ok_or_else(|| Error::Render("Canvas row-header address overflowed".into()))?;
+        row_header_owners.push(ComponentAddress::root().child(AddressRole::CanvasHeader, ordinal)?);
+    }
+    for ((header, plan), owner) in row_headers
+        .iter()
+        .zip(&row_header_plans)
+        .zip(&row_header_owners)
+    {
+        let height = required(plan.height())?;
+        heights.push(GridRequirement {
+            start: header.start,
+            span: header.span,
+            hard: height,
+            preferred: height,
+            fill: false,
+            address: owner,
+        });
+    }
     let mut header_owners = Vec::new();
     crate::layout::fit::reserve(
         theme,
@@ -171,8 +256,6 @@ pub(super) fn allocate(
         column_headers.len(),
         "Canvas header owners",
     )?;
-    let appearance =
-        theme.legacy_text_appearance(theme.composition_title_font_size, crate::TextWeight::Normal);
     for (index, header) in column_headers.iter().enumerate() {
         if header.span == 0
             || header
@@ -256,6 +339,55 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
+    let mut x_positions = Vec::new();
+    crate::layout::fit::reserve(theme, &mut x_positions, columns.len(), "Canvas x positions")?;
+    let mut cursor = i128::from(x0);
+    for (index, &width) in columns.iter().enumerate() {
+        cursor += i128::from(column_insets[index][0]);
+        x_positions.push(checked(cursor)?);
+        cursor += i128::from(width) + i128::from(column_insets[index][1]);
+        if index + 1 < columns.len() {
+            cursor += i128::from(gap);
+        }
+    }
+    let mut column_plans = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut column_plans,
+        column_headers.len(),
+        "Canvas measured column headers",
+    )?;
+    let mut header_height = 0.0_f64;
+    for (index, header) in column_headers.iter().enumerate() {
+        let end = header.start + header.span - 1;
+        let left = pixels(x_positions[header.start]);
+        let right = pixels(checked(
+            i128::from(x_positions[end]) + i128::from(columns[end]),
+        )?);
+        let plan = match fit::text(
+            theme,
+            &header.text,
+            &appearance,
+            right - left,
+            PhysicalTextAlignment::Center,
+            "Canvas column header",
+            &FitScope::new(&header_owners[index], 0),
+        )? {
+            FitOutcome::Measured(plan) => plan,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        header_height = header_height.max(plan.height() + theme.composition.column_header_padding);
+        column_plans.push((plan, left, right));
+    }
+    let header_quanta = required(header_height)?;
+    let y1 = checked(i128::from(y1) - i128::from(header_quanta))?;
+    let height = height - i128::from(header_quanta);
+    if height <= 0 {
+        return Ok(FitOutcome::Miss(scope.failure(
+            FitKind::TrackOrResidual,
+            "Canvas measured column headers leave no row tracks",
+        )));
+    }
     let rows = match allocate_grid_axis(
         &row_base,
         &heights,
@@ -270,19 +402,8 @@ pub(super) fn allocate(
         FitOutcome::Measured(value) => value.sizes,
         FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
     };
-    let mut x_positions = Vec::new();
     let mut y_positions = Vec::new();
-    crate::layout::fit::reserve(theme, &mut x_positions, columns.len(), "Canvas x positions")?;
     crate::layout::fit::reserve(theme, &mut y_positions, rows.len(), "Canvas y positions")?;
-    let mut cursor = i128::from(x0);
-    for (index, &width) in columns.iter().enumerate() {
-        cursor += i128::from(column_insets[index][0]);
-        x_positions.push(checked(cursor)?);
-        cursor += i128::from(width) + i128::from(column_insets[index][1]);
-        if index + 1 < columns.len() {
-            cursor += i128::from(gap);
-        }
-    }
     let mut cursor = i128::from(y1);
     for (index, &height) in rows.iter().enumerate() {
         cursor -= i128::from(row_insets[index][1]);
@@ -310,7 +431,48 @@ pub(super) fn allocate(
             ));
         }
     }
-    Ok(FitOutcome::Measured(cells))
+    let mut headers = Vec::new();
+    let header_count = column_headers
+        .len()
+        .checked_add(row_headers.len())
+        .ok_or_else(|| Error::Render("Canvas header storage overflowed".into()))?;
+    crate::render::backend::reserve_text_records(
+        &mut headers,
+        header_count,
+        theme.prepared_font_environment()?,
+    )?;
+    for (plan, left, right) in column_plans {
+        headers.push(CanvasHeaderPlan {
+            text: PlacedText::middle(
+                plan,
+                Point2D::new(
+                    f64::midpoint(left, right).round(),
+                    (header_outer.y1 - pixels(header_quanta) / 2.0).round(),
+                ),
+                TextAnchor::Middle,
+                0.0,
+            ),
+        });
+    }
+    for (header, plan) in row_headers.iter().zip(row_header_plans) {
+        let top = cells[header.start * columns.len()].y1;
+        let bottom = cells[(header.start + header.span - 1) * columns.len()].y0;
+        headers.push(CanvasHeaderPlan {
+            text: PlacedText::middle(
+                plan,
+                Point2D::new(
+                    (header_outer.x0 + row_header_width / 2.0).round(),
+                    f64::midpoint(bottom, top).round(),
+                ),
+                TextAnchor::Middle,
+                0.0,
+            ),
+        });
+    }
+    Ok(FitOutcome::Measured(CanvasGridAssignment {
+        cells,
+        headers,
+    }))
 }
 
 #[cfg(test)]
@@ -325,12 +487,13 @@ mod tests {
         let text = super::super::TextPanel::new("A", "B").unwrap();
         let mut intrinsics = [None; 4];
         intrinsics[0] = Some(TextPanelIntrinsics::prepare(&text, themes.root()).unwrap());
-        let FitOutcome::Measured(cells) = allocate(
+        let FitOutcome::Measured(grid) = allocate(
             PanelBox::new(0.0, 400.0, 0.0, 300.0),
             (2, 2),
             &plots,
             &intrinsics,
             &plot_titles,
+            &[],
             &[],
             &[],
             &themes,
@@ -339,6 +502,7 @@ mod tests {
         .unwrap() else {
             panic!("declared trailing Canvas cells must fit");
         };
+        let cells = grid.cells;
         assert_eq!(cells.len(), 4);
         assert!((cells[1].x0 - cells[0].x1 - 12.0).abs() < 1.0 / 1024.0);
         assert!((cells[0].y0 - cells[2].y1 - 12.0).abs() < 1.0 / 1024.0);
@@ -356,12 +520,13 @@ mod tests {
             Some(TextPanelIntrinsics::prepare(&long, themes.root()).unwrap()),
             Some(TextPanelIntrinsics::prepare(&short, themes.root()).unwrap()),
         ];
-        let FitOutcome::Measured(cells) = allocate(
+        let FitOutcome::Measured(grid) = allocate(
             PanelBox::new(0.0, 700.0, 0.0, 320.0),
             (1, 2),
             &plots,
             &intrinsics,
             &[None; 2],
+            &[],
             &[],
             &[],
             &themes,
@@ -370,6 +535,7 @@ mod tests {
         .unwrap() else {
             panic!("both assigned TextPanel cells must fit");
         };
+        let cells = grid.cells;
         assert!(cells[0].width() > cells[1].width());
         assert!((cells[1].x0 - cells[0].x1 - 12.0).abs() < 1.0 / 1024.0);
         assert_eq!(cells[0].y0.to_bits(), cells[1].y0.to_bits());
@@ -395,7 +561,7 @@ mod tests {
             "header span fixture",
         )
         .unwrap();
-        let FitOutcome::Measured(cells) = allocate(
+        let FitOutcome::Measured(grid) = allocate(
             PanelBox::new(0.0, 700.0, 0.0, 320.0),
             (1, 3),
             &plots,
@@ -403,15 +569,49 @@ mod tests {
             &[None; 3],
             &[header],
             &[],
+            &[],
             &themes,
             &FitScope::root(),
         )
         .unwrap() else {
             panic!("spanning header and trailing empty cell must fit");
         };
+        let cells = grid.cells;
         assert_eq!(cells.len(), 3);
         assert!(cells[1].x1 - cells[0].x0 >= hard);
         assert!(cells[2].width() > 0.0);
         assert!((cells[2].x0 - cells[1].x1 - 12.0).abs() < 1.0 / 1024.0);
+    }
+
+    #[test]
+    fn spanning_row_header_owns_its_left_track_and_vertical_span() {
+        let plots: Vec<Option<Plot>> = [None, None].into();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let row = CanvasHeader {
+            start: 0,
+            span: 2,
+            text: "Paired rows".into(),
+        };
+        let FitOutcome::Measured(grid) = allocate(
+            PanelBox::new(0.0, 300.0, 0.0, 120.0),
+            (2, 1),
+            &plots,
+            &[None; 2],
+            &[None; 2],
+            &[],
+            &[row],
+            &[],
+            &themes,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("the measured row header must fit its two declared rows");
+        };
+        assert_eq!(grid.headers.len(), 1);
+        assert_eq!(grid.headers[0].text.plan.source, "Paired rows");
+        assert!(grid.cells[0].x0 > 0.0);
+        assert_eq!(grid.cells[0].x0.to_bits(), grid.cells[1].x0.to_bits());
+        assert!(grid.headers[0].text.placement.position.y > grid.cells[1].y0);
+        assert!(grid.headers[0].text.placement.position.y < grid.cells[0].y1);
     }
 }

@@ -151,7 +151,7 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b5c | COMPLETE | T5b5b | `refactor(canvas): retire duplicate panel probe` |
 | T5b5d | IN PROGRESS | T5b5c | Umbrella; completes after T5b5d1a-d2 |
 | T5b5d1a | COMPLETE | T5b5c | `feat(canvas): constrain spanning header columns` |
-| T5b5d1b | PENDING | T5b5d1a | `feat(canvas): measure header bands` |
+| T5b5d1b | COMPLETE | T5b5d1a | `feat(canvas): measure header bands` |
 | T5b5d2 | PENDING | T5b5d1b | `feat(canvas): allocate measured row titles` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
 | T5b7 | PENDING | T5b6 | `test(layout): close native composition ownership` |
@@ -767,6 +767,20 @@ titles, root capture, Canvas admission, and strict Clippy pass. Logs:
 `/tmp/opencode/t5b5d1a-tracks-unit.log`,
 `/tmp/opencode/t5b5d1a-headers-integration.log`, and
 `/tmp/opencode/t5b5d1a-producer.log`.
+
+T5b5d1b closure: measured column-header text now determines one top header
+band after column spans receive their widths and before Canvas rows allocate.
+Long headers wrap completely instead of being rejected by a fixed single-line
+band. Row-header text determines its left nonfill track and contributes its
+actual height over the declared row span. Both are frozen once in the active
+Grid result and drawn from that result; the separate fixed-height header
+placement path was removed. Focused Canvas tracks, multi-line header SVG,
+row-header spans, shared headers/ranges, row-title compatibility, exact Canvas
+admission, and strict Clippy pass. Logs: `/tmp/opencode/t5b5d1b-lint.log`,
+`/tmp/opencode/t5b5d1b-tracks-unit.log`,
+`/tmp/opencode/t5b5d1b-wrapped-header.log`, and
+`/tmp/opencode/t5b5d1b-admission.log`. T5b5d2 moves row titles into the same
+Grid allocation.
 
 Integrate measured tracks with Plot/TextPanel/empty cells, spanning headers and
 row titles. Replace the Canvas parent adapter and `DeferredT5bPanelHeadingInputs`

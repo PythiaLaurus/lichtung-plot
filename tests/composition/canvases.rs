@@ -185,6 +185,53 @@ fn plot_local_and_canvas_captions_coexist_in_their_own_spans() {
 }
 
 #[test]
+fn narrow_spanning_canvas_header_wraps_completely_above_its_cells() {
+    let heading = "Measurement reporting period and independent longitudinal reference";
+    let svg = render_canvas(
+        Canvas::grid(1, 1)
+            .unwrap()
+            .size(220, 400)
+            .column_header(0, 1, heading)
+            .unwrap()
+            .text_panel(
+                0,
+                0,
+                lichtung_plot::TextPanel::new("Content", "Body").unwrap(),
+            )
+            .unwrap(),
+        "wrapped-canvas-header",
+    )
+    .unwrap();
+    let document = roxmltree::Document::parse(&svg).unwrap();
+    let header = document
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-shared-headers"))
+        .unwrap();
+    let words = header
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.text())
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>();
+    assert_eq!(words, heading.split_whitespace().collect::<Vec<_>>());
+    let body = document
+        .descendants()
+        .find(|node| node.has_tag_name("text") && node.text() == Some("Content"))
+        .unwrap();
+    let body_y = body.attribute("y").unwrap().parse::<f64>().unwrap();
+    let header_y = header
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .filter_map(|node| node.attribute("y"))
+        .map(|value| value.parse::<f64>().unwrap())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        header_y < body_y,
+        "wrapped header must clear its assigned cell"
+    );
+}
+
+#[test]
 fn continuous_shared_heatmaps_draw_one_merged_guide_without_local_colorbars() {
     let plot = |values| {
         Plot::heatmap(
