@@ -2,7 +2,9 @@
 
 use super::{TextPanel, TextPanelPlan};
 use crate::layout::fit::{self, FitOutcome, FitScope};
-use crate::layout::kernel::{allocate_tracks, nearest_spatial_quanta, FitKind, TrackSpec};
+use crate::layout::kernel::{
+    allocate_grid_axis, nearest_spatial_quanta, FitKind, GridRequirement, TrackSpec,
+};
 use crate::layout::{AddressRole, PanelBox, PhysicalTextAlignment, TextBlock};
 use crate::render::backend::{PlannedTextPlacement, Point2D, TextAnchor};
 use crate::theme::{ResolvedTheme, TextAppearance};
@@ -36,6 +38,8 @@ impl TextPanelPlan {
         scope: &FitScope,
     ) -> Result<FitOutcome<Self>, Error> {
         let owner = scope.child(AddressRole::TextPanelContent, index)?;
+        let title_scope = owner.child(AddressRole::TextPanelTitle, 0)?;
+        let body_scope = owner.child(AddressRole::TextPanelBody, 0)?;
         let [title_style, body_style] = text_appearance(theme);
         let (title_hard, title_preferred) = fit::intrinsic_widths(
             theme,
@@ -66,34 +70,61 @@ impl TextPanelPlan {
             .checked_sub(y0)
             .ok_or_else(|| Error::Render("TextPanel height overflowed".into()))?;
         let resources = theme.prepared_font_environment()?.generation_resources();
-        let hard = title_hard.max(body_hard);
-        let width_spec = TrackSpec {
-            min: nearest_spatial_quanta(crate::layout::kernel::required_length(hard)?)?,
-            preferred: nearest_spatial_quanta(crate::layout::kernel::required_length(
-                title_preferred.max(body_preferred).max(hard),
-            )?)?,
+        let hard = nearest_spatial_quanta(crate::layout::kernel::required_length(
+            title_hard.max(body_hard),
+        )?)?;
+        let column = TrackSpec {
+            min: 0,
+            preferred: 0,
             max: None,
             flexible: true,
         };
-        let assigned = match allocate_tracks(
-            &[width_spec],
+        let widths = [
+            GridRequirement {
+                start: 0,
+                span: 1,
+                hard: nearest_spatial_quanta(crate::layout::kernel::required_length(title_hard)?)?,
+                preferred: nearest_spatial_quanta(crate::layout::kernel::required_length(
+                    title_preferred.max(title_hard),
+                )?)?,
+                fill: false,
+                address: &title_scope.address,
+            },
+            GridRequirement {
+                start: 0,
+                span: 1,
+                hard: nearest_spatial_quanta(crate::layout::kernel::required_length(body_hard)?)?,
+                preferred: nearest_spatial_quanta(crate::layout::kernel::required_length(
+                    body_preferred.max(body_hard),
+                )?)?,
+                fill: false,
+                address: &body_scope.address,
+            },
+        ];
+        let assigned = match allocate_grid_axis(
+            &[column],
+            &widths,
             width,
             [inset, inset],
             0,
+            None,
             true,
             &resources,
             &owner,
         )? {
             FitOutcome::Measured(assigned) => assigned.sizes[0],
-            FitOutcome::Miss(_)
-                if i128::from(width) - 2 * i128::from(inset) < i128::from(width_spec.min) =>
-            {
+            FitOutcome::Miss(_) if i128::from(width) - 2 * i128::from(inset) < i128::from(hard) => {
                 let role = if title_hard >= body_hard {
                     AddressRole::TextPanelTitle
                 } else {
                     AddressRole::TextPanelBody
                 };
-                return Ok(FitOutcome::Miss(owner.child(role, 0)?.failure(
+                let child = if role == AddressRole::TextPanelTitle {
+                    &title_scope
+                } else {
+                    &body_scope
+                };
+                return Ok(FitOutcome::Miss(child.failure(
                     FitKind::Text,
                     "TextPanel hard unbroken text exceeds its assigned content width",
                 )));
@@ -108,7 +139,7 @@ impl TextPanelPlan {
             maximum_width,
             PhysicalTextAlignment::Start,
             "text panel title",
-            &owner.child(AddressRole::TextPanelTitle, 0)?,
+            &title_scope,
         )? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -120,7 +151,7 @@ impl TextPanelPlan {
             maximum_width,
             PhysicalTextAlignment::Start,
             "text panel body",
-            &owner.child(AddressRole::TextPanelBody, 0)?,
+            &body_scope,
         )? {
             FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
             FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
@@ -129,17 +160,37 @@ impl TextPanelPlan {
             nearest_spatial_quanta(crate::layout::kernel::required_length(title.height())?)?;
         let body_height =
             nearest_spatial_quanta(crate::layout::kernel::required_length(body.height())?)?;
-        let rows = [title_height, body_height].map(|size| TrackSpec {
-            min: size,
-            preferred: size,
+        let rows = [TrackSpec {
+            min: 0,
+            preferred: 0,
             max: None,
             flexible: false,
-        });
-        let allocation = match allocate_tracks(
+        }; 2];
+        let row_children = [
+            GridRequirement {
+                start: 0,
+                span: 1,
+                hard: title_height,
+                preferred: title_height,
+                fill: false,
+                address: &title_scope.address,
+            },
+            GridRequirement {
+                start: 1,
+                span: 1,
+                hard: body_height,
+                preferred: body_height,
+                fill: false,
+                address: &body_scope.address,
+            },
+        ];
+        let allocation = match allocate_grid_axis(
             &rows,
+            &row_children,
             height,
             [inset, inset],
             gap,
+            None,
             false,
             &resources,
             &owner,

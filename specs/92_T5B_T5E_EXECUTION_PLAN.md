@@ -139,9 +139,9 @@ No broader nesting, public alignment builders, or new guide positions are added.
 | T5b2c | COMPLETE | T5b2b | Umbrella; completed with T5b2c2 |
 | T5b2c1 | COMPLETE | T5b2b | `refactor(layout): resolve guide frame gaps from themes` |
 | T5b2c2 | COMPLETE | T5b2c1 | `refactor(layout): unify assigned outside guide frames` |
-| T5b3 | IN PROGRESS | T5b2 | Umbrella; completes after T5b3a-b |
+| T5b3 | COMPLETE | T5b2 | Umbrella; completed with T5b3b |
 | T5b3a | COMPLETE | T5b2 | `feat(layout): allocate TextPanel sequence tracks` |
-| T5b3b | PENDING | T5b3a | `feat(layout): allocate checked grid spans` |
+| T5b3b | COMPLETE | T5b3a | `feat(layout): allocate checked grid spans` |
 | T5b4 | PENDING | T5b3 | `refactor(layout): migrate native facet composition` |
 | T5b5 | PENDING | T5b4 | `feat(canvas): lay out complete panel text and tracks` |
 | T5b6 | PENDING | T5b5 | `refactor(canvas): integrate native shared axes and guides` |
@@ -607,6 +607,20 @@ admission/capture, and strict Clippy pass. Logs: `/tmp/opencode/t5b3a-lint.log`,
 `/tmp/opencode/t5b3a-text-panel-integration.log`, and
 `/tmp/opencode/t5b3a-canvas-admission.log`. T5b3b adds Grid and spans to this
 same producer.
+
+T5b3b closure: the active TextPanel producer now assigns its one-column,
+two-row Grid in column-before-row order, measuring both title and body only
+after the column receives its width. The same quantized track allocator admits
+Grid topology before track arrays, orders spans by length and canonical child
+address, raises covered flexible tracks by capped equal surplus, and rechecks
+all hard spans after the single allocation. Tests cover a spanning header,
+overlapping feasible/infeasible spans, capped redistribution, duplicate and
+invalid coordinates, empty children, sparse noncollapsing trailing tracks,
+TextPanel placement, Canvas admission/capture, and strict Clippy. Logs:
+`/tmp/opencode/t5b3b-lint.log`,
+`/tmp/opencode/t5b3b-grid-unit.log`,
+`/tmp/opencode/t5b3b-text-panel-integration.log`, and
+`/tmp/opencode/t5b3b-canvas-admission.log`. T5b4 migrates the facet parent.
 
 Implement the `05` Grid/sequence rules in quanta: columns before rows, canonical
 span order, flexible/inflexible tracks, proportional shrink, largest-remainder
