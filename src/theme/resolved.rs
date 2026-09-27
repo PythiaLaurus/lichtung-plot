@@ -529,25 +529,6 @@ impl ResolvedTheme {
         }
     }
 
-    /// Plan current legacy T5b body text within an exact finite pixel width.
-    pub(crate) fn plan_legacy_text(
-        &self,
-        source: &str,
-        font_size: u32,
-        maximum_width: f64,
-        alignment: PhysicalTextAlignment,
-        owner: &str,
-    ) -> Result<ResolvedTextPlan, Error> {
-        self.plan_legacy_appearance_text(
-            source,
-            &self.legacy_text_appearance(font_size, TextWeight::Normal),
-            maximum_width,
-            alignment,
-            owner,
-            false,
-        )
-    }
-
     /// Measure current legacy T5b body text without introducing a wrap boundary.
     pub(crate) fn measure_legacy_text(
         &self,
@@ -563,35 +544,6 @@ impl ResolvedTheme {
             owner,
             false,
         )
-    }
-
-    pub(crate) fn plan_legacy_appearance_text(
-        &self,
-        source: &str,
-        appearance: &TextAppearance,
-        maximum_width: f64,
-        alignment: PhysicalTextAlignment,
-        owner: &str,
-        exact_override: bool,
-    ) -> Result<ResolvedTextPlan, Error> {
-        if !maximum_width.is_finite() || maximum_width <= 0.0 {
-            return Err(Error::Render(format!(
-                "{owner} has no positive finite width available for text layout"
-            )));
-        }
-        let maximum_width_quanta = crate::layout::maximum_width_quanta(maximum_width)
-            .map_err(|error| Error::Render(format!("{owner} text planning: {error}")))?;
-        self.plan_text_quanta_with_policy(
-            source,
-            appearance,
-            maximum_width_quanta,
-            alignment,
-            owner,
-            exact_override,
-            true,
-            &crate::layout::fit::ROOT_SCOPE,
-        )
-        .map_err(crate::layout::fit::PlanError::into_error)
     }
 
     pub(crate) fn measure_legacy_appearance_text(
@@ -1085,6 +1037,8 @@ pub(crate) struct CompositionAppearance {
     pub(crate) canvas_grid_gap: f64,
     pub(crate) column_header_padding: f64,
     pub(crate) row_header_padding: f64,
+    pub(crate) row_title_horizontal_padding: f64,
+    pub(crate) row_title_vertical_padding: f64,
 }
 
 #[allow(
@@ -1208,6 +1162,8 @@ fn resolved_theme(
             canvas_grid_gap: 12.0,
             column_header_padding: 16.0,
             row_header_padding: 20.0,
+            row_title_horizontal_padding: 16.0,
+            row_title_vertical_padding: 8.0,
         },
         font_environment: Arc::new(OnceLock::new()),
         text_queries: Arc::default(),
@@ -1565,6 +1521,8 @@ mod tests {
                 canvas_grid_gap: 12.0,
                 column_header_padding: 16.0,
                 row_header_padding: 20.0,
+                row_title_horizontal_padding: 16.0,
+                row_title_vertical_padding: 8.0,
             },
             font_environment: Arc::new(OnceLock::new()),
             text_queries: Arc::default(),

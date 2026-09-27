@@ -877,6 +877,53 @@ fn composed_row_title_spans_all_columns_and_rejects_panel_titles() {
 }
 
 #[test]
+fn wrapped_row_title_keeps_all_lines_above_measured_cell_content() {
+    let title = "Independent longitudinal reference measurement period";
+    let svg = render_canvas(
+        Canvas::grid(1, 1)
+            .unwrap()
+            .size(220, 350)
+            .row_title(0, title)
+            .unwrap()
+            .text_panel(
+                0,
+                0,
+                lichtung_plot::TextPanel::new("Content", "Body").unwrap(),
+            )
+            .unwrap(),
+        "wrapped-row-title",
+    )
+    .unwrap();
+    let document = roxmltree::Document::parse(&svg).unwrap();
+    let row_titles = document
+        .descendants()
+        .find(|node| node.attribute("id") == Some("canvas-row-titles"))
+        .unwrap();
+    let lines = row_titles
+        .descendants()
+        .filter(|node| node.has_tag_name("text"))
+        .collect::<Vec<_>>();
+    assert!(lines.len() > 1);
+    let words = lines
+        .iter()
+        .filter_map(roxmltree::Node::text)
+        .flat_map(str::split_whitespace)
+        .collect::<Vec<_>>();
+    assert_eq!(words, title.split_whitespace().collect::<Vec<_>>());
+    let body_y = document
+        .descendants()
+        .find(|node| node.has_tag_name("text") && node.text() == Some("Content"))
+        .unwrap()
+        .attribute("y")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap();
+    assert!(lines
+        .iter()
+        .all(|line| line.attribute("y").unwrap().parse::<f64>().unwrap() < body_y));
+}
+
+#[test]
 fn shared_category_labels_reject_different_row_domains_preflight() {
     let left = CategoryValues::new("outcome", ["alpha", "beta"]).unwrap();
     let right = CategoryValues::new("outcome", ["alpha", "gamma"]).unwrap();

@@ -11,8 +11,8 @@ use crate::decorations::plan::children::MeasurementPhase;
 use crate::layout::canvas::PanelRequirements;
 use crate::layout::fit::{FitFailure, FitScope};
 use crate::layout::kernel::{FeedbackKind, FitKind};
-use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan};
-use crate::render::backend::{with_layer, Backend, Point2D, SurfaceRole};
+use crate::layout::{LegacyRootAxes, PanelBox, RootFramePlan};
+use crate::render::backend::{with_layer, Backend, SurfaceRole};
 use crate::scene::RenderedScene;
 use crate::spec::AxisDomain;
 use crate::theme::ResolvedTheme;
@@ -2649,80 +2649,6 @@ impl Canvas {
         Ok(ranges)
     }
 
-    fn row_title_plan(
-        &self,
-        title: &CanvasHeader,
-        cells: &[PanelBox],
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<crate::layout::ResolvedTextPlan, Error> {
-        let first = title.start * self.columns;
-        let last = first + self.columns - 1;
-        let maximum_width = (cells[last].x1 - cells[first].x0 - 16.0).max(1.0);
-        theme.plan_legacy_text(
-            &title.text,
-            theme.composition_title_font_size,
-            maximum_width,
-            PhysicalTextAlignment::Center,
-            "canvas row title",
-        )
-    }
-
-    fn add_row_title_requirements(
-        &self,
-        requirements: &mut Vec<(usize, usize, PanelRequirements)>,
-        cells: &[PanelBox],
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<(), Error> {
-        for title in &self.row_titles {
-            let plan = self.row_title_plan(title, cells, theme)?;
-            let top = plan.height() + 8.0;
-            requirements.push((
-                title.start,
-                0,
-                PanelRequirements {
-                    top,
-                    ..PanelRequirements::default()
-                },
-            ));
-        }
-        Ok(())
-    }
-
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "wrapped row-title line indices are bounded by the finite canvas"
-    )]
-    fn plan_row_titles(
-        &self,
-        cells: &[PanelBox],
-        theme: &crate::theme::ResolvedTheme,
-    ) -> Result<Vec<CanvasHeaderPlan>, Error> {
-        let mut plans = Vec::new();
-        crate::render::backend::reserve_text_records(
-            &mut plans,
-            self.row_titles.len(),
-            theme.prepared_font_environment()?,
-        )?;
-        for title in &self.row_titles {
-            let first = title.start * self.columns;
-            let last = first + self.columns - 1;
-            let x = f64::midpoint(cells[first].x0, cells[last].x1);
-            let plan = self.row_title_plan(title, cells, theme)?;
-            let y = cells[first].y1
-                + 14.0
-                + plan.lines.len().saturating_sub(1) as f64 * plan.line_height();
-            plans.push(CanvasHeaderPlan {
-                text: crate::render::backend::PlacedText::from_deferred_first_line(
-                    plan,
-                    Point2D::new(x.round(), y.round()),
-                    crate::render::backend::TextAnchor::Middle,
-                    0.0,
-                ),
-            });
-        }
-        Ok(plans)
-    }
-
     #[expect(
         clippy::type_complexity,
         clippy::too_many_lines,
@@ -3912,7 +3838,6 @@ impl Canvas {
         } else {
             None
         };
-        let header_theme = themes.root();
         let provisional = match tracks::allocate(
             outer,
             (self.rows, self.columns),
@@ -3921,6 +3846,7 @@ impl Canvas {
             prepared.plot_intrinsics,
             &self.column_headers,
             &self.row_headers,
+            &self.row_titles,
             &[],
             &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
@@ -4088,6 +4014,7 @@ impl Canvas {
             prepared.plot_intrinsics,
             &self.column_headers,
             &self.row_headers,
+            &self.row_titles,
             &requirements,
             &themes,
             &scope.child(crate::layout::AddressRole::CanvasGrid, 0)?,
@@ -4097,6 +4024,7 @@ impl Canvas {
         };
         let cells = grid.cells;
         let headers = grid.headers;
+        let row_titles = grid.row_titles;
         let mut measured = Vec::new();
         let mut requirements = Vec::new();
         fit::reserve(
@@ -4241,61 +4169,6 @@ impl Canvas {
                 )?;
             }
         }
-        let mut row_title_requirements = Vec::new();
-        fit::reserve(
-            themes.root(),
-            &mut row_title_requirements,
-            self.row_titles
-                .len()
-                .checked_mul(self.columns)
-                .ok_or_else(|| Error::Render("Canvas row title topology overflow".into()))?,
-            "Canvas row title requirements",
-        )?;
-        for (title_index, title) in self.row_titles.iter().enumerate() {
-            let first = title.start * self.columns;
-            let last = first + self.columns - 1;
-            let appearance = header_theme.legacy_text_appearance(
-                header_theme.composition_title_font_size,
-                crate::TextWeight::Normal,
-            );
-            if let FitOutcome::Miss(reason) = fit::text(
-                header_theme,
-                &title.text,
-                &appearance,
-                (cells[last].x1 - cells[first].x0 - 16.0).max(0.0),
-                PhysicalTextAlignment::Center,
-                "Canvas row title",
-                &scope.child(crate::layout::AddressRole::CanvasRowTitle, title_index)?,
-            )? {
-                return Ok(FitOutcome::Miss(reason));
-            }
-        }
-        self.add_row_title_requirements(&mut row_title_requirements, &cells, header_theme)?;
-        for (row, column, requirement) in row_title_requirements {
-            let index = row * self.columns + column;
-            let base_top = requirements
-                .iter()
-                .find(|(r, c, _)| *r == row && *c == column)
-                .map_or(0.0, |(_, _, requirement)| requirement.top);
-            let address = grid_address.child(
-                crate::layout::AddressRole::CanvasCell,
-                u32::try_from(index)
-                    .map_err(|_| Error::Render("canvas grid address overflowed".into()))?,
-            )?;
-            if let Some(request) = round.request_insets(
-                &address,
-                &address,
-                FeedbackKind::OwnedInk,
-                [0.0, 0.0, 0.0, (requirement.top - base_top).max(0.0)],
-            )? {
-                round.miss(
-                    &address,
-                    FitKind::TrackOrResidual,
-                    &[Some(request)],
-                    "row title ink requires an owned grid reserve",
-                )?;
-            }
-        }
         for (row, column, requirement) in requirements {
             let index = row * self.columns + column;
             let address = grid_address.child(
@@ -4323,14 +4196,13 @@ impl Canvas {
                 )?;
             }
         }
-        let row_titles = self.plan_row_titles(&cells, header_theme)?;
         #[cfg(test)]
         {
             if !headers.is_empty() {
-                record_canvas_theme(usize::MAX, "shared-header-plan", header_theme);
+                record_canvas_theme(usize::MAX, "shared-header-plan", themes.root());
             }
             if !row_titles.is_empty() {
-                record_canvas_theme(usize::MAX, "row-title-plan", header_theme);
+                record_canvas_theme(usize::MAX, "row-title-plan", themes.root());
             }
         }
 

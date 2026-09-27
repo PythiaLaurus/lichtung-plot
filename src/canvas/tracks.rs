@@ -33,6 +33,7 @@ fn checked(value: i128) -> Result<i64, Error> {
 pub(super) struct CanvasGridAssignment {
     pub cells: Vec<PanelBox>,
     pub headers: Vec<CanvasHeaderPlan>,
+    pub row_titles: Vec<CanvasHeaderPlan>,
 }
 
 #[expect(
@@ -48,6 +49,7 @@ pub(super) fn allocate(
     plot_titles: &[Option<crate::decorations::title_block::plan::RootTitleBlockIntrinsics>],
     column_headers: &[CanvasHeader],
     row_headers: &[CanvasHeader],
+    row_titles: &[CanvasHeader],
     gutters: &[(usize, usize, PanelRequirements)],
     themes: &ResolvedCanvasThemes,
     scope: &FitScope,
@@ -147,6 +149,7 @@ pub(super) fn allocate(
     let mut heights = Vec::new();
     let width_count = count
         .checked_add(column_headers.len())
+        .and_then(|count| count.checked_add(row_titles.len()))
         .ok_or_else(|| Error::Render("Canvas header requirement count overflowed".into()))?;
     crate::layout::fit::reserve(
         theme,
@@ -291,6 +294,43 @@ pub(super) fn allocate(
             address: owner,
         });
     }
+    let mut row_title_owners = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut row_title_owners,
+        row_titles.len(),
+        "Canvas row-title owners",
+    )?;
+    for (index, title) in row_titles.iter().enumerate() {
+        if title.span != 1 || title.start >= rows {
+            return Err(Error::Render(
+                "Canvas row title lies outside declared Grid tracks".into(),
+            ));
+        }
+        let owner = ComponentAddress::root().child(
+            AddressRole::CanvasRowTitle,
+            u32::try_from(index)
+                .map_err(|_| Error::Render("Canvas row-title address overflowed".into()))?,
+        )?;
+        row_title_owners.push(owner);
+    }
+    for (title, owner) in row_titles.iter().zip(&row_title_owners) {
+        let (hard, preferred) = fit::intrinsic_widths(
+            theme,
+            &title.text,
+            &appearance,
+            "Canvas row title intrinsic",
+        )?;
+        let padding = theme.composition.row_title_horizontal_padding;
+        widths.push(GridRequirement {
+            start: 0,
+            span: columns,
+            hard: required(hard + padding)?,
+            preferred: required(preferred.max(hard) + padding)?,
+            fill: false,
+            address: owner,
+        });
+    }
     let x0 = nearest_spatial_quanta(outer.x0)?;
     let x1 = nearest_spatial_quanta(outer.x1)?;
     let y0 = nearest_spatial_quanta(outer.y0)?;
@@ -379,13 +419,60 @@ pub(super) fn allocate(
         header_height = header_height.max(plan.height() + theme.composition.column_header_padding);
         column_plans.push((plan, left, right));
     }
+    let mut row_title_plans = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut row_title_plans,
+        row_titles.len(),
+        "Canvas measured row titles",
+    )?;
+    let title_left = pixels(x_positions[0]);
+    let last = columns.len() - 1;
+    let title_right = pixels(checked(
+        i128::from(x_positions[last]) + i128::from(columns[last]),
+    )?);
+    let mut row_title_heights = Vec::new();
+    crate::layout::fit::reserve(
+        theme,
+        &mut row_title_heights,
+        rows,
+        "Canvas row-title heights",
+    )?;
+    row_title_heights.resize(rows, 0_i64);
+    for (index, title) in row_titles.iter().enumerate() {
+        let plan = match fit::text(
+            theme,
+            &title.text,
+            &appearance,
+            title_right - title_left - theme.composition.row_title_horizontal_padding,
+            PhysicalTextAlignment::Center,
+            "Canvas row title",
+            &FitScope::new(&row_title_owners[index], 0),
+        )? {
+            FitOutcome::Measured(plan) => plan,
+            FitOutcome::Miss(reason) => return Ok(FitOutcome::Miss(reason)),
+        };
+        let reserve = required(plan.height() + theme.composition.row_title_vertical_padding)?;
+        row_title_heights[title.start] = reserve;
+        row_title_plans.push(plan);
+    }
+    let title_gutters = row_title_heights
+        .iter()
+        .map(|&height| i128::from(height))
+        .sum::<i128>();
+    let mut axis_row_tops = Vec::new();
+    crate::layout::fit::reserve(theme, &mut axis_row_tops, rows, "Canvas row axis tops")?;
+    axis_row_tops.extend(row_insets.iter().map(|insets| insets[1]));
+    for (insets, &title_height) in row_insets.iter_mut().zip(&row_title_heights) {
+        insets[1] = checked(i128::from(insets[1]) + i128::from(title_height))?;
+    }
     let header_quanta = required(header_height)?;
     let y1 = checked(i128::from(y1) - i128::from(header_quanta))?;
-    let height = height - i128::from(header_quanta);
+    let height = height - i128::from(header_quanta) - title_gutters;
     if height <= 0 {
         return Ok(FitOutcome::Miss(scope.failure(
             FitKind::TrackOrResidual,
-            "Canvas measured column headers leave no row tracks",
+            "Canvas measured headers and row titles leave no row tracks",
         )));
     }
     let rows = match allocate_grid_axis(
@@ -469,9 +556,33 @@ pub(super) fn allocate(
             ),
         });
     }
+    let mut measured_row_titles = Vec::new();
+    crate::render::backend::reserve_text_records(
+        &mut measured_row_titles,
+        row_titles.len(),
+        theme.prepared_font_environment()?,
+    )?;
+    for (title, plan) in row_titles.iter().zip(row_title_plans) {
+        let row = title.start;
+        measured_row_titles.push(CanvasHeaderPlan {
+            text: PlacedText::middle(
+                plan,
+                Point2D::new(
+                    f64::midpoint(title_left, title_right).round(),
+                    (cells[row * columns.len()].y1
+                        + pixels(axis_row_tops[row])
+                        + pixels(row_title_heights[row]) / 2.0)
+                        .round(),
+                ),
+                TextAnchor::Middle,
+                0.0,
+            ),
+        });
+    }
     Ok(FitOutcome::Measured(CanvasGridAssignment {
         cells,
         headers,
+        row_titles: measured_row_titles,
     }))
 }
 
@@ -493,6 +604,7 @@ mod tests {
             &plots,
             &intrinsics,
             &plot_titles,
+            &[],
             &[],
             &[],
             &[],
@@ -526,6 +638,7 @@ mod tests {
             &plots,
             &intrinsics,
             &[None; 2],
+            &[],
             &[],
             &[],
             &[],
@@ -570,6 +683,7 @@ mod tests {
             &[header],
             &[],
             &[],
+            &[],
             &themes,
             &FitScope::root(),
         )
@@ -601,6 +715,7 @@ mod tests {
             &[],
             &[row],
             &[],
+            &[],
             &themes,
             &FitScope::root(),
         )
@@ -613,5 +728,45 @@ mod tests {
         assert_eq!(grid.cells[0].x0.to_bits(), grid.cells[1].x0.to_bits());
         assert!(grid.headers[0].text.placement.position.y > grid.cells[1].y0);
         assert!(grid.headers[0].text.placement.position.y < grid.cells[0].y1);
+    }
+
+    #[test]
+    fn wrapped_row_title_owns_a_top_track_above_axis_gutters() {
+        let plots: Vec<Option<Plot>> = [None, None].into();
+        let themes = ResolvedCanvasThemes::new(crate::Theme::Publication, &plots);
+        let title = CanvasHeader {
+            start: 0,
+            span: 1,
+            text: "Independent longitudinal reference measurement period".into(),
+        };
+        let FitOutcome::Measured(grid) = allocate(
+            PanelBox::new(0.0, 220.0, 0.0, 320.0),
+            (2, 1),
+            &plots,
+            &[None; 2],
+            &[None; 2],
+            &[],
+            &[],
+            &[title],
+            &[(
+                0,
+                0,
+                PanelRequirements {
+                    top: 24.0,
+                    ..PanelRequirements::default()
+                },
+            )],
+            &themes,
+            &FitScope::root(),
+        )
+        .unwrap() else {
+            panic!("the wrapped row title must fit its assigned track");
+        };
+        assert_eq!(grid.row_titles.len(), 1);
+        let heading = &grid.row_titles[0].text;
+        assert!(heading.plan.lines.len() > 1);
+        assert!(heading.placement.position.y > grid.cells[0].y1 + 24.0);
+        assert!(heading.placement.position.y < 320.0);
+        assert!(grid.cells[1].height() > 0.0);
     }
 }
