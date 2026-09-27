@@ -921,7 +921,9 @@ caller styles while centralizing their ownership.
 | T5c0 | COMPLETE | T5b | `docs(marks): classify appearance and content policies` |
 | T5c1 | IN PROGRESS | T5c0 | Umbrella; completes after T5c1a-b |
 | T5c1a | COMPLETE | T5c0 | `feat(theme): separate interval and summary strokes` |
-| T5c1b | PENDING | T5c1a | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b | IN PROGRESS | T5c1a | Umbrella; completes after remaining roles and contrast |
+| T5c1b1 | COMPLETE | T5c1a | `refactor(theme): retire unused line width` |
+| T5c1b2 | PENDING | T5c1b1 | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -973,6 +975,12 @@ A private custom-value test varies both independently of frame stroke; focused
 bar/facet/Canvas, sampled/supplied distribution, SVG snapshot, and strict Clippy
 checks pass. No alternate style assembly or old interval-width alias remains.
 T5c1b completes the remaining mark/annotation styles and contrast policy.
+
+T5c1b1 closure: the unused `ResolvedTheme::line_width` and its unused preset
+constructor input are removed, not repurposed into a second line-style default.
+Resolved-theme equality, all four preset fixtures, strict Clippy, and focused
+built-in theme checks remain valid. T5c1b2 resolves the actually consumed
+line, point, fill, specialized mark, and annotation roles.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

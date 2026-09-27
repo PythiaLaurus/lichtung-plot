@@ -74,8 +74,6 @@ pub(crate) struct ResolvedTheme {
     pub(crate) font_family: String,
     /// Legacy paint source retained for later legend, mark, and annotation roles.
     pub(crate) foreground: (u8, u8, u8),
-    /// Width of plot series lines in pixels.
-    pub(crate) line_width: f32,
     /// Width of significance bracket strokes in pixels.
     pub(crate) bracket_width: f32,
     /// Font size in points for annotations, status text, and color scales.
@@ -328,7 +326,6 @@ impl PartialEq for ResolvedTheme {
         self.colors == other.colors
             && self.font_family == other.font_family
             && self.foreground == other.foreground
-            && self.line_width == other.line_width
             && self.bracket_width == other.bracket_width
             && self.detail_font_size == other.detail_font_size
             && self.label_font_size == other.label_font_size
@@ -1059,7 +1056,6 @@ fn resolved_theme(
     colors: Vec<(u8, u8, u8)>,
     foreground: (u8, u8, u8),
     axis_width: f32,
-    line_width: f32,
     bracket_width: f32,
     title_font_size: u32,
     subtitle_font_size: u32,
@@ -1076,7 +1072,6 @@ fn resolved_theme(
         colors,
         font_family: stack.clone(),
         foreground,
-        line_width,
         bracket_width,
         detail_font_size: 14,
         label_font_size: axis_title_font_size,
@@ -1228,7 +1223,6 @@ fn publication_theme() -> ResolvedTheme {
         ],
         (0, 0, 0),
         0.8,
-        1.5,
         1.0,
         20,
         15,
@@ -1250,7 +1244,6 @@ fn nature_theme() -> ResolvedTheme {
         ],
         (40, 40, 40),
         0.8,
-        1.0,
         0.8,
         19,
         14,
@@ -1272,7 +1265,6 @@ fn science_theme() -> ResolvedTheme {
         ],
         (0, 0, 0),
         1.0,
-        1.5,
         1.0,
         21,
         16,
@@ -1294,7 +1286,6 @@ fn chi_theme() -> ResolvedTheme {
         ],
         (60, 60, 60),
         0.8,
-        1.5,
         0.8,
         19,
         15,
@@ -1320,7 +1311,6 @@ mod tests {
     struct ExpectedPreset {
         foreground: (u8, u8, u8),
         axis_width: f32,
-        line_width: f32,
         bracket_width: f32,
         title_size: u32,
         subtitle_size: u32,
@@ -1346,7 +1336,6 @@ mod tests {
                 ExpectedPreset {
                     foreground: (0, 0, 0),
                     axis_width: 0.8,
-                    line_width: 1.5,
                     bracket_width: 1.0,
                     title_size: 20,
                     subtitle_size: 15,
@@ -1367,7 +1356,6 @@ mod tests {
                 ExpectedPreset {
                     foreground: (40, 40, 40),
                     axis_width: 0.8,
-                    line_width: 1.0,
                     bracket_width: 0.8,
                     title_size: 19,
                     subtitle_size: 14,
@@ -1388,7 +1376,6 @@ mod tests {
                 ExpectedPreset {
                     foreground: (0, 0, 0),
                     axis_width: 1.0,
-                    line_width: 1.5,
                     bracket_width: 1.0,
                     title_size: 21,
                     subtitle_size: 16,
@@ -1409,7 +1396,6 @@ mod tests {
                 ExpectedPreset {
                     foreground: (60, 60, 60),
                     axis_width: 0.8,
-                    line_width: 1.5,
                     bracket_width: 0.8,
                     title_size: 19,
                     subtitle_size: 15,
@@ -1442,7 +1428,6 @@ mod tests {
             colors,
             font_family: stack.clone(),
             foreground: expected.foreground,
-            line_width: expected.line_width,
             bracket_width: expected.bracket_width,
             detail_font_size: 14,
             label_font_size: expected.axis_title_size,
@@ -1582,7 +1567,6 @@ mod tests {
             assert!(resolved.marks.uncertainty_stroke.width > 0.0);
             assert!(resolved.marks.summary_stroke.width.is_finite());
             assert!(resolved.marks.summary_stroke.width > 0.0);
-            assert!(resolved.line_width.is_finite() && resolved.line_width > 0.0);
             assert!(resolved.bracket_width.is_finite() && resolved.bracket_width > 0.0);
             assert_eq!(resolved.detail_font_size, 14);
             let (_, expected) = expected_preset(theme);
