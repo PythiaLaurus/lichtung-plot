@@ -245,8 +245,8 @@ pub(crate) fn project(
             stroke_width: 0.8,
             opacity: 0.82,
         },
-        curve_style: LineStyle::solid(theme.foreground, 1.0),
-        rug_style: LineStyle::solid(theme.foreground, 0.7),
+        curve_style: theme.marks.histogram_curve.backend_style(),
+        rug_style: theme.marks.histogram_rug.backend_style(),
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     #[cfg(test)]

@@ -929,7 +929,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b1 | COMPLETE | T5c1b2a | `feat(theme): measure point-label gap from annotation role` |
 | T5c1b2b2 | IN PROGRESS | T5c1b2b1 | Umbrella; completes after path and remaining style roles |
 | T5c1b2b2a | COMPLETE | T5c1b2b1 | `feat(theme): resolve data-colored path strokes` |
-| T5c1b2b2b | PENDING | T5c1b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b | IN PROGRESS | T5c1b2b2a | Umbrella; completes after Histogram strokes and remaining roles |
+| T5c1b2b2b1 | COMPLETE | T5c1b2b2a | `feat(theme): resolve Histogram overlay strokes` |
+| T5c1b2b2b2 | PENDING | T5c1b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1013,6 +1015,13 @@ selected path payloads use the same resolved role; the duplicate local width
 switch is removed. A custom-width/alpha Line fixture changes its retained mark
 and exact guide glyph identity without moving its points; point/path, faceted
 guide, visual snapshot, and strict Clippy checks pass.
+
+T5c1b2b2b1 closure: sampled and supplied Histogram routes now consume the
+same resolved, independently customizable KDE-curve and rug-tick stroke roles.
+The old curve/rug literals are gone; bin fill and scientific bin/KDE sources
+remain separately owned. Preset paint/width/pattern match the old literals;
+focused sample/supplied integration tests, custom-role independence and strict
+Clippy pass. T5c1b2b2b2 continues remaining mark/annotation appearance.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

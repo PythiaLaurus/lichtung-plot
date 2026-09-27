@@ -939,6 +939,10 @@ pub(crate) struct MarkAppearance {
     pub(crate) series_line: DataLineAppearance,
     /// A Trajectory or LinePath series' data-colored path.
     pub(crate) path_line: DataLineAppearance,
+    /// Histogram KDE overlay independently resolved from the bin outline.
+    pub(crate) histogram_curve: StrokeAppearance,
+    /// Histogram rug ticks independently resolved from the KDE overlay.
+    pub(crate) histogram_rug: StrokeAppearance,
 }
 
 /// One complete data-colored mark stroke; the scale supplies opaque RGB only.
@@ -1203,6 +1207,8 @@ fn resolved_theme(
                 alpha: 255,
                 pattern: StrokePattern::Solid,
             },
+            histogram_curve: stroke_appearance(foreground_paint, 1.0, StrokePattern::Solid),
+            histogram_rug: stroke_appearance(foreground_paint, 0.7, StrokePattern::Solid),
         },
         annotations: AnnotationAppearance {
             bracket_stroke: BracketStrokeAppearance {
@@ -1579,6 +1585,16 @@ mod tests {
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
+                histogram_curve: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.0,
+                    pattern: StrokePattern::Solid,
+                },
+                histogram_rug: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.7,
+                    pattern: StrokePattern::Solid,
+                },
             },
             annotations: AnnotationAppearance {
                 bracket_stroke: BracketStrokeAppearance {
@@ -1734,6 +1750,30 @@ mod tests {
         assert_eq!(theme.marks, original.marks);
         assert_eq!(theme.typography, original.typography);
         assert_eq!(theme.axes, original.axes);
+    }
+
+    #[test]
+    fn histogram_curve_and_rug_styles_do_not_inherit_axis_or_bin_strokes() {
+        let mut theme = Theme::Science.resolve();
+        let original = theme.clone();
+        theme.marks.histogram_curve.paint = Rgba::rgb(25, 49, 73);
+        theme.marks.histogram_curve.width = 2.5;
+        theme.marks.histogram_rug.paint = Rgba::rgb(97, 121, 145);
+        theme.marks.histogram_rug.width = 0.5;
+        assert_ne!(theme, original);
+        assert_eq!(theme.axes, original.axes);
+        assert_eq!(
+            theme.marks.uncertainty_stroke,
+            original.marks.uncertainty_stroke
+        );
+        assert_eq!(
+            theme.marks.histogram_curve.backend_style().color,
+            Rgba::rgb(25, 49, 73)
+        );
+        assert_eq!(
+            theme.marks.histogram_rug.backend_style().color,
+            Rgba::rgb(97, 121, 145)
+        );
     }
 
     #[test]
