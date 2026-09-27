@@ -120,7 +120,6 @@ struct Measurement {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MeasurementPhase {
-    Layout,
     Probe,
     Hue,
     Legend,
@@ -131,7 +130,6 @@ pub(crate) enum MeasurementPhase {
 impl MeasurementPhase {
     fn label(self) -> &'static str {
         match self {
-            Self::Layout => "layout",
             Self::Probe => "probe",
             Self::Hue => "hue-probe",
             Self::Legend => "legend-probe",
@@ -454,7 +452,7 @@ mod tests {
                         &source,
                         context,
                         &owner,
-                        MeasurementPhase::Layout,
+                        MeasurementPhase::Probe,
                         round,
                         &mut produce,
                     ))
@@ -474,7 +472,7 @@ mod tests {
                         &source,
                         context,
                         &owner,
-                        MeasurementPhase::Layout,
+                        MeasurementPhase::Probe,
                         round,
                         &mut produce,
                     ))
@@ -486,7 +484,7 @@ mod tests {
                             &source,
                             context.with_axis_label_width(1.0),
                             &owner,
-                            MeasurementPhase::Layout,
+                            MeasurementPhase::Probe,
                             round,
                             &mut produce,
                         )

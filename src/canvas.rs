@@ -14,7 +14,7 @@ use crate::layout::kernel::{FeedbackKind, FitKind};
 use crate::layout::{LegacyRootAxes, PanelBox, PhysicalTextAlignment, RootFramePlan};
 use crate::render::backend::{with_layer, Backend, Point2D, SurfaceRole};
 use crate::scene::RenderedScene;
-use crate::spec::{AxisDomain, DecorationMode};
+use crate::spec::AxisDomain;
 use crate::theme::ResolvedTheme;
 use crate::{CanvasLegendPolicy, Labels, Output, Plot, PlotKind, Theme};
 
@@ -1203,24 +1203,23 @@ mod d1_tests {
             assert_eq!(calls, 3);
             CHILD_MEASUREMENTS.with(|events| {
                 let events = events.borrow();
-                for phase in ["layout", "panel"] {
-                    assert_eq!(
-                        events
-                            .iter()
-                            .filter(|(address, stage)| address == &owner && *stage == phase)
-                            .count(),
-                        3,
-                        "dirty {phase}"
-                    );
-                    assert_eq!(
-                        events
-                            .iter()
-                            .filter(|(address, stage)| address == &neighbor && *stage == phase)
-                            .count(),
-                        if disabled { 3 } else { 2 },
-                        "neighbor {phase}"
-                    );
-                }
+                assert!(events.iter().all(|(_, phase)| *phase != "layout"));
+                assert_eq!(
+                    events
+                        .iter()
+                        .filter(|(address, phase)| address == &owner && *phase == "panel")
+                        .count(),
+                    3,
+                    "dirty panel must be remeasured in each root round"
+                );
+                assert_eq!(
+                    events
+                        .iter()
+                        .filter(|(address, phase)| address == &neighbor && *phase == "panel")
+                        .count(),
+                    if disabled { 3 } else { 2 },
+                    "unchanged neighbor must be reused only when cache is enabled"
+                );
             });
             if let Some(expected) = &expected {
                 assert_eq!(root.plan(), expected);
@@ -4186,18 +4185,26 @@ impl Canvas {
                 u32::try_from(index)
                     .map_err(|_| Error::Render("canvas address overflowed".into()))?,
             )?;
-            let context = crate::spec::PlotRenderContext::new(plot.data(), local.body, theme)
+            let source_rows = plot.configured_source_rows()?;
+            let context = source_rows
+                .map_or_else(
+                    || crate::spec::PlotRenderContext::new(plot.data(), local.body, theme),
+                    |rows| {
+                        crate::spec::PlotRenderContext::with_source_rows(
+                            plot.data(),
+                            rows,
+                            local.body,
+                            theme,
+                        )
+                    },
+                )
                 .with_fit_scope(&child_scope);
-            let result = match children.measure(
-                plot,
-                context,
-                &owner,
-                MeasurementPhase::Layout,
-                round,
-                |call| {
-                    plot.preflight_measurement_in_call(kind, local.body, theme, &child_scope, call)
-                },
-            )? {
+            let role = if self.legend_policy == CanvasLegendPolicy::PerPlot {
+                crate::decorations::plan::LegendRole::Panel
+            } else {
+                crate::decorations::plan::LegendRole::Suppressed
+            };
+            let panel_plan = match children.plan(plot, role, context, None, round, &owner)? {
                 FitOutcome::Measured(result) => result,
                 FitOutcome::Miss(failure) => {
                     FitFailure::retain_least(&mut child_miss, failure);
@@ -4208,15 +4215,10 @@ impl Canvas {
             CANVAS_ASSIGNED_PANEL_EVIDENCE.with(|evidence| {
                 evidence
                     .borrow_mut()
-                    .push((cells[index], result.layout.projection.panel_box()));
+                    .push((local.body, panel_plan.result.layout.projection.panel_box()));
             });
-            if result.decoration_mode == DecorationMode::SelfManaged {
-                return Err(Error::Render(format!(
-                    "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
-                )));
-            }
             let requirement = match fit::outcome(PanelRequirements::measure_header(
-                result.axes.as_ref().ok_or_else(|| {
+                panel_plan.result.axes.as_ref().ok_or_else(|| {
                     Error::Render("composed panel is missing its measured axes".into())
                 })?,
                 theme,
@@ -4231,8 +4233,7 @@ impl Canvas {
                     continue;
                 }
             };
-            round.observe_layout(&result.layout)?;
-            measured.push((index, kind));
+            measured.push((index, kind, panel_plan, local));
             requirements.push((row, column, requirement));
         }
         if let Some(failure) = child_miss {
@@ -4481,65 +4482,19 @@ impl Canvas {
             measured.len(),
             "Canvas selected panels",
         )?;
-        let mut child_miss = None;
-        for (index, kind) in measured {
+        for (index, kind, panel_plan, local) in measured {
             let plot = plots[index]
                 .as_ref()
                 .expect("measured canvas panel remains configured");
             let cell = cells[index];
-            let role = if self.legend_policy == CanvasLegendPolicy::PerPlot {
-                crate::decorations::plan::LegendRole::Panel
-            } else {
-                crate::decorations::plan::LegendRole::Suppressed
-            };
-            let theme = themes
-                .plot(index)
-                .expect("configured canvas panel has a resolved theme");
             #[cfg(test)]
-            record_canvas_theme(index, "panel-plan", theme);
-            let address = crate::layout::ComponentAddress::root().child(
-                crate::layout::AddressRole::CanvasCell,
-                u32::try_from(index)
-                    .map_err(|_| Error::Render("canvas address overflowed".into()))?,
-            )?;
-            let local = match plot_text::PlotLocalTextPlan::measure(
-                plot,
-                cell,
-                theme,
-                [self.panel_title_alignment, self.panel_subtitle_alignment],
-                prepared.plot_intrinsics[index].expect("configured Canvas Plot text intrinsics"),
-                &FitScope::new(&address, scope.ordinal),
-            )? {
-                FitOutcome::Measured(local) => local,
-                FitOutcome::Miss(failure) => {
-                    FitFailure::retain_least(&mut child_miss, failure);
-                    continue;
-                }
-            };
-            let source_rows = plot.configured_source_rows()?;
-            let context = source_rows.map_or_else(
-                || crate::spec::PlotRenderContext::new(plot.data(), local.body, theme),
-                |rows| {
-                    crate::spec::PlotRenderContext::with_source_rows(
-                        plot.data(),
-                        rows,
-                        local.body,
-                        theme,
-                    )
-                },
+            record_canvas_theme(
+                index,
+                "panel-plan",
+                themes
+                    .plot(index)
+                    .expect("configured canvas panel has a resolved theme"),
             );
-            let panel_plan = match children.plan(plot, role, context, None, round, &address)? {
-                FitOutcome::Measured(plan) => plan,
-                FitOutcome::Miss(failure) => {
-                    FitFailure::retain_least(&mut child_miss, failure);
-                    continue;
-                }
-            };
-            if panel_plan.result.decoration_mode == DecorationMode::SelfManaged {
-                return Err(Error::Render(format!(
-                    "{kind:?} manages its own canvas and cannot be nested in a composed canvas"
-                )));
-            }
             let mut layers = [String::new(), String::new(), String::new(), String::new()];
             for (layer, suffix) in layers.iter_mut().zip(["grid", "axes", "legend", "title"]) {
                 plot.data()
@@ -4567,9 +4522,6 @@ impl Canvas {
                 header_layer,
                 layers: [grid, axes, legend],
             });
-        }
-        if let Some(failure) = child_miss {
-            return Ok(FitOutcome::Miss(failure));
         }
         let plan = CanvasPlan {
             themes,

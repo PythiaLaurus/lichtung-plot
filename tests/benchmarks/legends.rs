@@ -528,18 +528,12 @@ fn assert_child_reuse(sample: &CaseMeasurement, facet: bool, pressure: bool) {
     assert_eq!(observed.counters[Counter::ChildFeedbackReplay as usize], 0);
     assert_eq!(
         observed.counters[Counter::ChildCacheMiss as usize],
-        match (facet, pressure) {
-            (true, true) | (false, false) => 12,
-            (true, false) => 8,
-            (false, true) => 18,
-        }
+        if pressure { 12 } else { 8 }
     );
-    if facet {
-        assert!(
-            events.iter().all(|event| event.phase != "layout"),
-            "native facets must not probe a separate intermediate child body"
-        );
-    }
+    assert!(
+        events.iter().all(|event| event.phase != "layout"),
+        "native parents must not probe a separate intermediate child body"
+    );
     for counter in [
         Counter::ChildCacheHit,
         Counter::ChildCacheMiss,
