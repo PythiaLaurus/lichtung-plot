@@ -940,7 +940,14 @@ pub(crate) struct MarkAppearance {
 /// Annotation paths resolve independently of axes, marks, and label typography.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AnnotationAppearance {
-    pub(crate) bracket_stroke: StrokeAppearance,
+    pub(crate) bracket_stroke: BracketStrokeAppearance,
+}
+
+/// Bracket paths have a fixed solid topology; only their paint and width vary.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BracketStrokeAppearance {
+    pub(crate) paint: Rgba,
+    pub(crate) width: f32,
 }
 
 /// Structurally present frame appearance.
@@ -1164,11 +1171,10 @@ fn resolved_theme(
             summary_stroke: stroke_appearance(foreground_paint, axis_width, StrokePattern::Solid),
         },
         annotations: AnnotationAppearance {
-            bracket_stroke: stroke_appearance(
-                foreground_paint,
-                bracket_width,
-                StrokePattern::Solid,
-            ),
+            bracket_stroke: BracketStrokeAppearance {
+                paint: foreground_paint,
+                width: bracket_width,
+            },
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1530,10 +1536,9 @@ mod tests {
                 },
             },
             annotations: AnnotationAppearance {
-                bracket_stroke: StrokeAppearance {
+                bracket_stroke: BracketStrokeAppearance {
                     paint: foreground,
                     width: expected.bracket_width,
-                    pattern: StrokePattern::Solid,
                 },
             },
             composition: CompositionAppearance {
