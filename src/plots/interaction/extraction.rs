@@ -15,6 +15,68 @@ pub(crate) fn source() -> Plot<crate::kind::Interaction> {
 }
 
 #[test]
+fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
+    let source = source()
+        .styles([
+            crate::InteractionStyle::new("two").pattern(LinePattern::Dashed),
+            crate::InteractionStyle::new("one"),
+        ])
+        .y_limits(-2.0, 10.0)
+        .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let panel = crate::layout::PanelBox::new(80.0, 550.0, 70.0, 410.0);
+    let mut theme = crate::Theme::Publication.resolve();
+    let old = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    theme.marks.interaction_connector.alpha = 91;
+    theme.marks.interaction_connector.width = 2.5;
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    let styles = |result: &PlotRenderResult| {
+        let crate::layout::interior::MarkPayload::Interaction(payload) =
+            &result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Interaction")
+        };
+        payload
+            .traces
+            .iter()
+            .map(|trace| (trace.points.clone(), trace.connector.clone().unwrap()))
+            .collect::<Vec<_>>()
+    };
+    let original = styles(&old);
+    let changed = styles(&selected);
+    assert!(original
+        .iter()
+        .zip(&changed)
+        .all(|((old_points, _), (new_points, _))| old_points == new_points));
+    assert!(changed
+        .iter()
+        .all(|(_, line)| line.color.alpha() == 91 && line.width.to_bits() == 2.5_f32.to_bits()));
+    assert!(changed
+        .iter()
+        .any(|(_, line)| line.pattern == crate::render::backend::StrokePattern::LongDash));
+    assert!(changed
+        .iter()
+        .any(|(_, line)| line.pattern == crate::render::backend::StrokePattern::Solid));
+    assert!(crate::decorations::legend::merge_exact_entries(
+        [
+            old.legend_entries[0].clone(),
+            selected.legend_entries[0].clone()
+        ],
+        "custom interaction connector",
+        &OperationGenerationResources::new(),
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("glyphs must match exactly"));
+}
+
+#[test]
 fn same_assignment_marks_match_canonical_projection_fingerprints() {
     use crate::layout::PanelBox;
     // 2026-09-14 T5a6d: canonical projected centers precede marker construction.

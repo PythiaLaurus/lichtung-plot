@@ -961,7 +961,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining structural mark strokes` |
 | T5c1b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining style roles |
 | T5c1b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve primary point sizes by mark family` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2a | `feat(theme): complete private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining private style roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve Interaction connector appearance` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): complete private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1212,6 +1214,13 @@ point and its exact guide while retaining positions. Strict Clippy, a pinned
 Interaction marker fingerprint and seven representative SVG snapshot paths pass
 with existing preset sizes. T5c2 consumes these actual sizes for native ink and
 occupancy constraints rather than reverting to fixed renderer assumptions.
+
+T5c1b2b2b2b2b2b2b2b2b2b2b1 closure: Interaction connectors and originating
+guide glyphs now share theme-owned data-color width and alpha; exact per-group
+Solid/Dashed caller grammar overrides only the theme pattern. Custom appearance
+changes retained marks and guide identity without moving data points or
+overriding exact group patterns. Focused style/preflight/capture tests, current
+Interaction SVG snapshot, pinned projection hashes and strict Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

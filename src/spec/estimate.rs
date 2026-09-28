@@ -222,14 +222,23 @@ pub enum LinePattern {
 }
 
 impl LinePattern {
+    /// Exact caller connector grammar overrides the theme's default pattern.
+    pub(crate) const fn stroke_pattern(self) -> crate::render::backend::StrokePattern {
+        match self {
+            Self::Solid => crate::render::backend::StrokePattern::Solid,
+            Self::Dashed => crate::render::backend::StrokePattern::LongDash,
+        }
+    }
+
     pub(crate) fn line_style(
         self,
         color: (u8, u8, u8),
         width: f32,
     ) -> crate::render::backend::LineStyle {
-        match self {
-            Self::Solid => crate::render::backend::LineStyle::solid(color, width),
-            Self::Dashed => crate::render::backend::LineStyle::long_dashed(color, width),
+        crate::render::backend::LineStyle {
+            color: color.into(),
+            width,
+            pattern: self.stroke_pattern(),
         }
     }
 }

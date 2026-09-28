@@ -979,6 +979,7 @@ pub(crate) struct MarkAppearance {
     pub(crate) raincloud_median: StrokeAppearance,
     pub(crate) beeswarm_reference: StrokeAppearance,
     pub(crate) interaction_interval: DataLineAppearance,
+    pub(crate) interaction_connector: DataLineAppearance,
     /// Sizes of built-in point roles; plotted groups and their guides share these.
     pub(crate) point_sizes: PointSizeAppearance,
     /// Bar uncertainty stems/caps in either orientation.
@@ -1486,6 +1487,11 @@ fn resolved_theme(
             },
             interaction_interval: DataLineAppearance {
                 width: 1.2,
+                alpha: 255,
+                pattern: StrokePattern::Solid,
+            },
+            interaction_connector: DataLineAppearance {
+                width: 1.8,
                 alpha: 255,
                 pattern: StrokePattern::Solid,
             },
@@ -1997,6 +2003,11 @@ mod tests {
                 },
                 interaction_interval: DataLineAppearance {
                     width: 1.2,
+                    alpha: 255,
+                    pattern: StrokePattern::Solid,
+                },
+                interaction_connector: DataLineAppearance {
+                    width: 1.8,
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },

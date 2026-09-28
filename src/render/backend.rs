@@ -210,6 +210,7 @@ pub struct LineStyle {
 impl LineStyle {
     /// Create a solid line style.
     #[must_use]
+    #[cfg(test)]
     pub fn solid(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
             color: color.into(),
@@ -242,6 +243,7 @@ impl LineStyle {
 
     /// Create a line using the fixed `5 3` dash pattern.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn long_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
             color: color.into(),

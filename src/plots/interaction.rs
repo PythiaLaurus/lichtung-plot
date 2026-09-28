@@ -91,7 +91,8 @@ impl PreparedInteraction {
             let point = chart
                 .point_style(theme, color, theme.marks.point_sizes.interaction)
                 .with_shape(trace.style.point_shape);
-            let line = trace.style.line_pattern.line_style(color, 1.8);
+            let mut line = theme.marks.interaction_connector.backend_style(color);
+            line.pattern = trace.style.line_pattern.stroke_pattern();
             entries.push(
                 match (
                     chart.markers_visible(),
@@ -342,7 +343,12 @@ pub(crate) fn measure_marks(
                 context.theme.marks.point_sizes.interaction,
             )
             .with_shape(trace.style.point_shape);
-        let line = trace.style.line_pattern.line_style(color, 1.8);
+        let mut line = context
+            .theme
+            .marks
+            .interaction_connector
+            .backend_style(color);
+        line.pattern = trace.style.line_pattern.stroke_pattern();
         let mut selected = TracePayload {
             intervals: Vec::new(),
             points: Vec::new(),
