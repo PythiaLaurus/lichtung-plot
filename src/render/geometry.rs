@@ -784,6 +784,20 @@ pub(crate) fn rectangular_fill_ink_outset(
     theme: &crate::theme::ResolvedTheme,
     style: &FillStyle,
 ) -> Result<(f64, f64), Error> {
+    Ok(
+        rectangular_fill_ink_bounds(theme, style)?.map_or((0.0, 0.0), |bounds| {
+            (
+                (bounds.right - bounds.left).max(0.0),
+                (bounds.top - bounds.bottom).max(0.0),
+            )
+        }),
+    )
+}
+
+pub(crate) fn rectangular_fill_ink_bounds(
+    theme: &crate::theme::ResolvedTheme,
+    style: &FillStyle,
+) -> Result<Option<GeometryBox>, Error> {
     let mut ink = GeometrySnapshot::new(theme)?;
     ink.polygon(
         &[
@@ -795,11 +809,10 @@ pub(crate) fn rectangular_fill_ink_outset(
         style,
         None,
     )?;
-    Ok(ink.bounds().first().map_or((0.0, 0.0), |bounds| {
-        (
-            (bounds.right - bounds.left - 1.0).max(0.0),
-            (bounds.top - bounds.bottom - 1.0).max(0.0),
-        )
+    Ok(ink.bounds().first().copied().map(|mut bounds| {
+        bounds.right -= 1.0;
+        bounds.top -= 1.0;
+        bounds
     }))
 }
 

@@ -1679,6 +1679,50 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
 }
 
 #[test]
+fn histogram_bin_and_overlay_ink_remeasure_under_one_root_domain_owner() {
+    let source = Plot::histogram(crate::HistogramInput::samples(NumericValues::new(
+        "sample",
+        [1.0, 2.0, 3.0, 4.0],
+    )))
+    .bins(crate::HistogramBins::Count(2))
+    .stat(crate::HistogramStat::Density)
+    .composite(crate::HistogramComposite::KdeAndRug(
+        crate::HistogramKde::Internal,
+    ))
+    .size(640, 480)
+    .erase();
+    let mut theme = theme();
+    theme.marks.histogram_bin.outline_width = 18.0;
+    theme.marks.histogram_curve.width = 12.0;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let result = plan_panel(&chart, PlotKind::Histogram, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(result.planned_x_limits().is_some());
+    assert!(result.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Histogram(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Histogram")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    assert_eq!(payload.bins.len(), 2);
+    let panel = result.result.layout.projection.panel_box();
+    let mut geometry = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    for bin in &payload.bins {
+        geometry.polygon(bin, &payload.fill, None).unwrap();
+    }
+    for bounds in geometry.bounds() {
+        assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+    }
+}
+
+#[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
     let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let plot = Plot::line(

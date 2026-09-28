@@ -28,6 +28,7 @@ pub(crate) struct PreparedHistogramInputs {
 #[derive(Debug)]
 pub(crate) struct HistogramSemantics {
     pub(crate) ranges: [(f64, f64); 2],
+    source_ranges: [(f64, f64); 2],
     bins: Vec<crate::HistogramBin>,
     curve: Option<Vec<HistogramKdePoint>>,
     rugs: Vec<crate::HistogramRug>,
@@ -169,6 +170,7 @@ impl HistogramSemantics {
                     data.source_resources()?,
                 )?,
             ],
+            source_ranges: [range, (0.0, maximum)],
             bins,
             curve,
             rugs,
@@ -179,12 +181,13 @@ impl HistogramSemantics {
 #[derive(Debug)]
 pub(crate) struct HistogramPayload {
     clip: crate::layout::PanelBox,
-    bins: Vec<[Point2D; 4]>,
+    pub(crate) bins: Vec<[Point2D; 4]>,
     curve: Option<Vec<Point2D>>,
     rugs: Vec<[Point2D; 2]>,
-    fill: FillStyle,
+    pub(crate) fill: FillStyle,
     curve_style: LineStyle,
     rug_style: LineStyle,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl HistogramPayload {
@@ -231,7 +234,55 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(prepared, layout, theme, data).map_err(Into::into)
+    let projection = layout.projection.clone();
+    let mut result = project(prepared, layout, theme, data)?;
+    let fill = theme.marks.histogram_bin.backend_style((0, 0, 0));
+    let mut ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &fill)?;
+    if prepared
+        .curve
+        .as_ref()
+        .is_some_and(|curve| curve.len() >= 2)
+    {
+        let curve = crate::render::geometry::line_ink_bounds(
+            theme,
+            &theme.marks.histogram_curve.backend_style(),
+        )?;
+        ink = match (ink, curve) {
+            (Some(fill), Some(curve)) => Some(fill.union(curve)),
+            (fill, curve) => fill.or(curve),
+        };
+    }
+    if !prepared.rugs.is_empty() {
+        let rug = crate::render::geometry::line_ink_bounds(
+            theme,
+            &theme.marks.histogram_rug.backend_style(),
+        )?;
+        ink = match (ink, rug) {
+            (Some(ink), Some(rug)) => Some(ink.union(rug)),
+            (ink, rug) => ink.or(rug),
+        };
+    }
+    if let Some(ink) = ink {
+        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+            prepared.source_ranges,
+            &projection,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?;
+        let marks =
+            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Histogram marks"))
+                .expect("newly selected Histogram marks have one owner");
+        let crate::layout::interior::MarkPayload::Histogram(payload) = &mut marks.payload else {
+            unreachable!("Histogram selected its own mark payload")
+        };
+        payload.domain_expansions = requests;
+    }
+    Ok(result)
 }
 
 pub(crate) fn project(
@@ -296,6 +347,7 @@ pub(crate) fn project(
         fill: theme.marks.histogram_bin.backend_style(theme.colors[0]),
         curve_style: theme.marks.histogram_curve.backend_style(),
         rug_style: theme.marks.histogram_rug.backend_style(),
+        domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     #[cfg(test)]
