@@ -43,6 +43,111 @@ pub(crate) struct PreparedWaterfall {
     pub(crate) totals: [(f64, String); 2],
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_waterfall
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| Error::Render("Waterfall intrinsic requires root-prepared spans".into()))?;
+    if prepared.labels.is_empty() || prepared.labels.len() != prepared.spans.len() {
+        return Err(Error::Render(
+            "Waterfall categories and scientific spans differ".into(),
+        ));
+    }
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.spans.len() as u128)
+        .map_err(|error| Error::Render(format!("Waterfall span intrinsic admission: {error:?}")))?;
+    let positive = theme.marks.waterfall_bar.backend_style(theme.colors[0]);
+    let negative = theme
+        .marks
+        .waterfall_bar
+        .backend_style(theme.colors[1 % theme.colors.len()]);
+    let positive_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &positive)?;
+    let negative_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &negative)?;
+    let mut pitch = 1.0_f64 / 1024.0;
+    let mut numeric = 0.0_f64;
+    for (_, _, delta) in &prepared.spans {
+        let ink = if *delta >= 0.0 {
+            positive_ink
+        } else {
+            negative_ink
+        };
+        // One declared 0.6-category bar must retain distinct canonical edges.
+        pitch = pitch.max((1.0 / 1024.0) / 0.6);
+        if let Some(ink) = ink {
+            pitch = pitch.max((-ink.bottom).max(0.0) / 0.2);
+            pitch = pitch.max(ink.top.max(0.0) / 0.2);
+            numeric = numeric.max(ink.right - ink.left);
+        }
+    }
+    if prepared.spans.len() > 1 {
+        let connector = crate::render::geometry::line_ink_width(
+            theme,
+            &theme.marks.waterfall_connector.backend_style(),
+        )?;
+        pitch = pitch.max(connector / 0.4);
+        numeric = numeric.max(connector);
+    }
+    numeric = numeric.max(crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.waterfall_reference.backend_style(),
+    )?);
+    let categories = f64::from(
+        u32::try_from(prepared.labels.len())
+            .map_err(|_| Error::Render("Waterfall category count exceeds spatial range".into()))?,
+    );
+    let mark_height = pitch * categories;
+    let mut text_height = 0.0_f64;
+    resources.claim_visits(2).map_err(|error| {
+        Error::Render(format!("Waterfall total intrinsic admission: {error:?}"))
+    })?;
+    for (value, label) in &prepared.totals {
+        if chart
+            .user_x_limits()
+            .is_some_and(|range| *value < range.0 || *value > range.1)
+        {
+            continue;
+        }
+        let plan = theme.measure_text(
+            label,
+            &theme.typography.waterfall_total,
+            crate::layout::PhysicalTextAlignment::Center,
+            "Waterfall total shelf intrinsic",
+            false,
+        )?;
+        text_height = text_height.max(plan.height());
+    }
+    let height = mark_height
+        + if text_height > 0.0 {
+            2.0 * ANNOTATION_PADDING + text_height
+        } else {
+            0.0
+        };
+    if !height.is_finite() {
+        return Err(Error::Render(
+            "Waterfall mark/annotation hard span overflowed".into(),
+        ));
+    }
+    Ok((
+        if chart.user_x_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+        height,
+    ))
+}
+
 pub(crate) fn prepare(
     chart: &Plot,
     data: crate::data::PlotData<'_>,
@@ -269,12 +374,13 @@ pub(crate) fn measure(
             plan: text_plan,
         });
     }
-    let payload = WaterfallPayload {
+    let mut payload = WaterfallPayload {
         clip: layout.projection.panel_box(),
         bars,
         connectors,
         references,
         text,
+        domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();
@@ -289,6 +395,56 @@ pub(crate) fn measure(
     }
     for text in &payload.text {
         geometry.text(text.placement, &text.plan, None)?;
+    }
+    let mut full = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    data.claim_source_visits(payload.bars.len() + payload.connectors.len())?;
+    for (points, style) in &payload.bars {
+        full.polygon(points, style, None)?;
+    }
+    for (points, style) in &payload.connectors {
+        full.line(points, style, None)?;
+    }
+    if let Some(bounds) = full
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        if bounds.bottom < clip.y0 || bounds.top > clip.y1 {
+            return Err(context
+                .fit_scope()
+                .failure(
+                    crate::layout::fit::FitKind::SpecializedGeometry,
+                    "Waterfall painted bars/connectors exceed their assigned category panel",
+                )
+                .into());
+        }
+    }
+    // Base/terminal reference strokes belong to the numeric axis but their
+    // vertical ends intentionally meet the category frame.
+    data.claim_source_visits(payload.references.len())?;
+    for (points, style) in &payload.references {
+        full.line(points, style, None)?;
+    }
+    if chart.user_x_limits().is_none() {
+        if let Some(bounds) = full
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union)
+        {
+            let count = u32::try_from(prepared.labels.len()).map_err(|_| {
+                Error::Render("Waterfall category count exceeds spatial range".into())
+            })?;
+            payload.domain_expansions = crate::layout::interior::automatic_absolute_ink_expansions(
+                [prepared.range, (0.0, f64::from(count))],
+                &layout.projection,
+                bounds,
+                [true, false],
+                data,
+                context.fit_scope(),
+            )?;
+        }
     }
     let mut result = PlotRenderResult::new(layout, Vec::new());
     result.y_domain = crate::spec::AxisDomain::Categorical;
@@ -307,6 +463,7 @@ pub(crate) struct WaterfallPayload {
     connectors: Vec<([Point2D; 2], LineStyle)>,
     references: [([Point2D; 2], LineStyle); 2],
     text: Vec<PlacedText>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl WaterfallPayload {
@@ -489,6 +646,51 @@ mod tests {
     use crate::layout::fit::PlanError;
     use crate::layout::kernel::nearest_spatial_quanta;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn styled_waterfall_bars_clear_automatic_numeric_ink() {
+        let source = Plot::waterfall(
+            CategoryValues::new("step", ["rise", "fall"]).unwrap(),
+            NumericValues::new("delta", [2.0, -1.0]),
+            0.0,
+        )
+        .size(800, 900)
+        .erase();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.waterfall_bar.outline_width = 80.0;
+        theme.marks.waterfall_connector.width = 16.0;
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let cell = PanelBox::new(80.0, 700.0, 80.0, 800.0);
+        let selected = crate::decorations::plan::plan_panel_for_test(
+            &chart,
+            crate::PlotKind::Waterfall,
+            cell,
+            crate::decorations::plan::LegendRole::Panel,
+            &theme,
+        )
+        .unwrap();
+        assert!(selected.planned_x_limits().is_some());
+        let crate::layout::interior::MarkPayload::Waterfall(payload) =
+            &selected.result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Waterfall")
+        };
+        assert!(payload.domain_expansions.iter().all(Option::is_none));
+        let panel = selected.result.layout.projection.panel_box();
+        let mut ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        for (corners, style) in &payload.bars {
+            ink.polygon(corners, style, None).unwrap();
+        }
+        for (points, style) in &payload.connectors {
+            ink.line(points, style, None).unwrap();
+        }
+        for bounds in ink.bounds() {
+            assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+            assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        }
+    }
 
     #[test]
     fn custom_total_typography_reallocates_shelf_without_changing_span_inputs() {

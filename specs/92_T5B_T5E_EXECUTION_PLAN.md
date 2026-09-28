@@ -1025,7 +1025,9 @@ caller styles while centralizing their ownership.
 | T5c2d1a | COMPLETE | T5c2d0 | `feat(heatmap): measure styled cell and missing-cross hard ink` |
 | T5c2d1b | IN PROGRESS | T5c2d1a | Umbrella for remaining specialized mark requirements |
 | T5c2d1b1 | COMPLETE | T5c2d1a | `feat(beeswarm): measure occupied marker category ink` |
-| T5c2d1b2 | PENDING | T5c2d1b1 | `refactor(marks): measure remaining specialized mark requirements` |
+| T5c2d1b2 | IN PROGRESS | T5c2d1b1 | Umbrella for remaining specialized mark requirements |
+| T5c2d1b2a | COMPLETE | T5c2d1b1 | `feat(waterfall): measure signed step category ink` |
+| T5c2d1b2b | PENDING | T5c2d1b2a | `refactor(marks): measure Marginal and Matrix mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1793,6 +1795,19 @@ fixtures, exact-X windows and Y occupancy, colorbar routing, candidate resource
 refusal, frozen SVG/PNG replay and unchanged Beeswarm snapshot pass with
 strict Clippy. T5e4 replaces the bin offsets with the approved deterministic
 tangent pass; T5c2d1b2 proceeds to Waterfall/Marginal/Matrix mark inputs.
+
+T5c2d1b2a closure: Waterfall retains every finite signed cumulative span,
+including a true zero, and derives category hard pitch from complete positive/
+negative bar outlines and connector ink. Prepared base/terminal labels give a
+minimal required source-owned annotation row height before the still-deferred
+T5e5 shelf pack; caller-exact numeric windows may clip marks, not collapse
+their category count. Selected bars and connectors are observed unclipped
+before one X-domain feedback request; reference strokes deliberately terminate
+at the category frame and contribute numeric, not categorical, clearance.
+Custom 80px outlined signed bars and 16px connectors, deterministic replay,
+typed annotation failure, eleven focused Waterfall units, current full SVG
+fingerprints and strict Clippy pass. T5e5 will replace the shelf algorithm;
+Marginal/Matrix mark inputs follow in T5c2d1b2b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

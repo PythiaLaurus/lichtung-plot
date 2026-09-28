@@ -188,35 +188,25 @@ impl Plot {
         &self,
         theme: &crate::theme::ResolvedTheme,
     ) -> Result<(f64, f64), Error> {
-        if InteriorRoute::classify(self.kind()).is_native() {
-            let mut minimum = coordinate::Intrinsics::prepared(self, theme)?.minimum(self);
-            let point_ink = match self.kind() {
-                PlotKind::Scatter => {
-                    Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?)
-                }
-                PlotKind::Qq => Some(crate::plots::qq::intrinsic_body_minimum(self, theme)?),
-                PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
-                    self, theme,
-                )?),
-                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
-                    Some(crate::plots::line::intrinsic_body_minimum(self, theme)?)
-                }
-                PlotKind::Density => {
-                    Some(crate::plots::density::intrinsic_body_minimum(self, theme)?)
-                }
-                PlotKind::Histogram => Some(crate::plots::histogram::intrinsic_body_minimum(
-                    self, theme,
-                )?),
-                _ => None,
-            };
-            if let Some(mark) = point_ink {
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+        let mut minimum = if InteriorRoute::classify(self.kind()).is_native() {
+            coordinate::Intrinsics::prepared(self, theme)?.minimum(self)
+        } else {
+            DeferredLegacyPanelMinimum::SIZE
+        };
+        let mark = match self.kind() {
+            PlotKind::Scatter => Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Qq => Some(crate::plots::qq::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
+                self, theme,
+            )?),
+            PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                Some(crate::plots::line::intrinsic_body_minimum(self, theme)?)
             }
-            if matches!(
-                self.kind(),
-                PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
-            ) {
+            PlotKind::Density => Some(crate::plots::density::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Histogram => Some(crate::plots::histogram::intrinsic_body_minimum(
+                self, theme,
+            )?),
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
                 let prepared = self
                     .prepared_estimate
                     .as_ref()
@@ -230,58 +220,37 @@ impl Plot {
                     .ok_or_else(|| {
                         Error::Render("estimate intrinsic requires root-prepared rows".into())
                     })?;
-                let mark = prepared.mark_intrinsic(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+                Some(prepared.mark_intrinsic(self, theme)?)
             }
-            if self.kind() == PlotKind::Dumbbell {
-                let mark = crate::plots::dumbbell::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+            PlotKind::Dumbbell => {
+                Some(crate::plots::dumbbell::intrinsic_body_minimum(self, theme)?)
             }
-            if matches!(
-                self.kind(),
-                PlotKind::Bar
-                    | PlotKind::StackedBar
-                    | PlotKind::HorizontalBar
-                    | PlotKind::StackedHorizontalBar
-            ) {
-                let mark = crate::plots::bar_data::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+            PlotKind::Bar
+            | PlotKind::StackedBar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedHorizontalBar => {
+                Some(crate::plots::bar_data::intrinsic_body_minimum(self, theme)?)
             }
-            if self.kind() == PlotKind::Boxplot {
-                let mark = crate::plots::boxplot::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+            PlotKind::Boxplot => Some(crate::plots::boxplot::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Raincloud if self.raincloud_geometry_input().is_some() => Some(
+                crate::plots::violin::precomputed::intrinsic_body_minimum(self, theme)?,
+            ),
+            PlotKind::Violin | PlotKind::Raincloud => {
+                Some(crate::plots::violin::intrinsic_body_minimum(self, theme)?)
             }
-            if self.kind() == PlotKind::Raincloud && self.raincloud_geometry_input().is_some() {
-                let mark = crate::plots::violin::precomputed::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
+            PlotKind::Interaction => Some(crate::plots::interaction::intrinsic_body_minimum(
+                self, theme,
+            )?),
+            PlotKind::Heatmap => Some(crate::plots::heatmap::intrinsic_body_minimum(self, theme)?),
+            PlotKind::Beeswarm => {
+                Some(crate::plots::beeswarm::intrinsic_body_minimum(self, theme)?)
             }
-            if self.kind() == PlotKind::Violin
-                || (self.kind() == PlotKind::Raincloud && self.raincloud_geometry_input().is_none())
-            {
-                let mark = crate::plots::violin::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
-            }
-            if self.kind() == PlotKind::Interaction {
-                let mark = crate::plots::interaction::intrinsic_body_minimum(self, theme)?;
-                minimum.0 = minimum.0.max(mark.0);
-                minimum.1 = minimum.1.max(mark.1);
-            }
-            return Ok(minimum);
-        }
-        let mut minimum = DeferredLegacyPanelMinimum::SIZE;
-        if self.kind() == PlotKind::Heatmap {
-            let heatmap = crate::plots::heatmap::intrinsic_body_minimum(self, theme)?;
-            minimum.0 = minimum.0.max(heatmap.0);
-            minimum.1 = minimum.1.max(heatmap.1);
-        }
-        if self.kind() == PlotKind::Beeswarm {
-            let mark = crate::plots::beeswarm::intrinsic_body_minimum(self, theme)?;
+            PlotKind::Waterfall => Some(crate::plots::waterfall::intrinsic_body_minimum(
+                self, theme,
+            )?),
+            PlotKind::Marginal | PlotKind::Matrix => None,
+        };
+        if let Some(mark) = mark {
             minimum.0 = minimum.0.max(mark.0);
             minimum.1 = minimum.1.max(mark.1);
         }
