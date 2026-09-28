@@ -137,7 +137,7 @@ impl PreparedScatter {
             let color = theme.colors[chart.hue_color_index(label, slot) % theme.colors.len()];
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label, data)?,
-                chart.point_style(theme, color, 3),
+                chart.point_style(theme, color, theme.marks.point_sizes.scatter),
             ));
         }
         Ok(entries)
@@ -185,7 +185,7 @@ impl PreparedScatter {
                 || theme.colors.first().copied().unwrap_or((0, 0, 0)),
                 |label| theme.colors[chart.hue_color_index(label, index) % theme.colors.len()],
             );
-            let style = chart.point_style(theme, color, 3);
+            let style = chart.point_style(theme, color, theme.marks.point_sizes.scatter);
             let points = data.collect_source(group.points.iter().map(|(x, y)| {
                 data.claim_source_visits(1)?;
                 let (x, y) = projection.project(*x, *y);
@@ -336,6 +336,7 @@ mod tests {
         theme.marks.primary_point.fill_alpha = 128;
         theme.marks.primary_point.shape = crate::PointShape::TriangleUp;
         theme.marks.primary_point.outline.color = crate::render::backend::Rgba::new(3, 5, 7, 64);
+        theme.marks.point_sizes.scatter = 5;
         let selected = prepared
             .project(
                 &plot,
@@ -352,6 +353,7 @@ mod tests {
         let style = &selected.groups[0].1;
         assert_eq!(style.color.alpha(), 128);
         assert_eq!(style.shape, crate::PointShape::TriangleUp);
+        assert_eq!(style.radius, 5);
         assert_eq!(style.outline.unwrap().color.alpha(), 64);
         assert!(selected
             .legends

@@ -578,7 +578,7 @@ pub(crate) fn measure(
                     let ps = chart.point_style(
                         theme,
                         theme.colors[group.color_index % theme.colors.len()],
-                        2,
+                        theme.marks.point_sizes.matrix,
                     );
                     let pts = data.collect_source(xs.iter().zip(ys.iter()).map(|(&xi, &yi)| {
                         data.claim_source_visits(1)?;
@@ -778,7 +778,7 @@ fn matrix_legend(
             chart.point_style(
                 theme,
                 theme.colors[group.color_index % theme.colors.len()],
-                2,
+                theme.marks.point_sizes.matrix,
             ),
             theme
                 .marks

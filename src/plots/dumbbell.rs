@@ -46,7 +46,7 @@ impl DumbbellData {
         ] {
             entries.push(LegendEntry::point(
                 chart.point_legend_identity(label, data)?,
-                chart.point_style(theme, color, 4),
+                chart.point_style(theme, color, theme.marks.point_sizes.dumbbell),
             ));
         }
         Ok(entries)
@@ -124,8 +124,16 @@ fn project(
         pairs: Vec::new(),
         connector,
         points: [
-            chart.point_style(theme, endpoints.left_color(), 4),
-            chart.point_style(theme, endpoints.right_color(), 4),
+            chart.point_style(
+                theme,
+                endpoints.left_color(),
+                theme.marks.point_sizes.dumbbell,
+            ),
+            chart.point_style(
+                theme,
+                endpoints.right_color(),
+                theme.marks.point_sizes.dumbbell,
+            ),
         ],
     };
     data.reserve_source(&mut payload.pairs, prepared.rows.len())?;

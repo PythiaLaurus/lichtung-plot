@@ -145,7 +145,7 @@ pub(crate) fn project(
         line: None,
         points: Vec::new(),
         line_style: theme.marks.qq_reference.backend_style(),
-        point_style: chart.point_style(theme, theme.colors[0], 3),
+        point_style: chart.point_style(theme, theme.colors[0], theme.marks.point_sizes.qq),
     };
     data.claim_source_visits(1)?;
     if let Some(line) = prepared.line {

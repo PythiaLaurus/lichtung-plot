@@ -97,7 +97,7 @@ impl PreparedMarginal {
             let color = theme.colors[color_index % theme.colors.len()];
             entries.push(LegendEntry::point_fill(
                 chart.collective_legend_identity(&group.identity, data)?,
-                chart.point_style(theme, color, 3),
+                chart.point_style(theme, color, theme.marks.point_sizes.marginal),
                 theme.marks.marginal_density.backend_style(color),
             ));
         }
@@ -293,7 +293,7 @@ pub(crate) fn measure(
             group.color_index
         };
         let color = theme.colors[color_index % theme.colors.len()];
-        let point_style = chart.point_style(theme, color, 3);
+        let point_style = chart.point_style(theme, color, theme.marks.point_sizes.marginal);
         let pts = data.collect_source(group.x.iter().zip(&group.y).map(|(&x, &y)| {
             data.claim_source_visits(1)?;
             let (x, y) = proj.project(x, y);

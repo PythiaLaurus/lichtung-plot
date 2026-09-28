@@ -186,7 +186,11 @@ impl PreparedLine {
             let point = chart.point_style(
                 theme,
                 color,
-                if chart.kind() == PlotKind::Line { 3 } else { 4 },
+                if chart.kind() == PlotKind::Line {
+                    theme.marks.point_sizes.path
+                } else {
+                    theme.marks.point_sizes.trajectory
+                },
             );
             let fill = theme.marks.line_band.backend_style(color);
             data.reserve_source(&mut entries, 1)?;
@@ -207,7 +211,11 @@ impl PreparedLine {
             for (index, label) in levels.iter().enumerate() {
                 entries.push(LegendEntry::point(
                     chart.point_legend_identity(label, data)?,
-                    chart.point_style(theme, theme.colors[index % theme.colors.len()], 4),
+                    chart.point_style(
+                        theme,
+                        theme.colors[index % theme.colors.len()],
+                        theme.marks.point_sizes.trajectory,
+                    ),
                 ));
             }
         }
@@ -762,7 +770,11 @@ fn project(
         let point_style = chart.point_style(
             theme,
             color,
-            if chart.kind() == PlotKind::Line { 3 } else { 4 },
+            if chart.kind() == PlotKind::Line {
+                theme.marks.point_sizes.path
+            } else {
+                theme.marks.point_sizes.trajectory
+            },
         );
         if chart.kind() == PlotKind::Line && chart.markers_visible() {
             data.reserve_source(&mut payload.marks, 2)?;
@@ -803,7 +815,7 @@ fn project(
                 data.reserve_source(&mut payload.marks, 1)?;
                 payload.marks.push(LineMark::Points(
                     data.collect_source(std::iter::once(Ok(project(point.x, point.y))))?,
-                    chart.point_style(theme, color, 4),
+                    chart.point_style(theme, color, theme.marks.point_sizes.trajectory),
                 ));
             }
         }

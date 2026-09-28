@@ -979,6 +979,8 @@ pub(crate) struct MarkAppearance {
     pub(crate) raincloud_median: StrokeAppearance,
     pub(crate) beeswarm_reference: StrokeAppearance,
     pub(crate) interaction_interval: DataLineAppearance,
+    /// Sizes of built-in point roles; plotted groups and their guides share these.
+    pub(crate) point_sizes: PointSizeAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -1066,6 +1068,41 @@ pub(crate) struct PointAppearance {
     pub(crate) fill_alpha: u8,
     pub(crate) shape: crate::PointShape,
     pub(crate) outline: crate::render::backend::PointOutline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PointSizeAppearance {
+    pub(crate) scatter: u32,
+    pub(crate) path: u32,
+    pub(crate) trajectory: u32,
+    pub(crate) regression: u32,
+    pub(crate) qq: u32,
+    pub(crate) marginal: u32,
+    pub(crate) matrix: u32,
+    pub(crate) interval_estimate: u32,
+    pub(crate) dumbbell: u32,
+    pub(crate) interaction: u32,
+    pub(crate) beeswarm: u32,
+    pub(crate) box_flier: u32,
+}
+
+impl PointSizeAppearance {
+    fn publication() -> Self {
+        Self {
+            scatter: 3,
+            path: 3,
+            trajectory: 4,
+            regression: 3,
+            qq: 3,
+            marginal: 3,
+            matrix: 2,
+            interval_estimate: 4,
+            dumbbell: 4,
+            interaction: 4,
+            beeswarm: 3,
+            box_flier: 2,
+        }
+    }
 }
 
 impl PointAppearance {
@@ -1452,6 +1489,7 @@ fn resolved_theme(
                 alpha: 255,
                 pattern: StrokePattern::Solid,
             },
+            point_sizes: PointSizeAppearance::publication(),
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
                 axis_width,
@@ -1962,6 +2000,7 @@ mod tests {
                     alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
+                point_sizes: PointSizeAppearance::publication(),
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,
                     width: expected.axis_width,

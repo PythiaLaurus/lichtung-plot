@@ -959,7 +959,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve Heatmap cell and missing-key outlines` |
 | T5c1b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2a | Umbrella for remaining mark/annotation appearance |
 | T5c1b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining structural mark strokes` |
-| T5c1b2b2b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): complete private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining style roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve primary point sizes by mark family` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2a | `feat(theme): complete private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1200,6 +1202,16 @@ fingerprints were stale after the earlier RGBA point-alpha change: old
 `44fc64272cd500e1/6e44598a586b59bc`. The marker-hidden hash
 `bae40bd86df8a981` remains identical, confirming no interval/connector
 stroke change under current presets.
+
+T5c1b2b2b2b2b2b2b2b2b2b2a closure: the existing family-specific primary-point
+radii for Scatter, Line, Trajectory/LinePath, Regression, Q-Q, Marginal, Matrix,
+estimate displays, Dumbbell, Interaction, Beeswarm and Boxplot fliers now enter
+from private `MarkAppearance::point_sizes`; selected marks and originating guide
+glyphs share one owner per family. A custom Scatter size changes the selected
+point and its exact guide while retaining positions. Strict Clippy, a pinned
+Interaction marker fingerprint and seven representative SVG snapshot paths pass
+with existing preset sizes. T5c2 consumes these actual sizes for native ink and
+occupancy constraints rather than reverting to fixed renderer assumptions.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

@@ -776,7 +776,11 @@ fn project(
             theme.marks.estimate_reference.backend_style()
         },
         interval_style: theme.marks.estimate_interval.backend_style(),
-        point_style: chart.point_style(theme, theme.colors[0], 4),
+        point_style: chart.point_style(
+            theme,
+            theme.colors[0],
+            theme.marks.point_sizes.interval_estimate,
+        ),
         rows: Vec::new(),
         #[cfg(test)]
         kind: chart.kind(),
