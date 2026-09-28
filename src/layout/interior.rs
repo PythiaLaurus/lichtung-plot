@@ -200,6 +200,9 @@ impl Plot {
                 PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
                     Some(crate::plots::line::intrinsic_body_minimum(self, theme)?)
                 }
+                PlotKind::Density => {
+                    Some(crate::plots::density::intrinsic_body_minimum(self, theme)?)
+                }
                 _ => None,
             };
             if let Some(mark) = point_ink {

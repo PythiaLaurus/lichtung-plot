@@ -36,6 +36,42 @@ pub(crate) struct PreparedDensityInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedDensity)>,
 }
 
+/// Group curves, rather than their generated KDE vertices, are the semantic
+/// primary marks. The resolved stroke is measured before parent assignment.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_density
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Density intrinsic requires root-prepared curves".into()))?;
+    if prepared.curves.is_empty() {
+        return Err(Error::Render("Density has no retained group curves".into()));
+    }
+    let line = theme.marks.density_line.backend_style((0, 0, 0));
+    let ink = crate::render::geometry::line_ink_width(theme, &line)?;
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            ink
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            ink
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedDensity {
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.curves
@@ -700,6 +736,24 @@ fn scaled_difference_ratio(high: f64, low: f64, denominator: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn density_group_curve_stroke_enters_automatic_hard_size_without_counting_kde_vertices() {
+        let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
+            .x_limits(0.0, 5.0)
+            .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let original = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.density_line.width = 140.0;
+        let thick = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(thick.0.to_bits(), original.0.to_bits());
+        assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
+        theme.marks.density_line.alpha = 0;
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+    }
 
     #[test]
     fn selected_curves_use_parent_collective_order_and_palette_without_rereading_columns() {

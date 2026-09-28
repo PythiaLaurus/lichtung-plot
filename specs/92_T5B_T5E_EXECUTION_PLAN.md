@@ -980,7 +980,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2a | COMPLETE | T5c2a1b1 | `feat(marks): measure Line and Trajectory path hard ink` |
 | T5c2a1b2b | IN PROGRESS | T5c2a1b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b1 | COMPLETE | T5c2a1b2a | `feat(marks): measure Qq and Regression reference hard ink` |
-| T5c2a1b2b2 | PENDING | T5c2a1b2b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2 | IN PROGRESS | T5c2a1b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2a | COMPLETE | T5c2a1b2b1 | `feat(marks): measure Density group-curve hard ink` |
+| T5c2a1b2b2b | PENDING | T5c2a1b2b2a | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1375,6 +1377,15 @@ the malformed-source and invalid-width validation remains fatal before that
 decision. Custom 140px stroke/transparent roles preserve exact-window
 clipping and default SVG bytes. Focused Qq/Regression, representative
 distribution snapshots, exact root resource-cap test and strict Clippy pass.
+
+T5c2a1b2b2a closure: each retained Density group curve, not its generated KDE
+vertices or input samples, supplies one semantic primary instance. Its
+theme-resolved data-colored curve stroke uses the admitted canonical line ink
+path for automatic-axis hard requirements; exact axes preserve mark clipping.
+Independent custom wide/transparent stroke values recompute without changing
+the cached axis typography. Focused grouped/source/limit tests, distribution
+SVG snapshots, root exact resource-cap test and strict Clippy pass. Density
+area polygon ink and the other standard families remain pending.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
