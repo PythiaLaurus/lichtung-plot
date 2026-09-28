@@ -1010,7 +1010,9 @@ caller styles while centralizing their ownership.
 | T5c2b1b2 | COMPLETE | T5c2b1b1 | `feat(marks): measure Bar category and interval requirements` |
 | T5c2b1b2a | COMPLETE | T5c2b1b2 | `feat(marks): measure attached estimate label row height` |
 | T5c2b1b3 | COMPLETE | T5c2b1b2a | `feat(marks): retain categorical natural preferences` |
-| T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
+| T5c2c | IN PROGRESS | T5c2b | Umbrella for categorical distributions and Interaction |
+| T5c2c0 | COMPLETE | T5c2b | `docs(marks): map collective distribution slot and ink inputs` |
+| T5c2c1 | PENDING | T5c2c0 | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
@@ -1646,6 +1648,25 @@ complete numeric-axis mark ink all use retained semantics and the one bounded
 root feedback path. Explicit numeric windows clip paint without removing the
 categorical slot. Required attached-label height is already reflected in
 the hard row; final label placement and collision shelves remain T5c3.
+
+T5c2c0 input handoff: one shared category axis and the established private
+categorical preference carrier serve four remaining ordinary kinds without a
+new statistics or projection route:
+
+| Consumer | Retained owner/primary count | Additional actual painted slot input |
+| --- | --- | --- |
+| Boxplot | `PreparedBoxplot.sample.groups`/`stats`, one summary per populated group | Quartile box, median/whiskers/caps, fliers or exact raw overlay; sparse category/group combinations do not create summaries |
+| Violin | `PreparedViolin.sample.groups`/KDE, one body per group | Mirrored KDE half-width, inner summary/caps and optional exact raw points, not the 64 generated KDE vertices |
+| Raincloud sampled/supplied | `PreparedViolin.sample.groups` or `PreparedRaincloud.groups`, one cloud/summary per actual group | Half KDE cloud, mandatory raw strip, inner box/median; caller-supplied strip coordinates keep their exact normalized identity |
+| Interaction | `PreparedInteraction.conditions`/`traces[*].cells`, one populated factor×trace slot | Per-group exact point shape/pattern, optional connectors, interval strokes and sparse condition occupancy; holes remain empty |
+
+For each group retain its actual `distribution_sample::center` or equivalent
+source series slot, validate the declared category boundary and measure
+complete painted X mark/overlay extents at the assigned categorical pitch.
+Numeric Y ranges inherit already prepared scientific statistics and may grow
+only through the one typed root feedback owner; exact windows clip that paint.
+`2em` categorical pitch and soft `4:3` aspect are preferences, not an extra
+hard floor. Raw-row/source identity and prepared guide entries stay unchanged.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
