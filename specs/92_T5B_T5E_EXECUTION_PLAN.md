@@ -988,7 +988,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2a | COMPLETE | T5c2a1b2b2b1 | `feat(marks): clear automatic Scatter point ink through root feedback` |
 | T5c2a1b2b2b2b | IN PROGRESS | T5c2a1b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b1 | COMPLETE | T5c2a1b2b2b2a | `feat(marks): clear path and Qq ink through root feedback` |
-| T5c2a1b2b2b2b2 | PENDING | T5c2a1b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b1 | `feat(marks): clear Regression observations through root feedback` |
+| T5c2a1b2b2b2b2b | PENDING | T5c2a1b2b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1433,6 +1435,17 @@ window/complete-ink tests, 41 Line integration tests, native facet/Canvas and
 cache on/off tests, exact root resource-cap tests and strict Clippy pass.
 Band/interval/reference edge geometry, remaining mark families and the soft
 density preference remain in T5c2a1b2b2b2b2.
+
+T5c2a1b2b2b2b2a closure: Regression retains its admitted observation source
+min/max independently of its fitted/band-inclusive display range. Only those
+prepared observation extrema and resolved primary-point ink request bounded
+automatic X/Y clearance; fitting the band does not masquerade as extra
+observations or force point-sized margins at every band extremum. User-exact
+axes still clip marks. A custom 54px observation test proves converged root
+point containment and bit-exact OLS endpoints after reprojection. Focused
+sample/facet/Canvas, exact root resource-cap/reuse, current Regression SVG
+snapshots and strict Clippy pass. Fitted-line/band edge ink, other standard
+families and soft density remain pending.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

@@ -127,8 +127,9 @@ pub(crate) struct PreparedRegressionInputs {
 #[derive(Debug)]
 pub(crate) struct PreparedRegression {
     pub(crate) ranges: [(f64, f64); 2],
+    observation_ranges: [(f64, f64); 2],
     points: Vec<(f64, f64)>,
-    fit_line: [(f64, f64); 2],
+    pub(crate) fit_line: [(f64, f64); 2],
     band_values: Option<Vec<(f64, f64, f64)>>,
 }
 
@@ -258,6 +259,7 @@ impl PreparedRegression {
 
         data.claim_source_visits(y.len())?;
         let (mut y_min, mut y_max) = crate::data::min_max(y.iter().copied(), "regression")?;
+        let observation_ranges = [(x_min, x_max), (y_min, y_max)];
         y_min = y_min.min(y_fit_lo).min(y_fit_hi);
         y_max = y_max.max(y_fit_lo).max(y_fit_hi);
         if let Some(values) = &band_values {
@@ -280,6 +282,7 @@ impl PreparedRegression {
         )?;
         Ok(Self {
             ranges: [x_range, y_range],
+            observation_ranges,
             points,
             fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
             band_values,
@@ -290,12 +293,13 @@ impl PreparedRegression {
 #[derive(Debug)]
 pub(crate) struct RegressionPayload {
     clip: crate::layout::PanelBox,
-    points: Vec<Point2D>,
-    fit_line: [Point2D; 2],
+    pub(crate) points: Vec<Point2D>,
+    pub(crate) fit_line: [Point2D; 2],
     band: Option<Vec<Point2D>>,
     point_style: PointStyle,
     line_style: LineStyle,
     band_fill: FillStyle,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl RegressionPayload {
@@ -337,7 +341,32 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, theme, data).map_err(Into::into)
+    let projection = layout.projection.clone();
+    let mut result = project(chart, prepared, layout, theme, data)?;
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(
+        theme,
+        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression),
+    )? {
+        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+            prepared.observation_ranges,
+            &projection,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?;
+        let marks =
+            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Regression marks"))
+                .expect("newly selected Regression marks have one owner");
+        let crate::layout::interior::MarkPayload::Regression(payload) = &mut marks.payload else {
+            unreachable!("Regression selected its own mark payload")
+        };
+        payload.domain_expansions = requests;
+    }
+    Ok(result)
 }
 
 pub(crate) fn project(
@@ -411,6 +440,7 @@ pub(crate) fn project(
         point_style,
         line_style,
         band_fill,
+        domain_expansions: [None; 2],
     };
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     #[cfg(test)]

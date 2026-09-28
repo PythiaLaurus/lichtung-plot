@@ -1603,6 +1603,58 @@ fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quanti
 }
 
 #[test]
+fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ols() {
+    let source = Plot::regression(
+        NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
+    )
+    .size(640, 480)
+    .erase();
+    let mut theme = theme();
+    theme.marks.point_sizes.regression = 54;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let result = plan_panel(
+        &chart,
+        PlotKind::Regression,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    assert!(result.planned_x_limits().is_some() || result.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Regression(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Regression")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let ink = crate::render::geometry::point_ink_bounds(
+        &theme,
+        &chart.point_style(&theme, (0, 0, 0), 54),
+    )
+    .unwrap()
+    .unwrap();
+    let panel = result.result.layout.projection.panel_box();
+    assert_eq!(payload.points.len(), 4);
+    for point in &payload.points {
+        assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
+        assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+    }
+    let prepared = &inputs.regression.as_ref().unwrap().panels[0].1;
+    for (selected, (x, y)) in payload.fit_line.iter().zip(prepared.fit_line) {
+        let (expected_x, expected_y) = result.result.layout.projection.project(x, y);
+        assert_eq!(selected.x.to_bits(), expected_x.to_bits());
+        assert_eq!(selected.y.to_bits(), expected_y.to_bits());
+    }
+}
+
+#[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
     let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let plot = Plot::line(
