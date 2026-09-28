@@ -490,8 +490,8 @@ remain in progress while the later admitted subphases are incomplete.
 
 Verification: the T2a1 source manifest and rejected-match table account for the
 three admitted production sources; tests are evidence only. Independent review
-found no remaining ownership or schema issue. Tracked-diff checks and `just
-verify` passed on 2026-08-26. No production code, test, or snapshot changed.
+found no remaining ownership or schema issue. Tracked-diff checks and
+`just verify` passed on 2026-08-26. No production code, test, or snapshot changed.
 
 Create `04_VISUAL_PROPERTY_OWNERSHIP.md` with the required schema, source
 manifest, rejected-match table, and every current property record from
@@ -4394,8 +4394,8 @@ other eight before fonts):
 | Heatmap | `heatmap::{axis_categories,category_levels}`: shared admitted normalization, Cartesian/triangular ordering and explicit-order copies; no cell/color/highlight grid |
 | Matrix | `matrix::{prepare_axes,build_groups,validate_group_kdes,matrix_support_range}`: admitted variable reference/label buffers, nested channels/groups/bandwidths and support scans, then pre-admitted Arc retention; no cell packing/primitive payload |
 
-Common source gates are `PlotData::{reserve_source,collect_source,
-copy_source_string,normalize_source_string,reserve_source_string,source_arc}`,
+Common source gates are
+`PlotData::{reserve_source,collect_source,copy_source_string,normalize_source_string,reserve_source_string,source_arc}`,
 `data::explicit_category_order`, `SourceAdmission`, the fallible in-place source
 sorter, and the admitted KDE/geometry validators. All calls reached from the
 activation dispatcher carry its operation resources. Existing configuration
@@ -6129,8 +6129,8 @@ Final corrections and evidence:
 
 Final primary `just verify` in `/tmp/opencode/t5a6d-verify.log` passed in full:
 
-- Formatting and strict `cargo clippy --locked --offline --all-targets --
-  -D warnings` passed. Library: **1,024 passed, 0 failed, 17 ignored** (1,041 total).
+- Formatting and strict `cargo clippy --locked --offline --all-targets -- -D warnings`
+  passed. Library: **1,024 passed, 0 failed, 17 ignored** (1,041 total).
 - All **467 integration tests** passed: annotations 27, categorical 44, composition
   57, distributions 67, estimates 38, heatmap 37, interactions 23, layout 20,
   lines 41, marginal/matrix 19, output 28, rendering 43, statistics 10, and visual
