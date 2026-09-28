@@ -970,35 +970,35 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation style ownership |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve supplemental point-label typography` |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): close private mark and annotation roles` |
-| T5c2a | IN PROGRESS | T5c1 | Umbrella; completes after standard-mark input and intrinsic substages |
+| T5c2a | COMPLETE | T5c1 | Standard-coordinate mark input, hard/soft ink and feedback closure |
 | T5c2a0 | COMPLETE | T5c1 | `docs(marks): map standard prepared mark inputs` |
-| T5c2a1 | IN PROGRESS | T5c2a0 | Umbrella for standard mark hard/preferred/ink requirements |
+| T5c2a1 | COMPLETE | T5c2a0 | Umbrella for standard mark hard/preferred/ink requirements |
 | T5c2a1a | COMPLETE | T5c2a0 | `feat(marks): measure Scatter primary-point hard ink` |
-| T5c2a1b | IN PROGRESS | T5c2a1a | Umbrella for remaining point/path/reference requirements |
+| T5c2a1b | COMPLETE | T5c2a1a | Umbrella for remaining point/path/reference requirements |
 | T5c2a1b1 | COMPLETE | T5c2a1a | `feat(marks): measure Qq and Regression observation hard ink` |
-| T5c2a1b2 | IN PROGRESS | T5c2a1b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2 | COMPLETE | T5c2a1b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2a | COMPLETE | T5c2a1b1 | `feat(marks): measure Line and Trajectory path hard ink` |
-| T5c2a1b2b | IN PROGRESS | T5c2a1b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b | COMPLETE | T5c2a1b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b1 | COMPLETE | T5c2a1b2a | `feat(marks): measure Qq and Regression reference hard ink` |
-| T5c2a1b2b2 | IN PROGRESS | T5c2a1b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2 | COMPLETE | T5c2a1b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2a | COMPLETE | T5c2a1b2b1 | `feat(marks): measure Density group-curve hard ink` |
-| T5c2a1b2b2b | IN PROGRESS | T5c2a1b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b | COMPLETE | T5c2a1b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b1 | COMPLETE | T5c2a1b2b2a | `feat(marks): measure Histogram bin and overlay hard ink` |
-| T5c2a1b2b2b2 | IN PROGRESS | T5c2a1b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2 | COMPLETE | T5c2a1b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2a | COMPLETE | T5c2a1b2b2b1 | `feat(marks): clear automatic Scatter point ink through root feedback` |
-| T5c2a1b2b2b2b | IN PROGRESS | T5c2a1b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b | COMPLETE | T5c2a1b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b1 | COMPLETE | T5c2a1b2b2b2a | `feat(marks): clear path and Qq ink through root feedback` |
-| T5c2a1b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b1 | `feat(marks): clear Regression observations through root feedback` |
-| T5c2a1b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b | COMPLETE | T5c2a1b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2a | `feat(marks): clear Density curves through root feedback` |
-| T5c2a1b2b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b1 | `feat(marks): clear Histogram bins and overlays through root feedback` |
-| T5c2a1b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b | COMPLETE | T5c2a1b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2a | `feat(marks): measure Regression band and fit edge ink` |
-| T5c2a1b2b2b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b2b1 | `feat(marks): retain complete Density area and Line ribbon ink` |
-| T5c2a1b2b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b2b | COMPLETE | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2b2a | `feat(marks): constrain pre-selection area and band hard ink` |
 | T5c2a1b2b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b2b1 | `feat(marks): retain standard-panel density preferences` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
@@ -1538,6 +1538,20 @@ line projects to exactly the same scientific fit endpoints. Focused custom
 styles, facet/Canvas, distribution snapshots, exact resource-cap/cache tests
 and strict Clippy pass. Line ribbons, Density areas and the soft density
 preference remain in T5c2a1b2b2b2b2b2b2.
+
+T5c2a closure: all eight standard-coordinate families retain their prepared
+semantic mark cardinality, complete painted hard/selected ink, exact-window
+clipping and the one root feedback path; an admitted checked natural preference
+is attached to the native frame for T5e root sizing. `DeferredLegacyPanelMinimum`
+is still owned by T5c4, not silently displaced by a soft density target.
+Automatic Qq axes at `f64::MAX`/`-f64::MAX` cannot represent a further finite
+domain endpoint; the approved `05` automatic-ink rule now returns a scoped
+`SpecializedGeometry` fit miss before output publication instead of emitting
+the previously clipped glyph. Zero, subnormal and representable `1e300`
+constants still render, and an exact caller data window still clips. Focused
+Qq numeric/default tests, mark/facet/Canvas/capture and feedback tests, 41
+Line integration tests, 13 SVG snapshots, exact root resource caps and strict
+Clippy pass. T5c2b proceeds to categorical estimate and bar requirements.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

@@ -447,7 +447,7 @@ fn qq_renders_constant_large_finite_sample_with_representable_auto_range() {
 }
 
 #[test]
-fn qq_renders_zero_subnormal_and_f64_max_constants() {
+fn qq_renders_representable_constants_and_rejects_uncontainable_auto_ink() {
     for (name, value) in [
         ("zero", 0.0),
         ("subnormal", f64::from_bits(1)),
@@ -456,13 +456,27 @@ fn qq_renders_zero_subnormal_and_f64_max_constants() {
     ] {
         let dir = unique_dir(&format!("qq-constant-{name}"));
         let output = dir.join("qq.svg");
-        Plot::qq(NumericValues::new("value", [value, value, value]))
-            .svg_preserve_text(&output)
-            .unwrap();
-        let svg = std::fs::read_to_string(output).unwrap();
-
-        assert_eq!(svg.matches("<circle ").count(), 3, "{name}");
-        assert!(!svg.contains("NaN") && !svg.contains("inf"), "{name}");
+        let result =
+            Plot::qq(NumericValues::new("value", [value, value, value])).svg_preserve_text(&output);
+        if matches!(name, "maximum" | "minimum") {
+            let error = result
+                .err()
+                .expect("uncontainable automatic mark ink")
+                .to_string();
+            assert!(
+                error.contains("automatic mark ink cannot extend this representable data domain"),
+                "{name}: {error}"
+            );
+            assert!(
+                !output.exists(),
+                "unresolved automatic mark ink must not publish output"
+            );
+        } else {
+            result.unwrap();
+            let svg = std::fs::read_to_string(&output).unwrap();
+            assert_eq!(svg.matches("<circle ").count(), 3, "{name}");
+            assert!(!svg.contains("NaN") && !svg.contains("inf"), "{name}");
+        }
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
@@ -517,15 +531,20 @@ fn qq_explicit_limits_skip_opposite_sign_extreme_outliers_before_projection() {
 }
 
 #[test]
-fn qq_hidden_line_renders_opposite_extremes_with_exact_auto_range() {
+fn qq_hidden_line_rejects_uncontainable_opposite_extreme_auto_ink() {
     let dir = unique_dir("qq-opposite-extremes-auto-hidden");
     let output = dir.join("qq.svg");
     let plot = Plot::qq(NumericValues::new("value", [-f64::MAX, f64::MAX]));
     let plot = plot.reference_line(QqLine::Hidden);
-    plot.svg_preserve_text(&output).unwrap();
-    let svg = std::fs::read_to_string(output).unwrap();
-
-    assert_eq!(svg.matches("<circle ").count(), 2);
-    assert!(!svg.contains("NaN") && !svg.contains("inf"));
+    let error = plot
+        .svg_preserve_text(&output)
+        .err()
+        .expect("uncontainable automatic mark ink")
+        .to_string();
+    assert!(
+        error.contains("automatic mark ink cannot obtain a finite data domain"),
+        "{error}"
+    );
+    assert!(!output.exists());
     std::fs::remove_dir_all(dir).unwrap();
 }
