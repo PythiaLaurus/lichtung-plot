@@ -998,7 +998,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2a | `feat(marks): measure Regression band and fit edge ink` |
 | T5c2a1b2b2b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b2b1 | `feat(marks): retain complete Density area and Line ribbon ink` |
-| T5c2a1b2b2b2b2b2b2b | PENDING | T5c2a1b2b2b2b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2b2a | `feat(marks): constrain pre-selection area and band hard ink` |
+| T5c2a1b2b2b2b2b2b2b2 | PENDING | T5c2a1b2b2b2b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1458,6 +1460,18 @@ recorded in T5c2a1b2b2b2b1 is historical, not current expected output.
 Focused Line/Density, exact-window, facet/Canvas, snapshot, exact resource-cap
 and child-cache tests plus strict Clippy pass. Pre-selection polygon hard
 requirements and soft density preference remain in T5c2a1b2b2b2b2b2b2b.
+
+T5c2a1b2b2b2b2b2b2b1 closure: a configured Line interval ribbon, optional
+Regression band and Density area now contribute their complete resolved,
+canonically measured fill-outline outsets to the pre-selection hard width and
+height of an automatic data axis. When absent/fully transparent they add no
+phantom hard ink; exact data windows waive only their own dimension. The
+retained polygon's actual mitered shape is still validated and, if needed,
+recovered through the existing selected root feedback rather than estimated
+from an unrelated rectangle. Focused 100/140px custom outline, facet/Canvas,
+source representability, default SVG snapshots, exact operation resource-cap
+tests and strict Clippy pass. Soft primary-mark density/standard preferred
+dimensions are next; the generic floor retires only in T5c4.
 
 T5c2a1b2b2b2b2a closure: Regression retains its admitted observation source
 min/max independently of its fitted/band-inclusive display range. Only those

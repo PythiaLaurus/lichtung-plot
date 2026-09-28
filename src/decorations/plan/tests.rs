@@ -1568,6 +1568,8 @@ fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
     let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
+    assert!(minimum.0 >= 100.0 && minimum.1 >= 100.0);
     let result = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme).unwrap();
     let crate::layout::interior::MarkPayload::Line(payload) =
         &result.result.marks.as_ref().unwrap().payload

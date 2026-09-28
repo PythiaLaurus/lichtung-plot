@@ -59,14 +59,18 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let line = theme.marks.density_line.backend_style((0, 0, 0));
     let ink = crate::render::geometry::line_ink_width(theme, &line)?;
+    let area = crate::render::geometry::rectangular_fill_ink_outset(
+        theme,
+        &theme.marks.density_area.backend_style((0, 0, 0)),
+    )?;
     Ok((
         if chart.user_x_limits().is_none() {
-            ink
+            ink.max(area.0)
         } else {
             0.0
         },
         if chart.user_y_limits().is_none() {
-            ink
+            ink.max(area.1)
         } else {
             0.0
         },
@@ -798,6 +802,10 @@ mod tests {
         assert_eq!(thick.1.to_bits(), 140.0_f64.to_bits());
         theme.marks.density_line.alpha = 0;
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+        theme.marks.density_area.outline_width = 140.0;
+        let area = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(area.0.to_bits(), original.0.to_bits());
+        assert!(area.1 >= 140.0);
     }
 
     #[test]

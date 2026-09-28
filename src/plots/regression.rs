@@ -160,14 +160,22 @@ pub(crate) fn intrinsic_body_minimum(
         theme,
         &theme.marks.regression_fit.backend_style(),
     )?;
+    let band = if prepared.band_values.is_some() {
+        crate::render::geometry::rectangular_fill_ink_outset(
+            theme,
+            &theme.marks.regression_band.backend_style((0, 0, 0)),
+        )?
+    } else {
+        (0.0, 0.0)
+    };
     Ok((
         if chart.user_x_limits().is_none() {
-            width.max(fit)
+            width.max(fit).max(band.0)
         } else {
             0.0
         },
         if chart.user_y_limits().is_none() {
-            height.max(fit)
+            height.max(fit).max(band.1)
         } else {
             0.0
         },
@@ -524,6 +532,9 @@ mod style_tests {
         );
         theme.marks.regression_fit.paint = crate::render::backend::Rgba::new(1, 2, 3, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        theme.marks.regression_band.outline_width = 140.0;
+        let band = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert!(band.0 >= 140.0 && band.1 >= 140.0);
     }
 
     #[test]
