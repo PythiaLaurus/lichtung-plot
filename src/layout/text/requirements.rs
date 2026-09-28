@@ -1079,7 +1079,7 @@ fn push_deferred_plot_requirements(
                         &mut body_index,
                         label,
                         &[],
-                        &body,
+                        &theme.typography.point_layer_label,
                         prepared_stage.as_deref_mut(),
                     )?;
                 }

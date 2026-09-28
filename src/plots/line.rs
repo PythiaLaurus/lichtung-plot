@@ -854,9 +854,14 @@ fn project(
                 .expect("bounded layer index");
                 let length = usize::try_from(cursor.position()).expect("bounded layer index");
                 let owner = std::str::from_utf8(&buffer[..length]).expect("ASCII layer index");
-                let mut appearance = theme.legacy_text_appearance(10, crate::TextWeight::Normal);
-                appearance.line_height_multiplier = 1.2;
-                appearance.paint = style.color;
+                let label_role = &theme.typography.point_layer_label;
+                let appearance = crate::theme::TextAppearance {
+                    stack: data.copy_source_string(&label_role.stack)?,
+                    paint: style.color,
+                    font_size: label_role.font_size,
+                    weight: label_role.weight,
+                    line_height_multiplier: label_role.line_height_multiplier,
+                };
                 let plan = theme.measure_legacy_appearance_text(
                     label,
                     &appearance,

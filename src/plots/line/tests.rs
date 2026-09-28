@@ -234,6 +234,51 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
 }
 
 #[test]
+fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
+    let source = decorated_line();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let plot = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    let panel = crate::layout::PanelBox::new(10.0, 600.0, 10.0, 410.0);
+    let selected = plot
+        .measure_selected_interior(PlotRenderContext::new(plot.data(), panel, &theme))
+        .unwrap();
+    let prepared = &inputs.line.as_ref().unwrap().panels[0].1;
+    let original = project(
+        &plot,
+        prepared,
+        selected.layout.clone(),
+        &theme,
+        plot.data(),
+    )
+    .unwrap();
+    theme.typography.point_layer_label.font_size = 16;
+    theme.typography.point_layer_label.paint = crate::render::backend::Rgba::rgb(1, 2, 3);
+    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let extract = |result: &PlotRenderResult| {
+        let crate::layout::interior::MarkPayload::Line(payload) =
+            &result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected line payload")
+        };
+        let (points, point_style, labels) = &payload.layers[0];
+        (
+            points.clone(),
+            point_style.color,
+            labels[0].plan.style.clone(),
+        )
+    };
+    let (old_points, old_paint, old_label) = extract(&original);
+    let (new_points, new_paint, new_label) = extract(&changed);
+    assert_eq!(old_points, new_points);
+    assert_eq!(old_paint, new_paint);
+    assert_eq!(old_label.font_size, 10);
+    assert_eq!(new_label.font_size, 16);
+    assert_eq!(new_label.paint, new_paint);
+}
+
+#[test]
 fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
     let source = decorated_line();
     let resources = OperationGenerationResources::new();

@@ -967,7 +967,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve required estimate detail text` |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining annotation styles |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve Waterfall total annotation text` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): complete private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation style ownership |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve supplemental point-label typography` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): complete private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1240,6 +1242,14 @@ measurement. Changing private text size/paint changes the final measured
 annotation shelf and hence the projected y positions, preserving scientific
 spans and x positions. Focused custom-role, annotation/capture/resource tests,
 current Waterfall SVG fingerprints and strict Clippy pass.
+
+T5c1b2b2b2b2b2b2b2b2b2b2b2b2a closure: supplemental Line point-label font
+stack, size, weight and line pitch now come from a complete private annotation
+role in census and selected text planning. The exact layer paint overrides
+only the color after role selection, preserving caller precedence. A custom
+role changes the label font without moving the underlying point or replacing
+its exact color; focused gap/label tests, current path SVG snapshots and strict
+Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color
