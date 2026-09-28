@@ -40,7 +40,7 @@ impl PreparedRaincloud {
             )?;
             Ok(LegendEntry::point_fill(
                 chart.point_legend_identity(hue, data)?,
-                crate::plots::distribution_sample::overlay_style(color),
+                crate::plots::distribution_sample::overlay_style(color, theme),
                 theme.marks.violin_body.backend_style(color),
             ))
         }))
@@ -283,12 +283,10 @@ fn project_strip(
     }))?;
     payload.scatter(
         points,
-        crate::plots::distribution_sample::overlay_style(group_color(
-            chart,
-            group,
-            local_color_index,
+        crate::plots::distribution_sample::overlay_style(
+            group_color(chart, group, local_color_index, theme)?,
             theme,
-        )?),
+        ),
         data,
     )
 }

@@ -458,7 +458,7 @@ pub(crate) fn measure_marks(
             }))?;
             payload.scatter(
                 points,
-                crate::plots::distribution_sample::overlay_style(color),
+                crate::plots::distribution_sample::overlay_style(color, theme),
                 data,
             )?;
         }
@@ -485,7 +485,7 @@ pub(crate) fn measure_marks(
             }))?;
             payload.scatter(
                 points,
-                crate::plots::distribution_sample::overlay_style(color),
+                crate::plots::distribution_sample::overlay_style(color, theme),
                 data,
             )?;
         }

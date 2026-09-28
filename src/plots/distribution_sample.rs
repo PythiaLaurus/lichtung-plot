@@ -193,8 +193,14 @@ const fn splitmix64_source_row(source_row: usize) -> u64 {
     value
 }
 
-pub(crate) fn overlay_style(color: (u8, u8, u8)) -> PointStyle {
-    PointStyle::new(color, 2)
+pub(crate) fn overlay_style(
+    color: (u8, u8, u8),
+    theme: &crate::theme::ResolvedTheme,
+) -> PointStyle {
+    theme
+        .marks
+        .raw_overlay_point
+        .backend_style(color, theme.marks.raw_overlay_radius, true)
 }
 
 #[cfg(test)]

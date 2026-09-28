@@ -133,7 +133,8 @@ pub(crate) struct PointStyle {
 }
 
 impl PointStyle {
-    /// Construct a filled point with the default publication outline.
+    /// Construct a backend fixture with the default publication point outline.
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn new(color: (u8, u8, u8), radius: u32) -> Self {
         Self {

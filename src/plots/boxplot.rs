@@ -285,6 +285,7 @@ pub(crate) fn measure_marks(
                 points,
                 crate::plots::distribution_sample::overlay_style(
                     theme.colors[color_index % theme.colors.len()],
+                    theme,
                 ),
                 data,
             )?;

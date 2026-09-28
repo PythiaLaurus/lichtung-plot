@@ -51,7 +51,7 @@ impl PreparedDistribution {
                         } else {
                             LegendEntry::point_fill(
                                 identity,
-                                crate::plots::distribution_sample::overlay_style(color),
+                                crate::plots::distribution_sample::overlay_style(color, theme),
                                 fill,
                             )
                         })
@@ -242,6 +242,78 @@ impl DistributionPayload {
 mod appearance_tests {
     use super::Mark;
     use crate::{CategoryValues, NumericValues, Plot};
+
+    #[test]
+    fn custom_raincloud_overlay_point_changes_mark_and_exact_guide_glyph() {
+        let source = Plot::raincloud(crate::RaincloudInput::samples(
+            CategoryValues::new("category", ["A"; 12]).unwrap(),
+            NumericValues::new(
+                "value",
+                [1.0, 1.3, 1.6, 2.0, 2.3, 2.6, 3.0, 3.3, 3.6, 4.0, 4.3, 4.6],
+            ),
+        ))
+        .series(
+            CategoryValues::new(
+                "series",
+                ["a", "a", "a", "a", "a", "a", "b", "b", "b", "b", "b", "b"],
+            )
+            .unwrap(),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        let old = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        theme.marks.raw_overlay_point.fill_alpha = 123;
+        theme.marks.raw_overlay_radius = 4;
+        let changed = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        let extract = |result: &crate::spec::PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected Raincloud")
+            };
+            payload
+                .marks
+                .iter()
+                .find_map(|mark| match mark {
+                    Mark::Scatter(points, style) => Some((points.clone(), style.clone())),
+                    _ => None,
+                })
+                .expect("selected Raincloud strip")
+        };
+        let (old_points, old_style) = extract(&old);
+        let (new_points, new_style) = extract(&changed);
+        assert_eq!(old_points, new_points);
+        assert_eq!(old_style.color.alpha(), 209);
+        assert_eq!(new_style.color.alpha(), 123);
+        assert_eq!(new_style.radius, 4);
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                old.legend_entries[0].clone(),
+                changed.legend_entries[0].clone()
+            ],
+            "custom Raincloud strip",
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
+    }
 
     #[test]
     fn custom_violin_body_preserves_selected_geometry_and_changes_exact_guide() {

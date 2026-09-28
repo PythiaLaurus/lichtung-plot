@@ -965,6 +965,9 @@ pub(crate) struct MarkAppearance {
     pub(crate) raincloud_box: FixedFillAppearance,
     pub(crate) histogram_bin: DataFillAppearance,
     pub(crate) waterfall_bar: DataFillAppearance,
+    /// Boxplot/Violin raw observations and Raincloud strips/guide points.
+    pub(crate) raw_overlay_point: PointAppearance,
+    pub(crate) raw_overlay_radius: u32,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -1369,6 +1372,12 @@ fn resolved_theme(
                 outline_paint: FillOutlinePaint::Fixed(foreground_paint),
                 outline_width: 0.8,
             },
+            raw_overlay_point: PointAppearance {
+                fill_alpha: 209,
+                shape: crate::PointShape::Circle,
+                outline: crate::render::backend::PointOutline::default(),
+            },
+            raw_overlay_radius: 2,
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
                 axis_width,
@@ -1822,6 +1831,12 @@ mod tests {
                     outline_paint: FillOutlinePaint::Fixed(foreground),
                     outline_width: 0.8,
                 },
+                raw_overlay_point: PointAppearance {
+                    fill_alpha: 209,
+                    shape: crate::PointShape::Circle,
+                    outline: crate::render::backend::PointOutline::default(),
+                },
+                raw_overlay_radius: 2,
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,
                     width: expected.axis_width,
