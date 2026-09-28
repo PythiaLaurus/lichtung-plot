@@ -1547,6 +1547,82 @@ fn line_marker_ink_uses_the_same_root_domain_feedback_without_explicit_clipping(
 }
 
 #[test]
+fn line_ribbon_full_stroke_is_retained_inside_the_final_automatic_panel() {
+    let source = Plot::line(
+        NumericValues::new("x", [0.0, 1.0, 2.0]),
+        NumericValues::new("y", [2.0, 1.0, 3.0]),
+    )
+    .band(crate::Bounds::new(
+        NumericValues::new("lower", [1.0, 0.0, 2.0]),
+        NumericValues::new("upper", [3.0, 2.0, 4.0]),
+    ))
+    .size(640, 480)
+    .legend(LegendPolicy::Hidden)
+    .erase();
+    let mut theme = theme();
+    theme.marks.line_band.outline_width = 100.0;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let result = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme).unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Line")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let panel = result.result.layout.projection.panel_box();
+    let mut full = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    for mark in &payload.marks {
+        if let crate::plots::line::LineMark::Ribbon(points, style) = mark {
+            full.polygon(points, style, None).unwrap();
+        }
+    }
+    assert!(!full.bounds().is_empty());
+    assert!(
+        result.planned_x_limits().is_some() || result.planned_y_limits().is_some(),
+        "band ink={:?} panel={panel:?}",
+        full.bounds()
+    );
+    for bounds in full.bounds() {
+        assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+    }
+
+    let exact_source = Plot::line(
+        NumericValues::new("x", [0.0, 1.0, 2.0]),
+        NumericValues::new("y", [2.0, 1.0, 3.0]),
+    )
+    .band(crate::Bounds::new(
+        NumericValues::new("lower", [1.0, 0.0, 2.0]),
+        NumericValues::new("upper", [3.0, 2.0, 4.0]),
+    ))
+    .x_limits(0.0, 2.0)
+    .size(640, 480)
+    .legend(LegendPolicy::Hidden)
+    .erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let exact_chart = inputs.attach(exact_source).unwrap();
+    let exact = plan_panel(
+        &exact_chart,
+        PlotKind::Line,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    assert!(exact.planned_x_limits().is_none());
+}
+
+#[test]
 fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quantiles() {
     let source = Plot::qq(NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]))
         .size(640, 480)
@@ -1670,6 +1746,7 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         .erase();
     let mut theme = theme();
     theme.marks.density_line.width = 28.0;
+    theme.marks.density_area.outline_width = 18.0;
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -1685,6 +1762,35 @@ fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
         panic!("selected Density")
     };
     assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let panel = result.result.layout.projection.panel_box();
+    let mut area = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    for curve in &payload.curves {
+        area.polygon(&curve.fill, &curve.fill_style, None).unwrap();
+    }
+    for bounds in area.bounds() {
+        assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+    }
+
+    let exact_source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
+        .x_limits(0.0, 5.0)
+        .size(640, 480)
+        .erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let exact_chart = inputs.attach(exact_source).unwrap();
+    let exact = plan_panel(
+        &exact_chart,
+        PlotKind::Density,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    assert!(exact.planned_x_limits().is_none());
 }
 
 #[test]

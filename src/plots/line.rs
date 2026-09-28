@@ -36,6 +36,7 @@ pub(crate) struct PreparedLineInputs {
 #[derive(Debug)]
 pub(crate) struct PreparedLine {
     pub(crate) ranges: [(f64, f64); 2],
+    mark_ranges: [(f64, f64); 2],
     pub(crate) conditions: Option<Vec<String>>,
     groups: Vec<LineGroup>,
     hues: Vec<String>,
@@ -70,7 +71,7 @@ pub(crate) struct LinePayload {
     #[cfg(test)]
     kind: PlotKind,
     clip: crate::layout::PanelBox,
-    marks: Vec<LineMark>,
+    pub(crate) marks: Vec<LineMark>,
     layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
@@ -141,7 +142,7 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 #[derive(Debug)]
-enum LineMark {
+pub(crate) enum LineMark {
     Ribbon(Vec<Point2D>, FillStyle),
     Line(Vec<Point2D>, LineStyle),
     Points(Vec<Point2D>, PointStyle),
@@ -612,6 +613,7 @@ impl PreparedLine {
                 ranges[1] = (ranges[1].0.min(y), ranges[1].1.max(y));
             }
         }
+        let mark_ranges = ranges;
         ranges[0] = if let Some(levels) = &conditions {
             (0.0, categorical_index(levels.len())?)
         } else {
@@ -633,6 +635,7 @@ impl PreparedLine {
         };
         Ok(Self {
             ranges,
+            mark_ranges,
             conditions,
             groups,
             hues,
@@ -965,6 +968,35 @@ fn project(
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
     }
+    let mut band_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    data.claim_source_visits(payload.marks.len())?;
+    for mark in &payload.marks {
+        if let LineMark::Ribbon(points, style) = mark {
+            band_ink.polygon(points, style, None)?;
+        }
+    }
+    if let Some(bounds) = band_ink
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        let additional = crate::layout::interior::automatic_absolute_ink_expansions(
+            prepared.mark_ranges,
+            &layout.projection,
+            bounds,
+            [
+                chart.user_x_limits().is_none() && prepared.conditions.is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            scope,
+        )?;
+        payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+            payload.domain_expansions,
+            additional,
+        );
+    }
     let line_style = if chart.kind() == PlotKind::Line {
         &theme.marks.series_line
     } else {
@@ -988,8 +1020,8 @@ fn project(
         (line, point) => line.or(point),
     };
     if let Some(ink) = ink {
-        payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
-            prepared.ranges,
+        let additional = crate::layout::interior::automatic_mark_ink_expansions(
+            prepared.mark_ranges,
             &layout.projection,
             ink,
             [
@@ -999,6 +1031,10 @@ fn project(
             data,
             scope,
         )?;
+        payload.domain_expansions = crate::layout::interior::merge_mark_domain_expansions(
+            payload.domain_expansions,
+            additional,
+        );
     }
     let mut result = PlotRenderResult::new(layout, legends).with_axis_domains(
         if prepared.conditions.is_some() {

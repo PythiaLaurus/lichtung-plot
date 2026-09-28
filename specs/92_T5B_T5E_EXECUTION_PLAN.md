@@ -996,7 +996,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b1 | `feat(marks): clear Histogram bins and overlays through root feedback` |
 | T5c2a1b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2a | `feat(marks): measure Regression band and fit edge ink` |
-| T5c2a1b2b2b2b2b2b2 | PENDING | T5c2a1b2b2b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b2b1 | `feat(marks): retain complete Density area and Line ribbon ink` |
+| T5c2a1b2b2b2b2b2b2b | PENDING | T5c2a1b2b2b2b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1441,6 +1443,21 @@ window/complete-ink tests, 41 Line integration tests, native facet/Canvas and
 cache on/off tests, exact root resource-cap tests and strict Clippy pass.
 Band/interval/reference edge geometry, remaining mark families and the soft
 density preference remain in T5c2a1b2b2b2b2.
+
+T5c2a1b2b2b2b2b2b2a closure: Line now retains source mark ranges apart from
+nice display ranges. Its interval ribbons and Density's prepared KDE areas
+submit exact admitted, *unclipped* canonical polygon ink through the same
+owner as their previously measured path/curve strokes. Merge requests before
+root feedback; neither later mark role can overwrite the earlier one's
+clearance. Malformed scientific polygons reject before recoverable ink misses.
+Custom 100px Line ribbon and 18px Density area outlines converge with full
+painted bounds inside their panels; user-exact X windows still clip marks.
+Correcting Line's source-versus-display range restores the four default path
+SVG snapshots to their earlier bytes; their intermediate inward projection
+recorded in T5c2a1b2b2b2b1 is historical, not current expected output.
+Focused Line/Density, exact-window, facet/Canvas, snapshot, exact resource-cap
+and child-cache tests plus strict Clippy pass. Pre-selection polygon hard
+requirements and soft density preference remain in T5c2a1b2b2b2b2b2b2b.
 
 T5c2a1b2b2b2b2a closure: Regression retains its admitted observation source
 min/max independently of its fitted/band-inclusive display range. Only those

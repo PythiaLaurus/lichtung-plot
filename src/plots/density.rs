@@ -159,15 +159,15 @@ impl PreparedDensity {
 #[derive(Debug)]
 pub(crate) struct DensityPayload {
     clip: crate::layout::PanelBox,
-    curves: Vec<DensityCurvePayload>,
+    pub(crate) curves: Vec<DensityCurvePayload>,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 #[derive(Debug)]
-struct DensityCurvePayload {
-    fill: Vec<Point2D>,
+pub(crate) struct DensityCurvePayload {
+    pub(crate) fill: Vec<Point2D>,
     segments: Vec<Vec<Point2D>>,
-    fill_style: FillStyle,
+    pub(crate) fill_style: FillStyle,
     line_style: LineStyle,
 }
 
@@ -236,28 +236,60 @@ pub(crate) fn measure_marks(
     let data = context.data.with_axis_resources(&resources);
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme, data)?;
+    let automatic = [
+        chart.user_x_limits().is_none(),
+        chart.user_y_limits().is_none(),
+    ];
+    let mut requests = [None; 2];
     if let Some(ink) = crate::render::geometry::line_ink_bounds(
         theme,
         &theme.marks.density_line.backend_style((0, 0, 0)),
     )? {
-        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+        requests = crate::layout::interior::automatic_mark_ink_expansions(
             [prepared.x_range, (0.0, prepared.maximum)],
             &projection,
             ink,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            automatic,
             data,
             context.fit_scope(),
         )?;
-        let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Density marks"))
-            .expect("newly selected Density marks have one owner");
-        let crate::layout::interior::MarkPayload::Density(payload) = &mut marks.payload else {
-            unreachable!("Density selected its own mark payload")
-        };
-        payload.domain_expansions = requests;
     }
+    let crate::layout::interior::MarkPayload::Density(payload) = &result
+        .marks
+        .as_ref()
+        .expect("selected Density marks")
+        .payload
+    else {
+        unreachable!("Density selected its own mark payload")
+    };
+    let mut area = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    for curve in &payload.curves {
+        if curve.fill.len() >= 3 {
+            area.polygon(&curve.fill, &curve.fill_style, None)?;
+        }
+    }
+    if let Some(bounds) = area
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        let additional = crate::layout::interior::automatic_absolute_ink_expansions(
+            [prepared.x_range, (0.0, prepared.maximum)],
+            &projection,
+            bounds,
+            automatic,
+            data,
+            context.fit_scope(),
+        )?;
+        requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
+    }
+    let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Density marks"))
+        .expect("newly selected Density marks have one owner");
+    let crate::layout::interior::MarkPayload::Density(payload) = &mut marks.payload else {
+        unreachable!("Density selected its own mark payload")
+    };
+    payload.domain_expansions = requests;
     Ok(result)
 }
 
