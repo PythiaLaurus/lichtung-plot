@@ -390,6 +390,77 @@ pub(crate) fn automatic_mark_ink_expansions(
     Ok(expansions)
 }
 
+/// An already selected polygon/line has exact canonical *absolute* ink. Relate
+/// that ink to the retained scientific extrema before requesting a new domain;
+/// clipping the candidate first would erase the missing outward region.
+pub(crate) fn automatic_absolute_ink_expansions(
+    source: [(f64, f64); 2],
+    projection: &crate::layout::Projection,
+    bounds: crate::render::geometry::GeometryBox,
+    automatic: [bool; 2],
+    data: crate::data::PlotData<'_>,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<[Option<DomainExpansion>; 2], crate::layout::fit::PlanError> {
+    let mut expansions = [None; 2];
+    if !automatic.into_iter().any(|axis| axis) {
+        return Ok(expansions);
+    }
+    data.claim_source_visits(2)?;
+    let low = projection.project(source[0].0, source[1].0);
+    let high = projection.project(source[0].1, source[1].1);
+    let panel = projection.panel_box();
+    for (index, (axis, current, pixels, projected, painted)) in [
+        (
+            ClearanceAxis::X,
+            projection.x_range(),
+            (panel.x0, panel.x1),
+            (low.0, high.0),
+            (bounds.left - low.0, bounds.right - high.0),
+        ),
+        (
+            ClearanceAxis::Y,
+            projection.y_range(),
+            (panel.y0, panel.y1),
+            (low.1, high.1),
+            (bounds.bottom - low.1, bounds.top - high.1),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if automatic[index] {
+            expansions[index] = automatic_mark_ink_domain(
+                axis,
+                source[index],
+                current,
+                pixels,
+                projected,
+                painted,
+                scope,
+            )?;
+        }
+    }
+    Ok(expansions)
+}
+
+pub(crate) fn merge_mark_domain_expansions(
+    mut existing: [Option<DomainExpansion>; 2],
+    additional: [Option<DomainExpansion>; 2],
+) -> [Option<DomainExpansion>; 2] {
+    for (target, candidate) in existing.iter_mut().zip(additional) {
+        if let Some(candidate) = candidate {
+            *target = Some(target.map_or(candidate, |current| DomainExpansion {
+                axis: current.axis,
+                limits: (
+                    current.limits.0.min(candidate.limits.0),
+                    current.limits.1.max(candidate.limits.1),
+                ),
+            }));
+        }
+    }
+    existing
+}
+
 /// Insets use the existing spatial quantization and operation-owned feedback.
 /// No adapter owns a budget, retry loop, or root alternative. Requests replace
 /// stale effects through FeedbackRound; rejected work remains charged there.

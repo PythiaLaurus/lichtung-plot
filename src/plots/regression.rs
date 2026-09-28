@@ -128,6 +128,7 @@ pub(crate) struct PreparedRegressionInputs {
 pub(crate) struct PreparedRegression {
     pub(crate) ranges: [(f64, f64); 2],
     observation_ranges: [(f64, f64); 2],
+    mark_ranges: [(f64, f64); 2],
     points: Vec<(f64, f64)>,
     pub(crate) fit_line: [(f64, f64); 2],
     band_values: Option<Vec<(f64, f64, f64)>>,
@@ -269,6 +270,7 @@ impl PreparedRegression {
                 y_max = y_max.max(*upper);
             }
         }
+        let mark_ranges = [(x_min, x_max), (y_min, y_max)];
 
         let x_range = crate::layout::continuous_auto_range(
             (x_min, x_max),
@@ -283,6 +285,7 @@ impl PreparedRegression {
         Ok(Self {
             ranges: [x_range, y_range],
             observation_ranges,
+            mark_ranges,
             points,
             fit_line: [(x_min, y_fit_lo), (x_max, y_fit_hi)],
             band_values,
@@ -295,10 +298,10 @@ pub(crate) struct RegressionPayload {
     clip: crate::layout::PanelBox,
     pub(crate) points: Vec<Point2D>,
     pub(crate) fit_line: [Point2D; 2],
-    band: Option<Vec<Point2D>>,
+    pub(crate) band: Option<Vec<Point2D>>,
     point_style: PointStyle,
     line_style: LineStyle,
-    band_fill: FillStyle,
+    pub(crate) band_fill: FillStyle,
     pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
@@ -343,29 +346,59 @@ pub(crate) fn measure_marks(
     let data = context.data.with_axis_resources(&resources);
     let projection = layout.projection.clone();
     let mut result = project(chart, prepared, layout, theme, data)?;
+    let automatic = [
+        chart.user_x_limits().is_none(),
+        chart.user_y_limits().is_none(),
+    ];
+    let mut requests = [None; 2];
     if let Some(ink) = crate::render::geometry::point_ink_bounds(
         theme,
         &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression),
     )? {
-        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+        requests = crate::layout::interior::automatic_mark_ink_expansions(
             prepared.observation_ranges,
             &projection,
             ink,
-            [
-                chart.user_x_limits().is_none(),
-                chart.user_y_limits().is_none(),
-            ],
+            automatic,
             data,
             context.fit_scope(),
         )?;
-        let marks =
-            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Regression marks"))
-                .expect("newly selected Regression marks have one owner");
-        let crate::layout::interior::MarkPayload::Regression(payload) = &mut marks.payload else {
-            unreachable!("Regression selected its own mark payload")
-        };
-        payload.domain_expansions = requests;
     }
+    let crate::layout::interior::MarkPayload::Regression(payload) = &result
+        .marks
+        .as_ref()
+        .expect("selected Regression marks")
+        .payload
+    else {
+        unreachable!("Regression selected its own mark payload")
+    };
+    let mut scientific_ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
+    if let Some(band) = &payload.band {
+        scientific_ink.polygon(band, &payload.band_fill, None)?;
+    }
+    scientific_ink.line(&payload.fit_line, &payload.line_style, None)?;
+    if let Some(bounds) = scientific_ink
+        .bounds()
+        .iter()
+        .copied()
+        .reduce(crate::render::geometry::GeometryBox::union)
+    {
+        let additional = crate::layout::interior::automatic_absolute_ink_expansions(
+            prepared.mark_ranges,
+            &projection,
+            bounds,
+            automatic,
+            data,
+            context.fit_scope(),
+        )?;
+        requests = crate::layout::interior::merge_mark_domain_expansions(requests, additional);
+    }
+    let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Regression marks"))
+        .expect("newly selected Regression marks have one owner");
+    let crate::layout::interior::MarkPayload::Regression(payload) = &mut marks.payload else {
+        unreachable!("Regression selected its own mark payload")
+    };
+    payload.domain_expansions = requests;
     Ok(result)
 }
 

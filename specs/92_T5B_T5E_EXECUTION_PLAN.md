@@ -994,7 +994,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2a | `feat(marks): clear Density curves through root feedback` |
 | T5c2a1b2b2b2b2b2 | IN PROGRESS | T5c2a1b2b2b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b1 | `feat(marks): clear Histogram bins and overlays through root feedback` |
-| T5c2a1b2b2b2b2b2b | PENDING | T5c2a1b2b2b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2a | `feat(marks): measure Regression band and fit edge ink` |
+| T5c2a1b2b2b2b2b2b2 | PENDING | T5c2a1b2b2b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1474,6 +1476,19 @@ bar/KDE/rug geometry and axis ticks by less than one CSS pixel; source bins,
 colors and labels remain identical. Focused sample/supplied parity,
 precomputed KDE, 25 Histogram units, exact root resource-cap/reuse tests and
 strict Clippy pass. Other area/band shapes and soft density remain pending.
+
+T5c2a1b2b2b2b2b2b1 closure: Regression retains a separate full scientific
+mark range covering the OLS fit, its observations and the optional prepared
+confidence band. After canonical source/selected geometry validation, an
+admitted, *unclipped* band polygon plus exact fit stroke supply absolute
+painted edges; these are reconciled with existing observation-point domain
+requests before the one root feedback driver. Unpainted shapes contribute no
+edge ink. A custom 32px mitered band and 54px observations converge with the
+whole polygon and every point inside the final panel, while the retained OLS
+line projects to exactly the same scientific fit endpoints. Focused custom
+styles, facet/Canvas, distribution snapshots, exact resource-cap/cache tests
+and strict Clippy pass. Line ribbons, Density areas and the soft density
+preference remain in T5c2a1b2b2b2b2b2b2.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

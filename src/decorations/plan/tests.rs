@@ -1612,6 +1612,7 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
     .erase();
     let mut theme = theme();
     theme.marks.point_sizes.regression = 54;
+    theme.marks.regression_band.outline_width = 32.0;
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -1645,6 +1646,14 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
     for point in &payload.points {
         assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
         assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+    }
+    let mut band_ink = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    band_ink
+        .polygon(payload.band.as_ref().unwrap(), &payload.band_fill, None)
+        .unwrap();
+    for bounds in band_ink.bounds() {
+        assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
     }
     let prepared = &inputs.regression.as_ref().unwrap().panels[0].1;
     for (selected, (x, y)) in payload.fit_line.iter().zip(prepared.fit_line) {
