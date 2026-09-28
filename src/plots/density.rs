@@ -28,6 +28,7 @@ struct DensityCurve {
 #[derive(Debug)]
 pub(crate) struct PreparedDensity {
     x_range: (f64, f64),
+    maximum: f64,
     curves: Vec<DensityCurve>,
 }
 
@@ -143,19 +144,10 @@ impl PreparedDensity {
         chart: &Plot,
         data: PlotData<'_>,
     ) -> Result<[(f64, f64); 2], Error> {
-        for curve in &self.curves {
-            data.claim_source_visits(curve.densities.len())?;
-        }
-        let maximum = self
-            .curves
-            .iter()
-            .flat_map(|curve| &curve.densities)
-            .copied()
-            .fold(0.0_f64, f64::max);
         Ok([
             chart.x_axis_spec().limits.unwrap_or(self.x_range),
             crate::layout::anchored_auto_range(
-                (0.0, maximum),
+                (0.0, self.maximum),
                 chart.y_axis_spec(),
                 0.0,
                 data.source_resources()?,
@@ -168,6 +160,7 @@ impl PreparedDensity {
 pub(crate) struct DensityPayload {
     clip: crate::layout::PanelBox,
     curves: Vec<DensityCurvePayload>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 #[derive(Debug)]
@@ -205,19 +198,10 @@ pub(crate) fn axis_ranges(
         .x_col()
         .ok_or_else(|| Error::Data("density: value column not set".into()))?;
     let prepared = prepare_density_for_chart(chart, data, column)?;
-    for curve in &prepared.curves {
-        data.claim_source_visits(curve.densities.len())?;
-    }
-    let maximum = prepared
-        .curves
-        .iter()
-        .flat_map(|curve| &curve.densities)
-        .copied()
-        .fold(0.0_f64, f64::max);
     Ok([
         chart.x_axis_spec().limits.unwrap_or(prepared.x_range),
         crate::layout::anchored_auto_range(
-            (0.0, maximum),
+            (0.0, prepared.maximum),
             chart.y_axis_spec(),
             0.0,
             data.source_resources()?,
@@ -250,7 +234,31 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, theme, data).map_err(Into::into)
+    let projection = layout.projection.clone();
+    let mut result = project(chart, prepared, layout, theme, data)?;
+    if let Some(ink) = crate::render::geometry::line_ink_bounds(
+        theme,
+        &theme.marks.density_line.backend_style((0, 0, 0)),
+    )? {
+        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+            [prepared.x_range, (0.0, prepared.maximum)],
+            &projection,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?;
+        let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Density marks"))
+            .expect("newly selected Density marks have one owner");
+        let crate::layout::interior::MarkPayload::Density(payload) = &mut marks.payload else {
+            unreachable!("Density selected its own mark payload")
+        };
+        payload.domain_expansions = requests;
+    }
+    Ok(result)
 }
 
 pub(crate) fn project(
@@ -263,6 +271,7 @@ pub(crate) fn project(
     let mut payload = DensityPayload {
         clip: layout.projection.panel_box(),
         curves: Vec::new(),
+        domain_expansions: [None; 2],
     };
     data.reserve_source(&mut payload.curves, prepared.curves.len())?;
     let order = prepared.group_order(chart, data)?;
@@ -453,6 +462,7 @@ fn prepare_density_ordered<'a>(
     let mut support_low = f64::INFINITY;
     let mut support_high = f64::NEG_INFINITY;
     let mut curves = Vec::new();
+    let mut maximum = 0.0_f64;
     data.reserve_source(&mut curves, ordered_identities.len())?;
     let mut samples = Vec::new();
     data.reserve_source(&mut samples, values.len())?;
@@ -521,6 +531,8 @@ fn prepare_density_ordered<'a>(
             Error::Data(_) => Error::Data(format!("density: {}: {error}", description())),
             error => error,
         })?;
+        data.claim_source_visits(densities.len())?;
+        maximum = densities.iter().copied().fold(maximum, f64::max);
         data.claim_source_visits(hue_order.unwrap_or(&channels.hue_levels).len())?;
         curves.push(DensityCurve {
             identity: data.copy_source_pair(identity)?,
@@ -541,6 +553,7 @@ fn prepare_density_ordered<'a>(
     }
     Ok(PreparedDensity {
         x_range: (support_low, support_high),
+        maximum,
         curves,
     })
 }

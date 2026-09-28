@@ -1655,6 +1655,30 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
 }
 
 #[test]
+fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
+    let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
+        .size(640, 480)
+        .erase();
+    let mut theme = theme();
+    theme.marks.density_line.width = 28.0;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let result = plan_panel(&chart, PlotKind::Density, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(result.planned_x_limits().is_some());
+    let crate::layout::interior::MarkPayload::Density(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Density")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+}
+
+#[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
     let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let plot = Plot::line(

@@ -1346,12 +1346,17 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     ))
                     .map_err(PlanError::into_error)?;
                     let axes = plot.prepared_axis_inputs().unwrap();
+                    let with_existing_domain = |manual: (f64, f64), kind| {
+                        round.domain(&owner, kind).map_or(manual, |range| {
+                            (manual.0.min(range.0), manual.1.max(range.1))
+                        })
+                    };
                     assert_eq!(
                         rejected.result.layout.projection.x_range(),
                         if axes.categories[0].is_some() {
                             axes.ranges[0]
                         } else {
-                            (-10.0, 10.0)
+                            with_existing_domain((-10.0, 10.0), FeedbackKind::AutomaticDomainX)
                         }
                     );
                     assert_eq!(
@@ -1359,7 +1364,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         if axes.categories[1].is_some() {
                             axes.ranges[1]
                         } else {
-                            (-5.0, 5.0)
+                            with_existing_domain((-5.0, 5.0), FeedbackKind::AutomaticDomainY)
                         }
                     );
                     assert_ne!(first.panel_box, rejected.panel_box);
