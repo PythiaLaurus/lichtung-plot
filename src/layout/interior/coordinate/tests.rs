@@ -1306,6 +1306,7 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                     let requested = round
                         .next_insets(&owner, FeedbackKind::AxisGutter)
                         .map(f64::to_bits);
+                    let stable_for_reuse = round.child_stable(std::slice::from_ref(&owner));
                     let cached = fit::measured(children.plan(
                         &plot,
                         LegendRole::Suppressed,
@@ -1315,7 +1316,10 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                         &owner,
                     ))
                     .map_err(PlanError::into_error)?;
-                    assert_eq!(std::sync::Arc::ptr_eq(&first, &cached), !disabled);
+                    assert_eq!(
+                        std::sync::Arc::ptr_eq(&first, &cached),
+                        !disabled && stable_for_reuse
+                    );
                     assert_eq!(
                         round
                             .next_insets(&owner, FeedbackKind::AxisGutter)
@@ -1428,8 +1432,11 @@ fn native_child_reuse_and_rejected_ancestor_trials_preserve_selected_bytes_and_c
                             "deferred sibling requires a changed owned-ink reserve",
                         )?;
                     }
+                    // A child's own pending mark-domain request invalidates its
+                    // provisional key even when a sibling keeps the root alive.
+                    let reusable = round.child_stable(std::slice::from_ref(&owner));
                     children.finish_round(round);
-                    previous_selected = Some(std::sync::Arc::clone(&selected));
+                    previous_selected = reusable.then(|| std::sync::Arc::clone(&selected));
                     Ok(crate::layout::MeasuredLayout::new(
                         assigned,
                         (selected, canvas),

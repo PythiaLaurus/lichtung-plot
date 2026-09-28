@@ -72,6 +72,7 @@ pub(crate) struct LinePayload {
     clip: crate::layout::PanelBox,
     marks: Vec<LineMark>,
     layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 /// Resolve one prepared path's painted hard span before parent allocation.
@@ -684,7 +685,7 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, theme, data)
+    project(chart, prepared, layout, theme, data, context.fit_scope())
 }
 
 #[expect(
@@ -697,6 +698,7 @@ fn project(
     layout: crate::layout::Layout,
     theme: &crate::theme::ResolvedTheme,
     data: PlotData<'_>,
+    scope: &crate::layout::fit::FitScope,
 ) -> Result<PlotRenderResult, crate::layout::fit::PlanError> {
     #[cfg(test)]
     stage(chart.kind(), 2);
@@ -706,6 +708,7 @@ fn project(
         clip: layout.projection.panel_box(),
         marks: Vec::new(),
         layers: Vec::new(),
+        domain_expansions: [None; 2],
     };
     let project = |x, y| {
         let (x, y) = layout.projection.project(x, y);
@@ -961,6 +964,41 @@ fn project(
         for text in labels {
             geometry.text(text.placement, &text.plan, Some(clip))?;
         }
+    }
+    let line_style = if chart.kind() == PlotKind::Line {
+        &theme.marks.series_line
+    } else {
+        &theme.marks.path_line
+    }
+    .backend_style((0, 0, 0));
+    let line_ink = crate::render::geometry::line_ink_bounds(theme, &line_style)?;
+    let point_ink = if chart.kind() == PlotKind::Trajectory || chart.markers_visible() {
+        let radius = if chart.kind() == PlotKind::Line {
+            theme.marks.point_sizes.path
+        } else {
+            theme.marks.point_sizes.trajectory
+        };
+        let point_style = chart.point_style(theme, (0, 0, 0), radius);
+        crate::render::geometry::point_ink_bounds(theme, &point_style)?
+    } else {
+        None
+    };
+    let ink = match (line_ink, point_ink) {
+        (Some(line), Some(point)) => Some(line.union(point)),
+        (line, point) => line.or(point),
+    };
+    if let Some(ink) = ink {
+        payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
+            prepared.ranges,
+            &layout.projection,
+            ink,
+            [
+                chart.user_x_limits().is_none() && prepared.conditions.is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            scope,
+        )?;
     }
     let mut result = PlotRenderResult::new(layout, legends).with_axis_domains(
         if prepared.conditions.is_some() {

@@ -128,9 +128,10 @@ impl PreparedQq {
 pub(crate) struct QqPayload {
     clip: crate::layout::PanelBox,
     line: Option<[Point2D; 2]>,
-    points: Vec<Point2D>,
+    pub(crate) points: Vec<Point2D>,
     line_style: LineStyle,
     point_style: PointStyle,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl QqPayload {
@@ -171,7 +172,41 @@ pub(crate) fn measure_marks(
     let theme = context.theme;
     let resources = theme.prepared_font_environment()?.generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, theme, data).map_err(Into::into)
+    let projection = layout.projection.clone();
+    let mut result = project(chart, prepared, layout, theme, data)?;
+    if let Some(ink) = crate::render::geometry::point_ink_bounds(
+        theme,
+        &chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq),
+    )? {
+        let source = [
+            (
+                prepared.theoretical[0],
+                prepared.theoretical[prepared.theoretical.len() - 1],
+            ),
+            (
+                prepared.observed[0],
+                prepared.observed[prepared.observed.len() - 1],
+            ),
+        ];
+        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+            source,
+            &projection,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?;
+        let marks = std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Qq marks"))
+            .expect("newly selected Qq marks have one owner");
+        let crate::layout::interior::MarkPayload::Qq(payload) = &mut marks.payload else {
+            unreachable!("Qq selected its own mark payload")
+        };
+        payload.domain_expansions = requests;
+    }
+    Ok(result)
 }
 
 pub(crate) fn project(
@@ -187,6 +222,7 @@ pub(crate) fn project(
         points: Vec::new(),
         line_style: theme.marks.qq_reference.backend_style(),
         point_style: chart.point_style(theme, theme.colors[0], theme.marks.point_sizes.qq),
+        domain_expansions: [None; 2],
     };
     data.claim_source_visits(1)?;
     if let Some(line) = prepared.line {

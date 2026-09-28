@@ -986,7 +986,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b1 | COMPLETE | T5c2a1b2b2a | `feat(marks): measure Histogram bin and overlay hard ink` |
 | T5c2a1b2b2b2 | IN PROGRESS | T5c2a1b2b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2a | COMPLETE | T5c2a1b2b2b1 | `feat(marks): clear automatic Scatter point ink through root feedback` |
-| T5c2a1b2b2b2b | PENDING | T5c2a1b2b2b2a | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b | IN PROGRESS | T5c2a1b2b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b2b1 | COMPLETE | T5c2a1b2b2b2a | `feat(marks): clear path and Qq ink through root feedback` |
+| T5c2a1b2b2b2b2 | PENDING | T5c2a1b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1415,7 +1417,22 @@ resource refusal remains fatal. Source preparation, select, and replay remain
 separate. Custom 18px Scatter points, two-axis root convergence, fixed facets,
 exact windows, default guide/snapshot bytes, exact resource-cap tests and
 strict Clippy pass. Extend this owner to the other standard families in
-T5c2a1b2b2b.
+T5c2a1b2b2b2b.
+
+T5c2a1b2b2b2b1 closure: Line, numeric Trajectory and LinePath contribute
+resolved marker and stroked-path origin-relative ink; Qq contributes its
+retained paired-observation point ink. Categorical Trajectory does not grow
+its condition axis. Only a user-exact numeric data window clips that
+dimension; a planned range from the preceding root round remains automatic.
+Both axes can grow within one root round; pending child-domain requests
+invalidate provisional cache reuse until the next stable assignment. Canonical
+source/mark geometry validates before a proposed domain fit miss. Four
+inspected path SVG snapshots now move vertices, ticks and grid consistently
+inward without altering paint, text or scientific order. Focused Qq exact
+window/complete-ink tests, 41 Line integration tests, native facet/Canvas and
+cache on/off tests, exact root resource-cap tests and strict Clippy pass.
+Band/interval/reference edge geometry, remaining mark families and the soft
+density preference remain in T5c2a1b2b2b2b2.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

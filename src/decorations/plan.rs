@@ -991,6 +991,8 @@ fn plan_panel_attempt(
         .as_deref()
         .map_or([None; 2], |marks| match &marks.payload {
             crate::layout::interior::MarkPayload::Scatter(payload) => payload.domain_expansions,
+            crate::layout::interior::MarkPayload::Line(payload) => payload.domain_expansions,
+            crate::layout::interior::MarkPayload::Qq(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Bars(payload) => [payload.domain_expansion, None],
             crate::layout::interior::MarkPayload::Distribution(_) => [
                 result

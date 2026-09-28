@@ -205,10 +205,19 @@ fn point_layer_label_gap_moves_the_selected_text_without_moving_its_mark() {
         selected.layout.clone(),
         &theme,
         plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
     theme.annotations.point_label_gap = 9.0;
-    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let changed = project(
+        &plot,
+        prepared,
+        selected.layout,
+        &theme,
+        plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
     let crate::layout::interior::MarkPayload::Line(old) = &original.marks.as_ref().unwrap().payload
     else {
         panic!("selected line payload");
@@ -251,11 +260,20 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
         selected.layout.clone(),
         &theme,
         plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
     theme.typography.point_layer_label.font_size = 16;
     theme.typography.point_layer_label.paint = crate::render::backend::Rgba::rgb(1, 2, 3);
-    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let changed = project(
+        &plot,
+        prepared,
+        selected.layout,
+        &theme,
+        plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
     let extract = |result: &PlotRenderResult| {
         let crate::layout::interior::MarkPayload::Line(payload) =
             &result.marks.as_ref().unwrap().payload
@@ -316,6 +334,57 @@ fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
 }
 
 #[test]
+fn categorical_trajectory_and_exact_path_windows_only_expand_numeric_automatic_axes() {
+    let theme = {
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.point_sizes.trajectory = 18;
+        theme
+    };
+    let panel = crate::layout::PanelBox::new(80.0, 260.0, 70.0, 230.0);
+    let trajectory = Plot::trajectory(
+        CategoryValues::new("condition", ["first", "second"]).unwrap(),
+        NumericValues::new("y", [0.0, 10.0]),
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+    )
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&trajectory, &resources).unwrap();
+    let chart = inputs.attach(trajectory).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Trajectory")
+    };
+    assert!(payload.domain_expansions[0].is_none());
+    assert!(payload.domain_expansions[1].is_some());
+
+    let path = Plot::line_path(
+        NumericValues::new("x", [0.0, 10.0]),
+        NumericValues::new("y", [0.0, 10.0]),
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+    )
+    .markers(true)
+    .x_limits(0.0, 10.0)
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&path, &resources).unwrap();
+    let chart = inputs.attach(path).unwrap();
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &selected.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected LinePath")
+    };
+    assert!(payload.domain_expansions[0].is_none());
+    assert!(payload.domain_expansions[1].is_some());
+}
+
+#[test]
 fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
     let source = decorated_line();
     let resources = OperationGenerationResources::new();
@@ -336,11 +405,20 @@ fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
         selected.layout.clone(),
         &theme,
         plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
     )
     .unwrap();
     theme.marks.series_line.width = 2.5;
     theme.marks.series_line.alpha = 128;
-    let changed = project(&plot, prepared, selected.layout, &theme, plot.data()).unwrap();
+    let changed = project(
+        &plot,
+        prepared,
+        selected.layout,
+        &theme,
+        plot.data(),
+        &crate::layout::fit::ROOT_SCOPE,
+    )
+    .unwrap();
     let line = |result: &crate::spec::PlotRenderResult| {
         let crate::layout::interior::MarkPayload::Line(payload) =
             &result.marks.as_ref().unwrap().payload
@@ -776,6 +854,7 @@ fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_
             selected.layout,
             &theme,
             attached.data().with_axis_resources(&resources),
+            &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
         let visits = resources.usage().unwrap().1;
@@ -787,7 +866,8 @@ fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_
                 prepared,
                 selected.layout.clone(),
                 &theme,
-                attached.data().with_axis_resources(&limited)
+                attached.data().with_axis_resources(&limited),
+                &crate::layout::fit::ROOT_SCOPE,
             )
             .is_err());
         }
@@ -798,6 +878,7 @@ fn projected_buffers_share_exact_admission_and_payload_geometry_matches_clipped_
             selected.layout.clone(),
             &theme,
             attached.data().with_axis_resources(&exact),
+            &crate::layout::fit::ROOT_SCOPE,
         )
         .unwrap();
         let marks = selected.marks.as_ref().unwrap();

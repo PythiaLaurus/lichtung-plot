@@ -310,50 +310,17 @@ pub(crate) fn measure_marks(
     let mut payload = prepared.project(chart, &layout.projection, theme, data)?;
     let point_style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.scatter);
     if let Some(ink) = crate::render::geometry::point_ink_bounds(theme, &point_style)? {
-        if chart.user_x_limits().is_none() || chart.user_y_limits().is_none() {
-            data.claim_source_visits(2)?;
-            let low = layout
-                .projection
-                .project(prepared.ranges[0].0, prepared.ranges[1].0);
-            let high = layout
-                .projection
-                .project(prepared.ranges[0].1, prepared.ranges[1].1);
-            let panel = layout.projection.panel_box();
-            for (index, (axis, source, current, pixels, projected, painted)) in [
-                (
-                    crate::layout::interior::ClearanceAxis::X,
-                    prepared.ranges[0],
-                    layout.projection.x_range(),
-                    (panel.x0, panel.x1),
-                    (low.0, high.0),
-                    (ink.left, ink.right),
-                ),
-                (
-                    crate::layout::interior::ClearanceAxis::Y,
-                    prepared.ranges[1],
-                    layout.projection.y_range(),
-                    (panel.y0, panel.y1),
-                    (low.1, high.1),
-                    (ink.bottom, ink.top),
-                ),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if [chart.user_x_limits(), chart.user_y_limits()][index].is_none() {
-                    payload.domain_expansions[index] =
-                        crate::layout::interior::automatic_mark_ink_domain(
-                            axis,
-                            source,
-                            current,
-                            pixels,
-                            projected,
-                            painted,
-                            context.fit_scope(),
-                        )?;
-                }
-            }
-        }
+        payload.domain_expansions = crate::layout::interior::automatic_mark_ink_expansions(
+            prepared.ranges,
+            &layout.projection,
+            ink,
+            [
+                chart.user_x_limits().is_none(),
+                chart.user_y_limits().is_none(),
+            ],
+            data,
+            context.fit_scope(),
+        )?;
     }
     let mut geometry = crate::render::geometry::GeometrySnapshot::new(theme)?;
     let clip = crate::render::backend::validate_clip_region(payload.clip)?.panel();

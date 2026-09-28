@@ -151,7 +151,7 @@ impl GeometryBox {
         (bounds.left < bounds.right && bounds.bottom < bounds.top).then_some(bounds)
     }
 
-    fn union(self, other: Self) -> Self {
+    pub(crate) fn union(self, other: Self) -> Self {
         Self {
             left: self.left.min(other.left),
             right: self.right.max(other.right),
@@ -757,16 +757,25 @@ pub(crate) fn line_ink_width(
     theme: &crate::theme::ResolvedTheme,
     style: &LineStyle,
 ) -> Result<f64, Error> {
+    Ok(line_ink_bounds(theme, style)?.map_or(0.0, |bounds| bounds.top - bounds.bottom))
+}
+
+/// Relative painted extents of an axis-aligned path. The synthetic one-pixel
+/// segment itself is removed from the right end; both caps stay in the ink.
+pub(crate) fn line_ink_bounds(
+    theme: &crate::theme::ResolvedTheme,
+    style: &LineStyle,
+) -> Result<Option<GeometryBox>, Error> {
     let mut ink = GeometrySnapshot::new(theme)?;
     ink.line(
         &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 0.0)],
         style,
         None,
     )?;
-    Ok(ink
-        .bounds()
-        .first()
-        .map_or(0.0, |bounds| bounds.top - bounds.bottom))
+    Ok(ink.bounds().first().copied().map(|mut bounds| {
+        bounds.right -= 1.0;
+        bounds
+    }))
 }
 
 /// Outward painted size beyond a unit, axis-aligned bin body. This is the

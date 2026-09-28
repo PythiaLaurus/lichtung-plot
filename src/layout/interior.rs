@@ -338,6 +338,58 @@ pub(crate) fn automatic_mark_ink_domain(
     Ok(Some(DomainExpansion { axis, limits }))
 }
 
+/// Use a single admitted extrema projection for both automatically owned
+/// numeric axes. A categorical axis is excluded by the caller's semantic mask.
+pub(crate) fn automatic_mark_ink_expansions(
+    source: [(f64, f64); 2],
+    projection: &crate::layout::Projection,
+    bounds: crate::render::geometry::GeometryBox,
+    automatic: [bool; 2],
+    data: crate::data::PlotData<'_>,
+    scope: &crate::layout::fit::FitScope,
+) -> Result<[Option<DomainExpansion>; 2], crate::layout::fit::PlanError> {
+    let mut expansions = [None; 2];
+    if !automatic.into_iter().any(|axis| axis) {
+        return Ok(expansions);
+    }
+    data.claim_source_visits(2)?;
+    let low = projection.project(source[0].0, source[1].0);
+    let high = projection.project(source[0].1, source[1].1);
+    let panel = projection.panel_box();
+    for (index, (axis, current, pixels, projected, painted)) in [
+        (
+            ClearanceAxis::X,
+            projection.x_range(),
+            (panel.x0, panel.x1),
+            (low.0, high.0),
+            (bounds.left, bounds.right),
+        ),
+        (
+            ClearanceAxis::Y,
+            projection.y_range(),
+            (panel.y0, panel.y1),
+            (low.1, high.1),
+            (bounds.bottom, bounds.top),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if automatic[index] {
+            expansions[index] = automatic_mark_ink_domain(
+                axis,
+                source[index],
+                current,
+                pixels,
+                projected,
+                painted,
+                scope,
+            )?;
+        }
+    }
+    Ok(expansions)
+}
+
 /// Insets use the existing spatial quantization and operation-owned feedback.
 /// No adapter owns a budget, retry loop, or root alternative. Requests replace
 /// stale effects through FeedbackRound; rejected work remains charged there.

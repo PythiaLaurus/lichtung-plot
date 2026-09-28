@@ -1505,6 +1505,104 @@ fn scatter_painted_edges_expand_both_automatic_axes_in_one_root_feedback_driver(
 }
 
 #[test]
+fn line_marker_ink_uses_the_same_root_domain_feedback_without_explicit_clipping() {
+    let source = Plot::line(
+        NumericValues::new("x", [0.0, 10.0]),
+        NumericValues::new("y", [0.0, 10.0]),
+    )
+    .markers(true)
+    .size(640, 480)
+    .legend(LegendPolicy::Hidden)
+    .erase();
+    let mut theme = theme();
+    theme.marks.point_sizes.path = 18;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 270.0, 70.0, 270.0);
+    let result = plan_panel(&chart, PlotKind::Line, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(result.planned_x_limits().is_some());
+    assert!(result.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Line(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Line")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let ink = crate::render::geometry::point_ink_bounds(
+        &theme,
+        &chart.point_style(&theme, (0, 0, 0), 18),
+    )
+    .unwrap()
+    .unwrap();
+    let panel = result.result.layout.projection.panel_box();
+    for value in [0.0, 10.0] {
+        let (x, y) = result.result.layout.projection.project(value, value);
+        assert!(x + ink.left >= panel.x0 && x + ink.right <= panel.x1);
+        assert!(y + ink.bottom >= panel.y0 && y + ink.top <= panel.y1);
+    }
+}
+
+#[test]
+fn qq_observation_ink_expands_two_automatic_domains_without_moving_source_quantiles() {
+    let source = Plot::qq(NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]))
+        .size(640, 480)
+        .erase();
+    let mut theme = theme();
+    theme.marks.point_sizes.qq = 60;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(70.0, 420.0, 70.0, 420.0);
+    let result = plan_panel(&chart, PlotKind::Qq, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(
+        result.planned_x_limits().is_some(),
+        "Qq domains {:?}/{:?}",
+        result.planned_x_limits(),
+        result.planned_y_limits()
+    );
+    assert!(result.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Qq(payload) =
+        &result.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Qq")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let ink = crate::render::geometry::point_ink_bounds(
+        &theme,
+        &chart.point_style(&theme, (0, 0, 0), 60),
+    )
+    .unwrap()
+    .unwrap();
+    let panel = result.result.layout.projection.panel_box();
+    assert_eq!(payload.points.len(), 4);
+    for point in &payload.points {
+        assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
+        assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+    }
+
+    let source = Plot::qq(NumericValues::new("value", [0.0, 1.0, 2.0, 3.0]))
+        .x_limits(-2.0, 2.0)
+        .size(640, 480)
+        .erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let exact = plan_panel(&chart, PlotKind::Qq, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(exact.planned_x_limits().is_none());
+    assert!(exact.planned_y_limits().is_some());
+}
+
+#[test]
 fn right_edge_legend_expands_generic_continuous_x_axis() {
     let hue = CategoryValues::new("hue", ["a", "a", "b", "b"]).unwrap();
     let plot = Plot::line(
