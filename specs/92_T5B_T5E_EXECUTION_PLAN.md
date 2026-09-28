@@ -1019,7 +1019,9 @@ caller styles while centralizing their ownership.
 | T5c2c1b2 | COMPLETE | T5c2c1b1 | Umbrella for remaining distribution slots and sparse Interaction |
 | T5c2c1b2a | COMPLETE | T5c2c1b1 | `feat(marks): measure sampled and supplied cloud category pitch` |
 | T5c2c1b2b | COMPLETE | T5c2c1b2a | `feat(marks): measure sparse Interaction and collective preference` |
-| T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
+| T5c2d | IN PROGRESS | T5c2c | Umbrella for still-deferred specialized mark requirements |
+| T5c2d0 | COMPLETE | T5c2c | `docs(marks): map specialized mark requirement owners` |
+| T5c2d1 | PENDING | T5c2d0 | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1738,6 +1740,26 @@ must fit an assigned containing panel; exact Y windows clip numeric data but
 do not erase the semantic group or condition slot. Later overlay collision,
 significance shelves and source-owned text remain with T5c3, not a second
 collective packing pass.
+
+T5c2d0 input handoff: the five remaining specialized interiors keep their
+existing prepared semantics and selected payload, while T5e replaces each
+family's packing separately. T5c2d supplies *mark requirements* to that one
+owner now; it does not introduce local tangent searches or cell-track
+alternatives:
+
+| Family | Prepared count/source | T5c2d mark input; later packing owner |
+| --- | --- | --- |
+| Heatmap | `HeatmapData.x_levels/y_levels`, active declared cells including missing and fully-null merged rows | Cell paint, highlight/cross and selected annotation glyph hard width/height; T5e1 allocates columns then rows |
+| Beeswarm | `PreparedBeeswarm.rows` source identity, `levels` and numeric/color extents | Complete point radius/outline and categorical occupancy independent of post-placement bins; T5e4 chooses tangent offsets once |
+| Waterfall | `PreparedWaterfall.spans/labels/totals` retain signed source delta | Bar/connector/reference ink and per-category pitch, required total-label sources; T5e5 allocates typed shelves |
+| Marginal | `PreparedMarginal.groups` retain central source pairs and linked X/Y KDEs | Central point ink plus top/right density-area strokes and support; T5e3 links native subpanel tracks |
+| Matrix | `PreparedMatrixAxes.labels/ranges/groups/diagonals` retain declared variable square | Off-diagonal source points, diagonal per-group density bodies and exact cell-label ink; T5e2 allocates native grid tracks |
+
+Record one immutable hard/soft mark summary per owner using the same resolved
+theme, pre-font prepared identities and admitted work ledgers as ordinary
+families. A declared data window clips numeric marks only in its dimension;
+category/cell topology and required annotations remain. T5c4 can remove the
+generic floor only when each specialized consumer has these real bounds.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
