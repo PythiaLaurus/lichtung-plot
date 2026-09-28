@@ -4,7 +4,7 @@ use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
-use crate::render::backend::{FillStyle, LineStyle, Point2D};
+use crate::render::backend::{LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::{Plot, RaincloudGroup};
@@ -41,11 +41,7 @@ impl PreparedRaincloud {
             Ok(LegendEntry::point_fill(
                 chart.point_legend_identity(hue, data)?,
                 crate::plots::distribution_sample::overlay_style(color),
-                FillStyle::new(
-                    crate::render::backend::Rgba::from(color).with_alpha(178),
-                    theme.foreground.into(),
-                    1.0,
-                ),
+                theme.marks.violin_body.backend_style(color),
             ))
         }))
     }
@@ -206,17 +202,10 @@ fn project_cloud_and_summary(
     cloud.push(Point2D::new(baseline_low_x, baseline_low_y));
     payload.polygon(
         cloud,
-        FillStyle::new(
-            crate::render::backend::Rgba::from(group_color(
-                chart,
-                group,
-                local_color_index,
-                theme,
-            )?)
-            .with_alpha(178),
-            theme.foreground.into(),
-            1.0,
-        ),
+        theme
+            .marks
+            .violin_body
+            .backend_style(group_color(chart, group, local_color_index, theme)?),
         data,
     )?;
 
@@ -245,11 +234,7 @@ fn project_cloud_and_summary(
             .into_iter()
             .map(Ok),
         )?,
-        FillStyle::new(
-            crate::render::backend::Rgba::rgb(255, 255, 255),
-            theme.foreground.into(),
-            1.0,
-        ),
+        theme.marks.raincloud_box.backend_style(),
         data,
     )?;
     payload.line(

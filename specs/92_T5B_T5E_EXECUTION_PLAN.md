@@ -951,7 +951,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b1 | `feat(theme): resolve ordinary bar fill appearance` |
 | T5c1b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2a | Umbrella for remaining private mark and annotation roles |
 | T5c1b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2a | `feat(theme): resolve area and uncertainty-band fill appearance` |
-| T5c1b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation owners |
+| T5c1b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b1 | `feat(theme): resolve distribution and histogram body fills` |
+| T5c1b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1156,6 +1158,14 @@ originating guide glyphs. Outlines can follow the data color or carry an
 independent theme RGBA paint. A custom regression band changes both selected
 mark and exact glyph while preserving the prepared polygon; five affected
 SVG snapshot paths and strict Clippy pass with default preset bytes intact.
+
+T5c1b2b2b2b2b2b2b2b2a closure: boxplot, sampled Violin/Raincloud and supplied
+Raincloud, Histogram, and Waterfall bodies use distinct fill/outline roles.
+The inner Raincloud box has a fixed white fill role and an independent outline;
+current presets retain exactly the previous paint bytes. A custom Violin role
+changes selected polygons and their originating legend glyph without changing
+scientific positions. Focused supplied/sample parity, Histogram rendering,
+Waterfall fingerprints, three SVG snapshot paths, and strict Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

@@ -960,6 +960,11 @@ pub(crate) struct MarkAppearance {
     pub(crate) density_area: DataFillAppearance,
     pub(crate) marginal_density: DataFillAppearance,
     pub(crate) matrix_density: DataFillAppearance,
+    pub(crate) box_body: DataFillAppearance,
+    pub(crate) violin_body: DataFillAppearance,
+    pub(crate) raincloud_box: FixedFillAppearance,
+    pub(crate) histogram_bin: DataFillAppearance,
+    pub(crate) waterfall_bar: DataFillAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -1001,6 +1006,19 @@ pub(crate) struct DataFillAppearance {
 pub(crate) enum FillOutlinePaint {
     Fixed(Rgba),
     Data,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FixedFillAppearance {
+    pub(crate) paint: Rgba,
+    pub(crate) outline_paint: Rgba,
+    pub(crate) outline_width: f32,
+}
+
+impl FixedFillAppearance {
+    pub(crate) fn backend_style(&self) -> crate::render::backend::FillStyle {
+        crate::render::backend::FillStyle::new(self.paint, self.outline_paint, self.outline_width)
+    }
 }
 
 impl DataFillAppearance {
@@ -1325,6 +1343,31 @@ fn resolved_theme(
                 fill_alpha: 102,
                 outline_paint: FillOutlinePaint::Data,
                 outline_width: 1.0,
+            },
+            box_body: DataFillAppearance {
+                fill_alpha: 255,
+                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
+                outline_width: 1.0,
+            },
+            violin_body: DataFillAppearance {
+                fill_alpha: 178,
+                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
+                outline_width: 1.0,
+            },
+            raincloud_box: FixedFillAppearance {
+                paint: Rgba::rgb(255, 255, 255),
+                outline_paint: foreground_paint,
+                outline_width: 1.0,
+            },
+            histogram_bin: DataFillAppearance {
+                fill_alpha: 209,
+                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
+                outline_width: 0.8,
+            },
+            waterfall_bar: DataFillAppearance {
+                fill_alpha: 255,
+                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
+                outline_width: 0.8,
             },
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
@@ -1753,6 +1796,31 @@ mod tests {
                     fill_alpha: 102,
                     outline_paint: FillOutlinePaint::Data,
                     outline_width: 1.0,
+                },
+                box_body: DataFillAppearance {
+                    fill_alpha: 255,
+                    outline_paint: FillOutlinePaint::Fixed(foreground),
+                    outline_width: 1.0,
+                },
+                violin_body: DataFillAppearance {
+                    fill_alpha: 178,
+                    outline_paint: FillOutlinePaint::Fixed(foreground),
+                    outline_width: 1.0,
+                },
+                raincloud_box: FixedFillAppearance {
+                    paint: Rgba::rgb(255, 255, 255),
+                    outline_paint: foreground,
+                    outline_width: 1.0,
+                },
+                histogram_bin: DataFillAppearance {
+                    fill_alpha: 209,
+                    outline_paint: FillOutlinePaint::Fixed(foreground),
+                    outline_width: 0.8,
+                },
+                waterfall_bar: DataFillAppearance {
+                    fill_alpha: 255,
+                    outline_paint: FillOutlinePaint::Fixed(foreground),
+                    outline_width: 0.8,
                 },
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,

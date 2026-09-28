@@ -226,7 +226,7 @@ pub(crate) fn measure(
                 Point2D::new(right, top),
                 Point2D::new(left, top),
             ],
-            FillStyle::new(color.into(), theme.foreground.into(), 0.8),
+            theme.marks.waterfall_bar.backend_style(color),
         ));
         if index + 1 < spans.len() {
             let (x, from_y) = layout.projection.project(*end, y1);

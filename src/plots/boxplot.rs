@@ -19,7 +19,7 @@ use crate::Error;
 
 use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
-use crate::render::backend::{FillStyle, Point2D};
+use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 #[cfg(test)]
 use crate::stats::distribution::quantile;
@@ -172,7 +172,7 @@ pub(crate) fn measure_marks(
     for (i, stat) in stats.iter().enumerate() {
         let color_index = stat.hue_index.unwrap_or(if group_active { 0 } else { i });
         let color = theme.colors[color_index % theme.colors.len()];
-        let fill = FillStyle::new(color.into(), theme.foreground.into(), 1.0);
+        let fill = theme.marks.box_body.backend_style(color);
         let style = theme.marks.summary_stroke.backend_style();
 
         let x_center_data =

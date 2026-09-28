@@ -31,7 +31,7 @@ use crate::Error;
 
 use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
-use crate::render::backend::{FillStyle, LineStyle, Point2D};
+use crate::render::backend::{LineStyle, Point2D};
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde_support_range, kde_with_source};
 use crate::theme::ResolvedTheme;
@@ -257,19 +257,14 @@ pub(crate) fn measure_marks(
             0.8
         };
 
-        let fill = FillStyle::new(
-            crate::render::backend::Rgba::from(group_color(
-                chart,
-                group,
-                i,
-                group_active,
-                family,
-                theme,
-            )?)
-            .with_alpha(178),
-            theme.foreground.into(),
-            1.0,
-        );
+        let fill = theme.marks.violin_body.backend_style(group_color(
+            chart,
+            group,
+            i,
+            group_active,
+            family,
+            theme,
+        )?);
         match distribution_layout {
             DistributionLayout::Mirrored => {
                 // Violin shape
@@ -359,11 +354,7 @@ pub(crate) fn measure_marks(
                     .into_iter()
                     .map(Ok),
                 )?;
-                let box_fill = FillStyle::new(
-                    crate::render::backend::Rgba::rgb(255, 255, 255),
-                    theme.foreground.into(),
-                    1.0,
-                );
+                let box_fill = theme.marks.raincloud_box.backend_style();
                 payload.polygon(box_pts, box_fill, data)?;
 
                 let median_line = LineStyle::solid(theme.foreground, 1.5);
@@ -423,11 +414,7 @@ pub(crate) fn measure_marks(
                         .into_iter()
                         .map(Ok),
                     )?,
-                    FillStyle::new(
-                        crate::render::backend::Rgba::rgb(255, 255, 255),
-                        theme.foreground.into(),
-                        1.0,
-                    ),
+                    theme.marks.raincloud_box.backend_style(),
                     data,
                 )?;
                 payload.line(

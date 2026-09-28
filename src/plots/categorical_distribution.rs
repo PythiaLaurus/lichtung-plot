@@ -30,7 +30,7 @@ impl PreparedDistribution {
                         Ok(LegendEntry::line_fill(
                             chart.point_legend_identity(label, data)?,
                             theme.marks.summary_stroke.backend_style(),
-                            FillStyle::new(color.into(), theme.foreground.into(), 1.0),
+                            theme.marks.box_body.backend_style(color),
                         ))
                     },
                 ))
@@ -45,11 +45,7 @@ impl PreparedDistribution {
                     |(index, label)| {
                         let color = chart.categorical_color(family, label, index, theme)?;
                         let identity = chart.point_legend_identity(label, data)?;
-                        let fill = FillStyle::new(
-                            crate::render::backend::Rgba::from(color).with_alpha(178),
-                            theme.foreground.into(),
-                            1.0,
-                        );
+                        let fill = theme.marks.violin_body.backend_style(color);
                         Ok(if chart.kind() == PlotKind::Violin {
                             LegendEntry::fill(identity, fill)
                         } else {
@@ -239,6 +235,80 @@ impl DistributionPayload {
             geometry,
         })?);
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod appearance_tests {
+    use super::Mark;
+    use crate::{CategoryValues, NumericValues, Plot};
+
+    #[test]
+    fn custom_violin_body_preserves_selected_geometry_and_changes_exact_guide() {
+        let source = Plot::violin(
+            CategoryValues::new("category", ["A"; 12]).unwrap(),
+            NumericValues::new(
+                "value",
+                [1.0, 1.3, 1.6, 2.0, 2.3, 2.6, 3.0, 3.3, 3.6, 4.0, 4.3, 4.6],
+            ),
+        )
+        .series(
+            CategoryValues::new(
+                "series",
+                ["a", "a", "a", "a", "a", "a", "b", "b", "b", "b", "b", "b"],
+            )
+            .unwrap(),
+        )
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        let old = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        theme.marks.violin_body.fill_alpha = 79;
+        theme.marks.violin_body.outline_width = 2.0;
+        let changed = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        let extract = |result: &crate::spec::PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Distribution(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected violin")
+            };
+            let Some(Mark::Polygon(points, fill)) = payload.marks.first() else {
+                panic!("selected violin body")
+            };
+            (points.clone(), fill.clone())
+        };
+        let (old_polygon, old_style) = extract(&old);
+        let (new_polygon, new_style) = extract(&changed);
+        assert_eq!(old_polygon, new_polygon);
+        assert_eq!(old_style.color.alpha(), 178);
+        assert_eq!(new_style.color.alpha(), 79);
+        assert_eq!(new_style.stroke_width.to_bits(), 2.0_f32.to_bits());
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                old.legend_entries[0].clone(),
+                changed.legend_entries[0].clone()
+            ],
+            "custom violin body",
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
     }
 }
 
