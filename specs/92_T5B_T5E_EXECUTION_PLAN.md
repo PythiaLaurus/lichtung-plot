@@ -1005,7 +1005,9 @@ caller styles while centralizing their ownership.
 | T5c2b0 | COMPLETE | T5c2a | `docs(marks): map categorical geometry and slot owners` |
 | T5c2b1 | IN PROGRESS | T5c2b0 | Umbrella for categorical estimate and bar requirements |
 | T5c2b1a | COMPLETE | T5c2b0 | `feat(marks): measure categorical estimate hard pitch` |
-| T5c2b1b | PENDING | T5c2b1a | `refactor(marks): measure remaining categorical requirements` |
+| T5c2b1b | IN PROGRESS | T5c2b1a | Umbrella for remaining categorical requirements |
+| T5c2b1b1 | COMPLETE | T5c2b1a | `feat(marks): measure grouped Dumbbell slot ink` |
+| T5c2b1b2 | PENDING | T5c2b1b1 | `refactor(marks): measure Bar category and interval requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
@@ -1586,6 +1588,17 @@ Prepared-row inspection charges work before iteration; sampled nullable,
 all-unavailable, Log10 Forest, facet/Canvas, default estimate SVG and exact
 resource-cap tests plus strict Clippy pass. Adjacent-label consequences,
 Dumbbell occupancy and both Bar orientations follow in T5c2b1b.
+
+T5c2b1b1 closure: Dumbbell's prepared categories, declared group count and
+populated `(category,group)` rows supply a per-category hard Y pitch.
+`replicate_y`-exact occupied offsets and independently RGBA-painted endpoints
+and connector contribute complete slot half-ink; absent group combinations
+are not fabricated. The numeric X axis alone requests bounded root domain
+clearance when automatic, after selected source/projection validation. User-
+exact X windows clip that paint but do not compact category tracks. Grouped
+custom 54px endpoints, facet/Canvas preparation, immutable replay, exact
+resource caps, default estimate snapshots and strict Clippy pass. The four
+Bar orientations and attached label consequences remain in T5c2b1b2/T5c3.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

@@ -29,6 +29,88 @@ pub(crate) struct DumbbellData {
     pub(crate) range: (f64, f64),
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_dumbbell
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| Error::Render("Dumbbell intrinsic requires root-prepared pairs".into()))?;
+    if prepared.categories.is_empty() || prepared.group_count == 0 || prepared.rows.is_empty() {
+        return Err(Error::Render(
+            "Dumbbell has no occupied category/pair slots".into(),
+        ));
+    }
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.rows.len() as u128)
+        .map_err(|error| Error::Render(format!("Dumbbell occupied-slot admission: {error:?}")))?;
+    let slot = 0.72
+        / f64::from(
+            u32::try_from(prepared.group_count).map_err(|_| {
+                Error::Render("Dumbbell series count exceeds coordinate range".into())
+            })?,
+        );
+    let mut offset = 0.0_f64;
+    for row in &prepared.rows {
+        if row.category_index >= prepared.categories.len()
+            || row.group_index >= prepared.group_count
+        {
+            return Err(Error::Render(
+                "Dumbbell occupied slot exceeds prepared categories".into(),
+            ));
+        }
+        offset = offset.max((0.36 - slot * (row.group_index as f64 + 0.5)).abs());
+    }
+    let endpoints = chart
+        .dumbbell_endpoints_spec()
+        .ok_or_else(|| Error::Render("Dumbbell endpoint paints are missing".into()))?;
+    let mut outward = 0.0_f64;
+    let mut numeric = 0.0_f64;
+    for color in [endpoints.left_color(), endpoints.right_color()] {
+        if let Some(ink) = crate::render::geometry::point_ink_bounds(
+            theme,
+            &chart.point_style(theme, color, theme.marks.point_sizes.dumbbell),
+        )? {
+            outward = outward.max(ink.top.max(-ink.bottom));
+            numeric = numeric.max(ink.right - ink.left);
+        }
+    }
+    let connector = crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.dumbbell_connector.backend_style(),
+    )?;
+    outward = outward.max(connector / 2.0);
+    numeric = numeric.max(connector);
+    let pitch = (outward / (0.5 - offset)).max(1.0 / 1024.0);
+    let rows =
+        f64::from(u32::try_from(prepared.categories.len()).map_err(|_| {
+            Error::Render("Dumbbell category count exceeds coordinate range".into())
+        })?);
+    let height = pitch * rows;
+    if !height.is_finite() {
+        return Err(Error::Render(
+            "Dumbbell category hard span overflowed".into(),
+        ));
+    }
+    Ok((
+        if chart.user_x_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+        height,
+    ))
+}
+
 impl DumbbellData {
     pub(crate) fn guide_entries(
         chart: &Plot,
@@ -61,9 +143,10 @@ pub(crate) struct PreparedDumbbellInputs {
 #[derive(Debug)]
 pub(crate) struct DumbbellPayload {
     clip: crate::layout::PanelBox,
-    pairs: Vec<[Point2D; 2]>,
+    pub(crate) pairs: Vec<[Point2D; 2]>,
     connector: LineStyle,
     points: [crate::render::backend::PointStyle; 2],
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 impl DumbbellPayload {
@@ -104,7 +187,45 @@ pub(crate) fn measure_marks(
         .prepared_font_environment()?
         .generation_resources();
     let data = context.data.with_axis_resources(&resources);
-    project(chart, prepared, layout, context.theme, data).map_err(Into::into)
+    let projection = layout.projection.clone();
+    let mut result = project(chart, prepared, layout, context.theme, data)?;
+    let crate::layout::interior::MarkPayload::Dumbbell(payload) = &result
+        .marks
+        .as_ref()
+        .expect("selected Dumbbell marks")
+        .payload
+    else {
+        unreachable!("Dumbbell selected its own mark payload")
+    };
+    let mut ink = crate::render::geometry::line_ink_bounds(context.theme, &payload.connector)?;
+    for point in &payload.points {
+        let next = crate::render::geometry::point_ink_bounds(context.theme, point)?;
+        ink = match (ink, next) {
+            (Some(current), Some(next)) => Some(current.union(next)),
+            (current, next) => current.or(next),
+        };
+    }
+    if let Some(ink) = ink {
+        let count = u32::try_from(prepared.categories.len()).map_err(|_| {
+            Error::Render("Dumbbell category count exceeds coordinate range".into())
+        })?;
+        let requests = crate::layout::interior::automatic_mark_ink_expansions(
+            [prepared.range, (0.0, f64::from(count))],
+            &projection,
+            ink,
+            [chart.user_x_limits().is_none(), false],
+            data,
+            context.fit_scope(),
+        )?;
+        let marks =
+            std::sync::Arc::get_mut(result.marks.as_mut().expect("selected Dumbbell marks"))
+                .expect("newly selected Dumbbell marks have one owner");
+        let crate::layout::interior::MarkPayload::Dumbbell(payload) = &mut marks.payload else {
+            unreachable!("Dumbbell selected its own mark payload")
+        };
+        payload.domain_expansions = requests;
+    }
+    Ok(result)
 }
 
 fn project(
@@ -135,6 +256,7 @@ fn project(
                 theme.marks.point_sizes.dumbbell,
             ),
         ],
+        domain_expansions: [None; 2],
     };
     data.reserve_source(&mut payload.pairs, prepared.rows.len())?;
     data.claim_source_visits(prepared.rows.len())?;
@@ -368,6 +490,28 @@ mod tests {
             DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40)).unwrap(),
         )
         .group(CategoryValues::new("replicate", ["one", "one", "two", "two"]).unwrap())
+    }
+
+    #[test]
+    fn grouped_dumbbell_pitch_tracks_only_occupied_endpoint_slots() {
+        let plot = source().erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let chart = inputs.attach(plot).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let base = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.point_sizes.dumbbell = 54;
+        let styled = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert!(styled.0 > base.0);
+        assert!(styled.1 > 300.0);
+
+        let plot = source().x_limits(0.0, 5.0).erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let chart = inputs.attach(plot).unwrap();
+        let exact = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(exact.0.to_bits(), base.0.to_bits());
+        assert_eq!(exact.1.to_bits(), styled.1.to_bits());
     }
 
     #[test]

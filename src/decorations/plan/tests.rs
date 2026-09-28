@@ -1742,6 +1742,57 @@ fn regression_observation_ink_remeasures_under_root_feedback_without_changing_ol
 }
 
 #[test]
+fn grouped_dumbbell_endpoints_clear_only_the_automatic_numeric_axis() {
+    let source = Plot::dumbbell(
+        CategoryValues::new("category", ["b", "a", "b", "a"]).unwrap(),
+        NumericValues::new("left", [1.0, 2.0, 3.0, 4.0]),
+        NumericValues::new("right", [4.0, 3.0, 2.0, 1.0]),
+        crate::DumbbellEndpoints::new("Before", (20, 80, 140), "After", (180, 60, 40)).unwrap(),
+    )
+    .group(CategoryValues::new("replicate", ["one", "one", "two", "two"]).unwrap())
+    .size(1200, 900)
+    .erase();
+    let mut theme = theme();
+    theme.marks.point_sizes.dumbbell = 54;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(80.0, 900.0, 80.0, 800.0);
+    let selected = plan_panel(
+        &chart,
+        PlotKind::Dumbbell,
+        cell,
+        LegendRole::Suppressed,
+        &theme,
+    )
+    .unwrap();
+    assert!(selected.planned_x_limits().is_some());
+    assert!(selected.planned_y_limits().is_none());
+    let crate::layout::interior::MarkPayload::Dumbbell(payload) =
+        &selected.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Dumbbell")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let panel = selected.result.layout.projection.panel_box();
+    let ink = crate::render::geometry::point_ink_bounds(
+        &theme,
+        &chart.point_style(&theme, (0, 0, 0), 54),
+    )
+    .unwrap()
+    .unwrap();
+    for pair in &payload.pairs {
+        for point in pair {
+            assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
+            assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+        }
+    }
+}
+
+#[test]
 fn density_curve_support_clears_automatic_edges_without_repreparing_kde() {
     let source = Plot::density(NumericValues::new("sample", [1.0, 2.0, 3.0, 4.0]))
         .size(640, 480)
