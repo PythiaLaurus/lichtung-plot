@@ -189,8 +189,17 @@ impl Plot {
     ) -> Result<(f64, f64), Error> {
         if InteriorRoute::classify(self.kind()).is_native() {
             let mut minimum = coordinate::Intrinsics::prepared(self, theme)?.minimum(self);
-            if self.kind() == PlotKind::Scatter {
-                let mark = crate::plots::scatter::intrinsic_body_minimum(self, theme)?;
+            let point_ink = match self.kind() {
+                PlotKind::Scatter => {
+                    Some(crate::plots::scatter::intrinsic_body_minimum(self, theme)?)
+                }
+                PlotKind::Qq => Some(crate::plots::qq::intrinsic_body_minimum(self, theme)?),
+                PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
+                    self, theme,
+                )?),
+                _ => None,
+            };
+            if let Some(mark) = point_ink {
                 minimum.0 = minimum.0.max(mark.0);
                 minimum.1 = minimum.1.max(mark.1);
             }

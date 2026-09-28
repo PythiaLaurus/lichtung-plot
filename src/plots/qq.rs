@@ -28,6 +28,42 @@ pub(crate) struct PreparedQqInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedQq)>,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_qq
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Qq intrinsic requires root-prepared marks".into()))?;
+    if prepared.theoretical.len() != prepared.observed.len() || prepared.theoretical.is_empty() {
+        return Err(Error::Render(
+            "Qq primary quantile pairs are incomplete".into(),
+        ));
+    }
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq);
+    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            width
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            height
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedQq {
     pub(crate) fn validate_ranges(
         &self,
@@ -467,6 +503,26 @@ fn quartile_geometry_error() -> Error {
 mod tests {
     use super::*;
     use crate::stats::distribution::quantile;
+
+    #[test]
+    fn qq_styled_point_ink_constrains_only_automatic_axes() {
+        let source = Plot::qq(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
+            .x_limits(-2.0, 2.0)
+            .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let before = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.point_sizes.qq = 54;
+        let sized = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(sized.0.to_bits(), before.0.to_bits());
+        assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
+        theme.marks.primary_point.fill_alpha = 0;
+        theme.marks.primary_point.outline.color =
+            crate::render::backend::Rgba::new(255, 255, 255, 0);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+    }
 
     #[test]
     fn qq_sorts_observations_and_theoretical_quantiles() {

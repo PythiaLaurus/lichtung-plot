@@ -87,11 +87,7 @@ pub(crate) fn intrinsic_body_minimum(
     crate::render::backend::validate_point_style(&style)?;
     // Reuse the canonical painted-ink owner on one origin-relative point; no
     // source point is projected or clipped and scratch/record growth is admitted.
-    let mut ink = crate::render::geometry::GeometrySnapshot::new(theme)?;
-    ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], &style, None)?;
-    let (width, height) = ink.bounds().first().map_or((0.0, 0.0), |bounds| {
-        (bounds.right - bounds.left, bounds.top - bounds.bottom)
-    });
+    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
     Ok((
         if chart.x_axis_spec().limits.is_none() {
             width

@@ -132,6 +132,42 @@ pub(crate) struct PreparedRegression {
     band_values: Option<Vec<(f64, f64, f64)>>,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_regression
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Regression intrinsic requires root-prepared marks".into()))?;
+    if prepared.points.is_empty() {
+        return Err(Error::Render(
+            "Regression has no retained observations".into(),
+        ));
+    }
+    let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression);
+    let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            width
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            height
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedRegression {
     /// Exact marker, fitted-line and optional band legend glyphs. The prepared
     /// fit confirms this producer's semantic input; a panel is not needed.
@@ -393,6 +429,28 @@ pub(crate) fn project(
 mod style_tests {
     use super::*;
     use crate::font::canonical::OperationGenerationResources;
+
+    #[test]
+    fn regression_observation_ink_remeasures_with_custom_point_style() {
+        let source = Plot::regression(
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
+        )
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let before = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.point_sizes.regression = 54;
+        let sized = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(sized.0.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
+        assert_eq!(sized.1.to_bits(), (108.0_f64 + 5530.0 / 1024.0).to_bits());
+        theme.marks.primary_point.fill_alpha = 0;
+        theme.marks.primary_point.outline.color =
+            crate::render::backend::Rgba::new(255, 255, 255, 0);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+    }
 
     #[test]
     fn custom_regression_band_preserves_scientific_polygon_and_changes_guide_glyph() {

@@ -974,7 +974,9 @@ caller styles while centralizing their ownership.
 | T5c2a0 | COMPLETE | T5c1 | `docs(marks): map standard prepared mark inputs` |
 | T5c2a1 | IN PROGRESS | T5c2a0 | Umbrella for standard mark hard/preferred/ink requirements |
 | T5c2a1a | COMPLETE | T5c2a0 | `feat(marks): measure Scatter primary-point hard ink` |
-| T5c2a1b | PENDING | T5c2a1a | `refactor(marks): measure remaining point path and reference requirements` |
+| T5c2a1b | IN PROGRESS | T5c2a1a | Umbrella for remaining point/path/reference requirements |
+| T5c2a1b1 | COMPLETE | T5c2a1a | `feat(marks): measure Qq and Regression observation hard ink` |
+| T5c2a1b2 | PENDING | T5c2a1b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1337,6 +1339,17 @@ hard extent. Focused custom-theme, transparent, triangle, exact-window,
 resource-cap, child-reuse, Scatter snapshot and strict Clippy checks pass.
 Automatic-edge domain clearance, soft density preference and all other
 standard-mark families remain in T5c2a1b; the `80x60` floor is not retired.
+
+T5c2a1b1 closure: Qq retains its paired theoretical/observed point count,
+Regression its fitted-source observation count. The same admitted
+origin-relative canonical point-ink measurement used by Scatter supplies
+their independent actual-point hard width/height on automatic axes; exact
+windows may clip that axis. Resolved point radius, paint transparency, outline
+and shape are read on each call rather than cached under axis typography.
+This does not yet substitute for either family's independent fit, reference
+or band ink, or for automatic-domain edge clearance. Focused custom-role,
+sampled/faceted/Canvas, exact resource-cap and SVG snapshot tests plus strict
+Clippy pass. T5c2a1b2 completes the remaining standard-mark responsibilities.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

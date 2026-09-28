@@ -729,6 +729,19 @@ impl GeometrySnapshot {
     }
 }
 
+/// Exact painted extent of one origin-relative point. The same canonical
+/// geometry path measures pre-selection point requirements and selected ink.
+pub(crate) fn point_ink_dimensions(
+    theme: &crate::theme::ResolvedTheme,
+    style: &PointStyle,
+) -> Result<(f64, f64), Error> {
+    let mut ink = GeometrySnapshot::new(theme)?;
+    ink.scatter_with_clip(&[Point2D::new(0.0, 0.0)], style, None)?;
+    Ok(ink.bounds().first().map_or((0.0, 0.0), |bounds| {
+        (bounds.right - bounds.left, bounds.top - bounds.bottom)
+    }))
+}
+
 #[cfg(test)]
 impl GeometryBackend {
     fn record_text(
