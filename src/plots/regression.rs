@@ -153,11 +153,7 @@ impl PreparedRegression {
             LegendEntry::line_fill(
                 fit_identity,
                 line,
-                FillStyle::new(
-                    crate::render::backend::Rgba::from(color).with_alpha(64),
-                    color.into(),
-                    0.0,
-                ),
+                theme.marks.regression_band.backend_style(color),
             )
         } else {
             LegendEntry::line(fit_identity, line)
@@ -364,11 +360,7 @@ pub(crate) fn project(
             Ok(upper)
         })
         .transpose()?;
-    let band_fill = FillStyle::new(
-        crate::render::backend::Rgba::from(theme.colors[0]).with_alpha(64),
-        theme.colors[0].into(),
-        0.0,
-    );
+    let band_fill = theme.marks.regression_band.backend_style(theme.colors[0]);
 
     let legend_entries = PreparedRegression::guide_entries(chart, theme, data)?;
     let payload = RegressionPayload {
@@ -401,6 +393,56 @@ pub(crate) fn project(
 mod style_tests {
     use super::*;
     use crate::font::canonical::OperationGenerationResources;
+
+    #[test]
+    fn custom_regression_band_preserves_scientific_polygon_and_changes_guide_glyph() {
+        let source = Plot::regression(
+            crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
+            crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
+        )
+        .legend(crate::LegendPolicy::Visible(
+            crate::LegendPosition::OutsideRight,
+        ))
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let panel = crate::layout::PanelBox::new(10.0, 620.0, 20.0, 420.0);
+        let old = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        theme.marks.regression_band.fill_alpha = 128;
+        theme.marks.regression_band.outline_width = 2.0;
+        let changed = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let payload = |result: &PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Regression(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("Regression mark payload")
+            };
+            (payload.band.clone(), payload.band_fill.clone())
+        };
+        let (old_polygon, old_fill) = payload(&old);
+        let (new_polygon, new_fill) = payload(&changed);
+        assert_eq!(old_polygon, new_polygon);
+        assert_eq!(old_fill.color.alpha(), 64);
+        assert_eq!(new_fill.color.alpha(), 128);
+        assert_eq!(new_fill.stroke_width.to_bits(), 2.0_f32.to_bits());
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                old.legend_entries[1].clone(),
+                changed.legend_entries[1].clone()
+            ],
+            "custom regression band",
+            &OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
+    }
 
     #[test]
     fn custom_fit_stroke_preserves_scientific_line_and_changes_exact_guide_glyph() {

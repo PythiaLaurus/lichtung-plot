@@ -955,6 +955,11 @@ pub(crate) struct MarkAppearance {
     pub(crate) primary_point: PointAppearance,
     /// Ordinary bar bodies in either orientation and originating guide glyphs.
     pub(crate) bar_body: DataFillAppearance,
+    pub(crate) line_band: DataFillAppearance,
+    pub(crate) regression_band: DataFillAppearance,
+    pub(crate) density_area: DataFillAppearance,
+    pub(crate) marginal_density: DataFillAppearance,
+    pub(crate) matrix_density: DataFillAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -988,15 +993,24 @@ pub(crate) struct MarkAppearance {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DataFillAppearance {
     pub(crate) fill_alpha: u8,
-    pub(crate) outline_paint: Rgba,
+    pub(crate) outline_paint: FillOutlinePaint,
     pub(crate) outline_width: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum FillOutlinePaint {
+    Fixed(Rgba),
+    Data,
 }
 
 impl DataFillAppearance {
     pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> crate::render::backend::FillStyle {
         crate::render::backend::FillStyle::new(
             Rgba::from(color).with_alpha(self.fill_alpha),
-            self.outline_paint,
+            match self.outline_paint {
+                FillOutlinePaint::Fixed(paint) => paint,
+                FillOutlinePaint::Data => color.into(),
+            },
             self.outline_width,
         )
     }
@@ -1284,7 +1298,32 @@ fn resolved_theme(
             },
             bar_body: DataFillAppearance {
                 fill_alpha: 255,
-                outline_paint: foreground_paint,
+                outline_paint: FillOutlinePaint::Fixed(foreground_paint),
+                outline_width: 1.0,
+            },
+            line_band: DataFillAppearance {
+                fill_alpha: 46,
+                outline_paint: FillOutlinePaint::Data,
+                outline_width: 0.0,
+            },
+            regression_band: DataFillAppearance {
+                fill_alpha: 64,
+                outline_paint: FillOutlinePaint::Data,
+                outline_width: 0.0,
+            },
+            density_area: DataFillAppearance {
+                fill_alpha: 56,
+                outline_paint: FillOutlinePaint::Data,
+                outline_width: 0.0,
+            },
+            marginal_density: DataFillAppearance {
+                fill_alpha: 115,
+                outline_paint: FillOutlinePaint::Data,
+                outline_width: 1.0,
+            },
+            matrix_density: DataFillAppearance {
+                fill_alpha: 102,
+                outline_paint: FillOutlinePaint::Data,
                 outline_width: 1.0,
             },
             uncertainty_stroke: stroke_appearance(
@@ -1687,7 +1726,32 @@ mod tests {
                 },
                 bar_body: DataFillAppearance {
                     fill_alpha: 255,
-                    outline_paint: foreground,
+                    outline_paint: FillOutlinePaint::Fixed(foreground),
+                    outline_width: 1.0,
+                },
+                line_band: DataFillAppearance {
+                    fill_alpha: 46,
+                    outline_paint: FillOutlinePaint::Data,
+                    outline_width: 0.0,
+                },
+                regression_band: DataFillAppearance {
+                    fill_alpha: 64,
+                    outline_paint: FillOutlinePaint::Data,
+                    outline_width: 0.0,
+                },
+                density_area: DataFillAppearance {
+                    fill_alpha: 56,
+                    outline_paint: FillOutlinePaint::Data,
+                    outline_width: 0.0,
+                },
+                marginal_density: DataFillAppearance {
+                    fill_alpha: 115,
+                    outline_paint: FillOutlinePaint::Data,
+                    outline_width: 1.0,
+                },
+                matrix_density: DataFillAppearance {
+                    fill_alpha: 102,
+                    outline_paint: FillOutlinePaint::Data,
                     outline_width: 1.0,
                 },
                 uncertainty_stroke: StrokeAppearance {

@@ -86,11 +86,7 @@ impl PreparedDensity {
             entries.push(LegendEntry::line_fill(
                 chart.collective_legend_identity(&curve.identity, data)?,
                 theme.marks.density_line.backend_style(color),
-                FillStyle::new(
-                    crate::render::backend::Rgba::from(color).with_alpha(56),
-                    color.into(),
-                    0.0,
-                ),
+                theme.marks.density_area.backend_style(color),
             ));
         }
         Ok(entries)
@@ -255,11 +251,7 @@ pub(crate) fn project(
                 Vec::new()
             },
             segments: Vec::new(),
-            fill_style: FillStyle::new(
-                crate::render::backend::Rgba::from(color).with_alpha(56),
-                color.into(),
-                0.0,
-            ),
+            fill_style: theme.marks.density_area.backend_style(color),
             line_style: theme.marks.density_line.backend_style(color),
         };
         data.reserve_source(&mut projected.segments, visible.len() - 1)?;

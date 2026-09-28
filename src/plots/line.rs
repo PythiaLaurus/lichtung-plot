@@ -188,11 +188,7 @@ impl PreparedLine {
                 color,
                 if chart.kind() == PlotKind::Line { 3 } else { 4 },
             );
-            let fill = FillStyle::new(
-                crate::render::backend::Rgba::from(color).with_alpha(46),
-                color.into(),
-                0.0,
-            );
+            let fill = theme.marks.line_band.backend_style(color);
             data.reserve_source(&mut entries, 1)?;
             let identity = chart.collective_legend_identity(identity, data)?;
             entries.push(match (chart.markers_visible(), has_fill) {
@@ -670,11 +666,7 @@ fn project(
         } else {
             theme.foreground
         };
-        let fill = FillStyle::new(
-            crate::render::backend::Rgba::from(color).with_alpha(46),
-            color.into(),
-            0.0,
-        );
+        let fill = theme.marks.line_band.backend_style(color);
         data.claim_source_visits(group.points.len())?;
         let has_fill = chart.kind() == PlotKind::Line
             && group.points.iter().all(|point| point.interval.is_some());
