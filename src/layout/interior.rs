@@ -267,6 +267,11 @@ impl Plot {
                 minimum.0 = minimum.0.max(mark.0);
                 minimum.1 = minimum.1.max(mark.1);
             }
+            if self.kind() == PlotKind::Interaction {
+                let mark = crate::plots::interaction::intrinsic_body_minimum(self, theme)?;
+                minimum.0 = minimum.0.max(mark.0);
+                minimum.1 = minimum.1.max(mark.1);
+            }
             return Ok(minimum);
         }
         let mut minimum = DeferredLegacyPanelMinimum::SIZE;

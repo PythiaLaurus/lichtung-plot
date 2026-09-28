@@ -1010,15 +1010,15 @@ caller styles while centralizing their ownership.
 | T5c2b1b2 | COMPLETE | T5c2b1b1 | `feat(marks): measure Bar category and interval requirements` |
 | T5c2b1b2a | COMPLETE | T5c2b1b2 | `feat(marks): measure attached estimate label row height` |
 | T5c2b1b3 | COMPLETE | T5c2b1b2a | `feat(marks): retain categorical natural preferences` |
-| T5c2c | IN PROGRESS | T5c2b | Umbrella for categorical distributions and Interaction |
+| T5c2c | COMPLETE | T5c2b | Categorical distribution/Interaction mark requirements closed |
 | T5c2c0 | COMPLETE | T5c2b | `docs(marks): map collective distribution slot and ink inputs` |
-| T5c2c1 | IN PROGRESS | T5c2c0 | Umbrella for categorical distribution and Interaction requirements |
+| T5c2c1 | COMPLETE | T5c2c0 | Umbrella for categorical distribution and Interaction requirements |
 | T5c2c1a | COMPLETE | T5c2c0 | `feat(marks): measure sparse Boxplot body and raw-point pitch` |
-| T5c2c1b | IN PROGRESS | T5c2c1a | Umbrella for remaining collective requirements |
+| T5c2c1b | COMPLETE | T5c2c1a | Umbrella for remaining collective requirements |
 | T5c2c1b1 | COMPLETE | T5c2c1a | `feat(marks): retain complete distribution paint under root feedback` |
-| T5c2c1b2 | IN PROGRESS | T5c2c1b1 | Umbrella for remaining distribution slots and sparse Interaction |
+| T5c2c1b2 | COMPLETE | T5c2c1b1 | Umbrella for remaining distribution slots and sparse Interaction |
 | T5c2c1b2a | COMPLETE | T5c2c1b1 | `feat(marks): measure sampled and supplied cloud category pitch` |
-| T5c2c1b2b | PENDING | T5c2c1b2a | `refactor(marks): measure sparse Interaction and collective preference` |
+| T5c2c1b2b | COMPLETE | T5c2c1b2a | `feat(marks): measure sparse Interaction and collective preference` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
@@ -1716,6 +1716,28 @@ coordinates by about 0.05px, retaining all labels and paints. Sample/supplied
 parity, 15 Raincloud integration cases, categorical cache/facet/Canvas, exact
 candidate resource-cap tests and strict Clippy pass. Interaction and the
 shared categorical preference handoff remain in T5c2c1b2b.
+
+T5c2c1b2b closure: Interaction's declared conditions and actually populated
+trace cells supply X hard occupancy, complete per-group exact marker shape,
+interval/connector stroke and semantic `m` without fabricating sparse holes.
+Selected, validated interval/connector/point ink is observed before freezing;
+numeric Y uses bounded root feedback only when automatic. A custom 160px
+marker test confirms full Y containment and all five sparse cells, without
+altering the pinned current Interaction projection fingerprint. The existing
+kind-tagged categorical preference now covers Boxplot, sampled/supplied
+Violin/Raincloud and Interaction: prepared group/trace counts, category slot
+count, `2em` soft pitch and `4:3` aspect join the eight earlier categorical
+families. Seven focused preference tests, fourteen Interaction units,
+categorical distribution/Canvas/facet and exact resource-cap/reuse tests,
+current Interaction and collective SVG snapshots, and strict Clippy pass.
+
+T5c2c closure: sample and supplied group bodies, inner summaries, raw source
+strips/fliers, sparse collective intervals and connectors retain their one
+scientific-preparation and root-feedback route. Full categorical painted ink
+must fit an assigned containing panel; exact Y windows clip numeric data but
+do not erase the semantic group or condition slot. Later overlay collision,
+significance shelves and source-owned text remain with T5c3, not a second
+collective packing pass.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

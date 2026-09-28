@@ -446,7 +446,11 @@ pub(crate) fn canvas_layout(
                 | super::OneCategoricalAxis::Bar
                 | super::OneCategoricalAxis::HorizontalBar
                 | super::OneCategoricalAxis::StackedBar
-                | super::OneCategoricalAxis::StackedHorizontalBar,
+                | super::OneCategoricalAxis::StackedHorizontalBar
+                | super::OneCategoricalAxis::Boxplot
+                | super::OneCategoricalAxis::Violin
+                | super::OneCategoricalAxis::Raincloud
+                | super::OneCategoricalAxis::Interaction,
             ) => Some(super::preference::NativePanelPreference::Categorical(
                 super::preference::categorical_preference(plot, theme, minimum)?,
             )),

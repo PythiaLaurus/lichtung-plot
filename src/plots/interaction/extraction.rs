@@ -15,6 +15,58 @@ pub(crate) fn source() -> Plot<crate::kind::Interaction> {
 }
 
 #[test]
+fn sparse_trace_points_claim_category_pitch_and_complete_numeric_ink() {
+    let source = Plot::interaction(
+        CategoryValues::new("condition", ["b", "a", "c", "b", "c"]).unwrap(),
+        NumericValues::new("estimate", [1.0, 2.0, 3.0, 4.0, 5.0]),
+        CategoryValues::new("group", ["one", "one", "one", "two", "two"]).unwrap(),
+        Bounds::new(
+            NumericValues::new("lower", [0.0, 1.0, 2.0, 3.0, 4.0]),
+            NumericValues::new("upper", [2.0, 3.0, 4.0, 5.0, 6.0]),
+        ),
+    )
+    .size(1400, 900)
+    .erase();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.marks.point_sizes.interaction = 160;
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let hard = chart.intrinsic_body_minimum(&theme).unwrap();
+    assert!(hard.0 > 1000.0);
+    let cell = crate::layout::PanelBox::new(80.0, 1300.0, 80.0, 780.0);
+    let selected = crate::decorations::plan::plan_panel_for_test(
+        &chart,
+        crate::PlotKind::Interaction,
+        cell,
+        crate::decorations::plan::LegendRole::Suppressed,
+        &theme,
+    )
+    .unwrap();
+    assert!(selected.planned_y_limits().is_some());
+    let crate::layout::interior::MarkPayload::Interaction(payload) =
+        &selected.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Interaction")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let panel = selected.result.layout.projection.panel_box();
+    let mut count = 0;
+    for trace in &payload.traces {
+        count += trace.points.len();
+        let Some(style) = &trace.marker else { continue };
+        let ink = crate::render::geometry::point_ink_bounds(&theme, style)
+            .unwrap()
+            .unwrap();
+        for point in &trace.points {
+            assert!(point.x + ink.left >= panel.x0 && point.x + ink.right <= panel.x1);
+            assert!(point.y + ink.bottom >= panel.y0 && point.y + ink.top <= panel.y1);
+        }
+    }
+    assert_eq!(count, 5);
+}
+
+#[test]
 fn custom_connector_appearance_keeps_exact_group_patterns_and_guide_identity() {
     let source = source()
         .styles([

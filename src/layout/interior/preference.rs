@@ -39,6 +39,10 @@ fn ceil_ratio(numerator: i128, denominator: i128) -> Result<i64, Error> {
         .map_err(|_| Error::Render("categorical preference exceeds spatial range".into()))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one closed categorical owner lookup and checked pitch/aspect composition"
+)]
 pub(crate) fn categorical_preference(
     plot: &Plot,
     theme: &ResolvedTheme,
@@ -46,54 +50,76 @@ pub(crate) fn categorical_preference(
 ) -> Result<CategoricalPanelPreference, Error> {
     let resources = theme.prepared_font_environment()?.generation_resources();
     let scope = plot.axis_scope();
-    let (axis, slots, primary_marks) = match plot.kind() {
-        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
-            let inputs = plot
-                .prepared_estimate
-                .as_deref()
-                .ok_or_else(|| Error::Render("estimate preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Estimate", &resources)?;
-            (
-                crate::layout::AxisSide::Left,
-                marks.labels.len(),
-                marks.primary_mark_count(&resources)?,
-            )
-        }
-        PlotKind::Dumbbell => {
-            let inputs = plot
-                .prepared_dumbbell
-                .as_deref()
-                .ok_or_else(|| Error::Render("Dumbbell preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Dumbbell", &resources)?;
-            (
-                crate::layout::AxisSide::Left,
-                marks.categories.len(),
-                marks.primary_mark_count(),
-            )
-        }
-        PlotKind::Bar
-        | PlotKind::StackedBar
-        | PlotKind::HorizontalBar
-        | PlotKind::StackedHorizontalBar => {
-            let inputs = plot
-                .prepared_bars
-                .as_deref()
-                .ok_or_else(|| Error::Render("Bar preference lacks preparation".into()))?;
-            let marks = panel(&inputs.panels, scope, "Bars", &resources)?;
-            let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
-                crate::layout::AxisSide::Bottom
-            } else {
-                crate::layout::AxisSide::Left
-            };
-            (axis, marks.categories.len(), marks.primary_mark_count())
-        }
-        _ => {
-            return Err(Error::Render(
-                "categorical preference requires a prepared estimate, dumbbell or bar family"
-                    .into(),
-            ))
-        }
-    };
+    let (axis, slots, primary_marks) =
+        match plot.kind() {
+            PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+                let inputs = plot
+                    .prepared_estimate
+                    .as_deref()
+                    .ok_or_else(|| Error::Render("estimate preference lacks preparation".into()))?;
+                let marks = panel(&inputs.panels, scope, "Estimate", &resources)?;
+                (
+                    crate::layout::AxisSide::Left,
+                    marks.labels.len(),
+                    marks.primary_mark_count(&resources)?,
+                )
+            }
+            PlotKind::Dumbbell => {
+                let inputs = plot
+                    .prepared_dumbbell
+                    .as_deref()
+                    .ok_or_else(|| Error::Render("Dumbbell preference lacks preparation".into()))?;
+                let marks = panel(&inputs.panels, scope, "Dumbbell", &resources)?;
+                (
+                    crate::layout::AxisSide::Left,
+                    marks.categories.len(),
+                    marks.primary_mark_count(),
+                )
+            }
+            PlotKind::Bar
+            | PlotKind::StackedBar
+            | PlotKind::HorizontalBar
+            | PlotKind::StackedHorizontalBar => {
+                let inputs = plot
+                    .prepared_bars
+                    .as_deref()
+                    .ok_or_else(|| Error::Render("Bar preference lacks preparation".into()))?;
+                let marks = panel(&inputs.panels, scope, "Bars", &resources)?;
+                let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
+                    crate::layout::AxisSide::Bottom
+                } else {
+                    crate::layout::AxisSide::Left
+                };
+                (axis, marks.categories.len(), marks.primary_mark_count())
+            }
+            PlotKind::Boxplot | PlotKind::Violin | PlotKind::Raincloud => {
+                let inputs = plot.prepared_distributions.as_deref().ok_or_else(|| {
+                    Error::Render("distribution preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Distribution", &resources)?;
+                (
+                    crate::layout::AxisSide::Bottom,
+                    marks.categories().len(),
+                    marks.primary_mark_count(),
+                )
+            }
+            PlotKind::Interaction => {
+                let inputs = plot.prepared_interaction.as_deref().ok_or_else(|| {
+                    Error::Render("Interaction preference lacks preparation".into())
+                })?;
+                let marks = panel(&inputs.panels, scope, "Interaction", &resources)?;
+                (
+                    crate::layout::AxisSide::Bottom,
+                    marks.conditions.len(),
+                    marks.primary_mark_count(&resources)?,
+                )
+            }
+            _ => {
+                return Err(Error::Render(
+                    "categorical preference requires a prepared categorical family".into(),
+                ))
+            }
+        };
     let slots = u32::try_from(slots).map_err(|_| {
         Error::Render("categorical preference slot count exceeds spatial range".into())
     })?;
@@ -427,6 +453,91 @@ mod tests {
         assert_eq!(styled.panel_box, original.panel_box);
         assert!(categorical(&styled).hard_pitch_quanta > categorical(&original).hard_pitch_quanta);
         assert!(categorical(&styled).body_quanta.0 > categorical(&original).body_quanta.0);
+    }
+
+    #[test]
+    fn sparse_collective_families_share_one_categorical_preference_carrier() {
+        let category = CategoryValues::new("category", ["a", "a", "a", "b", "b", "b"]).unwrap();
+        let values = NumericValues::new("value", [1.0, 2.0, 3.0, 3.0, 4.0, 5.0]);
+        let sampled = [
+            Plot::boxplot(category.clone(), values.clone())
+                .size(1600, 900)
+                .erase(),
+            Plot::violin(category.clone(), values.clone())
+                .size(1600, 900)
+                .erase(),
+            Plot::raincloud(crate::RaincloudInput::samples(category, values))
+                .size(1600, 900)
+                .erase(),
+        ];
+        let supplied = Plot::raincloud(crate::RaincloudInput::geometry(crate::RaincloudGeometry {
+            dimensions: crate::RaincloudDimensions {
+                category: "category".into(),
+                value: "value".into(),
+                hue: None,
+            },
+            groups: ["a", "b"]
+                .into_iter()
+                .map(|category| crate::RaincloudGroup {
+                    category: category.into(),
+                    hue: None,
+                    density: vec![
+                        crate::RaincloudDensityPoint {
+                            y: 0.0,
+                            normalized_width: 0.0,
+                        },
+                        crate::RaincloudDensityPoint {
+                            y: 3.0,
+                            normalized_width: 1.0,
+                        },
+                        crate::RaincloudDensityPoint {
+                            y: 6.0,
+                            normalized_width: 0.0,
+                        },
+                    ],
+                    q1: 1.0,
+                    median: 3.0,
+                    q3: 5.0,
+                    points: vec![crate::RaincloudPoint {
+                        y: 3.0,
+                        normalized_strip: 0.5,
+                    }],
+                })
+                .collect(),
+        }))
+        .size(1600, 900)
+        .erase();
+        let interaction = Plot::interaction(
+            CategoryValues::new("condition", ["a", "b", "c", "a"]).unwrap(),
+            NumericValues::new("estimate", [1.0, 2.0, 3.0, 4.0]),
+            CategoryValues::new("group", ["one", "one", "one", "two"]).unwrap(),
+            crate::Bounds::new(
+                NumericValues::new("lower", [0.0, 1.0, 2.0, 3.0]),
+                NumericValues::new("upper", [2.0, 3.0, 4.0, 5.0]),
+            ),
+        )
+        .size(1600, 900)
+        .erase();
+        for (source, slots, primary) in sampled
+            .into_iter()
+            .map(|plot| (plot, 2, 2))
+            .chain([(supplied, 2, 2), (interaction, 3, 4)])
+        {
+            let resources = OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let chart = inputs.attach(source).unwrap();
+            let theme = crate::Theme::Publication.resolve();
+            let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+            let preference = categorical(&root);
+            assert_eq!(preference.axis, crate::layout::AxisSide::Bottom);
+            assert_eq!(preference.slots, slots);
+            assert_eq!(preference.primary_marks, primary);
+            assert!(preference.preferred_pitch_quanta >= preference.hard_pitch_quanta);
+            assert!(
+                preference.body_quanta.0
+                    >= i64::from(preference.slots) * preference.preferred_pitch_quanta
+            );
+        }
     }
 
     #[test]

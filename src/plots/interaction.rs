@@ -55,7 +55,112 @@ pub(crate) struct PreparedInteraction {
     traces: Vec<Trace>,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_interaction
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, marks)| marks)
+        .ok_or_else(|| {
+            Error::Render("Interaction intrinsic requires root-prepared traces".into())
+        })?;
+    if prepared.conditions.is_empty() || prepared.traces.is_empty() {
+        return Err(Error::Render(
+            "Interaction has no categorical slots or traces".into(),
+        ));
+    }
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.traces.len() as u128)
+        .map_err(|error| {
+            Error::Render(format!("Interaction trace intrinsic admission: {error:?}"))
+        })?;
+    let mut pitch = 1.0_f64 / 1024.0;
+    let mut numeric = 0.0_f64;
+    let interval = crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.interaction_interval.backend_style((0, 0, 0)),
+    )?;
+    for trace in &prepared.traces {
+        resources
+            .claim_visits(trace.cells.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("Interaction occupied-slot admission: {error:?}"))
+            })?;
+        let marker = if chart.markers_visible() {
+            let point = chart
+                .point_style(theme, (0, 0, 0), theme.marks.point_sizes.interaction)
+                .with_shape(trace.style.point_shape);
+            crate::render::geometry::point_ink_bounds(theme, &point)?
+        } else {
+            None
+        };
+        let connector = if chart.interaction_connectors_visible() && trace.cells.len() > 1 {
+            crate::render::geometry::line_ink_width(
+                theme,
+                &theme.marks.interaction_connector.backend_style((0, 0, 0)),
+            )?
+        } else {
+            0.0
+        };
+        let stroke = interval.max(connector);
+        numeric = numeric.max(stroke);
+        pitch = pitch.max(stroke);
+        for cell in &trace.cells {
+            if cell.condition >= prepared.conditions.len() {
+                return Err(Error::Render(
+                    "Interaction occupied condition exceeds prepared slots".into(),
+                ));
+            }
+            if let Some(ink) = marker {
+                pitch = pitch.max(2.0 * (-ink.left).max(ink.right));
+                numeric = numeric.max(ink.top - ink.bottom);
+            }
+        }
+    }
+    let count = u32::try_from(prepared.conditions.len())
+        .map_err(|_| Error::Render("Interaction condition count exceeds spatial range".into()))?;
+    let categorical = pitch * f64::from(count);
+    if !categorical.is_finite() {
+        return Err(Error::Render(
+            "Interaction categorical hard span overflowed".into(),
+        ));
+    }
+    Ok((
+        categorical,
+        if chart.user_y_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedInteraction {
+    pub(crate) fn primary_mark_count(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<u128, Error> {
+        resources
+            .claim_visits(self.traces.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("Interaction primary-trace admission: {error:?}"))
+            })?;
+        self.traces.iter().try_fold(0_u128, |count, trace| {
+            count
+                .checked_add(trace.cells.len() as u128)
+                .ok_or_else(|| Error::Render("Interaction occupied mark count overflowed".into()))
+        })
+    }
+
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.traces
             .iter()
@@ -258,6 +363,7 @@ pub(crate) fn prepare(
 pub(crate) struct InteractionPayload {
     clip: crate::layout::PanelBox,
     traces: Vec<TracePayload>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
 }
 
 #[derive(Debug)]
@@ -270,6 +376,61 @@ struct TracePayload {
 }
 
 impl InteractionPayload {
+    fn measure_ink(
+        &mut self,
+        chart: &Plot,
+        marks: &PreparedInteraction,
+        projection: &crate::layout::Projection,
+        context: PlotRenderContext<'_>,
+        data: PlotData<'_>,
+    ) -> Result<(), crate::layout::fit::PlanError> {
+        let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        data.claim_source_visits(self.traces.len())?;
+        for trace in &self.traces {
+            data.claim_source_visits(trace.intervals.len())?;
+            for interval in &trace.intervals {
+                full.line(interval, &trace.interval, None)?;
+            }
+            if let Some(style) = &trace.connector {
+                full.line(&trace.points, style, None)?;
+            }
+            if let Some(style) = &trace.marker {
+                full.scatter_with_clip(&trace.points, style, None)?;
+            }
+        }
+        if let Some(bounds) = full
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union)
+        {
+            if bounds.left < self.clip.x0 || bounds.right > self.clip.x1 {
+                return Err(context
+                    .fit_scope()
+                    .failure(
+                        crate::layout::fit::FitKind::SpecializedGeometry,
+                        "Interaction painted ink exceeds its assigned condition panel",
+                    )
+                    .into());
+            }
+            if chart.user_y_limits().is_none() {
+                let count = u32::try_from(marks.conditions.len()).map_err(|_| {
+                    Error::Render("Interaction condition count exceeds spatial range".into())
+                })?;
+                self.domain_expansions =
+                    crate::layout::interior::automatic_absolute_ink_expansions(
+                        [(0.0, f64::from(count)), marks.range],
+                        projection,
+                        bounds,
+                        [false, true],
+                        data,
+                        context.fit_scope(),
+                    )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn draw(&self, backend: &mut dyn Backend) -> Result<(), Error> {
         #[cfg(test)]
         count(2);
@@ -322,6 +483,7 @@ pub(crate) fn measure_marks(
     let mut payload = InteractionPayload {
         clip: layout.projection.panel_box(),
         traces: Vec::new(),
+        domain_expansions: [None; 2],
     };
     let legends = marks.guide_entries(chart, context.theme, data)?;
     data.reserve_source(&mut payload.traces, marks.traces.len())?;
@@ -388,6 +550,7 @@ pub(crate) fn measure_marks(
         }
         payload.traces.push(selected);
     }
+    payload.measure_ink(chart, marks, &layout.projection, context, data)?;
     let mut result = PlotRenderResult::new(layout, legends);
     result.x_domain = crate::spec::AxisDomain::Categorical;
     result.marks = Some(data.source_arc(crate::layout::interior::DeferredMarkPlan {

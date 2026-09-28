@@ -16,6 +16,14 @@ pub(crate) enum PreparedDistribution {
 }
 
 impl PreparedDistribution {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        match self {
+            Self::Boxplot(prepared) => prepared.sample.groups.len() as u128,
+            Self::Violin(prepared) => prepared.sample.groups.len() as u128,
+            Self::Supplied(prepared) => prepared.primary_mark_count(),
+        }
+    }
+
     pub(crate) fn guide_entries(
         &self,
         chart: &Plot,
