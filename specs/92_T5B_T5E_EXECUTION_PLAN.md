@@ -970,7 +970,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation style ownership |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve supplemental point-label typography` |
 | T5c1b2b2b2b2b2b2b2b2b2b2b2b2b | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): close private mark and annotation roles` |
-| T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
+| T5c2a | IN PROGRESS | T5c1 | Umbrella; completes after standard-mark input and intrinsic substages |
+| T5c2a0 | COMPLETE | T5c1 | `docs(marks): map standard prepared mark inputs` |
+| T5c2a1 | PENDING | T5c2a0 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1294,6 +1296,31 @@ canonical degeneracy rejection, exact data windows, and explicit caller styles.
 | T5c2b | PointInterval, Coefficient, Forest, Dumbbell, four bar kinds | Orientation-aware category pitch, unavailable slots, interval/cap clearance, sign/stack extents, adjacent value labels, exact local widths, Forest raw/log source distinctions |
 | T5c2c | Boxplot, Violin, Raincloud, Interaction | Sample/supplied parity, summaries/outliers/clouds/raw points, sparse collective slots/connectors, shared group/hue styles, category occupancy without dropping missing combinations |
 | T5c2d | Heatmap, Beeswarm, Waterfall, Marginal, Matrix mark consumers | Exact cell/glyph/label and mark requirements delivered to their still-deferred packing owners; no new tangent packing or track algorithm yet |
+
+T5c2a0 input handoff (the exact semantic cardinalities are fixed in
+`docs/t5c0-property-disposition.md`):
+
+| Family | Existing retained owner; count before clipping | Additional hard-ink input |
+| --- | --- | --- |
+| Scatter | `PreparedScatter.groups[*].points.len()`; hue regrouping does not add marks | Resolved point radius, shape, independent fill/outline RGBA, stroked outward ink at auto numeric edges |
+| Line/Trajectory/LinePath | `PreparedLine.groups[*].points.len()`; supplemental `layers` are separate | Styled markers only when present; complete path/ribbon stroke and interval boundary across an explicit window; supplemental labels belong to T5c3 |
+| Histogram | `HistogramSemantics.bins.len()` for both source kinds | Positive/nonzero source bin geometry, fill outline, optional KDE curve and rug strokes, anchored zero |
+| Density | `PreparedDensity.curves.len()`, not grid vertices | KDE support/area outline and stroked curve, including segments clipped into an exact window |
+| Qq | `PreparedQq.theoretical.len()` paired with `observed` | Point ink and optional reference line, with visible clipping independent of source count |
+| Regression | `PreparedRegression.points.len()`, not `BAND_POINTS` samples | Point ink, complete fit stroke and optional confidence polygon edge |
+
+T5c2a0 boundary: the current axis-only `PreparedAxes.intrinsics` `OnceLock`
+checks typography through `StandardPanelInputs::matches`; mark intrinsics
+depend additionally on resolved mark style and exact layer visibility. Do not
+cache them under that typography-only identity. Admit the semantic count and
+any iteration at the source owner; a cache hit still charges its measurement
+call. Selected `GeometrySnapshot` supplies final painted bounds but cannot
+retroactively determine pre-selection cardinality, natural preference or a
+parent's hard assignment. Preserve the single root feedback driver and the
+`80x60` compatibility floor until all four native mark clusters and annotation
+consequences can replace it atomically in T5c4. Automatic-axis painted edge
+clearance may request bounded owner feedback; exact data windows may clip marks
+but must not drop a required annotation or mask malformed/collapsed geometry.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
