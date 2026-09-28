@@ -19,11 +19,12 @@ fn same_assignment_marks_match_canonical_projection_fingerprints() {
     use crate::layout::PanelBox;
     // 2026-09-14 T5a6d: canonical projected centers precede marker construction.
     // Historical a6f9091 hashes were fac25eefcd84c63d / 3ef60d2fc29c86ec /
-    // bae40bd86df8a981. Only triangle x vertices changed, by one CSS quantum;
-    // see docs/local-search-benchmarks.md, "T5a6d Closing Audit".
+    // bae40bd86df8a981. T5c1 point-alpha quantization later changed the two
+    // marker-visible SVG byte hashes (formerly 66849c3c47bac743 and
+    // 178ec0a9046a6eb6); the marker-hidden fingerprint stayed identical.
     for (markers, connectors, expected) in [
-        (true, true, 0x6684_9c3c_47ba_c743),
-        (true, false, 0x178e_c0a9_046a_6eb6),
+        (true, true, 0x44fc_6427_2cd5_00e1),
+        (true, false, 0x6e44_598a_586b_59bc),
         (false, true, 0xbae4_0bd8_6df8_a981),
     ] {
         let source = source()

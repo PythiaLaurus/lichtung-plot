@@ -4,7 +4,7 @@ use crate::data::PlotData;
 use crate::decorations::legend::LegendEntry;
 use crate::layout::Layout;
 use crate::plots::categorical_distribution::DistributionPayload;
-use crate::render::backend::{LineStyle, Point2D};
+use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::theme::ResolvedTheme;
 use crate::{Plot, RaincloudGroup};
@@ -242,7 +242,7 @@ fn project_cloud_and_summary(
             Point2D::new(box_left, median),
             Point2D::new(box_right, median),
         ],
-        &LineStyle::solid(theme.foreground, 1.5),
+        &theme.marks.raincloud_median.backend_style(),
         data,
     )
 }

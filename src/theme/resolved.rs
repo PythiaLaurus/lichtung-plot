@@ -973,6 +973,12 @@ pub(crate) struct MarkAppearance {
     pub(crate) heatmap_missing_row_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_key_outline: FillOutlineAppearance,
     pub(crate) heatmap_missing_cross: StrokeAppearance,
+    pub(crate) bar_zero: StrokeAppearance,
+    pub(crate) waterfall_connector: StrokeAppearance,
+    pub(crate) waterfall_reference: StrokeAppearance,
+    pub(crate) raincloud_median: StrokeAppearance,
+    pub(crate) beeswarm_reference: StrokeAppearance,
+    pub(crate) interaction_interval: DataLineAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -1414,6 +1420,36 @@ fn resolved_theme(
             heatmap_missing_cross: StrokeAppearance {
                 paint: Rgba::rgb(120, 120, 120),
                 width: 1.0,
+                pattern: StrokePattern::Solid,
+            },
+            bar_zero: StrokeAppearance {
+                paint: foreground_paint,
+                width: 0.8,
+                pattern: StrokePattern::Solid,
+            },
+            waterfall_connector: StrokeAppearance {
+                paint: foreground_paint,
+                width: 0.7,
+                pattern: StrokePattern::ShortDash,
+            },
+            waterfall_reference: StrokeAppearance {
+                paint: foreground_paint,
+                width: 0.7,
+                pattern: StrokePattern::MediumDash,
+            },
+            raincloud_median: StrokeAppearance {
+                paint: foreground_paint,
+                width: 1.5,
+                pattern: StrokePattern::Solid,
+            },
+            beeswarm_reference: StrokeAppearance {
+                paint: foreground_paint,
+                width: 0.8,
+                pattern: StrokePattern::Solid,
+            },
+            interaction_interval: DataLineAppearance {
+                width: 1.2,
+                alpha: 255,
                 pattern: StrokePattern::Solid,
             },
             uncertainty_stroke: stroke_appearance(
@@ -1894,6 +1930,36 @@ mod tests {
                 heatmap_missing_cross: StrokeAppearance {
                     paint: Rgba::rgb(120, 120, 120),
                     width: 1.0,
+                    pattern: StrokePattern::Solid,
+                },
+                bar_zero: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.8,
+                    pattern: StrokePattern::Solid,
+                },
+                waterfall_connector: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.7,
+                    pattern: StrokePattern::ShortDash,
+                },
+                waterfall_reference: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.7,
+                    pattern: StrokePattern::MediumDash,
+                },
+                raincloud_median: StrokeAppearance {
+                    paint: foreground,
+                    width: 1.5,
+                    pattern: StrokePattern::Solid,
+                },
+                beeswarm_reference: StrokeAppearance {
+                    paint: foreground,
+                    width: 0.8,
+                    pattern: StrokePattern::Solid,
+                },
+                interaction_interval: DataLineAppearance {
+                    width: 1.2,
+                    alpha: 255,
                     pattern: StrokePattern::Solid,
                 },
                 uncertainty_stroke: StrokeAppearance {

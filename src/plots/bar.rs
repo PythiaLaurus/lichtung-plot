@@ -12,7 +12,7 @@ use crate::Error;
 
 use crate::layout::{Layout, PhysicalTextAlignment, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
-use crate::render::backend::{LineStyle, PlacedText, Point2D, TextAnchor};
+use crate::render::backend::{PlacedText, Point2D, TextAnchor};
 use crate::spec::{BarSpacing, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
@@ -148,7 +148,7 @@ pub(crate) fn measure_marks(
         clip: layout.projection.panel_box(),
         domain_expansion,
         zero: None,
-        zero_style: LineStyle::solid(theme.foreground, 0.8),
+        zero_style: theme.marks.bar_zero.backend_style(),
         interval_style: theme.marks.uncertainty_stroke.backend_style(),
         bars: Vec::new(),
         text: Vec::new(),

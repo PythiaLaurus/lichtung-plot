@@ -342,7 +342,11 @@ pub(crate) fn measure_marks(
         let mut selected = TracePayload {
             intervals: Vec::new(),
             points: Vec::new(),
-            interval: LineStyle::solid(color, 1.2),
+            interval: context
+                .theme
+                .marks
+                .interaction_interval
+                .backend_style(color),
             connector: (chart.interaction_connectors_visible() && trace.cells.len() > 1)
                 .then(|| line.clone()),
             marker: chart.markers_visible().then(|| point.clone()),

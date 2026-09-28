@@ -957,7 +957,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2a | `feat(theme): resolve raw distribution overlay points` |
 | T5c1b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b1 | Umbrella for remaining mark and annotation roles |
 | T5c1b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve Heatmap cell and missing-key outlines` |
-| T5c1b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2a | Umbrella for remaining mark/annotation appearance |
+| T5c1b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve remaining structural mark strokes` |
+| T5c1b2b2b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): complete private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1186,6 +1188,18 @@ Focused missing-cell, merged-row, deterministic SVG and strict Clippy checks
 pass. Variable cell/missing fill palette ownership remains with the T5d color
 scale cut because continuous guide descriptors are root-prepared before theme
 selection; keep prepared value/domain semantics independent of appearance.
+
+T5c1b2b2b2b2b2b2b2b2b2b1 closure: HorizontalBar zero, Waterfall connector
+and reference, sampled/supplied Raincloud median, Beeswarm reference and
+Interaction interval strokes consume separate complete private roles. Current
+presets preserve paint, width and dash grammar. A custom HorizontalBar zero
+stroke retains its exact geometry; Interaction unit/capture and SVG snapshots,
+Waterfall fingerprints and strict Clippy pass. Interaction's two marker-visible
+fingerprints were stale after the earlier RGBA point-alpha change: old
+`66849c3c47bac743/178ec0a9046a6eb6`, current
+`44fc64272cd500e1/6e44598a586b59bc`. The marker-hidden hash
+`bae40bd86df8a981` remains identical, confirming no interval/connector
+stroke change under current presets.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

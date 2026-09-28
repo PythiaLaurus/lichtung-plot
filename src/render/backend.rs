@@ -220,6 +220,7 @@ impl LineStyle {
 
     /// Create a line using the fixed `3 2` dash pattern.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn short_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
             color: color.into(),
@@ -230,6 +231,7 @@ impl LineStyle {
 
     /// Create a line using the fixed `4 3` dash pattern.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn medium_dashed(color: impl Into<Rgba>, width: f32) -> Self {
         Self {
             color: color.into(),

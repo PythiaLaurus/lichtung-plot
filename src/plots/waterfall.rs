@@ -233,7 +233,7 @@ pub(crate) fn measure(
             let (_, to_y) = layout.projection.project(*end, index as f64 + 1.2);
             connectors.push((
                 [Point2D::new(x, from_y), Point2D::new(x, to_y)],
-                LineStyle::short_dashed(theme.foreground, 0.7),
+                theme.marks.waterfall_connector.backend_style(),
             ));
         }
     }
@@ -243,7 +243,7 @@ pub(crate) fn measure(
         let (_, y1) = layout.projection.project(value, labels.len() as f64);
         (
             [Point2D::new(x, y0), Point2D::new(x, y1)],
-            LineStyle::medium_dashed(theme.foreground, 0.7),
+            theme.marks.waterfall_reference.backend_style(),
         )
     });
     let AnnotationPlan {

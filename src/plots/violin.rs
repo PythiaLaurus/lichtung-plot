@@ -31,7 +31,7 @@ use crate::Error;
 
 use crate::data::PlotData;
 use crate::plots::categorical_distribution::{self, DistributionPayload, PreparedDistribution};
-use crate::render::backend::{LineStyle, Point2D};
+use crate::render::backend::Point2D;
 use crate::spec::{PlotRenderContext, PlotRenderResult};
 use crate::stats::distribution::{kde_support_range, kde_with_source};
 use crate::theme::ResolvedTheme;
@@ -357,7 +357,7 @@ pub(crate) fn measure_marks(
                 let box_fill = theme.marks.raincloud_box.backend_style();
                 payload.polygon(box_pts, box_fill, data)?;
 
-                let median_line = LineStyle::solid(theme.foreground, 1.5);
+                let median_line = theme.marks.raincloud_median.backend_style();
                 payload.line(
                     &[
                         Point2D::new(cx_px - box_w_px, median_px),
@@ -422,7 +422,7 @@ pub(crate) fn measure_marks(
                         Point2D::new(box_left, median),
                         Point2D::new(box_right, median),
                     ],
-                    &LineStyle::solid(theme.foreground, 1.5),
+                    &theme.marks.raincloud_median.backend_style(),
                     data,
                 )?;
             }

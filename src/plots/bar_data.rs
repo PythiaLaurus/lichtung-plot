@@ -1755,11 +1755,12 @@ mod tests {
 
     #[test]
     fn custom_bar_fill_and_outline_match_selected_marks_and_originating_guide() {
-        let source = Plot::bar(
+        let source = Plot::horizontal_bar(
             CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
-            BarInput::samples(NumericValues::new("value", [1.0, 2.0, 3.0, 4.0])),
+            BarInput::samples(NumericValues::new("value", [-1.0, 2.0, 3.0, 4.0])),
         )
         .series(CategoryValues::new("series", ["first", "second", "first", "second"]).unwrap())
+        .zero_line()
         .erase();
         let resources = crate::font::canonical::OperationGenerationResources::new();
         let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
@@ -1777,6 +1778,8 @@ mod tests {
         theme.marks.bar_body.outline_paint =
             crate::theme::FillOutlinePaint::Fixed(crate::render::backend::Rgba::new(1, 3, 5, 64));
         theme.marks.bar_body.outline_width = 2.0;
+        theme.marks.bar_zero.paint = crate::render::backend::Rgba::new(2, 4, 6, 188);
+        theme.marks.bar_zero.width = 1.25;
         let selected = chart
             .measure_selected_interior(crate::spec::PlotRenderContext::new(
                 chart.data(),
@@ -1799,6 +1802,21 @@ mod tests {
         assert_eq!(new_style.color.alpha(), 128);
         assert_eq!(new_style.stroke.alpha(), 64);
         assert_eq!(new_style.stroke_width.to_bits(), 2.0_f32.to_bits());
+        let zero = |result: &crate::spec::PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Bars(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected ordinary bar payload")
+            };
+            (payload.zero, payload.zero_style.clone())
+        };
+        let (old_zero, old_zero_style) = zero(&original);
+        let (new_zero, new_zero_style) = zero(&selected);
+        assert_eq!(old_zero, new_zero);
+        assert!(new_zero.is_some());
+        assert_ne!(old_zero_style, new_zero_style);
+        assert_eq!(new_zero_style.color.alpha(), 188);
+        assert_eq!(new_zero_style.width.to_bits(), 1.25_f32.to_bits());
         assert!(crate::decorations::legend::merge_exact_entries(
             [
                 original.legend_entries[0].clone(),

@@ -321,7 +321,7 @@ pub(crate) fn measure(
         let (_, y1) = layout.projection.project(0.0, prepared.levels.len() as f64);
         Some((
             [Point2D::new(x, y0), Point2D::new(x, y1)],
-            LineStyle::solid(theme.foreground, 0.8),
+            theme.marks.beeswarm_reference.backend_style(),
         ))
     } else {
         None
