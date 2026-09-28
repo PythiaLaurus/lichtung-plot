@@ -885,6 +885,8 @@ pub(crate) struct FoundationalTypography {
     pub(crate) tick_label: TextAppearance,
     /// Significance-label default before an exact caller override.
     pub(crate) significance_label: TextAppearance,
+    /// Estimate value labels and the required not-estimable marker.
+    pub(crate) estimate_detail: TextAppearance,
     /// Complete candidates selected over a variable fill before font discovery.
     pub(crate) contrast_light: TextAppearance,
     pub(crate) contrast_dark: TextAppearance,
@@ -1328,6 +1330,7 @@ fn resolved_theme(
                 SIGNIFICANCE_FONT_SIZE,
                 1.2,
             ),
+            estimate_detail: text_appearance(&stack, foreground_paint, 14, 1.2),
             contrast_light: text_appearance(&stack, Rgba::rgb(255, 255, 255), 11, 1.2),
             contrast_dark: text_appearance(&stack, Rgba::rgb(0, 0, 0), 11, 1.2),
             legend_title: text_appearance(&stack, Rgba::rgb(60, 60, 60), 12, 1.2),
@@ -1836,6 +1839,7 @@ mod tests {
                 axis_title: text(foreground, expected.axis_title_size, 1.2),
                 tick_label: text(foreground, 16, 1.2),
                 significance_label: text(foreground, 16, 1.2),
+                estimate_detail: text(foreground, 14, 1.2),
                 contrast_light: text(Rgba::rgb(255, 255, 255), 11, 1.2),
                 contrast_dark: text(Rgba::rgb(0, 0, 0), 11, 1.2),
                 legend_title: text(Rgba::rgb(60, 60, 60), 12, 1.2),

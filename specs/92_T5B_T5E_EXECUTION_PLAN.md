@@ -963,7 +963,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve primary point sizes by mark family` |
 | T5c1b2b2b2b2b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2a | Umbrella for remaining private style roles |
 | T5c1b2b2b2b2b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2a | `feat(theme): resolve Interaction connector appearance` |
-| T5c1b2b2b2b2b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): complete private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b2b2b2b2b1 | Umbrella for remaining annotation roles |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b2b2b2b2b1 | `feat(theme): resolve required estimate detail text` |
+| T5c1b2b2b2b2b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2b2b2b2b2a | `feat(theme): complete private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1221,6 +1223,14 @@ Solid/Dashed caller grammar overrides only the theme pattern. Custom appearance
 changes retained marks and guide identity without moving data points or
 overriding exact group patterns. Focused style/preflight/capture tests, current
 Interaction SVG snapshot, pinned projection hashes and strict Clippy pass.
+
+T5c1b2b2b2b2b2b2b2b2b2b2b2a closure: required estimate detail text, including
+`Not estimable`, has one complete theme-owned typography role. Prepared census
+selects that stack before font discovery; selected PointInterval/Coefficient/
+Forest text plans use the same paint, size, weight and line height while an
+exact caller significance-label override stays independent. A private size/
+paint change alters the selected text but not the retained interval; focused
+status/facet tests, estimate SVG snapshots and strict Clippy pass.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

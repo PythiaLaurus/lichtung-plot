@@ -1470,7 +1470,14 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     source,
                     &[],
-                    &body,
+                    if matches!(
+                        kind,
+                        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
+                    ) {
+                        &theme.typography.estimate_detail
+                    } else {
+                        &body
+                    },
                     prepared_stage.as_deref_mut(),
                 )
             },
@@ -2461,6 +2468,50 @@ mod tests {
                 requirement.source == label && requirement.stack_source != chosen
             }));
         }
+    }
+
+    #[test]
+    fn estimate_detail_census_uses_complete_role_for_required_unavailable_text() {
+        let plot = crate::Plot::point_interval(
+            crate::CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
+            crate::NumericValues::nullable("estimate", [Some(1.0), None]),
+            crate::Bounds::new(
+                crate::NumericValues::nullable("lower", [Some(0.5), None]),
+                crate::NumericValues::nullable("upper", [Some(1.5), None]),
+            ),
+        )
+        .estimate_status([
+            crate::EstimateStatus::Estimated,
+            crate::EstimateStatus::NotEstimable,
+        ])
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.estimate_detail.stack = "Estimate detail only".into();
+        theme.typography.estimate_detail.font_size = 20;
+        theme.typography.estimate_detail.paint = crate::render::backend::Rgba::rgb(5, 7, 9);
+        let requirements = foundational_plot_requirements(
+            Some(&inputs),
+            &plot,
+            PlotKind::PointInterval,
+            &theme,
+            &ComponentAddress::root(),
+            true,
+            true,
+            true,
+            None,
+        )
+        .unwrap();
+        let unavailable = requirements
+            .iter()
+            .find(|requirement| requirement.source == "Not estimable")
+            .unwrap();
+        assert_eq!(unavailable.stack_source, "Estimate detail only");
+        assert!(!requirements.iter().any(|requirement| {
+            requirement.source == "Not estimable"
+                && requirement.stack_source != "Estimate detail only"
+        }));
     }
 
     #[test]

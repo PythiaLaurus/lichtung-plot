@@ -662,12 +662,13 @@ fn project(
         weight: exact.map_or(base.weight, crate::SignificanceMarkStyle::weight_spec),
         line_height_multiplier: base.line_height_multiplier,
     };
+    let detail_role = &theme.typography.estimate_detail;
     let detail_label = crate::theme::TextAppearance {
-        stack: data.copy_source_string(&theme.font_family)?,
-        paint: theme.foreground.into(),
-        font_size: theme.detail_font_size,
-        weight: crate::TextWeight::Normal,
-        line_height_multiplier: 1.2,
+        stack: data.copy_source_string(&detail_role.stack)?,
+        paint: detail_role.paint,
+        font_size: detail_role.font_size,
+        weight: detail_role.weight,
+        line_height_multiplier: detail_role.line_height_multiplier,
     };
     data.claim_source_visits(estimates.len())?;
     let not_estimable_plan = estimates
@@ -932,6 +933,54 @@ fn log_ticks(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::{Bounds, CategoryValues, NumericValues};
+
+    #[test]
+    fn custom_estimate_detail_role_changes_required_unavailable_text_before_capture() {
+        let source = crate::Plot::point_interval(
+            CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
+            NumericValues::nullable("estimate", [Some(1.0), None]),
+            Bounds::new(
+                NumericValues::nullable("lower", [Some(0.5), None]),
+                NumericValues::nullable("upper", [Some(1.5), None]),
+            ),
+        )
+        .estimate_status([
+            crate::EstimateStatus::Estimated,
+            crate::EstimateStatus::NotEstimable,
+        ])
+        .size(1200, 800)
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let panel = crate::layout::PanelBox::new(100.0, 900.0, 60.0, 600.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        let old = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        theme.typography.estimate_detail.font_size = 18;
+        theme.typography.estimate_detail.paint = crate::render::backend::Rgba::rgb(5, 7, 9);
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let text = |result: &PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Estimate(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected estimate display")
+            };
+            let row = &payload.rows[1];
+            (row.interval, row.text.as_ref().unwrap().plan.style.clone())
+        };
+        let (old_interval, old_text) = text(&old);
+        let (new_interval, new_text) = text(&selected);
+        assert_eq!(old_interval, new_interval);
+        assert_eq!(old_text.font_size, 14);
+        assert_eq!(new_text.font_size, 18);
+        assert_eq!(new_text.paint, crate::render::backend::Rgba::rgb(5, 7, 9));
+    }
 
     fn tick_theme() -> ResolvedTheme {
         crate::Theme::Publication.resolve()
