@@ -230,22 +230,31 @@ impl DistributionPayload {
                 Mark::Scatter(points, style) => geometry.scatter(points, style, clip)?,
             }
         }
-        if chart.user_y_limits().is_none() {
-            let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
-            data.claim_source_visits(self.marks.len())?;
-            for mark in &self.marks {
-                match mark {
-                    Mark::Polygon(points, style) => full.polygon(points, style, None)?,
-                    Mark::Line(points, style) => full.line(points, style, None)?,
-                    Mark::Scatter(points, style) => full.scatter_with_clip(points, style, None)?,
-                }
+        let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+        data.claim_source_visits(self.marks.len())?;
+        for mark in &self.marks {
+            match mark {
+                Mark::Polygon(points, style) => full.polygon(points, style, None)?,
+                Mark::Line(points, style) => full.line(points, style, None)?,
+                Mark::Scatter(points, style) => full.scatter_with_clip(points, style, None)?,
             }
-            if let Some(bounds) = full
-                .bounds()
-                .iter()
-                .copied()
-                .reduce(crate::render::geometry::GeometryBox::union)
-            {
+        }
+        if let Some(bounds) = full
+            .bounds()
+            .iter()
+            .copied()
+            .reduce(crate::render::geometry::GeometryBox::union)
+        {
+            if bounds.left < clip.x0 || bounds.right > clip.x1 {
+                return Err(context
+                    .fit_scope()
+                    .failure(
+                        crate::layout::fit::FitKind::SpecializedGeometry,
+                        "categorical distribution painted ink exceeds its assigned category panel",
+                    )
+                    .into());
+            }
+            if chart.user_y_limits().is_none() {
                 let categories = categorical_distribution_count(chart)?;
                 self.domain_expansions =
                     crate::layout::interior::automatic_absolute_ink_expansions(

@@ -23,10 +23,10 @@ expression: normalize_embedded_font(&svg)
 <polygon points="406.205078125,200.9091796875 350.1005859375,143.5908203125 406.205078125,86.2724609375 406.205078125,86.2724609375 406.205078125,200.9091796875" fill="#D55E00" fill-opacity="0.6980392156862745" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 <polygon points="413.2177734375,178.86328125 441.26953125,178.86328125 441.26953125,103.9091796875 413.2177734375,103.9091796875" fill="#FFFFFF" stroke="#000000" stroke-width="1" stroke-linejoin="miter" stroke-miterlimit="4.0"/>
 <polyline points="413.2177734375,143.5908203125 441.26953125,143.5908203125" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="257.30078125" cy="196.5" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="274.5859375" cy="156.818359375" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="476.458984375" cy="161.2275390625" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
-<circle cx="493.744140625" cy="121.5458984375" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="257.3505859375" cy="196.5" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="274.5361328125" cy="156.818359375" r="2" fill="#0072B2" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="476.5087890625" cy="161.2275390625" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
+<circle cx="493.6943359375" cy="121.5458984375" r="2" fill="#D55E00" fill-opacity="0.8196078431372549" stroke="#FFFFFF" stroke-width="0.2001953125"/>
 </g>
 <g id="axes">
 <polyline points="95,245 533.31640625,245" fill="none" stroke="#000000" stroke-width="0.7998046875" stroke-linecap="round" stroke-linejoin="round"/>

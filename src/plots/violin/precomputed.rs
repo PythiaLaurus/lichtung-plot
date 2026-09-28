@@ -20,6 +20,83 @@ pub(crate) struct PreparedRaincloud {
     hues: Vec<String>,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let crate::plots::categorical_distribution::PreparedDistribution::Supplied(prepared) =
+        crate::plots::categorical_distribution::retained(chart)?
+    else {
+        return Err(Error::Render(
+            "supplied Raincloud intrinsic requires retained groups".into(),
+        ));
+    };
+    if prepared.groups.is_empty() || prepared.groups.len() != prepared.categories.len() {
+        return Err(Error::Render(
+            "supplied Raincloud groups and category slots differ".into(),
+        ));
+    }
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.groups.len() as u128)
+        .map_err(|error| Error::Render(format!("supplied Raincloud slot admission: {error:?}")))?;
+    let width = 0.8_f64;
+    let cloud_style = theme.marks.violin_body.backend_style((0, 0, 0));
+    let cloud = crate::render::geometry::rectangular_fill_ink_bounds(theme, &cloud_style)?;
+    let (_, cloud_numeric) =
+        crate::render::geometry::rectangular_fill_ink_outset(theme, &cloud_style)?;
+    let box_style = theme.marks.raincloud_box.backend_style();
+    let box_ink = crate::render::geometry::rectangular_fill_ink_bounds(theme, &box_style)?;
+    let (_, box_numeric) = crate::render::geometry::rectangular_fill_ink_outset(theme, &box_style)?;
+    let median_ink = crate::render::geometry::line_ink_bounds(
+        theme,
+        &theme.marks.raincloud_median.backend_style(),
+    )?;
+    let median = median_ink.map_or(0.0, |ink| ink.top - ink.bottom);
+    let point = theme.marks.raw_overlay_point.backend_style(
+        (0, 0, 0),
+        theme.marks.raw_overlay_radius,
+        true,
+    );
+    let (_, point_numeric) = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+    let mut pitch = crate::plots::violin::raincloud_strip_pitch(theme, width)?
+        .max((1.0 / 1024.0) / (0.4 * width))
+        .max((1.0 / 1024.0) / (0.16 * width));
+    if let Some(ink) = cloud {
+        pitch = pitch.max((-ink.left).max(0.0) / (0.5 - 0.5 * width));
+        pitch = pitch.max(ink.right.max(0.0) / (0.5 + 0.1 * width));
+    }
+    if let Some(ink) = box_ink {
+        pitch = pitch.max((-ink.left).max(0.0) / (0.5 - 0.06 * width));
+        pitch = pitch.max(ink.right.max(0.0) / (0.5 - 0.10 * width));
+    }
+    if let Some(ink) = median_ink {
+        pitch = pitch.max((-ink.left).max(0.0) / (0.5 - 0.06 * width));
+        pitch = pitch.max(ink.right.max(0.0) / (0.5 - 0.10 * width));
+    }
+    let category_count = u32::try_from(prepared.categories.len()).map_err(|_| {
+        Error::Render("supplied Raincloud category count exceeds spatial range".into())
+    })?;
+    let category_span = pitch * f64::from(category_count);
+    if !category_span.is_finite() {
+        return Err(Error::Render(
+            "supplied Raincloud hard pitch overflowed".into(),
+        ));
+    }
+    let numeric = cloud_numeric
+        .max(box_numeric)
+        .max(median)
+        .max(point_numeric);
+    Ok((
+        category_span,
+        if chart.user_y_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl PreparedRaincloud {
     pub(crate) fn hue_levels(&self) -> &[String] {
         &self.hues
@@ -145,6 +222,7 @@ pub(super) fn measure_marks(
             theme,
             &mut payload,
             data,
+            context.fit_scope(),
         )?;
     }
     payload.retain(
@@ -262,20 +340,32 @@ fn project_strip(
     theme: &ResolvedTheme,
     payload: &mut DistributionPayload,
     data: PlotData<'_>,
-) -> Result<(), Error> {
+    scope: &crate::layout::fit::FitScope,
+) -> Result<(), crate::layout::fit::PlanError> {
     let center = index as f64 + 0.5;
     let width = 0.8;
     let (box_right, _) = layout.projection.project(center + width * 0.10, 0.0);
     let (strip_left, _) = layout.projection.project(center + width * 0.24, 0.0);
     let (strip_right, _) = layout.projection.project(center + width * 0.46, 0.0);
-    let point_radius = 2.0;
-    let strip_min = strip_left + point_radius;
-    let strip_max = strip_right - point_radius;
-    if strip_min - point_radius <= box_right || strip_max < strip_min {
-        return Err(Error::Render(
-            "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width"
-                .into(),
-        ));
+    let style = crate::plots::distribution_sample::overlay_style(
+        group_color(chart, group, local_color_index, theme)?,
+        theme,
+    );
+    let point_ink = crate::render::geometry::point_ink_bounds(theme, &style)?;
+    let point_left = point_ink.map_or(0.0, |ink| (-ink.left).max(0.0));
+    let point_right = point_ink.map_or(0.0, |ink| ink.right.max(0.0));
+    let box_right_ink = crate::render::geometry::rectangular_fill_ink_bounds(
+        theme,
+        &theme.marks.raincloud_box.backend_style(),
+    )?
+    .map_or(0.0, |ink| ink.right.max(0.0));
+    let strip_min = strip_left + point_left;
+    let strip_max = strip_right - point_right;
+    if strip_min - point_left <= box_right + box_right_ink || strip_max < strip_min {
+        return Err(scope.child(crate::layout::AddressRole::CategoricalSeriesSlot, index)?.failure(
+            crate::layout::fit::FitKind::SpecializedGeometry,
+            "raincloud: panel is too narrow to separate the complete observation strip from the IQR box; increase width",
+        ).into());
     }
     let points = data.collect_source(group.points.iter().map(|point| {
         data.claim_source_visits(1)?;
@@ -283,14 +373,7 @@ fn project_strip(
         let (_, y) = layout.projection.project(center, point.y);
         Ok(Point2D::new(x, y))
     }))?;
-    payload.scatter(
-        points,
-        crate::plots::distribution_sample::overlay_style(
-            group_color(chart, group, local_color_index, theme)?,
-            theme,
-        ),
-        data,
-    )
+    Ok(payload.scatter(points, style, data)?)
 }
 
 fn group_color(

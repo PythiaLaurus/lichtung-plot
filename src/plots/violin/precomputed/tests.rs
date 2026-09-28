@@ -61,7 +61,28 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
         .generation_resources();
     let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
     let chart = inputs.attach(source).unwrap();
-    let cell = crate::layout::PanelBox::new(80.0, 700.0, 80.0, 520.0);
+    let narrow = crate::layout::PanelBox::new(80.0, 700.0, 80.0, 520.0);
+    assert!(chart.intrinsic_body_minimum(&theme).unwrap().0 > narrow.width());
+    let error = crate::decorations::plan::plan_panel_for_test(
+        &chart,
+        crate::PlotKind::Raincloud,
+        narrow,
+        crate::decorations::plan::LegendRole::Suppressed,
+        &theme,
+    )
+    .err()
+    .expect("painted strip cannot fit this declared category slot")
+    .to_string();
+    assert!(error.contains("TrackOrResidual"), "{error}");
+
+    let source = self::source(true).size(5000, 1400);
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = crate::layout::PanelBox::new(80.0, 4900.0, 80.0, 1300.0);
     let selected = crate::decorations::plan::plan_panel_for_test(
         &chart,
         crate::PlotKind::Raincloud,
@@ -93,9 +114,10 @@ fn supplied_raincloud_cloud_and_strip_ink_fit_automatic_y_at_root() {
     }
     assert!(!ink.bounds().is_empty());
     for bound in ink.bounds() {
+        assert!(bound.left >= panel.x0 && bound.right <= panel.x1);
         assert!(bound.bottom >= panel.y0 && bound.top <= panel.y1);
     }
-    let exact_source = source_with_limits(true, Some((1.0, 5.0))).size(800, 600);
+    let exact_source = source_with_limits(true, Some((1.0, 5.0))).size(5000, 1400);
     let resources = theme
         .prepared_font_environment()
         .unwrap()
@@ -213,20 +235,21 @@ fn repeated_measurement_uses_retained_indices_and_charges_candidate_work() {
         let shapes = crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get);
         let calls = resources.call_cache_usage().0;
         let error = measure().unwrap_err().into_error();
-        // Intrinsic reuse and category copies do no processing. The numeric
-        // tick-pitch cache lookup admits one visit before each examined entry.
+        // The first owned variable scan now counts every supplied category
+        // slot before the cached numeric tick-pitch lookup can begin.
         let expected = crate::font::canonical::TextGenerationClaimError::Limit {
             resource: "root processing visits",
             limit,
-            cumulative_claim: limit + 1,
+            cumulative_claim: limit + prepared.groups.len() as u128,
         };
         assert!(
-            matches!(&error, Error::Render(message) if message == &format!("text query lookup: {expected:?}")),
+            matches!(&error, Error::Render(message) if message == &format!("supplied Raincloud slot admission: {expected:?}")),
             "{error}; with_hues={with_hues}"
         );
         assert_eq!(resources.usage().unwrap().1, limit);
-        // Interior, cached intrinsics, numeric axis, and cached text query.
-        assert_eq!(resources.call_cache_usage().0 - calls, 4);
+        // Interior and cached axis intrinsics are admitted; numeric/text
+        // lookups never start after the earlier source-slot work refusal.
+        assert_eq!(resources.call_cache_usage().0 - calls, 2);
         assert_eq!(
             crate::font::canonical::FONT_SHAPE_CALLS.with(std::cell::Cell::get),
             shapes

@@ -1016,7 +1016,9 @@ caller styles while centralizing their ownership.
 | T5c2c1a | COMPLETE | T5c2c0 | `feat(marks): measure sparse Boxplot body and raw-point pitch` |
 | T5c2c1b | IN PROGRESS | T5c2c1a | Umbrella for remaining collective requirements |
 | T5c2c1b1 | COMPLETE | T5c2c1a | `feat(marks): retain complete distribution paint under root feedback` |
-| T5c2c1b2 | PENDING | T5c2c1b1 | `refactor(marks): measure distribution slots and sparse Interaction` |
+| T5c2c1b2 | IN PROGRESS | T5c2c1b1 | Umbrella for remaining distribution slots and sparse Interaction |
+| T5c2c1b2a | COMPLETE | T5c2c1b1 | `feat(marks): measure sampled and supplied cloud category pitch` |
+| T5c2c1b2b | PENDING | T5c2c1b2a | `refactor(marks): measure sparse Interaction and collective preference` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
@@ -1698,6 +1700,22 @@ distribution native paths, sampled/supplied parity, raw overlays, exact root
 resource-cap/cache checks, current SVG snapshots and strict Clippy pass.
 Category-X pitch, sample/supplied parity under custom geometry, and sparse
 Interaction follow in T5c2c1b2.
+
+T5c2c1b2a closure: sampled Violin/Raincloud group occupancy and supplied
+Raincloud declared groups now measure separate categorical hard pitches from
+their actual mirrored/half-cloud, inner box/median/whisker, raw overlay and
+strip grammar. Supplying the same resolved point and independent box paints
+to strip placement removes the legacy 2px geometry hint: painted point widths
+and box outlines must fit between the box and declared strip. Too-narrow
+supplied slots give a typed recoverable category-slot or pre-selection fit
+miss; an adequate 5000px custom example keeps complete cloud, strip and inner
+ink inside the panel. Selected collective payloads reject uncontained X ink
+instead of relying on backend clip; caller-exact Y windows still clip data.
+The inspected native Raincloud SVG snapshot moves only four strip-point X
+coordinates by about 0.05px, retaining all labels and paints. Sample/supplied
+parity, 15 Raincloud integration cases, categorical cache/facet/Canvas, exact
+candidate resource-cap tests and strict Clippy pass. Interaction and the
+shared categorical preference handoff remain in T5c2c1b2b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
