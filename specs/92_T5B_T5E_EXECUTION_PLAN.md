@@ -1012,7 +1012,9 @@ caller styles while centralizing their ownership.
 | T5c2b1b3 | COMPLETE | T5c2b1b2a | `feat(marks): retain categorical natural preferences` |
 | T5c2c | IN PROGRESS | T5c2b | Umbrella for categorical distributions and Interaction |
 | T5c2c0 | COMPLETE | T5c2b | `docs(marks): map collective distribution slot and ink inputs` |
-| T5c2c1 | PENDING | T5c2c0 | `refactor(marks): measure distribution and interaction requirements` |
+| T5c2c1 | IN PROGRESS | T5c2c0 | Umbrella for categorical distribution and Interaction requirements |
+| T5c2c1a | COMPLETE | T5c2c0 | `feat(marks): measure sparse Boxplot body and raw-point pitch` |
+| T5c2c1b | PENDING | T5c2c1a | `refactor(marks): measure remaining collective requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
@@ -1667,6 +1669,19 @@ Numeric Y ranges inherit already prepared scientific statistics and may grow
 only through the one typed root feedback owner; exact windows clip that paint.
 `2em` categorical pitch and soft `4:3` aspect are preferences, not an extra
 hard floor. Raw-row/source identity and prepared guide entries stay unchanged.
+
+T5c2c1a closure: Boxplot measures each populated category/group summary at
+its resolved `distribution_sample::center` and actual box width, preserving
+missing combinations without fabricated quartiles. Fill outline, median/
+whisker cap stroke, fliers or the exact raw-overlay point style contribute
+independent categorical hard pitch; jitter uses each retained source-row
+identity. The numeric-axis hard input reads the same complete paint, while a
+caller-exact Y window may clip it. A private 100px body outline differs
+between sparse grouped and single boxes; a separate 80px flier demonstrates
+independent point ink. Focused Boxplot summary and overlay tests, all seven
+native categorical-distribution integration paths, current SVG snapshots,
+exact resource-cap checks and strict Clippy pass. Selected automatic Y ink,
+sampled/supplied Violin/Raincloud and sparse Interaction remain in T5c2c1b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

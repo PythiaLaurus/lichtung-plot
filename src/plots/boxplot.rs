@@ -55,6 +55,119 @@ pub(crate) struct PreparedBoxplot {
     pub(crate) range: (f64, f64),
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let PreparedDistribution::Boxplot(prepared) = categorical_distribution::retained(chart)? else {
+        return Err(Error::Render(
+            "Boxplot intrinsic requires prepared summaries".into(),
+        ));
+    };
+    let sample = &prepared.sample;
+    if sample.x_levels.is_empty() || prepared.stats.len() != sample.groups.len() {
+        return Err(Error::Render(
+            "Boxplot summary and populated groups differ".into(),
+        ));
+    }
+    let group_count = sample.group_levels.len();
+    let thickness = if group_count > 0 {
+        (0.72 / group_count as f64).min(0.32)
+    } else {
+        0.5
+    };
+    let fill = theme.marks.box_body.backend_style((0, 0, 0));
+    let body = crate::render::geometry::rectangular_fill_ink_bounds(theme, &fill)?;
+    let (_, out_y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
+    let summary = crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.summary_stroke.backend_style(),
+    )?;
+    let overlay = chart.raw_overlay_spec();
+    let point_style = if overlay.is_visible() {
+        theme
+            .marks
+            .raw_overlay_point
+            .backend_style((0, 0, 0), theme.marks.raw_overlay_radius, true)
+    } else {
+        chart.point_style(theme, theme.foreground, theme.marks.point_sizes.box_flier)
+    };
+    let point = crate::render::geometry::point_ink_bounds(theme, &point_style)?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let data = chart.data().with_axis_resources(&resources);
+    data.claim_source_visits(prepared.stats.len())?;
+    let mut pitch = 1.0_f64 / 1024.0;
+    let mut numeric = out_y.max(summary);
+    for (stat, group) in prepared.stats.iter().zip(&sample.groups) {
+        if stat.x_index != group.x_index
+            || stat.group_index != group.group_index
+            || group.x_index >= sample.x_levels.len()
+        {
+            return Err(Error::Render(
+                "Boxplot summary is outside its prepared category slot".into(),
+            ));
+        }
+        let center = crate::plots::distribution_sample::center(group, group_count);
+        let offset = center - (group.x_index as f64 + 0.5);
+        let half = thickness / 2.0;
+        let left_room = 0.5 + offset - half;
+        let right_room = 0.5 - offset - half;
+        if left_room <= 0.0 || right_room <= 0.0 {
+            return Err(Error::Render(
+                "Boxplot body exceeds prepared category slot".into(),
+            ));
+        }
+        pitch = pitch.max((1.0 / 1024.0) / thickness);
+        if let Some(ink) = body {
+            pitch = pitch.max((-ink.left).max(0.0) / left_room);
+            pitch = pitch.max(ink.right.max(0.0) / right_room);
+        }
+        if summary > 0.0 {
+            // The 0.3-box-width whisker cap is narrower than the filled box.
+            let cap_room = 0.3 * thickness;
+            pitch = pitch.max((summary / 2.0) / (0.5 + offset - cap_room));
+            pitch = pitch.max((summary / 2.0) / (0.5 - offset - cap_room));
+        }
+        if let Some(ink) = point {
+            if overlay.is_visible() {
+                data.claim_source_visits(group.observations.len())?;
+                for observation in &group.observations {
+                    let x = crate::plots::distribution_sample::overlay_x(
+                        overlay,
+                        center,
+                        thickness,
+                        observation.source_row,
+                    );
+                    let shift = x - (group.x_index as f64 + 0.5);
+                    pitch = pitch.max((-ink.left).max(0.0) / (0.5 + shift));
+                    pitch = pitch.max(ink.right.max(0.0) / (0.5 - shift));
+                }
+                numeric = numeric.max(ink.top - ink.bottom);
+            } else if !stat.fliers.is_empty() {
+                pitch = pitch.max((-ink.left).max(0.0) / (0.5 + offset));
+                pitch = pitch.max(ink.right.max(0.0) / (0.5 - offset));
+                numeric = numeric.max(ink.top - ink.bottom);
+            }
+        }
+    }
+    let count = u32::try_from(sample.x_levels.len())
+        .map_err(|_| Error::Render("Boxplot category count exceeds coordinate range".into()))?;
+    let category_span = pitch * f64::from(count);
+    if !category_span.is_finite() {
+        return Err(Error::Render(
+            "Boxplot category hard span overflowed".into(),
+        ));
+    }
+    Ok((
+        category_span,
+        if chart.user_y_limits().is_none() {
+            numeric
+        } else {
+            0.0
+        },
+    ))
+}
+
 pub(crate) fn prepare(
     chart: &Plot,
     data: PlotData<'_>,
@@ -356,6 +469,52 @@ fn box_summary_with_source(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_grouped_boxplot_bodies_and_fliers_have_separate_hard_pitch() {
+        let categories =
+            crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
+                .unwrap();
+        let values = crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 100.0]);
+        let grouped = Plot::boxplot(categories.clone(), values.clone())
+            .series(
+                crate::CategoryValues::new(
+                    "group",
+                    ["one", "one", "one", "one", "two", "two", "two", "two"],
+                )
+                .unwrap(),
+            )
+            .erase();
+        let single = Plot::boxplot(categories, values).erase();
+        let intrinsic = |source: Plot, theme: &crate::theme::ResolvedTheme| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            inputs
+                .attach(source)
+                .unwrap()
+                .intrinsic_body_minimum(theme)
+                .unwrap()
+        };
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.marks.box_body.outline_width = 100.0;
+        let grouped_body = intrinsic(grouped.clone(), &theme);
+        let single_body = intrinsic(single.clone(), &theme);
+        assert!(grouped_body.0 > single_body.0);
+        theme.marks.box_body.outline_width = 1.0;
+        theme.marks.point_sizes.box_flier = 80;
+        let flier = intrinsic(grouped.clone(), &theme);
+        assert!(flier.0 > intrinsic(grouped, &crate::Theme::Publication.resolve()).0);
+        let exact = Plot::boxplot(
+            crate::CategoryValues::new("category", ["a", "a", "a", "a", "b", "b", "b", "b"])
+                .unwrap(),
+            crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 100.0]),
+        )
+        .y_limits(0.0, 101.0)
+        .erase();
+        let styled = intrinsic(exact, &theme);
+        let plain = intrinsic(single, &crate::Theme::Publication.resolve());
+        assert_eq!(styled.1.to_bits(), plain.1.to_bits());
+    }
 
     #[test]
     fn two_point_box_summary_uses_type_7_quartile_geometry() {
