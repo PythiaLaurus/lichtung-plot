@@ -31,6 +31,22 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    pub(crate) fn primary_mark_count(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<u128, Error> {
+        resources
+            .claim_visits(self.estimates.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("estimate primary-mark count admission: {error:?}"))
+            })?;
+        Ok(self
+            .estimates
+            .iter()
+            .filter(|estimate| estimate.is_some())
+            .count() as u128)
+    }
+
     /// The category axis retains unavailable rows but does not fabricate a
     /// numeric estimate or painted interval for any such slot.
     pub(crate) fn mark_intrinsic(
@@ -89,6 +105,37 @@ impl PreparedEstimate {
                 false,
             )?;
             pitch = pitch.max(text.height());
+        }
+        if !self.adjacent.is_empty() && self.adjacent.len() != self.estimates.len() {
+            return Err(Error::Render(
+                "estimate adjacent labels and rows differ".into(),
+            ));
+        }
+        resources
+            .claim_visits(self.adjacent.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("estimate adjacent-height admission: {error:?}"))
+            })?;
+        let significance = theme
+            .typography
+            .effective_significance_label(chart.significance_mark_style_override());
+        for adjacent in self.adjacent.iter().flatten() {
+            let appearance = if adjacent.1 {
+                &significance
+            } else {
+                &theme.typography.estimate_detail
+            };
+            pitch = pitch.max(
+                theme
+                    .measure_text(
+                        &adjacent.0,
+                        appearance,
+                        PhysicalTextAlignment::Start,
+                        "estimate adjacent category height",
+                        adjacent.1 && chart.significance_mark_style_override().is_some(),
+                    )?
+                    .height(),
+            );
         }
         let count = u32::try_from(self.labels.len()).map_err(|_| {
             Error::Render("estimate category count exceeds coordinate range".into())
@@ -1043,6 +1090,37 @@ mod tests {
         let points = chart.intrinsic_body_minimum(&theme).unwrap();
         assert_eq!(points.0.to_bits(), base.0.to_bits());
         assert!(points.1 > text.1);
+    }
+
+    #[test]
+    fn attached_estimate_labels_contribute_measured_categorical_row_height() {
+        let source = |labels: bool| {
+            let plot = crate::Plot::coefficient(
+                CategoryValues::new("term", ["first", "second"]).unwrap(),
+                crate::CoefficientInput::estimates(NumericValues::new("estimate", [1.0, 2.0])),
+            );
+            if labels {
+                plot.estimate_labels(crate::NumericLabelFormat::default())
+                    .erase()
+            } else {
+                plot.erase()
+            }
+        };
+        let intrinsic = |source: Plot, theme: &ResolvedTheme| {
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            inputs
+                .attach(source)
+                .unwrap()
+                .intrinsic_body_minimum(theme)
+                .unwrap()
+        };
+        let mut theme = crate::Theme::Publication.resolve();
+        theme.typography.estimate_detail.font_size = 48;
+        let without = intrinsic(source(false), &theme);
+        let with = intrinsic(source(true), &theme);
+        assert!(with.1 > without.1);
+        assert_eq!(with.0.to_bits(), without.0.to_bits());
     }
 
     #[test]

@@ -112,6 +112,10 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl DumbbellData {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.rows.len() as u128
+    }
+
     pub(crate) fn guide_entries(
         chart: &Plot,
         theme: &crate::theme::ResolvedTheme,

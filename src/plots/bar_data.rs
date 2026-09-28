@@ -287,6 +287,12 @@ pub(crate) struct PreparedBars {
     pub(crate) significance: Vec<PreparedBarSignificance>,
 }
 
+impl PreparedBars {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.bars.len() as u128
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct PreparedBarInputs {
     pub(crate) panels: Vec<(Option<String>, PreparedBars)>,

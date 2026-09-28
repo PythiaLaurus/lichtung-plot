@@ -13,6 +13,138 @@ pub(crate) struct StandardPanelPreference {
     pub(crate) body_quanta: (i64, i64),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NativePanelPreference {
+    Standard(StandardPanelPreference),
+    Categorical(CategoricalPanelPreference),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct CategoricalPanelPreference {
+    pub(crate) axis: crate::layout::AxisSide,
+    pub(crate) slots: u32,
+    pub(crate) primary_marks: u128,
+    pub(crate) hard_pitch_quanta: i64,
+    pub(crate) preferred_pitch_quanta: i64,
+    pub(crate) body_quanta: (i64, i64),
+}
+
+fn ceil_ratio(numerator: i128, denominator: i128) -> Result<i64, Error> {
+    if numerator < 0 || denominator <= 0 {
+        return Err(Error::Render(
+            "categorical preference ratio is not positive".into(),
+        ));
+    }
+    i64::try_from((numerator + denominator - 1) / denominator)
+        .map_err(|_| Error::Render("categorical preference exceeds spatial range".into()))
+}
+
+pub(crate) fn categorical_preference(
+    plot: &Plot,
+    theme: &ResolvedTheme,
+    hard: (f64, f64),
+) -> Result<CategoricalPanelPreference, Error> {
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    let scope = plot.axis_scope();
+    let (axis, slots, primary_marks) = match plot.kind() {
+        PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest => {
+            let inputs = plot
+                .prepared_estimate
+                .as_deref()
+                .ok_or_else(|| Error::Render("estimate preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Estimate", &resources)?;
+            (
+                crate::layout::AxisSide::Left,
+                marks.labels.len(),
+                marks.primary_mark_count(&resources)?,
+            )
+        }
+        PlotKind::Dumbbell => {
+            let inputs = plot
+                .prepared_dumbbell
+                .as_deref()
+                .ok_or_else(|| Error::Render("Dumbbell preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Dumbbell", &resources)?;
+            (
+                crate::layout::AxisSide::Left,
+                marks.categories.len(),
+                marks.primary_mark_count(),
+            )
+        }
+        PlotKind::Bar
+        | PlotKind::StackedBar
+        | PlotKind::HorizontalBar
+        | PlotKind::StackedHorizontalBar => {
+            let inputs = plot
+                .prepared_bars
+                .as_deref()
+                .ok_or_else(|| Error::Render("Bar preference lacks preparation".into()))?;
+            let marks = panel(&inputs.panels, scope, "Bars", &resources)?;
+            let axis = if matches!(plot.kind(), PlotKind::Bar | PlotKind::StackedBar) {
+                crate::layout::AxisSide::Bottom
+            } else {
+                crate::layout::AxisSide::Left
+            };
+            (axis, marks.categories.len(), marks.primary_mark_count())
+        }
+        _ => {
+            return Err(Error::Render(
+                "categorical preference requires a prepared estimate, dumbbell or bar family"
+                    .into(),
+            ))
+        }
+    };
+    let slots = u32::try_from(slots).map_err(|_| {
+        Error::Render("categorical preference slot count exceeds spatial range".into())
+    })?;
+    if slots == 0 {
+        return Err(Error::Render(
+            "categorical preference requires occupied category slots".into(),
+        ));
+    }
+    let (hard_x, hard_y) = (
+        crate::layout::kernel::ceil_spatial_quanta(hard.0)?,
+        crate::layout::kernel::ceil_spatial_quanta(hard.1)?,
+    );
+    let category_hard = if axis == crate::layout::AxisSide::Bottom {
+        hard_x
+    } else {
+        hard_y
+    };
+    let hard_pitch = ceil_ratio(i128::from(category_hard), i128::from(slots))?.max(1);
+    let em = crate::layout::kernel::ceil_spatial_quanta(
+        2.0 * f64::from(theme.typography.tick_label.font_size),
+    )?;
+    let preferred_pitch = hard_pitch.max(em);
+    let category_span = i128::from(preferred_pitch) * i128::from(slots);
+    let (width, height) = if axis == crate::layout::AxisSide::Bottom {
+        let width = i128::from(hard_x).max(category_span);
+        (
+            width,
+            i128::from(hard_y).max(i128::from(ceil_ratio(width * 3, 4)?)),
+        )
+    } else {
+        let height = i128::from(hard_y).max(category_span);
+        (
+            i128::from(hard_x).max(i128::from(ceil_ratio(height * 4, 3)?)),
+            height,
+        )
+    };
+    Ok(CategoricalPanelPreference {
+        axis,
+        slots,
+        primary_marks,
+        hard_pitch_quanta: hard_pitch,
+        preferred_pitch_quanta: preferred_pitch,
+        body_quanta: (
+            i64::try_from(width)
+                .map_err(|_| Error::Render("categorical preferred width overflowed".into()))?,
+            i64::try_from(height)
+                .map_err(|_| Error::Render("categorical preferred height overflowed".into()))?,
+        ),
+    })
+}
+
 fn panel<'a, T>(
     panels: &'a [(Option<String>, T)],
     scope: Option<&str>,
@@ -190,6 +322,113 @@ mod tests {
     use super::*;
     use crate::{CategoryValues, NumericValues};
 
+    fn standard(root: &crate::layout::RootFramePlan) -> &StandardPanelPreference {
+        let Some(NativePanelPreference::Standard(preference)) = root.native_preference.as_ref()
+        else {
+            panic!("standard native root preference")
+        };
+        preference
+    }
+
+    fn categorical(root: &crate::layout::RootFramePlan) -> &CategoricalPanelPreference {
+        let Some(NativePanelPreference::Categorical(preference)) = root.native_preference.as_ref()
+        else {
+            panic!("categorical native root preference")
+        };
+        preference
+    }
+
+    #[test]
+    fn categorical_preferences_keep_unavailable_slots_and_occupied_grouped_bars() {
+        let estimate = Plot::point_interval(
+            CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
+            NumericValues::nullable("estimate", [Some(1.0), None]),
+            crate::Bounds::new(
+                NumericValues::nullable("lower", [Some(0.5), None]),
+                NumericValues::nullable("upper", [Some(1.5), None]),
+            ),
+        )
+        .estimate_status([
+            crate::EstimateStatus::Estimated,
+            crate::EstimateStatus::NotEstimable,
+        ])
+        .x_limits(0.0, 2.0)
+        .size(1200, 900)
+        .erase();
+        let grouped = |horizontal: bool| {
+            let category = CategoryValues::new("category", ["a", "b"]).unwrap();
+            let input = crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0]));
+            let series = CategoryValues::new("series", ["one", "two"]).unwrap();
+            if horizontal {
+                Plot::horizontal_bar(category, input)
+                    .series(series)
+                    .size(1200, 900)
+                    .erase()
+            } else {
+                Plot::bar(category, input)
+                    .series(series)
+                    .size(1200, 900)
+                    .erase()
+            }
+        };
+        let dumbbell = Plot::dumbbell(
+            CategoryValues::new("category", ["a", "b", "a", "b"]).unwrap(),
+            NumericValues::new("left", [1.0, 2.0, 3.0, 4.0]),
+            NumericValues::new("right", [4.0, 3.0, 2.0, 1.0]),
+            crate::DumbbellEndpoints::new("Before", (1, 2, 3), "After", (4, 5, 6)).unwrap(),
+        )
+        .group(CategoryValues::new("series", ["one", "one", "two", "two"]).unwrap())
+        .size(1200, 900)
+        .erase();
+        for (source, axis, count) in [
+            (estimate, crate::layout::AxisSide::Left, 1),
+            (dumbbell, crate::layout::AxisSide::Left, 4),
+            (grouped(false), crate::layout::AxisSide::Bottom, 2),
+            (grouped(true), crate::layout::AxisSide::Left, 2),
+        ] {
+            let resources = OperationGenerationResources::new();
+            let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+            let chart = prepared.attach(source).unwrap();
+            let theme = crate::Theme::Publication.resolve();
+            let root = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+            let preference = categorical(&root);
+            assert_eq!(preference.axis, axis);
+            assert_eq!(preference.slots, 2);
+            assert_eq!(preference.primary_marks, count);
+            assert!(preference.preferred_pitch_quanta >= 32 * 1024);
+            assert!(preference.preferred_pitch_quanta >= preference.hard_pitch_quanta);
+            let (width, height) = preference.body_quanta;
+            if axis == crate::layout::AxisSide::Bottom {
+                assert!(width >= 2 * preference.preferred_pitch_quanta);
+                assert!(height >= (3 * width + 3) / 4);
+            } else {
+                assert!(height >= 2 * preference.preferred_pitch_quanta);
+                assert!(width >= (4 * height + 2) / 3);
+            }
+        }
+    }
+
+    #[test]
+    fn private_bar_outline_changes_preference_but_not_exact_root_box() {
+        let source = Plot::bar(
+            CategoryValues::new("category", ["a", "b"]).unwrap(),
+            crate::BarInput::estimates(NumericValues::new("value", [1.0, 2.0])),
+        )
+        .series(CategoryValues::new("series", ["one", "two"]).unwrap())
+        .size(1200, 900)
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = prepared.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        theme.marks.bar_body.outline_width = 100.0;
+        let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        assert_eq!(styled.panel_box, original.panel_box);
+        assert!(categorical(&styled).hard_pitch_quanta > categorical(&original).hard_pitch_quanta);
+        assert!(categorical(&styled).body_quanta.0 > categorical(&original).body_quanta.0);
+    }
+
     #[test]
     fn integer_ceil_sqrt_has_exact_square_and_neighbor_boundaries() {
         for (value, expected) in [
@@ -221,7 +460,7 @@ mod tests {
         let chart = prepared.attach(source).unwrap();
         let mut theme = crate::Theme::Publication.resolve();
         let original = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        let preference = original.native_preference.as_ref().unwrap();
+        let preference = standard(&original);
         assert_eq!(preference.primary_marks, 25);
         assert_eq!(preference.mark_pitch.to_bits(), 16.0_f64.to_bits());
         assert_eq!(preference.density_side.to_bits(), 80.0_f64.to_bits());
@@ -233,7 +472,7 @@ mod tests {
 
         theme.marks.point_sizes.scatter = 80;
         let styled = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
-        let preference = styled.native_preference.as_ref().unwrap();
+        let preference = standard(&styled);
         assert_eq!(preference.primary_marks, 25);
         assert!(preference.mark_pitch > 160.0);
         assert!(preference.density_side > 800.0);
@@ -244,12 +483,9 @@ mod tests {
         theme.marks.primary_point.outline.color =
             crate::render::backend::Rgba::new(255, 255, 255, 0);
         let invisible = super::super::coordinate::canvas_layout(&chart, &theme).unwrap();
+        assert_eq!(standard(&invisible).primary_marks, 25);
         assert_eq!(
-            invisible.native_preference.as_ref().unwrap().primary_marks,
-            25
-        );
-        assert_eq!(
-            invisible.native_preference.unwrap().mark_pitch.to_bits(),
+            standard(&invisible).mark_pitch.to_bits(),
             16.0_f64.to_bits()
         );
 
@@ -264,7 +500,7 @@ mod tests {
         let prepared = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
         let clipped = prepared.attach(source).unwrap();
         let exact = super::super::coordinate::canvas_layout(&clipped, &theme).unwrap();
-        assert_eq!(exact.native_preference.unwrap().primary_marks, 25);
+        assert_eq!(standard(&exact).primary_marks, 25);
     }
 
     #[test]
@@ -281,7 +517,7 @@ mod tests {
                 &crate::Theme::Publication.resolve(),
             )
             .unwrap();
-            assert_eq!(root.native_preference.unwrap().primary_marks, expected);
+            assert_eq!(standard(&root).primary_marks, expected);
         }
     }
 
@@ -297,6 +533,6 @@ mod tests {
         let root =
             super::super::coordinate::canvas_layout(&chart, &crate::Theme::Publication.resolve())
                 .unwrap();
-        assert_eq!(root.native_preference.unwrap().primary_marks, 4);
+        assert_eq!(standard(&root).primary_marks, 4);
     }
 }

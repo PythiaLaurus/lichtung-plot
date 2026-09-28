@@ -1001,14 +1001,15 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2b2b | COMPLETE | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2b2a | `feat(marks): constrain pre-selection area and band hard ink` |
 | T5c2a1b2b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b2b1 | `feat(marks): retain standard-panel density preferences` |
-| T5c2b | IN PROGRESS | T5c2a | Umbrella for categorical estimate and bar requirements |
+| T5c2b | COMPLETE | T5c2a | Categorical estimate, Dumbbell and Bar hard/soft requirements |
 | T5c2b0 | COMPLETE | T5c2a | `docs(marks): map categorical geometry and slot owners` |
-| T5c2b1 | IN PROGRESS | T5c2b0 | Umbrella for categorical estimate and bar requirements |
+| T5c2b1 | COMPLETE | T5c2b0 | Umbrella for categorical estimate and bar requirements |
 | T5c2b1a | COMPLETE | T5c2b0 | `feat(marks): measure categorical estimate hard pitch` |
-| T5c2b1b | IN PROGRESS | T5c2b1a | Umbrella for remaining categorical requirements |
+| T5c2b1b | COMPLETE | T5c2b1a | Umbrella for remaining categorical requirements |
 | T5c2b1b1 | COMPLETE | T5c2b1a | `feat(marks): measure grouped Dumbbell slot ink` |
 | T5c2b1b2 | COMPLETE | T5c2b1b1 | `feat(marks): measure Bar category and interval requirements` |
-| T5c2b1b3 | PENDING | T5c2b1b2 | `feat(marks): retain categorical natural preferences` |
+| T5c2b1b2a | COMPLETE | T5c2b1b2 | `feat(marks): measure attached estimate label row height` |
+| T5c2b1b3 | COMPLETE | T5c2b1b2a | `feat(marks): retain categorical natural preferences` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
@@ -1616,6 +1617,35 @@ root zero-edge and large-point clearance, 6 native Bar resource/feedback
 tests, populated guides, current bar SVG snapshots and strict Clippy pass.
 Natural categorical pitch and cross-axis aspect follow in T5c2b1b3; attached
 significance text and collision shelves remain T5c3-owned.
+
+T5c2b1b2a closure: attached Coefficient/Forest estimate-value and significance
+labels now contribute the height of their actual prepared text to the same
+category-row hard pitch. The complete estimate or effective exact caller
+significance typography is resolved before the font metric query, with each
+retained source inspected under admitted visits. Numeric-side placement,
+collision and source-owned annotation shelves remain T5c3. Focused custom
+48pt point-only labels, significance/Log10 Forest, nullable status, default
+estimate SVG and exact resource-cap tests plus strict Clippy pass.
+
+T5c2b1b3 closure: the eight categorical Estimate, Dumbbell and Bar families
+retain one kind-tagged native panel preference beside the standard summary.
+Every declared category slot is preserved; the semantic primary count excludes
+unavailable estimate tuples, empty grouped-series combinations, duplicated
+endpoint glyphs and connector/cap primitives. Checked spatial quanta retain
+`hard_pitch=max(1 quantum, actual occupied slot pitch)`,
+`preferred_pitch=max(hard_pitch,2em)`, the full slot span and the soft `4:3`
+cross-axis target. Internal theme outline changes update the retained pitch
+without altering an exact root panel. Six focused preference/math tests, all
+twenty native exact-root cases, facet/Canvas reuse, current Bar/estimate SVG
+snapshots, exact resource caps and strict Clippy pass. T5c2c will fill the
+remaining four categorical distribution/Interaction cases on this same carrier.
+
+T5c2b closure: pre-selection category pitch, available/unavailable tuple
+identity, signed/zero bars, sparse group slots, interval/cap clearance and
+complete numeric-axis mark ink all use retained semantics and the one bounded
+root feedback path. Explicit numeric windows clip paint without removing the
+categorical slot. Required attached-label height is already reflected in
+the hard row; final label placement and collision shelves remain T5c3.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

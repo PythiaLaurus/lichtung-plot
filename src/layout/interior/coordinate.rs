@@ -432,12 +432,26 @@ pub(crate) fn canvas_layout(
         panel_box,
         insets,
         root_text: text,
-        native_preference: matches!(
-            super::InteriorRoute::classify(plot.kind()),
-            super::InteriorRoute::StandardCoordinate(_)
-        )
-        .then(|| super::preference::mark_preference(plot, theme, minimum))
-        .transpose()?,
+        native_preference: match super::InteriorRoute::classify(plot.kind()) {
+            super::InteriorRoute::StandardCoordinate(_) => {
+                Some(super::preference::NativePanelPreference::Standard(
+                    super::preference::mark_preference(plot, theme, minimum)?,
+                ))
+            }
+            super::InteriorRoute::OneCategoricalAxis(
+                super::OneCategoricalAxis::PointInterval
+                | super::OneCategoricalAxis::Coefficient
+                | super::OneCategoricalAxis::Forest
+                | super::OneCategoricalAxis::Dumbbell
+                | super::OneCategoricalAxis::Bar
+                | super::OneCategoricalAxis::HorizontalBar
+                | super::OneCategoricalAxis::StackedBar
+                | super::OneCategoricalAxis::StackedHorizontalBar,
+            ) => Some(super::preference::NativePanelPreference::Categorical(
+                super::preference::categorical_preference(plot, theme, minimum)?,
+            )),
+            _ => None,
+        },
     })
 }
 

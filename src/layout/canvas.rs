@@ -199,7 +199,7 @@ pub(crate) struct RootFramePlan {
     /// Resolved reserved margins.
     pub insets: CanvasInsets,
     pub(crate) native_preference:
-        Option<crate::layout::interior::preference::StandardPanelPreference>,
+        Option<crate::layout::interior::preference::NativePanelPreference>,
 }
 
 impl RootFramePlan {
