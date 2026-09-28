@@ -213,6 +213,27 @@ impl Plot {
                 minimum.0 = minimum.0.max(mark.0);
                 minimum.1 = minimum.1.max(mark.1);
             }
+            if matches!(
+                self.kind(),
+                PlotKind::PointInterval | PlotKind::Coefficient | PlotKind::Forest
+            ) {
+                let prepared = self
+                    .prepared_estimate
+                    .as_ref()
+                    .and_then(|inputs| {
+                        inputs
+                            .panels
+                            .iter()
+                            .find(|(scope, _)| scope.as_deref() == self.axis_scope())
+                    })
+                    .map(|(_, marks)| marks)
+                    .ok_or_else(|| {
+                        Error::Render("estimate intrinsic requires root-prepared rows".into())
+                    })?;
+                let mark = prepared.mark_intrinsic(self, theme)?;
+                minimum.0 = minimum.0.max(mark.0);
+                minimum.1 = minimum.1.max(mark.1);
+            }
             return Ok(minimum);
         }
         let mut minimum = DeferredLegacyPanelMinimum::SIZE;

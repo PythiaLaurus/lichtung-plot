@@ -1003,7 +1003,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b2b1 | `feat(marks): retain standard-panel density preferences` |
 | T5c2b | IN PROGRESS | T5c2a | Umbrella for categorical estimate and bar requirements |
 | T5c2b0 | COMPLETE | T5c2a | `docs(marks): map categorical geometry and slot owners` |
-| T5c2b1 | PENDING | T5c2b0 | `refactor(marks): measure categorical estimate and bar requirements` |
+| T5c2b1 | IN PROGRESS | T5c2b0 | Umbrella for categorical estimate and bar requirements |
+| T5c2b1a | COMPLETE | T5c2b0 | `feat(marks): measure categorical estimate hard pitch` |
+| T5c2b1b | PENDING | T5c2b1a | `refactor(marks): measure remaining categorical requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
@@ -1573,6 +1575,17 @@ slot ink must join the existing native axis intrinsic and bounded parent
 feedback without a local search, another mark projection, or an alternate
 `80x60` floor. Retain `DeferredLegacyPanelMinimum` until T5c4 removes it with
 the deferred mark and annotation consequences together.
+
+T5c2b1a closure: PointInterval, Coefficient and Forest keep every prepared
+category row, including `Not estimable` slots without fabricated numeric
+marks. Pre-selection Y pitch combines complete resolved point ink, optional
+interval stroke/PointInterval cap height and required unavailable text height;
+the X hard stroke/glyph span applies only on an automatic numeric axis. Exact
+data windows retain the categorical slot and clip only their numeric paint.
+Prepared-row inspection charges work before iteration; sampled nullable,
+all-unavailable, Log10 Forest, facet/Canvas, default estimate SVG and exact
+resource-cap tests plus strict Clippy pass. Adjacent-label consequences,
+Dumbbell occupancy and both Bar orientations follow in T5c2b1b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

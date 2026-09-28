@@ -31,6 +31,84 @@ pub(crate) struct PreparedEstimateInputs {
 }
 
 impl PreparedEstimate {
+    /// The category axis retains unavailable rows but does not fabricate a
+    /// numeric estimate or painted interval for any such slot.
+    pub(crate) fn mark_intrinsic(
+        &self,
+        chart: &Plot,
+        theme: &ResolvedTheme,
+    ) -> Result<(f64, f64), Error> {
+        if self.labels.len() != self.estimates.len() {
+            return Err(Error::Render(
+                "estimate categories and prepared rows differ".into(),
+            ));
+        }
+        let resources = theme.prepared_font_environment()?.generation_resources();
+        resources
+            .claim_visits(self.estimates.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("estimate slot intrinsic admission: {error:?}"))
+            })?;
+        let mut available = false;
+        let mut unavailable = false;
+        let mut interval = false;
+        for row in &self.estimates {
+            if let Some(tuple) = row {
+                available = true;
+                interval |= tuple.lower.zip(tuple.upper).is_some();
+            } else {
+                unavailable = true;
+            }
+        }
+        let mut numeric = 0.0_f64;
+        let mut pitch = 1.0_f64 / 1024.0;
+        if available {
+            let point =
+                chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.interval_estimate);
+            let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &point)?;
+            numeric = numeric.max(width);
+            pitch = pitch.max(height);
+        }
+        if interval {
+            let stroke = crate::render::geometry::line_ink_width(
+                theme,
+                &theme.marks.estimate_interval.backend_style(),
+            )?;
+            numeric = numeric.max(stroke);
+            pitch = pitch.max(stroke);
+            if self.point_interval && stroke > 0.0 {
+                pitch = pitch.max(8.0 + stroke);
+            }
+        }
+        if unavailable {
+            let text = theme.measure_text(
+                NOT_ESTIMABLE_TEXT,
+                &theme.typography.estimate_detail,
+                PhysicalTextAlignment::Center,
+                "estimate unavailable category intrinsic",
+                false,
+            )?;
+            pitch = pitch.max(text.height());
+        }
+        let count = u32::try_from(self.labels.len()).map_err(|_| {
+            Error::Render("estimate category count exceeds coordinate range".into())
+        })?;
+        let height = pitch * f64::from(count);
+        if !height.is_finite() {
+            return Err(Error::Render(
+                "estimate category hard span overflowed".into(),
+            ));
+        }
+        Ok((
+            if chart.user_x_limits().is_none() {
+                numeric
+            } else {
+                0.0
+            },
+            height,
+        ))
+    }
+
     pub(crate) fn new<'a>(
         chart: &Plot,
         data: crate::data::PlotData<'_>,
@@ -935,6 +1013,37 @@ mod tests {
     use super::*;
 
     use crate::{Bounds, CategoryValues, NumericValues};
+
+    #[test]
+    fn categorical_estimate_hard_pitch_uses_available_marks_and_unavailable_text() {
+        let source = crate::Plot::point_interval(
+            CategoryValues::new("term", ["available", "unavailable"]).unwrap(),
+            NumericValues::nullable("estimate", [Some(1.0), None]),
+            Bounds::new(
+                NumericValues::nullable("lower", [Some(0.5), None]),
+                NumericValues::nullable("upper", [Some(1.5), None]),
+            ),
+        )
+        .estimate_status([
+            crate::EstimateStatus::Estimated,
+            crate::EstimateStatus::NotEstimable,
+        ])
+        .x_limits(0.0, 2.0)
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let base = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.typography.estimate_detail.font_size = 48;
+        let text = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(text.0.to_bits(), base.0.to_bits());
+        assert!(text.1 > base.1);
+        theme.marks.point_sizes.interval_estimate = 54;
+        let points = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(points.0.to_bits(), base.0.to_bits());
+        assert!(points.1 > text.1);
+    }
 
     #[test]
     fn custom_estimate_detail_role_changes_required_unavailable_text_before_capture() {
