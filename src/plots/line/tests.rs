@@ -279,6 +279,43 @@ fn point_layer_label_uses_theme_font_and_exact_layer_paint() {
 }
 
 #[test]
+fn path_hard_ink_observes_visibility_and_resolved_stroke_on_automatic_axes() {
+    let source = Plot::line(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("y", [3.0, 4.0]),
+    )
+    .markers(false)
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    let original = chart.intrinsic_body_minimum(&theme).unwrap();
+    theme.marks.point_sizes.path = 54;
+    assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+    theme.marks.series_line.width = 140.0;
+    assert_eq!(
+        chart.intrinsic_body_minimum(&theme).unwrap(),
+        (140.0, 140.0)
+    );
+    theme.marks.series_line.alpha = 0;
+    assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), original);
+
+    let source = Plot::trajectory(
+        NumericValues::new("x", [1.0, 2.0]),
+        NumericValues::new("y", [3.0, 4.0]),
+        CategoryValues::new("group", ["a", "a"]).unwrap(),
+    )
+    .erase();
+    let resources = OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    theme.marks.point_sizes.trajectory = 54;
+    let minimum = chart.intrinsic_body_minimum(&theme).unwrap();
+    assert_eq!(minimum, (108.0 + 5530.0 / 1024.0, 108.0 + 5530.0 / 1024.0));
+}
+
+#[test]
 fn custom_series_line_style_is_shared_by_selected_marks_and_guide_identity() {
     let source = decorated_line();
     let resources = OperationGenerationResources::new();

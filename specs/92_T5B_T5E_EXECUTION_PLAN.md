@@ -976,7 +976,9 @@ caller styles while centralizing their ownership.
 | T5c2a1a | COMPLETE | T5c2a0 | `feat(marks): measure Scatter primary-point hard ink` |
 | T5c2a1b | IN PROGRESS | T5c2a1a | Umbrella for remaining point/path/reference requirements |
 | T5c2a1b1 | COMPLETE | T5c2a1a | `feat(marks): measure Qq and Regression observation hard ink` |
-| T5c2a1b2 | PENDING | T5c2a1b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2 | IN PROGRESS | T5c2a1b1 | Umbrella for remaining standard mark requirements |
+| T5c2a1b2a | COMPLETE | T5c2a1b1 | `feat(marks): measure Line and Trajectory path hard ink` |
+| T5c2a1b2b | PENDING | T5c2a1b2a | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1350,6 +1352,18 @@ This does not yet substitute for either family's independent fit, reference
 or band ink, or for automatic-domain edge clearance. Focused custom-role,
 sampled/faceted/Canvas, exact resource-cap and SVG snapshot tests plus strict
 Clippy pass. T5c2a1b2 completes the remaining standard-mark responsibilities.
+
+T5c2a1b2a closure: Line, Trajectory and LinePath derive their primary-vertex
+cardinality from retained groups before window clipping and charge group
+processing. Origin-relative, admitted canonical line and point observations
+supply painted width and height according to each family's actual marker
+visibility and resolved stroke/point roles. Fully transparent lines contribute
+no ink after source geometry and stroke-style validation; an independent
+geometry test pins that distinction. Exact data windows waive only the
+constrained-axis hard span. Focused Line/Trajectory tests, facet/Canvas
+preparation, actual root resource-cap/reuse tests, current path SVG snapshots
+and strict Clippy pass. Ribbon boundary ink, supplemental layer consequences,
+automatic-edge clearance and soft density remain in T5c2a1b2b/T5c3.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

@@ -74,6 +74,71 @@ pub(crate) struct LinePayload {
     layers: Vec<(Vec<Point2D>, PointStyle, Vec<PlacedText>)>,
 }
 
+/// Resolve one prepared path's painted hard span before parent allocation.
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_line
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Line intrinsic requires root-prepared paths".into()))?;
+    let resources = theme.prepared_font_environment()?.generation_resources();
+    resources
+        .claim_visits(prepared.groups.len() as u128)
+        .map_err(|error| {
+            Error::Render(format!("Line intrinsic group-count admission: {error:?}"))
+        })?;
+    let count = prepared.groups.iter().try_fold(0_u128, |total, group| {
+        total
+            .checked_add(group.points.len() as u128)
+            .ok_or_else(|| Error::Render("Line primary vertex cardinality overflowed".into()))
+    })?;
+    if count == 0 {
+        return Err(Error::Render(
+            "Line has no prepared primary vertices".into(),
+        ));
+    }
+    let path_style = if chart.kind() == PlotKind::Line {
+        &theme.marks.series_line
+    } else {
+        &theme.marks.path_line
+    }
+    .backend_style((0, 0, 0));
+    let path = crate::render::geometry::line_ink_width(theme, &path_style)?;
+    let points_visible = chart.kind() == PlotKind::Trajectory || chart.markers_visible();
+    let mark = if points_visible {
+        let radius = if chart.kind() == PlotKind::Line {
+            theme.marks.point_sizes.path
+        } else {
+            theme.marks.point_sizes.trajectory
+        };
+        let point_style = chart.point_style(theme, (0, 0, 0), radius);
+        crate::render::geometry::point_ink_dimensions(theme, &point_style)?
+    } else {
+        (0.0, 0.0)
+    };
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            mark.0.max(path)
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            mark.1.max(path)
+        } else {
+            0.0
+        },
+    ))
+}
+
 #[derive(Debug)]
 enum LineMark {
     Ribbon(Vec<Point2D>, FillStyle),

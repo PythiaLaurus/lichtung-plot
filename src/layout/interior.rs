@@ -197,6 +197,9 @@ impl Plot {
                 PlotKind::Regression => Some(crate::plots::regression::intrinsic_body_minimum(
                     self, theme,
                 )?),
+                PlotKind::Line | PlotKind::Trajectory | PlotKind::LinePath => {
+                    Some(crate::plots::line::intrinsic_body_minimum(self, theme)?)
+                }
                 _ => None,
             };
             if let Some(mark) = point_ink {

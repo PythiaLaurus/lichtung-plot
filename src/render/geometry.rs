@@ -742,6 +742,24 @@ pub(crate) fn point_ink_dimensions(
     }))
 }
 
+/// Painted thickness of an origin-relative one-pixel path, independent of the
+/// prepared scientific length and orientation.
+pub(crate) fn line_ink_width(
+    theme: &crate::theme::ResolvedTheme,
+    style: &LineStyle,
+) -> Result<f64, Error> {
+    let mut ink = GeometrySnapshot::new(theme)?;
+    ink.line(
+        &[Point2D::new(0.0, 0.0), Point2D::new(1.0, 0.0)],
+        style,
+        None,
+    )?;
+    Ok(ink
+        .bounds()
+        .first()
+        .map_or(0.0, |bounds| bounds.top - bounds.bottom))
+}
+
 #[cfg(test)]
 impl GeometryBackend {
     fn record_text(
@@ -979,7 +997,7 @@ fn line_bounds(
     }
     let points = backend::validate_line_points(points)?;
     let style = super::primitives::CanonicalLineStyle::new(style)?;
-    if style.width.units() == 0 {
+    if style.color.alpha() == 0 || style.width.units() == 0 {
         return Ok(());
     }
     for segment in points.windows(2) {
@@ -2462,6 +2480,42 @@ mod tests {
                 .unwrap();
             assert_eq!(stroked.bounds.len(), 1);
         }
+    }
+
+    #[test]
+    fn transparent_line_has_no_painted_ink_but_still_validates_geometry() {
+        let theme = crate::Theme::Publication.resolve();
+        let style = LineStyle {
+            color: backend::Rgba::new(1, 2, 3, 0),
+            width: 140.0,
+            pattern: backend::StrokePattern::Solid,
+        };
+        let mut snapshot = GeometrySnapshot::new(&theme).unwrap();
+        snapshot
+            .line(
+                &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 1.0)],
+                &style,
+                None,
+            )
+            .unwrap();
+        assert!(snapshot.bounds().is_empty());
+        assert!(snapshot
+            .line(
+                &[Point2D::new(1.0, 1.0), Point2D::new(f64::NAN, 1.0)],
+                &style,
+                None
+            )
+            .is_err());
+        assert!(snapshot
+            .line(
+                &[Point2D::new(1.0, 1.0), Point2D::new(2.0, 1.0)],
+                &LineStyle {
+                    width: f32::NAN,
+                    ..style
+                },
+                None
+            )
+            .is_err());
     }
 
     #[test]
