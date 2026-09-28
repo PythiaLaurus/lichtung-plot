@@ -33,6 +33,60 @@ pub(crate) struct HistogramSemantics {
     rugs: Vec<crate::HistogramRug>,
 }
 
+pub(crate) fn intrinsic_body_minimum(
+    chart: &Plot,
+    theme: &crate::theme::ResolvedTheme,
+) -> Result<(f64, f64), Error> {
+    let prepared = chart
+        .prepared_histogram
+        .as_ref()
+        .and_then(|inputs| {
+            inputs
+                .panels
+                .iter()
+                .find(|(scope, _)| scope.as_deref() == chart.axis_scope())
+        })
+        .map(|(_, prepared)| prepared)
+        .ok_or_else(|| Error::Render("Histogram intrinsic requires root-prepared bins".into()))?;
+    if prepared.bins.is_empty() {
+        return Err(Error::Render(
+            "Histogram has no prepared primary bins".into(),
+        ));
+    }
+    let style = theme.marks.histogram_bin.backend_style((0, 0, 0));
+    let fill = crate::render::geometry::rectangular_fill_ink_outset(theme, &style)?;
+    let curve = if prepared
+        .curve
+        .as_ref()
+        .is_some_and(|points| points.len() >= 2)
+    {
+        crate::render::geometry::line_ink_width(
+            theme,
+            &theme.marks.histogram_curve.backend_style(),
+        )?
+    } else {
+        0.0
+    };
+    let rug = if prepared.rugs.is_empty() {
+        0.0
+    } else {
+        crate::render::geometry::line_ink_width(theme, &theme.marks.histogram_rug.backend_style())?
+    };
+    let span = (fill.0.max(fill.1) + 1.0 / 1024.0).max(curve).max(rug);
+    Ok((
+        if chart.x_axis_spec().limits.is_none() {
+            span
+        } else {
+            0.0
+        },
+        if chart.y_axis_spec().limits.is_none() {
+            span
+        } else {
+            0.0
+        },
+    ))
+}
+
 impl HistogramSemantics {
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.claim_mark_rows()?;
@@ -823,6 +877,47 @@ fn finish_histogram(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn histogram_bin_and_present_overlay_ink_are_independent_hard_inputs() {
+        let sample = || {
+            Plot::histogram(crate::HistogramInput::samples(crate::NumericValues::new(
+                "sample",
+                [1.0, 2.0, 3.0, 4.0],
+            )))
+            .bins(crate::HistogramBins::Count(2))
+            .stat(HistogramStat::Density)
+            .x_limits(0.0, 5.0)
+        };
+        let source = sample().erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let mut theme = crate::Theme::Publication.resolve();
+        let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
+        theme.marks.histogram_curve.width = 140.0;
+        theme.marks.histogram_rug.width = 140.0;
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
+        theme.marks.histogram_bin.outline_width = 140.0;
+        let styled = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(styled.0.to_bits(), baseline.0.to_bits());
+        assert!(styled.1 > 140.0);
+        theme.marks.histogram_bin.outline_paint =
+            crate::theme::FillOutlinePaint::Fixed(crate::render::backend::Rgba::new(1, 2, 3, 0));
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
+
+        let source = sample()
+            .composite(crate::HistogramComposite::KdeAndRug(
+                crate::HistogramKde::Internal,
+            ))
+            .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let overlay = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(overlay.0.to_bits(), baseline.0.to_bits());
+        assert_eq!(overlay.1.to_bits(), 140.0_f64.to_bits());
+    }
 
     #[test]
     fn axis_helpers_refuse_before_edges_quantiles_counts_and_kde_work() {

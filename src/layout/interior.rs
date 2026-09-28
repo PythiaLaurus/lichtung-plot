@@ -203,6 +203,9 @@ impl Plot {
                 PlotKind::Density => {
                     Some(crate::plots::density::intrinsic_body_minimum(self, theme)?)
                 }
+                PlotKind::Histogram => Some(crate::plots::histogram::intrinsic_body_minimum(
+                    self, theme,
+                )?),
                 _ => None,
             };
             if let Some(mark) = point_ink {

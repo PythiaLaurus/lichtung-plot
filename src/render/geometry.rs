@@ -760,6 +760,31 @@ pub(crate) fn line_ink_width(
         .map_or(0.0, |bounds| bounds.top - bounds.bottom))
 }
 
+/// Outward painted size beyond a unit, axis-aligned bin body. This is the
+/// histogram's actual rectangular polygon grammar, including mitered stroke.
+pub(crate) fn rectangular_fill_ink_outset(
+    theme: &crate::theme::ResolvedTheme,
+    style: &FillStyle,
+) -> Result<(f64, f64), Error> {
+    let mut ink = GeometrySnapshot::new(theme)?;
+    ink.polygon(
+        &[
+            Point2D::new(0.0, 0.0),
+            Point2D::new(1.0, 0.0),
+            Point2D::new(1.0, 1.0),
+            Point2D::new(0.0, 1.0),
+        ],
+        style,
+        None,
+    )?;
+    Ok(ink.bounds().first().map_or((0.0, 0.0), |bounds| {
+        (
+            (bounds.right - bounds.left - 1.0).max(0.0),
+            (bounds.top - bounds.bottom - 1.0).max(0.0),
+        )
+    }))
+}
+
 #[cfg(test)]
 impl GeometryBackend {
     fn record_text(

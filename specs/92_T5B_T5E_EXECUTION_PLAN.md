@@ -982,7 +982,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b1 | COMPLETE | T5c2a1b2a | `feat(marks): measure Qq and Regression reference hard ink` |
 | T5c2a1b2b2 | IN PROGRESS | T5c2a1b2b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2a | COMPLETE | T5c2a1b2b1 | `feat(marks): measure Density group-curve hard ink` |
-| T5c2a1b2b2b | PENDING | T5c2a1b2b2a | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b | IN PROGRESS | T5c2a1b2b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b2b1 | COMPLETE | T5c2a1b2b2a | `feat(marks): measure Histogram bin and overlay hard ink` |
+| T5c2a1b2b2b2 | PENDING | T5c2a1b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1386,6 +1388,17 @@ Independent custom wide/transparent stroke values recompute without changing
 the cached axis typography. Focused grouped/source/limit tests, distribution
 SVG snapshots, root exact resource-cap test and strict Clippy pass. Density
 area polygon ink and the other standard families remain pending.
+
+T5c2a1b2b2b1 closure: Histogram's retained bins, sampled or supplied, supply
+primary mark cardinality without counting KDE grid vertices or rugs. An
+admitted unit rectangle runs through its actual canonical mitered polygon
+grammar to resolve fill/outline paint's outward hard ink; optional KDE and
+rug strokes contribute only when those prepared overlays exist. Explicit
+data windows waive the respective dimension. Focused custom transparent/wide
+outline and optional-overlay tests, sampled/supplied parity, all focused
+Histogram units, current distribution snapshots, exact root resource-cap
+checks and strict Clippy pass. Painted-edge domain clearance and natural
+density preference remain separately pending in this T5c2a umbrella.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
