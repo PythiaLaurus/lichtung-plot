@@ -968,6 +968,11 @@ pub(crate) struct MarkAppearance {
     /// Boxplot/Violin raw observations and Raincloud strips/guide points.
     pub(crate) raw_overlay_point: PointAppearance,
     pub(crate) raw_overlay_radius: u32,
+    pub(crate) heatmap_cell_outline: FillOutlineAppearance,
+    pub(crate) heatmap_highlight_outline: FillOutlineAppearance,
+    pub(crate) heatmap_missing_row_outline: FillOutlineAppearance,
+    pub(crate) heatmap_missing_key_outline: FillOutlineAppearance,
+    pub(crate) heatmap_missing_cross: StrokeAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -1016,6 +1021,18 @@ pub(crate) struct FixedFillAppearance {
     pub(crate) paint: Rgba,
     pub(crate) outline_paint: Rgba,
     pub(crate) outline_width: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FillOutlineAppearance {
+    pub(crate) paint: Rgba,
+    pub(crate) width: f32,
+}
+
+impl FillOutlineAppearance {
+    pub(crate) fn backend_style(&self, fill: Rgba) -> crate::render::backend::FillStyle {
+        crate::render::backend::FillStyle::new(fill, self.paint, self.width)
+    }
 }
 
 impl FixedFillAppearance {
@@ -1378,6 +1395,27 @@ fn resolved_theme(
                 outline: crate::render::backend::PointOutline::default(),
             },
             raw_overlay_radius: 2,
+            heatmap_cell_outline: FillOutlineAppearance {
+                paint: Rgba::rgb(255, 255, 255),
+                width: 0.5,
+            },
+            heatmap_highlight_outline: FillOutlineAppearance {
+                paint: foreground_paint,
+                width: 2.5,
+            },
+            heatmap_missing_row_outline: FillOutlineAppearance {
+                paint: Rgba::rgb(255, 255, 255),
+                width: 0.5,
+            },
+            heatmap_missing_key_outline: FillOutlineAppearance {
+                paint: Rgba::rgb(120, 120, 120),
+                width: 0.8,
+            },
+            heatmap_missing_cross: StrokeAppearance {
+                paint: Rgba::rgb(120, 120, 120),
+                width: 1.0,
+                pattern: StrokePattern::Solid,
+            },
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
                 axis_width,
@@ -1837,6 +1875,27 @@ mod tests {
                     outline: crate::render::backend::PointOutline::default(),
                 },
                 raw_overlay_radius: 2,
+                heatmap_cell_outline: FillOutlineAppearance {
+                    paint: Rgba::rgb(255, 255, 255),
+                    width: 0.5,
+                },
+                heatmap_highlight_outline: FillOutlineAppearance {
+                    paint: foreground,
+                    width: 2.5,
+                },
+                heatmap_missing_row_outline: FillOutlineAppearance {
+                    paint: Rgba::rgb(255, 255, 255),
+                    width: 0.5,
+                },
+                heatmap_missing_key_outline: FillOutlineAppearance {
+                    paint: Rgba::rgb(120, 120, 120),
+                    width: 0.8,
+                },
+                heatmap_missing_cross: StrokeAppearance {
+                    paint: Rgba::rgb(120, 120, 120),
+                    width: 1.0,
+                    pattern: StrokePattern::Solid,
+                },
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,
                     width: expected.axis_width,

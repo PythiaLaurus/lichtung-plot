@@ -463,11 +463,13 @@ pub(crate) fn measure(
 
     let payload = HeatmapPayload {
         clip: panel,
-        cross_style: LineStyle::solid(MISSING_STROKE, 1.0),
+        cross_style: theme.marks.heatmap_missing_cross.backend_style(),
         cells: select_cells(prepared, &layout, theme, &annotations, data)?,
         colorbar: colorbar
             .as_ref()
-            .map(|(title, values, _)| select_colorbar(prepared, &layout, title, values, data))
+            .map(|(title, values, _)| {
+                select_colorbar(prepared, &layout, title, values, theme, data)
+            })
             .transpose()?,
     };
     let geometry = payload.geometry(theme)?;
@@ -1162,7 +1164,10 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: FillStyle::new(MISSING_FILL.into(), (255, 255, 255).into(), 0.5),
+                fill: theme
+                    .marks
+                    .heatmap_missing_row_outline
+                    .backend_style(MISSING_FILL.into()),
                 cross: None,
                 text: Some(PlacedText {
                     plan: annotation.clone(),
@@ -1197,15 +1202,12 @@ fn select_cells(
                     Point2D::new(right, top),
                     Point2D::new(left, top),
                 ],
-                fill: FillStyle::new(
-                    color.into(),
-                    if highlighted {
-                        theme.foreground.into()
-                    } else {
-                        (255, 255, 255).into()
-                    },
-                    if highlighted { 2.5 } else { 0.5 },
-                ),
+                fill: if highlighted {
+                    &theme.marks.heatmap_highlight_outline
+                } else {
+                    &theme.marks.heatmap_cell_outline
+                }
+                .backend_style(color.into()),
                 text: None,
                 cross: None,
             };
@@ -1366,6 +1368,7 @@ fn select_colorbar(
     layout: &Layout,
     color_label: &crate::layout::TextBlock,
     values: &[crate::layout::ResolvedTextPlan],
+    theme: &ResolvedTheme,
     data: crate::data::PlotData<'_>,
 ) -> Result<ColorbarPayload, Error> {
     let (_, panel_right, panel_bottom, panel_top) = layout.projection.pixel_box();
@@ -1441,7 +1444,10 @@ fn select_colorbar(
                 Point2D::new(left + 12.0, swatch_bottom + 12.0),
                 Point2D::new(left, swatch_bottom + 12.0),
             ],
-            fill: FillStyle::new(MISSING_FILL.into(), MISSING_STROKE.into(), 0.8),
+            fill: theme
+                .marks
+                .heatmap_missing_key_outline
+                .backend_style(MISSING_FILL.into()),
             cross: None,
             text: Some(PlacedText::from_deferred_first_line(
                 values

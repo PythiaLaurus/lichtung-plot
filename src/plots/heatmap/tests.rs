@@ -25,6 +25,67 @@ fn prepare_chart(chart: &Plot<crate::kind::Heatmap>) -> Result<HeatmapData, Erro
 }
 
 #[test]
+fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_place() {
+    let source = chart(&valid_data()).size(1200, 800).erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let panel = PanelBox::new(10.0, 850.0, 20.0, 620.0);
+    let mut theme = crate::Theme::Publication.resolve();
+    let original = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    theme.marks.heatmap_cell_outline.paint = crate::render::backend::Rgba::new(1, 3, 5, 110);
+    theme.marks.heatmap_cell_outline.width = 0.7;
+    theme.marks.heatmap_missing_cross.paint = crate::render::backend::Rgba::new(7, 9, 11, 220);
+    theme.marks.heatmap_missing_key_outline.paint =
+        crate::render::backend::Rgba::new(13, 15, 17, 90);
+    let selected = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    let extract = |result: &PlotRenderResult| {
+        let crate::layout::interior::MarkPayload::Heatmap(payload) =
+            &result.marks.as_ref().unwrap().payload
+        else {
+            panic!("selected Heatmap")
+        };
+        (
+            payload
+                .cells
+                .iter()
+                .map(|cell| cell.corners)
+                .collect::<Vec<_>>(),
+            payload
+                .cells
+                .iter()
+                .find(|cell| cell.cross.is_none())
+                .unwrap()
+                .fill
+                .clone(),
+            payload.cross_style.clone(),
+            payload
+                .colorbar
+                .as_ref()
+                .unwrap()
+                .missing
+                .as_ref()
+                .unwrap()
+                .fill
+                .clone(),
+        )
+    };
+    let (old_cells, old_cell, old_cross, old_key) = extract(&original);
+    let (new_cells, new_cell, new_cross, new_key) = extract(&selected);
+    assert_eq!(old_cells, new_cells);
+    assert_eq!(old_cell.color, new_cell.color);
+    assert_eq!(new_cell.stroke.alpha(), 110);
+    assert_eq!(new_cell.stroke_width.to_bits(), 0.7_f32.to_bits());
+    assert_ne!(old_cross.color, new_cross.color);
+    assert_eq!(new_key.color, old_key.color);
+    assert_eq!(new_key.stroke.alpha(), 90);
+}
+
+#[test]
 fn census_borrows_retained_formatted_values_in_render_order() {
     let source = chart(&valid_data())
         .annotations(HeatmapAnnotations::Values(

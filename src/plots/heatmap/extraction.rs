@@ -433,7 +433,7 @@ fn selected_cell_guide_storage_and_elision_refuse_at_exact_limits() {
             } else if component == 1 {
                 select_cells(marks, &selected.layout, &theme, &annotations, data)?;
             } else {
-                select_colorbar(marks, &selected.layout, &title, &values, data)?;
+                select_colorbar(marks, &selected.layout, &title, &values, &theme, data)?;
             }
             Ok(())
         };
