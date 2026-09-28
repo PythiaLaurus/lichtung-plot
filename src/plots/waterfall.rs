@@ -398,11 +398,12 @@ fn plan_annotations(
             context
                 .producer_text()?
                 .plan(text, "waterfall total annotation", || {
-                    Ok(theme.measure_legacy_text(
+                    Ok(theme.measure_text(
                         text,
-                        theme.detail_font_size,
+                        &theme.typography.waterfall_total,
                         PhysicalTextAlignment::Center,
                         "waterfall total annotation",
+                        false,
                     )?)
                 })?;
         let width = text_plan.width();
@@ -488,6 +489,60 @@ mod tests {
     use crate::layout::fit::PlanError;
     use crate::layout::kernel::nearest_spatial_quanta;
     use crate::{CategoryValues, NumericValues};
+
+    #[test]
+    fn custom_total_typography_reallocates_shelf_without_changing_span_inputs() {
+        let source = Plot::waterfall(
+            CategoryValues::new("step", ["change"]).unwrap(),
+            NumericValues::new("delta", [2.0]),
+            1.0,
+        )
+        .size(1200, 800)
+        .erase();
+        let resources = OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let panel = PanelBox::new(80.0, 750.0, 60.0, 500.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        let old = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        theme.typography.waterfall_total.font_size = 18;
+        theme.typography.waterfall_total.paint = crate::render::backend::Rgba::rgb(3, 5, 7);
+        let selected = chart
+            .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+            .unwrap();
+        let extract = |result: &PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Waterfall(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected Waterfall")
+            };
+            (
+                payload
+                    .bars
+                    .iter()
+                    .map(|(corners, _)| *corners)
+                    .collect::<Vec<_>>(),
+                payload
+                    .text
+                    .iter()
+                    .map(|text| text.plan.style.clone())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let (old_bars, old_text) = extract(&old);
+        let (new_bars, new_text) = extract(&selected);
+        assert_eq!(old_bars.len(), new_bars.len());
+        assert_ne!(old_bars, new_bars);
+        assert_eq!(old_bars[0][0].x.to_bits(), new_bars[0][0].x.to_bits());
+        assert_eq!(old_text.len(), 2);
+        assert_eq!(old_text[0].font_size, 14);
+        assert!(new_text
+            .iter()
+            .all(|text| text.font_size == 18
+                && text.paint == crate::render::backend::Rgba::rgb(3, 5, 7)));
+    }
 
     #[test]
     fn projected_spans_reject_nonzero_collapse_but_retain_signed_zero_deltas() {

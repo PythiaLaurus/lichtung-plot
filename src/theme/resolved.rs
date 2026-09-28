@@ -887,6 +887,8 @@ pub(crate) struct FoundationalTypography {
     pub(crate) significance_label: TextAppearance,
     /// Estimate value labels and the required not-estimable marker.
     pub(crate) estimate_detail: TextAppearance,
+    /// Required Waterfall start/end total labels.
+    pub(crate) waterfall_total: TextAppearance,
     /// Complete candidates selected over a variable fill before font discovery.
     pub(crate) contrast_light: TextAppearance,
     pub(crate) contrast_dark: TextAppearance,
@@ -1331,6 +1333,7 @@ fn resolved_theme(
                 1.2,
             ),
             estimate_detail: text_appearance(&stack, foreground_paint, 14, 1.2),
+            waterfall_total: text_appearance(&stack, foreground_paint, 14, 1.2),
             contrast_light: text_appearance(&stack, Rgba::rgb(255, 255, 255), 11, 1.2),
             contrast_dark: text_appearance(&stack, Rgba::rgb(0, 0, 0), 11, 1.2),
             legend_title: text_appearance(&stack, Rgba::rgb(60, 60, 60), 12, 1.2),
@@ -1840,6 +1843,7 @@ mod tests {
                 tick_label: text(foreground, 16, 1.2),
                 significance_label: text(foreground, 16, 1.2),
                 estimate_detail: text(foreground, 14, 1.2),
+                waterfall_total: text(foreground, 14, 1.2),
                 contrast_light: text(Rgba::rgb(255, 255, 255), 11, 1.2),
                 contrast_dark: text(Rgba::rgb(0, 0, 0), 11, 1.2),
                 legend_title: text(Rgba::rgb(60, 60, 60), 12, 1.2),
