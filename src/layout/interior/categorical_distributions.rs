@@ -295,7 +295,7 @@ fn native_distribution_significance_uses_root_feedback_and_final_assigned_geomet
 }
 
 #[test]
-fn native_root_annotation_growth_is_monotonic_and_freezes_the_final_domain() {
+fn native_root_mark_and_annotation_growth_freeze_the_final_domain() {
     use crate::decorations::plan::{plan_panel, LegendRole};
     use crate::layout::kernel::FeedbackKind;
     use crate::layout::{AddressRole, ComponentAddress};
@@ -333,7 +333,15 @@ fn native_root_annotation_growth_is_monotonic_and_freezes_the_final_domain() {
                     &owner,
                 ))
                 .map_err(crate::layout::fit::PlanError::into_error)?;
-                let requested = plan.result.significance.as_ref().unwrap().y_range;
+                let mut requested = plan.result.significance.as_ref().unwrap().y_range;
+                if let Some(marks) = plan.result.marks.as_deref() {
+                    if let super::MarkPayload::Distribution(payload) = &marks.payload {
+                        if let Some(expansion) = payload.domain_expansions[1] {
+                            requested.0 = requested.0.min(expansion.limits.0);
+                            requested.1 = requested.1.max(expansion.limits.1);
+                        }
+                    }
+                }
                 assert!(requested.0 <= consumed.0 && requested.1 >= consumed.1);
                 ranges.push((consumed, requested));
                 Ok(crate::layout::MeasuredLayout::new(assigned, plan))

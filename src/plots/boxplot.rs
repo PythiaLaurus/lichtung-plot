@@ -405,12 +405,11 @@ pub(crate) fn measure_marks(
             )?;
         }
     }
-    payload
-        .retain(
-            PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance),
-            context,
-        )
-        .map_err(Into::into)
+    payload.retain(
+        PlotRenderResult::new(layout, legend_entries).with_significance_plan(significance),
+        context,
+        chart,
+    )
 }
 
 #[cfg(test)]

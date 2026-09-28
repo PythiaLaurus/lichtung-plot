@@ -998,17 +998,22 @@ fn plan_panel_attempt(
             crate::layout::interior::MarkPayload::Histogram(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Dumbbell(payload) => payload.domain_expansions,
             crate::layout::interior::MarkPayload::Bars(payload) => [payload.domain_expansion, None],
-            crate::layout::interior::MarkPayload::Distribution(_) => [
-                result
-                    .significance
-                    .as_ref()
-                    .filter(|plan| plan.y_range != next_y)
-                    .map(|plan| DomainExpansion {
-                        axis: ClearanceAxis::Y,
-                        limits: plan.y_range,
-                    }),
-                None,
-            ],
+            crate::layout::interior::MarkPayload::Distribution(payload) => {
+                crate::layout::interior::merge_mark_domain_expansions(
+                    payload.domain_expansions,
+                    [
+                        None,
+                        result
+                            .significance
+                            .as_ref()
+                            .filter(|plan| plan.y_range != next_y)
+                            .map(|plan| DomainExpansion {
+                                axis: ClearanceAxis::Y,
+                                limits: plan.y_range,
+                            }),
+                    ],
+                )
+            }
             _ => [None; 2],
         });
     let mut requests = [None; 2];

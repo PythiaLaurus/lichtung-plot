@@ -1014,7 +1014,9 @@ caller styles while centralizing their ownership.
 | T5c2c0 | COMPLETE | T5c2b | `docs(marks): map collective distribution slot and ink inputs` |
 | T5c2c1 | IN PROGRESS | T5c2c0 | Umbrella for categorical distribution and Interaction requirements |
 | T5c2c1a | COMPLETE | T5c2c0 | `feat(marks): measure sparse Boxplot body and raw-point pitch` |
-| T5c2c1b | PENDING | T5c2c1a | `refactor(marks): measure remaining collective requirements` |
+| T5c2c1b | IN PROGRESS | T5c2c1a | Umbrella for remaining collective requirements |
+| T5c2c1b1 | COMPLETE | T5c2c1a | `feat(marks): retain complete distribution paint under root feedback` |
+| T5c2c1b2 | PENDING | T5c2c1b1 | `refactor(marks): measure distribution slots and sparse Interaction` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
@@ -1682,6 +1684,20 @@ independent point ink. Focused Boxplot summary and overlay tests, all seven
 native categorical-distribution integration paths, current SVG snapshots,
 exact resource-cap checks and strict Clippy pass. Selected automatic Y ink,
 sampled/supplied Violin/Raincloud and sparse Interaction remain in T5c2c1b.
+
+T5c2c1b1 closure: Boxplot, sampled Violin/Raincloud and supplied Raincloud
+share the existing `DistributionPayload` owner for one additional admitted
+unclipped canonical pass over final polygon, line and raw-point paints. Their
+prepared scientific support determines optional automatic Y clearance; exact
+Y windows still clip. The single root round reconciles that request with
+already owned significance shelves rather than discarding either. Custom
+220px Boxplot whisker/body strokes and supplied 120px Raincloud clouds/50px
+strips show complete selected numeric ink and resolved no-extra-work replay;
+the supplied exact Y window keeps its fixed domain. Seven categorical-
+distribution native paths, sampled/supplied parity, raw overlays, exact root
+resource-cap/cache checks, current SVG snapshots and strict Clippy pass.
+Category-X pitch, sample/supplied parity under custom geometry, and sparse
+Interaction follow in T5c2c1b2.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

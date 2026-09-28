@@ -1843,6 +1843,76 @@ fn bar_orientations_clear_the_painted_zero_edge_through_one_numeric_feedback_own
 }
 
 #[test]
+fn boxplot_whisker_and_body_ink_clear_the_automatic_value_edge() {
+    let source = Plot::boxplot(
+        CategoryValues::new("category", ["a"; 8]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+    )
+    .size(800, 600)
+    .erase();
+    let mut theme = theme();
+    theme.marks.box_body.outline_width = 220.0;
+    theme.marks.summary_stroke.width = 220.0;
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let cell = PanelBox::new(80.0, 700.0, 80.0, 520.0);
+    let selected = plan_panel(&chart, PlotKind::Boxplot, cell, LegendRole::Panel, &theme).unwrap();
+    assert!(selected.planned_y_limits().is_some());
+    assert!(selected.planned_x_limits().is_none());
+    let crate::layout::interior::MarkPayload::Distribution(payload) =
+        &selected.result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Boxplot")
+    };
+    assert!(payload.domain_expansions.iter().all(Option::is_none));
+    let panel = selected.result.layout.projection.panel_box();
+    let mut full = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+    for mark in &payload.marks {
+        match mark {
+            crate::plots::categorical_distribution::Mark::Polygon(points, style) => {
+                full.polygon(points, style, None).unwrap();
+            }
+            crate::plots::categorical_distribution::Mark::Line(points, style) => {
+                full.line(points, style, None).unwrap();
+            }
+            crate::plots::categorical_distribution::Mark::Scatter(points, style) => {
+                full.scatter_with_clip(points, style, None).unwrap();
+            }
+        }
+    }
+    for bounds in full.bounds() {
+        assert!(bounds.left >= panel.x0 && bounds.right <= panel.x1);
+        assert!(bounds.bottom >= panel.y0 && bounds.top <= panel.y1);
+    }
+    let exact_source = Plot::boxplot(
+        CategoryValues::new("category", ["a"; 8]).unwrap(),
+        NumericValues::new("value", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+    )
+    .y_limits(1.0, 8.0)
+    .size(800, 600)
+    .erase();
+    let resources = theme
+        .prepared_font_environment()
+        .unwrap()
+        .generation_resources();
+    let inputs = crate::plots::shared_x::prepare_plot(&exact_source, &resources).unwrap();
+    let exact_chart = inputs.attach(exact_source).unwrap();
+    let exact = plan_panel(
+        &exact_chart,
+        PlotKind::Boxplot,
+        cell,
+        LegendRole::Panel,
+        &theme,
+    )
+    .unwrap();
+    assert!(exact.planned_y_limits().is_none());
+}
+
+#[test]
 fn supplemental_bar_point_outside_bar_values_extends_numeric_ink_domain() {
     let source = Plot::bar(
         CategoryValues::new("category", ["a", "b"]).unwrap(),

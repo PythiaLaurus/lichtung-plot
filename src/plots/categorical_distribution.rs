@@ -134,7 +134,7 @@ pub(crate) fn retained(chart: &Plot) -> Result<&PreparedDistribution, Error> {
 }
 
 #[derive(Debug)]
-enum Mark {
+pub(crate) enum Mark {
     Polygon(Vec<Point2D>, FillStyle),
     Line(Vec<Point2D>, LineStyle),
     Scatter(Vec<Point2D>, PointStyle),
@@ -143,7 +143,8 @@ enum Mark {
 #[derive(Debug)]
 pub(crate) struct DistributionPayload {
     clip: crate::layout::PanelBox,
-    marks: Vec<Mark>,
+    pub(crate) marks: Vec<Mark>,
+    pub(crate) domain_expansions: [Option<crate::layout::interior::DomainExpansion>; 2],
     #[cfg(test)]
     kind: PlotKind,
 }
@@ -154,6 +155,7 @@ impl DistributionPayload {
         Self {
             clip,
             marks: Vec::new(),
+            domain_expansions: [None; 2],
             #[cfg(test)]
             kind,
         }
@@ -209,10 +211,11 @@ impl DistributionPayload {
     }
 
     pub(crate) fn retain(
-        self,
+        mut self,
         mut result: crate::spec::PlotRenderResult,
         context: crate::spec::PlotRenderContext<'_>,
-    ) -> Result<crate::spec::PlotRenderResult, Error> {
+        chart: &Plot,
+    ) -> Result<crate::spec::PlotRenderResult, crate::layout::fit::PlanError> {
         let resources = context
             .theme
             .prepared_font_environment()?
@@ -227,6 +230,34 @@ impl DistributionPayload {
                 Mark::Scatter(points, style) => geometry.scatter(points, style, clip)?,
             }
         }
+        if chart.user_y_limits().is_none() {
+            let mut full = crate::render::geometry::GeometrySnapshot::new(context.theme)?;
+            data.claim_source_visits(self.marks.len())?;
+            for mark in &self.marks {
+                match mark {
+                    Mark::Polygon(points, style) => full.polygon(points, style, None)?,
+                    Mark::Line(points, style) => full.line(points, style, None)?,
+                    Mark::Scatter(points, style) => full.scatter_with_clip(points, style, None)?,
+                }
+            }
+            if let Some(bounds) = full
+                .bounds()
+                .iter()
+                .copied()
+                .reduce(crate::render::geometry::GeometryBox::union)
+            {
+                let categories = categorical_distribution_count(chart)?;
+                self.domain_expansions =
+                    crate::layout::interior::automatic_absolute_ink_expansions(
+                        [(0.0, f64::from(categories)), retained(chart)?.range()],
+                        &result.layout.projection,
+                        bounds,
+                        [false, true],
+                        data,
+                        context.fit_scope(),
+                    )?;
+            }
+        }
         #[cfg(test)]
         count(self.kind, 2);
         result.x_domain = crate::spec::AxisDomain::Categorical;
@@ -236,6 +267,12 @@ impl DistributionPayload {
         })?);
         Ok(result)
     }
+}
+
+fn categorical_distribution_count(chart: &Plot) -> Result<u32, Error> {
+    u32::try_from(retained(chart)?.categories().len()).map_err(|_| {
+        Error::Render("categorical distribution count exceeds coordinate range".into())
+    })
 }
 
 #[cfg(test)]

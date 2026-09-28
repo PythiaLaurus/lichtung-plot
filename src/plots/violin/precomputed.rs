@@ -147,9 +147,11 @@ pub(super) fn measure_marks(
             data,
         )?;
     }
-    payload
-        .retain(PlotRenderResult::new(layout, legend_entries), context)
-        .map_err(Into::into)
+    payload.retain(
+        PlotRenderResult::new(layout, legend_entries),
+        context,
+        chart,
+    )
 }
 
 #[expect(
