@@ -947,7 +947,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b1 | `feat(theme): resolve primary point appearance` |
 | T5c1b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2a | Umbrella; completes after composited contrast and remaining roles |
 | T5c1b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2a | `feat(theme): select complete Heatmap contrast roles` |
-| T5c1b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b2b1 | Umbrella; completes after bar fill and remaining roles |
+| T5c1b2b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b2b1 | `feat(theme): resolve ordinary bar fill appearance` |
+| T5c1b2b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1135,6 +1137,15 @@ font discovery, Heatmap/facet/Canvas annotation paths, and strict Clippy pass.
 T5d4 reuses this owner when it supplies final variable fills from resolved
 continuous scales. The remaining MarkTheme fill/point sizes and annotation
 styles stay in T5c1b2b2b2b2b2b2b2.
+
+T5c1b2b2b2b2b2b2b2a closure: all four ordinary bar families and their
+originating fill guide glyphs consume one private `DataFillAppearance` with
+independent fill alpha, outline RGBA and width. Current presets retain the
+same opaque data color and foreground outline. Custom private values change
+the exact retained mark and glyph without changing scientific polygons;
+focused standalone/facet/Canvas bar preparation, populated guides, current
+SVG snapshots and strict Clippy pass. Remaining fill roles are separate
+semantic owners in T5c1b2b2b2b2b2b2b2b.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

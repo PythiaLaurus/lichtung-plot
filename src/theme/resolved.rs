@@ -953,6 +953,8 @@ impl StrokeAppearance {
 pub(crate) struct MarkAppearance {
     /// Shared primary-point paint/outline before family-specific size selection.
     pub(crate) primary_point: PointAppearance,
+    /// Ordinary bar bodies in either orientation and originating guide glyphs.
+    pub(crate) bar_body: DataFillAppearance,
     /// Bar uncertainty stems/caps in either orientation.
     pub(crate) uncertainty_stroke: StrokeAppearance,
     /// Distribution summary and whisker strokes, including their guide glyphs.
@@ -979,6 +981,25 @@ pub(crate) struct MarkAppearance {
     pub(crate) qq_reference: StrokeAppearance,
     /// Dumbbell pairs use one neutral connecting stroke.
     pub(crate) dumbbell_connector: StrokeAppearance,
+}
+
+/// A filled mark consumes one opaque scale color and independent fill/outline
+/// roles; neither paint inherits alpha from the other.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct DataFillAppearance {
+    pub(crate) fill_alpha: u8,
+    pub(crate) outline_paint: Rgba,
+    pub(crate) outline_width: f32,
+}
+
+impl DataFillAppearance {
+    pub(crate) fn backend_style(&self, color: (u8, u8, u8)) -> crate::render::backend::FillStyle {
+        crate::render::backend::FillStyle::new(
+            Rgba::from(color).with_alpha(self.fill_alpha),
+            self.outline_paint,
+            self.outline_width,
+        )
+    }
 }
 
 /// One complete default point paint and its independently painted outline.
@@ -1260,6 +1281,11 @@ fn resolved_theme(
                 fill_alpha: 209,
                 shape: crate::PointShape::Circle,
                 outline: crate::render::backend::PointOutline::default(),
+            },
+            bar_body: DataFillAppearance {
+                fill_alpha: 255,
+                outline_paint: foreground_paint,
+                outline_width: 1.0,
             },
             uncertainty_stroke: stroke_appearance(
                 foreground_paint,
@@ -1658,6 +1684,11 @@ mod tests {
                     fill_alpha: 209,
                     shape: crate::PointShape::Circle,
                     outline: crate::render::backend::PointOutline::default(),
+                },
+                bar_body: DataFillAppearance {
+                    fill_alpha: 255,
+                    outline_paint: foreground,
+                    outline_width: 1.0,
                 },
                 uncertainty_stroke: StrokeAppearance {
                     paint: foreground,

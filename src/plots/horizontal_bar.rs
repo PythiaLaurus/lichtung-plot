@@ -12,7 +12,7 @@ use crate::Error;
 
 use crate::layout::{Layout, PanelBox, PhysicalTextAlignment, Projection, ResolvedTextPlan};
 use crate::plots::bar_data::{self, BarMode, PreparedBar, PreparedBarSignificance, PreparedBars};
-use crate::render::backend::{FillStyle, LineStyle, PlacedText, Point2D, TextAnchor};
+use crate::render::backend::{LineStyle, PlacedText, Point2D, TextAnchor};
 use crate::spec::{BarSpacing, PlotRenderContext, PlotRenderResult};
 use crate::Plot;
 
@@ -177,7 +177,7 @@ pub(crate) fn measure_marks(
         let polygon = project_bar(&layout.projection, bar, y_center, height)?;
         payload.bars.push(bar_data::BarShape {
             polygon,
-            fill: FillStyle::new(color.into(), theme.foreground.into(), 1.0),
+            fill: theme.marks.bar_body.backend_style(color),
             interval: bar
                 .interval
                 .map(|(lower, upper)| {

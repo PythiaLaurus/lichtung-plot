@@ -951,11 +951,10 @@ pub(crate) fn legend_entries(
     data.collect_source(prepared.hues.iter().enumerate().map(|(index, label)| {
         Ok(LegendEntry::fill(
             chart.point_legend_identity(label, data)?,
-            FillStyle::new(
-                theme.colors[index % theme.colors.len()].into(),
-                theme.foreground.into(),
-                1.0,
-            ),
+            theme
+                .marks
+                .bar_body
+                .backend_style(theme.colors[index % theme.colors.len()]),
         ))
     }))
 }
@@ -1753,6 +1752,64 @@ mod tests {
         PercentileInterval, StandardDeviation, StandardError,
     };
     use crate::{BarInput, Bounds, CategoryValues, ErrorBar, NumericValues, Plot};
+
+    #[test]
+    fn custom_bar_fill_and_outline_match_selected_marks_and_originating_guide() {
+        let source = Plot::bar(
+            CategoryValues::new("category", ["a", "a", "b", "b"]).unwrap(),
+            BarInput::samples(NumericValues::new("value", [1.0, 2.0, 3.0, 4.0])),
+        )
+        .series(CategoryValues::new("series", ["first", "second", "first", "second"]).unwrap())
+        .erase();
+        let resources = crate::font::canonical::OperationGenerationResources::new();
+        let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+        let chart = inputs.attach(source).unwrap();
+        let panel = crate::layout::PanelBox::new(10.0, 900.0, 20.0, 600.0);
+        let mut theme = crate::Theme::Publication.resolve();
+        let original = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        theme.marks.bar_body.fill_alpha = 128;
+        theme.marks.bar_body.outline_paint = crate::render::backend::Rgba::new(1, 3, 5, 64);
+        theme.marks.bar_body.outline_width = 2.0;
+        let selected = chart
+            .measure_selected_interior(crate::spec::PlotRenderContext::new(
+                chart.data(),
+                panel,
+                &theme,
+            ))
+            .unwrap();
+        let extract = |result: &crate::spec::PlotRenderResult| {
+            let crate::layout::interior::MarkPayload::Bars(payload) =
+                &result.marks.as_ref().unwrap().payload
+            else {
+                panic!("selected ordinary bar payload")
+            };
+            (payload.bars[0].polygon, payload.bars[0].fill.clone())
+        };
+        let (old_polygon, old_style) = extract(&original);
+        let (new_polygon, new_style) = extract(&selected);
+        assert_eq!(old_polygon, new_polygon);
+        assert_eq!(old_style.color.alpha(), 255);
+        assert_eq!(new_style.color.alpha(), 128);
+        assert_eq!(new_style.stroke.alpha(), 64);
+        assert_eq!(new_style.stroke_width.to_bits(), 2.0_f32.to_bits());
+        assert!(crate::decorations::legend::merge_exact_entries(
+            [
+                original.legend_entries[0].clone(),
+                selected.legend_entries[0].clone()
+            ],
+            "custom bar fill",
+            &crate::font::canonical::OperationGenerationResources::new(),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("glyphs must match exactly"));
+    }
 
     fn stable_mean(values: &[f64]) -> Result<f64, crate::Error> {
         super::stable_mean(values, None)
