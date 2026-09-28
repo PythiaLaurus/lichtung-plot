@@ -945,7 +945,9 @@ caller styles while centralizing their ownership.
 | T5c1b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2a | `feat(render): resolve independent point and outline paints` |
 | T5c1b2b2b2b2b2b2 | IN PROGRESS | T5c1b2b2b2b2b2b1 | Umbrella; completes after primary-point appearance and remaining roles |
 | T5c1b2b2b2b2b2b2a | COMPLETE | T5c1b2b2b2b2b2b1 | `feat(theme): resolve primary point appearance` |
-| T5c1b2b2b2b2b2b2b | PENDING | T5c1b2b2b2b2b2b2a | `feat(theme): resolve remaining private mark and annotation roles` |
+| T5c1b2b2b2b2b2b2b | IN PROGRESS | T5c1b2b2b2b2b2b2a | Umbrella; completes after composited contrast and remaining roles |
+| T5c1b2b2b2b2b2b2b1 | COMPLETE | T5c1b2b2b2b2b2b2a | `feat(theme): select complete Heatmap contrast roles` |
+| T5c1b2b2b2b2b2b2b2 | PENDING | T5c1b2b2b2b2b2b2b1 | `feat(theme): resolve remaining private mark and annotation roles` |
 | T5c2a | PENDING | T5c1 | `refactor(marks): measure point path and reference requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
@@ -1108,6 +1110,31 @@ and the obsolete `PointStyle::with_outline` construction path was deleted.
 Custom-theme Scatter evidence confirms prepared guide equality, changed
 point/outline paints and persistent hidden visibility; focused point/path,
 Canvas shared guides, composition, current snapshots and strict Clippy pass.
+
+Contrast primitive correction: CORE-MATH is a source project, not a Cargo
+package; its public site links the binary64 `pow.c` implementation. Since
+`TypographyTheme` only linearizes `u8` channels, the approved implementation
+uses one first-party 256-entry binary64 table instead of porting a general
+power routine into the standalone safe renderer. All table bits and the
+binary64 preprocessing order are pinned and tested independently. This
+changes the *method*, not the contrast selection or fallback policy; no
+runtime network, native FFI, or platform `pow` enters the renderer.
+
+T5c1b2b2b2b2b2b2b1 closure: one checked-in 256-channel binary64 table now
+selects complete `TypographyTheme` light/dark candidates after linear-light
+composition of cell fill, panel, owning Canvas root and the opaque
+`AnnotationTheme` planning backdrop. Exact-bit contrast ties choose dark.
+Heatmap finite-cell and fully-null-row requirements census *only* the selected
+stack before font preparation; intrinsic widths/heights and selected payloads
+use that same complete role, replacing renderer-local luminance threshold and
+paint-only substitution. Explicitly themed Canvas Plot children consume their
+actual Canvas root surface. Table SHA-256 and all 256 ordered values, three
+high-precision reference evaluations (120/240/480 decimal digits), translucent
+surfaces, invalid candidates, differing candidate stacks/sizes, selected-only
+font discovery, Heatmap/facet/Canvas annotation paths, and strict Clippy pass.
+T5d4 reuses this owner when it supplies final variable fills from resolved
+continuous scales. The remaining MarkTheme fill/point sizes and annotation
+styles stay in T5c1b2b2b2b2b2b2b2.
 
 Implement complete private mark/annotation roles and exact local-style precedence.
 Keep data identity/domain in the scale owner: styles receive one opaque data color

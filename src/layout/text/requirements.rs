@@ -1388,14 +1388,14 @@ fn push_deferred_plot_requirements(
                 }
                 Some(guide)
             };
-            for label in marks.annotation_labels() {
+            for (label, fill) in marks.annotation_labels() {
                 push_deferred_body(
                     requirements,
                     &body_address,
                     &mut body_index,
                     label,
                     &[],
-                    &body,
+                    theme.contrasting_text(fill)?,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -1420,7 +1420,7 @@ fn push_deferred_plot_requirements(
                     &mut body_index,
                     annotation.text(),
                     &[],
-                    &body,
+                    theme.contrasting_text(crate::plots::heatmap::missing_fill())?,
                     prepared_stage.as_deref_mut(),
                 )?;
             }
@@ -2414,6 +2414,126 @@ mod tests {
                 && requirement.source == "exact"
                 && requirement.generated_alphabet.is_empty()
         }));
+    }
+
+    #[test]
+    fn heatmap_value_census_requests_only_the_contrast_role_chosen_for_each_fill() {
+        for (value, label, chosen) in [
+            (0.0, "0.00", "Dark contrast font"),
+            (1.0, "1.00", "Light contrast font"),
+        ] {
+            let plot = crate::Plot::heatmap(
+                crate::CategoryValues::new("column", ["a"]).unwrap(),
+                crate::CategoryValues::new("row", ["one"]).unwrap(),
+                crate::NumericValues::new("fill", [value]),
+            )
+            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-1.0, 1.0)
+            .annotations(crate::HeatmapAnnotations::Values(
+                crate::NumericLabelFormat::default(),
+            ))
+            .erase();
+            let resources = crate::font::canonical::OperationGenerationResources::new();
+            let inputs = crate::plots::shared_x::prepare_plot(&plot, &resources).unwrap();
+            let mut theme = crate::Theme::Publication.resolve();
+            theme.typography.contrast_light.stack = "Light contrast font".into();
+            theme.typography.contrast_dark.stack = "Dark contrast font".into();
+            theme.typography.contrast_light.font_size = 19;
+            theme.typography.contrast_dark.font_size = 9;
+            let requirements = foundational_plot_requirements(
+                Some(&inputs),
+                &plot,
+                PlotKind::Heatmap,
+                &theme,
+                &ComponentAddress::root(),
+                true,
+                true,
+                true,
+                None,
+            )
+            .unwrap();
+            let selected = requirements
+                .iter()
+                .find(|requirement| requirement.source == label)
+                .unwrap();
+            assert_eq!(selected.stack_source, chosen);
+            assert!(!requirements.iter().any(|requirement| {
+                requirement.source == label && requirement.stack_source != chosen
+            }));
+        }
+    }
+
+    #[test]
+    fn unavailable_unselected_heatmap_contrast_face_never_enters_font_preparation() {
+        for (value, light_selected) in [(0.0, false), (1.0, true)] {
+            let plot = crate::Plot::heatmap(
+                crate::CategoryValues::new("column", ["a"]).unwrap(),
+                crate::CategoryValues::new("row", ["one"]).unwrap(),
+                crate::NumericValues::new("fill", [value]),
+            )
+            .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-1.0, 1.0)
+            .annotations(crate::HeatmapAnnotations::Values(
+                crate::NumericLabelFormat::default(),
+            ))
+            .erase();
+            let mut theme = crate::Theme::Publication.resolve();
+            let available = theme.font_family.clone();
+            let missing = "No Such Contrast Face In This Operation".to_owned();
+            theme.typography.contrast_light.stack = if light_selected {
+                available.clone()
+            } else {
+                missing.clone()
+            };
+            theme.typography.contrast_dark.stack = if light_selected { missing } else { available };
+            theme.typography.contrast_light.font_size = if light_selected { 64 } else { 7 };
+            theme.typography.contrast_dark.font_size = if light_selected { 7 } else { 64 };
+            crate::layout::plan_exact_root(
+                800,
+                600,
+                |stage| {
+                    let inputs =
+                        crate::plots::shared_x::prepare_plot(&plot, &stage.generation_resources())?;
+                    let requirements = foundational_plot_requirements(
+                        Some(&inputs),
+                        &plot,
+                        PlotKind::Heatmap,
+                        &theme,
+                        &ComponentAddress::root(),
+                        true,
+                        true,
+                        true,
+                        Some(stage),
+                    )?;
+                    let mut presence = Vec::new();
+                    stage.reserve_prepared(&mut presence, SCALAR_MAP_WORDS, "contrast census")?;
+                    presence.resize(SCALAR_MAP_WORDS, 0);
+                    let mut census = PreparedTextCensus::materialize(
+                        requirements,
+                        Some(stage),
+                        Some(&mut presence),
+                    )
+                    .map_err(|error| Error::Render(error.to_string()))?;
+                    theme.prepare_font_environment_from_census(&mut census, presence, stage)?;
+                    let marks = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+                    let minimum = crate::plots::heatmap::prepare_intrinsics(
+                        marks,
+                        &inputs.axes[0].1,
+                        plot.data(),
+                        &theme,
+                        None,
+                    )?;
+                    assert!(
+                        minimum.1 > 60.0 && minimum.0 > 100.0,
+                        "selected complete text size owns row height: {minimum:?}"
+                    );
+                    Ok(())
+                },
+                |(), assigned, _| Ok(crate::layout::MeasuredLayout::new(assigned, ())),
+                |(), _, (), _| Ok(()),
+            )
+            .unwrap();
+        }
     }
 
     #[test]

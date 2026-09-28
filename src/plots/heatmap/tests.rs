@@ -43,7 +43,7 @@ fn census_borrows_retained_formatted_values_in_render_order() {
     let marks = retained(&source).unwrap();
     let sources: Vec<_> = marks
         .guide_labels()
-        .chain(marks.annotation_labels())
+        .chain(marks.annotation_labels().map(|(label, _)| label))
         .chain(marks.missing_guide_label())
         .collect();
     assert_eq!(
@@ -81,7 +81,7 @@ fn census_stops_on_first_admission_refusal_without_visiting_later_values() {
             let marks = retained(&source).unwrap();
             let result = marks
                 .guide_labels()
-                .chain(marks.annotation_labels())
+                .chain(marks.annotation_labels().map(|(label, _)| label))
                 .chain(marks.missing_guide_label())
                 .try_for_each(|source| {
                     visits += 1;

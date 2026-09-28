@@ -1708,6 +1708,7 @@ impl ResolvedCanvasThemes {
                     plot.theme_spec()
                         .map_or(ResolvedPlotTheme::InheritedRoot, |theme| {
                             let mut theme = Box::new(theme.resolve());
+                            theme.canvas_surface_override = Some(root.surfaces.canvas_root);
                             theme.share_font_environment_from(&root);
                             ResolvedPlotTheme::ExplicitPlot(theme)
                         })

@@ -84,6 +84,8 @@ pub(crate) struct ResolvedTheme {
     pub(crate) facet_header_font_size: u32,
     /// Canvas-root and Plot-panel paints.
     pub(crate) surfaces: SurfaceAppearance,
+    /// An explicit Plot inside Canvas composes over the Canvas owner's surface.
+    pub(crate) canvas_surface_override: Option<Rgba>,
     /// Complete foundational text roles.
     pub(crate) typography: FoundationalTypography,
     /// Legend typography-adjacent chrome with owner-local lengths.
@@ -331,6 +333,7 @@ impl PartialEq for ResolvedTheme {
             && self.composition_title_font_size == other.composition_title_font_size
             && self.facet_header_font_size == other.facet_header_font_size
             && self.surfaces == other.surfaces
+            && self.canvas_surface_override == other.canvas_surface_override
             && self.typography == other.typography
             && self.axes == other.axes
             && self.marks == other.marks
@@ -524,6 +527,20 @@ impl ResolvedTheme {
             weight,
             line_height_multiplier: 1.2,
         }
+    }
+
+    /// Select a complete text role over one final variable-fill paint before
+    /// font preparation, using owner-local panel/root surfaces and backdrop.
+    pub(crate) fn contrasting_text(&self, fill: Rgba) -> Result<&TextAppearance, Error> {
+        super::contrast::select(
+            fill,
+            self.surfaces.plot_panel,
+            self.canvas_surface_override
+                .unwrap_or(self.surfaces.canvas_root),
+            self.annotations.planning_backdrop,
+            &self.typography.contrast_light,
+            &self.typography.contrast_dark,
+        )
     }
 
     /// Measure current legacy T5b body text without introducing a wrap boundary.
@@ -868,6 +885,9 @@ pub(crate) struct FoundationalTypography {
     pub(crate) tick_label: TextAppearance,
     /// Significance-label default before an exact caller override.
     pub(crate) significance_label: TextAppearance,
+    /// Complete candidates selected over a variable fill before font discovery.
+    pub(crate) contrast_light: TextAppearance,
+    pub(crate) contrast_dark: TextAppearance,
     pub(crate) legend_title: TextAppearance,
     pub(crate) legend_label: TextAppearance,
 }
@@ -1009,6 +1029,8 @@ pub(crate) struct AnnotationAppearance {
     pub(crate) bracket_stroke: BracketStrokeAppearance,
     /// Clearance from a labeled supplemental point's painted radius.
     pub(crate) point_label_gap: f64,
+    /// Opaque calculation-only backdrop when output surfaces are translucent.
+    pub(crate) planning_backdrop: Rgba,
 }
 
 /// Bracket paths have a fixed solid topology; only their paint and width vary.
@@ -1161,6 +1183,7 @@ fn resolved_theme(
             canvas_root: Rgba::rgb(255, 255, 255),
             plot_panel: Rgba::rgb(255, 255, 255),
         },
+        canvas_surface_override: None,
         typography: FoundationalTypography {
             title: text_appearance(
                 &stack,
@@ -1188,6 +1211,8 @@ fn resolved_theme(
                 SIGNIFICANCE_FONT_SIZE,
                 1.2,
             ),
+            contrast_light: text_appearance(&stack, Rgba::rgb(255, 255, 255), 11, 1.2),
+            contrast_dark: text_appearance(&stack, Rgba::rgb(0, 0, 0), 11, 1.2),
             legend_title: text_appearance(&stack, Rgba::rgb(60, 60, 60), 12, 1.2),
             legend_label: text_appearance(&stack, Rgba::rgb(40, 40, 40), 11, 1.2),
         },
@@ -1276,6 +1301,7 @@ fn resolved_theme(
                 width: bracket_width,
             },
             point_label_gap: 2.0,
+            planning_backdrop: Rgba::rgb(255, 255, 255),
         },
         composition: CompositionAppearance {
             root_title_alignment: TitleAlignment::Center,
@@ -1555,6 +1581,7 @@ mod tests {
                 canvas_root: Rgba::new(255, 255, 255, 255),
                 plot_panel: Rgba::new(255, 255, 255, 255),
             },
+            canvas_surface_override: None,
             typography: FoundationalTypography {
                 title: text(
                     foreground,
@@ -1574,6 +1601,8 @@ mod tests {
                 axis_title: text(foreground, expected.axis_title_size, 1.2),
                 tick_label: text(foreground, 16, 1.2),
                 significance_label: text(foreground, 16, 1.2),
+                contrast_light: text(Rgba::rgb(255, 255, 255), 11, 1.2),
+                contrast_dark: text(Rgba::rgb(0, 0, 0), 11, 1.2),
                 legend_title: text(Rgba::rgb(60, 60, 60), 12, 1.2),
                 legend_label: text(Rgba::rgb(40, 40, 40), 11, 1.2),
             },
@@ -1702,6 +1731,7 @@ mod tests {
                     width: expected.bracket_width,
                 },
                 point_label_gap: 2.0,
+                planning_backdrop: Rgba::rgb(255, 255, 255),
             },
             composition: CompositionAppearance {
                 root_title_alignment: TitleAlignment::Center,
@@ -1850,6 +1880,24 @@ mod tests {
         assert_eq!(theme.marks, original.marks);
         assert_eq!(theme.typography, original.typography);
         assert_eq!(theme.axes, original.axes);
+    }
+
+    #[test]
+    fn composed_plot_contrast_uses_the_canvas_owner_surface() {
+        let mut theme = Theme::Publication.resolve();
+        theme.surfaces.canvas_root = Rgba::new(0, 0, 0, 0);
+        theme.surfaces.plot_panel = Rgba::new(0, 0, 0, 0);
+        theme.annotations.planning_backdrop = Rgba::rgb(0, 0, 0);
+        let fill = Rgba::new(0, 0, 0, 0);
+        assert_eq!(
+            theme.contrasting_text(fill).unwrap(),
+            &theme.typography.contrast_light
+        );
+        theme.canvas_surface_override = Some(Rgba::rgb(255, 255, 255));
+        assert_eq!(
+            theme.contrasting_text(fill).unwrap(),
+            &theme.typography.contrast_dark
+        );
     }
 
     #[test]

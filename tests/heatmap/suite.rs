@@ -567,6 +567,34 @@ fn heatmap_annotations_use_default_and_chained_formats_with_contrasting_text() {
 }
 
 #[test]
+fn diverging_cells_choose_complete_light_or_dark_text_before_paint() {
+    let data = HeatmapData::new(
+        CategoryValues::new("column", ["low", "center", "high"]).unwrap(),
+        CategoryValues::new("row", ["one", "one", "one"]).unwrap(),
+        NumericValues::new("value", [-1.0, 0.0, 1.0]),
+    );
+    let svg = render(&data, |chart| {
+        chart
+            .scale(HeatmapScale::Diverging { center: 0.0 })
+            .color_limits(-1.0, 1.0)
+            .annotations(HeatmapAnnotations::Values(NumericLabelFormat::default()))
+    })
+    .unwrap();
+    let marks = clipped_marks(&svg);
+    for (text, paint) in [
+        ("-1.00", "#000000"),
+        ("0.00", "#000000"),
+        ("1.00", "#FFFFFF"),
+    ] {
+        let line = marks
+            .lines()
+            .find(|line| line.contains(&format!(">{text}</text>")))
+            .unwrap();
+        assert!(line.contains(&format!("fill=\"{paint}\"")), "{line}");
+    }
+}
+
+#[test]
 fn heatmap_merges_annotated_fully_null_row_and_preserves_finite_value_labels() {
     let data = HeatmapData::new(
         CategoryValues::new(

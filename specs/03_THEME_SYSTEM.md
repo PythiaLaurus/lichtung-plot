@@ -556,10 +556,16 @@ translucent, contrast planning composites it over the opaque backdrop stored in
 `AnnotationTheme`; that backdrop affects selection only and is not painted. The
 light and dark candidate text colors must be opaque. The renderer computes
 relative luminance deterministically and uses the candidate with the greater
-contrast ratio. Convert one `u8` sRGB channel `c` to linear binary64 as `c/255 / 12.92`
-for `c <= 10`, otherwise `((c/255 + 0.055)/1.055)^2.4`, using the vendored
-CORE-MATH correctly rounded `cr_pow` routine at revision
-`e0a3599597503f2af90311c82e2ca92dc06c789a`. Composite source-over in linear
+contrast ratio. Convert one `u8` sRGB channel `c` to linear binary64 through
+one checked-in 256-entry table of exact binary64 bit patterns. Entries 0–10
+are the nearest-even result of `c/255 / 12.92`; entries 11–255 are the
+nearest-even result of `((c/255 + 0.055)/1.055)^2.4`, with each operation before
+the power evaluated in the stated binary64 order. The table's normative
+bits are pinned by exhaustive tests against independently computed
+high-precision reference values; the renderer performs no platform-dependent
+runtime `pow`. This finite-domain approach replaces the earlier prescribed
+vendored CORE-MATH `cr_pow` implementation, which is unnecessary for 256
+possible channel inputs. Composite source-over in linear
 light by starting with the opaque planning backdrop, then applying Canvas,
 panel, and variable fill from back to front. For each layer and each channel in
 `r,g,b` order, calculate `one_minus_a = 1.0 - a`, `source_term = source*a`,

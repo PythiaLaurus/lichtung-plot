@@ -1,5 +1,6 @@
 //! Built-in publication themes and private appearance resolution.
 
+mod contrast;
 mod resolved;
 
 pub use resolved::Theme;

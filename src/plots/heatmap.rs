@@ -22,9 +22,12 @@ use crate::theme::ResolvedTheme;
 use crate::Plot;
 
 const MAX_CELLS: usize = 1_000_000;
-const ANNOTATION_FONT_SIZE: u32 = 11;
 const MISSING_FILL: (u8, u8, u8) = (224, 224, 224);
 const MISSING_STROKE: (u8, u8, u8) = (120, 120, 120);
+
+pub(crate) fn missing_fill() -> crate::render::backend::Rgba {
+    MISSING_FILL.into()
+}
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct HeatmapData {
@@ -190,11 +193,11 @@ pub(crate) fn prepare_intrinsics(
     let resources = environment.generation_resources();
     let data = data.with_axis_resources(&resources);
     data.claim_source_visits(prepared.value_labels.len() + prepared.null_row_annotations.len())?;
-    let appearance = theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal);
-    for source in prepared.value_labels.iter().flatten() {
+    for (source, fill) in prepared.annotation_labels() {
+        let appearance = theme.contrasting_text(fill)?;
         let plan = theme.measure_legacy_appearance_text(
             source,
-            &appearance,
+            appearance,
             PhysicalTextAlignment::Center,
             "heatmap value intrinsic",
             false,
@@ -204,19 +207,20 @@ pub(crate) fn prepare_intrinsics(
             .max((plan.width() + 6.0) * prepared.x_levels.len() as f64);
         minimum.1 = minimum
             .1
-            .max((f64::from(ANNOTATION_FONT_SIZE) + 5.0) * prepared.y_levels.len() as f64);
+            .max((plan.height() + 5.0) * prepared.y_levels.len() as f64);
     }
+    let appearance = theme.contrasting_text(missing_fill())?;
     for source in prepared.null_row_annotations.iter().flatten() {
         let hard = crate::layout::fit::intrinsic_widths(
             theme,
             source,
-            &appearance,
+            appearance,
             "heatmap fully-null row annotation",
         )?
         .0;
         let unwrapped = theme.measure_legacy_appearance_text(
             source,
-            &appearance,
+            appearance,
             PhysicalTextAlignment::Center,
             "heatmap fully-null row annotation",
             false,
@@ -246,8 +250,18 @@ impl HeatmapData {
             .flatten()
     }
 
-    pub(crate) fn annotation_labels(&self) -> impl Iterator<Item = &str> {
-        self.value_labels.iter().flatten().map(String::as_str)
+    pub(crate) fn annotation_labels(
+        &self,
+    ) -> impl Iterator<Item = (&str, crate::render::backend::Rgba)> {
+        self.value_labels
+            .iter()
+            .zip(&self.cells)
+            .filter_map(|(label, value)| {
+                Some((
+                    label.as_deref()?,
+                    heatmap_color((*value)?, self.domain).into(),
+                ))
+            })
     }
 }
 
@@ -1277,29 +1291,29 @@ fn plan_annotations(
             let source = prepared.value_labels[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value text identity missing".into()))?;
-            let mut appearance =
-                theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal);
-            appearance.paint = contrasting_text(heatmap_color(*value, prepared.domain)).into();
+            let appearance =
+                theme.contrasting_text(heatmap_color(*value, prepared.domain).into())?;
             let owner = prepared.value_owners[index]
                 .as_deref()
                 .ok_or_else(|| Error::Render("heatmap value owner missing".into()))?;
             let plan = text.plan(source, owner, || {
                 Ok(theme.measure_legacy_appearance_text(
                     source,
-                    &appearance,
+                    appearance,
                     PhysicalTextAlignment::Center,
                     owner,
                     false,
                 )?)
             })?;
             let width = plan.width();
+            let height = plan.height();
             plans.values[index] = Some(plan);
-            if cell_height < f64::from(ANNOTATION_FONT_SIZE) + 5.0 || cell_width < width + 6.0 {
+            if cell_height < height + 5.0 || cell_width < width + 6.0 {
                 FitFailure::retain_least(&mut miss, scope.child(AddressRole::HeatmapValueLabel, index)?.failure(FitKind::Text, format!(
                 "heatmap: cells are too small for value annotations at precision {} (cell {cell_width:.1}x{cell_height:.1}px, need at least {:.1}x{:.1}px); increase chart size, reduce precision, or hide annotations",
                 format.configured_precision(),
                 width + 6.0,
-                f64::from(ANNOTATION_FONT_SIZE) + 5.0
+                height + 5.0
                 )));
             }
         }
@@ -1311,27 +1325,26 @@ fn plan_annotations(
             continue;
         };
         let row_scope = scope.child(AddressRole::HeatmapMergedRow, y_index)?;
-        let block = match fit::outcome(text.plan(
-            annotation,
-            "heatmap fully-null row annotation",
-            || {
-                fit::measured(fit::text(
-                    theme,
-                    annotation,
-                    &theme.legacy_text_appearance(ANNOTATION_FONT_SIZE, crate::TextWeight::Normal),
-                    available_width,
-                    PhysicalTextAlignment::Center,
-                    "heatmap fully-null row annotation",
-                    &row_scope,
-                ))
-            },
-        ))? {
-            FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
-            FitOutcome::Miss(failure) => {
-                FitFailure::retain_least(&mut miss, failure);
-                continue;
-            }
-        };
+        let block =
+            match fit::outcome(
+                text.plan(annotation, "heatmap fully-null row annotation", || {
+                    fit::measured(fit::text(
+                        theme,
+                        annotation,
+                        theme.contrasting_text(missing_fill())?,
+                        available_width,
+                        PhysicalTextAlignment::Center,
+                        "heatmap fully-null row annotation",
+                        &row_scope,
+                    ))
+                }),
+            )? {
+                FitOutcome::Measured(plan) => TextBlock::from_resolved(plan),
+                FitOutcome::Miss(failure) => {
+                    FitFailure::retain_least(&mut miss, failure);
+                    continue;
+                }
+            };
         if block.width() > available_width || block.height() > available_height {
             FitFailure::retain_least(&mut miss, row_scope.failure(FitKind::Text, format!(
                 "heatmap: wrapped fully-null row annotation for {:?} does not fit its merged row ({available_width:.1}x{available_height:.1}px available, {:.1}x{:.1}px needed); increase chart size or shorten the annotation",
@@ -1523,16 +1536,6 @@ fn interpolate(low: (u8, u8, u8), high: (u8, u8, u8), t: f64) -> (u8, u8, u8) {
 
 fn same_value(left: f64, right: f64) -> bool {
     left.total_cmp(&right).is_eq() || (left.abs().to_bits() == 0 && right.abs().to_bits() == 0)
-}
-
-fn contrasting_text(color: (u8, u8, u8)) -> (u8, u8, u8) {
-    let luminance =
-        0.2126 * f64::from(color.0) + 0.7152 * f64::from(color.1) + 0.0722 * f64::from(color.2);
-    if luminance < 145.0 {
-        (255, 255, 255)
-    } else {
-        (0, 0, 0)
-    }
 }
 
 struct ColorbarValue(f64);
