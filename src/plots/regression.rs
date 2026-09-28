@@ -183,6 +183,10 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedRegression {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.points.len() as u128
+    }
+
     /// Exact marker, fitted-line and optional band legend glyphs. The prepared
     /// fit confirms this producer's semantic input; a panel is not needed.
     pub(crate) fn guide_entries(

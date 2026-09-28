@@ -70,6 +70,10 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedQq {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.theoretical.len() as u128
+    }
+
     pub(crate) fn validate_ranges(
         &self,
         ranges: [(f64, f64); 2],

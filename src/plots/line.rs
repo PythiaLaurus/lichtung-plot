@@ -157,6 +157,22 @@ pub(crate) enum LineMark {
 }
 
 impl PreparedLine {
+    pub(crate) fn primary_mark_count(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<u128, Error> {
+        resources
+            .claim_visits(self.groups.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("Line primary-vertex count admission: {error:?}"))
+            })?;
+        self.groups.iter().try_fold(0_u128, |count, group| {
+            count
+                .checked_add(group.points.len() as u128)
+                .ok_or_else(|| Error::Render("Line primary vertex count overflowed".into()))
+        })
+    }
+
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.hues.iter().map(String::as_str)
     }

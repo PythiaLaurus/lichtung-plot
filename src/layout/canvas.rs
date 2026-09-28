@@ -198,6 +198,8 @@ pub(crate) struct RootFramePlan {
     pub panel_box: PanelBox,
     /// Resolved reserved margins.
     pub insets: CanvasInsets,
+    pub(crate) native_preference:
+        Option<crate::layout::interior::preference::StandardPanelPreference>,
 }
 
 impl RootFramePlan {
@@ -245,6 +247,7 @@ impl RootFramePlan {
             panel_box,
             insets,
             root_text: plan,
+            native_preference: None,
         })
     }
 

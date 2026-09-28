@@ -104,6 +104,22 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedScatter {
+    pub(crate) fn primary_mark_count(
+        &self,
+        resources: &crate::font::canonical::OperationGenerationResources,
+    ) -> Result<u128, Error> {
+        resources
+            .claim_visits(self.groups.len() as u128)
+            .map_err(|error| {
+                Error::Render(format!("Scatter primary-mark count admission: {error:?}"))
+            })?;
+        self.groups.iter().try_fold(0_u128, |count, group| {
+            count
+                .checked_add(group.points.len() as u128)
+                .ok_or_else(|| Error::Render("Scatter primary mark count overflowed".into()))
+        })
+    }
+
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.groups
             .iter()

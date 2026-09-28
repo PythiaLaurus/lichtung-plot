@@ -78,6 +78,10 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl PreparedDensity {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.curves.len() as u128
+    }
+
     pub(crate) fn hue_levels(&self) -> impl Iterator<Item = &str> {
         self.curves
             .iter()

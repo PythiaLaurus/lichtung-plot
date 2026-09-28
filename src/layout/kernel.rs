@@ -9,6 +9,10 @@ const QUANTA_PER_CSS_PIXEL: i64 = 1024;
 pub(crate) fn nearest_spatial_quanta(value: f64) -> Result<i64, Error> {
     LayoutScalar::from_css_pixels(value, SpatialRounding::NearestEven).map(|value| value.0)
 }
+
+pub(crate) fn ceil_spatial_quanta(value: f64) -> Result<i64, Error> {
+    LayoutScalar::from_css_pixels(value, SpatialRounding::Ceil).map(|value| value.0)
+}
 #[cfg(test)]
 const TOPOLOGY_SLOT_LIMIT: u128 = 1_000_000;
 

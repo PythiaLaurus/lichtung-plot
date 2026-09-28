@@ -432,6 +432,12 @@ pub(crate) fn canvas_layout(
         panel_box,
         insets,
         root_text: text,
+        native_preference: matches!(
+            super::InteriorRoute::classify(plot.kind()),
+            super::InteriorRoute::StandardCoordinate(_)
+        )
+        .then(|| super::preference::mark_preference(plot, theme, minimum))
+        .transpose()?,
     })
 }
 

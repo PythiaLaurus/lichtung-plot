@@ -89,6 +89,10 @@ pub(crate) fn intrinsic_body_minimum(
 }
 
 impl HistogramSemantics {
+    pub(crate) fn primary_mark_count(&self) -> u128 {
+        self.bins.len() as u128
+    }
+
     pub(crate) fn new(chart: &Plot, data: PlotData<'_>) -> Result<Self, Error> {
         data.claim_mark_rows()?;
         #[cfg(test)]

@@ -9,6 +9,7 @@ use crate::{Error, Plot};
 
 pub(crate) mod coordinate;
 pub(crate) mod guide;
+pub(crate) mod preference;
 
 macro_rules! interior_routes {
     (native { $($native:ident { $($native_kind:ident),+ $(,)? }),+ $(,)? }

@@ -1000,7 +1000,7 @@ caller styles while centralizing their ownership.
 | T5c2a1b2b2b2b2b2b2a | COMPLETE | T5c2a1b2b2b2b2b2b1 | `feat(marks): retain complete Density area and Line ribbon ink` |
 | T5c2a1b2b2b2b2b2b2b | IN PROGRESS | T5c2a1b2b2b2b2b2b2a | Umbrella for remaining standard mark requirements |
 | T5c2a1b2b2b2b2b2b2b1 | COMPLETE | T5c2a1b2b2b2b2b2b2a | `feat(marks): constrain pre-selection area and band hard ink` |
-| T5c2a1b2b2b2b2b2b2b2 | PENDING | T5c2a1b2b2b2b2b2b2b1 | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b2b2b2b2b2b2 | COMPLETE | T5c2a1b2b2b2b2b2b2b1 | `feat(marks): retain standard-panel density preferences` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1472,6 +1472,24 @@ from an unrelated rectangle. Focused 100/140px custom outline, facet/Canvas,
 source representability, default SVG snapshots, exact operation resource-cap
 tests and strict Clippy pass. Soft primary-mark density/standard preferred
 dimensions are next; the generic floor retires only in T5c4.
+
+T5c2a1b2b2b2b2b2b2b2 closure: the eight ordinary standard-coordinate
+families retain one bottom-up `StandardPanelPreference` on their exact root
+frame. The semantic primary count is sourced from prepared groups/vertices,
+bins, curves, ordered Qq pairs or Regression observations before clipping;
+coincident, transparent and exact-window-hidden marks still count. Renderer-
+generated KDE/band vertices, connectors, rugs, reference lines and raw
+overlays do not multiply `m`. Actual resolved primary ink and tick-label
+typography supply `max(1em, painted mark pitch)`, an integer checked
+`ceil_sqrt(max(1,m))` gives density side, and the sealed `0` glyph supplies
+`66ch`. Preferred width is `max(hard,66ch,density_side)`; checked spatial
+quanta retain preferred height `max(hard_height,ceil_div(3*width,4),density_side)`.
+Current exact root dimensions and child allocation remain unchanged; the one
+retained value is the T5e private automatic/width-only root input, not a
+second sizing route. Four focused cardinality/math/cache-style tests, all
+twenty native exact-root defaults, facet/Canvas reuse, current SVG snapshots,
+exact operation caps and strict Clippy pass. No generic hard floor is deleted
+before T5c4.
 
 T5c2a1b2b2b2b2a closure: Regression retains its admitted observation source
 min/max independently of its fitted/band-inclusive display range. Only those
