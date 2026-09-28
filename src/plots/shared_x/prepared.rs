@@ -9,7 +9,8 @@ use crate::{Error, Plot};
 #[derive(Debug)]
 pub(crate) struct PreparedAxes {
     pub(crate) intrinsics: std::sync::OnceLock<crate::layout::interior::coordinate::Intrinsics>,
-    pub(crate) heatmap_intrinsics: std::sync::OnceLock<(f64, f64)>,
+    pub(crate) heatmap_intrinsics:
+        std::sync::OnceLock<crate::plots::heatmap::HeatmapIntrinsicCache>,
     pub(crate) ranges: [(f64, f64); 2],
     pub(crate) categories: [Option<Vec<AxisTick>>; 2],
     pub(crate) display_categories: [Option<Vec<String>>; 2],

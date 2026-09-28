@@ -1021,7 +1021,9 @@ caller styles while centralizing their ownership.
 | T5c2c1b2b | COMPLETE | T5c2c1b2a | `feat(marks): measure sparse Interaction and collective preference` |
 | T5c2d | IN PROGRESS | T5c2c | Umbrella for still-deferred specialized mark requirements |
 | T5c2d0 | COMPLETE | T5c2c | `docs(marks): map specialized mark requirement owners` |
-| T5c2d1 | PENDING | T5c2d0 | `refactor(marks): measure specialized mark requirements` |
+| T5c2d1 | IN PROGRESS | T5c2d0 | Umbrella for specialized mark requirements |
+| T5c2d1a | COMPLETE | T5c2d0 | `feat(heatmap): measure styled cell and missing-cross hard ink` |
+| T5c2d1b | PENDING | T5c2d1a | `refactor(marks): measure remaining specialized mark requirements` |
 | T5c3 | PENDING | T5c2d | `refactor(annotations): measure native overlay consequences` |
 | T5c4 | PENDING | T5c3 | `refactor(layout): replace deferred mark and annotation minima` |
 | T5c5 | PENDING | T5c4 | `test(theme): close native mark and annotation ownership` |
@@ -1760,6 +1762,21 @@ theme, pre-font prepared identities and admitted work ledgers as ordinary
 families. A declared data window clips numeric marks only in its dimension;
 category/cell topology and required annotations remain. T5c4 can remove the
 generic floor only when each specialized consumer has these real bounds.
+
+T5c2d1a closure: Heatmap's root-prepared `x_levels/y_levels`, active layout,
+merged fully-null rows, highlighted cells and explicit missing cells now
+supply separate source-owned cell stroke and cross minimum pitches before
+specialized panel assignment. The missing diagonal's pixel inset expands for
+its actual painted stroke instead of retaining the old 4px maximum and
+cropping a private custom 24px cross. Only roles actually selected by the
+prepared cell topology are assembled; candidate font discovery remains
+selected-only. The sole axis intrinsic cache checks complete light/dark
+typography, owner-local translucent surfaces/backdrop, selected cell stroke
+and final continuous color domain before reuse; mismatched inputs recompute
+without stale style reuse. Focused cache/domain/custom 100px cell/24px cross,
+preparation/admission, 38 Heatmap integration and font-census tests, plus
+strict Clippy pass. T5e1 owns column-first native cell track assignment;
+Beeswarm/Waterfall/Marginal/Matrix mark inputs follow in T5c2d1b.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect

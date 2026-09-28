@@ -136,6 +136,72 @@ struct ColorDomain {
     center: Option<f64>,
 }
 
+/// The one prepared-axis fast path is usable only for the appearance and
+/// continuous domain that actually selected the annotation glyph roles.
+#[derive(Debug)]
+pub(crate) struct HeatmapIntrinsicCache {
+    minimum: (f64, f64),
+    domain: ColorDomain,
+    contrast_light: crate::theme::TextAppearance,
+    contrast_dark: crate::theme::TextAppearance,
+    plot_panel: crate::render::backend::Rgba,
+    canvas_root: crate::render::backend::Rgba,
+    canvas_override: Option<crate::render::backend::Rgba>,
+    backdrop: crate::render::backend::Rgba,
+    cell_outline: crate::theme::FillOutlineAppearance,
+    highlight_outline: crate::theme::FillOutlineAppearance,
+    missing_row_outline: crate::theme::FillOutlineAppearance,
+    missing_cross: LineStyle,
+}
+
+impl HeatmapIntrinsicCache {
+    fn matches(&self, prepared: &HeatmapData, theme: &ResolvedTheme) -> bool {
+        self.domain == prepared.domain
+            && self.contrast_light == theme.typography.contrast_light
+            && self.contrast_dark == theme.typography.contrast_dark
+            && self.plot_panel == theme.surfaces.plot_panel
+            && self.canvas_root == theme.surfaces.canvas_root
+            && self.canvas_override == theme.canvas_surface_override
+            && self.backdrop == theme.annotations.planning_backdrop
+            && self.cell_outline == theme.marks.heatmap_cell_outline
+            && self.highlight_outline == theme.marks.heatmap_highlight_outline
+            && self.missing_row_outline == theme.marks.heatmap_missing_row_outline
+            && self.missing_cross == theme.marks.heatmap_missing_cross.backend_style()
+    }
+
+    fn new(
+        minimum: (f64, f64),
+        prepared: &HeatmapData,
+        theme: &ResolvedTheme,
+        data: crate::data::PlotData<'_>,
+    ) -> Result<Self, Error> {
+        data.claim_source_bytes(std::mem::size_of::<Self>())?;
+        let text = |role: &crate::theme::TextAppearance| -> Result<_, Error> {
+            Ok(crate::theme::TextAppearance {
+                stack: data.copy_source_string(&role.stack)?,
+                paint: role.paint,
+                font_size: role.font_size,
+                weight: role.weight,
+                line_height_multiplier: role.line_height_multiplier,
+            })
+        };
+        Ok(Self {
+            minimum,
+            domain: prepared.domain,
+            contrast_light: text(&theme.typography.contrast_light)?,
+            contrast_dark: text(&theme.typography.contrast_dark)?,
+            plot_panel: theme.surfaces.plot_panel,
+            canvas_root: theme.surfaces.canvas_root,
+            canvas_override: theme.canvas_surface_override,
+            backdrop: theme.annotations.planning_backdrop,
+            cell_outline: theme.marks.heatmap_cell_outline.clone(),
+            highlight_outline: theme.marks.heatmap_highlight_outline.clone(),
+            missing_row_outline: theme.marks.heatmap_missing_row_outline.clone(),
+            missing_cross: theme.marks.heatmap_missing_cross.backend_style(),
+        })
+    }
+}
+
 /// Current specialized packing floor, not T5e category-pitch intrinsics.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct DeferredHeatmapMinimum {
@@ -168,6 +234,108 @@ pub(crate) fn intrinsic_body_minimum(
     )
 }
 
+fn intrinsic_cell_ink(
+    prepared: &HeatmapData,
+    theme: &ResolvedTheme,
+    data: crate::data::PlotData<'_>,
+) -> Result<(f64, f64), Error> {
+    let (columns, rows) = (prepared.x_levels.len(), prepared.y_levels.len());
+    let slots = columns.checked_mul(rows).ok_or_else(|| {
+        Error::Render("heatmap declared cell topology exceeds spatial capacity".into())
+    })?;
+    if columns == 0
+        || rows == 0
+        || prepared.highlighted.len() != prepared.cells.len()
+        || prepared.null_row_annotations.len() != rows
+        || prepared.cells.len() != slots
+    {
+        return Err(Error::Render(
+            "heatmap cell topology differs from prepared category tracks".into(),
+        ));
+    }
+    let quantum = 1.0 / 1024.0;
+    let cell = |style: &crate::theme::FillOutlineAppearance| -> Result<_, Error> {
+        let fill = style.backend_style((0, 0, 0).into());
+        let (x, y) = crate::render::geometry::rectangular_fill_ink_outset(theme, &fill)?;
+        Ok((x + quantum, y + quantum))
+    };
+    let mut normal = None;
+    let mut highlight = None;
+    let mut missing_row = None;
+    let mut cross = None;
+    let mut pitch = (quantum, quantum);
+    data.claim_source_visits(prepared.cells.len())?;
+    for y in 0..rows {
+        if prepared.null_row_annotations[y].is_some() {
+            let ink = if let Some(ink) = missing_row {
+                ink
+            } else {
+                let ink = cell(&theme.marks.heatmap_missing_row_outline)?;
+                missing_row = Some(ink);
+                ink
+            };
+            pitch.0 = pitch.0.max(ink.0);
+            pitch.1 = pitch.1.max(ink.1);
+        }
+        for x in 0..columns {
+            if !active_cell(prepared.layout, x, y) {
+                continue;
+            }
+            if prepared.null_row_annotations[y].is_some() {
+                continue;
+            }
+            let index = y * columns + x;
+            let ink = if prepared.highlighted[index] {
+                if let Some(ink) = highlight {
+                    ink
+                } else {
+                    let ink = cell(&theme.marks.heatmap_highlight_outline)?;
+                    highlight = Some(ink);
+                    ink
+                }
+            } else if let Some(ink) = normal {
+                ink
+            } else {
+                let ink = cell(&theme.marks.heatmap_cell_outline)?;
+                normal = Some(ink);
+                ink
+            };
+            pitch.0 = pitch.0.max(ink.0);
+            pitch.1 = pitch.1.max(ink.1);
+            if prepared.cells[index].is_none() {
+                let cross = if let Some(stroke) = cross {
+                    stroke
+                } else {
+                    let stroke = crate::render::geometry::line_ink_width(
+                        theme,
+                        &theme.marks.heatmap_missing_cross.backend_style(),
+                    )?;
+                    cross = Some(stroke);
+                    stroke
+                };
+                let span = (2.0_f64).max(cross + 2.0 * quantum) + quantum;
+                pitch.0 = pitch.0.max(span);
+                pitch.1 = pitch.1.max(span);
+            }
+        }
+    }
+    let columns = f64::from(
+        u32::try_from(columns)
+            .map_err(|_| Error::Render("heatmap column count exceeds spatial range".into()))?,
+    );
+    let rows = f64::from(
+        u32::try_from(rows)
+            .map_err(|_| Error::Render("heatmap row count exceeds spatial range".into()))?,
+    );
+    let result = (pitch.0 * columns, pitch.1 * rows);
+    if !result.0.is_finite() || !result.1.is_finite() {
+        return Err(Error::Render(
+            "heatmap painted cell hard span overflowed".into(),
+        ));
+    }
+    Ok(result)
+}
+
 pub(crate) fn prepare_intrinsics(
     prepared: &HeatmapData,
     axes: &crate::plots::shared_x::PreparedAxes,
@@ -181,8 +349,10 @@ pub(crate) fn prepare_intrinsics(
             "heatmap intrinsic call admission {scope:?}: {error:?}"
         ))
     })?;
-    if let Some(minimum) = axes.heatmap_intrinsics.get() {
-        return Ok(*minimum);
+    if let Some(cached) = axes.heatmap_intrinsics.get() {
+        if cached.matches(prepared, theme) {
+            return Ok(cached.minimum);
+        }
     }
     #[cfg(test)]
     crate::orchestrator::measurements::intrinsic(
@@ -230,10 +400,16 @@ pub(crate) fn prepare_intrinsics(
             .1
             .max((unwrapped.height() + 4.0) * prepared.y_levels.len() as f64);
     }
-    environment
-        .claim_cache_entries(1)
-        .map_err(|error| Error::Render(format!("heatmap intrinsic cache admission: {error:?}")))?;
-    let _ = axes.heatmap_intrinsics.set(minimum);
+    let cell = intrinsic_cell_ink(prepared, theme, data)?;
+    minimum.0 = minimum.0.max(cell.0);
+    minimum.1 = minimum.1.max(cell.1);
+    if axes.heatmap_intrinsics.get().is_none() {
+        environment.claim_cache_entries(1).map_err(|error| {
+            Error::Render(format!("heatmap intrinsic cache admission: {error:?}"))
+        })?;
+        let cache = HeatmapIntrinsicCache::new(minimum, prepared, theme, data)?;
+        let _ = axes.heatmap_intrinsics.set(cache);
+    }
     Ok(minimum)
 }
 
@@ -1148,6 +1324,7 @@ fn select_cells(
 ) -> Result<Vec<CellPayload>, Error> {
     let x_count = prepared.x_levels.len();
     let y_count = prepared.y_levels.len();
+    let mut cross_width = None;
     let mut cells = Vec::new();
     data.reserve_source(&mut cells, prepared.cells.len())?;
     for y_index in 0..y_count {
@@ -1224,7 +1401,19 @@ fn select_cells(
                     ));
                 }
             } else {
-                let inset = ((right - left).min(top - bottom) * 0.16).clamp(1.0, 4.0);
+                let stroke = if let Some(stroke) = cross_width {
+                    stroke
+                } else {
+                    let stroke = crate::render::geometry::line_ink_width(
+                        theme,
+                        &theme.marks.heatmap_missing_cross.backend_style(),
+                    )?;
+                    cross_width = Some(stroke);
+                    stroke
+                };
+                let inset = ((right - left).min(top - bottom) * 0.16)
+                    .clamp(1.0, 4.0)
+                    .max(stroke / 2.0 + 1.0 / 1024.0);
                 cell.cross = Some([
                     [
                         Point2D::new(left + inset, bottom + inset),

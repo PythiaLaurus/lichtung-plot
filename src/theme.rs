@@ -8,4 +8,6 @@ pub(crate) use resolved::FillOutlinePaint;
 pub use resolved::Theme;
 #[cfg(test)]
 pub(crate) use resolved::THEME_RESOLUTION_CALLS;
-pub(crate) use resolved::{AxisSpacing, ResolvedTheme, TextAppearance, TitleAlignment};
+pub(crate) use resolved::{
+    AxisSpacing, FillOutlineAppearance, ResolvedTheme, TextAppearance, TitleAlignment,
+};

@@ -86,6 +86,161 @@ fn custom_heatmap_outlines_and_cross_leave_selected_cells_and_missing_key_in_pla
 }
 
 #[test]
+fn heatmap_intrinsic_cache_rechecks_contrast_role_metrics_after_theme_change() {
+    let source = chart(&valid_data())
+        .annotations(HeatmapAnnotations::Values(
+            crate::NumericLabelFormat::default()
+                .suffix(" long units")
+                .unwrap(),
+        ))
+        .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let original = intrinsic_body_minimum(&chart, &theme).unwrap();
+    assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), original);
+    let mut custom = theme.clone();
+    custom.typography.contrast_light.font_size = 40;
+    custom.typography.contrast_dark.font_size = 40;
+    let changed = intrinsic_body_minimum(&chart, &custom).unwrap();
+    assert!(
+        changed.0 > original.0 && changed.1 >= original.1,
+        "original={original:?} changed={changed:?}"
+    );
+    assert_eq!(intrinsic_body_minimum(&chart, &theme).unwrap(), original);
+}
+
+#[test]
+fn heatmap_intrinsic_cache_rechecks_the_final_shared_color_domain() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b"]).unwrap(),
+        CategoryValues::new("row", ["one", "one"]).unwrap(),
+        NumericValues::new("fill", [0.0, 1.0]),
+    )
+    .scale(crate::HeatmapScale::Diverging { center: 0.0 })
+    .color_limits(-1.0, 1.0)
+    .annotations(HeatmapAnnotations::Values(
+        crate::NumericLabelFormat::default()
+            .suffix(" long units")
+            .unwrap(),
+    ))
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let mut inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.typography.contrast_light.font_size = 40;
+    theme.typography.contrast_dark.font_size = 9;
+    let axes = &inputs.axes[0].1;
+    let prepared = &inputs.heatmap.as_ref().unwrap().panels[0].1;
+    let initial = prepare_intrinsics(prepared, axes, source.data(), &theme, None).unwrap();
+    let original = prepared.annotation_labels().last().unwrap().1;
+    assert_eq!(theme.contrasting_text(original).unwrap().font_size, 40);
+    let panels = std::sync::Arc::get_mut(inputs.heatmap.as_mut().unwrap()).unwrap();
+    let prepared = &mut panels.panels[0].1;
+    prepared.domain = ColorDomain {
+        minimum: -100.0,
+        maximum: 100.0,
+        center: Some(0.0),
+    };
+    let remapped = prepared.annotation_labels().last().unwrap().1;
+    assert_eq!(theme.contrasting_text(remapped).unwrap().font_size, 9);
+    assert!(!axes
+        .heatmap_intrinsics
+        .get()
+        .unwrap()
+        .matches(prepared, &theme));
+    let changed = prepare_intrinsics(prepared, axes, source.data(), &theme, None).unwrap();
+    assert!(changed.0 < initial.0);
+}
+
+#[test]
+fn heatmap_cell_and_missing_cross_ink_supply_preselection_track_bounds() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "c", "d", "e"]).unwrap(),
+        CategoryValues::new("row", ["u", "v", "w", "x", "y"]).unwrap(),
+        NumericValues::nullable("fill", [Some(1.0), None, None, None, None]),
+    )
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
+    theme.marks.heatmap_cell_outline.width = 100.0;
+    let outlined = chart.intrinsic_body_minimum(&theme).unwrap();
+    assert!(outlined.0 >= 500.0 && outlined.1 >= 500.0);
+    assert!(outlined.0 > baseline.0 && outlined.1 > baseline.1);
+    theme.marks.heatmap_cell_outline.width = 0.5;
+    theme.marks.heatmap_missing_cross.width = 24.0;
+    let crossed = chart.intrinsic_body_minimum(&theme).unwrap();
+    assert!(crossed.0 >= 120.0 && crossed.1 >= 120.0);
+    assert!(crossed.0 < outlined.0 && crossed.1 < outlined.1);
+}
+
+#[test]
+fn highlighted_cell_outline_invalidates_only_its_matching_intrinsic_input() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "c"]).unwrap(),
+        CategoryValues::new("row", ["one", "one", "one"]).unwrap(),
+        NumericValues::new("fill", [1.0, 2.0, 3.0]),
+    )
+    .heatmap_highlight(crate::BooleanValues::new("selected", [true, false, false]))
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let theme = crate::Theme::Publication.resolve();
+    let baseline = chart.intrinsic_body_minimum(&theme).unwrap();
+    let mut changed = theme.clone();
+    changed.marks.heatmap_highlight_outline.width = 100.0;
+    let minimum = chart.intrinsic_body_minimum(&changed).unwrap();
+    assert!(minimum.0 >= 300.0 && minimum.0 > baseline.0);
+    assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), baseline);
+}
+
+#[test]
+fn wide_missing_cell_cross_retains_complete_ink_within_its_cell() {
+    let source = Plot::heatmap(
+        CategoryValues::new("column", ["a", "b", "c", "d", "e"]).unwrap(),
+        CategoryValues::new("row", ["u", "v", "w", "x", "y"]).unwrap(),
+        NumericValues::nullable("fill", [Some(1.0), None, None, None, None]),
+    )
+    .size(1200, 900)
+    .erase();
+    let resources = crate::font::canonical::OperationGenerationResources::new();
+    let inputs = crate::plots::shared_x::prepare_plot(&source, &resources).unwrap();
+    let chart = inputs.attach(source).unwrap();
+    let mut theme = crate::Theme::Publication.resolve();
+    theme.marks.heatmap_missing_cross.width = 24.0;
+    let panel = PanelBox::new(50.0, 1000.0, 50.0, 800.0);
+    let result = chart
+        .measure_selected_interior(PlotRenderContext::new(chart.data(), panel, &theme))
+        .unwrap();
+    let crate::layout::interior::MarkPayload::Heatmap(payload) =
+        &result.marks.as_ref().unwrap().payload
+    else {
+        panic!("selected Heatmap")
+    };
+    let mut observed = 0;
+    for cell in &payload.cells {
+        let Some(cross) = &cell.cross else { continue };
+        observed += 1;
+        let (left, right) = (cell.corners[0].x, cell.corners[1].x);
+        let (bottom, top) = (cell.corners[0].y, cell.corners[2].y);
+        let mut geometry = crate::render::geometry::GeometrySnapshot::new(&theme).unwrap();
+        for segment in cross {
+            geometry.line(segment, &payload.cross_style, None).unwrap();
+        }
+        for bounds in geometry.bounds() {
+            assert!(bounds.left >= left && bounds.right <= right);
+            assert!(bounds.bottom >= bottom && bounds.top <= top);
+        }
+    }
+    assert!(observed > 0);
+}
+
+#[test]
 fn census_borrows_retained_formatted_values_in_render_order() {
     let source = chart(&valid_data())
         .annotations(HeatmapAnnotations::Values(
