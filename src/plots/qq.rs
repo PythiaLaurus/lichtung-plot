@@ -50,14 +50,19 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.qq);
     let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    let reference = if prepared.line.is_some() {
+        crate::render::geometry::line_ink_width(theme, &theme.marks.qq_reference.backend_style())?
+    } else {
+        0.0
+    };
     Ok((
         if chart.x_axis_spec().limits.is_none() {
-            width
+            width.max(reference)
         } else {
             0.0
         },
         if chart.y_axis_spec().limits.is_none() {
-            height
+            height.max(reference)
         } else {
             0.0
         },
@@ -505,7 +510,7 @@ mod tests {
     use crate::stats::distribution::quantile;
 
     #[test]
-    fn qq_styled_point_ink_constrains_only_automatic_axes() {
+    fn qq_styled_point_and_reference_ink_constrain_only_automatic_axes() {
         let source = Plot::qq(crate::NumericValues::new("value", [1.0, 2.0, 3.0, 4.0]))
             .x_limits(-2.0, 2.0)
             .erase();
@@ -521,6 +526,12 @@ mod tests {
         theme.marks.primary_point.fill_alpha = 0;
         theme.marks.primary_point.outline.color =
             crate::render::backend::Rgba::new(255, 255, 255, 0);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        theme.marks.qq_reference.width = 140.0;
+        let reference = chart.intrinsic_body_minimum(&theme).unwrap();
+        assert_eq!(reference.0.to_bits(), before.0.to_bits());
+        assert_eq!(reference.1.to_bits(), 140.0_f64.to_bits());
+        theme.marks.qq_reference.paint = crate::render::backend::Rgba::new(1, 2, 3, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
     }
 

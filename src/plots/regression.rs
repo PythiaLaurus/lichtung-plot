@@ -154,14 +154,18 @@ pub(crate) fn intrinsic_body_minimum(
     }
     let style = chart.point_style(theme, (0, 0, 0), theme.marks.point_sizes.regression);
     let (width, height) = crate::render::geometry::point_ink_dimensions(theme, &style)?;
+    let fit = crate::render::geometry::line_ink_width(
+        theme,
+        &theme.marks.regression_fit.backend_style(),
+    )?;
     Ok((
         if chart.x_axis_spec().limits.is_none() {
-            width
+            width.max(fit)
         } else {
             0.0
         },
         if chart.y_axis_spec().limits.is_none() {
-            height
+            height.max(fit)
         } else {
             0.0
         },
@@ -431,7 +435,7 @@ mod style_tests {
     use crate::font::canonical::OperationGenerationResources;
 
     #[test]
-    fn regression_observation_ink_remeasures_with_custom_point_style() {
+    fn regression_observation_and_fit_ink_remeasure_with_custom_styles() {
         let source = Plot::regression(
             crate::NumericValues::new("x", [1.0, 2.0, 3.0, 4.0]),
             crate::NumericValues::new("y", [1.0, 2.5, 2.0, 4.0]),
@@ -449,6 +453,13 @@ mod style_tests {
         theme.marks.primary_point.fill_alpha = 0;
         theme.marks.primary_point.outline.color =
             crate::render::backend::Rgba::new(255, 255, 255, 0);
+        assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
+        theme.marks.regression_fit.width = 140.0;
+        assert_eq!(
+            chart.intrinsic_body_minimum(&theme).unwrap(),
+            (140.0, 140.0)
+        );
+        theme.marks.regression_fit.paint = crate::render::backend::Rgba::new(1, 2, 3, 0);
         assert_eq!(chart.intrinsic_body_minimum(&theme).unwrap(), before);
     }
 

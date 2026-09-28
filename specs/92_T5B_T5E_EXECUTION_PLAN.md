@@ -978,7 +978,9 @@ caller styles while centralizing their ownership.
 | T5c2a1b1 | COMPLETE | T5c2a1a | `feat(marks): measure Qq and Regression observation hard ink` |
 | T5c2a1b2 | IN PROGRESS | T5c2a1b1 | Umbrella for remaining standard mark requirements |
 | T5c2a1b2a | COMPLETE | T5c2a1b1 | `feat(marks): measure Line and Trajectory path hard ink` |
-| T5c2a1b2b | PENDING | T5c2a1b2a | `refactor(marks): measure remaining standard mark requirements` |
+| T5c2a1b2b | IN PROGRESS | T5c2a1b2a | Umbrella for remaining standard mark requirements |
+| T5c2a1b2b1 | COMPLETE | T5c2a1b2a | `feat(marks): measure Qq and Regression reference hard ink` |
+| T5c2a1b2b2 | PENDING | T5c2a1b2b1 | `refactor(marks): measure remaining standard mark requirements` |
 | T5c2b | PENDING | T5c2a | `refactor(marks): measure categorical estimate and bar requirements` |
 | T5c2c | PENDING | T5c2b | `refactor(marks): measure distribution and interaction requirements` |
 | T5c2d | PENDING | T5c2c | `refactor(marks): measure specialized mark requirements` |
@@ -1364,6 +1366,15 @@ constrained-axis hard span. Focused Line/Trajectory tests, facet/Canvas
 preparation, actual root resource-cap/reuse tests, current path SVG snapshots
 and strict Clippy pass. Ribbon boundary ink, supplemental layer consequences,
 automatic-edge clearance and soft density remain in T5c2a1b2b/T5c3.
+
+T5c2a1b2b1 closure: Qq's optional reference and Regression's required fit
+contribute their independently resolved, canonically quantized line stroke
+ink to the same pre-selection hard input as their observation points. A hidden
+Qq line is not inspected. Transparent but valid strokes contribute zero ink;
+the malformed-source and invalid-width validation remains fatal before that
+decision. Custom 140px stroke/transparent roles preserve exact-window
+clipping and default SVG bytes. Focused Qq/Regression, representative
+distribution snapshots, exact root resource-cap test and strict Clippy pass.
 
 The common standard preference is the exact `05` density/`66ch`/`4:3` rule;
 categorical hard/preferred pitch is derived from actual occupied slots. Aspect
